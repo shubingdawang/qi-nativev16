@@ -1,0 +1,227 @@
+import Foundation
+
+/// 负责跟 OpenAI 兼容接口打交道：把请求发出去，
+/// 把服务器一个字一个字吐回来的内容，变成能 for await 逐段消费的流。
+/// 也负责把 MCP 工具按接口要求的格式带上去。
+enum ChatAPI {
+
+    // MARK: 发出去的消息
+
+    struct ToolCallPayload: Hashable {
+        var id: String
+        var name: String
+        var arguments: String   // 一段 JSON 文本
+    }
+
+    struct OutgoingMessage {
+        var role: String
+        var text: String
+        var imageDataURLs: [String] = []
+        /// assistant 这轮发起的工具调用
+        var toolCalls: [ToolCallPayload] = []
+        /// role 为 tool 时，说明是在回哪一次调用
+        var toolCallID: String? = nil
+    }
+
+    // MARK: 收回来的东西
+
+    enum StreamEvent {
+        case content(String)
+        case reasoning(String)
+        /// 这一轮花了多少 token（输入、缓存命中、缓存写入、输出分开算）
+        case usage(TokenUsage)
+        /// 工具调用是一小段一小段拼出来的，index 用来区分同时调的第几个
+        case toolCallDelta(index: Int, id: String?, name: String?, argsPiece: String?)
+        case finish(String?)
+    }
+
+    enum APIError: LocalizedError {
+        case badStatus(Int, String)
+        case noResponse
+
+        var errorDescription: String? {
+            switch self {
+            case .badStatus(let code, let body):
+                if code == 401 { return "密钥不对（401）。检查一下设置里的 API Key。" }
+                if code == 404 { return "地址不对（404）。检查一下接口地址和路径。" }
+                if code == 429 { return "请求太频繁或余额不足（429）。" }
+                if code == 503 { return "服务器暂时不可用（503），过一会儿再试。" }
+                return "接口返回 \(code)：\(body.prefix(200))"
+            case .noResponse:
+                return "没收到服务器响应，检查一下网络。"
+            }
+        }
+    }
+
+    // MARK: 流式对话
+
+    static func stream(
+        endpoint: URL,
+        apiKey: String,
+        model: String,
+        messages: [OutgoingMessage],
+        tools: [[String: Any]] = []
+    ) -> AsyncThrowingStream<StreamEvent, Error> {
+
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    var request = URLRequest(url: endpoint)
+                    request.httpMethod = "POST"
+                    request.timeoutInterval = 300
+                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                    if !apiKey.isEmpty {
+                        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+                    }
+                    request.httpBody = try buildBody(model: model, messages: messages, tools: tools)
+
+                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
+
+                    guard let http = response as? HTTPURLResponse else { throw APIError.noResponse }
+                    guard (200..<300).contains(http.statusCode) else {
+                        var body = ""
+                        for try await line in bytes.lines {
+                            body += line
+                            if body.count > 600 { break }
+                        }
+                        throw APIError.badStatus(http.statusCode, body)
+                    }
+
+                    for try await line in bytes.lines {
+                        if Task.isCancelled { break }
+                        guard line.hasPrefix("data:") else { continue }
+                        let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+                        if payload.isEmpty || payload == "[DONE]" { continue }
+                        guard let data = payload.data(using: .utf8),
+                              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                        else { continue }
+
+                        if let usage = json["usage"] as? [String: Any] {
+                            let parsed = TokenUsage.parse(usage)
+                            if !parsed.isEmpty { continuation.yield(.usage(parsed)) }
+                        }
+
+                        guard let choices = json["choices"] as? [[String: Any]],
+                              let choice = choices.first
+                        else { continue }
+
+                        if let reason = choice["finish_reason"] as? String {
+                            continuation.yield(.finish(reason))
+                        }
+
+                        guard let delta = choice["delta"] as? [String: Any] else { continue }
+
+                        if let r = delta["reasoning_content"] as? String, !r.isEmpty {
+                            continuation.yield(.reasoning(r))
+                        } else if let r = delta["reasoning"] as? String, !r.isEmpty {
+                            continuation.yield(.reasoning(r))
+                        }
+                        if let c = delta["content"] as? String, !c.isEmpty {
+                            continuation.yield(.content(c))
+                        }
+                        if let calls = delta["tool_calls"] as? [[String: Any]] {
+                            for call in calls {
+                                let idx = (call["index"] as? Int) ?? 0
+                                let fn = call["function"] as? [String: Any]
+                                continuation.yield(.toolCallDelta(
+                                    index: idx,
+                                    id: call["id"] as? String,
+                                    name: fn?["name"] as? String,
+                                    argsPiece: fn?["arguments"] as? String
+                                ))
+                            }
+                        }
+                    }
+                    continuation.finish()
+                } catch is CancellationError {
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    // MARK: 组请求体
+
+    private static func buildBody(
+        model: String,
+        messages: [OutgoingMessage],
+        tools: [[String: Any]]
+    ) throws -> Data {
+
+        var payload: [[String: Any]] = []
+        for m in messages {
+            var item: [String: Any] = ["role": m.role]
+
+            if m.role == "tool" {
+                item["content"] = m.text
+                if let id = m.toolCallID { item["tool_call_id"] = id }
+                payload.append(item)
+                continue
+            }
+
+            if !m.toolCalls.isEmpty {
+                item["content"] = m.text.isEmpty ? NSNull() : m.text
+                item["tool_calls"] = m.toolCalls.map { call in
+                    [
+                        "id": call.id,
+                        "type": "function",
+                        "function": ["name": call.name, "arguments": call.arguments]
+                    ] as [String: Any]
+                }
+                payload.append(item)
+                continue
+            }
+
+            if m.imageDataURLs.isEmpty {
+                item["content"] = m.text
+            } else {
+                var parts: [[String: Any]] = []
+                if !m.text.isEmpty { parts.append(["type": "text", "text": m.text]) }
+                for url in m.imageDataURLs {
+                    parts.append(["type": "image_url", "image_url": ["url": url]])
+                }
+                item["content"] = parts
+            }
+            payload.append(item)
+        }
+
+        var body: [String: Any] = [
+            "model": model,
+            "messages": payload,
+            "stream": true,
+            "stream_options": ["include_usage": true]
+        ]
+        if !tools.isEmpty {
+            body["tools"] = tools
+            body["tool_choice"] = "auto"
+        }
+        return try JSONSerialization.data(withJSONObject: body)
+    }
+
+    // MARK: 拉模型列表
+
+    struct RemoteModel: Identifiable, Hashable {
+        let id: String
+    }
+
+    static func fetchModels(endpoint: URL, apiKey: String) async throws -> [RemoteModel] {
+        var request = URLRequest(url: endpoint)
+        request.timeoutInterval = 30
+        if !apiKey.isEmpty {
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw APIError.noResponse }
+        guard (200..<300).contains(http.statusCode) else {
+            throw APIError.badStatus(http.statusCode, String(data: data, encoding: .utf8) ?? "")
+        }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let list = json["data"] as? [[String: Any]]
+        else { return [] }
+        return list.compactMap { $0["id"] as? String }.sorted().map { RemoteModel(id: $0) }
+    }
+}

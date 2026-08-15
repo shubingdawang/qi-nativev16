@@ -1,0 +1,54 @@
+name: 构建原生版 iOS 安装包
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 看一眼 Xcode 版本
+        run: |
+          xcodebuild -version
+          xcodebuild -list -project Qi.xcodeproj
+
+      - name: 生成自定义图标
+        run: |
+          chmod +x scripts/make-icons.sh
+          ./scripts/make-icons.sh
+
+      - name: 编译（不签名）
+        run: |
+          xcodebuild \
+            -project Qi.xcodeproj \
+            -scheme Qi \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            build
+
+      - name: 打包成 ipa
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Qi.app Payload/Qi.app
+          zip -qry Qi-native.ipa Payload
+          ls -lh Qi-native.ipa
+
+      - name: 上传安装包
+        uses: actions/upload-artifact@v4
+        with:
+          name: Qi-native-ipa
+          path: Qi-native.ipa
+          retention-days: 30

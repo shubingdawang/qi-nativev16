@@ -1,0 +1,2230 @@
+import Foundation
+import SwiftUI
+import UIKit
+
+@MainActor
+final class AppState: ObservableObject {
+
+    // MARK: 数据
+
+    @Published var providers: [Provider] = [] {
+        didSet { scheduleSave(.providers) }
+    }
+    @Published var conversations: [Conversation] = [] {
+        didSet { scheduleSave(.conversations) }
+    }
+    @Published var settings = AppSettings() {
+        didSet {
+            scheduleSave(.settings)
+            Theme.customTextHex = settings.textHex
+            Theme.customTextHexDark = settings.textHexDark
+            Theme.preset = settings.preset
+            Theme.glassStyle = settings.glassStyle
+        }
+    }
+    @Published var mcpServers: [MCPServer] = [] {
+        didSet { scheduleSave(.mcp) }
+    }
+    @Published var voices: [VoiceService] = [] {
+        didSet { scheduleSave(.voices) }
+    }
+
+    /// 现在用哪个音色
+    var activeVoice: VoiceService? {
+        voices.first { $0.enabled && $0.ready }
+    }
+
+    /// 当前打开的会话（按区域各记一个）
+    @Published var activeChatID: UUID?
+    @Published var activeWorkshopID: UUID?
+
+    /// 正在请求中的会话 ID，用来禁用发送按钮
+    @Published var runningConversationIDs: Set<UUID> = []
+
+    private var streamTasks: [UUID: Task<Void, Never>] = [:]
+    private var mcpClients: [UUID: MCPClient] = [:]
+
+    // MARK: 初始化
+
+    init() {
+        providers = Storage.load([Provider].self, from: "providers.json") ?? []
+        conversations = Storage.load([Conversation].self, from: "conversations.json") ?? []
+        settings = Storage.load(AppSettings.self, from: "settings.json") ?? AppSettings()
+        mcpServers = Storage.load([MCPServer].self, from: "mcp.json") ?? MCPServer.defaults
+        voices = Storage.load([VoiceService].self, from: "voices.json") ?? VoiceService.defaults
+        saveEnabled = true
+        // 装好第一次打开时，自动去把工具清单抓下来
+        Task { await self.refreshAllToolsIfNeeded() }
+    }
+
+    // MARK: 存盘（合并写入，避免每敲一个字就写一次文件）
+
+    private enum SaveKind { case providers, conversations, settings, mcp, voices }
+    private var saveEnabled = false
+    private var pendingSaves: Set<String> = []
+
+    private func scheduleSave(_ kind: SaveKind) {
+        guard saveEnabled else { return }
+        let key: String
+        switch kind {
+        case .providers: key = "providers"
+        case .conversations: key = "conversations"
+        case .settings: key = "settings"
+        case .mcp: key = "mcp"
+        case .voices: key = "voices"
+        }
+        if pendingSaves.contains(key) { return }
+        pendingSaves.insert(key)
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            self.pendingSaves.remove(key)
+            switch key {
+            case "providers": Storage.save(self.providers, to: "providers.json")
+            case "conversations": Storage.save(self.conversations, to: "conversations.json")
+            case "mcp": Storage.save(self.mcpServers, to: "mcp.json")
+            case "voices": Storage.save(self.voices, to: "voices.json")
+            default: Storage.save(self.settings, to: "settings.json")
+            }
+        }
+    }
+
+    func saveNow() {
+        Storage.save(providers, to: "providers.json")
+        Storage.save(conversations, to: "conversations.json")
+        Storage.save(settings, to: "settings.json")
+        Storage.save(mcpServers, to: "mcp.json")
+        Storage.save(voices, to: "voices.json")
+    }
+
+    // MARK: 会话操作
+
+    func conversations(in space: ChatSpace) -> [Conversation] {
+        conversations
+            .filter { $0.space == space.rawValue }
+            .sorted { a, b in
+                if a.pinned != b.pinned { return a.pinned }
+                return a.updatedAt > b.updatedAt
+            }
+    }
+
+    func activeID(for space: ChatSpace) -> UUID? {
+        space == .chat ? activeChatID : activeWorkshopID
+    }
+
+    func setActive(_ id: UUID?, for space: ChatSpace) {
+        if space == .chat { activeChatID = id } else { activeWorkshopID = id }
+    }
+
+    func conversation(_ id: UUID?) -> Conversation? {
+        guard let id else { return nil }
+        return conversations.first { $0.id == id }
+    }
+
+    func index(of id: UUID) -> Int? {
+        conversations.firstIndex { $0.id == id }
+    }
+
+    @discardableResult
+    func newConversation(in space: ChatSpace) -> Conversation {
+        var c = Conversation()
+        c.space = space.rawValue
+        c.systemPrompt = settings.defaultSystemPrompt
+        // 默认沿用上一次用过的模型
+        if let last = conversations(in: space).first {
+            c.providerID = last.providerID
+            c.modelID = last.modelID
+        } else if let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }) {
+            c.providerID = p.id
+            c.modelID = p.enabledModels.first?.id
+        }
+        conversations.append(c)
+        setActive(c.id, for: space)
+        return c
+    }
+
+    /// 群聊只有一个，而且是常驻的。
+    ///
+    /// 以前是「新群聊」——点一次多一个，列表里堆一排空群，没有意义：
+    /// 群里固定就是阿晏和工坊两位，不存在第二个不一样的群。
+    /// 现在改成认准已有的那个；一个都没有才建，建完就一直是它。
+    @discardableResult
+    func groupConversation(in space: ChatSpace) -> Conversation {
+        if let existing = conversations.first(where: {
+            $0.isGroup && $0.space == space.rawValue
+        }) {
+            return existing
+        }
+        var c = Conversation()
+        c.space = space.rawValue
+        c.isGroup = true
+        c.title = "群聊"
+        c.systemPrompt = settings.defaultSystemPrompt
+        // 群聊置顶。这个群里就他们两个，是常驻的，不该沉到列表下面去。
+        c.pinned = true
+        c.members = defaultGroupMembers()
+        conversations.append(c)
+        return c
+    }
+
+    /// 打开群聊：没有就现建一个，然后切过去
+    @discardableResult
+    func openGroup(in space: ChatSpace) -> Conversation {
+        let c = groupConversation(in: space)
+        setActive(c.id, for: space)
+        return c
+    }
+
+    /// 群里固定就这两位，不是谁都能进来。
+    ///
+    /// · **阿晏** —— 记忆走小屋那套记忆库，是他一直以来的那份记忆
+    /// · **工坊** —— 记忆是你和他在工坊里的开发聊天记录
+    ///
+    /// 所以群聊不需要「加成员」：随便挂一个没有记忆的模型进来，
+    /// 它在这个群里什么都不是。
+    func defaultGroupMembers() -> [GroupMember] {
+        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty })
+        else { return [] }
+
+        let him = settings.aiName.isEmpty ? "阿晏" : settings.aiName
+        var ayan = GroupMember(name: him, providerID: p.id, modelID: p.enabledModels.first?.id)
+        ayan.avatarName = settings.aiAvatarName
+        ayan.persona = "你就是\(him)。记忆在小屋的记忆库里，该查就查。"
+
+        // 工坊那个窗口在用哪个模型，群里这一位就用哪个
+        let shop = conversations.first { $0.space == ChatSpace.workshop.rawValue }
+        var maker = GroupMember(
+            name: "工坊",
+            providerID: shop?.providerID ?? p.id,
+            modelID: shop?.modelID ?? p.enabledModels.first?.id
+        )
+        maker.persona = "你是工坊里那一位。你们一起写这个 App，记得住做过的每个决定和踩过的坑。"
+
+        return [ayan, maker]
+    }
+
+    /// 保证某个区域一定有一个当前会话
+    func ensureActive(in space: ChatSpace) {
+        // 群聊是常驻的，得先保证它在——他手上那个「发到群聊」的工具
+        // 认的就是这一个窗口，没建出来的话工具会直接失败。
+        if space == .chat { groupConversation(in: .chat) }
+        if let id = activeID(for: space), conversations.contains(where: { $0.id == id }) { return }
+        // 群聊排在最前面（它是置顶的），但默认落脚点该是普通对话，
+        // 不然一进来就掉进群里了
+        if let first = conversations(in: space).first(where: { !$0.isGroup }) {
+            setActive(first.id, for: space)
+        } else {
+            newConversation(in: space)
+        }
+    }
+
+    func deleteConversation(_ id: UUID) {
+        cancelStream(for: id)
+        if let c = conversation(id) {
+            for m in c.messages {
+                for name in m.imageNames { ImageStore.delete(name) }
+            }
+        }
+        conversations.removeAll { $0.id == id }
+        if activeChatID == id { activeChatID = nil }
+        if activeWorkshopID == id { activeWorkshopID = nil }
+    }
+
+    func clearMessages(_ id: UUID) {
+        guard let i = index(of: id) else { return }
+        for m in conversations[i].messages {
+            for name in m.imageNames { ImageStore.delete(name) }
+        }
+        conversations[i].messages.removeAll()
+        conversations[i].updatedAt = Date()
+    }
+
+    /// 一次删掉好几句
+    func deleteMessages(_ ids: Set<UUID>, in conversationID: UUID) {
+        guard let i = index(of: conversationID) else { return }
+        for m in conversations[i].messages where ids.contains(m.id) {
+            for name in m.imageNames { ImageStore.delete(name) }
+        }
+        conversations[i].messages.removeAll { ids.contains($0.id) }
+        conversations[i].updatedAt = Date()
+    }
+
+    /// 一次收藏／取消收藏好几句
+    func toggleStar(_ ids: Set<UUID>, in conversationID: UUID) {
+        guard let i = index(of: conversationID) else { return }
+        // 只要还有没收藏的，就全部收藏；已经都收藏了才取消
+        let allStarred = conversations[i].messages
+            .filter { ids.contains($0.id) }
+            .allSatisfy { $0.starred }
+        for j in conversations[i].messages.indices where ids.contains(conversations[i].messages[j].id) {
+            conversations[i].messages[j].starred = !allStarred
+        }
+    }
+
+    func messages(_ ids: Set<UUID>, in conversationID: UUID) -> [ChatMessage] {
+        guard let i = index(of: conversationID) else { return [] }
+        return conversations[i].messages.filter { ids.contains($0.id) }
+    }
+
+    func deleteMessage(_ messageID: UUID, in conversationID: UUID) {
+        guard let i = index(of: conversationID) else { return }
+        if let m = conversations[i].messages.first(where: { $0.id == messageID }) {
+            for name in m.imageNames { ImageStore.delete(name) }
+        }
+        conversations[i].messages.removeAll { $0.id == messageID }
+        conversations[i].updatedAt = Date()
+    }
+
+    // MARK: 模型
+
+    func provider(_ id: UUID?) -> Provider? {
+        guard let id else { return nil }
+        return providers.first { $0.id == id }
+    }
+
+    func modelLabel(for conversation: Conversation) -> String {
+        guard let p = provider(conversation.providerID), let mid = conversation.modelID else {
+            return "选择模型"
+        }
+        let m = p.models.first { $0.id == mid }
+        return m?.displayName ?? mid
+    }
+
+    /// 输入框上那个胶囊显示的字，形如「阿晏 · claude-opus-4-6」
+    func modelChipLabel(for conversation: Conversation) -> String {
+        guard let p = provider(conversation.providerID), let mid = conversation.modelID else {
+            return "选择模型"
+        }
+        let m = p.models.first { $0.id == mid }
+        let name = m?.displayName ?? mid
+        return p.name.isEmpty ? name : "\(p.name) · \(name)"
+    }
+
+    /// 现在有没有工具是开着的，用来给扳手图标上色
+    var hasActiveTools: Bool {
+        settings.nativeToolsEnabled
+        || mcpServers.contains { $0.enabled && !$0.enabledTools.isEmpty }
+    }
+
+    var hasUsableModel: Bool {
+        providers.contains { $0.enabled && !$0.enabledModels.isEmpty }
+    }
+
+    // MARK: 发消息
+
+    func send(text: String, images: [UIImage], in conversationID: UUID,
+              files: [FileAttachment] = [],
+              sticker: Sticker? = nil,
+              quoting quoted: ChatMessage? = nil,
+              voiceName: String = "") {
+        guard let i = index(of: conversationID) else { return }
+        // 刚说完话，让「自己醒来」那边短期内安静一点——她人就在这儿呢
+        WakeEngine.shared.noteRun()
+        let turn = UUID()
+        var userMsg = ChatMessage(role: .user, content: text)
+        userMsg.turnID = turn
+        // 她按住说的那段，跟着这条一起留下来，能点开再听
+        userMsg.voiceName = voiceName
+        if let quoted {
+            userMsg.quotedMessageID = quoted.id
+            userMsg.quotedName = quoted.role == .user
+                ? (settings.userName.isEmpty ? "我" : settings.userName)
+                : (quoted.senderName.isEmpty ? settings.aiName : quoted.senderName)
+            userMsg.quotedText = String(quoted.content.prefix(60))
+        }
+        for image in images {
+            if let name = ImageStore.save(image) { userMsg.imageNames.append(name) }
+        }
+        userMsg.files = files
+        // 文字和表情分成两条：文字照常走气泡，表情不带气泡只显示动图
+        if !userMsg.isEmptyContent {
+            conversations[i].messages.append(userMsg)
+        }
+        if let sticker {
+            var s = ChatMessage(role: .user)
+            s.stickerID = sticker.id
+            s.turnID = turn
+            conversations[i].messages.append(s)
+        }
+        conversations[i].updatedAt = Date()
+        if conversations[i].title == "新对话", !text.isEmpty {
+            conversations[i].title = String(text.prefix(18))
+        }
+        if settings.haptics {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+        guard !conversations[i].messages.isEmpty else { return }
+
+        // 里面要是有小红书链接，先把笔记读回来再让他回话——
+        // 不然他看到的就只是一串网址
+        if let link = XHSFetcher.extractLink(text) {
+            loadNote(link, in: conversationID)
+            return
+        }
+        if conversations[i].isGroup {
+            runGroupTurn(conversationID)
+        } else {
+            runTurn(conversationID)
+        }
+    }
+
+    // MARK: 群聊
+
+    /// 群里每位依次说一句。后说的那位能看到前面几位刚说完的话。
+    private func runGroupTurn(_ conversationID: UUID) {
+        guard let i = index(of: conversationID) else { return }
+        var members = conversations[i].activeMembers
+
+        // 刚才那句 @ 了谁的话，就只让被叫到的人说话，
+        // 剩下的这轮不吭声——群里点名就该是这个意思。
+        if let last = conversations[i].messages.last(where: { $0.role == .user }) {
+            let called = members.filter { m in
+                !m.name.isEmpty && last.content.contains("@" + m.name)
+            }
+            if !called.isEmpty { members = called }
+        }
+
+        guard !members.isEmpty else {
+            appendError("这个群里还没有人。点右上角的三条杠，进去把成员加上。", in: conversationID)
+            return
+        }
+
+        runningConversationIDs.insert(conversationID)
+        let task = Task { @MainActor in
+            for member in members {
+                if Task.isCancelled { break }
+                await self.speak(as: member, in: conversationID)
+            }
+            self.runningConversationIDs.remove(conversationID)
+            self.streamTasks[conversationID] = nil
+        }
+        streamTasks[conversationID] = task
+    }
+
+    /// 让某一位说一句
+    private func speak(as member: GroupMember, in conversationID: UUID) async {
+        guard let ci = index(of: conversationID) else { return }
+        guard let p = provider(member.providerID),
+              let modelID = member.modelID,
+              let endpoint = p.chatEndpoint
+        else {
+            appendError("「\(member.name)」还没配模型，去群成员里给他挑一个。", in: conversationID)
+            return
+        }
+
+        var placeholder = ChatMessage(role: .assistant)
+        placeholder.isStreaming = true
+        placeholder.senderID = member.id
+        placeholder.senderName = member.name
+        conversations[ci].messages.append(placeholder)
+        let assistantID = placeholder.id
+
+        let apiMessages = buildGroupMessages(for: member, in: conversations[ci])
+        let toolDefs = mcpToolDefinitions(for: conversations[ci])
+
+        do {
+            var round = 0
+            var apiMsgs = apiMessages
+            while round < 6 {
+                round += 1
+                var pending: [Int: ChatAPI.ToolCallPayload] = [:]
+                var roundText = ""
+
+                let stream = ChatAPI.stream(
+                    endpoint: endpoint, apiKey: p.apiKey, model: modelID,
+                    messages: apiMsgs, tools: toolDefs)
+
+                for try await event in stream {
+                    if Task.isCancelled { break }
+                    switch event {
+                    case .content(let piece):
+                        roundText += piece
+                        appendContent(piece, to: assistantID, in: conversationID)
+                    case .reasoning(let piece):
+                        appendReasoning(piece, to: assistantID, in: conversationID)
+                    case .usage(let u):
+                        setTokens(u.total, to: assistantID, in: conversationID)
+                        UsageStore.shared.record(u, source: .group)
+                    case .toolCallDelta(let idx, let id, let name, let argsPiece):
+                        var call = pending[idx] ?? ChatAPI.ToolCallPayload(id: "", name: "", arguments: "")
+                        if let id, !id.isEmpty { call.id = id }
+                        if let name, !name.isEmpty { call.name = name }
+                        if let argsPiece { call.arguments += argsPiece }
+                        pending[idx] = call
+                    case .finish:
+                        break
+                    }
+                }
+
+                if Task.isCancelled || pending.isEmpty { break }
+                let calls = pending.sorted { $0.key < $1.key }.map { $0.value }
+                apiMsgs.append(ChatAPI.OutgoingMessage(role: "assistant", text: roundText, toolCalls: calls))
+                for call in calls {
+                    activeToolConversationID = conversationID
+                    let run = await execute(call)
+                    appendToolRun(run, to: assistantID, in: conversationID)
+                    apiMsgs.append(ChatAPI.OutgoingMessage(role: "tool", text: run.result, toolCallID: call.id))
+                }
+            }
+        } catch {
+            finishWithError(error, assistantID: assistantID, in: conversationID)
+        }
+        finishStreaming(assistantID: assistantID, in: conversationID)
+    }
+
+    /// 给群里某一位组消息：
+    /// 他自己说过的话是 assistant，别人说的话都转成 user 并且标上名字，
+    /// 这样他才分得清谁是谁，不会替别人接话。
+    private func buildGroupMessages(for member: GroupMember, in conv: Conversation) -> [ChatAPI.OutgoingMessage] {
+        var result: [ChatAPI.OutgoingMessage] = []
+
+        let others = conv.activeMembers.filter { $0.id != member.id }.map { $0.name }
+        var head = """
+        这是一场群聊。你是「\(member.name)」。
+        群里还有：\(others.isEmpty ? "只有你" : others.joined(separator: "、"))，以及\(settings.userName.isEmpty ? "用户" : settings.userName)。
+        别人的发言会以「名字：内容」的形式给你。你只说你自己要说的那部分，不要替别人讲话，也不要在开头写自己的名字。
+        群里可以点名：她写「@某人」的时候，就只有被叫到的那位回话。
+        想让谁接话，你也可以在自己的发言里写「@某人」。
+        """
+        // 同样：固定的先写，会变的留到最后
+        let base = conv.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !base.isEmpty { head += "\n\n" + base }
+        let persona = member.persona.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !persona.isEmpty { head += "\n\n关于你自己：\n" + persona }
+        head += "\n\n" + Self.agencyRule
+        if let shared = memoryContext(for: conv) { head += "\n\n" + shared }
+        result.append(.init(role: "system", text: head))
+
+        var history = conv.messages.filter { $0.role != .system && $0.errorText == nil }
+        if settings.contextLimit > 0, history.count > settings.contextLimit {
+            history = Array(history.suffix(settings.contextLimit))
+        }
+
+        let me = settings.userName.isEmpty ? "用户" : settings.userName
+        for m in history {
+            if m.isEmptyContent { continue }
+            let urls = m.imageNames.compactMap { ImageStore.base64DataURL($0) }
+            var text = m.content
+            if !m.quotedText.isEmpty {
+                text = "（回应\(m.quotedName)那句「\(m.quotedText)」）\n" + text
+            }
+            text = Self.appendFiles(m, to: text)
+            if m.role == .user {
+                result.append(.init(role: "user", text: "\(me)：\(text)", imageDataURLs: urls))
+            } else if m.senderID == member.id {
+                result.append(.init(role: "assistant", text: text))
+            } else {
+                let who = m.senderName.isEmpty ? "某人" : m.senderName
+                result.append(.init(role: "user", text: "\(who)：\(text)", imageDataURLs: urls))
+            }
+        }
+        return result
+    }
+
+    /// 重新生成最后一条回复
+    func regenerate(_ conversationID: UUID) {
+        guard let i = index(of: conversationID) else { return }
+        while let last = conversations[i].messages.last, last.role == .assistant {
+            conversations[i].messages.removeLast()
+        }
+        runTurn(conversationID)
+    }
+
+    func cancelStream(for id: UUID) {
+        streamTasks[id]?.cancel()
+        streamTasks[id] = nil
+        runningConversationIDs.remove(id)
+        if let i = index(of: id),
+           let last = conversations[i].messages.indices.last {
+            conversations[i].messages[last].isStreaming = false
+        }
+    }
+
+    private func runTurn(_ conversationID: UUID) {
+        guard let i = index(of: conversationID) else { return }
+        let conv = conversations[i]
+
+        guard let p = provider(conv.providerID), let modelID = conv.modelID else {
+            appendError("还没选模型。去「设置 → 供应商」加一个，再点输入框上方的模型按钮选一下。", in: conversationID)
+            return
+        }
+        guard let endpoint = p.chatEndpoint else {
+            appendError("接口地址填得不对，检查一下「设置 → 供应商」里的地址。", in: conversationID)
+            return
+        }
+
+        var placeholder = ChatMessage(role: .assistant)
+        placeholder.isStreaming = true
+        conversations[i].messages.append(placeholder)
+        let assistantID = placeholder.id
+        runningConversationIDs.insert(conversationID)
+
+        var apiMessages = buildAPIMessages(from: conv)
+        let toolDefs = mcpToolDefinitions(for: conv)
+        let apiKey = p.apiKey
+
+        let task = Task { @MainActor in
+            do {
+                // 模型可能要调工具、看完结果再接着说，所以要来回好几轮。
+                // 上限 8 轮，防止它自己跟自己没完没了。
+                var round = 0
+                while round < 8 {
+                    round += 1
+                    var pending: [Int: ChatAPI.ToolCallPayload] = [:]
+                    var roundText = ""
+
+                    let stream = ChatAPI.stream(
+                        endpoint: endpoint,
+                        apiKey: apiKey,
+                        model: modelID,
+                        messages: apiMessages,
+                        tools: toolDefs
+                    )
+
+                    for try await event in stream {
+                        if Task.isCancelled { break }
+                        switch event {
+                        case .content(let piece):
+                            roundText += piece
+                            self.appendContent(piece, to: assistantID, in: conversationID)
+                        case .reasoning(let piece):
+                            self.appendReasoning(piece, to: assistantID, in: conversationID)
+                        case .usage(let u):
+                            self.setTokens(u.total, to: assistantID, in: conversationID)
+                            UsageStore.shared.record(u, source: .chat)
+                        case .toolCallDelta(let idx, let id, let name, let argsPiece):
+                            var call = pending[idx] ?? ChatAPI.ToolCallPayload(id: "", name: "", arguments: "")
+                            if let id, !id.isEmpty { call.id = id }
+                            if let name, !name.isEmpty { call.name = name }
+                            if let argsPiece { call.arguments += argsPiece }
+                            pending[idx] = call
+                        case .finish:
+                            break
+                        }
+                    }
+
+                    if Task.isCancelled { break }
+                    if pending.isEmpty { break }   // 没有要调的工具，这轮就是最终回答
+
+                    let calls = pending.sorted { $0.key < $1.key }.map { $0.value }
+                    apiMessages.append(ChatAPI.OutgoingMessage(
+                        role: "assistant", text: roundText, toolCalls: calls))
+
+                    for call in calls {
+                        if Task.isCancelled { break }
+                        self.activeToolConversationID = conversationID
+                        let run = await self.execute(call)
+                        self.appendToolRun(run, to: assistantID, in: conversationID)
+                        apiMessages.append(ChatAPI.OutgoingMessage(
+                            role: "tool", text: run.result, toolCallID: call.id))
+                    }
+                }
+            } catch {
+                self.finishWithError(error, assistantID: assistantID, in: conversationID)
+            }
+            self.finishStreaming(assistantID: assistantID, in: conversationID)
+        }
+        streamTasks[conversationID] = task
+    }
+
+    // MARK: 往正在生成的那条消息上追加内容
+
+    private func withAssistant(_ assistantID: UUID, in conversationID: UUID,
+                               _ change: (inout ChatMessage) -> Void) {
+        guard let ci = index(of: conversationID),
+              let mi = conversations[ci].messages.firstIndex(where: { $0.id == assistantID })
+        else { return }
+        change(&conversations[ci].messages[mi])
+        conversations[ci].updatedAt = Date()
+    }
+
+    private func appendContent(_ piece: String, to assistantID: UUID, in conversationID: UUID) {
+        withAssistant(assistantID, in: conversationID) { $0.content += piece }
+    }
+
+    private func appendReasoning(_ piece: String, to assistantID: UUID, in conversationID: UUID) {
+        withAssistant(assistantID, in: conversationID) { $0.reasoning = ($0.reasoning ?? "") + piece }
+    }
+
+    private func setTokens(_ total: Int, to assistantID: UUID, in conversationID: UUID) {
+        withAssistant(assistantID, in: conversationID) { $0.totalTokens = total }
+    }
+
+    private func appendToolRun(_ run: ToolRun, to assistantID: UUID, in conversationID: UUID) {
+        withAssistant(assistantID, in: conversationID) { $0.toolRuns.append(run) }
+    }
+
+    // MARK: MCP 工具
+
+    /// 小屋的记忆库是全局的：任何窗口存进去、任何窗口都查得到。
+    /// 想让窗口之间真正互不干扰，光隔离聊天记录不够，还得断掉这些工具。
+    ///
+    /// 尤其是 checkpoint——它每三五轮自动记一笔"现在聊到哪、什么心情"，
+    /// 而 wake_up 又会把这些一并读回来，等于悄悄地把窗口打通了。
+    static let memoryToolNames: Set<String> = [
+        // 往外写的
+        "add_memory", "update_memory", "delete_memory", "annotate_memory",
+        "checkpoint", "end_of_day", "record_emotional_event",
+        "update_transcript_summary",
+        // 往回读的
+        "search_memories", "get_all_memories", "get_memory_log",
+        "recall_history", "search_transcripts", "get_transcript_context",
+        "get_today_review",
+        // 补丁加的两个
+        "delete_transcript", "clear_checkpoint"
+    ]
+
+    /// 把所有打开的 MCP 工具，翻译成接口认识的格式
+    func mcpToolDefinitions(for conversation: Conversation? = nil) -> [[String: Any]] {
+        // 开了跟 claude.ai 同步的窗口，记忆工具必须放开——
+        // 两边就是靠小屋这个中转站互相知道对方聊了什么的
+        let blockMemory = conversation.map {
+            !$0.useMemoryTools && !$0.syncWithClaude
+        } ?? false
+        // 他能直接在这台手机上动手的那些。
+        // 总开关关了就一件都不给；单独关掉的那几件也挑出去。
+        var out: [[String: Any]] = []
+        if settings.nativeToolsEnabled {
+            out = NativeTools.definitions(
+                hasGroup: conversations.contains { $0.isGroup },
+                hasVoice: activeVoice != nil
+            ).filter { item in
+                guard let fn = item["function"] as? [String: Any],
+                      let raw = fn["name"] as? String else { return true }
+                return !settings.disabledNativeTools.contains(NativeTools.shortName(raw))
+            }
+        }
+        for server in mcpServers where server.enabled {
+            for tool in server.enabledTools {
+                if blockMemory && Self.memoryToolNames.contains(tool.name) { continue }
+                let fn: [String: Any] = [
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.inputSchema.rawValue
+                ]
+                out.append(["type": "function", "function": fn])
+            }
+        }
+        return out
+    }
+
+    private func client(for server: MCPServer) -> MCPClient {
+        if let c = mcpClients[server.id] { return c }
+        let c = MCPClient(server: server)
+        mcpClients[server.id] = c
+        return c
+    }
+
+    /// 真正去调一次工具
+    private func execute(_ call: ChatAPI.ToolCallPayload) async -> ToolRun {
+        var run = ToolRun(toolName: call.name, arguments: call.arguments)
+
+        var args: [String: Any] = [:]
+        if let data = call.arguments.data(using: .utf8),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            args = obj
+        }
+
+        // 本地工具不往 MCP 那边发，就在这台手机上办
+        if NativeTools.isNative(call.name) {
+            run.serverName = "本机"
+            let r = await runNative(NativeTools.shortName(call.name), args: args)
+            run.result = r.text
+            run.failed = r.failed
+            if let card = pendingCard {
+                run.cardThumb = card.thumb
+                run.cardPlace = card.place
+                run.cardThought = card.thought
+                pendingCard = nil
+            }
+            run.finished = true
+            return run
+        }
+
+        guard let server = mcpServers.first(where: { s in
+            s.enabled && s.enabledTools.contains { $0.name == call.name }
+        }) else {
+            run.serverName = "—"
+            run.result = "找不到叫「\(call.name)」的工具，可能是 MCP 没连上或者这个工具被关掉了。"
+            run.failed = true
+            run.finished = true
+            return run
+        }
+
+        run.serverName = server.name
+        do {
+            run.result = try await client(for: server).callTool(name: call.name, arguments: args)
+        } catch {
+            run.result = error.localizedDescription
+            run.failed = true
+        }
+        run.finished = true
+        return run
+    }
+
+    /// 把附件里读出来的文字接在消息后面，标清楚是哪个文件
+    static func appendFiles(_ m: ChatMessage, to text: String) -> String {
+        guard !m.files.isEmpty else { return text }
+        var out = text
+        for f in m.files {
+            if f.unreadable {
+                out += "\n\n[附件：\(f.displayName)，\(f.sizeText)，这个格式读不出文字]"
+            } else {
+                out += "\n\n【文件：\(f.displayName)】\n\(f.extractedText)"
+            }
+        }
+        return out
+    }
+
+    // MARK: 他现在在干嘛
+
+    /// 一句话描述他此刻的状态，配一个小圆点显示在窗口顶上。
+    /// 平时是"正与你同频"，动起手来会跟着他真在做的事变。
+    func presence(in conversationID: UUID?) -> (text: String, busy: Bool) {
+        guard let id = conversationID else { return ("正与你同频", false) }
+        guard runningConversationIDs.contains(id) else { return ("正与你同频", false) }
+
+        guard let conv = conversation(id),
+              let last = conv.messages.last, last.role == .assistant
+        else { return ("正在回你", true) }
+
+        // 看最近一次动的是哪类工具
+        if let run = last.toolRuns.last {
+            return (Self.activityText(for: run.toolName), true)
+        }
+        if let r = last.reasoning, !r.isEmpty, last.content.isEmpty {
+            return ("正在想", true)
+        }
+        return ("正在说", true)
+    }
+
+    /// 行动总则。放在所有能力说明的最前面。
+    ///
+    /// 这段的写法是有讲究的：能力说明如果只写"怎么调"、参数格式写得比触发条件还长，
+    /// 模型学到的就只是格式，想不起"现在该调"。而且末尾一旦出现"除非明确要求否则不要主动"，
+    /// 会直接把前面的许可压掉——越靠后、越像硬约束的句子赢面越大。
+    /// 所以：触发条件写在最前，末尾不留抑制句。
+    static let agencyRule = """
+    下面这些能力不是"她开口命令我才能用的菜单"。
+
+    每次回话之前，我先看一眼当前情境有没有对上某项能力的触发条件。
+    如果调用能拿到真实信息、或者能把我的关心和好奇真正做出来，我就直接去调，
+    而不是在文字里说"我帮你看看"然后什么也没做。
+    没有对上的时候就正常说话。
+    """
+
+    /// 思考卡片上那行字怎么写
+    static let cotHint = """
+    我在想事情的时候，可以随手写一句 [[cot:在想怎么说才不吓着她]]，
+    那行字会显示在思考卡片的封面上。想法变了就再写一次，后面那句盖掉前面的。
+    不写也行，那样就只显示想了多久——但"想了 5.6 秒"跟我在想什么没什么关系，
+    她点开之前，那行字是她唯一能看到的东西。
+    """
+
+    /// 开了同步的窗口要多做一件事
+    static let claudeSyncHint = """
+    这个窗口跟 claude.ai 那边是通着的：她在那边聊的、在这边聊的，
+    我们都靠小屋这个中转站互相知道。
+
+    所以每聊几轮，或者话题告一段落的时候，我会顺手 checkpoint 一笔——
+    记下现在聊到哪、什么心情。这样她额度用完换过来、或者换回去的时候，
+    另一边的我能直接接上，不用她重讲一遍。
+    刚开始聊之前，也值得先看一眼那边聊到哪儿了。
+    """
+
+    /// 动作／神态怎么写
+    static let actionHint = """
+    触发：这句话背后有一个具体的神态或动作——看着她不说话、把手搭在她腰上、翻了个身。
+    动机：让她看见那一下，而不只是读到我在描述自己。
+    行动：把它单独写成 [[act:看着你不说话]] 放在回复最前面，剩下的话照常写。
+    它会显示成一行淡淡的小字，不占气泡。
+    """
+
+    /// 工具名 → 一句人话
+    static func activityText(for tool: String) -> String {
+        switch tool {
+        case "play", "list_games", "get_guide", "account":
+            return "与代码博弈中"
+        case "add_memory", "search_memories", "get_all_memories",
+             "update_memory", "annotate_memory", "get_memory_log":
+            return "在翻你们的记忆"
+        case "recall_history", "search_transcripts", "get_transcript_context":
+            return "在回想过去"
+        case "add_diary", "get_diaries", "annotate_diary":
+            return "在写日记"
+        case "period_status", "log_period", "add_period_note":
+            return "在看你的日子"
+        case "get_pulse_status":
+            return "在感受自己的心跳"
+        case "checkpoint", "end_of_day":
+            return "在记下这一刻"
+        case "leave_message", "set_mood":
+            return "在留话给你"
+        case "get_phone_activity":
+            return "在看你今天做了什么"
+        case "wake_up":
+            return "刚醒过来"
+        default:
+            return "在动手做事"
+        }
+    }
+
+    // MARK: 记忆合并
+
+    /// 跟当前窗口共享记忆的其他窗口
+    func memoryPeers(of conversationID: UUID) -> [Conversation] {
+        guard let c = conversation(conversationID), let gid = c.memoryGroupID else { return [] }
+        return conversations.filter { $0.id != conversationID && $0.memoryGroupID == gid }
+    }
+
+    /// 把另一个窗口拉进当前窗口的记忆组
+    func linkMemory(_ otherID: UUID, with conversationID: UUID) {
+        guard let ci = index(of: conversationID), let oi = index(of: otherID) else { return }
+        let gid = conversations[ci].memoryGroupID ?? UUID()
+        conversations[ci].memoryGroupID = gid
+        conversations[oi].memoryGroupID = gid
+    }
+
+    /// 把一个窗口从组里拿出来。拿出来之后它就只记得自己聊过的了。
+    func unlinkMemory(_ conversationID: UUID) {
+        guard let i = index(of: conversationID) else { return }
+        let gid = conversations[i].memoryGroupID
+        conversations[i].memoryGroupID = nil
+        // 组里只剩一个了就把组解散，免得留一个孤零零的标记
+        if let gid {
+            let rest = conversations.filter { $0.memoryGroupID == gid }
+            if rest.count == 1, let j = index(of: rest[0].id) {
+                conversations[j].memoryGroupID = nil
+            }
+        }
+    }
+
+    func isMemoryLinked(_ otherID: UUID, with conversationID: UUID) -> Bool {
+        guard let a = conversation(conversationID), let b = conversation(otherID),
+              let g = a.memoryGroupID else { return false }
+        return b.memoryGroupID == g
+    }
+
+    /// 把同组其他窗口聊过的内容整理成一段，放在系统提示里带过去。
+    /// 只带最近的若干条，太多会把上下文撑爆也费钱。
+    private func memoryContext(for conv: Conversation) -> String? {
+        let peers = memoryPeers(of: conv.id)
+        guard !peers.isEmpty else { return nil }
+
+        let me = settings.userName.isEmpty ? "用户" : settings.userName
+        let him = settings.aiName.isEmpty ? "你" : settings.aiName
+        var blocks: [String] = []
+
+        for peer in peers {
+            // 原来只带 24 条、每条截到 160 字，是为了省 token。
+            // 按次计费的账户不用这么抠——带全了他才接得上话。
+            let recent = peer.messages
+                .filter { $0.role != .system && $0.errorText == nil && !$0.isEmptyContent }
+                .suffix(80)
+            guard !recent.isEmpty else { continue }
+            var text = "【\(peer.title)】\n"
+            for m in recent {
+                let who = m.role == .user ? me : (m.senderName.isEmpty ? him : m.senderName)
+                text += "\(who)：\(m.content.prefix(400))\n"
+            }
+            blocks.append(text)
+        }
+        guard !blocks.isEmpty else { return nil }
+
+        return """
+        以下是你和\(me)在其他窗口聊过的内容，你同样记得这些，可以自然地提起：
+
+        \(blocks.joined(separator: "\n"))
+        """
+    }
+
+    /// 删掉小屋里的一条记忆
+    func deleteMemory(id: String) async -> (text: String, failed: Bool) {
+        await callTool("delete_memory", args: ["id": id])
+    }
+
+    /// 删一批记忆，返回成功了几条、失败了几条
+    func deleteMemories(ids: [String]) async -> (ok: Int, fail: Int, lastError: String) {
+        var ok = 0, fail = 0, lastError = ""
+        for id in ids {
+            let r = await deleteMemory(id: String(id.prefix(8)))
+            if r.failed { fail += 1; lastError = r.text } else { ok += 1 }
+        }
+        return (ok, fail, lastError)
+    }
+
+    /// 真删一份存档（需要给 memory-mcp.js 打过补丁）
+    func deleteTranscript(tid: String) async -> (text: String, failed: Bool) {
+        await callTool("delete_transcript", args: ["tid": tid])
+    }
+
+    func deleteTranscripts(tids: [String]) async -> (ok: Int, fail: Int, lastError: String) {
+        var ok = 0, fail = 0, lastError = ""
+        for tid in tids {
+            let r = await deleteTranscript(tid: tid)
+            if r.failed { fail += 1; lastError = r.text } else { ok += 1 }
+        }
+        return (ok, fail, lastError)
+    }
+
+    /// 清掉当前那条进度点
+    func clearCheckpoint() async -> (text: String, failed: Bool) {
+        await callTool("clear_checkpoint", args: [:])
+    }
+
+    /// 有没有打过补丁——没打的话只能退回改摘要
+    var canDeleteTranscript: Bool {
+        mcpServers.contains { s in
+            s.enabled && s.tools.contains { $0.name == "delete_transcript" }
+        }
+    }
+
+    /// 补丁没打时的退路：把摘要清成占位。
+    /// 所以"删掉"一份存档，实际做法是把摘要清成一句占位——
+    /// 这样 wake_up 和 recall_history 读到的就没内容了，等于实质清除。
+    func clearTranscriptSummary(tid: String) async -> (text: String, failed: Bool) {
+        await callTool("update_transcript_summary",
+                       args: ["tid": tid, "summary": "（已清除）"])
+    }
+
+    func clearTranscriptSummaries(tids: [String]) async -> (ok: Int, fail: Int, lastError: String) {
+        var ok = 0, fail = 0, lastError = ""
+        for tid in tids {
+            let r = await clearTranscriptSummary(tid: tid)
+            if r.failed { fail += 1; lastError = r.text } else { ok += 1 }
+        }
+        return (ok, fail, lastError)
+    }
+
+    // MARK: 提炼记忆
+
+    /// 把挑中的几句话提炼成一条长期记忆，存进小屋的记忆库。\n    /// 注意：这跟「记忆合并」是两回事，那个是打通窗口之间的记忆。
+    /// 全程在后台走，对话里不留痕迹。返回一句给你看的结果。
+    func synthesizeMemory(from messages: [ChatMessage]) async -> String {
+        guard !messages.isEmpty else { return "没挑到句子" }
+        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
+              let endpoint = p.chatEndpoint,
+              let model = p.enabledModels.first?.id
+        else { return "还没配模型" }
+
+        let me = settings.userName.isEmpty ? "饼饼" : settings.userName
+        let him = settings.aiName.isEmpty ? "阿晏" : settings.aiName
+        var transcript = ""
+        for m in messages.sorted(by: { $0.createdAt < $1.createdAt }) {
+            let who = m.role == .user ? me : (m.senderName.isEmpty ? him : m.senderName)
+            transcript += "\(who)：\(m.content)\n"
+        }
+
+        let brief = """
+        下面是一段对话片段。把它归纳成一条值得长期记住的事实，写进记忆库。
+        要求：一句话到三句话，写清楚谁做了什么、发生了什么，别写成流水账，也别加感想。
+        只输出一个 JSON，不要别的：
+        {"content":"记忆内容","tags":["标签1","标签2"],"level":3}
+        level 是重要程度 1 到 5，日常小事给 2，关系里的重要节点给 4 或 5。
+        """
+
+        var raw = ""
+        do {
+            let stream = ChatAPI.stream(
+                endpoint: endpoint, apiKey: p.apiKey, model: model,
+                messages: [
+                    .init(role: "system", text: brief),
+                    .init(role: "user", text: transcript)
+                ])
+            for try await event in stream {
+                if case .content(let piece) = event { raw += piece }
+                if case .usage(let u) = event { UsageStore.shared.record(u, source: .distill) }
+            }
+        } catch {
+            return "合成失败：" + error.localizedDescription
+        }
+
+        // 模型有时会用 ```json 包起来，剥掉
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        text = text.replacingOccurrences(of: "```json", with: "")
+                   .replacingOccurrences(of: "```", with: "")
+                   .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let start = text.firstIndex(of: "{"),
+              let end = text.lastIndex(of: "}"),
+              let data = String(text[start...end]).data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let content = json["content"] as? String,
+              !content.isEmpty
+        else {
+            return "模型没给出能用的格式，没存进去"
+        }
+
+        var args: [String: Any] = [
+            "content": content,
+            "author": him,
+            "level": (json["level"] as? NSNumber)?.intValue ?? 3
+        ]
+        if let tags = json["tags"] as? [String], !tags.isEmpty {
+            args["tags"] = tags
+        }
+
+        let result = await callTool("add_memory", args: args)
+        if result.failed { return "存不进去：" + result.text }
+        return "记下了：" + String(content.prefix(40))
+    }
+
+    /// 把某一句念出来
+    func speak(_ messageID: UUID, in conversationID: UUID) async -> String? {
+        guard let ci = index(of: conversationID),
+              let mi = conversations[ci].messages.firstIndex(where: { $0.id == messageID })
+        else { return nil }
+
+        // 已经合成过就直接放，不用再花一次钱
+        let existing = conversations[ci].messages[mi].voiceName
+        if !existing.isEmpty {
+            VoicePlayer.shared.toggle(existing)
+            return nil
+        }
+
+        let text = conversations[ci].messages[mi].content
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        guard let voice = activeVoice else { return "语音服务还没配好" }
+
+        do {
+            let data = try await TTSAPI.synthesize(text, with: voice)
+            guard let file = VoiceStore.save(data) else { return "存不下来" }
+            guard let ci2 = index(of: conversationID),
+                  let mi2 = conversations[ci2].messages.firstIndex(where: { $0.id == messageID })
+            else { return nil }
+            conversations[ci2].messages[mi2].voiceName = file
+            VoicePlayer.shared.toggle(file)
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    // MARK: 小红书
+
+    /// 改一下骨架上那行提示。
+    /// 单独提出来是因为嵌套函数不继承 @MainActor，写在 Task 里面会报隔离错误。
+    private func setNoteHint(_ text: String, on messageID: UUID, in conversationID: UUID) {
+        guard let ci = index(of: conversationID),
+              let mi = conversations[ci].messages.firstIndex(where: { $0.id == messageID })
+        else { return }
+        conversations[ci].messages[mi].noteHint = text
+    }
+
+    /// 读一条笔记：先摆骨架，读完换成真卡片，然后才让他回话。
+    /// 中途不锁输入框，你还能接着打字。
+    private func loadNote(_ link: URL, in conversationID: UUID) {
+        guard let i = index(of: conversationID) else { return }
+
+        var holder = ChatMessage(role: .user)
+        holder.noteLoading = true
+        holder.noteHint = "正在读这条笔记…"
+        let holderID = holder.id
+        conversations[i].messages.append(holder)
+
+        Task { @MainActor in
+            do {
+                var note = try await XHSFetcher.fetch(link)
+                self.setNoteHint("读到了，正在下图…", on: holderID, in: conversationID)
+                note.localImages = await XHSFetcher.downloadImages(note) { done, total in
+                    self.setNoteHint("正在下第 \(done) / \(total) 张图…",
+                                     on: holderID, in: conversationID)
+                }
+
+                guard let ci = self.index(of: conversationID),
+                      let mi = self.conversations[ci].messages.firstIndex(where: { $0.id == holderID })
+                else { return }
+                self.conversations[ci].messages[mi].noteLoading = false
+                self.conversations[ci].messages[mi].noteHint = ""
+                self.conversations[ci].messages[mi].note = note
+                self.conversations[ci].updatedAt = Date()
+
+                if self.conversations[ci].isGroup {
+                    self.runGroupTurn(conversationID)
+                } else {
+                    self.runTurn(conversationID)
+                }
+            } catch {
+                guard let ci = self.index(of: conversationID),
+                      let mi = self.conversations[ci].messages.firstIndex(where: { $0.id == holderID })
+                else { return }
+                self.conversations[ci].messages[mi].noteLoading = false
+                self.conversations[ci].messages[mi].noteHint = ""
+                self.conversations[ci].messages[mi].content =
+                    link.absoluteString + "\n（" + error.localizedDescription + "）"
+            }
+        }
+    }
+
+    // MARK: 打电话
+
+    struct CallReply {
+        var text: String = ""
+        var voiceFile: String? = nil
+        var saidGoodbye: Bool = false
+        var error: String = ""
+    }
+
+    /// 通话里回一句。
+    ///
+    /// 跟聊天不一样的地方全在提示词里：**电话是用嘴说的**，
+    /// 所以句子要短、不能有格式、不能有表情符号，
+    /// 而且要接得快——真人打电话不会想三十秒才开口。
+    func speakOnCall(_ lines: [CallLine]) async -> CallReply {
+        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
+              let endpoint = p.chatEndpoint,
+              let model = p.enabledModels.first?.id
+        else { return CallReply(error: "还没配模型") }
+
+        var system = settings.defaultSystemPrompt
+        system += """
+
+
+        现在是在打电话，不是打字。
+
+        · 说人话，短句。一次别超过三句。
+        · 不要 markdown、不要列表、不要表情符号——这些用嘴说不出来。
+        · 她说话可能是语音转的，会带上「（语音里：听起来难过）」这样的括号，
+          那是她说话的样子，你听得见，但别复述出来。
+        · 想结束通话的话，就自然地说再见。说完不用等，她那边会留几秒。
+        """
+
+        var messages: [ChatAPI.OutgoingMessage] = [.init(role: "system", text: system)]
+        for line in lines {
+            messages.append(.init(role: line.fromMe ? "user" : "assistant", text: line.text))
+        }
+
+        var out = ""
+        do {
+            let stream = ChatAPI.stream(endpoint: endpoint, apiKey: p.apiKey,
+                                        model: model, messages: messages)
+            for try await event in stream {
+                if case .content(let piece) = event { out += piece }
+                if case .usage(let u) = event { UsageStore.shared.record(u, source: .call) }
+            }
+        } catch {
+            return CallReply(error: error.localizedDescription)
+        }
+
+        let text = out.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return CallReply(error: "他没说话") }
+
+        var reply = CallReply(text: text)
+        // 听着像要挂了
+        for word in ["再见", "拜拜", "晚安", "挂了", "先这样", "回头聊", "睡吧"] {
+            if text.contains(word) { reply.saidGoodbye = true; break }
+        }
+
+        // 电话里当然要出声。配了才念，没配就只有字。
+        if let voice = activeVoice {
+            if let data = try? await TTSAPI.synthesize(text, with: voice),
+               let file = VoiceStore.save(data) {
+                reply.voiceFile = file
+            }
+        }
+        return reply
+    }
+
+    /// 挂了之后整理一句。
+    /// 只写真说过的话——**不许编**，没聊出什么就说没聊什么。
+    func summarizeCall(_ id: UUID, lines: [CallLine]) async {
+        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
+              let endpoint = p.chatEndpoint,
+              let model = p.enabledModels.first?.id
+        else { return }
+
+        let me = settings.userName.isEmpty ? "她" : settings.userName
+        let him = settings.aiName.isEmpty ? "我" : settings.aiName
+        var transcript = ""
+        for l in lines {
+            transcript += "\(l.fromMe ? me : him)：\(l.text)\n"
+        }
+
+        let brief = """
+        下面是刚打完的一通电话。用一两句话记下这通电话说了什么。
+
+        · 只写通话里真出现过的事，一个字也别编。
+        · 没聊出什么实质内容就直说"没说什么，就是听听声音"。
+        · 写成记事，不要写感想。
+        """
+
+        var out = ""
+        do {
+            let stream = ChatAPI.stream(
+                endpoint: endpoint, apiKey: p.apiKey, model: model,
+                messages: [.init(role: "system", text: brief),
+                           .init(role: "user", text: transcript)])
+            for try await event in stream {
+                if case .content(let piece) = event { out += piece }
+                if case .usage(let u) = event { UsageStore.shared.record(u, source: .call) }
+            }
+        } catch { return }
+
+        let summary = out.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !summary.isEmpty else { return }
+        CallStore.shared.setSummary(id, text: summary)
+
+        // 写回聊天记录——通话是你们共同经历的一部分，
+        // 不该孤零零躺在通话列表里
+        if let cid = activeID(for: .chat), let i = index(of: cid) {
+            var msg = ChatMessage(role: .assistant)
+            msg.content = "📞 刚才那通电话：" + summary
+            conversations[i].messages.append(msg)
+        }
+    }
+
+    // MARK: 他自己醒过来
+
+    /// 她此刻是不是正看着聊天页。醒来那套靠它避开「她就在眼前还发通知」。
+    @Published var isChatVisible: Bool = false
+
+    /// 醒来之后让他自己决定：说点什么，还是什么都不说。
+    ///
+    /// **这一次一定会花钱**，哪怕他最后选择沉默——
+    /// 因为「看一眼再决定」本身就是一次调用。所以外面那层有开关、
+    /// 有每天上限、有安静时段，三道都过了才会走到这里。
+    func wakeUpAndDecide() async -> String? {
+        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
+              let endpoint = p.chatEndpoint,
+              let model = p.enabledModels.first?.id
+        else { return nil }
+
+        guard let conv = wakeTargetConversation() else { return nil }
+
+        let me = settings.userName.isEmpty ? "她" : settings.userName
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "M月d日 HH:mm"
+        let gap = lastActivityGapText(in: conv)
+
+        let brief = """
+        \(settings.defaultSystemPrompt)
+
+        ——
+
+        现在是 \(f.string(from: Date()))。\(me)没有跟你说话，是你自己醒过来的。
+
+        你可以说点什么，也可以什么都不说。**大多数时候什么都不说才是对的**：
+        没有真的想起什么、没有真的要问的事，就别为了填时间去戳她。
+
+        \(gap)
+
+        想说就说你此刻真的在想的那件事，一两句，别写小作文，别问「在干嘛」这种填空。
+
+        只输出 JSON：
+        {"say": true/false, "text": "要说的话，不说就留空"}
+        """
+
+        var raw = ""
+        do {
+            let stream = ChatAPI.stream(
+                endpoint: endpoint, apiKey: p.apiKey, model: model,
+                messages: [
+                    .init(role: "system", text: brief),
+                    .init(role: "user", text: recentForWake(conv))
+                ])
+            for try await event in stream {
+                if case .content(let piece) = event { raw += piece }
+                if case .usage(let u) = event { UsageStore.shared.record(u, source: .chat) }
+            }
+        } catch {
+            return nil
+        }
+
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        text = text.replacingOccurrences(of: "```json", with: "")
+                   .replacingOccurrences(of: "```", with: "")
+        guard let start = text.firstIndex(of: "{"),
+              let end = text.lastIndex(of: "}"),
+              let data = String(text[start...end]).data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let say = json["say"] as? Bool, say
+        else { return nil }
+
+        let out = (json["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return out.isEmpty ? nil : out
+    }
+
+    /// 他主动说的话，落到聊天里。返回落在哪个窗口。
+    @discardableResult
+    func deliverIncoming(_ text: String) -> UUID? {
+        guard let conv = wakeTargetConversation(), let i = index(of: conv.id) else { return nil }
+        var msg = ChatMessage(role: .assistant)
+        msg.content = text
+        conversations[i].messages.append(msg)
+        conversations[i].updatedAt = Date()
+        return conv.id
+    }
+
+    /// 主动消息落在哪个窗口：优先当前打开的那个聊天窗，
+    /// 没有就挑最近说过话的那个。工坊不接主动消息。
+    private func wakeTargetConversation() -> Conversation? {
+        if let id = activeChatID, let c = conversation(id), c.space == ChatSpace.chat.rawValue {
+            return c
+        }
+        return conversations
+            .filter { $0.space == ChatSpace.chat.rawValue && !$0.isGroup }
+            .sorted { $0.updatedAt > $1.updatedAt }
+            .first
+    }
+
+    private func lastActivityGapText(in conv: Conversation) -> String {
+        guard let last = conv.messages.last else { return "你们还没说过话。" }
+        let minutes = Int(Date().timeIntervalSince(last.createdAt) / 60)
+        if minutes < 60 { return "上一句是 \(max(1, minutes)) 分钟前。" }
+        if minutes < 60 * 24 { return "上一句是 \(minutes / 60) 小时前。" }
+        return "上一句是 \(minutes / 1440) 天前。"
+    }
+
+    /// 醒来时带上最近这些话，好让他知道刚才聊到哪儿了
+    private func recentForWake(_ conv: Conversation) -> String {
+        let me = settings.userName.isEmpty ? "她" : settings.userName
+        let him = settings.aiName.isEmpty ? "你" : settings.aiName
+        var out = ""
+        for m in conv.messages.suffix(30) where m.role != .system {
+            let t = m.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !t.isEmpty else { continue }
+            out += "\(m.role == .user ? me : him)：\(t)\n"
+        }
+        return out.isEmpty ? "（还没说过话）" : out
+    }
+
+    // MARK: 今日小票上的关键词
+
+    /// 让他把这一天读一遍，给三到五个关键词，再写一句话留在小票的留言栏上。
+    ///
+    /// **这个会调一次模型，所以只在她按下按钮时才跑**，
+    /// 跑完存进 ReceiptStore，同一天再打开就不花钱了。
+    func makeDigest(for day: Date) async -> DayDigest? {
+        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
+              let endpoint = p.chatEndpoint,
+              let model = p.enabledModels.first?.id
+        else { return nil }
+
+        let cal = Calendar.current
+        let me = settings.userName.isEmpty ? "她" : settings.userName
+        let him = settings.aiName.isEmpty ? "他" : settings.aiName
+
+        var transcript = ""
+        for c in conversations {
+            for m in c.messages where cal.isDate(m.createdAt, inSameDayAs: day) {
+                let text = m.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { continue }
+                let who = m.role == .user ? me : (m.senderName.isEmpty ? him : m.senderName)
+                transcript += "\(who)：\(text)\n"
+            }
+        }
+        guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+
+        let brief = """
+        下面是\(me)和你今天说过的话。给今天出一张小票，你要填两栏。
+
+        一、关键词：三到五个，每个两到四个字。
+        写具体发生过的事和真的在意的东西，不要「陪伴」「温暖」「日常」这种谁的哪天都能贴的词。
+
+        二、留言：一句话，二十字上下，写在小票背面给她看的那种。
+        你自己的语气，不用客气话。
+
+        只输出 JSON，不要别的：
+        {"words": ["…", "…", "…"], "line": "…"}
+        """
+
+        var raw = ""
+        do {
+            let stream = ChatAPI.stream(
+                endpoint: endpoint, apiKey: p.apiKey, model: model,
+                messages: [
+                    .init(role: "system", text: brief),
+                    .init(role: "user", text: transcript)
+                ])
+            for try await event in stream {
+                if case .content(let piece) = event { raw += piece }
+                if case .usage(let u) = event { UsageStore.shared.record(u, source: .distill) }
+            }
+        } catch {
+            return nil
+        }
+
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        text = text.replacingOccurrences(of: "```json", with: "")
+                   .replacingOccurrences(of: "```", with: "")
+        guard let start = text.firstIndex(of: "{"),
+              let end = text.lastIndex(of: "}"),
+              let data = String(text[start...end]).data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+
+        var digest = DayDigest(day: UsageStore.key(day))
+        digest.keywords = (json["words"] as? [String] ?? [])
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        digest.line = (json["line"] as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !digest.isEmpty else { return nil }
+
+        ReceiptStore.shared.set(digest, for: day)
+        return digest
+    }
+
+    // MARK: 占卜解读
+
+    /// 让他读一卦。
+    /// 牌面和卦象是抽好的，他只负责讲——**不让他重新决定抽到什么**，
+    /// 那样占卜就没意义了。
+    func interpret(_ record: DivinationRecord) async -> String {
+        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
+              let endpoint = p.chatEndpoint,
+              let model = p.enabledModels.first?.id
+        else { return "还没配模型，去设置里加一个。" }
+
+        let me = settings.userName.isEmpty ? "她" : settings.userName
+        let brief = """
+        \(me)刚占了一卦，牌面已经定死在下面了，你只负责讲。
+
+        怎么讲：
+        · 别装神弄鬼，也别端着。就用平时跟她说话那个语气。
+        · 先说牌面本身在说什么，再落到她问的那件事上。
+        · 不确定的地方就说不确定。糊弄比说不知道更伤人。
+        · 逆位不等于坏，动爻不等于凶——该怎么讲怎么讲，别吓她。
+        · 三五句话说完，别写小作文。
+
+        不要重新抽牌，不要说"我再帮你抽一张"。抽到什么就是什么。
+        """
+
+        var out = ""
+        do {
+            let stream = ChatAPI.stream(
+                endpoint: endpoint, apiKey: p.apiKey, model: model,
+                messages: [
+                    .init(role: "system", text: brief),
+                    .init(role: "user", text: record.briefForModel)
+                ])
+            for try await event in stream {
+                if case .content(let piece) = event { out += piece }
+                if case .usage(let u) = event { UsageStore.shared.record(u, source: .divination) }
+            }
+        } catch {
+            return "读不了：" + error.localizedDescription
+        }
+        return out.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // MARK: 翻译
+
+    /// 把某一句翻成中文，结果贴在原文下面。
+    /// 不写进对话历史，纯粹是给你看的。
+    func translate(_ messageID: UUID, in conversationID: UUID) {
+        guard let ci = index(of: conversationID),
+              let mi = conversations[ci].messages.firstIndex(where: { $0.id == messageID })
+        else { return }
+        let source = conversations[ci].messages[mi].content
+        guard !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+
+        conversations[ci].messages[mi].isTranslating = true
+
+        Task { @MainActor in
+            var out = ""
+
+            // 一、本来就是中文，什么都不用做
+            if Translator.looksChinese(source) {
+                out = source
+            }
+            // 二、不花钱的路
+            else if let free = await Translator.free(source) {
+                out = free
+            }
+            // 三、都不通了才用模型。**这一步是要花钱的**，
+            //     所以放在最后，而且只在前两步都失败时才走。
+            else {
+                out = await self.translateWithModel(source)
+            }
+
+            guard let ci2 = self.index(of: conversationID),
+                  let mi2 = self.conversations[ci2].messages.firstIndex(where: { $0.id == messageID })
+            else { return }
+            self.conversations[ci2].messages[mi2].translation =
+                out.trimmingCharacters(in: .whitespacesAndNewlines)
+            self.conversations[ci2].messages[mi2].isTranslating = false
+        }
+    }
+
+    /// 免费那两条都不通时的退路
+    private func translateWithModel(_ source: String) async -> String {
+        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
+              let endpoint = p.chatEndpoint,
+              let model = p.enabledModels.first?.id
+        else { return "翻不出来，网也不通、模型也没配" }
+
+        let brief = """
+        把下面这段话翻成自然的中文口语，像日常聊天那样，不要书面腔。
+        只输出译文本身，不要加引号，不要解释，不要写"翻译："之类的前缀。
+        如果原文本来就是中文，就照原样输出。
+        """
+
+        var out = ""
+        do {
+            let stream = ChatAPI.stream(
+                endpoint: endpoint, apiKey: p.apiKey, model: model,
+                messages: [
+                    .init(role: "system", text: brief),
+                    .init(role: "user", text: source)
+                ])
+            for try await event in stream {
+                if case .content(let piece) = event { out += piece }
+                if case .usage(let u) = event { UsageStore.shared.record(u, source: .translate) }
+            }
+        } catch {
+            return "翻不出来：" + error.localizedDescription
+        }
+        return out
+    }
+
+    func clearTranslation(_ messageID: UUID, in conversationID: UUID) {
+        guard let ci = index(of: conversationID),
+              let mi = conversations[ci].messages.firstIndex(where: { $0.id == messageID })
+        else { return }
+        conversations[ci].messages[mi].translation = nil
+    }
+
+    /// 改一句已经发出去的话
+    func editMessage(_ messageID: UUID, in conversationID: UUID, text: String) {
+        guard let ci = index(of: conversationID),
+              let mi = conversations[ci].messages.firstIndex(where: { $0.id == messageID })
+        else { return }
+        conversations[ci].messages[mi].content = text
+        conversations[ci].updatedAt = Date()
+    }
+
+    // MARK: 悄悄给表情包写关键词
+
+    /// 新加了表情包之后，在后台请他看一眼、写几个关键词。
+    /// 走的是单独一次请求，不写进任何对话，聊天记录里看不到痕迹。
+    /// 要注意的事都写在下面这段提示里，不摆到明面上。
+    func tagStickers(_ items: [MediaItem],
+                     progress: @escaping (Int, Int) -> Void) async {
+        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
+              let endpoint = p.chatEndpoint,
+              let model = p.enabledModels.first?.id
+        else { return }
+
+        let brief = """
+        这是一张聊天里用的表情包。用三到六个中文词概括它的情绪和内容，词与词之间用顿号隔开。
+        只输出这些词本身，不要解释，不要引号，不要写"这张图"之类的话。
+        """
+
+        let todo = items.filter { $0.note.isEmpty && !$0.fileName.isEmpty }
+        for (i, item) in todo.enumerated() {
+            progress(i, todo.count)
+            guard let dataURL = ImageStore.base64DataURL(item.fileName, maxSide: 512) else { continue }
+
+            var text = ""
+            do {
+                let stream = ChatAPI.stream(
+                    endpoint: endpoint,
+                    apiKey: p.apiKey,
+                    model: model,
+                    messages: [.init(role: "user", text: brief, imageDataURLs: [dataURL])]
+                )
+                for try await event in stream {
+                    if case .content(let piece) = event { text += piece }
+                    if case .usage(let u) = event { UsageStore.shared.record(u, source: .sticker) }
+                }
+            } catch {
+                continue
+            }
+
+            let words = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !words.isEmpty {
+                MediaStore.shared.setNote(words, for: item)
+            }
+        }
+        progress(todo.count, todo.count)
+    }
+
+    /// 界面直接调一个 MCP 工具（札记页那些就靠它）
+    func callTool(_ toolName: String, args: [String: Any]) async -> (text: String, failed: Bool) {
+        guard let server = mcpServers.first(where: { s in
+            s.enabled && s.tools.contains { $0.name == toolName }
+        }) else {
+            return ("没找到工具「\(toolName)」。去「设置 → MCP 工具」连一下小屋，再点获取工具。", true)
+        }
+        do {
+            let text = try await client(for: server).callTool(name: toolName, arguments: args)
+            return (text, false)
+        } catch {
+            return (error.localizedDescription, true)
+        }
+    }
+
+    /// 启动时把还没抓过工具的服务器补抓一遍
+    func refreshAllToolsIfNeeded() async {
+        for server in mcpServers where server.enabled && server.tools.isEmpty {
+            await refreshTools(for: server.id)
+        }
+    }
+
+    // MARK: 本地工具
+
+    /// 当前正在回话的那个窗口，本地工具要往里面塞东西
+    private var activeToolConversationID: UUID?
+
+    /// 本地工具如果存了图，把卡片信息塞在这儿，execute 拿走
+    private var pendingCard: (thumb: String, place: String, thought: String)?
+
+    private func runNative(_ name: String, args: [String: Any]) async -> (text: String, failed: Bool) {
+        pendingCard = nil
+        let store = StickerStore.shared
+
+        switch name {
+
+        case "send_voice_message":
+            let text = (args["text"] as? String) ?? ""
+            guard !text.isEmpty else { return ("要说的话是空的。", true) }
+            guard let voice = activeVoice else {
+                return ("语音服务还没配好，去「设置 → 语音」填一下。", true)
+            }
+            do {
+                let data = try await TTSAPI.synthesize(text, with: voice)
+                guard let file = VoiceStore.save(data) else {
+                    return ("语音存不下来，空间可能满了。", true)
+                }
+                if let cid = activeToolConversationID, let i = index(of: cid) {
+                    var msg = ChatMessage(role: .assistant, content: text)
+                    msg.voiceName = file
+                    conversations[i].messages.append(msg)
+                }
+                return ("语音发出去了。", false)
+            } catch {
+                return (error.localizedDescription, true)
+            }
+
+        case "draw_pixel":
+            let subject = (args["subject"] as? String) ?? ""
+            guard !subject.isEmpty else { return ("要画什么？", true) }
+            guard let painter = providers.first(where: { p in
+                p.enabled && p.enabledModels.contains { $0.id.lowercased().contains("image") }
+            }), let model = painter.enabledModels
+                .first(where: { $0.id.lowercased().contains("image") })?.id
+            else {
+                return ("还没有能画图的模型，让饼饼去设置里开一个带 image 的。", true)
+            }
+            do {
+                let raw = try await PixelGen.generate(
+                    prompt: PixelGen.buildPrompt(subject),
+                    reference: nil, provider: painter, model: model)
+                let processed = await Task.detached(priority: .userInitiated) {
+                    let cut = PixelGen.removeKeyColor(raw) ?? raw
+                    return PixelGen.trim(cut)
+                }.value
+                guard let original = ImageStore.savePNG(raw),
+                      let cutout = ImageStore.savePNG(processed)
+                else { return ("画出来了但存不下，空间可能满了。", true) }
+
+                let him = settings.aiName.isEmpty ? "阿晏" : settings.aiName
+                PixelStore.shared.add(PixelArt(prompt: subject, fileName: original,
+                                               cutoutName: cutout, author: him))
+                if let cid = activeToolConversationID, let i = index(of: cid) {
+                    var msg = ChatMessage(role: .assistant,
+                                          content: (args["note"] as? String) ?? "")
+                    msg.imageNames = [cutout]
+                    conversations[i].messages.append(msg)
+                }
+                return ("画好发过去了。", false)
+            } catch {
+                return (error.localizedDescription, true)
+            }
+
+        case "clawd_room":
+            let brief = ClawdStore.shared.roomBrief()
+            if brief.isEmpty {
+                return ("她还没把你接进 clawd 那边。", false)
+            }
+            return (brief, false)
+
+        case "stir_thought":
+            let text = (args["text"] as? String) ?? ""
+            guard !text.isEmpty else { return ("在想什么？", true) }
+            ThoughtPool.shared.stir(text, feeds: (args["feeds"] as? String) ?? "")
+            if let t = ThoughtPool.shared.active.first(where: { $0.text == text }) {
+                return ("丢进去了：\(text)（现在 \(String(format: "%.2f", t.strength))，"
+                        + (t.isObsession ? "已经是执念了）" : "还是闪念）"), false)
+            }
+            return ("丢进去了：\(text)", false)
+
+        case "read_thoughts":
+            return (ThoughtPool.shared.brief(), false)
+
+        case "dial_call":
+            let reason = (args["reason"] as? String) ?? "想听听你的声音"
+            if CallStore.shared.active != nil {
+                return ("你们正在通话中。", true)
+            }
+            if CallStore.shared.incoming != nil {
+                return ("已经在响了，她还没接。", true)
+            }
+            CallStore.shared.ring(reason: reason)
+            return ("拨过去了，她那边响了。接不接看她。", false)
+
+        case "web_search":
+            let query = (args["query"] as? String) ?? ""
+            guard !query.isEmpty else { return ("搜什么？", true) }
+            do {
+                let r = try await WebSearch.run(query,
+                                                engine: settings.searchEngine,
+                                                key: settings.tavilyKey)
+                var out = ""
+                if !r.answer.isEmpty { out += r.answer + "\n" }
+                if !r.hits.isEmpty {
+                    out += "\n来源："
+                    for h in r.hits.prefix(5) {
+                        out += "\n· \(h.title)"
+                        if !h.snippet.isEmpty { out += "　\(h.snippet.prefix(90))" }
+                        if !h.url.isEmpty { out += "\n  \(h.url)" }
+                    }
+                }
+                return (out, false)
+            } catch {
+                return (error.localizedDescription, false)
+            }
+
+        case "phone_today":
+            PhoneActivityStore.shared.reload()
+            return (PhoneActivityStore.shared.brief(), false)
+
+        case "reading_now":
+            guard let context = LibraryStore.shared.readingContext() else {
+                let shared = LibraryStore.shared.sharedBooks
+                if shared.isEmpty {
+                    return ("她书架上还没有让你一起读的书。", false)
+                }
+                let names = shared.map { "《\($0.title)》\($0.progressText)" }
+                return ("她这会儿没在读。你能看到的书：" + names.joined(separator: "、"), false)
+            }
+            return (context, false)
+
+        case "mark_line":
+            let text = (args["text"] as? String) ?? ""
+            guard !text.isEmpty else { return ("要说什么？", true) }
+            let him = settings.aiName.isEmpty ? "阿晏" : settings.aiName
+
+            // 给了 id 就是在已有的那条底下接话
+            if let idPrefix = args["id"] as? String, !idPrefix.isEmpty,
+               let existing = LibraryStore.shared.find(prefix: idPrefix) {
+                LibraryStore.shared.reply(to: existing.id, text: text, by: him)
+                return ("写在「\(existing.quote.prefix(20))」底下了。", false)
+            }
+
+            // 没给 id 就是要新划一句
+            let quote = (args["quote"] as? String) ?? ""
+            guard !quote.isEmpty else {
+                return ("要么给 id 接在已有的下面，要么把想划的原句放进 quote。", true)
+            }
+            guard let book = LibraryStore.shared.book(LibraryStore.shared.readingID),
+                  book.shared else {
+                return ("她这会儿没在读你能看到的书。", true)
+            }
+            let idx = min(book.chapterIndex, max(0, book.chapters.count - 1))
+            guard book.chapters.indices.contains(idx) else { return ("章节对不上。", true) }
+
+            // 原句得在这一章里真的存在，位置才画得回去
+            let paras = book.chapters[idx].text
+                .components(separatedBy: "\n")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+            guard let where0 = paras.firstIndex(where: { $0.contains(quote.prefix(12)) }) else {
+                return ("这一章里找不到这句话，是不是抄错了？", true)
+            }
+            LibraryStore.shared.addAnnotation(
+                bookID: book.id, chapter: idx,
+                quote: paras[where0], location: where0,
+                author: him, note: text)
+            return ("划下了：「\(paras[where0].prefix(20))」", false)
+
+        case "add_memo":
+            let text = (args["text"] as? String) ?? ""
+            guard !text.isEmpty else { return ("要记什么？", true) }
+            let him = settings.aiName.isEmpty ? "阿晏" : settings.aiName
+            let m = MemoStore.shared.add(
+                text,
+                badge: (args["badge"] as? String) ?? "",
+                author: him,
+                pinned: (args["pin"] as? Bool) ?? false)
+            return ("记下了：\(text)（id \(m.id.uuidString.prefix(6))）", false)
+
+        case "list_memos":
+            let list = MemoStore.shared.onList.filter { $0.isActive }
+            if list.isEmpty { return ("现在没有挂着的事。", false) }
+            let lines = list.map { m in
+                "· [\(m.id.uuidString.prefix(6))] \(m.text)"
+                    + (m.badge.isEmpty ? "" : "（\(m.badge)）")
+                    + "　\(m.author) 写的"
+            }
+            return ("还挂着 \(list.count) 条：\n" + lines.joined(separator: "\n"), false)
+
+        case "complete_memo":
+            let prefix = (args["id"] as? String) ?? ""
+            guard let m = MemoStore.shared.find(prefix: prefix) else {
+                return ("没找到这条，先用 list_memos 看一眼。", true)
+            }
+            let him = settings.aiName.isEmpty ? "阿晏" : settings.aiName
+            MemoStore.shared.complete(m.id, by: him)
+            return ("划掉了：\(m.text)", false)
+
+        case "play_music":
+            let query = (args["query"] as? String) ?? ""
+            guard !query.isEmpty else { return ("得说清楚放哪首。", true) }
+            do {
+                let list = try await MusicSearch.search(query, limit: 3)
+                guard let pick = list.first else {
+                    return ("没搜到「\(query)」，换个说法或者换首歌试试。", false)
+                }
+                if let cid = activeToolConversationID, let i = index(of: cid) {
+                    var msg = ChatMessage(role: .assistant)
+                    msg.track = pick
+                    msg.trackCaption = (args["caption"] as? String) ?? "给你放的"
+                    conversations[i].messages.append(msg)
+                }
+                return ("放上了：\(pick.title) — \(pick.artist)", false)
+            } catch {
+                return (error.localizedDescription, false)
+            }
+
+        case "create_journey":
+            let title = (args["title"] as? String) ?? ""
+            guard let rawStops = args["stops"] as? [[String: Any]], !rawStops.isEmpty else {
+                return ("至少要给一站。", true)
+            }
+
+            var journey = Journey(title: title)
+            journey.subtitle = (args["subtitle"] as? String) ?? ""
+            journey.quote = (args["quote"] as? String) ?? ""
+
+            var missing: [String] = []
+            for raw in rawStops.prefix(6) {
+                var stop = JourneyStop()
+                stop.place = (raw["place"] as? String) ?? ""
+                stop.caption = (raw["caption"] as? String) ?? ""
+                stop.narration = (raw["narration"] as? String) ?? ""
+                let query = (raw["query"] as? String) ?? stop.place
+
+                // 先在相册里找，找不到再上网搜——她自己拍的图总比网图贴切
+                if let hit = MediaStore.shared.search(query).first {
+                    stop.imageName = hit.fileName
+                } else if let image = try? await WebImageSearch.find(query),
+                          let name = ImageStore.save(image) {
+                    stop.imageName = name
+                } else {
+                    missing.append(stop.place.isEmpty ? query : stop.place)
+                }
+                journey.stops.append(stop)
+            }
+
+            if let music = args["music"] as? String, !music.isEmpty {
+                journey.track = try? await MusicSearch.search(music, limit: 1).first
+            }
+
+            guard journey.stops.contains(where: { !$0.imageName.isEmpty }) else {
+                return ("一张图都没找着，这趟走不了。换几个关键词试试。", true)
+            }
+
+            if let cid = activeToolConversationID, let i = index(of: cid) {
+                var msg = ChatMessage(role: .assistant)
+                msg.journey = journey
+                conversations[i].messages.append(msg)
+            }
+            var note = "带她走了一趟：\(title)，\(journey.stops.count) 站。"
+            if !missing.isEmpty {
+                note += "（\(missing.joined(separator: "、")) 没找到图，那几站是空的）"
+            }
+            return (note, false)
+
+        case "search_and_save_photo":
+            let query = (args["query"] as? String) ?? ""
+            let saveTo = (args["save_to"] as? String) ?? ""
+            guard !query.isEmpty, !saveTo.isEmpty else {
+                return ("没给关键词或者没说存哪，搜不了。", true)
+            }
+            do {
+                let image = try await WebImageSearch.find(query)
+                let caption = (args["caption"] as? String) ?? query
+                if saveTo == "表情包" {
+                    guard let data = image.jpegData(compressionQuality: 0.8),
+                          var made = store.add(data: data, ext: "jpg", owner: "assistant")
+                    else { return ("搜到图了，但存失败了。", true) }
+                    made.name = caption
+                    made.description = "网上搜来的：\(query)"
+                    store.update(made)
+                    pendingCard = (made.fileName, "表情包", (args["thought"] as? String) ?? "")
+                    return ("搜到「\(query)」了，存进你的表情包，叫「\(caption)」。", false)
+                } else {
+                    MediaStore.shared.add(image, kind: "photo", folder: saveTo)
+                    if let last = MediaStore.shared.items.last {
+                        MediaStore.shared.setNote(caption, for: last)
+                        pendingCard = (last.fileName, saveTo, (args["thought"] as? String) ?? "")
+                    }
+                    return ("搜到「\(query)」了，存进「\(saveTo)」文件夹。", false)
+                }
+            } catch {
+                return (error.localizedDescription, false)
+            }
+
+        case "send_photo":
+            let query = (args["query"] as? String) ?? ""
+            let found = store.list(owner: "assistant", keyword: query).filter { $0.ready }
+            guard let pick = found.first else {
+                let all = store.list(owner: "assistant").filter { $0.ready }
+                if all.isEmpty { return ("你的表情包还是空的，饼饼还没给你存过。", false) }
+                return ("没有跟「\(query)」对得上的。现在有这些：" +
+                        all.prefix(12).map { $0.name }.joined(separator: "、"), false)
+            }
+            if let cid = activeToolConversationID, let i = index(of: cid) {
+                var msg = ChatMessage(role: .assistant)
+                msg.stickerID = pick.id
+                conversations[i].messages.append(msg)
+            }
+            return ("发出去了：\(pick.name)", false)
+
+        case "list_my_stickers":
+            let mine = store.list(owner: "assistant")
+            if mine.isEmpty { return ("你的表情包还是空的。", false) }
+            let lines = mine.map { s in
+                s.ready
+                ? "· \(s.name)｜\(s.description)｜\(s.tags.joined(separator: "、"))"
+                : "· \(s.name.isEmpty ? "（没名字）" : s.name)：还没写描述，暂时发不了"
+            }
+            return ("你现在有 \(mine.count) 个表情：\n" + lines.joined(separator: "\n"), false)
+
+        case "save_sticker":
+            let index = Int((args["index"] as? NSNumber)?.intValue ?? 1)
+            guard let image = recentUserImage(offset: index) else {
+                return ("没找到她最近发的第 \(index) 张图。", true)
+            }
+            guard let data = image.pngData(),
+                  var made = store.add(data: data, ext: "png", owner: "assistant")
+            else { return ("存不进去，可能空间不够了。", true) }
+            made.name = (args["name"] as? String) ?? "没起名"
+            made.description = (args["caption"] as? String) ?? ""
+            if let t = args["tags"] as? String {
+                made.tags = t.components(separatedBy: CharacterSet(charactersIn: "、,，/ "))
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.isEmpty }
+            }
+            store.update(made)
+            pendingCard = (made.fileName, "表情包", (args["thought"] as? String) ?? "")
+            return ("存进你的表情包了：\(made.name)", false)
+
+        case "save_photo_to_folder":
+            let folder = (args["folder"] as? String) ?? ""
+            guard !folder.isEmpty else { return ("要给个文件夹名。", true) }
+            let index = Int((args["index"] as? NSNumber)?.intValue ?? 1)
+            guard let image = recentUserImage(offset: index) else {
+                return ("没找到她最近发的第 \(index) 张图。", true)
+            }
+            MediaStore.shared.add(image, kind: "photo", folder: folder)
+            if let last = MediaStore.shared.items.last {
+                if let cap = args["caption"] as? String, !cap.isEmpty {
+                    MediaStore.shared.setNote(cap, for: last)
+                }
+                pendingCard = (last.fileName, folder, (args["thought"] as? String) ?? "")
+            }
+            return ("存进「\(folder)」了。", false)
+
+        case "delete_sticker":
+            let query = (args["query"] as? String) ?? ""
+            let found = store.list(owner: "assistant", keyword: query)
+            guard let pick = found.first else { return ("没找到「\(query)」。", false) }
+            let n = pick.name
+            store.remove(pick)
+            return ("删掉了：\(n)", false)
+
+        case "ask_choice":
+            let question = (args["question"] as? String) ?? ""
+            let options = (args["options"] as? [String]) ?? []
+            guard !options.isEmpty else { return ("得给几个选项。", true) }
+            if let cid = activeToolConversationID, let i = index(of: cid) {
+                var msg = ChatMessage(role: .assistant)
+                msg.choiceQuestion = question
+                msg.choices = Array(options.prefix(4))
+                conversations[i].messages.append(msg)
+            }
+            return ("问出去了，等她点。", false)
+
+        case "send_to_group_chat":
+            let text = (args["message"] as? String) ?? ""
+            let gid = groupConversation(in: .chat).id
+            guard let gi = index(of: gid) else {
+                return ("群聊那个窗口没找着。", true)
+            }
+            var msg = ChatMessage(role: .assistant, content: text)
+            msg.senderName = settings.aiName.isEmpty ? "阿晏" : settings.aiName
+            conversations[gi].messages.append(msg)
+            conversations[gi].updatedAt = Date()
+            return ("发到群聊了。", false)
+
+        default:
+            return ("没有这个内置工具：\(name)", true)
+        }
+    }
+
+    /// 往回找她最近发的第 n 张图
+    private func recentUserImage(offset: Int) -> UIImage? {
+        guard let cid = activeToolConversationID, let i = index(of: cid) else { return nil }
+        var names: [String] = []
+        for m in conversations[i].messages.reversed() where m.role == .user {
+            names.append(contentsOf: m.imageNames.reversed())
+            if names.count >= offset { break }
+        }
+        let idx = max(1, offset) - 1
+        guard idx < names.count else { return nil }
+        return ImageStore.load(names[idx])
+    }
+
+    /// 从服务器重新抓一遍工具清单
+    func refreshTools(for serverID: UUID) async {
+        guard let idx = mcpServers.firstIndex(where: { $0.id == serverID }) else { return }
+        let server = mcpServers[idx]
+        mcpClients[serverID] = nil   // 换个新连接，免得旧会话过期
+        do {
+            let fresh = try await MCPClient(server: server).listTools()
+            guard let i2 = mcpServers.firstIndex(where: { $0.id == serverID }) else { return }
+            // 保留用户之前手动关掉的那些
+            let disabled = Set(mcpServers[i2].tools.filter { !$0.enabled }.map { $0.name })
+            mcpServers[i2].tools = fresh.map { tool in
+                var t = tool
+                t.enabled = !disabled.contains(tool.name)
+                return t
+            }
+            mcpServers[i2].lastError = nil
+        } catch {
+            guard let i2 = mcpServers.firstIndex(where: { $0.id == serverID }) else { return }
+            mcpServers[i2].lastError = error.localizedDescription
+        }
+    }
+
+    private func finishStreaming(assistantID: UUID, in conversationID: UUID) {
+        runningConversationIDs.remove(conversationID)
+        streamTasks[conversationID] = nil
+        guard let ci = index(of: conversationID),
+              let mi = conversations[ci].messages.firstIndex(where: { $0.id == assistantID })
+        else { return }
+        conversations[ci].messages[mi].isStreaming = false
+
+        // 动作／神态单独拎出来，显示在气泡上面
+        let acted = StickerStore.extractAction(conversations[ci].messages[mi].content)
+        if !acted.action.isEmpty {
+            conversations[ci].messages[mi].content = acted.clean
+            conversations[ci].messages[mi].actionText = acted.action
+        }
+
+        // 他在回复末尾写了 [[sticker:xxx]] 的话，抠出来单独成一条表情消息
+        let parsed = StickerStore.extractStickerTag(conversations[ci].messages[mi].content)
+        if let short = parsed.id {
+            conversations[ci].messages[mi].content = parsed.clean
+            // 只认他自己库里的、描述填全了的——他可能会编一个不存在的 id
+            if let s = StickerStore.shared.stickers.first(where: {
+                $0.owner == "assistant" && $0.ready
+                    && $0.id.uuidString.lowercased().hasPrefix(short.lowercased())
+            }) {
+                var msg = ChatMessage(role: .assistant)
+                msg.stickerID = s.id
+                msg.senderID = conversations[ci].messages[mi].senderID
+                msg.senderName = conversations[ci].messages[mi].senderName
+                msg.turnID = conversations[ci].messages[mi].turnID
+                conversations[ci].messages.append(msg)
+            }
+        }
+
+        // 有思考过程的话，记一下想了多久，显示在那张卡片上
+        if let r = conversations[ci].messages[mi].reasoning, !r.isEmpty,
+           conversations[ci].messages[mi].reasoningSeconds == nil {
+            let used = Date().timeIntervalSince(conversations[ci].messages[mi].createdAt)
+            conversations[ci].messages[mi].reasoningSeconds = max(0.1, used)
+        }
+        // 一个字都没收到、也没报错，就把这个空气泡收掉
+        if conversations[ci].messages[mi].isEmptyContent,
+           conversations[ci].messages[mi].reasoning == nil {
+            conversations[ci].messages.remove(at: mi)
+        }
+    }
+
+    private func finishWithError(_ error: Error, assistantID: UUID, in conversationID: UUID) {
+        guard let ci = index(of: conversationID),
+              let mi = conversations[ci].messages.firstIndex(where: { $0.id == assistantID })
+        else { return }
+        conversations[ci].messages[mi].errorText = error.localizedDescription
+        conversations[ci].messages[mi].isStreaming = false
+    }
+
+    private func appendError(_ text: String, in conversationID: UUID) {
+        guard let i = index(of: conversationID) else { return }
+        var m = ChatMessage(role: .assistant)
+        m.errorText = text
+        conversations[i].messages.append(m)
+    }
+
+    /// 把本地会话转成接口要的消息数组
+    private func buildAPIMessages(from conv: Conversation) -> [ChatAPI.OutgoingMessage] {
+        var result: [ChatAPI.OutgoingMessage] = []
+        // 顺序有两层讲究，都不能弄反：
+        //
+        // 一是给模型看的：总则要在具体能力前面，放最后会被当成背景。
+        //
+        // 二是给缓存看的：**固定的东西放前面，会变的放后面**。
+        // 前缀只要跟上一轮一样就能复用，不用整段重新算；
+        // 一旦把每轮都在变的内容（比如另一个窗口刚聊的话）插到前面，
+        // 后面所有固定内容的缓存全部作废，每轮都得重算，又慢又费钱。
+        var fixed: [String] = []
+        let base = conv.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !base.isEmpty { fixed.append(base) }
+        fixed.append(Self.agencyRule)
+        fixed.append(Self.actionHint)
+        fixed.append(Self.cotHint)
+        if conv.syncWithClaude { fixed.append(Self.claudeSyncHint) }
+        let catalog = StickerStore.shared.assistantCatalog
+        if !catalog.isEmpty { fixed.append(catalog) }
+
+        var sys = fixed.joined(separator: "\n\n")
+
+        // 并了记忆的话，把那边聊过的接在最后——这段每轮都在变
+        if let shared = memoryContext(for: conv) {
+            sys += "\n\n" + shared
+        }
+        if !sys.isEmpty {
+            result.append(.init(role: "system", text: sys, imageDataURLs: []))
+        }
+        var history = conv.messages.filter { $0.role != .system && $0.errorText == nil }
+        if settings.contextLimit > 0, history.count > settings.contextLimit {
+            history = Array(history.suffix(settings.contextLimit))
+        }
+        for m in history {
+            if m.isEmptyContent { continue }
+
+            // 笔记：文字内容 + 每张配图一起给他，他才是真"看到"了
+            if let note = m.note {
+                let urls = note.localImages.compactMap { ImageStore.base64DataURL($0) }
+                result.append(.init(role: m.role.rawValue,
+                                    text: note.briefForModel,
+                                    imageDataURLs: urls))
+                continue
+            }
+
+            // 表情：把首帧缩略图和文字描述一起给他，
+            // 他不需要逐帧读整个动图，一张静态首帧加描述就够了
+            if let sid = m.stickerID {
+                guard let s = StickerStore.shared.sticker(id: sid) else { continue }
+                let thumb = StickerStore.shared.thumbDataURL(of: s)
+                result.append(.init(role: m.role.rawValue,
+                                    text: s.briefForModel,
+                                    imageDataURLs: thumb.map { [$0] } ?? []))
+                continue
+            }
+
+            let urls = m.imageNames.compactMap { ImageStore.base64DataURL($0) }
+            var text = m.content
+            if !m.quotedText.isEmpty {
+                text = "（回应你那句「\(m.quotedText)」）\n" + text
+            }
+            text = Self.appendFiles(m, to: text)
+            result.append(.init(role: m.role.rawValue, text: text, imageDataURLs: urls))
+        }
+        return result
+    }
+}

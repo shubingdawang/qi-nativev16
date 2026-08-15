@@ -1,0 +1,253 @@
+import SwiftUI
+
+/// 输入框左边那个扳手，点开能快速开关这次对话要带哪些工具。
+/// 跟「设置 → MCP」里改的是同一份数据，在这里改完立刻生效。
+///
+/// 排版是**折叠**的：一组一行，行上有这一组的总开关，
+/// 一眼能看完手上有几摊东西；想动某一件再点开那一组。
+/// 以前是把几十个工具全平铺出来，翻半天找不到要关的那个。
+struct ToolToggleView: View {
+
+    @EnvironmentObject var app: AppState
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.dismiss) private var dismiss
+    @State private var search = ""
+    /// 现在哪几组是展开的
+    @State private var expanded: Set<String> = []
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                WallpaperBackground()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+
+                        if app.mcpServers.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("还没连 MCP")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(Theme.textMain(scheme))
+                                Text("连上之后，模型才能真的去查记忆、写日记、记经期。去「设置 → MCP」加一个。")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Theme.textMuted(scheme))
+                            }
+                            .padding(14)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .glassBackground(radius: 18, strength: app.settings.glassOpacity)
+                        }
+
+                        group("App 自带") {
+                            nativeGroup
+                        }
+
+                        if !app.mcpServers.isEmpty {
+                            group("MCP") {
+                                VStack(spacing: 10) {
+                                    ForEach($app.mcpServers) { $server in
+                                        serverGroup($server)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 6)
+                    .padding(.bottom, 30)
+                }
+                .scrollDismissesKeyboard(.interactively)
+            }
+            .searchable(text: $search, prompt: "搜索工具")
+            .navigationTitle("工具")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("完成") { dismiss() }
+                }
+            }
+        }
+    }
+
+    // MARK: 一个大类
+
+    @ViewBuilder
+    private func group<C: View>(_ title: String, @ViewBuilder content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.textMuted(scheme))
+                .padding(.leading, 6)
+            content()
+        }
+    }
+
+    // MARK: 自带工具
+
+    private var nativeGroup: some View {
+        let list = nativeTools
+        let key = "__native"
+        let isOpen = expanded.contains(key)
+        return VStack(spacing: 0) {
+            groupHeader(
+                title: "App 自带工具",
+                count: list.count,
+                isOpen: isOpen,
+                toggle: Binding(
+                    get: { app.settings.nativeToolsEnabled },
+                    set: { app.settings.nativeToolsEnabled = $0 }
+                ),
+                onTap: { flip(key) })
+
+            if isOpen {
+                VStack(spacing: 0) {
+                    ForEach(list, id: \.name) { tool in
+                        SettingsDivider()
+                        toolRow(
+                            name: tool.name,
+                            desc: tool.desc,
+                            on: Binding(
+                                get: { !app.settings.disabledNativeTools.contains(tool.name) },
+                                set: { on in
+                                    if on {
+                                        app.settings.disabledNativeTools.removeAll { $0 == tool.name }
+                                    } else if !app.settings.disabledNativeTools.contains(tool.name) {
+                                        app.settings.disabledNativeTools.append(tool.name)
+                                    }
+                                }),
+                            enabled: app.settings.nativeToolsEnabled)
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .glassBackground(radius: 18, strength: app.settings.glassOpacity)
+    }
+
+    // MARK: 一台 MCP
+
+    private func serverGroup(_ server: Binding<MCPServer>) -> some View {
+        let key = server.wrappedValue.id.uuidString
+        let isOpen = expanded.contains(key)
+        let indices = visibleIndices(of: server.wrappedValue)
+        return VStack(spacing: 0) {
+            groupHeader(
+                title: server.wrappedValue.name.isEmpty ? "未命名" : server.wrappedValue.name,
+                count: server.wrappedValue.tools.count,
+                isOpen: isOpen,
+                toggle: server.enabled,
+                onTap: { flip(key) })
+
+            if isOpen {
+                VStack(spacing: 0) {
+                    ForEach(indices, id: \.self) { i in
+                        SettingsDivider()
+                        toolRow(
+                            name: server.wrappedValue.tools[i].name,
+                            desc: server.wrappedValue.tools[i].description,
+                            on: server.tools[i].enabled,
+                            enabled: server.wrappedValue.enabled)
+                    }
+                    if indices.isEmpty {
+                        SettingsDivider()
+                        Text(search.isEmpty ? "这台还没抓到工具清单" : "没有匹配的工具")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .glassBackground(radius: 18, strength: app.settings.glassOpacity)
+    }
+
+    // MARK: 零件
+
+    /// 折起来时看到的那一行：三角 + 名字（几个） + 总开关
+    private func groupHeader(title: String,
+                             count: Int,
+                             isOpen: Bool,
+                             toggle: Binding<Bool>,
+                             onTap: @escaping () -> Void) -> some View {
+        HStack(spacing: 10) {
+            Button(action: onTap) {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                        .rotationEffect(.degrees(isOpen ? 90 : 0))
+                    Text("\(title)（\(count)）")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    Spacer(minLength: 4)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Toggle("", isOn: toggle)
+                .labelsHidden()
+                .tint(app.settings.accentColor)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 13)
+    }
+
+    /// 展开之后每一件工具各自那一行
+    private func toolRow(name: String, desc: String,
+                         on: Binding<Bool>, enabled: Bool) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundStyle(Theme.textMain(scheme))
+                if !desc.isEmpty {
+                    Text(desc)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            Spacer(minLength: 8)
+            Toggle("", isOn: on)
+                .labelsHidden()
+                .tint(app.settings.accentColor)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        // 总开关关着的时候，底下这些还看得见，但动不了也不生效
+        .opacity(enabled ? 1 : 0.4)
+        .disabled(!enabled)
+    }
+
+    private func flip(_ key: String) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
+            if expanded.contains(key) { expanded.remove(key) } else { expanded.insert(key) }
+        }
+    }
+
+    /// 从工具定义里把名字和说明抠出来，光展示用
+    private var nativeTools: [(name: String, desc: String)] {
+        NativeTools.definitions(hasGroup: true, hasVoice: true).compactMap { item in
+            guard let fn = item["function"] as? [String: Any],
+                  let raw = fn["name"] as? String else { return nil }
+            let desc = (fn["description"] as? String ?? "")
+            // 工具说明是按「触发 → 动机 → 行动」写的，列表里只取第一句
+            let first = desc.split(separator: "。").first.map(String.init) ?? desc
+            return (NativeTools.shortName(raw), first)
+        }
+        .filter { !search.isEmpty ? $0.name.localizedCaseInsensitiveContains(search) : true }
+    }
+
+    private func visibleIndices(of server: MCPServer) -> [Int] {
+        server.tools.indices.filter { i in
+            search.isEmpty
+            || server.tools[i].name.localizedCaseInsensitiveContains(search)
+            || server.tools[i].description.localizedCaseInsensitiveContains(search)
+        }
+    }
+}
