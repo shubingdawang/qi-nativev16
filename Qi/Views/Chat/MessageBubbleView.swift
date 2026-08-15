@@ -633,7 +633,11 @@ struct MessageBubbleView: View {
 
     /// 按空行把回复切成几段，每段单独一个气泡。
     /// 段与段的间距跟思考链、工具卡片之间是同一个值。
+    ///
+    /// 开关在「设置 → 通用设置 → 他分段发」。关着就一整段一个气泡——
+    /// 有人就是喜欢一大块读完，不喜欢消息一条条弹。
     private var contentSegments: [String] {
+        guard app.settings.segmentAssistant || isUser else { return [message.content] }
         let parts = message.content
             .components(separatedBy: "\n\n")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }

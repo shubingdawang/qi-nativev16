@@ -41,7 +41,9 @@ struct ClawdCompanion: View {
                         .transition(.scale(scale: 0.85).combined(with: .opacity))
                 }
 
-                ClawdView(mood: mood, scale: 2.2)
+                // 图纸那只是 30 格宽，比上一版粗一倍，
+                // 所以每格得画小一点，摆出来才是原来那个尺寸
+                ClawdView(mood: mood, scale: 1.2)
                     .onTapGesture {
                         poked = true
                         mood = .happy

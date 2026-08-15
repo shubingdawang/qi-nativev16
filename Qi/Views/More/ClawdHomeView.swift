@@ -195,7 +195,7 @@ struct ClawdHomeView: View {
                             .fixedSize()
                             .transition(.scale(scale: 0.9).combined(with: .opacity))
                     }
-                    ClawdView(mood: mood, scale: 3.4)
+                    ClawdView(mood: mood, scale: 1.8)
                 }
                 .position(x: clawdX * geo.size.width, y: geo.size.height * 0.78)
                 .animation(.easeInOut(duration: 2.4), value: clawdX)

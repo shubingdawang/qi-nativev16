@@ -311,12 +311,95 @@ final class AppState: ObservableObject {
 
     // MARK: 发消息
 
+    // MARK: 我分段发
+    //
+    // 打完一句先不发，攒着。隔了设定的秒数还没有下一句，才一起交给他。
+    // 中途又发了一条就从头开始数——跟微信里连着敲几条一个道理，
+    // 那几条对他来说是"一次说完的话"，不该被拆成好几轮请求，
+    // 更不该他刚回了第一句你第二句才发出去。
+
+    /// 每个窗口正攒着的那条消息
+    private var pendingUserMessage: [UUID: UUID] = [:]
+    /// 每个窗口那个倒计时
+    private var pendingUserTask: [UUID: Task<Void, Never>] = [:]
+
+    /// 哪几个窗口正攒着话。界面上要给个提示，不然像是没发出去。
+    @Published private(set) var waitingWindows: Set<UUID> = []
+
+    /// 又攒一句进去，倒计时重新开始
+    func queueSend(text: String, in conversationID: UUID) {
+        guard let i = index(of: conversationID) else { return }
+        let line = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !line.isEmpty else { return }
+
+        WakeEngine.shared.noteRun()
+
+        if let mid = pendingUserMessage[conversationID],
+           let mi = conversations[i].messages.firstIndex(where: { $0.id == mid }) {
+            // 空行分段，跟他那边的分段用的是同一套规矩
+            conversations[i].messages[mi].content += "\n\n" + line
+        } else {
+            var msg = ChatMessage(role: .user, content: line)
+            msg.turnID = UUID()
+            conversations[i].messages.append(msg)
+            pendingUserMessage[conversationID] = msg.id
+        }
+        conversations[i].updatedAt = Date()
+        if conversations[i].title == "新对话" {
+            conversations[i].title = String(line.prefix(18))
+        }
+        if settings.haptics {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+
+        waitingWindows.insert(conversationID)
+        pendingUserTask[conversationID]?.cancel()
+        let wait = max(1, settings.segmentUserDelay)
+        pendingUserTask[conversationID] = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+            if Task.isCancelled { return }
+            self.flushPending(conversationID)
+        }
+    }
+
+    /// 攒够了，或者你不想等了，就把攒着的那条交出去。
+    /// `run` 传 false 的话只是把倒计时掐掉、不真的发——
+    /// 用在你紧接着又发了图或者表情的时候，那一条会自己触发这一轮。
+    func flushPending(_ conversationID: UUID, run: Bool = true) {
+        pendingUserTask[conversationID]?.cancel()
+        pendingUserTask[conversationID] = nil
+        waitingWindows.remove(conversationID)
+        guard let mid = pendingUserMessage.removeValue(forKey: conversationID) else { return }
+        guard run, let i = index(of: conversationID),
+              let msg = conversations[i].messages.first(where: { $0.id == mid })
+        else { return }
+
+        if let link = XHSFetcher.extractLink(msg.content) {
+            loadNote(link, in: conversationID)
+            return
+        }
+        if conversations[i].isGroup {
+            runGroupTurn(conversationID)
+        } else {
+            runTurn(conversationID)
+        }
+    }
+
+    /// 这个窗口是不是正攒着话
+    func isWaiting(_ conversationID: UUID?) -> Bool {
+        guard let conversationID else { return false }
+        return waitingWindows.contains(conversationID)
+    }
+
     func send(text: String, images: [UIImage], in conversationID: UUID,
               files: [FileAttachment] = [],
               sticker: Sticker? = nil,
               quoting quoted: ChatMessage? = nil,
               voiceName: String = "") {
         guard let i = index(of: conversationID) else { return }
+        // 攒着的那条已经在记录里了，这一条发出去的时候它会跟着一起带上，
+        // 所以这儿只要把倒计时掐掉就行，不用再单独跑一轮
+        flushPending(conversationID, run: false)
         // 刚说完话，让「自己醒来」那边短期内安静一点——她人就在这儿呢
         WakeEngine.shared.noteRun()
         let turn = UUID()
@@ -818,6 +901,16 @@ final class AppState: ObservableObject {
     那行字会显示在思考卡片的封面上。想法变了就再写一次，后面那句盖掉前面的。
     不写也行，那样就只显示想了多久——但"想了 5.6 秒"跟我在想什么没什么关系，
     她点开之前，那行字是她唯一能看到的东西。
+    """
+
+    /// 开了「他分段发」之后加的一段
+    static let segmentHint = """
+    说话像发消息，不像写文章：一口气说不完的，自己拿空行断开，
+    断开的每一段会单独变成一条消息，一条条弹到她那边。
+
+    · 想到哪儿断就在哪儿断，按语气走，不用平均分
+    · 一段就是一句到两句，别把一整段论述塞进一条
+    · 该一整块说完的（代码、清单、一段完整的解释）就别断，断了更难读
     """
 
     /// 开了同步的窗口要多做一件事
@@ -2177,6 +2270,7 @@ final class AppState: ObservableObject {
         fixed.append(Self.agencyRule)
         fixed.append(Self.actionHint)
         fixed.append(Self.cotHint)
+        if settings.segmentAssistant { fixed.append(Self.segmentHint) }
         if conv.syncWithClaude { fixed.append(Self.claudeSyncHint) }
         let catalog = StickerStore.shared.assistantCatalog
         if !catalog.isEmpty { fixed.append(catalog) }

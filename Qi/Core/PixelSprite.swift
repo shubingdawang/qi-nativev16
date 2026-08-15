@@ -64,196 +64,330 @@ struct PixelSpriteView: View {
 
 // MARK: - clawd 本体
 
-/// clawd 是只小螃蟹。
-/// 几套姿势画在这儿，切着播就是动画——跟 CSS 关键帧一个道理，
-/// 只是这边用 SwiftUI 的定时器换帧。
+/// clawd 是 Claude 那只吉祥物。
+///
+/// 这一版**照饼饼给的豆画图纸一格一格抄下来的**，不是我自己想的：
+/// 图纸 32 列 25 行，用到的是第 2~31 列、第 2~24 行，一共 510 颗豆——
+/// 身子色 492 颗、眼睛黑色 18 颗，抄完对得上，说明没抄错。
+///
+///   · 身子    第 2~18 行 × 第 5~28 列，一整块
+///   · 两只手  第 8~12 行，左边第 2~4 列、右边第 29~31 列
+///   · 四条腿  第 19~24 行，第 5-7、10-12、21-23、26-28 列
+///     （中间空一大段，所以是两条在左、两条在右）
+///   · 眼睛    第 7~9 行，第 8-10 列和第 23-25 列，两个三格见方的黑块
+///
+/// 别的姿势都是在这张图上改眼睛或者挪手挪出来的，身子一格没动，
+/// 所以换帧的时候它不会歪、不会跳。
 enum ClawdSprites {
 
     static let palette: [Character: Color] = [
-        "p": Color(hexString: "C8805E")!,   // 身子，砖橘
-        "d": Color(hexString: "A9664A")!,   // 暗一点，脚和边
-        "k": Color(hexString: "1A1A1A")!,   // 眼睛
+        "p": Color(hexString: "F2715F")!,   // 身子，图纸上那个珊瑚红
+        "d": Color(hexString: "C9553F")!,   // 暗一档，闭着的眼睛用
+        "k": Color(hexString: "000000")!,   // 眼睛，图纸上是纯黑
         "y": Color(hexString: "F0C040")!,   // 头顶那点小闪光
         "w": Color(hexString: "FFFFFF")!,   // 气泡
         "b": Color(hexString: "4A90D9")!    // 气泡里那个蓝点
     ]
 
-    // clawd 是**螃蟹**，不是一块砖。
-    //
-    // 上一版把身子画成了一整块方板，左右各戳出一格当手——
-    // 放大了看就是一块地砖上开了两个黑洞，谁都认不出是螃蟹。
-    // 现在照螃蟹本来的样子重新排：
-    //   · 顶上左右各**一只举起来的钳子**（两格宽、三格高，暗色描边）
-    //   · 中间是壳，上窄下宽，眼睛是壳上挖的两个黑格
-    //   · 壳底下**六条腿**，左三右三，一格宽
-    // 所有帧统一 14 格宽，换帧的时候身子不会左右跳。
-
-    /// 站着
+    /// 睁着眼站着。这就是图纸原样。
     static let idle = PixelSprite([
-        ".dd........dd.",
-        "dppd......dppd",
-        "dppd.pppp.dppd",
-        ".ddppppppppdd.",
-        "..pppppppppp..",
-        "..pkkppppkkp..",
-        "..pkkppppkkp..",
-        "..pppppppppp..",
-        "..pppppppppp..",
-        "..dppppppppd..",
-        ".d.d.d..d.d.d."
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppkkkppppppppppppkkkppp...",
+        "ppppppkkkppppppppppppkkkpppppp",
+        "ppppppkkkppppppppppppkkkpppppp",
+        "pppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppp",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp..."
     ], palette)
 
-    /// 呼吸：整只往下沉一格
+    /// 呼吸：整只往下沉一格，腿跟着收短一截
     static let breathe = PixelSprite([
-        "..............",
-        ".dd........dd.",
-        "dppd......dppd",
-        "dppd.pppp.dppd",
-        ".ddppppppppdd.",
-        "..pppppppppp..",
-        "..pkkppppkkp..",
-        "..pkkppppkkp..",
-        "..pppppppppp..",
-        "..dppppppppd..",
-        ".d.d.d..d.d.d."
+        "..............................",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppkkkppppppppppppkkkppp...",
+        "ppppppkkkppppppppppppkkkpppppp",
+        "ppppppkkkppppppppppppkkkpppppp",
+        "pppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppp",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp..."
     ], palette)
 
-    /// 眨眼：眼睛只剩一格高
+    /// 眨眼：三格高的眼睛只剩最下面一格
     static let blink = PixelSprite([
-        ".dd........dd.",
-        "dppd......dppd",
-        "dppd.pppp.dppd",
-        ".ddppppppppdd.",
-        "..pppppppppp..",
-        "..pppppppppp..",
-        "..pkkppppkkp..",
-        "..pppppppppp..",
-        "..pppppppppp..",
-        "..dppppppppd..",
-        ".d.d.d..d.d.d."
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "pppppppppppppppppppppppppppppp",
+        "ppppppkkkppppppppppppkkkpppppp",
+        "pppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppp",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp..."
     ], palette)
 
-    /// 开心：眼睛弯成两个 ^，钳子举高
+    /// 开心：眼睛眯起来，只剩下面两格
     static let happy = PixelSprite([
-        "dppd......dppd",
-        "dppd......dppd",
-        ".dd..pppp..dd.",
-        "..dppppppppd..",
-        "..pppppppppp..",
-        "..ppkppppkpp..",
-        "..pkpkppkpkp..",
-        "..pppppppppp..",
-        "..pppppppppp..",
-        "..dppppppppd..",
-        ".d.d.d..d.d.d."
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "ppppppkkkppppppppppppkkkpppppp",
+        "ppppppkkkppppppppppppkkkpppppp",
+        "pppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppp",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp..."
     ], palette)
 
-    /// 笑：眼睛照常，嘴角咧开一道
+    /// 笑：眼睛留上下两道、中间亮着，像弯起来了
     static let smile = PixelSprite([
-        ".dd........dd.",
-        "dppd......dppd",
-        "dppd.pppp.dppd",
-        ".ddppppppppdd.",
-        "..pppppppppp..",
-        "..pkkppppkkp..",
-        "..pkkppppkkp..",
-        "..pppddddppp..",
-        "..pppppppppp..",
-        "..dppppppppd..",
-        ".d.d.d..d.d.d."
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppkkkppppppppppppkkkppp...",
+        "pppppppppppppppppppppppppppppp",
+        "ppppppkkkppppppppppppkkkpppppp",
+        "pppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppp",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp..."
+    ], palette)
+
+    /// 睡着：眼睛闭成一道暗色的缝
+    static let sleep = PixelSprite([
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "pppppppppppppppppppppppppppppp",
+        "ppppppdddppppppppppppdddpppppp",
+        "pppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppp",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp..."
     ], palette)
 
     /// 在想事情：头顶冒小方块
     static let thinking = PixelSprite([
-        ".......y......",
-        "...y..........",
-        ".dd........dd.",
-        "dppd......dppd",
-        "dppd.pppp.dppd",
-        ".ddppppppppdd.",
-        "..pppppppppp..",
-        "..pkkppppkkp..",
-        "..pkkppppkkp..",
-        "..pppppppppp..",
-        "..pppppppppp..",
-        "..dppppppppd..",
-        ".d.d.d..d.d.d."
+        ".......y......................",
+        "..................y...........",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppkkkppppppppppppkkkppp...",
+        "ppppppkkkppppppppppppkkkpppppp",
+        "ppppppkkkppppppppppppkkkpppppp",
+        "pppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppp",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp..."
     ], palette)
 
     /// 想得更凶：小方块换个位置，看着像在冒
     static let thinking2 = PixelSprite([
-        "...y..........",
-        ".......y......",
-        ".dd........dd.",
-        "dppd......dppd",
-        "dppd.pppp.dppd",
-        ".ddppppppppdd.",
-        "..pppppppppp..",
-        "..pkkppppkkp..",
-        "..pkkppppkkp..",
-        "..pppppppppp..",
-        "..pppppppppp..",
-        "..dppppppppd..",
-        ".d.d.d..d.d.d."
+        "..................y...........",
+        ".......y......................",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppkkkppppppppppppkkkppp...",
+        "ppppppkkkppppppppppppkkkpppppp",
+        "ppppppkkkppppppppppppkkkpppppp",
+        "pppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppp",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp..."
     ], palette)
 
-    /// 干活：右钳子砸下去
+    /// 干活：左手抬起来、右手压下去
     static let working = PixelSprite([
-        ".dd...........",
-        "dppd.......dd.",
-        "dppd.pppp.dppd",
-        ".ddppppppppdd.",
-        "..pppppppppp..",
-        "..pkkppppkkp..",
-        "..pkkppppkkp..",
-        "..pppppppppp..",
-        "..pppppppppp..",
-        "..dppppppppd..",
-        ".d.d.d..d.d.d."
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "ppppppkkkppppppppppppkkkppp...",
+        "ppppppkkkppppppppppppkkkppp...",
+        "ppppppkkkppppppppppppkkkpppppp",
+        "pppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppp",
+        "...ppppppppppppppppppppppppppp",
+        "...ppppppppppppppppppppppppppp",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp..."
     ], palette)
 
-    /// 换左钳子砸。两帧来回切就是在敲东西。
+    /// 换只手。两帧来回切就是在忙活。
     static let working2 = PixelSprite([
-        "...........dd.",
-        ".dd.......dppd",
-        "dppd.pppp.dppd",
-        ".ddppppppppdd.",
-        "..pppppppppp..",
-        "..pkkppppkkp..",
-        "..pkkppppkkp..",
-        "..pppppppppp..",
-        "..pppppppppp..",
-        "..dppppppppd..",
-        ".d.d.d..d.d.d."
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppkkkppppppppppppkkkpppppp",
+        "...pppkkkppppppppppppkkkpppppp",
+        "ppppppkkkppppppppppppkkkpppppp",
+        "pppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppp",
+        "ppppppppppppppppppppppppppp...",
+        "ppppppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...pppppppppppppppppppppppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp...",
+        "...ppp..ppp........ppp..ppp..."
     ], palette)
 
-    /// 躲到边上：只露半边身子、一只钳子和一只眼
+    /// 躲到边上：只露左半边身子和一只眼
     static let peek = PixelSprite([
-        "......dd.",
-        ".....dppd",
-        "pppp.dppd",
-        "ppppppdd.",
-        "pppppppp.",
-        "ppkkpppp.",
-        "ppkkpppp.",
-        "pppppppp.",
-        "pppppppd.",
-        ".d.d.d..."
-    ], palette)
-
-    /// 睡着：眼睛闭上，钳子垂下来
-    static let sleep = PixelSprite([
-        "..............",
-        "..............",
-        "dppd.pppp.dppd",
-        "dddppppppppddd",
-        "..pppppppppp..",
-        "..pppppppppp..",
-        "..pddppppddp..",
-        "..pppppppppp..",
-        "..pppppppppp..",
-        "..dppppppppd..",
-        ".d.d.d..d.d.d."
+        "...pppppppppppppp",
+        "...pppppppppppppp",
+        "...pppppppppppppp",
+        "...pppppppppppppp",
+        "...pppppppppppppp",
+        "...pppkkkpppppppp",
+        "ppppppkkkpppppppp",
+        "ppppppkkkpppppppp",
+        "ppppppppppppppppp",
+        "ppppppppppppppppp",
+        "ppppppppppppppppp",
+        "...pppppppppppppp",
+        "...pppppppppppppp",
+        "...pppppppppppppp",
+        "...pppppppppppppp",
+        "...pppppppppppppp",
+        "...pppppppppppppp",
+        "...ppp..ppp......",
+        "...ppp..ppp......",
+        "...ppp..ppp......",
+        "...ppp..ppp......",
+        "...ppp..ppp......",
+        "...ppp..ppp......"
     ], palette)
 
     /// 头顶那个小气泡，说话的时候冒出来

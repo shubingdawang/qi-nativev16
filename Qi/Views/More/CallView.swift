@@ -15,7 +15,7 @@ struct IncomingCallView: View {
     var body: some View {
         HStack(spacing: 12) {
             // clawd 顶上来当头像
-            ClawdView(mood: .idle, scale: 2)
+            ClawdView(mood: .idle, scale: 1.1)
                 .frame(width: 46, height: 46)
                 .background(
                     Circle().fill(app.settings.accentColor.opacity(0.16))
@@ -160,7 +160,7 @@ struct CallView: View {
 
     private var header: some View {
         VStack(spacing: 4) {
-            ClawdView(mood: thinking ? .thinking : .idle, scale: 2.6)
+            ClawdView(mood: thinking ? .thinking : .idle, scale: 1.4)
                 .frame(height: 40)
                 .padding(.top, 10)
 

@@ -151,9 +151,21 @@ struct NavDrawerBar: View {
         Button {
             toggle(true)
         } label: {
-            GlassSurface(radius: 3, strength: app.settings.glassOpacity, extra: 0.5)
+            // **这里不能用 GlassSurface。**
+            // material 是要去采样背后那块画面的，拖着它走的时候
+            // 采样跟不上位移，屏幕上就拖出一道虚影（就是那个"重影"）。
+            // 这么细一根条本来也糊不出什么东西来，
+            // 所以直接画一根实心的白条：不采样，就不会有影。
+            // 颜色还是跟着玻璃设置走——哪套玻璃就哪个白。
+            Capsule(style: .continuous)
+                .fill(.white.opacity(handleWhite))
+                .overlay {
+                    Capsule(style: .continuous)
+                        .strokeBorder(.white.opacity(handleWhite * 0.5), lineWidth: 0.5)
+                }
                 .frame(width: 5.5, height: 44)
-                .shadow(color: Theme.shadow(scheme), radius: 6, x: -1, y: 1)
+                .shadow(color: .black.opacity(scheme == .dark ? 0.30 : 0.14),
+                        radius: 5, x: -1, y: 1)
                 // 条本身很细，四周留出富余，手指按偏一点也能中
                 .padding(.leading, 22)
                 .padding(.trailing, 3)
@@ -175,6 +187,17 @@ struct NavDrawerBar: View {
                     if abs(v.translation.height) > 10 { handleDragY = v.translation.height }
                 }
         )
+    }
+
+    /// 那根条有多白。三套玻璃各给一个值，换玻璃它跟着变。
+    private var handleWhite: Double {
+        let base: Double
+        switch app.settings.glassStyle {
+        case .frosted: base = scheme == .dark ? 0.42 : 0.92
+        case .clear:   base = scheme == .dark ? 0.30 : 0.70
+        case .blur:    base = scheme == .dark ? 0.36 : 0.82
+        }
+        return base * min(1, app.settings.glassOpacity + 0.3)
     }
 
     private var currentScreenHeight: CGFloat? {

@@ -156,69 +156,80 @@ struct SideMenuPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName)
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(Theme.textMain(scheme))
-                Text("在这里")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.textMuted(scheme))
-            }
-            .padding(.horizontal, 22)
-            .padding(.top, 14)
-            .padding(.bottom, 12)
-            .offset(y: isOpen ? 0 : -10)
-            .opacity(isOpen ? 1 : 0)
-            .animation(.spring(response: 0.34, dampingFraction: 0.85), value: isOpen)
-
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 2) {
-                    ForEach(Array(SideMenuItem.all.enumerated()), id: \.element.id) { i, item in
-                        row(item)
-                            // 一行比一行晚一点点出来，从下往上抬。
-                            // 每格 25 毫秒，十四行加起来也就三分之一秒，
-                            // 快到不觉得在等，但眼睛看得出是"滑进来"的。
-                            .offset(y: isOpen ? 0 : 22)
-                            .opacity(isOpen ? 1 : 0)
-                            .animation(
-                                .spring(response: 0.38, dampingFraction: 0.86)
-                                    .delay(isOpen ? Double(i) * 0.025 : 0),
-                                value: isOpen)
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 12)
-            }
-
-            Spacer(minLength: 0)
-
-            // 底下原来空着一大片。搁一句在一起多少天，
-            // 顺手把那块空白填上——比留一整块空更像个"地方"。
-            footer
+            header
+                .offset(y: isOpen ? 0 : -12)
                 .opacity(isOpen ? 1 : 0)
-                .animation(.easeOut(duration: 0.3).delay(isOpen ? 0.24 : 0), value: isOpen)
+                .animation(.spring(response: 0.34, dampingFraction: 0.85), value: isOpen)
+
+            // 菜单本体。滚起来是**半个转盘**的样子：
+            // 越靠近竖直中线的那几项越大、越实、越往右探；
+            // 上下两头缩小、变淡、往左收回去，像绕着一根轴转过去了。
+            //
+            // 做法是 .visualEffect ——它只改画出来的样子，不参与排版，
+            // 所以每一帧跟着滚动位置重算也不会把布局搅乱。
+            GeometryReader { geo in
+                let mid = geo.size.height / 2
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 2) {
+                        ForEach(Array(SideMenuItem.all.enumerated()), id: \.element.id) { i, item in
+                            row(item)
+                                .visualEffect { content, proxy in
+                                    // 这一行的中心离竖直中线有多远，0 是正中，1 是到边
+                                    let y = proxy.frame(in: .named("wheel")).midY
+                                    let d = min(1, abs(y - mid) / mid)
+                                    return content
+                                        .scaleEffect(1 - d * 0.34, anchor: .leading)
+                                        .offset(x: -d * d * 46)
+                                        .opacity(1 - d * 0.72)
+                                        .blur(radius: d * d * 2.2)
+                                }
+                                // 拉开侧栏的那一下，一行比一行晚一点点抬上来
+                                .offset(y: isOpen ? 0 : 26)
+                                .opacity(isOpen ? 1 : 0)
+                                .animation(
+                                    .spring(response: 0.42, dampingFraction: 0.82)
+                                        .delay(isOpen ? Double(i) * 0.03 : 0),
+                                    value: isOpen)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    // 内容不够高就居中撑开，底下不留那一大片空
+                    .frame(minHeight: geo.size.height, alignment: .center)
+                }
+                .coordinateSpace(name: "wheel")
+                // 第一项和最后一项也能转到正中间来
+                .contentMargins(.vertical, geo.size.height * 0.28, for: .scrollContent)
+            }
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .padding(.top, 44)
     }
 
-    // MARK: 底下那一小块
+    // MARK: 顶上那一块
 
-    private var footer: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("在一起第 \(daysTogether) 天")
-                .font(.system(size: 13, weight: .medium))
+    /// 名字、在一起多少天、今天几号，全挪到最上面来。
+    /// 原来「在一起第 N 天」挂在最底下，那是整栏最不容易看见的位置。
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName)
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(Theme.textMain(scheme))
-            Text(Self.today.string(from: Date()))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted(scheme))
+            HStack(spacing: 6) {
+                Text("在一起第 \(daysTogether) 天")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.textSoft(scheme))
+                Circle()
+                    .fill(Theme.textMuted(scheme).opacity(0.5))
+                    .frame(width: 3, height: 3)
+                Text(Self.today.string(from: Date()))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 13)
-        .glassBackground(radius: 16, strength: app.settings.glassOpacity * 0.8)
-        .padding(.horizontal, 12)
-        .padding(.bottom, 40)
+        .padding(.horizontal, 22)
+        .padding(.top, 14)
+        .padding(.bottom, 14)
     }
 
     private var daysTogether: Int {

@@ -305,6 +305,15 @@ struct AppSettings: Codable {
     var nativeToolsEnabled: Bool = true
     /// 单独关掉的自带工具（存短名，不带 app__ 前缀）
     var disabledNativeTools: [String] = []
+
+    /// 他分段发：让他自己决定在哪儿断句，断开的每一段单独一个气泡。
+    /// 一整段说完才算一句话，头像只挂一次。
+    var segmentAssistant: Bool = false
+    /// 我分段发：我打完一句先攒着，隔了下面这么多秒还没有下一句才真的发出去。
+    /// 中途又发了一条就重新开始数。
+    var segmentUser: Bool = false
+    /// 攒多久（秒）
+    var segmentUserDelay: Double = 6
     /// 自己的气泡要不要染一点主题色。0 = 纯玻璃，跟对方的一样透。
     var bubbleTint: Double = 0
     /// 从哪天开始算在一起

@@ -1,10 +1,8 @@
 import SwiftUI
-import PhotosUI
 
 struct AppearanceView: View {
 
     @EnvironmentObject var app: AppState
-    @State private var wallpaperItem: PhotosPickerItem?
     @State private var customHex = ""
 
     /// 设置页那张外观卡片也要用同一组色，所以放成 static
@@ -64,90 +62,8 @@ struct AppearanceView: View {
                 }
             }
 
-            Section {
-                if let name = app.settings.wallpaperName, let image = ImageStore.load(name) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(height: 150)
-                        .clipped()
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                }
-
-                PhotosPicker(selection: $wallpaperItem, matching: .images) {
-                    Label(wallpaperButtonTitle, systemImage: "photo")
-                }
-
-                if !app.settings.wallpaperHistory.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("换过的")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(app.settings.wallpaperHistory, id: \.self) { name in
-                                    if let img = ImageStore.load(name) {
-                                        Image(uiImage: img)
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 54, height: 78)
-                                            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                                    .strokeBorder(Color.white.opacity(0.5), lineWidth: 0.8)
-                                            )
-                                            .onTapGesture {
-                                                let current = app.settings.wallpaperName
-                                                app.settings.wallpaperName = name
-                                                app.settings.wallpaperHistory.removeAll { $0 == name }
-                                                if let current,
-                                                   !app.settings.wallpaperHistory.contains(current) {
-                                                    app.settings.wallpaperHistory.insert(current, at: 0)
-                                                }
-                                            }
-                                            .contextMenu {
-                                                Button(role: .destructive) {
-                                                    ImageStore.delete(name)
-                                                    app.settings.wallpaperHistory.removeAll { $0 == name }
-                                                } label: {
-                                                    Label("彻底删掉", systemImage: Icon.trash)
-                                                }
-                                            }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if app.settings.wallpaperName != nil {
-                    VStack(alignment: .leading) {
-                        HStack {
-                            Text("压暗")
-                            Spacer()
-                            Text("\(Int(app.settings.wallpaperDim * 100))%")
-                                .foregroundStyle(.secondary)
-                                .font(.caption)
-                        }
-                        Slider(value: $app.settings.wallpaperDim, in: 0...0.6)
-                    }
-                    Button {
-                        if let name = app.settings.wallpaperName,
-                           !app.settings.wallpaperHistory.contains(name) {
-                            app.settings.wallpaperHistory.insert(name, at: 0)
-                        }
-                        app.settings.wallpaperName = nil
-                        app.settings.wallpaperDim = 0
-                    } label: {
-                        Label("先不用壁纸", systemImage: "photo.badge.arrow.down")
-                    }
-                }
-            } header: {
-                Text("壁纸")
-            } footer: {
-                Text("壁纸太花的话，把气泡透明度调低一点会更好读。")
-            }
+            // 壁纸那一整块搬去「设置 → 外观 → 背景」了。
+            // 换图、换过的、压暗，全在那一格里办完，这儿不再重复一遍。
 
             Section {
                 ForEach(ThemePreset.allCases) { p in
@@ -359,19 +275,13 @@ struct AppearanceView: View {
         }
         .transparentList()
         .listRowBackground(GlassRowBackground())
+        .background { WallpaperBackground() }
         .safeAreaInset(edge: .bottom) {
             Color.clear.frame(height: Layout.tabBarExpanded)
         }
-        .navigationTitle("主题与壁纸")
+        .navigationTitle("自定义主题")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { customHex = app.settings.accentHex }
-        .onChange(of: wallpaperItem) { _, item in
-            loadWallpaper(item)
-        }
-    }
-
-    private var wallpaperButtonTitle: String {
-        app.settings.wallpaperName == nil ? "选一张壁纸" : "换一张"
     }
 
     private func applyCustom() {
@@ -379,25 +289,5 @@ struct AppearanceView: View {
         if hex.hasPrefix("#") { hex.removeFirst() }
         guard Color(hexString: hex) != nil else { return }
         app.settings.accentHex = hex.uppercased()
-    }
-
-    private func loadWallpaper(_ item: PhotosPickerItem?) {
-        guard let item else { return }
-        Task {
-            guard let data = try? await item.loadTransferable(type: Data.self),
-                  let image = UIImage(data: data),
-                  let name = ImageStore.save(image, quality: 0.9)
-            else { return }
-            await MainActor.run {
-                // 旧的不删，收进历史里，随时能换回去
-                if let old = app.settings.wallpaperName,
-                   !app.settings.wallpaperHistory.contains(old) {
-                    app.settings.wallpaperHistory.insert(old, at: 0)
-                }
-                app.settings.wallpaperName = name
-                app.settings.wallpaperHistory.removeAll { $0 == name }
-                wallpaperItem = nil
-            }
-        }
     }
 }

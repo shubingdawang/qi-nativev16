@@ -215,99 +215,102 @@ struct GlassSurface: View {
     }
 
     var body: some View {
+        switch kind {
+        case .frosted: frosted
+        case .clear:   clear
+        case .blur:    blur
+        }
+    }
+
+    // MARK: 磨砂 —— 参考图里的 Frosted
+    //
+    // 参考图那块的特征：糊得**很彻底**（背后只剩大色块，认不出形状），
+    // 表面有一层看得见的细砂，四边一圈很淡的亮边把形状收住，
+    // 整体偏亮但不发灰。上一版差在两处：白铺得太少所以发灰，
+    // 砂只在上面一点点看得见。这版把白垫足，砂铺满整块。
+    private var frosted: some View {
         shape
-            .fill(material)
-            // 通透那套要的是"几乎看不出有东西挡着"，
-            // material 本身没法调淡，只能整层压透明度。
-            .opacity(kind == .clear ? 0.62 : 1)
+            .fill(.regularMaterial)
             .overlay {
-                // 薄白那一层。磨砂上下差一点，模糊几乎均匀，
-                // 通透基本不上白——它靠边缘那道光成形，不靠面。
                 shape.fill(
                     LinearGradient(
-                        stops: [
-                            .init(color: .white.opacity(topWhite), location: 0),
-                            .init(color: .white.opacity(topWhite * midRatio), location: 0.35),
-                            .init(color: .white.opacity(topWhite * midRatio * 0.9), location: 0.75),
-                            .init(color: .white.opacity(bottomWhite), location: 1)
+                        colors: [
+                            .white.opacity(frostWhite * 1.06),
+                            .white.opacity(frostWhite * 0.88)
                         ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
+                        startPoint: .top, endPoint: .bottom)
                 )
             }
             .overlay {
-                // 磨砂表面那层细颗粒。喷砂玻璃跟普通模糊的区别就在这儿——
+                // 砂。磨砂玻璃跟普通模糊的区别全在这层上——
                 // 少了它只是"糊"，有了才是"砂"。
-                if kind == .frosted {
-                    GrainOverlay(opacity: (scheme == .dark ? 0.05 : 0.075) * strength)
-                        .clipShape(shape)
-                        .allowsHitTesting(false)
-                }
+                GrainOverlay(opacity: (scheme == .dark ? 0.16 : 0.22) * strength)
+                    .clipShape(shape)
+                    .allowsHitTesting(false)
             }
             .overlay {
-                // 边缘那圈。通透那套全靠它：上缘一道亮高光，
-                // 往下收掉，看着像一片真的玻璃在反光。
-                if edgeTop > 0.001 {
-                    shape.strokeBorder(
-                        LinearGradient(
-                            stops: [
-                                .init(color: .white.opacity(edgeTop), location: 0),
-                                .init(color: .white.opacity(edgeTop * 0.55), location: 0.5),
-                                .init(color: .white.opacity(edgeTop * 0.35), location: 1)
-                            ],
-                            startPoint: .top, endPoint: .bottom
-                        ),
-                        lineWidth: edgeWidth
-                    )
-                }
+                // 一圈很淡的亮边，四边都有，不是只在上面
+                shape.strokeBorder(
+                    .white.opacity((scheme == .dark ? 0.20 : 0.62) * min(1, strength + 0.2)),
+                    lineWidth: 0.9)
             }
     }
 
-    /// 糊到什么程度，由系统的 material 挡着办
-    private var material: Material {
-        switch kind {
-        case .frosted: return .regularMaterial   // 糊得厉害
-        case .clear:   return .ultraThinMaterial // 几乎不糊
-        case .blur:    return .thinMaterial      // 均匀一片
-        }
+    private var frostWhite: Double {
+        (scheme == .dark ? 0.14 : 0.46) * strength + extra * 0.12
     }
 
-    /// 薄白那一层的顶端浓度
-    private var topWhite: Double {
-        let base: Double
-        switch kind {
-        case .frosted: base = scheme == .dark ? 0.10 : 0.34
-        case .clear:   base = scheme == .dark ? 0.04 : 0.12
-        case .blur:    base = scheme == .dark ? 0.07 : 0.22
-        }
-        return base * strength + extra * 0.12
+    // MARK: 通透 —— 参考图里的 Clear（iOS 那种）
+    //
+    // 这块几乎不挡东西：背后是什么，你基本还看得清。
+    // 它靠的全是**边**——上缘一道很亮的高光，下缘一道暗影，
+    // 两条加起来眼睛就自动脑补出"这里有一片厚玻璃"。
+    // 所以白垫得极少，边给得极足，跟磨砂正好反过来。
+    private var clear: some View {
+        shape
+            .fill(.ultraThinMaterial)
+            .opacity(0.34)
+            .overlay {
+                shape.fill(.white.opacity((scheme == .dark ? 0.03 : 0.07) * strength + extra * 0.1))
+            }
+            .overlay {
+                // 顶上那道窄窄的反光带。玻璃厚度就是靠它读出来的。
+                shape.fill(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .white.opacity(scheme == .dark ? 0.16 : 0.42), location: 0),
+                            .init(color: .white.opacity(0), location: 0.16)
+                        ],
+                        startPoint: .top, endPoint: .bottom)
+                )
+            }
+            .overlay {
+                // 边：左上亮到底，右下压成暗的。一圈同一个亮度就成了描边，
+                // 不像玻璃，像贴纸。
+                shape.strokeBorder(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .white.opacity(scheme == .dark ? 0.55 : 0.98), location: 0),
+                            .init(color: .white.opacity(scheme == .dark ? 0.18 : 0.40), location: 0.42),
+                            .init(color: .black.opacity(scheme == .dark ? 0.16 : 0.10), location: 1)
+                        ],
+                        startPoint: .topLeading, endPoint: .bottomTrailing),
+                    lineWidth: 1.2)
+            }
     }
 
-    private var bottomWhite: Double {
-        let base: Double
-        switch kind {
-        case .frosted: base = scheme == .dark ? 0.06 : 0.22
-        case .clear:   base = scheme == .dark ? 0.03 : 0.09
-        case .blur:    base = scheme == .dark ? 0.07 : 0.21   // 模糊那套上下一样，才叫均匀
-        }
-        return base * strength + extra * 0.08
+    // MARK: 模糊 —— 参考图里的 Blur（One UI 那种）
+    //
+    // 均匀一片糊，**没有边、没有砂、上下没有渐变**。
+    // 少一样都会往另外两种上靠——尤其是边，加了就成 Clear 了。
+    private var blur: some View {
+        shape
+            .fill(.thinMaterial)
+            .overlay {
+                shape.fill(.white.opacity(
+                    (scheme == .dark ? 0.06 : 0.20) * strength + extra * 0.1))
+            }
     }
-
-    /// 中段收多少。模糊那套不收，磨砂收一点。
-    private var midRatio: Double { kind == .blur ? 1 : 0.82 }
-
-    /// 边缘。磨砂淡到要凑近才看得见；通透靠它成形，所以给足；
-    /// 模糊干脆不要边——One UI 那种就是一块没有边界的糊。
-    private var edgeTop: Double {
-        switch kind {
-        case .frosted: return (scheme == .dark ? 0.22 : 0.55) * min(1, strength + 0.2)
-        case .clear:   return (scheme == .dark ? 0.42 : 0.92) * min(1, strength + 0.35)
-        case .blur:    return 0
-        }
-    }
-
-    private var edgeWidth: CGFloat { kind == .clear ? 1.1 : 0.8 }
 }
 
 /// 磨砂表面那层颗粒。

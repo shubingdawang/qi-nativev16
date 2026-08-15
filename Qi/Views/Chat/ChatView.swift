@@ -59,6 +59,11 @@ struct ChatView: View {
         return app.runningConversationIDs.contains(id)
     }
 
+    /// 正攒着话、还没交出去
+    private var waiting: Bool {
+        app.isWaiting(activeConversation?.id)
+    }
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
 
@@ -239,7 +244,7 @@ struct ChatView: View {
             DragGesture(minimumDistance: 12)
                 .onEnded { v in
                     guard showsSideMenu, !sideOpen, !drawerOpen else { return }
-                    guard v.startLocation.x < 46 else { return }
+                    guard v.startLocation.x < 90 else { return }
                     guard v.translation.width > 28
                             || v.predictedEndTranslation.width > 60 else { return }
                     // 竖着划的不算，那是在翻聊天记录
@@ -542,6 +547,23 @@ struct ChatView: View {
                 }
             }
 
+            // 攒着话的时候得给个说法，不然看着像发出去了他却不理你
+            if waiting {
+                HStack(spacing: 7) {
+                    Image(systemName: "hourglass")
+                        .font(.system(size: 11))
+                        .foregroundStyle(app.settings.accentColor)
+                    Text("攒着呢，你不说了 \(Int(app.settings.segmentUserDelay)) 秒之后一起发。长按发送键马上发。")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Theme.softFillDeep))
+            }
+
             if let q = quoting {
                 HStack(spacing: 8) {
                     RoundedRectangle(cornerRadius: 1.5)
@@ -721,7 +743,8 @@ struct ChatView: View {
                 } label: {
                     ZStack {
                         Circle()
-                            .fill(app.settings.primaryColor.opacity(canSend || isRunning ? 0.85 : 0.35))
+                            .fill(app.settings.primaryColor
+                                .opacity(canSend || isRunning || waiting ? 0.85 : 0.35))
                             .frame(width: 36, height: 36)
                         Image(systemName: isRunning ? "stop.fill" : "arrow.up")
                             .font(.system(size: 15, weight: .semibold))
@@ -730,6 +753,16 @@ struct ChatView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSend && !isRunning)
+                // 攒着的时候长按就是"不等了，现在就发"
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.35).onEnded { _ in
+                        guard waiting else { return }
+                        if app.settings.haptics {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        }
+                        app.flushPending(conv.id)
+                    }
+                )
             }
         }
         .padding(.horizontal, 14)
@@ -908,6 +941,19 @@ struct ChatView: View {
     }
 
     private func sendCurrent(_ conv: Conversation) {
+        // 只打了字、没带别的东西，而且开了「我分段发」——
+        // 那这一句先攒着，等她真的不说了再一起交给他
+        if app.settings.segmentUser
+            && pendingImages.isEmpty && pendingFiles.isEmpty
+            && pendingSticker == nil && pendingVoice == nil && quoting == nil {
+            let line = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty else { return }
+            draft = ""
+            mentioning = false
+            app.queueSend(text: line, in: conv.id)
+            return
+        }
+
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         let images = pendingImages
         let quoted = quoting
@@ -1037,15 +1083,17 @@ struct MessageListView: View {
 
     /// 这一条上面要不要挂头像那行。
     ///
-    /// 同一个人接连说的几句只在第一句上挂——中间隔了五分钟以上算重新开口，
-    /// 再挂一次，好让人知道这中间断过一段时间。
+    /// 规矩是**一句话挂一次**——一句话指的是一整条消息：
+    /// 他那边思考链、工具、正文加起来算一条；分段发的那几个气泡
+    /// 本来就在同一条里，所以也只挂一次。
+    /// 唯一要合并的是同一个 turn 拆出来的那两条（文字 + 表情），
+    /// 那是一次发送，不该挂两个头像。
     private func showsHeader(at index: Int) -> Bool {
         guard index > 0 else { return true }
         let msg = conversation.messages[index]
         let prev = conversation.messages[index - 1]
-        if prev.role != msg.role { return true }
-        if prev.senderName != msg.senderName { return true }
-        return msg.createdAt.timeIntervalSince(prev.createdAt) > 300
+        if let t = msg.turnID, t == prev.turnID { return false }
+        return true
     }
 
     private var emptyHint: some View {

@@ -106,6 +106,7 @@ struct AppIconPickerView: View {
             .padding(.horizontal, 18)
             .padding(.bottom, Layout.tabBarExpanded + 12)
         }
+        .background { WallpaperBackground() }
         .navigationTitle("App 图标")
         .navigationBarTitleDisplayMode(.inline)
     }
