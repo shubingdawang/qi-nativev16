@@ -1740,6 +1740,14 @@ final class AppState: ObservableObject {
 
     /// 界面直接调一个 MCP 工具（札记页那些就靠它）
     func callTool(_ toolName: String, args: [String: Any]) async -> (text: String, failed: Bool) {
+        // 札记那几页（日记 / 记忆 / 经期）就是靠这个方法取数据的。
+        // 以前它只认 MCP——所以本机记忆库一开、小屋一关，那几页就全空了，
+        // 看着像"没显示完全"，其实是压根没拿到东西。
+        if MemoryTools.handles(toolName, memory: settings.localMemory,
+                               pulse: settings.localPulse) {
+            if toolName == "wake_up" { MemoryTools.recentTurns = recentCleanTurns() }
+            return MemoryTools.run(toolName, args: args)
+        }
         guard let server = mcpServers.first(where: { s in
             s.enabled && s.tools.contains { $0.name == toolName }
         }) else {

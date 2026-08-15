@@ -251,7 +251,10 @@ struct MemoryListView: View {
                             Text(mem.content)
                                 .font(.system(size: 14))
                                 .foregroundStyle(Theme.textMain(scheme))
+                                // 不加这一条，长文会被上层的 stack 压成一行截断
+                                .fixedSize(horizontal: false, vertical: true)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                .textSelection(.enabled)
                             if !mem.tags.isEmpty {
                                 Text("#" + mem.tags.joined(separator: " #"))
                                     .font(.system(size: 10))
@@ -314,7 +317,9 @@ struct MemoryDiaryListView: View {
                             Text(d.content)
                                 .font(.system(size: 14))
                                 .foregroundStyle(Theme.textMain(scheme))
+                                .fixedSize(horizontal: false, vertical: true)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                .textSelection(.enabled)
                             ForEach(d.annotations ?? [], id: \.self) { a in
                                 Text("⤷ \(a.author)：把「\(a.original)」改成「\(a.correction)」")
                                     .font(.system(size: 11))
@@ -412,6 +417,8 @@ struct MemoryTranscriptReader: View {
                             Text(msg.text)
                                 .font(.system(size: 13))
                                 .foregroundStyle(Theme.textMain(scheme))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                                 .textSelection(.enabled)
                         }
                         .padding(11)

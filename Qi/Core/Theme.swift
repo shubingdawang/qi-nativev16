@@ -246,16 +246,18 @@ struct GlassSurface: View {
     //   · 砂只是一层几乎看不见的颗粒，凑近才看得出来
     //   · 边缘的高光才是三套之间最明显的区别
 
-    // MARK: 磨砂 —— 苹果原来那块毛玻璃
+    // MARK: 磨砂 —— 苹果原来那块毛玻璃（iOS 7 那一代）
     //
-    // 我前面几版一直在往 material 上面糊自己的东西：白、渐变、噪点、边光，
-    // 想"做出"磨砂的质感。做反了——**苹果那块毛玻璃本身就是磨砂**，
-    // 我加的每一层都是在把它盖掉。
+    // 上一版用 `.regularMaterial`、模糊用 `.thinMaterial`，
+    // 结果两块几乎一模一样——那几档 material 的差别本来就只有一点点浓淡，
+    // 换档换不出"两种做法"的感觉。
     //
-    // 现在只用 `.regularMaterial`（就是通知中心、控制中心那块），
-    // 外加一道细到几乎看不见的亮边收住形状。别的什么都不加。
+    // 真正拉得开的是**老的那套 UIBlurEffect**：
+    // `.extraLight` 是糊得最狠、发白的那块，就是通知中心刚出来那几年的样子；
+    // `.light` 糊得一样狠但不发白，背后的颜色是透上来的。
+    // 这两块摆一起，一眼就能看出不是同一种东西。
     private var frosted: some View {
-        base(liquid: false, material: .regularMaterial)
+        base(liquid: false, blur: .extraLight)
             .overlay {
                 if extra > 0.01 {
                     // 需要更突出的地方（比如自己的气泡）才多垫一丝白
@@ -278,7 +280,7 @@ struct GlassSurface: View {
     // 白几乎不加，让背后照样看得清；上缘一道亮的、右下一道暗的，
     // 眼睛自己会读出"这儿有一片厚玻璃"。
     private var clear: some View {
-        base(liquid: true)
+        base(liquid: true, blur: .light)
             .overlay {
                 if !hasLiquidGlass {
                     shape.fill(.white.opacity(0.05 * strength + extra * 0.08))
@@ -314,13 +316,13 @@ struct GlassSurface: View {
             }
     }
 
-    // MARK: 模糊 —— 更薄的那一档，壁纸透得最多
+    // MARK: 模糊 —— 糊得一样狠，但不发白
     //
-    // 跟磨砂的区别就是换一档 material：`.thinMaterial` 比 regular 薄，
-    // 背后的颜色透上来更多、糊得更均匀。**一条边都不给**——
-    // 加了边就往「通透」那边靠了，三套就分不出来了。
+    // 跟磨砂同样是重度模糊，区别在**不往上刷白**：
+    // 壁纸的颜色是透上来的，一团一团化开，不是被一层白盖住。
+    // **一条边都不给**——加了边就往「通透」那边靠了，三套就分不出来了。
     private var blur: some View {
-        base(liquid: false, material: .thinMaterial)
+        base(liquid: false, blur: .light)
             .overlay {
                 if extra > 0.01 {
                     shape.fill(.white.opacity(extra * 0.10))
@@ -331,18 +333,32 @@ struct GlassSurface: View {
     /// 底下那一层。
     ///
     /// `liquid` 为真、而且系统给得起的时候，用 iOS 26 的液态玻璃；
-    /// 别的情况一律退回 material。
+    /// 别的情况用老的 UIBlurEffect —— 它比 SwiftUI 那几档 material
+    /// 糊得更狠、彼此差别也更大。
+    ///
+    /// `strength`（设置里那根滑块）在这里体现为整层的透明度：
+    /// 调低就让背后透出来更多，但最低也留 35%，不然玻璃直接没了。
     @ViewBuilder
-    private func base(liquid: Bool, material: Material = .regularMaterial) -> some View {
+    private func base(liquid: Bool, blur style: UIBlurEffect.Style) -> some View {
         #if compiler(>=6.2)
         if liquid, #available(iOS 26.0, *) {
             // `.clear` 那档才是"几乎不挡东西、靠折射成形"的那块玻璃
             Color.clear.glassEffect(.clear, in: shape)
+        } else if liquid {
+            shape.fill(.ultraThinMaterial)
         } else {
-            shape.fill(liquid ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(material))
+            BlurView(style: style)
+                .opacity(0.35 + 0.65 * min(1, max(0, strength)))
+                .clipShape(shape)
         }
         #else
-        shape.fill(liquid ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(material))
+        if liquid {
+            shape.fill(.ultraThinMaterial)
+        } else {
+            BlurView(style: style)
+                .opacity(0.35 + 0.65 * min(1, max(0, strength)))
+                .clipShape(shape)
+        }
         #endif
     }
 
@@ -355,6 +371,24 @@ struct GlassSurface: View {
         #else
         return false
         #endif
+    }
+}
+
+/// 老那套 `UIVisualEffectView` 的壳子。
+///
+/// SwiftUI 的 `Material` 只给了 ultraThin/thin/regular/thick/bar 几档，
+/// 而且每档之间只差一点点浓淡，做不出"两种不同做法"的区别。
+/// UIKit 这边的 `.extraLight` / `.light` 是 iOS 7 那代留下来的重度模糊，
+/// 差别大得多，正好拿来当磨砂和模糊两套。
+struct BlurView: UIViewRepresentable {
+    var style: UIBlurEffect.Style
+
+    func makeUIView(context: Context) -> UIVisualEffectView {
+        UIVisualEffectView(effect: UIBlurEffect(style: style))
+    }
+
+    func updateUIView(_ view: UIVisualEffectView, context: Context) {
+        view.effect = UIBlurEffect(style: style)
     }
 }
 

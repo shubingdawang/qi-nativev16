@@ -324,8 +324,17 @@ enum MemoryTools {
             if !who.isEmpty { list = list.filter { $0.author == who } }
             list = Array(list.prefix(limit))
             if list.isEmpty { return ("还没有日记。", false) }
+            // 同样按 [id][作者][心情] 日期：正文 来拼，札记页才切得开
             return (list.map { d in
-                "[\(d.shortID)] \(short(d.created_at)) \(d.author)\(d.mood ?? "")\n\(d.content)"
+                var s = "[\(d.shortID)][\(d.author)]"
+                if let mood = d.mood, !mood.isEmpty { s += "[\(mood)]" }
+                s += " \(day(d.created_at))：\n\(d.content)"
+                if let anns = d.annotations, !anns.isEmpty {
+                    for a in anns {
+                        s += "\n    ⤷ \(a.author)批注：把「\(a.original)」改成「\(a.correction)」"
+                    }
+                }
+                return s
             }.joined(separator: "\n\n"), false)
 
         case "delete_diary":
@@ -500,8 +509,10 @@ enum MemoryTools {
         case "recall_history":
             if m.transcripts.isEmpty { return ("还没有存档的对话。", false) }
             let limit = i("limit", m.transcripts.count)
+            // 存档是另一种格式：【标题】tid=xxx 日期 (N条)，札记页照这个切
             let rows = m.transcripts.prefix(limit).map { t in
-                "[\(t.id)] \(t.title)（\(t.count) 条）\n\(t.summary ?? "还没写摘要")"
+                "【\(t.title)】tid=\(t.id) \(String(t.imported_at.prefix(10)))（\(t.count)条）\n"
+                + (t.summary ?? "还没写摘要")
             }
             return ("一共 \(m.transcripts.count) 份：\n\n"
                     + rows.joined(separator: "\n\n"), false)
@@ -579,11 +590,17 @@ enum MemoryTools {
 
     // MARK: 拼字符串的活
 
+    /// 一条记忆写成一行。
+    ///
+    /// 格式**必须**是 `[id][作者][标签] 日期：正文` ——
+    /// 札记页那个 MCPEntryParser 就是照这个切条的，
+    /// 换个写法它就切不开，整页糊成一大块。
+    /// 星级塞进标签里，跟着一起显示。
     private static func line(_ mem: MemoryItem) -> String {
-        var s = "[\(mem.shortID)] "
-        s += String(repeating: "★", count: max(1, min(5, mem.level)))
-        s += " \(mem.content)"
-        if !mem.tags.isEmpty { s += "  #" + mem.tags.joined(separator: " #") }
+        var tags = mem.tags
+        tags.insert(String(repeating: "★", count: max(1, min(5, mem.level))), at: 0)
+        var s = "[\(mem.shortID)][\(mem.author)][\(tags.joined(separator: "、"))]"
+        s += " \(day(mem.created_at))：\(mem.content)"
         if let anns = mem.annotations, !anns.isEmpty {
             for a in anns {
                 s += "\n    ⤷ \(a.author)批注：把「\(a.original)」改成「\(a.correction)」"
@@ -594,6 +611,14 @@ enum MemoryTools {
 
     private static func short(_ iso: String) -> String {
         String(iso.prefix(16)).replacingOccurrences(of: "T", with: " ")
+    }
+
+    /// ISO 时间戳里把年月日抠出来，写成 2026/8/5 那样
+    private static func day(_ iso: String) -> String {
+        let d = String(iso.prefix(10))
+        let parts = d.split(separator: "-")
+        guard parts.count == 3 else { return d }
+        return "\(parts[0])/\(Int(parts[1]) ?? 0)/\(Int(parts[2]) ?? 0)"
     }
 
     /// 命中那句话前后各截一点，别把整段甩出去
@@ -632,13 +657,15 @@ enum MemoryTools {
         }
         if !gaps.isEmpty {
             let avg = gaps.reduce(0, +) / gaps.count
-            out += "。平均 \(avg) 天一次"
+            // 「平均周期」「预测下次」这两个词不能改——
+            // 札记那个经期页在走 MCP 的时候是靠它们从这段话里抠日期的
+            out += "。平均周期 \(avg) 天"
             if let lastStart = f.date(from: last.start),
                let next = Calendar.current.date(byAdding: .day, value: avg, to: lastStart) {
                 let days = Calendar.current.dateComponents(
                     [.day], from: Calendar.current.startOfDay(for: Date()),
                     to: Calendar.current.startOfDay(for: next)).day ?? 0
-                out += "，按这个算下次大概 \(f.string(from: next))"
+                out += "，预测下次 \(f.string(from: next))"
                 out += days >= 0 ? "（还有 \(days) 天）" : "（已经晚了 \(-days) 天）"
             }
         }

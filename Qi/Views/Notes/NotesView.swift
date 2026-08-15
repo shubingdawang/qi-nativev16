@@ -611,8 +611,14 @@ struct PeriodPane: View {
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.textMuted(scheme))
                 HStack(spacing: 14) {
-                    legend(app.settings.accentColor.opacity(0.75), "这次")
+                    legend(app.settings.accentColor.opacity(0.75), "来了")
                     legend(app.settings.accentColor.opacity(0.28), "预测")
+                    HStack(spacing: 5) {
+                        Circle().fill(app.settings.accentColor).frame(width: 3.5, height: 3.5)
+                        Text("有备注")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -686,12 +692,19 @@ struct PeriodPane: View {
             showSheet = true
         } label: {
             ZStack {
-                if mark > 0 {
+                if mark == 1 || mark == 2 {
                     Circle()
                         .fill(app.settings.accentColor.opacity(mark == 1 ? 0.75 : 0.28))
                         .frame(width: 32, height: 32)
                 }
-                if isToday && mark == 0 {
+                if mark == 2 {
+                    // 预测的那几天用虚线圈一下，跟真的来了区分开
+                    Circle()
+                        .strokeBorder(app.settings.accentColor.opacity(0.55),
+                                      style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5]))
+                        .frame(width: 32, height: 32)
+                }
+                if isToday && mark != 1 {
                     Circle()
                         .strokeBorder(app.settings.accentColor.opacity(0.7), lineWidth: 1.2)
                         .frame(width: 32, height: 32)
@@ -699,6 +712,14 @@ struct PeriodPane: View {
                 Text("\(cal.component(.day, from: day))")
                     .font(.system(size: 13, weight: isToday ? .semibold : .regular))
                     .foregroundStyle(mark == 1 ? Color.white : Theme.textMain(scheme))
+
+                // 写过备注的那天，底下点一个小点
+                if hasNote(day) {
+                    Circle()
+                        .fill(mark == 1 ? Color.white : app.settings.accentColor)
+                        .frame(width: 3.5, height: 3.5)
+                        .offset(y: 13)
+                }
             }
             .frame(height: 38)
             .frame(maxWidth: .infinity)
@@ -707,16 +728,76 @@ struct PeriodPane: View {
         .buttonStyle(.plain)
     }
 
-    /// 0 = 普通，1 = 这次经期，2 = 预测的下次
+    private func hasNote(_ day: Date) -> Bool {
+        notesByDay[df.string(from: cal.startOfDay(for: day))]?.isEmpty == false
+    }
+
+    /// 本机记忆库开着的话，直接读那份真数据。
+    /// 走 MCP 那条路才需要从 period_status 那段话里抠日期——
+    /// 抠出来的东西不可靠，能不用就不用。
+    private var records: [PeriodRecord] {
+        app.settings.localMemory ? MemoryStore.shared.periods.records : []
+    }
+
+    private var notesByDay: [String: [PeriodNote]] {
+        app.settings.localMemory ? MemoryStore.shared.periods.notes : [:]
+    }
+
+    /// 0 = 普通，1 = 真的来了的那几天，2 = 预测的下次，3 = 只是写了备注
+    ///
+    /// 这里跟以前最大的不同：**没结束的那次只涂到今天为止**。
+    /// 以前是拿平均天数把整段一次涂满，等于把还没发生的日子也涂上了。
     private func marking(_ day: Date) -> Int {
+        let d = cal.startOfDay(for: day)
+        let today = cal.startOfDay(for: Date())
+
+        if !records.isEmpty {
+            for r in records {
+                guard let start = df.date(from: r.start).map({ cal.startOfDay(for: $0) })
+                else { continue }
+                // 记了结束日就到那天，没记就只涂到今天——来一天涂一天
+                let end: Date
+                if let e = r.end, let ed = df.date(from: e) {
+                    end = cal.startOfDay(for: ed)
+                } else {
+                    end = today
+                }
+                if d >= start && d <= end { return 1 }
+            }
+            // 预测：最后一次开始 + 平均周期，往后铺一个常见的行经长度
+            if let next = predictedNext {
+                let span = cal.date(byAdding: .day, value: 4, to: next) ?? next
+                if d >= next && d <= span { return 2 }
+            }
+            if notesByDay[df.string(from: d)]?.isEmpty == false { return 3 }
+            return 0
+        }
+
+        // 兜底：还在走 MCP，只能按那段话里抠出来的日期画
         let i = info
         if let last = i.last,
-           let end = cal.date(byAdding: .day, value: i.days - 1, to: last),
-           day >= cal.startOfDay(for: last), day <= end { return 1 }
+           let end = cal.date(byAdding: .day, value: i.days - 1, to: last) {
+            let stop = min(end, today)
+            if d >= cal.startOfDay(for: last), d <= stop { return 1 }
+        }
         if let next = i.next,
            let end = cal.date(byAdding: .day, value: i.days - 1, to: next),
-           day >= cal.startOfDay(for: next), day <= end { return 2 }
+           d >= cal.startOfDay(for: next), d <= end { return 2 }
         return 0
+    }
+
+    /// 按平均周期推的下一次开始日
+    private var predictedNext: Date? {
+        let sorted = records.compactMap { df.date(from: $0.start) }.sorted()
+        guard let last = sorted.last, sorted.count >= 2 else { return nil }
+        var gaps: [Int] = []
+        for k in 1..<sorted.count {
+            let n = cal.dateComponents([.day], from: sorted[k - 1], to: sorted[k]).day ?? 0
+            if n > 10 && n < 90 { gaps.append(n) }
+        }
+        guard !gaps.isEmpty else { return nil }
+        let avg = gaps.reduce(0, +) / gaps.count
+        return cal.date(byAdding: .day, value: avg, to: cal.startOfDay(for: last))
     }
 
     private var monthTitle: String {
@@ -752,6 +833,39 @@ struct PeriodPane: View {
                         Text(picked.map { dayTitle($0) } ?? "")
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(Theme.textMain(scheme))
+
+                        // 这天已经写过的备注。以前根本没显示，
+                        // 写进去就再也看不见了，等于写了个寂寞。
+                        if let d = picked {
+                            let existing = notesByDay[df.string(from: cal.startOfDay(for: d))] ?? []
+                            if !existing.isEmpty {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text("这天记过的")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundStyle(Theme.textMain(scheme))
+                                    ForEach(Array(existing.enumerated()), id: \.offset) { _, n in
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            HStack(spacing: 6) {
+                                                Text(n.author)
+                                                    .font(.system(size: 11, weight: .medium))
+                                                    .foregroundStyle(app.settings.accentColor)
+                                                Text(String(n.time.prefix(16))
+                                                    .replacingOccurrences(of: "T", with: " "))
+                                                    .font(.system(size: 10))
+                                                    .foregroundStyle(Theme.textMuted(scheme))
+                                            }
+                                            Text(n.text)
+                                                .font(.system(size: 13))
+                                                .foregroundStyle(Theme.textSoft(scheme))
+                                                .fixedSize(horizontal: false, vertical: true)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                        }
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .glassCard()
+                            }
+                        }
 
                         Button {
                             guard let d = picked else { return }
