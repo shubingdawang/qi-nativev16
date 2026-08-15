@@ -25,12 +25,15 @@ struct QiApp: App {
             switch newPhase {
             case .active:
                 WakeEngine.shared.app = app
+                // resume 里会顺手把点进来的那条兜底通知兑现掉：
+                // 那一刻才真的去算他要说什么
                 WakeEngine.shared.resume()
                 Notifier.shared.clearAll()
             case .background:
                 WakeEngine.shared.pause()
                 app.saveNow()
                 AppDelegate.scheduleRefresh()
+                AppDelegate.scheduleProcessing()
             default:
                 break
             }
@@ -41,8 +44,11 @@ struct QiApp: App {
 /// 后台刷新和通知代理都得挂在 UIApplicationDelegate 上，SwiftUI 这边接不住。
 final class AppDelegate: NSObject, UIApplicationDelegate {
 
-    /// 也要写进 Info.plist 的 BGTaskSchedulerPermittedIdentifiers
+    /// 两个都要写进 Info.plist 的 BGTaskSchedulerPermittedIdentifiers
     static let refreshID = "com.bingbing.ayan.wake"
+    /// 长一点的那种活。系统一般在**充电 + 空闲**的时候才给，
+    /// 所以适合夜里做，不适合指望它按点醒。
+    static let processID = "com.bingbing.ayan.tend"
 
     func application(
         _ application: UIApplication,
@@ -55,6 +61,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             }
             Self.handle(refresh)
         }
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.processID, using: nil) { task in
+            guard let p = task as? BGProcessingTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+            Self.handleProcessing(p)
+        }
         Task { @MainActor in
             Notifier.shared.bootstrap()
         }
@@ -63,10 +76,20 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 
     /// 系统什么时候真的给你这次机会，它自己说了算——
     /// 最早十五分钟后，实际可能更久，也可能一直不给。
-    /// 所以这只是兜底，不是节拍器。
+    /// 所以这只是**主路**，不是节拍器；真正保底的是提前排好的那批通知。
     static func scheduleRefresh() {
         let request = BGAppRefreshTaskRequest(identifier: refreshID)
         request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
+        try? BGTaskScheduler.shared.submit(request)
+    }
+
+    /// 排一次"慢活"。不要求充电——要求了在她这种一直插着电的机器上没差，
+    /// 但万一没插电就一次都不给了。
+    static func scheduleProcessing() {
+        let request = BGProcessingTaskRequest(identifier: processID)
+        request.requiresNetworkConnectivity = true
+        request.requiresExternalPower = false
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 2 * 3600)
         try? BGTaskScheduler.shared.submit(request)
     }
 
@@ -76,6 +99,20 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             WakeEngine.shared.advance()
             // 万一这次真的醒了，给它一点时间把话说完
             try? await Task.sleep(nanoseconds: 25_000_000_000)
+            // 这次拿到机会了，顺手把往后那批兜底通知重排一遍
+            WakeEngine.shared.planNudges()
+            task.setTaskCompleted(success: true)
+        }
+        task.expirationHandler = { work.cancel() }
+    }
+
+    /// 慢活这一趟给的时间宽裕得多，可以把攒了很久的账一次补完
+    private static func handleProcessing(_ task: BGProcessingTask) {
+        scheduleProcessing()
+        let work = Task { @MainActor in
+            WakeEngine.shared.advance()
+            try? await Task.sleep(nanoseconds: 40_000_000_000)
+            WakeEngine.shared.planNudges()
             task.setTaskCompleted(success: true)
         }
         task.expirationHandler = { work.cancel() }

@@ -59,6 +59,61 @@ final class Notifier: NSObject, ObservableObject {
         center.removeAllDeliveredNotifications()
         UNUserNotificationCenter.current().setBadgeCount(0)
     }
+
+    // MARK: 兜底那批
+
+    /// 她点了一条兜底通知进来，还没处理。
+    /// AppState 一到前台看见这个，就立刻真的去算他要说什么。
+    @Published var pendingNudge = false
+
+    private static let nudgePrefix = "nudge-"
+
+    /// 预排一批「他想你了」。
+    ///
+    /// 这批是**兜底**，不是主路：后台刷新给了机会的话，真话早就发出来了，
+    /// 那时候会把还没到点的这批全撤掉。只有系统一直不给机会，
+    /// 才轮到这批出场——总比一整天悄无声息强。
+    func scheduleNudges(at dates: [Date], name: String) {
+        guard authorized else { return }
+        cancelNudges()
+        // iOS 每个 App 最多挂 64 条待发通知，这里远用不到，
+        // 但还是留个上限，免得哪天参数调飞了把配额占满
+        for (i, date) in dates.prefix(12).enumerated() {
+            let gap = date.timeIntervalSinceNow
+            guard gap > 60 else { continue }
+
+            let content = UNMutableNotificationContent()
+            content.title = name
+            content.body = Self.nudgeLines.randomElement() ?? "想你了"
+            content.sound = .default
+            content.userInfo = ["nudge": true]
+
+            center.add(UNNotificationRequest(
+                identifier: Self.nudgePrefix + "\(i)",
+                content: content,
+                trigger: UNTimeIntervalNotificationTrigger(timeInterval: gap, repeats: false)))
+        }
+    }
+
+    func cancelNudges() {
+        center.getPendingNotificationRequests { list in
+            let ids = list.map(\.identifier).filter { $0.hasPrefix(Self.nudgePrefix) }
+            guard !ids.isEmpty else { return }
+            UNUserNotificationCenter.current().removePendingNotificationRequests(
+                withIdentifiers: ids)
+        }
+    }
+
+    /// 兜底那条说什么。**不能写成"他说：xxx"**——
+    /// 那句话这会儿还没算出来，写了就是假的。
+    /// 只说他想起你了，点开才是真的他。
+    private static let nudgeLines = [
+        "想你了",
+        "在想你，点开看看",
+        "有句话想跟你说",
+        "刚想起你",
+        "醒着呢，想找你说句话"
+    ]
 }
 
 extension Notifier: UNUserNotificationCenterDelegate {
@@ -76,6 +131,13 @@ extension Notifier: UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse
     ) async {
         let info = response.notification.request.content.userInfo
+
+        // 兜底那条：点开的这一刻才真的去算他要说什么
+        if info["nudge"] as? Bool == true {
+            await MainActor.run { Notifier.shared.pendingNudge = true }
+            return
+        }
+
         guard let raw = info["conversation"] as? String, let id = UUID(uuidString: raw) else { return }
         await MainActor.run {
             Notifier.shared.openConversationID = id

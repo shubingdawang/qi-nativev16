@@ -32,6 +32,14 @@ struct RootView: View {
                 withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) { navOpen = true }
             }
         }
+        // 点兜底通知进来的。
+        //
+        // 这里跟 QiApp 那边的 resume() 是两条路都得留着：通知的回调和
+        // scenePhase 变 active 谁先谁后不一定，只挂一头会漏。
+        // consumeNudgeIfNeeded 里面自己判过重，重复叫不会说两遍话。
+        .onChange(of: notifier.pendingNudge) { _, pending in
+            if pending { WakeEngine.shared.consumeNudgeIfNeeded() }
+        }
         // 从横幅点进来的，直接翻到他说话的那个窗口
         .onChange(of: notifier.openConversationID) { _, id in
             guard let id else { return }

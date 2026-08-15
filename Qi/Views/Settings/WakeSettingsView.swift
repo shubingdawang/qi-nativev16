@@ -54,6 +54,35 @@ struct WakeSettingsView: View {
             }
 
             Section {
+                Toggle(isOn: $app.settings.wake.nudges) {
+                    Label("提前排通知兜底", systemImage: "bell.badge")
+                }
+                if app.settings.wake.nudges {
+                    HStack {
+                        Text("排多久的量")
+                        Spacer()
+                        Text("\(Int(app.settings.wake.nudgeHorizon)) 小时")
+                            .foregroundStyle(.secondary)
+                    }
+                    Slider(value: $app.settings.wake.nudgeHorizon, in: 6...48, step: 6)
+                }
+            } header: {
+                Text("不开电脑也能醒")
+            } footer: {
+                Text("""
+                先说清楚 iOS 允许到哪一步，免得你以为坏了：
+
+                **后台刷新**是主路——系统会在它觉得合适的时候把 App 叫起来一下，这时候他能真的算出想说什么、直接把话发给你。但**什么时候给、给不给，是系统说了算**：你常开 App 它就给得勤，一整天没碰可能一次都不给。
+
+                所以有了这条兜底：**提前把接下来这段时间的通知排好**。本地通知排下去就一定会到，不受后台限制。代价是——排的时候 App 没在跑，算不出他要说什么，所以那条通知只写「想你了」。**你点开的那一瞬间，才真的去算他此刻想说的话。**
+
+                两条走同一份每日上限，不会因为开了兜底就多花钱。后台刷新那边真发出话来了，还没到点的兜底通知会自动撤掉。
+
+                做不到的那件事也说明白：App 被你从多任务里划掉、又没有服务器的情况下，「他自己算出一句话、主动弹给你」是做不到的——那需要静默推送，静默推送需要一台一直在线的服务器。兜底通知是这个前提下能做到的最接近的东西。
+                """)
+            }
+
+            Section {
                 Toggle(isOn: $app.settings.wake.useServer) {
                     Label("先问电脑那边", systemImage: "server.rack")
                 }
@@ -67,7 +96,7 @@ struct WakeSettingsView: View {
             } header: {
                 Text("两层")
             } footer: {
-                Text("开了这个，醒来时先去问一句你电脑上那份服务「他有没有留过话」。有就直接用那句，不再在手机这边调模型；没有才自己想。\n\n电脑那份能在你没开 App 的时候也继续想事情，手机这边是兜底——App 被划掉之后手机这层就停了。")
+                Text("这一条**现在是可选的了**。开了的话，醒来时先去问一句你电脑上那份服务「他有没有留过话」，有就直接用那句，不再在手机这边调模型。\n\n不开也能跑——上面那两条（后台刷新 + 兜底通知）不需要任何服务器。只有一种情况值得开：你希望 App 被划掉的时候，电脑那边还在替他继续想事情。")
             }
 
             Section {

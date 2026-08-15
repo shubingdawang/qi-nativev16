@@ -23,6 +23,16 @@ struct WakeConfig: Codable, Hashable {
     var serverURL: String = ""
     /// 就算他决定不说话，也在札记里留个痕（方便你看它到底醒没醒）
     var logSilent: Bool = true
+
+    /// 提前排一批通知当兜底。
+    ///
+    /// 后台刷新是系统看心情给的——她要是一天没开 App，可能一次都不给，
+    /// 那"自己醒来"就等于没有。本地通知不一样：**排下去就一定会到**，
+    /// 代价是内容得在排的时候就定好，没法先算出他想说什么。
+    /// 所以兜底那条只说一句"他想你了"，她点开的瞬间才真的去算他要说什么。
+    var nudges: Bool = true
+    /// 提前排多少个小时的量
+    var nudgeHorizon: Double = 24
 }
 
 // MARK: - 状态
@@ -91,12 +101,82 @@ final class WakeEngine: ObservableObject {
     func resume() {
         advance()
         startTicker()
+        // 回到前台就把兜底那批撤掉——人已经在这儿了，不用再戳她
+        Notifier.shared.cancelNudges()
+        consumeNudgeIfNeeded()
     }
 
     func pause() {
         ticker?.cancel()
         ticker = nil
         advance()
+        // 要进后台了。从这一刻起 App 可能几个小时都拿不到运行机会，
+        // 所以把接下来这段时间的兜底通知排下去。
+        planNudges()
+    }
+
+    /// 她点了一条兜底通知进来。这时候才真的去算他要说什么——
+    /// 排通知的时候算不了，那会儿 App 根本没在跑。
+    func consumeNudgeIfNeeded() {
+        guard Notifier.shared.pendingNudge else { return }
+        Notifier.shared.pendingNudge = false
+        guard config.enabled, let app, !running else { return }
+        guard state.firedToday < config.dailyLimit else { return }
+
+        running = true
+        var s = state
+        s.firedToday += 1
+        s.lastFire = Date()
+        state = s
+
+        Task { @MainActor in
+            await self.run(app: app)
+            self.running = false
+            self.noteRun()
+        }
+    }
+
+    // MARK: 兜底那批通知
+
+    /// 按当前的 λ 采样出未来一段时间里的几个"他可能会想起你"的时刻，
+    /// 排成本地通知。
+    ///
+    /// 这是**兜底**：后台刷新真给了机会的话，真话早发出来了，
+    /// 回到前台时会把这批全撤掉。只有系统一直不给，才轮到它出场。
+    func planNudges() {
+        guard config.enabled, config.nudges else {
+            Notifier.shared.cancelNudges()
+            return
+        }
+        let name = app?.settings.aiName.isEmpty == false
+            ? app!.settings.aiName : "阿晏"
+        Notifier.shared.scheduleNudges(at: sampleWakeTimes(), name: name)
+    }
+
+    /// 用当前的 λ 往前推，采样出几个时刻。
+    ///
+    /// 严格说 λ 是会随时间漂的，这里拿此刻的 λ 当常数近似——
+    /// 排的是"大概什么时候"，不需要那么准，而且真到点了还得看她点不点。
+    private func sampleWakeTimes() -> [Date] {
+        let lambda = max(0.05, lambdaNow)
+        var out: [Date] = []
+        var t = Date()
+        let end = Date().addingTimeInterval(config.nudgeHorizon * 3600)
+        // 今天还剩多少次配额，兜底也占同一份配额，不能绕过去
+        var budget = max(0, config.dailyLimit - state.firedToday)
+
+        while t < end, budget > 0, out.count < 12 {
+            // 指数分布采样：两次之间隔多久
+            let u = max(1e-9, Double.random(in: 0...1))
+            let hours = -log(u) / lambda
+            t = t.addingTimeInterval(hours * 3600)
+            guard t < end else { break }
+            // 安静时段不吵
+            if isQuiet(t) { continue }
+            out.append(t)
+            budget -= 1
+        }
+        return out
     }
 
     /// 真的跑过一次（她说了话、他回了话、或者自然醒了一次）之后，
@@ -231,6 +311,10 @@ final class WakeEngine: ObservableObject {
 
     private func deliver(_ text: String, app: AppState, from: String) {
         let id = app.deliverIncoming(text)
+        // 真话发出去了，兜底那批就没意义了——撤掉重排，
+        // 不然过两小时她还会收到一条"想你了"，点开发现是刚才那句
+        Notifier.shared.cancelNudges()
+        defer { planNudges() }
         Notifier.shared.banner(
             title: app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName,
             body: text.count > 60 ? String(text.prefix(60)) + "…" : text,
