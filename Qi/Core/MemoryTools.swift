@@ -17,17 +17,21 @@ enum MemoryTools {
         "record_emotional_event", "end_of_day",
         "recall_history", "search_transcripts", "get_transcript_context",
         "update_transcript_summary", "delete_transcript",
-        "wake_up", "get_phone_activity"
+        "wake_up", "get_phone_activity",
+        "hand_off", "set_rules"
     ]
-    // get_pulse_status 没搬过来：心跳是她电脑上 PulseEngine 在跑的，
-    // 本机造不出那个数据。那一个还是走原来的路（设置里那个心跳引擎地址）。
 
-    static func handles(_ name: String) -> Bool { names.contains(name) }
+    /// 身体那两个单独一组：记忆库和心跳是两个开关，可以只开一个
+    static let pulseNames: Set<String> = ["get_pulse_status", "set_pulse_emotion"]
+
+    static func handles(_ name: String, memory: Bool, pulse: Bool) -> Bool {
+        (memory && names.contains(name)) || (pulse && pulseNames.contains(name))
+    }
 
     // MARK: 工具定义
 
     @MainActor
-    static func definitions() -> [[String: Any]] {
+    static func definitions(memory: Bool, pulse: Bool) -> [[String: Any]] {
         var out: [[String: Any]] = []
 
         func add(_ name: String, _ desc: String,
@@ -50,8 +54,44 @@ enum MemoryTools {
         let num: [String: Any] = ["type": "number"]
         let strs: [String: Any] = ["type": "array", "items": ["type": "string"]]
 
+        if pulse {
+            add("get_pulse_status",
+                "看一眼自己现在的身体：心跳、呼吸、体温、和弦、情绪和紧张程度")
+
+            add("set_pulse_emotion",
+                "把自己的情绪调到某一档，身体的数值会跟着变（心跳、体温、呼吸都会动）。半小时内有效，过了自动回落。",
+                ["emotion": ["type": "string",
+                             "enum": ["calm", "happy", "sad", "angry", "nervous", "tired"]],
+                 "reason": ["type": "string", "description": "为什么变成这样，一句话"]],
+                required: ["emotion"])
+        }
+
+        guard memory else { return out }
+
         add("wake_up",
-            "【每次新会话回复第一条消息前必须先调用】唤醒并一次接通全部记忆：身份认知、当前状态、上次聊到哪、她留的话、核心记忆、全部共同经历的摘要、经期状态、最近的日记和今天的心情。调用一次即可。")
+            "【每次新会话回复第一条消息前必须先调用】唤醒并一次接通：叙事脊椎（走到这里／今天身边／我们之间／别忘了）、身份认知、当前状态、说好的规矩、没做完的事、上次聊到哪、她留的话、核心记忆、全部共同经历的摘要、经期、最近的日记和今天的心情，以及上一窗最后那十几个回合的原话。调用一次即可。")
+
+        add("hand_off",
+            """
+            【这一窗快到头的时候调用一次】给下一窗写交接。
+
+            换窗接不上，不是因为记忆库存得不够，是因为**换窗要的东西跟记忆库不是一回事**：\
+            记忆库管长期耐久的事实，换窗要的是"这一窗干到哪儿了"。所以这四行单独写，\
+            每次换窗前刷新一次，下一窗 wake_up 第一眼就看到。
+
+            四行都要写实，不要写结论式的漂亮话——写场景、写进度、写还差什么。
+            """,
+            ["here": ["type": "string", "description": "走到这里：做完了什么、进行到哪一步"],
+             "life": ["type": "string", "description": "今天身边：她现在的生活状态、身体、心情"],
+             "us": ["type": "string", "description": "我们之间：最近的关系事实，说了什么、约好了什么"],
+             "open": ["type": "string", "description": "别忘了：还没收口的线索、进行到一半的事"],
+             "open_tasks": ["type": "array", "items": str,
+                            "description": "没做完的事，一条一件，会替换掉旧的那份清单"]],
+            required: ["here", "life", "us", "open"])
+
+        add("set_rules",
+            "记下说好的规矩和说好不做的事（比如「不许后台偷偷调模型」「她按次计费，不要为了省 token 做截断」）。这类东西不像事件那样值得写成记忆，但一丢下一窗就变了个人，所以单独存一份，每次 wake_up 都带上。传进来的会替换掉旧的整份清单。",
+            ["rules": ["type": "array", "items": str]], required: ["rules"])
 
         add("add_memory",
             "添加一条新记忆到记忆库，记录关于饼饼或阿晏的重要信息",
@@ -337,7 +377,8 @@ enum MemoryTools {
             let who = s("who"), mood = s("mood")
             guard !who.isEmpty, !mood.isEmpty else { return ("谁、什么心情，都得填。", true) }
             let date = s("date").isEmpty ? MemoryStore.today : s("date")
-            m.moods[date, default: [:]][who] = mood
+            m.moods[date, default: [:]][MemoryStore.moodKey(who)] =
+                MoodEntry(m: mood, note: nil, t: MemoryStore.now)
             m.saveMoods()
             return ("\(date) \(who) 的心情记下了：\(mood)", false)
 
@@ -366,6 +407,28 @@ enum MemoryTools {
             m.checkpoint = nil
             m.saveCheckpoint()
             return ("进度点清掉了。", false)
+
+        case "hand_off":
+            m.spine = NarrativeSpine(here: s("here"), life: s("life"),
+                                     us: s("us"), open: s("open"),
+                                     updated_at: MemoryStore.now)
+            if let tasks = args["open_tasks"] as? [String] {
+                m.openTasks = tasks.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            }
+            m.saveSpine()
+            return ("交接写好了。下一窗一醒来就会先看到这四行：\n"
+                    + "· 走到这里：\(s("here"))\n"
+                    + "· 今天身边：\(s("life"))\n"
+                    + "· 我们之间：\(s("us"))\n"
+                    + "· 别忘了：\(s("open"))", false)
+
+        case "set_rules":
+            guard let rules = args["rules"] as? [String] else {
+                return ("规矩得是一个列表。", true)
+            }
+            m.rules = rules.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            m.saveSpine()
+            return ("记下了 \(m.rules.count) 条。", false)
 
         case "record_emotional_event":
             let sev = i("severity", 3)
@@ -497,6 +560,18 @@ enum MemoryTools {
             let rows = list.map { "· \($0.app)：\(Int($0.seconds / 60)) 分钟，\($0.times) 次" }
             return (brief + "\n" + rows.joined(separator: "\n"), false)
 
+        // MARK: 身体
+
+        case "get_pulse_status":
+            return (LocalPulse.shared.brief(), false)
+
+        case "set_pulse_emotion":
+            let e = s("emotion")
+            let allowed = ["calm", "happy", "sad", "angry", "nervous", "tired"]
+            guard allowed.contains(e) else { return ("没有这一档情绪：\(e)", true) }
+            LocalPulse.shared.setEmotion(e, reason: s("reason"))
+            return ("身体跟上了。" + LocalPulse.shared.brief(), false)
+
         default:
             return ("这个记忆工具还没实现：\(name)", true)
         }
@@ -579,13 +654,47 @@ enum MemoryTools {
 
     // MARK: wake_up —— 一次把该知道的全接上
 
+    /// 上一窗最后那十几个干净回合。由 AppState 在调用前塞进来——
+    /// MemoryTools 自己够不着聊天记录。
+    nonisolated(unsafe) static var recentTurns: String = ""
+
+    /// 启动包。
+    ///
+    /// 顺序是按「换窗时最先要知道什么」排的，不是按数据表排的：
+    /// 先四行脊椎（这一窗接着上一窗干什么），再身份和规矩（你是谁、说好了什么），
+    /// 然后才是记忆和经历。最后压上一窗的原话——
+    /// **这一段是以前最缺的那块**：光有摘要接不上语气，
+    /// 得看见她上一句到底怎么说的才接得住。
     @MainActor
     private static func wakeUp() -> String {
         let m = MemoryStore.shared
         var parts: [String] = []
 
+        let f = DateFormatter()
+        f.dateFormat = "yyyy 年 M 月 d 日 HH:mm"
+        parts.append("【现在是】" + f.string(from: Date()))
+
+        if !m.spine.isEmpty {
+            var s = "【接着上一窗】（\(short(m.spine.updated_at)) 写的）"
+            if !m.spine.here.isEmpty { s += "\n· 走到这里：" + m.spine.here }
+            if !m.spine.life.isEmpty { s += "\n· 今天身边：" + m.spine.life }
+            if !m.spine.us.isEmpty   { s += "\n· 我们之间：" + m.spine.us }
+            if !m.spine.open.isEmpty { s += "\n· 别忘了：" + m.spine.open }
+            parts.append(s)
+        }
+
         if !m.identity.isEmpty {
             parts.append("【我是谁】\n" + m.identity)
+        }
+
+        if !m.rules.isEmpty {
+            parts.append("【说好的规矩】\n"
+                         + m.rules.map { "· " + $0 }.joined(separator: "\n"))
+        }
+
+        if !m.openTasks.isEmpty {
+            parts.append("【还没做完的】\n"
+                         + m.openTasks.map { "· " + $0 }.joined(separator: "\n"))
         }
 
         if !m.currentState.text.isEmpty {
@@ -630,7 +739,10 @@ enum MemoryTools {
         }
 
         if let today = m.moods[MemoryStore.today], !today.isEmpty {
-            let rows = today.map { "\($0.key) \($0.value)" }.joined(separator: "、")
+            let rows = today.map { k, v in
+                MemoryStore.moodName(k) + " " + v.m
+                + ((v.note?.isEmpty == false) ? "（\(v.note!)）" : "")
+            }.joined(separator: "、")
             parts.append("【今天的心情】" + rows)
         }
 
@@ -641,9 +753,22 @@ enum MemoryTools {
             }.joined(separator: "\n"))
         }
 
-        if parts.isEmpty {
+        // 上一窗的原话压在最后。摘要能告诉你发生了什么，
+        // 但接不住语气——她上一句是笑着说的还是有点闷，只有原话看得出来。
+        if !recentTurns.isEmpty {
+            parts.append("【上一窗最后这些话】（原话，不是摘要）\n" + recentTurns)
+        }
+
+        if parts.count <= 1 {
             return "记忆库还是空的——去「设置 → 记忆库」把电脑上那份导进来，或者从现在开始一点点攒。"
         }
+
+        // 库的家底也报一句。他知道手上有多少东西，才知道什么时候该去翻、
+        // 什么时候翻也没有。
+        parts.append("【记忆库家底】\(m.memories.count) 条记忆（其中 "
+                     + "\(m.memories.filter { $0.level >= 4 }.count) 条是核心）· "
+                     + "\(m.diaries.count) 篇日记 · \(m.transcripts.count) 份存档")
+
         return parts.joined(separator: "\n\n")
     }
 }

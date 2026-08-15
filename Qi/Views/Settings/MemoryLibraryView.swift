@@ -85,8 +85,32 @@ struct MemoryLibraryView: View {
             .padding(.vertical, 11)
 
             SettingsNote(app.settings.localMemory
-                ? "记忆库那 29 个工具（wake_up、add_memory、checkpoint、end_of_day…）现在是 App 内置的，名字和参数跟电脑上那套一模一样。\n\n⚠️ 建议去「设置 → MCP」把「小屋」那台关掉——两边都开着的话，同一件事他手上有两套工具，会来回打架。"
+                ? "记忆库那 28 个工具（wake_up、add_memory、checkpoint、end_of_day…）现在是 App 内置的，名字和参数跟电脑上那套一模一样。\n\n⚠️ 建议去「设置 → MCP」把「小屋」那台关掉——两边都开着的话，同一件事他手上有两套工具，会来回打架。"
                 : "关着的时候他还是走小屋那台 MCP，也就是还得开着电脑。")
+
+            SettingsDivider()
+
+            Toggle(isOn: $app.settings.localPulse) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("心跳也在本机算")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    Text("不用再开 PulseEngine")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+            }
+            .tint(app.settings.accentColor)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+
+            SettingsNote("""
+            把 PulseEngine 那几条公式原样搬进来了：心率的分时段基线、情绪偏移、天气偏移、突刺的指数衰减、那条慢正弦抖动——常数一个没改，所以算出来的数跟电脑上是一样的。
+
+            那套东西本来就是**每次请求现算**的纯公式，不是靠一秒一次 tick 累积出来的，所以少了那个循环什么都不缺。心率历史照样一分钟记一条，存在手机上。
+
+            开着之后「札记 → 心跳」和他手上的 get_pulse_status 都走本机，一次网络都不发。
+            """)
         }
     }
 

@@ -246,31 +246,27 @@ struct GlassSurface: View {
     //   · 砂只是一层几乎看不见的颗粒，凑近才看得出来
     //   · 边缘的高光才是三套之间最明显的区别
 
-    // MARK: 磨砂 —— 糊得最狠，表面带一点点颗粒
+    // MARK: 磨砂 —— 苹果原来那块毛玻璃
+    //
+    // 我前面几版一直在往 material 上面糊自己的东西：白、渐变、噪点、边光，
+    // 想"做出"磨砂的质感。做反了——**苹果那块毛玻璃本身就是磨砂**，
+    // 我加的每一层都是在把它盖掉。
+    //
+    // 现在只用 `.regularMaterial`（就是通知中心、控制中心那块），
+    // 外加一道细到几乎看不见的亮边收住形状。别的什么都不加。
     private var frosted: some View {
-        base(liquid: false)
+        base(liquid: false, material: .regularMaterial)
             .overlay {
-                shape.fill(
-                    LinearGradient(
-                        colors: [.white.opacity(frostWhite),
-                                 .white.opacity(frostWhite * 0.72)],
-                        startPoint: .top, endPoint: .bottom)
-                )
+                if extra > 0.01 {
+                    // 需要更突出的地方（比如自己的气泡）才多垫一丝白
+                    shape.fill(.white.opacity(extra * 0.12))
+                }
             }
             .overlay {
-                // 砂。**要淡到几乎看不见**——它只是让表面不那么平，
-                // 不是真往上面撒沙子。
-                GrainOverlay(opacity: 0.045 * strength)
-                    .clipShape(shape)
-                    .allowsHitTesting(false)
-            }
-            .overlay {
-                shape.strokeBorder(.white.opacity(0.42 * min(1, strength + 0.2)),
-                                   lineWidth: 0.8)
+                shape.strokeBorder(.white.opacity(0.30 * min(1, strength + 0.2)),
+                                   lineWidth: 0.7)
             }
     }
-
-    private var frostWhite: Double { 0.22 * strength + extra * 0.10 }
 
     // MARK: 通透 —— iOS 那块玻璃
     //
@@ -318,14 +314,17 @@ struct GlassSurface: View {
             }
     }
 
-    // MARK: 模糊 —— One UI 那种
+    // MARK: 模糊 —— 更薄的那一档，壁纸透得最多
     //
-    // 均匀一片糊，**没有边、没有砂、上下没有渐变**，
-    // 但也**不能不透**：白只加一丝丝，壁纸的颜色还得照样透上来。
+    // 跟磨砂的区别就是换一档 material：`.thinMaterial` 比 regular 薄，
+    // 背后的颜色透上来更多、糊得更均匀。**一条边都不给**——
+    // 加了边就往「通透」那边靠了，三套就分不出来了。
     private var blur: some View {
         base(liquid: false, material: .thinMaterial)
             .overlay {
-                shape.fill(.white.opacity(0.07 * strength + extra * 0.08))
+                if extra > 0.01 {
+                    shape.fill(.white.opacity(extra * 0.10))
+                }
             }
     }
 
@@ -357,61 +356,6 @@ struct GlassSurface: View {
         return false
         #endif
     }
-}
-
-/// 磨砂表面那层颗粒。
-///
-/// 噪点图只生成一次，之后到处平铺——每块玻璃各画一张的话，
-/// 一个屏幕上几十块玻璃就是几十次逐像素绘制，滚起来会卡。
-struct GrainOverlay: View {
-    var opacity: Double = 0.07
-
-    var body: some View {
-        // 不用 blendMode。混合模式会往下穿到壁纸那一层，
-        // 各处叠起来结果不可控；直接铺一层很淡的灰噪点就够"砂"了。
-        Image(uiImage: GrainOverlay.tile)
-            .resizable(resizingMode: .tile)
-            .opacity(opacity)
-    }
-
-    /// 一块透明底的噪点，平铺用。
-    ///
-    /// 关键是**一个噪点等于一个物理像素**，不是一个点（point）。
-    /// 上一版按点画，在 3 倍屏上每颗噪点被放成 3×3 的方块，
-    /// 放大看就是一粒粒沙子——那不叫磨砂，那叫撒了沙。
-    /// 所以这里按屏幕倍率生成：64 点见方的图，在 3 倍屏上是 192×192 个像素点。
-    ///
-    /// 每个点随机偏白或偏黑，一半一半，平均下来不改变底下的明暗——
-    /// 要是铺一层灰，整块玻璃会被压暗一档。
-    nonisolated(unsafe) static let tile: UIImage = {
-        let side: CGFloat = 64      // 点
-        // 写死 3。手机基本都是 3 倍屏；碰上 2 倍屏无非是噪点比一个像素
-        // 还细一点点，看不出差别。这里不去问 UIScreen——那东西是主线程的，
-        // 而这张图是懒加载的静态量，谁先用到就在谁的线程上生成。
-        let scale: CGFloat = 3
-        let step = 1.0 / scale      // 一颗噪点多大（点）
-        let count = Int(side * scale)
-
-        let format = UIGraphicsImageRendererFormat.default()
-        format.scale = scale
-        format.opaque = false
-        let renderer = UIGraphicsImageRenderer(
-            size: CGSize(width: side, height: side), format: format)
-
-        return renderer.image { ctx in
-            let cg = ctx.cgContext
-            cg.setShouldAntialias(false)
-            for y in 0..<count {
-                for x in 0..<count {
-                    let white = Bool.random()
-                    let alpha = CGFloat.random(in: 0...0.85)
-                    cg.setFillColor(UIColor(white: white ? 1 : 0, alpha: alpha).cgColor)
-                    cg.fill(CGRect(x: CGFloat(x) * step, y: CGFloat(y) * step,
-                                   width: step, height: step))
-                }
-            }
-        }
-    }()
 }
 
 extension View {

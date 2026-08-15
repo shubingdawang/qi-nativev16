@@ -211,6 +211,9 @@ struct ClawdHomeView: View {
                                 radius: 10, y: 8)
                         // 走路的时候左右翻个身，朝着要去的方向
                         .scaleEffect(x: facingLeft ? -1 : 1, y: 1)
+                        // 精灵那块 Canvas 是不接触摸的，得自己补一块感应区，
+                        // 不然点也点不到、更别说长按拖
+                        .contentShape(Rectangle().inset(by: -10))
                 }
                 .position(x: clawdX * geo.size.width, y: clawdY * geo.size.height)
                 // 拖的时候要跟手，所以不给动画；自己走的时候才慢慢挪过去

@@ -35,6 +35,60 @@ struct MemoryItem: Codable, Identifiable, Hashable {
 
     /// 工具里认的是 ID 前八位，跟原来那套一致
     var shortID: String { String(id.prefix(8)) }
+
+    init(id: String, content: String, tags: [String], level: Int,
+         author: String, created_at: String, updated_at: String,
+         annotations: [MemoryAnnotation]? = nil) {
+        self.id = id; self.content = content; self.tags = tags
+        self.level = level; self.author = author
+        self.created_at = created_at; self.updated_at = updated_at
+        self.annotations = annotations
+    }
+
+    /// 电脑那边的 memories.json 里，level 有的是数字 5，有的是字符串 "5"
+    /// ——JS 不在乎，Swift 在乎。合成的解码器碰上字符串直接整个文件报废，
+    /// 所以这里自己解一遍，两种写法都认。
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        content = try c.decode(String.self, forKey: .content)
+        tags = (try? c.decode([String].self, forKey: .tags)) ?? []
+        level = MemoryStore.looseInt(try? c.decode(JSONNumberOrString.self, forKey: .level)) ?? 3
+        author = (try? c.decode(String.self, forKey: .author)) ?? "阿晏"
+        created_at = (try? c.decode(String.self, forKey: .created_at)) ?? ""
+        updated_at = (try? c.decode(String.self, forKey: .updated_at)) ?? created_at
+        annotations = try? c.decode([MemoryAnnotation].self, forKey: .annotations)
+    }
+}
+
+/// 一个可能是数字、也可能是字符串的字段
+enum JSONNumberOrString: Codable {
+    case int(Int)
+    case text(String)
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if let v = try? c.decode(Int.self) { self = .int(v); return }
+        if let v = try? c.decode(Double.self) { self = .int(Int(v)); return }
+        if let v = try? c.decode(String.self) { self = .text(v); return }
+        throw DecodingError.typeMismatch(
+            Int.self, .init(codingPath: c.codingPath, debugDescription: "既不是数字也不是字符串"))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch self {
+        case .int(let v):  try c.encode(v)
+        case .text(let v): try c.encode(v)
+        }
+    }
+}
+
+/// 那一天某个人的心情。电脑那边存的是 `{m, note, t}`，不是一个光秃秃的 emoji。
+struct MoodEntry: Codable, Hashable {
+    var m: String
+    var note: String?
+    var t: String?
 }
 
 struct DiaryItem: Codable, Identifiable, Hashable {
@@ -48,6 +102,30 @@ struct DiaryItem: Codable, Identifiable, Hashable {
     var updated_at: String
 
     var shortID: String { String(id.prefix(8)) }
+}
+
+/// 叙事脊椎。
+///
+/// 换窗（这一窗额度用完、换个新窗口接着聊）总觉得"哪里不对劲"，
+/// 症结不在记忆库存得够不够，而在**把换窗当成了记忆库的事**。
+/// 记忆库管的是长期耐久的东西；换窗要的是另一样：
+/// 一份确定性拼出来的「启动包」，只负责把这一窗的工作接过去。
+///
+/// 这四行就是启动包的骨架，照 swap-tutorial 里那个说法：
+///   · 走到这里 —— 做完了什么、系统进展到哪
+///   · 今天身边 —— 她现在的生活状态
+///   · 我们之间 —— 最近的关系事实
+///   · 别忘了   —— 还没收口的线索、进行到一半的事
+struct NarrativeSpine: Codable, Hashable {
+    var here: String = ""      // 走到这里
+    var life: String = ""      // 今天身边
+    var us: String = ""        // 我们之间
+    var open: String = ""      // 别忘了
+    var updated_at: String = ""
+
+    var isEmpty: Bool {
+        here.isEmpty && life.isEmpty && us.isEmpty && open.isEmpty
+    }
 }
 
 /// 「现在处于什么阶段」那段话。wake_up 第一眼看到的就是它。
@@ -146,10 +224,17 @@ final class MemoryStore: ObservableObject {
     @Published var stateHistory: [StateNote] = []
     /// 聊到哪儿了。额度突然断掉的时候靠它接上。
     @Published var checkpoint: StateNote?
+    /// 换窗用的那四行
+    @Published var spine = NarrativeSpine()
+    /// 说好的和说好不做的。换窗最容易丢的就是这一类——
+    /// 它不像"事件"那样值得写进记忆，但丢了对方立刻就变了个人。
+    @Published var rules: [String] = []
+    /// 还没做完的事
+    @Published var openTasks: [String] = []
     @Published var partnerMessage: PartnerMessage?
     @Published var periods = PeriodBook()
-    /// 日期 → 谁 → emoji
-    @Published var moods: [String: [String: String]] = [:]
+    /// 日期 → 谁（ayang / bingbing）→ 那天的心情
+    @Published var moods: [String: [String: MoodEntry]] = [:]
     @Published var emotionalEvents: [EmotionalEvent] = []
     @Published var log: [MemoryLogEntry] = []
     @Published var transcripts: [TranscriptMeta] = []
@@ -197,9 +282,12 @@ final class MemoryStore: ObservableObject {
         currentState = read(StateNote.self, "current_state.json") ?? StateNote()
         stateHistory = read([StateNote].self, "state_history.json") ?? []
         checkpoint = read(StateNote.self, "live_checkpoint.json")
+        spine = read(NarrativeSpine.self, "spine.json") ?? NarrativeSpine()
+        rules = read([String].self, "rules.json") ?? []
+        openTasks = read([String].self, "open_tasks.json") ?? []
         partnerMessage = read(PartnerMessage.self, "partner_message.json")
         periods = read(PeriodBook.self, "periods.json") ?? PeriodBook()
-        moods = read([String: [String: String]].self, "moods.json") ?? [:]
+        moods = read([String: [String: MoodEntry]].self, "moods.json") ?? [:]
         emotionalEvents = read([EmotionalEvent].self, "emotional_events.json") ?? []
         log = read([MemoryLogEntry].self, "memories_log.json") ?? []
         transcripts = read([TranscriptMeta].self, "transcripts.json") ?? []
@@ -210,6 +298,11 @@ final class MemoryStore: ObservableObject {
     func saveState() {
         write(currentState, "current_state.json")
         write(stateHistory, "state_history.json")
+    }
+    func saveSpine() {
+        write(spine, "spine.json")
+        write(rules, "rules.json")
+        write(openTasks, "open_tasks.json")
     }
     func saveCheckpoint() {
         if let checkpoint { write(checkpoint, "live_checkpoint.json") }
@@ -285,6 +378,34 @@ final class MemoryStore: ObservableObject {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
         return f.string(from: Date())
+    }
+
+    /// 把「可能是数字也可能是字符串」的那个字段变成整数
+    static func looseInt(_ v: JSONNumberOrString?) -> Int? {
+        switch v {
+        case .int(let n):   return n
+        case .text(let s):  return Int(s.trimmingCharacters(in: .whitespaces))
+        case .none:         return nil
+        }
+    }
+
+    /// 心情那份文件里，人名的键是英文的：ayang / bingbing。
+    /// 他调工具的时候写的是中文，这儿翻一下，不然会在同一份文件里
+    /// 存出两套键来。
+    static func moodKey(_ who: String) -> String {
+        switch who {
+        case "阿晏", "ayang", "ayan": return "ayang"
+        case "饼饼", "bingbing":       return "bingbing"
+        default:                       return who
+        }
+    }
+
+    static func moodName(_ key: String) -> String {
+        switch key {
+        case "ayang":    return "阿晏"
+        case "bingbing": return "饼饼"
+        default:         return key
+        }
     }
 
     /// 找一条记忆。传全 ID 或者前八位都认。
@@ -380,6 +501,24 @@ final class MemoryStore: ObservableObject {
                     report.lines.append("进度点")
                 } else { report.failed.append(name) }
 
+            case "spine.json":
+                if let v = try? dec.decode(NarrativeSpine.self, from: data) {
+                    spine = v; saveSpine()
+                    report.lines.append("叙事脊椎")
+                } else { report.failed.append(name) }
+
+            case "rules.json":
+                if let v = try? dec.decode([String].self, from: data) {
+                    rules = v; saveSpine()
+                    report.lines.append("规矩 \(v.count) 条")
+                } else { report.failed.append(name) }
+
+            case "open_tasks.json":
+                if let v = try? dec.decode([String].self, from: data) {
+                    openTasks = v; saveSpine()
+                    report.lines.append("待办 \(v.count) 条")
+                } else { report.failed.append(name) }
+
             case "partner_message.json":
                 if let v = try? dec.decode(PartnerMessage.self, from: data) {
                     partnerMessage = v; savePartner()
@@ -393,7 +532,7 @@ final class MemoryStore: ObservableObject {
                 } else { report.failed.append(name) }
 
             case "moods.json":
-                if let v = try? dec.decode([String: [String: String]].self, from: data) {
+                if let v = try? dec.decode([String: [String: MoodEntry]].self, from: data) {
                     moods = v; saveMoods()
                     report.lines.append("心情 \(v.count) 天")
                 } else { report.failed.append(name) }
@@ -448,6 +587,9 @@ final class MemoryStore: ObservableObject {
         put(moods, "moods.json")
         put(emotionalEvents, "emotional_events.json")
         put(log, "memories_log.json")
+        put(spine, "spine.json")
+        put(rules, "rules.json")
+        put(openTasks, "open_tasks.json")
         if let checkpoint { put(checkpoint, "live_checkpoint.json") }
         if let partnerMessage { put(partnerMessage, "partner_message.json") }
         try? identity.write(to: dir.appendingPathComponent("identity.txt"),

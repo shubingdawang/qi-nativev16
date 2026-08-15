@@ -838,7 +838,7 @@ struct PulsePane: View {
 
     var body: some View {
         PaneScroll {
-            if base.isEmpty {
+            if base.isEmpty && !app.settings.localPulse {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("还没填心跳服务的地址").font(.system(size: 15, weight: .semibold))
                     Text("去「设置 → 后端服务」填上 PulseEngine 的地址，比如 http://你电脑的地址:8000")
@@ -967,6 +967,15 @@ struct PulsePane: View {
     }
 
     private func load() async {
+        // 走本机那套的话，一次网络都不用发——公式在手机上现算
+        if app.settings.localPulse {
+            snap = LocalPulse.shared.snapshot()
+            history = LocalPulse.shared.history()
+            offline = false
+            error = nil
+            loading = false
+            return
+        }
         guard !base.isEmpty else { return }
         loading = true
         error = nil
@@ -987,6 +996,11 @@ struct PulsePane: View {
     }
 
     private func setEmotion(_ key: String) async {
+        if app.settings.localPulse {
+            LocalPulse.shared.setEmotion(key, reason: "她在心跳页点的")
+            await load()
+            return
+        }
         do {
             try await PulseAPI.setEmotion(base, emotion: key)
             await load()
@@ -994,6 +1008,11 @@ struct PulsePane: View {
     }
 
     private func spike() async {
+        if app.settings.localPulse {
+            LocalPulse.shared.spike(25)
+            await load()
+            return
+        }
         do {
             try await PulseAPI.spike(base, magnitude: 25)
             await load()

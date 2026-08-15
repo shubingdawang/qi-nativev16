@@ -770,9 +770,11 @@ final class AppState: ObservableObject {
             var native = NativeTools.definitions(
                 hasGroup: conversations.contains { $0.isGroup },
                 hasVoice: activeVoice != nil)
-            // 本机记忆库那 29 个。开着才给——关着的话他还是走小屋那台 MCP。
-            if settings.localMemory {
-                native += MemoryTools.definitions()
+            // 本机记忆库和本机心跳。各自有各自的开关，
+            // 关着的话对应的那几个还是走原来那条路（小屋 MCP / 电脑上的 PulseEngine）。
+            if settings.localMemory || settings.localPulse {
+                native += MemoryTools.definitions(memory: settings.localMemory,
+                                                  pulse: settings.localPulse)
             }
             out = native.filter { item in
                 guard let fn = item["function"] as? [String: Any],
@@ -1766,13 +1768,58 @@ final class AppState: ObservableObject {
     /// 本地工具如果存了图，把卡片信息塞在这儿，execute 拿走
     private var pendingCard: (thumb: String, place: String, thought: String)?
 
+    /// 上一窗最后那十几个**干净**的回合。
+    ///
+    /// 干净的意思是：只留真的说出口的话。工具调用的日志、思考过程、
+    /// 报错、空消息全部剔掉——那些东西占地方又帮不上忙，
+    /// 而且带进新窗口反而会把上下文搅浑。
+    ///
+    /// 取的是当前这个窗口之外、最近动过的那个聊天窗口；
+    /// 要是就这一个窗口，那就取它自己前面的部分。
+    private func recentCleanTurns(limit: Int = 14) -> String {
+        let pool = conversations
+            .filter { $0.space == ChatSpace.chat.rawValue && !$0.isGroup }
+            .sorted { $0.updatedAt > $1.updatedAt }
+
+        // 优先看上一个窗口；只有一个窗口的话就看它自己
+        let source = pool.first(where: { $0.id != activeChatID }) ?? pool.first
+        guard let conv = source else { return "" }
+
+        let me = settings.userName.isEmpty ? "饼饼" : settings.userName
+        let him = settings.aiName.isEmpty ? "阿晏" : settings.aiName
+
+        let clean = conv.messages.filter { msg in
+            msg.errorText == nil
+            && !msg.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        guard !clean.isEmpty else { return "" }
+
+        let rows = clean.suffix(limit).map { msg -> String in
+            let who = msg.role == .user
+                ? me
+                : (msg.senderName.isEmpty ? him : msg.senderName)
+            // 单条太长就掐一下。要的是语气，不是全文——
+            // 全文在存档里，他想看可以自己去 search_transcripts。
+            let text = msg.content.count > 400
+                ? String(msg.content.prefix(400)) + "…"
+                : msg.content
+            return "\(who)：\(text)"
+        }
+        return "（来自《\(conv.title)》）\n" + rows.joined(separator: "\n")
+    }
+
     private func runNative(_ name: String, args: [String: Any]) async -> (text: String, failed: Bool) {
         pendingCard = nil
         let store = StickerStore.shared
 
         // 记忆库那一摊单独放在 MemoryTools 里，不往这个 switch 里堆——
         // 29 个 case 塞进来这个方法就没法看了
-        if settings.localMemory, MemoryTools.handles(name) {
+        if MemoryTools.handles(name, memory: settings.localMemory,
+                               pulse: settings.localPulse) {
+            // wake_up 要看上一窗最后那十几个回合的原话。
+            // 这份东西只有 App 这边有——MCP 那版当年拿不到，
+            // 所以换窗只能靠摘要接，接不住语气。现在把它塞进去。
+            if name == "wake_up" { MemoryTools.recentTurns = recentCleanTurns() }
             return MemoryTools.run(name, args: args)
         }
 

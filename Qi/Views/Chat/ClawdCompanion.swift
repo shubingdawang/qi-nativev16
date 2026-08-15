@@ -57,6 +57,11 @@ struct ClawdRoamer: View {
                     .scaleEffect(held ? 1.2 : 1)
                     .scaleEffect(x: facingLeft ? -1 : 1, y: 1)
                     .shadow(color: .black.opacity(held ? 0.26 : 0), radius: 10, y: 8)
+                    // 这一条是长按拖不动的根源：PixelSpriteView 里那块 Canvas
+                    // 自己写着 allowsHitTesting(false)，所以它整个不接触摸，
+                    // 外面挂多少手势都落不到实处。补一块实心的感应区上去，
+                    // 顺便放大一圈——它只有三十几个点宽，按准太难了。
+                    .contentShape(Rectangle().inset(by: -14))
             }
             .position(x: app.settings.clawdX * geo.size.width,
                       y: app.settings.clawdY * geo.size.height)
@@ -78,8 +83,10 @@ struct ClawdRoamer: View {
                     sync()
                 }
             }
-            .gesture(
-                LongPressGesture(minimumDuration: 0.3)
+            // 用 highPriority：聊天页整页还挂着一个拉侧栏的拖拽手势，
+            // 普通 gesture 会被它压住
+            .highPriorityGesture(
+                LongPressGesture(minimumDuration: 0.28)
                     .onEnded { _ in
                         held = true
                         walkTask?.cancel()

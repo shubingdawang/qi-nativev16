@@ -311,6 +311,9 @@ struct AppSettings: Codable {
     /// 打开之后记忆库那 29 个工具变成 App 内置的，
     /// **这时候该把「小屋」那台 MCP 关掉**，不然同一件事有两套工具。
     var localMemory: Bool = false
+    /// 心跳也在本机算。PulseEngine 那几条公式是纯函数，
+    /// 输入只有「当前时间 + 情绪 + 天气 + 突刺」，不需要一台机器一直 tick。
+    var localPulse: Bool = false
     /// 单独关掉的自带工具（存短名，不带 app__ 前缀）
     var disabledNativeTools: [String] = []
 
