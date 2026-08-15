@@ -53,7 +53,7 @@ struct MemoryItem: Codable, Identifiable, Hashable {
         id = try c.decode(String.self, forKey: .id)
         content = try c.decode(String.self, forKey: .content)
         tags = (try? c.decode([String].self, forKey: .tags)) ?? []
-        level = MemoryStore.looseInt(try? c.decode(JSONNumberOrString.self, forKey: .level)) ?? 3
+        level = (try? c.decode(JSONNumberOrString.self, forKey: .level))?.intValue ?? 3
         author = (try? c.decode(String.self, forKey: .author)) ?? "阿晏"
         created_at = (try? c.decode(String.self, forKey: .created_at)) ?? ""
         updated_at = (try? c.decode(String.self, forKey: .updated_at)) ?? created_at
@@ -80,6 +80,19 @@ enum JSONNumberOrString: Codable {
         switch self {
         case .int(let v):  try c.encode(v)
         case .text(let v): try c.encode(v)
+        }
+    }
+
+    /// 换算成整数。
+    ///
+    /// **这个方法必须放在这儿，不能放进 MemoryStore。**
+    /// MemoryStore 整个类是 @MainActor 的，它的静态方法也跟着被隔离；
+    /// 而 `MemoryItem.init(from:)` 是解码器在任意线程上调的（nonisolated），
+    /// 从那里去调一个 MainActor 的方法，编译就报错。
+    var intValue: Int? {
+        switch self {
+        case .int(let n):  return n
+        case .text(let s): return Int(s.trimmingCharacters(in: .whitespaces))
         }
     }
 }
@@ -378,15 +391,6 @@ final class MemoryStore: ObservableObject {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
         return f.string(from: Date())
-    }
-
-    /// 把「可能是数字也可能是字符串」的那个字段变成整数
-    static func looseInt(_ v: JSONNumberOrString?) -> Int? {
-        switch v {
-        case .int(let n):   return n
-        case .text(let s):  return Int(s.trimmingCharacters(in: .whitespaces))
-        case .none:         return nil
-        }
     }
 
     /// 心情那份文件里，人名的键是英文的：ayang / bingbing。
