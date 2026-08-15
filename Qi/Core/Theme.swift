@@ -139,11 +139,15 @@ extension View {
         modifier(GlassCard(radius: radius, padding: padding))
     }
 
-    /// 让 List / Form 的默认灰底消失，好让壁纸透上来
+    /// 让 List / Form 的默认灰底消失，好让壁纸透上来。
+    ///
+    /// 光把 scroll 的底设成透明是不够的：List 外面那层
+    /// NavigationStack / sheet 自己还铺着一张不透明的系统底色，
+    /// 壁纸在它下面，照样透不上来——所以这儿得自己再垫一张。
     func transparentList() -> some View {
         self
             .scrollContentBackground(.hidden)
-            .background(Color.clear)
+            .background { WallpaperBackground() }
     }
 }
 
@@ -222,12 +226,20 @@ struct GlassSurface: View {
         }
     }
 
-    // MARK: 磨砂 —— 参考图里的 Frosted
+    // 三套的区别**主要交给系统的 material**，我们自己只加很薄的一层。
     //
-    // 参考图那块的特征：糊得**很彻底**（背后只剩大色块，认不出形状），
-    // 表面有一层看得见的细砂，四边一圈很淡的亮边把形状收住，
-    // 整体偏亮但不发灰。上一版差在两处：白铺得太少所以发灰，
-    // 砂只在上面一点点看得见。这版把白垫足，砂铺满整块。
+    // 上一版走反了：为了把三套拉开距离，自己往上糊了厚厚的白、
+    // 又铺了一层很重的噪点，结果磨砂看着像撒了一把沙子，
+    // 模糊变成一块不透光的灰板，通透因为把 material 压到 34%
+    // 反而什么质感都没剩下。
+    //
+    // 这版规矩很简单：
+    //   · material 用足，不压透明度——它就是 iOS 那块玻璃本身
+    //   · 自己加的白控制在很薄的一层，只用来定"这块比背后亮一点"
+    //   · 砂只是一层几乎看不见的颗粒，凑近才看得出来
+    //   · 边缘的高光才是三套之间最明显的区别
+
+    // MARK: 磨砂 —— 糊得最狠，表面带一点点颗粒
     private var frosted: some View {
         shape
             .fill(.regularMaterial)
@@ -235,80 +247,81 @@ struct GlassSurface: View {
                 shape.fill(
                     LinearGradient(
                         colors: [
-                            .white.opacity(frostWhite * 1.06),
-                            .white.opacity(frostWhite * 0.88)
+                            .white.opacity(frostWhite),
+                            .white.opacity(frostWhite * 0.72)
                         ],
                         startPoint: .top, endPoint: .bottom)
                 )
             }
             .overlay {
-                // 砂。磨砂玻璃跟普通模糊的区别全在这层上——
-                // 少了它只是"糊"，有了才是"砂"。
-                GrainOverlay(opacity: (scheme == .dark ? 0.16 : 0.22) * strength)
+                // 砂。**要淡到几乎看不见**——它只是让表面不那么平，
+                // 不是真往上面撒沙子。上一版给到 0.22，放大看全是颗粒。
+                GrainOverlay(opacity: (scheme == .dark ? 0.030 : 0.045) * strength)
                     .clipShape(shape)
                     .allowsHitTesting(false)
             }
             .overlay {
-                // 一圈很淡的亮边，四边都有，不是只在上面
+                // 一圈很淡的亮边，四边都有
                 shape.strokeBorder(
-                    .white.opacity((scheme == .dark ? 0.20 : 0.62) * min(1, strength + 0.2)),
-                    lineWidth: 0.9)
+                    .white.opacity((scheme == .dark ? 0.14 : 0.42) * min(1, strength + 0.2)),
+                    lineWidth: 0.8)
             }
     }
 
     private var frostWhite: Double {
-        (scheme == .dark ? 0.14 : 0.46) * strength + extra * 0.12
+        (scheme == .dark ? 0.07 : 0.22) * strength + extra * 0.10
     }
 
-    // MARK: 通透 —— 参考图里的 Clear（iOS 那种）
+    // MARK: 通透 —— iOS 那块玻璃
     //
-    // 这块几乎不挡东西：背后是什么，你基本还看得清。
-    // 它靠的全是**边**——上缘一道很亮的高光，下缘一道暗影，
-    // 两条加起来眼睛就自动脑补出"这里有一片厚玻璃"。
-    // 所以白垫得极少，边给得极足，跟磨砂正好反过来。
+    // `ultraThinMaterial` 本来就是 iOS 自己那块玻璃，**别去动它**：
+    // 一压透明度就什么都不剩了。这套要做的只有两件事——
+    // 白几乎不加，让背后照样看得清；边给足，上缘一道亮的、下缘一道暗的，
+    // 眼睛自己会读出"这儿有一片厚玻璃"。
     private var clear: some View {
         shape
             .fill(.ultraThinMaterial)
-            .opacity(0.34)
             .overlay {
-                shape.fill(.white.opacity((scheme == .dark ? 0.03 : 0.07) * strength + extra * 0.1))
+                shape.fill(.white.opacity(
+                    (scheme == .dark ? 0.02 : 0.05) * strength + extra * 0.08))
             }
             .overlay {
-                // 顶上那道窄窄的反光带。玻璃厚度就是靠它读出来的。
+                // 顶上那道窄窄的反光带，玻璃的厚度就是靠它读出来的
                 shape.fill(
                     LinearGradient(
                         stops: [
-                            .init(color: .white.opacity(scheme == .dark ? 0.16 : 0.42), location: 0),
-                            .init(color: .white.opacity(0), location: 0.16)
+                            .init(color: .white.opacity(scheme == .dark ? 0.13 : 0.34), location: 0),
+                            .init(color: .white.opacity(0), location: 0.18)
                         ],
                         startPoint: .top, endPoint: .bottom)
                 )
             }
             .overlay {
                 // 边：左上亮到底，右下压成暗的。一圈同一个亮度就成了描边，
-                // 不像玻璃，像贴纸。
+                // 像贴纸不像玻璃。
                 shape.strokeBorder(
                     LinearGradient(
                         stops: [
-                            .init(color: .white.opacity(scheme == .dark ? 0.55 : 0.98), location: 0),
-                            .init(color: .white.opacity(scheme == .dark ? 0.18 : 0.40), location: 0.42),
-                            .init(color: .black.opacity(scheme == .dark ? 0.16 : 0.10), location: 1)
+                            .init(color: .white.opacity(scheme == .dark ? 0.50 : 0.95), location: 0),
+                            .init(color: .white.opacity(scheme == .dark ? 0.16 : 0.36), location: 0.45),
+                            .init(color: .black.opacity(scheme == .dark ? 0.18 : 0.10), location: 1)
                         ],
                         startPoint: .topLeading, endPoint: .bottomTrailing),
-                    lineWidth: 1.2)
+                    lineWidth: 1.1)
             }
     }
 
-    // MARK: 模糊 —— 参考图里的 Blur（One UI 那种）
+    // MARK: 模糊 —— One UI 那种
     //
-    // 均匀一片糊，**没有边、没有砂、上下没有渐变**。
-    // 少一样都会往另外两种上靠——尤其是边，加了就成 Clear 了。
+    // 均匀一片糊，**没有边、没有砂、上下没有渐变**，
+    // 但也**不能不透**：白只加一丝丝，壁纸的颜色还得照样透上来。
+    // 上一版浅色下加了 0.20 的白，直接把背后盖成一块灰板。
     private var blur: some View {
         shape
             .fill(.thinMaterial)
             .overlay {
                 shape.fill(.white.opacity(
-                    (scheme == .dark ? 0.06 : 0.20) * strength + extra * 0.1))
+                    (scheme == .dark ? 0.025 : 0.07) * strength + extra * 0.08))
             }
     }
 }
@@ -328,25 +341,40 @@ struct GrainOverlay: View {
             .opacity(opacity)
     }
 
-    /// 128×128 的一块噪点，底是透明的。
+    /// 一块透明底的噪点，平铺用。
+    ///
+    /// 关键是**一个噪点等于一个物理像素**，不是一个点（point）。
+    /// 上一版按点画，在 3 倍屏上每颗噪点被放成 3×3 的方块，
+    /// 放大看就是一粒粒沙子——那不叫磨砂，那叫撒了沙。
+    /// 所以这里按屏幕倍率生成：64 点见方的图，在 3 倍屏上是 192×192 个像素点。
     ///
     /// 每个点随机偏白或偏黑，一半一半，平均下来不改变底下的明暗——
     /// 要是铺一层灰，整块玻璃会被压暗一档。
     nonisolated(unsafe) static let tile: UIImage = {
-        let side = 128
+        let side: CGFloat = 64      // 点
+        // 写死 3。手机基本都是 3 倍屏；碰上 2 倍屏无非是噪点比一个像素
+        // 还细一点点，看不出差别。这里不去问 UIScreen——那东西是主线程的，
+        // 而这张图是懒加载的静态量，谁先用到就在谁的线程上生成。
+        let scale: CGFloat = 3
+        let step = 1.0 / scale      // 一颗噪点多大（点）
+        let count = Int(side * scale)
+
         let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 1
+        format.scale = scale
         format.opaque = false
         let renderer = UIGraphicsImageRenderer(
             size: CGSize(width: side, height: side), format: format)
+
         return renderer.image { ctx in
             let cg = ctx.cgContext
-            for y in 0..<side {
-                for x in 0..<side {
+            cg.setShouldAntialias(false)
+            for y in 0..<count {
+                for x in 0..<count {
                     let white = Bool.random()
-                    let alpha = CGFloat.random(in: 0...0.9)
+                    let alpha = CGFloat.random(in: 0...0.85)
                     cg.setFillColor(UIColor(white: white ? 1 : 0, alpha: alpha).cgColor)
-                    cg.fill(CGRect(x: x, y: y, width: 1, height: 1))
+                    cg.fill(CGRect(x: CGFloat(x) * step, y: CGFloat(y) * step,
+                                   width: step, height: step))
                 }
             }
         }

@@ -47,12 +47,33 @@ struct PixelSpriteView: View {
 
     var body: some View {
         Canvas { context, _ in
+            // 一格一格地画会在格与格之间留下发白的细线：
+            // scale 不是整数的时候每个小方块的边落在半个像素上，
+            // 抗锯齿把边缘画成半透明，两块挨着就透出一道缝——
+            // 身上那些"线"就是这么来的。
+            //
+            // 所以**同一行里颜色一样的连续几格并成一条**再画，
+            // 竖着再多铺出半个像素让上下两行压住彼此。
+            // 这样整块身子是一片实心的，一条缝都没有。
             for y in 0..<sprite.height {
-                for x in 0..<sprite.width {
-                    guard let c = sprite.color(x: x, y: y) else { continue }
-                    let rect = CGRect(x: CGFloat(x) * scale, y: CGFloat(y) * scale,
-                                      width: scale, height: scale)
+                var x = 0
+                while x < sprite.width {
+                    guard let c = sprite.color(x: x, y: y) else {
+                        x += 1
+                        continue
+                    }
+                    var run = 1
+                    while x + run < sprite.width,
+                          let next = sprite.color(x: x + run, y: y),
+                          next == c {
+                        run += 1
+                    }
+                    let rect = CGRect(x: CGFloat(x) * scale,
+                                      y: CGFloat(y) * scale,
+                                      width: CGFloat(run) * scale + 0.5,
+                                      height: scale + 0.5)
                     context.fill(Path(rect), with: .color(tint ?? c))
+                    x += run
                 }
             }
         }

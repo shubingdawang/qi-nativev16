@@ -107,10 +107,26 @@ struct NavDrawerBar: View {
             .animation(.spring(response: 0.34, dampingFraction: 0.86), value: isOpen)
         }
         .ignoresSafeArea(edges: .bottom)
+        // 只要它是开着的，就一直有一个三秒的倒计时在跑。
+        //
+        // 之前只在"点了它"的时候才起倒计时，所以从设置页（常驻不收）
+        // 切回絮语的时候，条已经是开着的、又没人点它，
+        // 倒计时根本没起过——那条就一直挂在那儿不走了。
+        .onChange(of: isOpen) { _, open in
+            if open { postpone() } else { idleTask?.cancel() }
+        }
         .onChange(of: canAutoHide) { _, can in
             // 切到札记、设置这些页面时，把已经在倒计时的那个任务掐掉，
-            // 不然刚展开又被上一页留下的计时收回去
-            if !can { idleTask?.cancel() }
+            // 不然刚展开又被上一页留下的计时收回去；
+            // 反过来切回絮语、工坊，就得把倒计时重新起上
+            if can {
+                if isOpen { postpone() }
+            } else {
+                idleTask?.cancel()
+            }
+        }
+        .onAppear {
+            if isOpen { postpone() }
         }
     }
 

@@ -50,34 +50,45 @@ struct SideMenuShell<Content: View>: View {
                 // 之前是在它上面盖一层透明的捕捉层，结果连底下侧栏的点击
                 // 和滚动一起吃掉了，侧栏看得见点不动。现在改成直接让它失效，
                 // 再单独放一层只盖住它自己的捕捉层。
+                // 下沉要够狠才看得出来是"推开了一张卡片"。
+                // 上一版只缩了 10%、盖了一层几乎看不见的暗，
+                // 结果推开之后跟没推一样。现在三件事一起加：
+                // 缩到 84%、圆角给到 36、**页面本身压一层暗**——
+                // 最后这条是关键，光靠外面的阴影是压不下去的。
                 content
                     .frame(width: geo.size.width, height: geo.size.height)
                     .allowsHitTesting(!isOpen)
+                    .overlay {
+                        Color.black.opacity(0.34 * progress)
+                            .allowsHitTesting(false)
+                    }
                     .compositingGroup()
-                    .clipShape(RoundedRectangle(cornerRadius: 30 * progress,
+                    .clipShape(RoundedRectangle(cornerRadius: 36 * progress,
                                                 style: .continuous))
                     .overlay {
                         // 推开之后给它一道边，不然跟底下那层糊成一片，
                         // 看不出来是"浮"在上面的
-                        RoundedRectangle(cornerRadius: 30 * progress, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.5 * progress), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 36 * progress, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.28 * progress), lineWidth: 1)
                             .allowsHitTesting(false)
                     }
-                    .shadow(color: Color.black.opacity(0.30 * progress),
-                            radius: 24 * progress, x: -10 * progress, y: 0)
-                    .shadow(color: Color.black.opacity(0.16 * progress),
-                            radius: 6 * progress, x: -2 * progress, y: 0)
-                    .scaleEffect(1 - 0.10 * progress, anchor: .center)
+                    .shadow(color: Color.black.opacity(0.45 * progress),
+                            radius: 30 * progress, x: -12 * progress, y: 0)
+                    .shadow(color: Color.black.opacity(0.22 * progress),
+                            radius: 8 * progress, x: -3 * progress, y: 0)
+                    .scaleEffect(1 - 0.16 * progress, anchor: .center)
                     .offset(x: width * progress)
                     .zIndex(1)
 
                 // 捕捉层：只盖住聊天页那一块，点一下关上，往左拖也关上。
                 if progress > 0.02 {
+                    // 这块盖的是被推开那张卡片，尺寸得跟着上面的缩放一起改，
+                    // 不然点空白处关不掉、或者点到侧栏上反而被它吃掉
                     Color.black.opacity(0.001)
-                        .frame(width: geo.size.width * (1 - 0.10 * progress),
-                               height: geo.size.height * (1 - 0.10 * progress))
+                        .frame(width: geo.size.width * (1 - 0.16 * progress),
+                               height: geo.size.height * (1 - 0.16 * progress))
                         .contentShape(Rectangle())
-                        .offset(x: width * progress + geo.size.width * 0.05 * progress)
+                        .offset(x: width * progress + geo.size.width * 0.08 * progress)
                         .onTapGesture { close() }
                         .gesture(
                             DragGesture()
@@ -179,10 +190,12 @@ struct SideMenuPanel: View {
                                     let y = proxy.frame(in: .named("wheel")).midY
                                     let d = min(1, abs(y - mid) / mid)
                                     return content
-                                        .scaleEffect(1 - d * 0.34, anchor: .leading)
-                                        .offset(x: -d * d * 46)
-                                        .opacity(1 - d * 0.72)
-                                        .blur(radius: d * d * 2.2)
+                                        .scaleEffect(1 - d * 0.30, anchor: .leading)
+                                        // 往左收一点点就行。收太多整栏都贴在屏幕边上，
+                                        // 右边空一大片，看着像没排满。
+                                        .offset(x: -d * d * 16)
+                                        .opacity(1 - d * 0.68)
+                                        .blur(radius: d * d * 1.8)
                                 }
                                 // 拉开侧栏的那一下，一行比一行晚一点点抬上来
                                 .offset(y: isOpen ? 0 : 26)
@@ -193,13 +206,15 @@ struct SideMenuPanel: View {
                                     value: isOpen)
                         }
                     }
-                    .padding(.horizontal, 12)
+                    // 整栏往右挪一截，别贴着屏幕左边缘
+                    .padding(.leading, 26)
+                    .padding(.trailing, 10)
                     // 内容不够高就居中撑开，底下不留那一大片空
                     .frame(minHeight: geo.size.height, alignment: .center)
                 }
                 .coordinateSpace(name: "wheel")
-                // 第一项和最后一项也能转到正中间来
-                .contentMargins(.vertical, geo.size.height * 0.28, for: .scrollContent)
+                // 不留上下空白边距。留了的话一打开是从空白开始的，
+                // 得先往上拖一截才看得到东西排满。
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)
