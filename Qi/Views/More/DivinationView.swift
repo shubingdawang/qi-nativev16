@@ -14,6 +14,27 @@ struct DivinationView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // 切换挪到最上面了，跟「搜索聊天记录」那页一个样式：
+            // 一条分段控件顶在内容前面。原来钉在屏幕最底下，
+            // 一是够不着，二是跟导航条挤在一起。
+            VStack(spacing: 6) {
+                Picker("", selection: $mode) {
+                    Text("塔罗").tag(0)
+                    Text("六爻").tag(1)
+                }
+                .pickerStyle(.segmented)
+
+                Text(mode == 0
+                     ? "看心境、看关系、看一件事的来龙去脉"
+                     : "断具体的事：成不成、在哪儿、什么时候")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 10)
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     if mode == 0 {
@@ -23,18 +44,12 @@ struct DivinationView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 20)
+                .padding(.top, 4)
+                .padding(.bottom, Layout.tabBarExpanded + 20)
             }
-
-            // 底下这排就是切换用哪套
-            HStack(spacing: 0) {
-                modeTab(0, "塔罗", "看心境、看关系、看一件事的来龙去脉")
-                modeTab(1, "六爻", "断具体的事：成不成、在哪儿、什么时候")
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, Layout.tabBarExpanded + 6)
         }
+        .animation(.easeInOut(duration: 0.2), value: mode)
+        .background { WallpaperBackground() }
         .navigationTitle("占卜")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -51,33 +66,6 @@ struct DivinationView: View {
         }
     }
 
-    private func modeTab(_ i: Int, _ title: String, _ note: String) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) { mode = i }
-        } label: {
-            VStack(spacing: 3) {
-                Text(title)
-                    .font(.system(size: 14, weight: mode == i ? .semibold : .regular))
-                    .foregroundStyle(mode == i
-                                     ? Theme.textMain(scheme)
-                                     : Theme.textMuted(scheme))
-                Text(note)
-                    .font(.system(size: 9))
-                    .foregroundStyle(Theme.textMuted(scheme).opacity(0.8))
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background {
-                if mode == i {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(app.settings.accentColor.opacity(0.18))
-                }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
 }
 
 // MARK: - 塔罗

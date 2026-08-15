@@ -210,8 +210,6 @@ struct GlassSurface: View {
     /// 强行指定一种玻璃。不传就跟着设置走。
     var style: GlassStyle? = nil
 
-    @Environment(\.colorScheme) private var scheme
-
     private var kind: GlassStyle { style ?? Theme.glassStyle }
 
     private var shape: RoundedRectangle {
@@ -219,11 +217,20 @@ struct GlassSurface: View {
     }
 
     var body: some View {
-        switch kind {
-        case .frosted: frosted
-        case .clear:   clear
-        case .blur:    blur
+        Group {
+            switch kind {
+            case .frosted: frosted
+            case .clear:   clear
+            case .blur:    blur
+            }
         }
+        // **玻璃不跟着深色模式变黑。**
+        //
+        // 系统的 material 是跟着 colorScheme 走的：深色下它会变成一块黑玻璃。
+        // 但这个 App 的玻璃底下永远是壁纸，不是系统背景——
+        // 深色模式下把玻璃也刷黑，壁纸就被闷死了，看着很奇怪。
+        // 所以这儿把玻璃**锁在浅色那一套**，字色照旧跟着深浅色走。
+        .environment(\.colorScheme, .light)
     }
 
     // 三套的区别**主要交给系统的 material**，我们自己只加很薄的一层。
@@ -241,73 +248,73 @@ struct GlassSurface: View {
 
     // MARK: 磨砂 —— 糊得最狠，表面带一点点颗粒
     private var frosted: some View {
-        shape
-            .fill(.regularMaterial)
+        base(liquid: false)
             .overlay {
                 shape.fill(
                     LinearGradient(
-                        colors: [
-                            .white.opacity(frostWhite),
-                            .white.opacity(frostWhite * 0.72)
-                        ],
+                        colors: [.white.opacity(frostWhite),
+                                 .white.opacity(frostWhite * 0.72)],
                         startPoint: .top, endPoint: .bottom)
                 )
             }
             .overlay {
                 // 砂。**要淡到几乎看不见**——它只是让表面不那么平，
-                // 不是真往上面撒沙子。上一版给到 0.22，放大看全是颗粒。
-                GrainOverlay(opacity: (scheme == .dark ? 0.030 : 0.045) * strength)
+                // 不是真往上面撒沙子。
+                GrainOverlay(opacity: 0.045 * strength)
                     .clipShape(shape)
                     .allowsHitTesting(false)
             }
             .overlay {
-                // 一圈很淡的亮边，四边都有
-                shape.strokeBorder(
-                    .white.opacity((scheme == .dark ? 0.14 : 0.42) * min(1, strength + 0.2)),
-                    lineWidth: 0.8)
+                shape.strokeBorder(.white.opacity(0.42 * min(1, strength + 0.2)),
+                                   lineWidth: 0.8)
             }
     }
 
-    private var frostWhite: Double {
-        (scheme == .dark ? 0.07 : 0.22) * strength + extra * 0.10
-    }
+    private var frostWhite: Double { 0.22 * strength + extra * 0.10 }
 
     // MARK: 通透 —— iOS 那块玻璃
     //
-    // `ultraThinMaterial` 本来就是 iOS 自己那块玻璃，**别去动它**：
-    // 一压透明度就什么都不剩了。这套要做的只有两件事——
-    // 白几乎不加，让背后照样看得清；边给足，上缘一道亮的、下缘一道暗的，
+    // 系统上有真的液态玻璃就用真的（`.glassEffect`，iOS 26 才有）。
+    // 那才是 iOS 自己那块玻璃：会折射、会随内容动，
+    // 我拿 material 加边光去仿，永远只能仿个七八分。
+    //
+    // 系统上没有的话，退回 `ultraThinMaterial` + 一道边光：
+    // 白几乎不加，让背后照样看得清；上缘一道亮的、右下一道暗的，
     // 眼睛自己会读出"这儿有一片厚玻璃"。
     private var clear: some View {
-        shape
-            .fill(.ultraThinMaterial)
+        base(liquid: true)
             .overlay {
-                shape.fill(.white.opacity(
-                    (scheme == .dark ? 0.02 : 0.05) * strength + extra * 0.08))
+                if !hasLiquidGlass {
+                    shape.fill(.white.opacity(0.05 * strength + extra * 0.08))
+                }
             }
             .overlay {
-                // 顶上那道窄窄的反光带，玻璃的厚度就是靠它读出来的
-                shape.fill(
-                    LinearGradient(
-                        stops: [
-                            .init(color: .white.opacity(scheme == .dark ? 0.13 : 0.34), location: 0),
-                            .init(color: .white.opacity(0), location: 0.18)
-                        ],
-                        startPoint: .top, endPoint: .bottom)
-                )
+                if !hasLiquidGlass {
+                    // 顶上那道窄窄的反光带，玻璃的厚度就是靠它读出来的
+                    shape.fill(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .white.opacity(0.34), location: 0),
+                                .init(color: .white.opacity(0), location: 0.18)
+                            ],
+                            startPoint: .top, endPoint: .bottom)
+                    )
+                }
             }
             .overlay {
-                // 边：左上亮到底，右下压成暗的。一圈同一个亮度就成了描边，
-                // 像贴纸不像玻璃。
-                shape.strokeBorder(
-                    LinearGradient(
-                        stops: [
-                            .init(color: .white.opacity(scheme == .dark ? 0.50 : 0.95), location: 0),
-                            .init(color: .white.opacity(scheme == .dark ? 0.16 : 0.36), location: 0.45),
-                            .init(color: .black.opacity(scheme == .dark ? 0.18 : 0.10), location: 1)
-                        ],
-                        startPoint: .topLeading, endPoint: .bottomTrailing),
-                    lineWidth: 1.1)
+                if !hasLiquidGlass {
+                    // 边：左上亮到底，右下压成暗的。一圈同一个亮度就成了描边，
+                    // 像贴纸不像玻璃。
+                    shape.strokeBorder(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .white.opacity(0.95), location: 0),
+                                .init(color: .white.opacity(0.36), location: 0.45),
+                                .init(color: .black.opacity(0.10), location: 1)
+                            ],
+                            startPoint: .topLeading, endPoint: .bottomTrailing),
+                        lineWidth: 1.1)
+                }
             }
     }
 
@@ -315,14 +322,40 @@ struct GlassSurface: View {
     //
     // 均匀一片糊，**没有边、没有砂、上下没有渐变**，
     // 但也**不能不透**：白只加一丝丝，壁纸的颜色还得照样透上来。
-    // 上一版浅色下加了 0.20 的白，直接把背后盖成一块灰板。
     private var blur: some View {
-        shape
-            .fill(.thinMaterial)
+        base(liquid: false, material: .thinMaterial)
             .overlay {
-                shape.fill(.white.opacity(
-                    (scheme == .dark ? 0.025 : 0.07) * strength + extra * 0.08))
+                shape.fill(.white.opacity(0.07 * strength + extra * 0.08))
             }
+    }
+
+    /// 底下那一层。
+    ///
+    /// `liquid` 为真、而且系统给得起的时候，用 iOS 26 的液态玻璃；
+    /// 别的情况一律退回 material。
+    @ViewBuilder
+    private func base(liquid: Bool, material: Material = .regularMaterial) -> some View {
+        #if compiler(>=6.2)
+        if liquid, #available(iOS 26.0, *) {
+            // `.clear` 那档才是"几乎不挡东西、靠折射成形"的那块玻璃
+            Color.clear.glassEffect(.clear, in: shape)
+        } else {
+            shape.fill(liquid ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(material))
+        }
+        #else
+        shape.fill(liquid ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(material))
+        #endif
+    }
+
+    /// 这台机器上有没有真的液态玻璃。有的话上面那些手工的边光就不画了，
+    /// 画了会跟系统自己的高光打架。
+    private var hasLiquidGlass: Bool {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) { return true }
+        return false
+        #else
+        return false
+        #endif
     }
 }
 

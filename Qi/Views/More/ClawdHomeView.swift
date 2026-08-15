@@ -15,6 +15,14 @@ struct ClawdHomeView: View {
     @State private var dragPoint: CGPoint = .zero
     @State private var mood: ClawdMood = .idle
     @State private var clawdX: Double = 0.5
+    /// 他现在站在房间高度的百分之几。以前写死在 0.78，只能左右走。
+    @State private var clawdY: Double = 0.78
+    /// 正被拎在手上
+    @State private var held = false
+    /// 朝哪边走。左右翻个身，看着才像在走而不是在平移。
+    @State private var facingLeft = false
+    /// 这一趟走多久。远一点就走久一点。
+    @State private var walkSeconds: Double = 2.4
     @State private var bubble: String?
     @State private var bubbleTask: Task<Void, Never>?
     @State private var walkTask: Task<Void, Never>?
@@ -178,7 +186,8 @@ struct ClawdHomeView: View {
                     }
                 }
 
-                // clawd
+                // clawd 本人。长按能拎起来放到任何地方，
+                // 没人管的时候他自己也会在屋里走来走去。
                 VStack(spacing: 4) {
                     if let bubble {
                         Text(bubble)
@@ -195,10 +204,19 @@ struct ClawdHomeView: View {
                             .fixedSize()
                             .transition(.scale(scale: 0.9).combined(with: .opacity))
                     }
-                    ClawdView(mood: mood, scale: 1.8)
+                    ClawdView(mood: mood, scale: 1.8, shadow: true)
+                        // 被拎起来的时候整只抬高一点、影子也跟着散开
+                        .scaleEffect(held ? 1.14 : 1)
+                        .shadow(color: .black.opacity(held ? 0.26 : 0),
+                                radius: 10, y: 8)
+                        // 走路的时候左右翻个身，朝着要去的方向
+                        .scaleEffect(x: facingLeft ? -1 : 1, y: 1)
                 }
-                .position(x: clawdX * geo.size.width, y: geo.size.height * 0.78)
-                .animation(.easeInOut(duration: 2.4), value: clawdX)
+                .position(x: clawdX * geo.size.width, y: clawdY * geo.size.height)
+                // 拖的时候要跟手，所以不给动画；自己走的时候才慢慢挪过去
+                .animation(held ? nil : .easeInOut(duration: walkSeconds), value: clawdX)
+                .animation(held ? nil : .easeInOut(duration: walkSeconds), value: clawdY)
+                .animation(.spring(response: 0.28, dampingFraction: 0.6), value: held)
                 .onTapGesture {
                     mood = .happy
                     say(tapLine())
@@ -210,6 +228,32 @@ struct ClawdHomeView: View {
                         if mood == .happy { mood = .idle }
                     }
                 }
+                .gesture(
+                    LongPressGesture(minimumDuration: 0.3)
+                        .onEnded { _ in
+                            held = true
+                            walkTask?.cancel()          // 拎着的时候别让他自己乱跑
+                            mood = .happy
+                            if app.settings.haptics {
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            }
+                            say(["诶——", "放我下来", "飞起来了", "唔？"].randomElement() ?? "诶")
+                        }
+                        .sequenced(before: DragGesture(minimumDistance: 0))
+                        .onChanged { value in
+                            if case .second(_, let drag?) = value {
+                                clawdX = min(0.92, max(0.08, drag.location.x / geo.size.width))
+                                clawdY = min(0.94, max(0.10, drag.location.y / geo.size.height))
+                            }
+                        }
+                        .onEnded { _ in
+                            guard held else { return }
+                            held = false
+                            mood = .idle
+                            say(["就待这儿吧", "好", "这儿也不错"].randomElement() ?? "好")
+                            startWalking()              // 放下之后重新开始自己溜达
+                        }
+                )
 
                 if let notice {
                     Text(notice)
@@ -334,21 +378,44 @@ struct ClawdHomeView: View {
 
     // MARK: 它自己的小动作
 
-    /// 隔一会儿挪一下，挪到哪件东西旁边就说一句相关的
+    /// 隔一会儿自己挪一下。
+    ///
+    /// 现在是**满屋子走**，不只是左右平移：横竖都换一个位置，
+    /// 走多远就走多久（近的两秒、远的四秒多），走的时候朝着要去的方向翻身。
+    /// 挪到哪件东西旁边就说一句跟那件东西有关的话。
     private func startWalking() {
         walkTask?.cancel()
         walkTask = Task { @MainActor in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64.random(in: 6...14) * 1_000_000_000)
+                try? await Task.sleep(nanoseconds: UInt64.random(in: 5...12) * 1_000_000_000)
                 if Task.isCancelled { return }
-                guard mood != .happy else { continue }
+                guard mood != .happy, !held else { continue }
 
-                clawdX = Double.random(in: 0.15...0.85)
+                let targetX = Double.random(in: 0.12...0.88)
+                let targetY = Double.random(in: 0.22...0.90)
+                let dist = ((targetX - clawdX) * (targetX - clawdX)
+                            + (targetY - clawdY) * (targetY - clawdY)).squareRoot()
+
+                facingLeft = targetX < clawdX
+                walkSeconds = 1.6 + dist * 3.2
+                // 走的这一路上换成"在忙活"那两帧，腿看着像在倒腾
+                mood = .working
+                clawdX = targetX
+                clawdY = targetY
+
+                try? await Task.sleep(nanoseconds: UInt64(walkSeconds * 1_000_000_000))
+                if Task.isCancelled { return }
+                if mood == .working { mood = .idle }
 
                 // 走到谁旁边了
                 let near = store.owned.filter { !$0.hidden }
-                    .min { abs($0.x - clawdX) < abs($1.x - clawdX) }
-                if let near, abs(near.x - clawdX) < 0.16,
+                    .min { a, b in
+                        let da = abs(a.x - clawdX) + abs(a.y - clawdY)
+                        let db = abs(b.x - clawdX) + abs(b.y - clawdY)
+                        return da < db
+                    }
+                if let near,
+                   abs(near.x - clawdX) < 0.16, abs(near.y - clawdY) < 0.20,
                    let kind = FurnitureCatalog.kind(near.kind),
                    Bool.random() {
                     say(kind.reaction)

@@ -59,7 +59,9 @@ struct SideMenuShell<Content: View>: View {
                     .frame(width: geo.size.width, height: geo.size.height)
                     .allowsHitTesting(!isOpen)
                     .overlay {
-                        Color.black.opacity(0.34 * progress)
+                        // 压一层暗是为了"沉下去"，不是为了把聊天页关灯。
+                        // 0.34 太重了，推开之后那半边黑得很突兀。
+                        Color.black.opacity(0.16 * progress)
                             .allowsHitTesting(false)
                     }
                     .compositingGroup()
@@ -206,8 +208,8 @@ struct SideMenuPanel: View {
                                     value: isOpen)
                         }
                     }
-                    // 整栏往右挪一截，别贴着屏幕左边缘
-                    .padding(.leading, 26)
+                    // 整栏往右让开一截，别贴着屏幕边
+                    .padding(.leading, 44)
                     .padding(.trailing, 10)
                     // 内容不够高就居中撑开，底下不留那一大片空
                     .frame(minHeight: geo.size.height, alignment: .center)
@@ -242,7 +244,8 @@ struct SideMenuPanel: View {
                     .foregroundStyle(Theme.textMuted(scheme))
             }
         }
-        .padding(.horizontal, 22)
+        .padding(.leading, 44)
+        .padding(.trailing, 16)
         .padding(.top, 14)
         .padding(.bottom, 14)
     }

@@ -30,6 +30,9 @@ struct FurnitureKind: Identifiable {
         case plant = "植物"
         case toy = "玩具"
         case drink = "饮料"
+        case food = "吃的"
+        case gadget = "电器"
+        case decor = "摆设"
         case wear = "穿戴"
 
         var id: String { rawValue }
@@ -191,7 +194,217 @@ enum FurnitureCatalog {
             "..gg....",
             "..gg....",
             "..gg...."
-        ], p), category: .wear, reaction: "把脸埋进去")
+        ], p), category: .wear, reaction: "把脸埋进去"),
+
+        .init(id: "glasses", name: "小眼镜", price: 65, sprite: PixelSprite([
+            ".kkk..kkk.",
+            "kccckkccck",
+            "kcccbbccck",
+            "kcccbbccck",
+            ".kkk..kkk."
+        ], p), category: .wear, reaction: "推了推镜框"),
+
+        .init(id: "bag", name: "小背包", price: 95, sprite: PixelSprite([
+            "..dddd..",
+            ".dwwwwd.",
+            "dwwwwwwd",
+            "dwwkkwwd",
+            "dwwwwwwd",
+            ".dwwwwd."
+        ], p), category: .wear, reaction: "背上就不想放下"),
+
+        // MARK: 家具再添几件
+
+        .init(id: "sofa", name: "小沙发", price: 180, sprite: PixelSprite([
+            "gg........gg",
+            "ggggggggggcg",
+            "gccccccccccg",
+            "gccccccccccg",
+            "gggggggggggg",
+            ".dd......dd."
+        ], p), category: .furniture, reaction: "整只陷进去"),
+
+        .init(id: "table", name: "小桌子", price: 110, sprite: PixelSprite([
+            "wwwwwwwwww",
+            "dddddddddd",
+            ".w......w.",
+            ".w......w.",
+            ".w......w.",
+            ".w......w."
+        ], p), category: .furniture, reaction: "爬上去坐着"),
+
+        .init(id: "stool", name: "小凳子", price: 55, sprite: PixelSprite([
+            ".wwwwww.",
+            "wwwwwwww",
+            "dddddddd",
+            ".w....w.",
+            ".w....w.",
+            ".w....w."
+        ], p), category: .furniture, reaction: "踩上去够高处"),
+
+        // MARK: 植物
+
+        .init(id: "sunflower", name: "向日葵", price: 55, sprite: PixelSprite([
+            "..yyyy..",
+            ".yykkyy.",
+            "yykkkkyy",
+            ".yykkyy.",
+            "..gggg..",
+            "..gggg..",
+            ".ggggg..",
+            "..gggg..",
+            "..ssss.."
+        ], p), category: .plant, reaction: "跟着它转了半圈"),
+
+        .init(id: "mushroom", name: "小蘑菇", price: 32, sprite: PixelSprite([
+            "..rrrr..",
+            ".rrccrr.",
+            "rrccrrrr",
+            "rrrrrrcr",
+            "..cccc..",
+            "..cccc..",
+            ".ssssss."
+        ], p), category: .plant, reaction: "戳一戳伞盖"),
+
+        // MARK: 玩具
+
+        .init(id: "blocks", name: "积木", price: 60, sprite: PixelSprite([
+            "..rr....",
+            "..rr....",
+            "bbbbgg..",
+            "bbbbgg..",
+            "yyyybbbb",
+            "yyyybbbb"
+        ], p), category: .toy, reaction: "垒得比自己还高"),
+
+        .init(id: "plane", name: "纸飞机", price: 20, sprite: PixelSprite([
+            "......cc",
+            "....cccc",
+            "..cccccc",
+            "cccccccc",
+            "..cccccc",
+            "....cc.."
+        ], p), category: .toy, reaction: "扔出去又捡回来"),
+
+        .init(id: "yarn", name: "毛线球", price: 38, sprite: PixelSprite([
+            "..nnnn..",
+            ".nnccnn.",
+            "nncnncnn",
+            "nnccnncn",
+            ".nnccnn.",
+            "..nnnn..",
+            ".....nn.",
+            "......nn"
+        ], p), category: .toy, reaction: "滚着滚着自己绕进去了"),
+
+        // MARK: 吃的
+
+        .init(id: "cake", name: "小蛋糕", price: 45, sprite: PixelSprite([
+            "...r....",
+            "..nnnn..",
+            ".nnnnnn.",
+            "cccccccc",
+            "wwwwwwww",
+            "cccccccc",
+            ".ssssss."
+        ], p), category: .food, reaction: "先把上面那颗吃掉"),
+
+        .init(id: "donut", name: "甜甜圈", price: 26, sprite: PixelSprite([
+            "..nnnn..",
+            ".nnnnnn.",
+            "nnnwwnnn",
+            "nnwwwwnn",
+            "nnnwwnnn",
+            ".nnnnnn.",
+            "..nnnn.."
+        ], p), category: .food, reaction: "从中间那个洞里往外看"),
+
+        .init(id: "riceball", name: "饭团", price: 22, sprite: PixelSprite([
+            "...cc...",
+            "..cccc..",
+            ".cccccc.",
+            "ckkkkkkc",
+            "ckkkkkkc",
+            ".cccccc."
+        ], p), category: .food, reaction: "捧着啃"),
+
+        // MARK: 电器
+
+        .init(id: "tv", name: "小电视", price: 220, sprite: PixelSprite([
+            "kkkkkkkkkkkk",
+            "kbbbbbbbbbbk",
+            "kbccbbbbccbk",
+            "kbbbbbbbbbbk",
+            "kbbbbbbbbbbk",
+            "kkkkkkkkkkkk",
+            "..dd....dd.."
+        ], p), category: .gadget, reaction: "坐下来看一会儿"),
+
+        .init(id: "speaker", name: "小音箱", price: 130, sprite: PixelSprite([
+            "kkkkkkkk",
+            "kkssskkk",
+            "kskkksk.",
+            "kkssskkk",
+            "kkkkkkkk",
+            "kkyyyykk",
+            "kkkkkkkk"
+        ], p), category: .gadget, reaction: "跟着节奏晃"),
+
+        .init(id: "fan", name: "小风扇", price: 85, sprite: PixelSprite([
+            "..bbbb..",
+            ".bbccbb.",
+            "bbcccckb",
+            "bbcccckb",
+            ".bbccbb.",
+            "..bbbb..",
+            "...kk...",
+            "..kkkk.."
+        ], p), category: .gadget, reaction: "对着风口张嘴"),
+
+        // MARK: 摆设
+
+        .init(id: "frame", name: "相框", price: 70, sprite: PixelSprite([
+            "wwwwwwww",
+            "wbbbbbbw",
+            "wbbnnbbw",
+            "wbnnnnbw",
+            "wbbbbbbw",
+            "wwwwwwww",
+            "...ww..."
+        ], p), category: .decor, reaction: "站在前面看很久"),
+
+        .init(id: "moon", name: "月亮灯", price: 140, sprite: PixelSprite([
+            "..yyyy..",
+            ".yyyyyy.",
+            "yyyy..y.",
+            "yyy.....",
+            "yyyy..y.",
+            ".yyyyyy.",
+            "..yyyy..",
+            "...ss..."
+        ], p), category: .decor, reaction: "靠着睡着了"),
+
+        .init(id: "stars", name: "星星串", price: 50, sprite: PixelSprite([
+            "ssssssss",
+            ".y....y.",
+            "yyy..yyy",
+            ".y....y.",
+            "...y....",
+            "..yyy...",
+            "...y...."
+        ], p), category: .decor, reaction: "抬头数了一遍"),
+
+        .init(id: "globe", name: "小地球仪", price: 160, sprite: PixelSprite([
+            "..bbbb..",
+            ".bbggbb.",
+            "bggbbggb",
+            "bbggbbbb",
+            "bbbbggbb",
+            ".bbggbb.",
+            "..bbbb..",
+            "...ww...",
+            "..wwww.."
+        ], p), category: .decor, reaction: "转一圈找家在哪儿")
     ]
 
     static func kind(_ id: String) -> FurnitureKind? {

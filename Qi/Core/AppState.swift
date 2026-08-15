@@ -767,10 +767,14 @@ final class AppState: ObservableObject {
         // 总开关关了就一件都不给；单独关掉的那几件也挑出去。
         var out: [[String: Any]] = []
         if settings.nativeToolsEnabled {
-            out = NativeTools.definitions(
+            var native = NativeTools.definitions(
                 hasGroup: conversations.contains { $0.isGroup },
-                hasVoice: activeVoice != nil
-            ).filter { item in
+                hasVoice: activeVoice != nil)
+            // 本机记忆库那 29 个。开着才给——关着的话他还是走小屋那台 MCP。
+            if settings.localMemory {
+                native += MemoryTools.definitions()
+            }
+            out = native.filter { item in
                 guard let fn = item["function"] as? [String: Any],
                       let raw = fn["name"] as? String else { return true }
                 return !settings.disabledNativeTools.contains(NativeTools.shortName(raw))
@@ -1765,6 +1769,12 @@ final class AppState: ObservableObject {
     private func runNative(_ name: String, args: [String: Any]) async -> (text: String, failed: Bool) {
         pendingCard = nil
         let store = StickerStore.shared
+
+        // 记忆库那一摊单独放在 MemoryTools 里，不往这个 switch 里堆——
+        // 29 个 case 塞进来这个方法就没法看了
+        if settings.localMemory, MemoryTools.handles(name) {
+            return MemoryTools.run(name, args: args)
+        }
 
         switch name {
 

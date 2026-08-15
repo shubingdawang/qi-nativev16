@@ -297,12 +297,20 @@ struct AppSettings: Codable {
     var enterToSend: Bool = false
     /// 导航条把手在屏幕右侧的高度，0 是顶 1 是底。拖过之后记住。
     var handleY: Double = 0.62
+    /// clawd 现在待在聊天页的哪儿。它自己会走，也能被拎着放，
+    /// 位置记下来，下次进来还在原地。
+    var clawdX: Double = 0.78
+    var clawdY: Double = 0.66
     /// 玻璃的通透程度，0 最透 1 最实
     var glassOpacity: Double = 1.0
     /// 玻璃是哪一套做法
     var glassStyle: GlassStyle = .frosted
     /// 自带工具的总开关。关掉之后他手上一件本地工具都没有。
     var nativeToolsEnabled: Bool = true
+    /// 用本机那份记忆库（不走 MCP、不用开电脑）。
+    /// 打开之后记忆库那 29 个工具变成 App 内置的，
+    /// **这时候该把「小屋」那台 MCP 关掉**，不然同一件事有两套工具。
+    var localMemory: Bool = false
     /// 单独关掉的自带工具（存短名，不带 app__ 前缀）
     var disabledNativeTools: [String] = []
 

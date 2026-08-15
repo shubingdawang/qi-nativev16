@@ -126,12 +126,8 @@ struct ChatView: View {
                         selectionBar(conv)
                     } else {
                         VStack(spacing: 0) {
-                            // 输入框上蹲着的那只，不接模型，看他干嘛就做什么动作
-                            if space == .chat, let conv = activeConversation {
-                                let state = app.presence(in: conv.id)
-                                ClawdCompanion(busy: state.busy, activity: state.text)
-                            }
-
+                            // clawd 不再钉在这儿了——它现在满屏走，
+                            // 挂在整页的最上面一层（见下面那个 ClawdRoamer）
                             VStack(spacing: 8) {
                             if stickerPanelOpen {
                                 StickerPanel { sticker in
@@ -225,6 +221,14 @@ struct ChatView: View {
                 .zIndex(99)
             }
 
+            // clawd 在整页上溜达。挂在这一层是因为它得能走到任何地方，
+            // 又不能挡住底下的气泡——它自己那一小块接触摸，别处一律放过去。
+            if space == .chat, let conv = activeConversation {
+                let state = app.presence(in: conv.id)
+                ClawdRoamer(busy: state.busy, activity: state.text)
+                    .allowsHitTesting(menuOpenID == nil && !selecting)
+            }
+
             // 置顶的备忘挂在最上面一层。
             // 之前夹在中间，被后面那些铺满屏幕的层盖住了，
             // 所以絮语页看不见、工坊（没有那些层）反而看得见。
@@ -244,7 +248,8 @@ struct ChatView: View {
             DragGesture(minimumDistance: 12)
                 .onEnded { v in
                     guard showsSideMenu, !sideOpen, !drawerOpen else { return }
-                    guard v.startLocation.x < 90 else { return }
+                    // 屏幕左边**三分之一**起手都算。再窄下去就总是滑不出来。
+                    guard v.startLocation.x < 140 else { return }
                     guard v.translation.width > 28
                             || v.predictedEndTranslation.width > 60 else { return }
                     // 竖着划的不算，那是在翻聊天记录

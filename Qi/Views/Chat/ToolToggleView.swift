@@ -16,9 +16,19 @@ struct ToolToggleView: View {
     @State private var expanded: Set<String> = []
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                WallpaperBackground()
+        // 这儿**不用 NavigationStack + .searchable**。
+        //
+        // iOS 26 把 searchable 的输入框挪到了屏幕底部，
+        // 跟这张表自己的滚动内容叠在一起；再加上导航栏是透明的，
+        // 标题和「完成」底下直接透出正在滚的文字——
+        // 看着就是"所有字都掉下来了"。
+        // 自己画一个顶栏和搜索框，这一整类问题就都没有了。
+        ZStack {
+            WallpaperBackground()
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                topBar
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
@@ -57,15 +67,53 @@ struct ToolToggleView: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
             }
-            .searchable(text: $search, prompt: "搜索工具")
-            .navigationTitle("工具")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.hidden, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("完成") { dismiss() }
+        }
+    }
+
+    // MARK: 顶栏
+
+    /// 标题 + 完成 + 搜索框，全是自己画的。
+    /// 它有自己的玻璃底，滚动的内容从它下面过，不会透出来。
+    private var topBar: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Text("工具")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Spacer()
+                Button("完成") { dismiss() }
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(app.settings.accentColor)
+                    .buttonStyle(.plain)
+            }
+
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                TextField("搜索工具", text: $search)
+                    .font(.system(size: 14))
+                    .textFieldStyle(.plain)
+                if !search.isEmpty {
+                    Button {
+                        search = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
+                    .buttonStyle(.plain)
                 }
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(Capsule().fill(Theme.softFillDeep))
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
+        .background {
+            GlassSurface(radius: 0, strength: app.settings.glassOpacity, extra: 0.2)
         }
     }
 

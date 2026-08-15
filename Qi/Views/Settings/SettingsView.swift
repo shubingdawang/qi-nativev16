@@ -439,6 +439,15 @@ struct SettingsView: View {
                 .buttonStyle(.plain)
                 SettingsDivider()
 
+                NavigationLink { MemoryLibraryView() } label: {
+                    SettingsRowLabel(title: "记忆库",
+                                     value: app.settings.localMemory
+                                        ? MemoryStore.shared.summaryLine : "走 MCP",
+                                     chevron: true)
+                }
+                .buttonStyle(.plain)
+                SettingsDivider()
+
                 NavigationLink { WakeSettingsView() } label: {
                     SettingsRowLabel(title: "自己醒来",
                                      value: app.settings.wake.enabled ? "开着" : "关着",
