@@ -469,8 +469,7 @@ enum MemoryTools {
                 r += "  \(day(p.madeAt)) 答应的"
                 return r
             }
-            return (rows.joined(separator: "
-"), false)
+            return (rows.joined(separator: "\n"), false)
 
         case "keep_promise":
             let id = s("id")
@@ -775,11 +774,9 @@ enum MemoryTools {
         // 答应过的东西不该等她想起来才被想起来。
         let owing = m.openPromises
         if !owing.isEmpty {
-            parts.append("【还欠着她的】
-" + owing.prefix(10).map { p in
+            parts.append("【还欠着她的】\n" + owing.prefix(10).map { p in
                 "· " + p.text + (p.due.map { "（说好 \($0) 之前）" } ?? "")
-            }.joined(separator: "
-"))
+            }.joined(separator: "\n"))
         }
 
         if !m.openTasks.isEmpty {
