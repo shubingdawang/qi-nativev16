@@ -320,6 +320,7 @@ struct SideMenuItem: Identifiable, Hashable {
         .init(id: "pixel",     title: "像素", icon: Icon.sticker),
         .init(id: "library",   title: "书房", icon: Icon.diary),
         .init(id: "memo",      title: "备忘", icon: Icon.notes),
+        .init(id: "promise",   title: "承诺", icon: "hand.raised"),
         .init(id: "mood",      title: "心情", icon: Icon.heart),
         .init(id: "footprint", title: "足迹", icon: Icon.footprint)
     ]

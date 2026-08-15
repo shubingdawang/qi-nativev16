@@ -120,6 +120,16 @@ struct ChatView: View {
                             editText = msg.content
                             editingMessage = msg
                         },
+                        onMention: { name in
+                            // insertMention 是原来给候选条用的，直接复用：
+                            // 光标前有 @ 就替换掉，没有就补一个
+                            if draft.hasSuffix("@") {
+                                insertMention(name)
+                            } else {
+                                draft += (draft.isEmpty || draft.hasSuffix(" ") ? "" : " ")
+                                    + "@" + name + " "
+                            }
+                        },
                         running: app.runningConversationIDs.contains(conv.id)
                     )
                     if selecting {
@@ -1013,6 +1023,8 @@ struct MessageListView: View {
     var onOpenMenu: (UUID) -> Void = { _ in }
     var onCloseMenu: () -> Void = {}
     var onEdit: (ChatMessage) -> Void = { _ in }
+    /// 长按头像 @ 这个人
+    var onMention: (String) -> Void = { _ in }
     /// 这个窗口是不是正在等他回话
     var running: Bool = false
 
@@ -1042,7 +1054,8 @@ struct MessageListView: View {
                             menuOpenID: menuOpenID,
                             onOpenMenu: { onOpenMenu(message.id) },
                             onCloseMenu: onCloseMenu,
-                            showsHeader: showsHeader(at: index)
+                            showsHeader: showsHeader(at: index),
+                            onMention: { onMention($0) }
                         )
                         .id(message.id)
                     }

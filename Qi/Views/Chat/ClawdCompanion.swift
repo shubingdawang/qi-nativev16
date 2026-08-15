@@ -139,6 +139,28 @@ struct ClawdRoamer: View {
                 if Task.isCancelled { return }
                 guard !held, !poked, !busy else { continue }
 
+                // 偶尔不好好走路，躲到屏幕右边去只露半个身子。
+                // peek 那一帧是他的左半边——右半边得藏在屏幕外面才对得上，
+                // 所以躲的时候贴的是右边缘。
+                if Double.random(in: 0...1) < 0.18 {
+                    facingLeft = false
+                    walkSeconds = 1.4
+                    mood = .working
+                    app.settings.clawdX = 0.97
+                    app.settings.clawdY = Double.random(in: 0.3...0.6)
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    if Task.isCancelled { return }
+                    guard !held, !poked else { continue }
+                    mood = .peeking
+                    // 躲一会儿，然后自己溜出来
+                    try? await Task.sleep(nanoseconds: UInt64.random(in: 8...20) * 1_000_000_000)
+                    if Task.isCancelled { return }
+                    guard !held, !poked else { continue }
+                    app.settings.clawdX = right - 0.08
+                    sync()
+                    continue
+                }
+
                 let tx = Double.random(in: left...right)
                 let ty = Double.random(in: top...bottom)
                 let dx = tx - app.settings.clawdX

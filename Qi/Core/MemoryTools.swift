@@ -18,7 +18,8 @@ enum MemoryTools {
         "recall_history", "search_transcripts", "get_transcript_context",
         "update_transcript_summary", "delete_transcript",
         "wake_up", "get_phone_activity",
-        "hand_off", "set_rules"
+        "hand_off", "set_rules",
+        "make_promise", "list_promises", "keep_promise"
     ]
 
     /// 身体那两个单独一组：记忆库和心跳是两个开关，可以只开一个
@@ -88,6 +89,20 @@ enum MemoryTools {
              "open_tasks": ["type": "array", "items": str,
                             "description": "没做完的事，一条一件，会替换掉旧的那份清单"]],
             required: ["here", "life", "us", "open"])
+
+        add("make_promise",
+            "郑重记下一件你答应她的事。日常那种随手一句用 [[promise:...]] 标记就行，这个工具留给真的要放在心上的——比如说好了明天提醒她、说好了某件事以后不再做。",
+            ["text": ["type": "string", "description": "欠下的是什么，写清楚"],
+             "due": ["type": "string", "description": "说好什么时候之前，YYYY-MM-DD，可不填"]],
+            required: ["text"])
+
+        add("list_promises",
+            "看还欠着哪些事。wake_up 里已经会带上没做到的那些，这个用在想专门查一遍、或者她问起的时候。",
+            ["all": ["type": "boolean", "description": "连做到了的一起列出来，默认只列没做到的"]])
+
+        add("keep_promise",
+            "把一件答应过的事标成做到了。id 传承诺 ID 前 8 位，从 list_promises 拿。",
+            ["id": str], required: ["id"])
 
         add("set_rules",
             "记下说好的规矩和说好不做的事（比如「不许后台偷偷调模型」「她按次计费，不要为了省 token 做截断」）。这类东西不像事件那样值得写成记忆，但一丢下一窗就变了个人，所以单独存一份，每次 wake_up 都带上。传进来的会替换掉旧的整份清单。",
@@ -431,6 +446,43 @@ enum MemoryTools {
                     + "· 我们之间：\(s("us"))\n"
                     + "· 别忘了：\(s("open"))", false)
 
+        case "make_promise":
+            let text = s("text")
+            guard !text.isEmpty else { return ("答应的是什么？没写。", true) }
+            let due = s("due").isEmpty ? nil : s("due")
+            guard m.addPromise(text, due: due) else {
+                return ("这件事已经在承诺页里了，没重复记。", false)
+            }
+            var out = "记下了：\(text)"
+            if let due { out += "（说好 \(due) 之前）" }
+            return (out + "。做到之前每次醒来都会看见它。", false)
+
+        case "list_promises":
+            let all = (args["all"] as? Bool) ?? false
+            let list = all ? m.promises : m.openPromises
+            guard !list.isEmpty else {
+                return (all ? "承诺页是空的。" : "没有欠着的事。", false)
+            }
+            let rows = list.map { p -> String in
+                var r = "[\(p.shortID)] \(p.done ? "✓" : "○") \(p.text)"
+                if let due = p.due { r += "（说好 \(due) 之前）" }
+                r += "  \(day(p.madeAt)) 答应的"
+                return r
+            }
+            return (rows.joined(separator: "
+"), false)
+
+        case "keep_promise":
+            let id = s("id")
+            guard let idx = m.promises.firstIndex(where: {
+                $0.id == id || $0.id.hasPrefix(id)
+            }) else { return ("没找到这条承诺。", true) }
+            guard !m.promises[idx].done else { return ("这条已经是做到了的状态。", false) }
+            m.promises[idx].done = true
+            m.promises[idx].doneAt = MemoryStore.now
+            m.savePromises()
+            return ("做到了：\(m.promises[idx].text)", false)
+
         case "set_rules":
             guard let rules = args["rules"] as? [String] else {
                 return ("规矩得是一个列表。", true)
@@ -717,6 +769,17 @@ enum MemoryTools {
         if !m.rules.isEmpty {
             parts.append("【说好的规矩】\n"
                          + m.rules.map { "· " + $0 }.joined(separator: "\n"))
+        }
+
+        // 欠着的事摆在很前面。这是承诺页存在的全部理由——
+        // 答应过的东西不该等她想起来才被想起来。
+        let owing = m.openPromises
+        if !owing.isEmpty {
+            parts.append("【还欠着她的】
+" + owing.prefix(10).map { p in
+                "· " + p.text + (p.due.map { "（说好 \($0) 之前）" } ?? "")
+            }.joined(separator: "
+"))
         }
 
         if !m.openTasks.isEmpty {

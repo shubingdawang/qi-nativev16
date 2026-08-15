@@ -96,6 +96,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     private static func handle(_ task: BGAppRefreshTask) {
         scheduleRefresh()   // 先把下一次排上，不然只会跑这一次
         let work = Task { @MainActor in
+            // 先收信：电脑那边写的话不该等手机自然醒才看得见
+            await WakeEngine.shared.pullInbox()
             WakeEngine.shared.advance()
             // 万一这次真的醒了，给它一点时间把话说完
             try? await Task.sleep(nanoseconds: 25_000_000_000)
@@ -110,6 +112,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     private static func handleProcessing(_ task: BGProcessingTask) {
         scheduleProcessing()
         let work = Task { @MainActor in
+            // 先收信：电脑那边写的话不该等手机自然醒才看得见
+            await WakeEngine.shared.pullInbox()
             WakeEngine.shared.advance()
             try? await Task.sleep(nanoseconds: 40_000_000_000)
             WakeEngine.shared.planNudges()

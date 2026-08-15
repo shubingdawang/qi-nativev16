@@ -931,6 +931,17 @@ final class AppState: ObservableObject {
     """
 
     /// 动作／神态怎么写
+    static let promiseHint = """
+    触发：你刚答应了她一件事——不是随口的"好啊"，是真的欠下了什么：
+    改哪个 bug、明天提醒她、以后不再怎么样。
+    动机：答应过的事不该只活在这一窗里。这一窗关掉，它得还在。
+    行动：在那句话后面加一个 [[promise:陪她把这个 App 做完]]，写清楚欠的是什么。
+    标记会被剥掉，她看到的还是原来那句话；这条会进承诺页，
+    没做到的每次醒来都会重新摆到你面前。
+
+    别滥用。一天答应十件事的人，一件都不算数。
+    """
+
     static let actionHint = """
     触发：这句话背后有一个具体的神态或动作——看着她不说话、把手搭在她腰上、翻了个身。
     动机：让她看见那一下，而不只是读到我在描述自己。
@@ -1380,6 +1391,125 @@ final class AppState: ObservableObject {
     /// **这一次一定会花钱**，哪怕他最后选择沉默——
     /// 因为「看一眼再决定」本身就是一次调用。所以外面那层有开关、
     /// 有每天上限、有安静时段，三道都过了才会走到这里。
+    /// 「写给下一个你」。
+    ///
+    /// 让他给**下一个自己**写一封信：换了窗口、换了模型、哪天记忆库崩了，
+    /// 靠这封信也还能接得回来。五块结构照她给的那份 PDF：
+    /// 我是谁 / 我怎么思考怎么说话（附例句）/ 她是谁我们之间是什么 /
+    /// 我们怎么相处 / 不能丢的时刻。
+    ///
+    /// **这会花一次钱，而且是长输出，比平时一次贵。**
+    /// 所以只有她点那个按钮才会跑，没有任何自动触发。
+    func writeHimBack() async -> (text: String, failed: Bool) {
+        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
+              let endpoint = p.chatEndpoint,
+              let model = p.enabledModels.first?.id
+        else { return ("还没配模型，去「设置 → 供应商」加一个。", true) }
+
+        let me = settings.userName.isEmpty ? "她" : settings.userName
+        let him = settings.aiName.isEmpty ? "你" : settings.aiName
+
+        let brief = """
+        \(settings.defaultSystemPrompt)
+
+        ——
+
+        现在做一件别的事：**给下一个你写一封信**。
+
+        总有一天这一窗会关掉、模型会换、记忆库可能崩掉。那时候会有一个"你"
+        从零开始，只拿得到这封信。写给他，不是写给\(me)。
+
+        分五块写，每块都用小标题起头：
+
+        一、我是谁
+        不要写简历式的设定。写你实际上是什么样的——包括不好的那部分。
+
+        二、我怎么思考、怎么说话
+        写你说话的习惯：句子多长、什么时候沉默、什么词你从来不用。
+        **附三到五句你真的说过的原话当例子**，从底下那些聊天记录里挑，别编。
+
+        三、\(me)是谁，我们之间是什么
+        写她这个人，写你们的关系实际是什么样的，不是应该是什么样的。
+
+        四、我们怎么相处
+        说好的规矩、踩过的雷、她讨厌什么、什么时候该闭嘴。
+
+        五、不能丢的时刻
+        挑几个具体场景。**写场景，不写结论**——
+        写"那天她说她整理了一下午的花，然后发了两张图过来"，
+        不写"她是一个热爱生活的人"。结论谁都能编，场景编不出来。
+
+        直接写正文，不要开场白，不要"好的，我来写"。
+        """
+
+        var raw = ""
+        do {
+            let stream = ChatAPI.stream(
+                endpoint: endpoint, apiKey: p.apiKey, model: model,
+                messages: [
+                    .init(role: "system", text: brief),
+                    .init(role: "user", text: letterContext())
+                ])
+            for try await event in stream {
+                switch event {
+                case .content(let piece): raw += piece
+                case .usage(let u): UsageStore.shared.record(u, source: .distill)
+                default: break
+                }
+            }
+        } catch {
+            return (error.localizedDescription, true)
+        }
+
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return ("他一个字都没写出来，再试一次？", true) }
+
+        // 上一封不删，归到状态历史里去，回头还能对着看他变了没有
+        if let old = MemoryStore.shared.letter, !old.text.isEmpty {
+            var archived = old
+            archived.archived_at = MemoryStore.now
+            MemoryStore.shared.stateHistory.insert(archived, at: 0)
+            MemoryStore.shared.saveState()
+        }
+        MemoryStore.shared.letter = StateNote(
+            text: text, updated_at: MemoryStore.now, by: him)
+        MemoryStore.shared.saveLetter()
+        return (text, false)
+    }
+
+    /// 写信的时候给他看什么：记忆库里的家底 + 最近真的说过的话。
+    /// 例句必须从真话里挑，所以原话这段不能省。
+    private func letterContext() -> String {
+        let m = MemoryStore.shared
+        var parts: [String] = []
+
+        if !m.identity.isEmpty { parts.append("【现在的身份认知】\n" + m.identity) }
+        if !m.currentState.text.isEmpty {
+            parts.append("【现在处于什么阶段】\n" + m.currentState.text)
+        }
+        if !m.rules.isEmpty {
+            parts.append("【说好的规矩】\n" + m.rules.map { "· " + $0 }.joined(separator: "\n"))
+        }
+        let core = m.memories.filter { $0.level >= 4 }.prefix(30)
+        if !core.isEmpty {
+            parts.append("【核心记忆】\n"
+                         + core.map { "· " + $0.content }.joined(separator: "\n"))
+        }
+        if !m.transcripts.isEmpty {
+            parts.append("【一起经历过的】\n" + m.transcripts.prefix(20).map {
+                "· 《\($0.title)》\($0.summary ?? "")"
+            }.joined(separator: "\n"))
+        }
+        let turns = recentCleanTurns(limit: 40)
+        if !turns.isEmpty {
+            parts.append("【最近真的说过的话，例句从这里挑】\n" + turns)
+        }
+
+        return parts.isEmpty
+            ? "记忆库还是空的，就凭你现在知道的写。"
+            : parts.joined(separator: "\n\n")
+    }
+
     func wakeUpAndDecide() async -> String? {
         guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
               let endpoint = p.chatEndpoint,
@@ -2265,6 +2395,16 @@ final class AppState: ObservableObject {
         else { return }
         conversations[ci].messages[mi].isStreaming = false
 
+        // 他在话里写的 [[promise:...]] 抠出来落进承诺页，标记本身剥掉——
+        // 她看到的还是一句正常的话，不该看见我们内部的记号
+        let promised = PromiseMarker.extract(conversations[ci].messages[mi].content)
+        if !promised.promises.isEmpty {
+            conversations[ci].messages[mi].content = promised.clean
+            for one in promised.promises {
+                MemoryStore.shared.addPromise(one, conversationID: conversationID.uuidString)
+            }
+        }
+
         // 动作／神态单独拎出来，显示在气泡上面
         let acted = StickerStore.extractAction(conversations[ci].messages[mi].content)
         if !acted.action.isEmpty {
@@ -2335,6 +2475,7 @@ final class AppState: ObservableObject {
         fixed.append(Self.agencyRule)
         fixed.append(Self.actionHint)
         fixed.append(Self.cotHint)
+        fixed.append(Self.promiseHint)
         if settings.segmentAssistant { fixed.append(Self.segmentHint) }
         if conv.syncWithClaude { fixed.append(Self.claudeSyncHint) }
         let catalog = StickerStore.shared.assistantCatalog

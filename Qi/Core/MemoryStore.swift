@@ -198,6 +198,30 @@ struct MemoryLogEntry: Codable, Hashable, Identifiable {
     var afterText: String?
 }
 
+/// 他答应过的一件事。
+///
+/// 来路有两条，走的是同一个盒子：
+///   · 他在回话里随手写 `[[promise:陪你把这个 App 做完]]`，
+///     显示的时候标记会被抠掉，这条悄悄落进来
+///   · 他主动调 `make_promise` 郑重记一笔
+///
+/// 为什么要单独存：答应过的事跟"记忆"不是一回事。记忆是发生过什么，
+/// 承诺是**还欠着什么**——它有状态（做没做到），而且没做到的那些
+/// 每次醒来都该重新看见一遍。混进记忆库就沉底了。
+struct Promise: Codable, Identifiable, Hashable {
+    var id: String = UUID().uuidString
+    var text: String
+    var madeAt: String
+    /// 说好什么时候之前（可不填）
+    var due: String?
+    var done: Bool = false
+    var doneAt: String?
+    /// 在哪个窗口答应的，方便回头翻
+    var conversationID: String?
+
+    var shortID: String { String(id.prefix(8)) }
+}
+
 struct TranscriptMsg: Codable, Hashable {
     var role: String
     var text: String
@@ -222,6 +246,47 @@ struct TranscriptFile: Codable {
     var msgs: [TranscriptMsg]
 }
 
+// MARK: - 从他的话里把承诺抠出来
+
+/// 「隐藏标记法」：让他在正文里写标记，后端解析出来落库，
+/// 再把标记从正文里剥干净——她看到的还是一句正常的话。
+///
+/// 好处是他不用为了记一件事专门调一次工具（那会打断说话的节奏，
+/// 也多一次往返）；坏处是格式他可能写歪，所以这里认得宽松一点：
+/// `[[promise:...]]`、`[promise:...]`、`[[承诺:...]]`、`[承诺:...]` 都收，
+/// 中英文冒号也都认。
+enum PromiseMarker {
+
+    private static let pattern =
+        #"\[{1,2}\s*(?:promise|承诺)\s*[:：]\s*([^\]\n]{1,120})\s*\]{1,2}"#
+
+    /// 返回：剥干净的正文 + 抠出来的几条承诺
+    static func extract(_ text: String) -> (clean: String, promises: [String]) {
+        guard let regex = try? NSRegularExpression(
+            pattern: pattern, options: [.caseInsensitive]) else { return (text, []) }
+        let ns = text as NSString
+        let matches = regex.matches(in: text, range: NSRange(location: 0, length: ns.length))
+        guard !matches.isEmpty else { return (text, []) }
+
+        var found: [String] = []
+        for m in matches where m.numberOfRanges > 1 {
+            let r = m.range(at: 1)
+            guard r.location != NSNotFound else { continue }
+            let one = ns.substring(with: r).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !one.isEmpty { found.append(one) }
+        }
+
+        var clean = regex.stringByReplacingMatches(
+            in: text, range: NSRange(location: 0, length: ns.length), withTemplate: "")
+        // 标记单独占一行的话，剥完会留下一行空白，顺手收掉
+        clean = clean.replacingOccurrences(
+            of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
+        clean = clean.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return (clean, found)
+    }
+}
+
 // MARK: - 仓库
 
 @MainActor
@@ -244,6 +309,11 @@ final class MemoryStore: ObservableObject {
     @Published var rules: [String] = []
     /// 还没做完的事
     @Published var openTasks: [String] = []
+    /// 他答应过的事
+    @Published var promises: [Promise] = []
+    /// 「写给下一个你」。他自己写的那封长信，五块结构。
+    /// 有它的时候 wake_up 用它当身份认知——它比那段简介深得多。
+    @Published var letter: StateNote?
     @Published var partnerMessage: PartnerMessage?
     @Published var periods = PeriodBook()
     /// 日期 → 谁（ayang / bingbing）→ 那天的心情
@@ -298,6 +368,8 @@ final class MemoryStore: ObservableObject {
         spine = read(NarrativeSpine.self, "spine.json") ?? NarrativeSpine()
         rules = read([String].self, "rules.json") ?? []
         openTasks = read([String].self, "open_tasks.json") ?? []
+        promises = read([Promise].self, "promises.json") ?? []
+        letter = read(StateNote.self, "letter.json")
         partnerMessage = read(PartnerMessage.self, "partner_message.json")
         periods = read(PeriodBook.self, "periods.json") ?? PeriodBook()
         moods = read([String: [String: MoodEntry]].self, "moods.json") ?? [:]
@@ -317,6 +389,38 @@ final class MemoryStore: ObservableObject {
         write(rules, "rules.json")
         write(openTasks, "open_tasks.json")
     }
+    func savePromises() { write(promises, "promises.json") }
+
+    func saveLetter() {
+        if let letter { write(letter, "letter.json") }
+        else { try? FileManager.default.removeItem(at: url("letter.json")) }
+    }
+
+    /// 还欠着的那些，先看有期限的、期限近的排前面
+    var openPromises: [Promise] {
+        promises.filter { !$0.done }.sorted { a, b in
+            switch (a.due, b.due) {
+            case let (x?, y?): return x < y
+            case (_?, nil):    return true
+            case (nil, _?):    return false
+            default:           return a.madeAt > b.madeAt
+            }
+        }
+    }
+
+    /// 记一条承诺。同一句话不重复记——他可能在几轮里反复说同一件事。
+    @discardableResult
+    func addPromise(_ text: String, due: String? = nil,
+                    conversationID: String? = nil) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return false }
+        guard !promises.contains(where: { !$0.done && $0.text == t }) else { return false }
+        promises.insert(Promise(text: t, madeAt: Self.now, due: due,
+                                conversationID: conversationID), at: 0)
+        savePromises()
+        return true
+    }
+
     func saveCheckpoint() {
         if let checkpoint { write(checkpoint, "live_checkpoint.json") }
         else { try? FileManager.default.removeItem(at: url("live_checkpoint.json")) }
@@ -594,6 +698,8 @@ final class MemoryStore: ObservableObject {
         put(spine, "spine.json")
         put(rules, "rules.json")
         put(openTasks, "open_tasks.json")
+        put(promises, "promises.json")
+        if let letter { put(letter, "letter.json") }
         if let checkpoint { put(checkpoint, "live_checkpoint.json") }
         if let partnerMessage { put(partnerMessage, "partner_message.json") }
         try? identity.write(to: dir.appendingPathComponent("identity.txt"),
@@ -617,5 +723,7 @@ final class MemoryStore: ObservableObject {
         checkpoint = nil; partnerMessage = nil
         periods = PeriodBook(); moods = [:]
         emotionalEvents = []; log = []; transcripts = []
+        promises = []; spine = NarrativeSpine(); rules = []; openTasks = []
+        letter = nil
     }
 }

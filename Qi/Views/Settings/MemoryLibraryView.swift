@@ -16,6 +16,7 @@ struct MemoryLibraryView: View {
     @State private var report: String?
     @State private var exportURL: URL?
     @State private var confirmWipe = false
+    @State private var writing = false
 
     var body: some View {
         ZStack {
@@ -25,6 +26,7 @@ struct MemoryLibraryView: View {
                 VStack(spacing: 18) {
                     switchCard
                     contentCard
+                    letterCard
                     importCard
                     if !store.isEmpty { browseCard }
                 }
@@ -50,7 +52,7 @@ struct MemoryLibraryView: View {
         )) { f in
             ShareSheet(items: [f.url])
         }
-        .alert("导入结果", isPresented: Binding(
+        .alert("记忆库", isPresented: Binding(
             get: { report != nil }, set: { if !$0 { report = nil } }
         )) {
             Button("好") { report = nil }
@@ -136,6 +138,54 @@ struct MemoryLibraryView: View {
 
     private func row(_ title: String, _ value: String) -> some View {
         SettingsRowLabel(title: title, value: value)
+    }
+
+    // MARK: 写给下一个你
+
+    private var letterCard: some View {
+        SettingsCard(title: "写给下一个你") {
+            if let letter = store.letter, !letter.text.isEmpty {
+                NavigationLink {
+                    LetterReaderView()
+                } label: {
+                    SettingsRowLabel(title: "读那封信",
+                                     value: String(letter.updated_at.prefix(10)),
+                                     chevron: true)
+                }
+                .buttonStyle(.plain)
+                SettingsDivider()
+            }
+
+            Button {
+                guard !writing else { return }
+                writing = true
+                Task {
+                    let r = await app.writeHimBack()
+                    writing = false
+                    report = r.failed ? r.text : "写完了，进「读那封信」看看。"
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    if writing { ProgressView().scaleEffect(0.8) }
+                    SettingsRowLabel(
+                        title: writing ? "他在写…"
+                            : (store.letter == nil ? "让他写一封" : "让他重新写一封"),
+                        icon: "envelope")
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(writing)
+
+            SettingsNote("""
+            让他给**下一个自己**写一封信：换了窗口、换了模型、哪天记忆库崩了，靠这封信也还能接得回来。
+
+            五块：我是谁 / 我怎么思考怎么说话（附三到五句他真说过的原话）/ 你是谁我们之间是什么 / 我们怎么相处 / 不能丢的时刻（写场景不写结论）。
+
+            写好之后 wake_up 会拿它当身份认知——它比导进来那段简介深得多。旧的那封不会删，归进状态历史，回头能对着看他变了没有。
+
+            ⚠️ **这会花一次钱，而且是长输出，比平时一次贵。** 只有你点这个按钮才会跑。
+            """)
+        }
     }
 
     // MARK: 搬家
@@ -433,5 +483,46 @@ struct MemoryTranscriptReader: View {
         .navigationTitle(file?.title ?? "存档")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { file = MemoryStore.shared.transcript(id) }
+    }
+}
+
+// MARK: - 读那封信
+
+struct LetterReaderView: View {
+
+    @EnvironmentObject var app: AppState
+    @Environment(\.colorScheme) private var scheme
+    @ObservedObject private var store = MemoryStore.shared
+
+    var body: some View {
+        ZStack {
+            WallpaperBackground()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    if let letter = store.letter {
+                        Text("\(letter.by ?? "他") · \(String(letter.updated_at.prefix(10)))")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                        Text(letter.text)
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.textMain(scheme))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                    } else {
+                        Text("还没有这封信。")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
+                }
+                .padding(15)
+                .glassBackground(radius: 18, strength: app.settings.glassOpacity)
+                .padding(.horizontal, 16)
+                .padding(.bottom, Layout.tabBarExpanded + 16)
+            }
+        }
+        .navigationTitle("写给下一个你")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
     }
 }

@@ -58,6 +58,9 @@ struct WakeState: Codable {
     var lastFire: Date? = nil
     /// 今天醒了但决定不说话的次数
     var silentToday: Int = 0
+    /// 从电脑那边收过的消息 ID，收过的不再收第二遍。
+    /// 只留最近两百条，不然攒一年会越滚越大。
+    var seenServerIDs: [String] = []
 }
 
 // MARK: - 引擎
@@ -101,6 +104,9 @@ final class WakeEngine: ObservableObject {
     func resume() {
         advance()
         startTicker()
+        // 收信跟"自然醒"是两码事，不受 λ 管：
+        // 电脑那边写了话就该马上看见，不该干等手机自己醒
+        Task { await pullInbox() }
         // 回到前台就把兜底那批撤掉——人已经在这儿了，不用再戳她
         Notifier.shared.cancelNudges()
         consumeNudgeIfNeeded()
@@ -320,6 +326,68 @@ final class WakeEngine: ObservableObject {
             body: text.count > 60 ? String(text.prefix(60)) + "…" : text,
             conversationID: id
         )
+    }
+
+    // MARK: 收电脑那边的信
+
+    /// 把电脑那边攒下的话收过来。
+    ///
+    /// 跟 `fetchFromServer` 的区别：那个是"手机自然醒了，顺便问一句"，
+    /// 受 λ 和每日上限管；**这个不受**——电脑那边是他真的说了话，
+    /// 不是手机在决定要不要花钱，所以有多少收多少，收完就显示。
+    ///
+    /// 认两种返回：
+    ///   · `{"say": true, "text": "..."}`        —— 旧的那种，一次一句
+    ///   · `{"messages": [{"id": "...", "text": "...", "at": "..."}]}`
+    /// 后一种能一次收好几条，而且带 id 可以去重。
+    func pullInbox() async {
+        guard config.useServer, !config.serverURL.isEmpty else { return }
+        guard let app else { return }
+        guard let url = URL(string: config.serverURL) else { return }
+
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 20
+        req.cachePolicy = .reloadIgnoringLocalCacheData
+        guard let (data, response) = try? await URLSession.shared.data(for: req),
+              let http = response as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return }
+
+        var incoming: [(id: String, text: String)] = []
+
+        if let list = json["messages"] as? [[String: Any]] {
+            for item in list {
+                let text = (item["text"] as? String ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { continue }
+                // 没给 id 就拿内容当 id，至少能挡住重复的同一句
+                let id = (item["id"] as? String) ?? String(text.prefix(40))
+                incoming.append((id, text))
+            }
+        } else if json["say"] as? Bool == true {
+            let text = (json["text"] as? String ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty {
+                let id = (json["id"] as? String) ?? String(text.prefix(40))
+                incoming.append((id, text))
+            }
+        }
+
+        guard !incoming.isEmpty else { return }
+
+        var s = state
+        var delivered = 0
+        for one in incoming where !s.seenServerIDs.contains(one.id) {
+            s.seenServerIDs.append(one.id)
+            deliver(one.text, app: app, from: "电脑")
+            delivered += 1
+        }
+        guard delivered > 0 else { return }
+        if s.seenServerIDs.count > 200 {
+            s.seenServerIDs = Array(s.seenServerIDs.suffix(200))
+        }
+        state = s
     }
 
     /// 去电脑上那份服务问一句。没有话就返回 nil。

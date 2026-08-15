@@ -21,6 +21,8 @@ struct MessageBubbleView: View {
     /// 这条上面要不要挂头像、名字和时间。
     /// 同一个人连着说的几句只在第一句上挂，不然一屏全是头像。
     var showsHeader: Bool = true
+    /// 长按头像，把这个人 @ 进输入框。群聊里才接。
+    var onMention: (String) -> Void = { _ in }
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
     @State private var showReasoning = false
@@ -45,7 +47,19 @@ struct MessageBubbleView: View {
     private var header: some View {
         HStack(spacing: 7) {
             if isUser { Spacer(minLength: 0) }
-            if !isUser { AvatarView(name: displayName, image: avatarImage, size: 26) }
+            if !isUser {
+                AvatarView(name: displayName, image: avatarImage, size: 26)
+                    // 群聊里长按头像，名字直接进输入框——
+                    // 比在候选条里翻名字快，也是她原本习惯的那个动作
+                    .contentShape(Circle())
+                    .onLongPressGesture(minimumDuration: 0.32) {
+                        guard app.conversation(conversationID)?.isGroup == true else { return }
+                        if app.settings.haptics {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        }
+                        onMention(displayName)
+                    }
+            }
             VStack(alignment: isUser ? .trailing : .leading, spacing: 1) {
                 Text(displayName)
                     .font(.system(size: 12, weight: .medium))
