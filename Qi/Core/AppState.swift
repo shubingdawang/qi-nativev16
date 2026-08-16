@@ -616,6 +616,8 @@ final class AppState: ObservableObject {
         streamTasks[id]?.cancel()
         streamTasks[id] = nil
         runningConversationIDs.remove(id)
+        // 按了停止，岛上那条也得跟着撤，不然会一直挂着
+        IslandController.shared.end(immediately: true)
         if let i = index(of: id),
            let last = conversations[i].messages.indices.last {
             conversations[i].messages[last].isStreaming = false
@@ -640,6 +642,12 @@ final class AppState: ObservableObject {
         conversations[i].messages.append(placeholder)
         let assistantID = placeholder.id
         runningConversationIDs.insert(conversationID)
+
+        // 灵动岛上开一条。这样她锁着屏、切去别的 App，
+        // 也看得见他还在想、想了多久、说到哪儿了。
+        IslandController.shared.begin(
+            name: settings.aiName.isEmpty ? "阿晏" : settings.aiName,
+            conversationID: conversationID)
 
         var apiMessages = buildAPIMessages(from: conv)
         let toolDefs = mcpToolDefinitions(for: conv)
@@ -722,10 +730,25 @@ final class AppState: ObservableObject {
 
     private func appendContent(_ piece: String, to assistantID: UUID, in conversationID: UUID) {
         withAssistant(assistantID, in: conversationID) { $0.content += piece }
+        pushIsland(assistantID, in: conversationID)
     }
 
     private func appendReasoning(_ piece: String, to assistantID: UUID, in conversationID: UUID) {
         withAssistant(assistantID, in: conversationID) { $0.reasoning = ($0.reasoning ?? "") + piece }
+        pushIsland(assistantID, in: conversationID)
+    }
+
+    /// 把当前进度推给灵动岛。
+    ///
+    /// 每来一片字就叫一次——**节流在 IslandController 里做**（0.8 秒一次），
+    /// 不在这儿判，免得这条热路径上多一份状态要维护。
+    private func pushIsland(_ assistantID: UUID, in conversationID: UUID) {
+        let state = presence(in: conversationID)
+        let text = conversation(conversationID)?.messages
+            .first(where: { $0.id == assistantID })?.content ?? ""
+        IslandController.shared.update(activity: state.text,
+                                       preview: text,
+                                       conversationID: conversationID)
     }
 
     private func setTokens(_ total: Int, to assistantID: UUID, in conversationID: UUID) {
@@ -2390,6 +2413,13 @@ final class AppState: ObservableObject {
     private func finishStreaming(assistantID: UUID, in conversationID: UUID) {
         runningConversationIDs.remove(conversationID)
         streamTasks[conversationID] = nil
+
+        // 灵动岛那条收尾。这里是**所有正常结束路径的必经之地**，
+        // 放在这儿才不会漏掉某一条分支把它挂在岛上不下来。
+        IslandController.shared.finish(
+            preview: conversation(conversationID)?.messages
+                .first(where: { $0.id == assistantID })?.content ?? "",
+            conversationID: conversationID)
         guard let ci = index(of: conversationID),
               let mi = conversations[ci].messages.firstIndex(where: { $0.id == assistantID })
         else { return }

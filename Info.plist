@@ -36,6 +36,12 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>需要本地网络权限，才能连上你自己电脑上跑的服务。</string>
 
+	<!-- 灵动岛／锁屏上那条实时活动。没有这一项，ActivityKit 会直接拒绝。 -->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<!-- 允许在 App 没跑的时候由系统刷新那条活动的频率提示 -->
+	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
+	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

@@ -19,6 +19,9 @@ struct QiApp: App {
                     KeyboardDismisser.shared.install()
                     WakeEngine.shared.app = app
                     WakeEngine.shared.resume()
+                    // 上次要是被系统杀掉的，灵动岛上那条会一直挂着——
+                    // 进程都没了，没人会去收它。每次起来先扫一遍。
+                    IslandController.shared.cleanupStale()
                 }
         }
         .onChange(of: phase) { _, newPhase in
