@@ -3,9 +3,15 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>zh_CN</string>
+	<string>en</string>
+	<!-- 这里**必须是纯英文**，不能写「栖」。
+	     AltStore 侧载时要去苹果开发者门户注册一个 App ID，
+	     而 App ID 的名字只允许字母、数字和空格；中文会被整个滤掉，
+	     只剩一个空格，于是报 The name " " contains invalid characters。
+	     这个名字只出现在开发者门户和描述文件里，
+	     手机上看不见——桌面图标下面显示的还是主 App 的「栖」。 -->
 	<key>CFBundleDisplayName</key>
-	<string>栖</string>
+	<string>Qi Island</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
