@@ -51,6 +51,15 @@ struct ToolToggleView: View {
                             nativeGroup
                         }
 
+                        // 记忆库那批。它们跟 MCP 没有任何关系——小屋关着照样能用，
+                        // 但以前这个面板只列 NativeTools，这三十个在这儿是**看不见**的，
+                        // 于是看着像"关了 MCP 就没工具了"。现在单独列一组。
+                        if app.settings.localMemory || app.settings.localPulse {
+                            group("记忆库（本机）") {
+                                memoryGroup
+                            }
+                        }
+
                         if !app.mcpServers.isEmpty {
                             group("MCP") {
                                 VStack(spacing: 10) {
@@ -112,8 +121,16 @@ struct ToolToggleView: View {
         .padding(.horizontal, 16)
         .padding(.top, 16)
         .padding(.bottom, 12)
-        .background {
-            GlassSurface(radius: 0, strength: app.settings.glassOpacity, extra: 0.2)
+        // 这里**不铺玻璃**。
+        //
+        // 铺了就是在壁纸上盖一块比周围亮一档的板，
+        // 板的下沿跟壁纸之间会切出一道笔直的横线——就是那道分层。
+        // 顶栏本来也不需要自己的底：整张表已经坐在壁纸上了，
+        // 内容从它下面滚过去，靠一道极淡的分隔线交代边界就够。
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Theme.textMuted(scheme).opacity(0.14))
+                .frame(height: 0.6)
         }
     }
 
@@ -164,6 +181,49 @@ struct ToolToggleView: View {
                                     }
                                 }),
                             enabled: app.settings.nativeToolsEnabled)
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .glassBackground(radius: 18, strength: app.settings.glassOpacity)
+    }
+
+    // MARK: 记忆库那批
+
+    private var memoryGroup: some View {
+        let list = memoryTools
+        let key = "__memory"
+        let isOpen = expanded.contains(key)
+        return VStack(spacing: 0) {
+            groupHeader(
+                title: "记忆库工具",
+                count: list.count,
+                isOpen: isOpen,
+                toggle: Binding(
+                    get: { app.settings.localMemory },
+                    set: { app.settings.localMemory = $0 }),
+                onTap: { flip(key) })
+
+            if isOpen {
+                VStack(spacing: 0) {
+                    ForEach(list, id: \.name) { tool in
+                        SettingsDivider()
+                        toolRow(
+                            name: tool.name,
+                            desc: tool.desc,
+                            on: Binding(
+                                get: { !app.settings.disabledNativeTools.contains(tool.name) },
+                                set: { on in
+                                    if on {
+                                        app.settings.disabledNativeTools.removeAll { $0 == tool.name }
+                                    } else if !app.settings.disabledNativeTools.contains(tool.name) {
+                                        app.settings.disabledNativeTools.append(tool.name)
+                                    }
+                                }),
+                            // 记忆库这组跟自带工具共用总开关那一套过滤，
+                            // 所以两个总开关任意一个关掉，这里都动不了
+                            enabled: app.settings.nativeToolsEnabled && app.settings.localMemory)
                     }
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
@@ -285,6 +345,18 @@ struct ToolToggleView: View {
                   let raw = fn["name"] as? String else { return nil }
             let desc = (fn["description"] as? String ?? "")
             // 工具说明是按「触发 → 动机 → 行动」写的，列表里只取第一句
+            let first = desc.split(separator: "。").first.map(String.init) ?? desc
+            return (NativeTools.shortName(raw), first)
+        }
+        .filter { !search.isEmpty ? $0.name.localizedCaseInsensitiveContains(search) : true }
+    }
+
+    private var memoryTools: [(name: String, desc: String)] {
+        MemoryTools.definitions(memory: app.settings.localMemory,
+                                pulse: app.settings.localPulse).compactMap { item in
+            guard let fn = item["function"] as? [String: Any],
+                  let raw = fn["name"] as? String else { return nil }
+            let desc = (fn["description"] as? String ?? "")
             let first = desc.split(separator: "。").first.map(String.init) ?? desc
             return (NativeTools.shortName(raw), first)
         }

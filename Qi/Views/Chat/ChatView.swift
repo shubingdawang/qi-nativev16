@@ -13,6 +13,10 @@ struct ChatView: View {
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
     @ObservedObject private var keyboard = KeyboardWatcher.shared
+    // 必须真的**订阅** CallStore，不能只是 CallStore.shared 这样读一下。
+    // 只读不订阅的话，他打过来／挂断的时候 SwiftUI 根本不知道要重画，
+    // 要等下一次别的什么状态变了才顺带刷出来——看起来就是"打电话有延迟"。
+    @ObservedObject private var calls = CallStore.shared
 
     @State private var drawerOpen = false
     @State private var sideOpen = false
@@ -211,7 +215,7 @@ struct ChatView: View {
             }
 
             // 他打过来了：卡片压在所有东西上面
-            if let incoming = CallStore.shared.incoming {
+            if let incoming = calls.incoming {
                 VStack {
                     IncomingCallView(
                         call: incoming,
@@ -319,8 +323,8 @@ struct ChatView: View {
             }
         }
         .fullScreenCover(isPresented: Binding(
-            get: { CallStore.shared.active != nil },
-            set: { if !$0 && CallStore.shared.active != nil { CallStore.shared.hangUp(by: "me") } }
+            get: { calls.active != nil },
+            set: { if !$0 && calls.active != nil { calls.hangUp(by: "me") } }
         )) {
             CallView()
         }
@@ -695,8 +699,12 @@ struct ChatView: View {
                         .foregroundStyle(Theme.textSoft(scheme))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Capsule().fill(Theme.softFillDeep))
-                        .overlay(Capsule().strokeBorder(Theme.softStroke, lineWidth: 0.8))
+                        // 这颗胶囊以前是一块死颜色（softFillDeep），
+                        // 所以换玻璃、拉模糊它都纹丝不动。改成跟别处一样走 GlassSurface，
+                        // 半径给得比高度大就是胶囊。
+                        .glassBackground(radius: 20,
+                                         strength: app.settings.glassOpacity,
+                                         extra: 0.2)
                 }
                 .buttonStyle(.plain)
 
@@ -1034,7 +1042,7 @@ struct MessageListView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 14) {
+                LazyVStack(spacing: 10) {
                     if conversation.messages.isEmpty {
                         emptyHint.padding(.top, 100)
                     }

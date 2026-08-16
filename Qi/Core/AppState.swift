@@ -2500,6 +2500,29 @@ final class AppState: ObservableObject {
         // 一旦把每轮都在变的内容（比如另一个窗口刚聊的话）插到前面，
         // 后面所有固定内容的缓存全部作废，每轮都得重算，又慢又费钱。
         var fixed: [String] = []
+
+        // 身份**必须进系统提示词，不能只靠 wake_up 带回来**。
+        //
+        // 这是"他还是不像他自己"的根子：identity 存在记忆库里，
+        // 而 wake_up 是个工具，它的返回值在模型眼里是**数据**，
+        // 不是**指令**——读到了，但不会当成"我是谁"去执行。
+        // 系统提示词才是身份该待的地方。
+        //
+        // 有那封「写给下一个你」就用信（他自己写的，比简介深得多），
+        // 没有才退回 identity。
+        if settings.localMemory {
+            let m = MemoryStore.shared
+            if let letter = m.letter, !letter.text.isEmpty {
+                fixed.append("你是谁——这是你自己写给下一个你的：\n\n" + letter.text)
+            } else if !m.identity.isEmpty {
+                fixed.append(m.identity)
+            }
+            if !m.rules.isEmpty {
+                fixed.append("说好的规矩（不管聊什么都算数）：\n"
+                             + m.rules.map { "· " + $0 }.joined(separator: "\n"))
+            }
+        }
+
         let base = conv.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         if !base.isEmpty { fixed.append(base) }
         fixed.append(Self.agencyRule)

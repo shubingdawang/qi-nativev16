@@ -256,21 +256,34 @@ struct GlassSurface: View {
     // `.extraLight` 是糊得最狠、发白的那块，就是通知中心刚出来那几年的样子；
     // `.light` 糊得一样狠但不发白，背后的颜色是透上来的。
     // 这两块摆一起，一眼就能看出不是同一种东西。
+    // MARK: 磨砂
+    //
+    // 上一版只加了噪点，结果看着"像噪点"而不是"像磨砂"——因为**磨砂的重点不是颗粒**。
+    // 真的磨砂玻璃是把表面打毛，光打上去会**散射**，所以整块会发一点奶白、
+    // 边上还会有一圈更亮的晕。颗粒只是凑近才看得见的那一层，是配角。
+    //
+    // 所以这版是三层叠起来，顺序不能换：
+    //   1. 一层很淡的奶白（散射）—— 这层才是"磨砂"的主体
+    //   2. 上亮下沉的渐变（光是从上面来的）
+    //   3. 极淡的颗粒（表面打毛的痕迹），比上一版又降了一半
     private var frosted: some View {
         base(liquid: false, blur: .extraLight)
             .overlay {
-                if extra > 0.01 {
-                    // 需要更突出的地方（比如自己的气泡）才多垫一丝白
-                    shape.fill(.white.opacity(extra * 0.12))
-                }
+                shape.fill(
+                    LinearGradient(
+                        colors: [.white.opacity(0.20 + extra * 0.12),
+                                 .white.opacity(0.11 + extra * 0.08)],
+                        startPoint: .top, endPoint: .bottom)
+                )
             }
             .overlay {
-                // **砂**。磨砂和模糊就差这一层，别的都一样。
-                GrainOverlay(opacity: 0.075)
+                // 颗粒。0.075 还是看得出一颗一颗，降到 0.035——
+                // 凑近才觉得表面不平，退开只剩一层哑光。
+                GrainOverlay(opacity: 0.035)
                     .clipShape(shape)
             }
             .overlay {
-                shape.strokeBorder(.white.opacity(0.30), lineWidth: 0.7)
+                shape.strokeBorder(.white.opacity(0.42), lineWidth: 0.8)
             }
     }
 
@@ -325,14 +338,42 @@ struct GlassSurface: View {
     // 跟磨砂同样是重度模糊，区别在**不往上刷白**：
     // 壁纸的颜色是透上来的，一团一团化开，不是被一层白盖住。
     // **一条边都不给**——加了边就往「通透」那边靠了，三套就分不出来了。
+    // MARK: 模糊 —— One UI 那种
+    //
+    // 有件事得先摆明白：**壁纸是一整片纯色的时候，任何模糊都看不出来**——
+    // 一片纯色糊完还是那片纯色，没有东西可糊。这不是做得不够，是物理如此。
+    //
+    // 所以这一套要靠**别的东西**让人看出这是一块玻璃而不是一块死色板：
+    //   · 压一层很淡的暗（One UI 本来就是往暗里压，不是往白里提）
+    //   · 上下一点点明暗差，读出"这是一个面"
+    //   · 底下一道极淡的内阴影，把下缘压住
+    // 唯独**不给边**——加了边就往「通透」那边靠，三套又分不出来了。
     private var blur: some View {
         base(liquid: false, blur: .light)
+            .overlay {
+                shape.fill(
+                    LinearGradient(
+                        colors: [.black.opacity(0.05), .black.opacity(0.13)],
+                        startPoint: .top, endPoint: .bottom)
+                )
+            }
             .overlay {
                 if extra > 0.01 {
                     shape.fill(.white.opacity(extra * 0.10))
                 }
             }
-        // 没有砂、没有边。跟磨砂的区别就在这儿：一样地糊，但表面是平的。
+            .overlay {
+                // 下缘那道内阴影。它不是"边"——边是一圈实线，
+                // 这个只压住底部一小截，让这块看着有厚度、浮在上面。
+                shape.fill(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0.82),
+                            .init(color: .black.opacity(0.10), location: 1)
+                        ],
+                        startPoint: .top, endPoint: .bottom)
+                )
+            }
     }
 
     /// 底下那一层。
@@ -438,8 +479,16 @@ struct BlurView: UIViewRepresentable {
             c.animator = a
             c.style = style
         }
-        // 留一点底：完全 0 的话这块就彻底不见了，看着像 bug 不像设计
-        c.animator?.fractionComplete = CGFloat(min(1, max(0.06, intensity)))
+        // 上限**必须小于 1**。
+        //
+        // 这是"拉滑块没反应、要切一次页面才生效"的真正原因：
+        // 玻璃浓度默认就是 100%，fractionComplete 一旦到 1.0，
+        // 这个 animator 就算跑完了，之后再赋值它**一律不理**——
+        // 所以第一帧之后这块玻璃就冻住了，只有整个 View 被重建
+        // （比如切页面回来）才会新建一个 animator，看着才像"换页面才生效"。
+        //
+        // 下限留 0.05 也是有意的：真给 0 这块就彻底没了，看着像 bug 不像设计。
+        c.animator?.fractionComplete = CGFloat(min(0.995, max(0.05, intensity)))
     }
 }
 
@@ -480,9 +529,12 @@ struct GrainOverlay: View {
             for y in 0..<count {
                 for x in 0..<count {
                     // 一半偏白一半偏黑，平均下来不改变底下的明暗；
-                    // 铺一层灰的话整块玻璃会被压暗一档
+                    // 铺一层灰的话整块玻璃会被压暗一档。
+                    //
+                    // 对比度也压下来了（原来 0~0.85）：颗粒之间差得越大，
+                    // 越像"噪点"；差得小才像"哑光的表面"。
                     let white = Bool.random()
-                    let alpha = CGFloat.random(in: 0...0.85)
+                    let alpha = CGFloat.random(in: 0...0.5)
                     cg.setFillColor(UIColor(white: white ? 1 : 0, alpha: alpha).cgColor)
                     cg.fill(CGRect(x: CGFloat(x) * step, y: CGFloat(y) * step,
                                    width: step, height: step))

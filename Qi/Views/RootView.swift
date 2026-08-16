@@ -175,19 +175,24 @@ struct NavDrawerBar: View {
         Button {
             toggle(true)
         } label: {
-            // **这里不能用 GlassSurface。**
-            // material 是要去采样背后那块画面的，拖着它走的时候
-            // 采样跟不上位移，屏幕上就拖出一道虚影（就是那个"重影"）。
-            // 这么细一根条本来也糊不出什么东西来，
-            // 所以直接画一根实心的白条：不采样，就不会有影。
-            // 颜色还是跟着玻璃设置走——哪套玻璃就哪个白。
-            Capsule(style: .continuous)
-                .fill(.white.opacity(handleWhite))
-                .overlay {
+            // 平时用真玻璃，**只在拖动的那一下换成实心白条**。
+            //
+            // 之前整根都画成实心白，是为了躲开拖动时的重影：
+            // material 要去采样背后那块画面，位移一快采样跟不上，
+            // 就拖出一道虚影。但那个问题只在**拖的时候**存在——
+            // 停着的时候用玻璃完全没事，而且这样它才会跟着
+            // 磨砂/通透/模糊和模糊程度一起变。
+            Group {
+                if handleDragY != 0 {
                     Capsule(style: .continuous)
-                        .strokeBorder(.white.opacity(handleWhite * 0.5), lineWidth: 0.5)
+                        .fill(.white.opacity(handleWhite))
+                } else {
+                    GlassSurface(radius: 3,
+                                 strength: app.settings.glassOpacity,
+                                 extra: 0.55)
                 }
-                .frame(width: 5.5, height: 44)
+            }
+            .frame(width: 5.5, height: 44)
                 .shadow(color: .black.opacity(scheme == .dark ? 0.30 : 0.14),
                         radius: 5, x: -1, y: 1)
                 // 条本身很细，四周留出富余，手指按偏一点也能中
