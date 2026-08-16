@@ -438,6 +438,50 @@ final class ClawdStore: ObservableObject {
         didSet { if loaded { UserDefaults.standard.set(linked, forKey: "clawdLinked") } }
     }
 
+    // MARK: 他现在手上拿着什么、在干嘛
+    //
+    // 这两个状态**放在 store 里而不是各自的 View 里**，就是为了让小屋和聊天页
+    // 联动：他在小屋里搬起一个箱子，切到聊天页那只手上也抱着箱子；
+    // 在聊天页拿出一罐汽水，回小屋他还举着。
+    // 两边看的是同一个他，不是两只长得一样的。
+
+    /// 手上那件东西的 kind id（FurnitureCatalog 里的），没拿就是 nil
+    @Published var carrying: String? {
+        didSet {
+            if loaded { UserDefaults.standard.set(carrying, forKey: "clawdCarrying") }
+        }
+    }
+
+    /// 他手上那件东西是什么
+    var carriedKind: FurnitureKind? {
+        carrying.flatMap { FurnitureCatalog.kind($0) }
+    }
+
+    /// 能随身带着走的东西：吃的、喝的、玩具、穿戴。
+    /// 沙发和书架这种搬是能搬，但不该抱着满屋子跑。
+    func portable(_ kind: FurnitureKind) -> Bool {
+        switch kind.category {
+        case .drink, .food, .toy, .wear, .decor: return true
+        case .furniture, .plant, .gadget:        return false
+        }
+    }
+
+    /// 拿起 / 放下。放下的时候把它挪到指定位置。
+    func pickUp(_ kindID: String) {
+        carrying = kindID
+    }
+
+    func putDown(at point: CGPoint?) {
+        defer { carrying = nil }
+        guard let kindID = carrying, let point else { return }
+        // 手上这件如果是屋里摆着的那一件，就把它挪到放下的地方
+        if let i = owned.firstIndex(where: { $0.kind == kindID }) {
+            owned[i].x = min(0.95, max(0.05, point.x))
+            owned[i].y = min(0.95, max(0.05, point.y))
+            owned[i].hidden = false
+        }
+    }
+
     private var loaded = false
 
     init() {
@@ -446,6 +490,7 @@ final class ClawdStore: ObservableObject {
         let t = UserDefaults.standard.double(forKey: "clawdCheckIn")
         lastCheckIn = t > 0 ? Date(timeIntervalSince1970: t) : nil
         linked = UserDefaults.standard.bool(forKey: "clawdLinked")
+        carrying = UserDefaults.standard.string(forKey: "clawdCarrying")
         // 头一回进来给点起步的钱，不然什么都买不了
         if coins == 0 && owned.isEmpty { coins = 200 }
         loaded = true

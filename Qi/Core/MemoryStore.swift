@@ -639,6 +639,18 @@ final class MemoryStore: ObservableObject {
                     report.lines.append("待办 \(v.count) 条")
                 } else { report.failed.append(name) }
 
+            case "promises.json":
+                if let v = try? dec.decode([Promise].self, from: data) {
+                    promises = v; savePromises()
+                    report.lines.append("承诺 \(v.count) 条")
+                } else { report.failed.append(name) }
+
+            case "letter.json":
+                if let v = try? dec.decode(StateNote.self, from: data) {
+                    letter = v; saveLetter()
+                    report.lines.append("写给下一个你")
+                } else { report.failed.append(name) }
+
             case "partner_message.json":
                 if let v = try? dec.decode(PartnerMessage.self, from: data) {
                     partnerMessage = v; savePartner()

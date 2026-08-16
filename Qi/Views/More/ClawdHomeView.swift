@@ -204,7 +204,15 @@ struct ClawdHomeView: View {
                             .fixedSize()
                             .transition(.scale(scale: 0.9).combined(with: .opacity))
                     }
-                    ClawdView(mood: mood, scale: 1.8, shadow: true)
+                    HStack(alignment: .bottom, spacing: 2) {
+                        ClawdView(mood: mood, scale: 1.8, shadow: true)
+                        // 手上那件。跟聊天页读的是同一个 store，所以两边同步。
+                        if let kind = store.carriedKind {
+                            PixelSpriteView(sprite: kind.sprite, scale: 1.5)
+                                .offset(y: -8)
+                                .transition(.scale(scale: 0.5).combined(with: .opacity))
+                        }
+                    }
                         // 被拎起来的时候整只抬高一点、影子也跟着散开
                         .scaleEffect(held ? 1.14 : 1)
                         .shadow(color: .black.opacity(held ? 0.26 : 0),
@@ -402,13 +410,15 @@ struct ClawdHomeView: View {
                 facingLeft = targetX < clawdX
                 walkSeconds = 1.6 + dist * 3.2
                 // 走的这一路上换成"在忙活"那两帧，腿看着像在倒腾
-                mood = .working
+                mood = store.carrying == nil ? .walking : .hauling
                 clawdX = targetX
                 clawdY = targetY
 
                 try? await Task.sleep(nanoseconds: UInt64(walkSeconds * 1_000_000_000))
                 if Task.isCancelled { return }
-                if mood == .working { mood = .idle }
+                if mood == .walking || mood == .hauling {
+                    mood = store.carrying == nil ? .idle : .carrying
+                }
 
                 // 走到谁旁边了
                 let near = store.owned.filter { !$0.hidden }

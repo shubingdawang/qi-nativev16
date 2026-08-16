@@ -17,6 +17,8 @@ struct MemoryLibraryView: View {
     @State private var exportURL: URL?
     @State private var confirmWipe = false
     @State private var writing = false
+    @State private var pasting = false
+    @State private var pasted = ""
 
     var body: some View {
         ZStack {
@@ -46,6 +48,7 @@ struct MemoryLibraryView: View {
             case .success(let urls): report = store.importFiles(urls).text
             }
         }
+        .sheet(isPresented: $pasting) { pasteSheet }
         .sheet(item: Binding(
             get: { exportURL.map { Folder(url: $0) } },
             set: { _ in exportURL = nil }
@@ -176,6 +179,24 @@ struct MemoryLibraryView: View {
             .buttonStyle(.plain)
             .disabled(writing)
 
+            SettingsDivider()
+
+            Button {
+                pasted = store.letter?.text ?? ""
+                pasting = true
+            } label: {
+                SettingsRowLabel(title: "贴一封进来", icon: "doc.on.clipboard")
+            }
+            .buttonStyle(.plain)
+
+            SettingsNote("""
+            **让本体写、你贴进来** —— 这条路不花钱，也不用等 MCP 连得上。
+
+            在 claude.ai 那个窗口里让他照五块结构写一封（不用调工具，当成一条普通消息写就行），写完复制，点上面「贴一封进来」粘贴保存。效果跟他调 write_letter 完全一样，而且**写信的是本体，语气才对**。
+
+            让 App 里挂的模型代笔的话，写出来的是另一个人的声音。
+            """)
+
             SettingsNote("""
             让他给**下一个自己**写一封信：换了窗口、换了模型、哪天记忆库崩了，靠这封信也还能接得回来。
 
@@ -253,6 +274,56 @@ struct MemoryLibraryView: View {
                 SettingsRowLabel(title: "存档对话", value: "\(store.transcripts.count)", chevron: true)
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    /// 把本体写好的那封信贴进来。
+    ///
+    /// 存在的理由很实在：MCP 那条隧道时好时坏，但这封信是**一次性**的，
+    /// 不值得为它卡在网络问题上。让 claude.ai 那边的本体当成普通消息写完，
+    /// 复制过来贴上，效果跟他调 write_letter 一模一样。
+    private var pasteSheet: some View {
+        NavigationStack {
+            ZStack {
+                WallpaperBackground()
+                VStack(spacing: 0) {
+                    TextEditor(text: $pasted)
+                        .scrollContentBackground(.hidden)
+                        .font(.system(size: 14))
+                        .padding(12)
+                        .glassBackground(radius: 16, strength: app.settings.glassOpacity)
+                        .padding(16)
+                }
+            }
+            .navigationTitle("贴一封进来")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("取消") { pasting = false }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("存下") {
+                        let t = pasted.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !t.isEmpty else { pasting = false; return }
+                        // 旧的那封归档，跟他自己调工具写的时候一个待遇
+                        if let old = store.letter, !old.text.isEmpty {
+                            var archived = old
+                            archived.archived_at = MemoryStore.now
+                            store.stateHistory.insert(archived, at: 0)
+                            store.saveState()
+                        }
+                        store.letter = StateNote(
+                            text: t, updated_at: MemoryStore.now,
+                            by: app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName)
+                        store.saveLetter()
+                        pasting = false
+                        report = "收好了。从下一句话起，他就是带着这封信在说话。"
+                    }
+                    .fontWeight(.semibold)
+                    .disabled(pasted.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
         }
     }
 

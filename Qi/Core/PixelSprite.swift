@@ -384,6 +384,88 @@ enum ClawdSprites {
         "....ppp..ppp........ppp..ppp...."
     ], palette)
 
+    /// 走路第一步：左边那两条腿抬起来。跟 walk2 交替就是在迈步，
+    /// 不是原地翻个身就瞬移过去。
+    static let walk1 = PixelSprite([
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppkkkppppppppppppkkkppp....",
+        "pppppppkkkppppppppppppkkkppppppp",
+        "pppppppkkkppppppppppppkkkppppppp",
+        "pppppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppppp",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        ".........ppp.............ppp....",
+        ".........ppp.............ppp...."
+    ], palette)
+
+    /// 走路第二步：换右边那两条腿抬
+    static let walk2 = PixelSprite([
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppkkkppppppppppppkkkppp....",
+        "pppppppkkkppppppppppppkkkppppppp",
+        "pppppppkkkppppppppppppkkkppppppp",
+        "pppppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppppp",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp.............ppp.........",
+        "....ppp.............ppp........."
+    ], palette)
+
+    /// 搬东西：两只手都放低到身前，像抱着一个箱子
+    static let carry = PixelSprite([
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppkkkppppppppppppkkkppp....",
+        "....pppkkkppppppppppppkkkppp....",
+        "....pppkkkppppppppppppkkkppp....",
+        "pppppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppppp",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp...."
+    ], palette)
+
     /// 躲到边上：只露左半边身子和一只手
     static let peek = PixelSprite([
         "....pppppppppppppp",
@@ -432,6 +514,9 @@ enum ClawdMood: String, Codable {
     case thinking   // 他在想
     case working    // 他在动手做事
     case talking    // 他在说话
+    case walking    // 正在走路（迈步，不是瞬移）
+    case carrying   // 手上抱着东西站着
+    case hauling    // 抱着东西在走
 
     /// 这个状态下轮播哪几帧、每帧停多久
     var frames: [(PixelSprite, Double)] {
@@ -446,6 +531,14 @@ enum ClawdMood: String, Codable {
             ]
         case .happy:
             return [(ClawdSprites.happy, 0.35), (ClawdSprites.idle, 0.35)]
+        case .walking:
+            // 0.16 秒换一次脚。再慢就看着像在滑，再快腿会糊成一团。
+            return [(ClawdSprites.walk1, 0.16), (ClawdSprites.walk2, 0.16)]
+        case .carrying:
+            return [(ClawdSprites.carry, 1.2), (ClawdSprites.idle, 0.9)]
+        case .hauling:
+            // 抱着东西走：手一直端着，所以只有腿在换
+            return [(ClawdSprites.walk1, 0.19), (ClawdSprites.carry, 0.19)]
         case .sleeping:
             return [(ClawdSprites.sleep, 2.2), (ClawdSprites.breathe, 2.0)]
         case .peeking:
