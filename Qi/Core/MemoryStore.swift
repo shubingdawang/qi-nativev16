@@ -358,6 +358,17 @@ final class MemoryStore: ObservableObject {
 
     // MARK: 读写
 
+    /// 新的在上、旧的在下。
+    ///
+    /// 从电脑那边导进来的 json 是按写入顺序排的，也就是**最旧的在最前面**，
+    /// 直接显示就是倒着看。这里统一按时间倒排一次，
+    /// 界面、工具输出、wake_up 全都跟着对了——不用在三个地方各排一遍。
+    private func sortNewestFirst() {
+        memories.sort { $0.created_at > $1.created_at }
+        diaries.sort { $0.created_at > $1.created_at }
+        transcripts.sort { $0.imported_at > $1.imported_at }
+    }
+
     func reload() {
         memories = read([MemoryItem].self, "memories.json") ?? []
         diaries = read([DiaryItem].self, "diaries.json") ?? []
@@ -376,6 +387,7 @@ final class MemoryStore: ObservableObject {
         emotionalEvents = read([EmotionalEvent].self, "emotional_events.json") ?? []
         log = read([MemoryLogEntry].self, "memories_log.json") ?? []
         transcripts = read([TranscriptMeta].self, "transcripts.json") ?? []
+        sortNewestFirst()
     }
 
     func saveMemories() { write(memories, "memories.json") }
@@ -669,6 +681,10 @@ final class MemoryStore: ObservableObject {
                 }
             }
         }
+        // 导进来的是按写入顺序排的，最旧的在最前面，得倒过来
+        sortNewestFirst()
+        saveMemories()
+        saveDiaries()
         return report
     }
 

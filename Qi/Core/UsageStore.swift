@@ -17,6 +17,12 @@ struct TokenUsage: Codable, Hashable {
     var cacheWrite: Int = 0
     /// 输出
     var output: Int = 0
+    /// 输出里有多少是"想"掉的。
+    ///
+    /// **这个数是包含在 output 里面的，不是另加的一笔**——
+    /// 加进总数会重复计。单独记它只有一个用处：让你看得见
+    /// 这次的钱有多少花在了他没说出口的那部分。
+    var reasoning: Int = 0
     /// 调用了几次
     var calls: Int = 0
 
@@ -38,6 +44,7 @@ struct TokenUsage: Codable, Hashable {
             cacheRead: a.cacheRead + b.cacheRead,
             cacheWrite: a.cacheWrite + b.cacheWrite,
             output: a.output + b.output,
+            reasoning: a.reasoning + b.reasoning,
             calls: a.calls + b.calls
         )
     }
@@ -78,6 +85,12 @@ struct TokenUsage: Codable, Hashable {
         u.output = (usage["completion_tokens"] as? Int)
             ?? (usage["output_tokens"] as? Int)
             ?? 0
+
+        // 想掉的那部分。OpenAI 口径放在 completion_tokens_details 里，
+        // 而且**已经算在 completion_tokens 里了**，所以只记不加。
+        let outDetails = (usage["completion_tokens_details"] as? [String: Any])
+            ?? (usage["output_tokens_details"] as? [String: Any])
+        u.reasoning = (outDetails?["reasoning_tokens"] as? Int) ?? 0
 
         // 什么都没读到，但给了个总数，至少把总数记上（算在输出上会虚高，
         // 所以宁可记成输入，输入单价低，估出来的钱更保守）

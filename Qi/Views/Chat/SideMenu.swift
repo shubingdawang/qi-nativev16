@@ -153,6 +153,17 @@ extension View {
     }
 }
 
+/// 侧栏翻到哪儿了。
+///
+/// 放成静态量而不是 @State，是因为她要的是这个行为：
+/// **App 没被划掉就一直记着上次翻到的地方，划掉重开才回到居中。**
+/// @State 会随着 View 销毁而没，@SceneStorage 又会跨启动留着，
+/// 都不对；一个活在进程里的静态量正好。
+@MainActor
+enum SideMenuScroll {
+    static var lastID: String?
+}
+
 // MARK: - 侧栏本体
 
 /// 垫在最底下那一层的内容。它不管开合，只管长什么样。
@@ -165,6 +176,8 @@ struct SideMenuPanel: View {
 
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
+    /// 现在停在哪一项上
+    @State private var scrolledID: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -187,6 +200,7 @@ struct SideMenuPanel: View {
                     VStack(spacing: 2) {
                         ForEach(Array(SideMenuItem.all.enumerated()), id: \.element.id) { i, item in
                             row(item)
+                                .id(item.id)
                                 .visualEffect { content, proxy in
                                     // 这一行的中心离竖直中线有多远，0 是正中，1 是到边
                                     let y = proxy.frame(in: .named("wheel")).midY
@@ -211,12 +225,29 @@ struct SideMenuPanel: View {
                     // 整栏往右让开一截，别贴着屏幕边
                     .padding(.leading, 44)
                     .padding(.trailing, 10)
-                    // 内容不够高就居中撑开，底下不留那一大片空
-                    .frame(minHeight: geo.size.height, alignment: .center)
+                    .scrollTargetLayout()
                 }
                 .coordinateSpace(name: "wheel")
-                // 不留上下空白边距。留了的话一打开是从空白开始的，
-                // 得先往上拖一截才看得到东西排满。
+                // 上下各留半屏的余量，最上和最下那一项也能转到正中间来。
+                //
+                // 上一版为了"不留空白"把内容高度钉死成正好一屏
+                // （minHeight: geo.size.height），结果内容跟容器一样高，
+                // ScrollView 认为没有可滚的东西，整栏就滚不动了。
+                .contentMargins(.vertical, geo.size.height * 0.34, for: .scrollContent)
+                .scrollPosition(id: $scrolledID, anchor: .center)
+                .onAppear {
+                    // 第一次打开落在正中间那一项；之后停在上次翻到的地方。
+                    // 位置记在一个静态量里——App 还活着就一直在，
+                    // 被划掉重开才回到居中。
+                    if SideMenuScroll.lastID == nil {
+                        SideMenuScroll.lastID =
+                            SideMenuItem.all[SideMenuItem.all.count / 2].id
+                    }
+                    scrolledID = SideMenuScroll.lastID
+                }
+                .onChange(of: scrolledID) { _, id in
+                    if let id { SideMenuScroll.lastID = id }
+                }
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)

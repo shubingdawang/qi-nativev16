@@ -269,7 +269,8 @@ enum MemoryTools {
                 && (want.isEmpty || !Set(mem.tags).isDisjoint(with: Set(want)))
                 && mem.level >= minLevel
             }
-            hits.sort { $0.level > $1.level }
+            // 新的排前面。星级高的更重要，但"最近发生的"更容易是她在问的那件事。
+            hits.sort { $0.created_at > $1.created_at }
             hits = Array(hits.prefix(limit))
             if hits.isEmpty { return ("没找到相关的记忆。", false) }
             return (hits.map(line).joined(separator: "\n"), false)
@@ -720,13 +721,10 @@ enum MemoryTools {
                 out += days >= 0 ? "（还有 \(days) 天）" : "（已经晚了 \(-days) 天）"
             }
         }
-        // 那几天的备注也带上，不然只有日期没有人
-        let recent = m.periods.notes.keys.sorted().suffix(3)
-        for d in recent {
-            if let ns = m.periods.notes[d], let n = ns.last {
-                out += "\n\(d) \(n.author)：\(n.text)"
-            }
-        }
+        // 备注**不往这段话里塞**。
+        // 这段话会原样显示在经期页的「当前状态」卡片上，
+        // 备注一多那张卡就长得没边了。备注只在点开那一天的时候看，
+        // 日历上有小点提示哪天写过。
         return out
     }
 

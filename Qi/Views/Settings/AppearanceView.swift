@@ -157,7 +157,7 @@ struct AppearanceView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 13)
 
-            SettingsNote("换的是做法不是浓度：磨砂糊得最狠、表面带一层几乎看不见的颗粒；通透几乎不挡东西，只留一道边光；模糊是均匀一片、没有边。整个 App 的卡片、气泡、导航条都跟着变。")
+            SettingsNote("磨砂和模糊糊得一样狠，**区别只有一样：磨砂表面有砂，模糊是平的**。凑近看磨砂那块能看出细颗粒。通透走的是系统的液态玻璃，几乎不挡东西，靠一道边光成形。\n\n整个 App 的卡片、气泡、导航条都跟着变。糊到什么程度由下面那根「模糊程度」定。")
         }
     }
 
@@ -257,11 +257,11 @@ struct AppearanceView: View {
                    range: 13...22, step: 1,
                    readout: "\(Int(app.settings.fontSize))")
             SettingsDivider()
-            slider(title: "玻璃浓度",
+            slider(title: "模糊程度",
                    value: $app.settings.glassOpacity,
                    range: 0...1, step: nil,
                    readout: "\(Int(app.settings.glassOpacity * 100))%",
-                   note: "调低更透，壁纸看得更清楚；调高更实，字更好读。")
+                   note: "往右越糊，背后的壁纸化成色块，玻璃看着越实；往左越清楚，能看出壁纸原来是什么。\n\n这根滑块以前调的是整层的透明度——往左只是让玻璃越来越淡、直到快没了，那不是玻璃变了，是玻璃不见了。")
             SettingsDivider()
             slider(title: "自己的气泡染色",
                    value: $app.settings.bubbleTint,

@@ -265,8 +265,12 @@ struct GlassSurface: View {
                 }
             }
             .overlay {
-                shape.strokeBorder(.white.opacity(0.30 * min(1, strength + 0.2)),
-                                   lineWidth: 0.7)
+                // **砂**。磨砂和模糊就差这一层，别的都一样。
+                GrainOverlay(opacity: 0.075)
+                    .clipShape(shape)
+            }
+            .overlay {
+                shape.strokeBorder(.white.opacity(0.30), lineWidth: 0.7)
             }
     }
 
@@ -328,6 +332,7 @@ struct GlassSurface: View {
                     shape.fill(.white.opacity(extra * 0.10))
                 }
             }
+        // 没有砂、没有边。跟磨砂的区别就在这儿：一样地糊，但表面是平的。
     }
 
     /// 底下那一层。
@@ -338,6 +343,14 @@ struct GlassSurface: View {
     ///
     /// `strength`（设置里那根滑块）在这里体现为整层的透明度：
     /// 调低就让背后透出来更多，但最低也留 35%，不然玻璃直接没了。
+    /// 那根滑块现在调的是**模糊半径**，不是透明度。
+    ///
+    /// 往右越糊：背后的壁纸化成一片色块，玻璃看着越"实"。
+    /// 往左越清楚：能看出壁纸原来是什么。
+    /// 以前调的是整层的 opacity，往左只是让这块玻璃越来越淡、
+    /// 直到快没了——那不是"玻璃变了"，那是"玻璃不见了"。
+    private var blurAmount: Double { min(1, max(0, strength)) }
+
     @ViewBuilder
     private func base(liquid: Bool, blur style: UIBlurEffect.Style) -> some View {
         #if compiler(>=6.2)
@@ -347,17 +360,13 @@ struct GlassSurface: View {
         } else if liquid {
             shape.fill(.ultraThinMaterial)
         } else {
-            BlurView(style: style)
-                .opacity(0.35 + 0.65 * min(1, max(0, strength)))
-                .clipShape(shape)
+            BlurView(style: style, intensity: blurAmount).clipShape(shape)
         }
         #else
         if liquid {
             shape.fill(.ultraThinMaterial)
         } else {
-            BlurView(style: style)
-                .opacity(0.35 + 0.65 * min(1, max(0, strength)))
-                .clipShape(shape)
+            BlurView(style: style, intensity: blurAmount).clipShape(shape)
         }
         #endif
     }
@@ -374,22 +383,113 @@ struct GlassSurface: View {
     }
 }
 
-/// 老那套 `UIVisualEffectView` 的壳子。
+/// 可以调**模糊半径**的毛玻璃。
 ///
-/// SwiftUI 的 `Material` 只给了 ultraThin/thin/regular/thick/bar 几档，
-/// 而且每档之间只差一点点浓淡，做不出"两种不同做法"的区别。
-/// UIKit 这边的 `.extraLight` / `.light` 是 iOS 7 那代留下来的重度模糊，
-/// 差别大得多，正好拿来当磨砂和模糊两套。
+/// 这是这次真正的关键。前几版那根滑块调的一直是「整层的透明度」——
+/// 往左拉只是让这块玻璃越来越淡，背后的东西一直都是同一个糊法，
+/// 所以怎么调都不像「玻璃变实了」，只像「玻璃快没了」。
+///
+/// 系统没给设置模糊半径的 API，但有一条公开的路子：
+/// **把"从没有效果变成有效果"做成一个动画，然后把它冻在中间某一帧。**
+/// `UIViewPropertyAnimator` 允许你把 `fractionComplete` 停在 0~1 之间，
+/// 停在 0.3 就是三成的模糊，停在 1 就是满的。这不是私有 API，
+/// 只是把动画当插值器用。
+///
+/// 代价是这个 animator 必须一直活着（一旦跑完或被释放，效果会跳回终态），
+/// 所以拿 Coordinator 存着它，并且在 deinit 里 stop 掉，不然会漏。
 struct BlurView: UIViewRepresentable {
+
     var style: UIBlurEffect.Style
+    /// 0 = 几乎不糊，1 = 糊到底
+    var intensity: Double
+
+    final class Coordinator {
+        var animator: UIViewPropertyAnimator?
+        var style: UIBlurEffect.Style?
+        deinit {
+            animator?.stopAnimation(true)
+            animator?.finishAnimation(at: .current)
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> UIVisualEffectView {
-        UIVisualEffectView(effect: UIBlurEffect(style: style))
+        let view = UIVisualEffectView(effect: nil)
+        apply(view, context: context)
+        return view
     }
 
     func updateUIView(_ view: UIVisualEffectView, context: Context) {
-        view.effect = UIBlurEffect(style: style)
+        apply(view, context: context)
     }
+
+    private func apply(_ view: UIVisualEffectView, context: Context) {
+        let c = context.coordinator
+        // 换了玻璃种类就得重来一个 animator，同一个改不了目标效果
+        if c.style != style || c.animator == nil {
+            c.animator?.stopAnimation(true)
+            c.animator?.finishAnimation(at: .current)
+            view.effect = nil
+            let a = UIViewPropertyAnimator(duration: 1, curve: .linear)
+            a.addAnimations { view.effect = UIBlurEffect(style: style) }
+            a.pausesOnCompletion = true
+            a.pauseAnimation()
+            c.animator = a
+            c.style = style
+        }
+        // 留一点底：完全 0 的话这块就彻底不见了，看着像 bug 不像设计
+        c.animator?.fractionComplete = CGFloat(min(1, max(0.06, intensity)))
+    }
+}
+
+/// 磨砂表面那层颗粒。
+///
+/// 这是磨砂跟模糊唯一真正的区别——**模糊只是糊，磨砂是糊 + 表面有砂**。
+/// 之前我把它删了，因为上上版给到 0.22 看着像撒了一把沙；
+/// 但删干净之后两套就只剩一档 material 的差别，肉眼确实分不出来。
+/// 现在按物理像素画（一颗噪点 = 一个像素，不是一个点），
+/// 浓度压到几乎看不见的程度——凑近看得出是砂面，退开只觉得"这块不那么平"。
+struct GrainOverlay: View {
+    var opacity: Double = 0.07
+
+    var body: some View {
+        Image(uiImage: GrainOverlay.tile)
+            .resizable(resizingMode: .tile)
+            .opacity(opacity)
+            .allowsHitTesting(false)
+    }
+
+    nonisolated(unsafe) static let tile: UIImage = {
+        let side: CGFloat = 64
+        // 写死 3 倍。这张图是懒加载的静态量，谁先用到就在谁的线程上生成，
+        // 不能去问 UIScreen——那东西是主线程的。
+        let scale: CGFloat = 3
+        let step = 1.0 / scale
+        let count = Int(side * scale)
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = scale
+        format.opaque = false
+        let renderer = UIGraphicsImageRenderer(
+            size: CGSize(width: side, height: side), format: format)
+
+        return renderer.image { ctx in
+            let cg = ctx.cgContext
+            cg.setShouldAntialias(false)
+            for y in 0..<count {
+                for x in 0..<count {
+                    // 一半偏白一半偏黑，平均下来不改变底下的明暗；
+                    // 铺一层灰的话整块玻璃会被压暗一档
+                    let white = Bool.random()
+                    let alpha = CGFloat.random(in: 0...0.85)
+                    cg.setFillColor(UIColor(white: white ? 1 : 0, alpha: alpha).cgColor)
+                    cg.fill(CGRect(x: CGFloat(x) * step, y: CGFloat(y) * step,
+                                   width: step, height: step))
+                }
+            }
+        }
+    }()
 }
 
 extension View {

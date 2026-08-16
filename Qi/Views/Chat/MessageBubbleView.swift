@@ -819,39 +819,87 @@ struct MessageBubbleView: View {
         ).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// 思考链那一条。
+    ///
+    /// 展开的时候**不往下撑**，而是单独一个气泡浮在它上面——照她画的那张图。
+    /// 为什么这么做：思考经常有几百上千字，塞回原位会把底下说的话
+    /// 整个顶出屏幕，你为了看一眼他在想什么，就得丢掉他说了什么。
+    /// 浮起来就没这个问题：底下那句话一动不动，看完点一下收掉。
     private func reasoningBlock(_ text: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // 做成一整条可点开的卡片，跟原来网页版「认真思考了 ▸」那种一样
-            Button {
-                withAnimation(.easeInOut(duration: 0.18)) { showReasoning.toggle() }
-            } label: {
-                HStack(spacing: 8) {
-                    Text(reasoningTitle)
-                        .font(.system(size: 14, weight: .medium))
-                    Spacer(minLength: 8)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .rotationEffect(.degrees(showReasoning ? 90 : 0))
-                }
-                .foregroundStyle(Theme.textSoft(scheme))
-                .padding(.horizontal, 15)
-                .padding(.vertical, 13)
-                // 同上，思考链这条也是固定宽的
-                .frame(width: Layout.sideCardWidth, alignment: .leading)
-                .glassBackground(radius: 18, strength: app.settings.glassOpacity * 0.85)
+        Button {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                showReasoning.toggle()
             }
-            .buttonStyle(.plain)
-
+        } label: {
+            HStack(spacing: 8) {
+                Text(reasoningTitle)
+                    .font(.system(size: 14, weight: .medium))
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 11, weight: .semibold))
+                    .rotationEffect(.degrees(showReasoning ? 180 : 0))
+            }
+            .foregroundStyle(Theme.textSoft(scheme))
+            .padding(.horizontal, 15)
+            .padding(.vertical, 13)
+            // 折起来的这一条是固定宽的，跟工具那条对齐
+            .frame(width: Layout.sideCardWidth, alignment: .leading)
+            .glassBackground(radius: 18, strength: app.settings.glassOpacity * 0.85)
+        }
+        .buttonStyle(.plain)
+        // 浮起来的那个气泡挂在这一条的**上边**，用 overlay 所以不占布局位置
+        .overlay(alignment: .bottomLeading) {
             if showReasoning {
-                Text(text)
-                    .font(.system(size: max(11, app.settings.fontSize - 3)))
-                    .foregroundStyle(.secondary)
-                    .padding(10)
-                    .frame(width: Layout.sideCardWidth, alignment: .leading)
-                    .glassBackground(radius: 14, strength: app.settings.glassOpacity * 0.75)
-                    .textSelection(.enabled)
+                floatingThought(text)
+                    // 往上顶开自己那条的高度，再留 8 点缝
+                    .offset(y: -(collapsedHeight + 8))
+                    .transition(.scale(scale: 0.9, anchor: .bottom)
+                        .combined(with: .opacity))
             }
         }
+        // 展开的时候不让它被上面那条消息裁掉
+        .zIndex(showReasoning ? 10 : 0)
+    }
+
+    /// 折起来那条大概多高：上下 13 的内边距 + 一行 14 号字
+    private var collapsedHeight: CGFloat { 13 * 2 + 18 }
+
+    private func floatingThought(_ text: String) -> some View {
+        ScrollView {
+            Text(text)
+                .font(.system(size: max(11, app.settings.fontSize - 3)))
+                .foregroundStyle(Theme.textSoft(scheme))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+                .padding(12)
+        }
+        // 想得再多也就这么高，超了自己滚——
+        // 不封顶的话一条长思考能盖住整个屏幕
+        .frame(width: Layout.sideCardWidth + 46)
+        .frame(maxHeight: 260)
+        .glassBackground(radius: 16, strength: app.settings.glassOpacity)
+        // 浮起来就得有影子，不然跟底下那条糊成一块，看不出是"浮"着的
+        .shadow(color: .black.opacity(scheme == .dark ? 0.42 : 0.16),
+                radius: 18, x: 0, y: 8)
+        .overlay(alignment: .bottomLeading) {
+            // 一个朝下的小尖，指着自己那一条，说明这团是从哪儿冒出来的
+            Triangle()
+                .fill(Theme.softFill)
+                .frame(width: 14, height: 7)
+                .offset(x: 26, y: 6)
+        }
+    }
+}
+
+/// 浮起来那个气泡底下那个朝下的小尖
+struct Triangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: 0, y: 0))
+        p.addLine(to: CGPoint(x: rect.width, y: 0))
+        p.addLine(to: CGPoint(x: rect.midX, y: rect.height))
+        p.closeSubpath()
+        return p
     }
 }
 

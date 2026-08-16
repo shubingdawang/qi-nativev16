@@ -639,10 +639,13 @@ struct PeriodPane: View {
     private var calendar: some View {
         VStack(spacing: 10) {
             HStack {
-                Button {
-                    month = cal.date(byAdding: .month, value: -1, to: month) ?? month
-                } label: {
-                    Image(systemName: "chevron.left").foregroundStyle(app.settings.accentColor)
+                // 箭头原来只有一个图标那么大，手指基本按不中。
+                // 撑到 44×34 的感应区，再补一条左右滑动换月。
+                Button { shift(-1) } label: {
+                    Image(systemName: "chevron.left")
+                        .foregroundStyle(app.settings.accentColor)
+                        .frame(width: 44, height: 34)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
 
@@ -650,12 +653,14 @@ struct PeriodPane: View {
                 Text(monthTitle)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.textMain(scheme))
+                    .contentTransition(.numericText())
                 Spacer()
 
-                Button {
-                    month = cal.date(byAdding: .month, value: 1, to: month) ?? month
-                } label: {
-                    Image(systemName: "chevron.right").foregroundStyle(app.settings.accentColor)
+                Button { shift(1) } label: {
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(app.settings.accentColor)
+                        .frame(width: 44, height: 34)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -681,6 +686,24 @@ struct PeriodPane: View {
             }
         }
         .glassCard()
+        // 在日历上左右滑也能换月，比去够那两个小箭头顺手
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 24)
+                .onEnded { v in
+                    guard abs(v.translation.width) > abs(v.translation.height) else { return }
+                    shift(v.translation.width < 0 ? 1 : -1)
+                }
+        )
+    }
+
+    private func shift(_ n: Int) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            month = cal.date(byAdding: .month, value: n, to: month) ?? month
+        }
+        if app.settings.haptics {
+            UISelectionFeedbackGenerator().selectionChanged()
+        }
     }
 
     private func dayCell(_ day: Date) -> some View {

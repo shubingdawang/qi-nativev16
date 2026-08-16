@@ -70,10 +70,30 @@ struct FootprintView: View {
                                 GridItem(.flexible(), spacing: 10)], spacing: 10) {
                 tile("聊了几句", "\(messageCount(on: picked))")
                 tile("调用次数", "\(u.calls)")
-                tile("新输入", UsageFormat.short(u.input))
-                tile("输出", UsageFormat.short(u.output))
+                // 「新输入」其实就是没命中缓存的那部分，叫「缓存未命中」
+                // 跟旁边那个「缓存命中」才对得上，一眼能看出是同一件事的两半
+                tile("缓存未命中", UsageFormat.short(u.input))
+                tile("输出（含思考）", UsageFormat.short(u.output))
                 tile("缓存命中", UsageFormat.short(u.cacheRead))
                 tile("缓存写入", UsageFormat.short(u.cacheWrite))
+            }
+
+            // 想掉的那部分。只有他真的报了才显示——
+            // 不是所有模型都给这个数，摆一个常年为 0 的格子没意义。
+            if u.reasoning > 0 {
+                HStack {
+                    Text("其中思考")
+                        .font(.caption)
+                        .foregroundStyle(Theme.textSoft(scheme))
+                    Spacer()
+                    Text(UsageFormat.short(u.reasoning))
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Theme.textSoft(scheme))
+                    Text(String(format: "占输出 %.0f%%",
+                                Double(u.reasoning) / Double(max(1, u.output)) * 100))
+                        .font(.caption2)
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
             }
 
             hitRateBar(u)

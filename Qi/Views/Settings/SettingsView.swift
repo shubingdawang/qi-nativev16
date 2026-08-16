@@ -498,8 +498,41 @@ struct SettingsView: View {
         SettingsCard {
             SettingsRowLabel(title: "版本", value: appVersion)
             SettingsDivider()
-            SettingsRowLabel(title: "对话数", value: "\(app.conversations.count)")
+            SettingsRowLabel(title: "这一版打包于", value: buildDate)
+            SettingsDivider()
+            SettingsRowLabel(title: "絮语窗口", value: "\(chatCount)")
+            SettingsDivider()
+            SettingsRowLabel(title: "消息总数", value: "\(messageCount)")
+
+            SettingsNote("版本号是写死在工程里的（MARKETING_VERSION），不改它就一直是 1.0——所以真正能认出"我装的是不是最新那版"的是上面那个打包时间。\n\n清空全部对话之后「絮语窗口」会是 1 而不是 0：群聊是常驻的、工坊有一个固定窗口，再加一个新开的空窗口，清干净了也还剩这三个壳子。看「消息总数」才知道内容有没有真的清掉。")
         }
+    }
+
+    /// 只数絮语里的普通窗口。群聊和工坊是常驻的壳子，
+    /// 混进来会让人以为"怎么清都清不掉"。
+    private var chatCount: Int {
+        app.conversations.filter {
+            $0.space == ChatSpace.chat.rawValue && !$0.isGroup
+        }.count
+    }
+
+    private var messageCount: Int {
+        app.conversations.reduce(0) { $0 + $1.messages.count }
+    }
+
+    /// 包是什么时候打的。
+    ///
+    /// 版本号写死在工程里不会变，但包里 Info.plist 的落盘时间每次构建都是新的，
+    /// 拿它当"这是哪一版"最准，也不用每次记得手动改版本号。
+    private var buildDate: String {
+        guard let url = Bundle.main.url(forResource: "Info", withExtension: "plist"),
+              let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let date = attrs[.modificationDate] as? Date
+        else { return "不知道" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "M月d日 HH:mm"
+        return f.string(from: date)
     }
 
     private var mcpSummary: String {
