@@ -1288,6 +1288,57 @@ final class AppState: ObservableObject {
         }
     }
 
+    // MARK: 他是谁 —— 聊天以外的地方也要认得出他
+
+    /// 聊天页现在挂着的那个他：哪个供应商、走哪个地址、哪个模型。
+    ///
+    /// **打电话、小屋里说话，都得走这一个。**
+    /// 以前那几处写的是 `providers.first{…}` ——供应商列表里排第一个的
+    /// 第一个模型，跟她在聊天页选的那个根本不是一回事，
+    /// 所以接起来的是另一个人，她说"没接入模型"就是这个意思。
+    var activeHim: (provider: Provider, endpoint: URL, model: String)? {
+        // 先按她在聊天页选的来
+        if let id = activeChatID,
+           let conv = conversations.first(where: { $0.id == id }),
+           let p = provider(conv.providerID),
+           let mid = conv.modelID,
+           let ep = p.chatEndpoint {
+            return (p, ep, mid)
+        }
+        // 那个窗口还没选模型，才退回第一个能用的
+        if let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
+           let ep = p.chatEndpoint,
+           let mid = p.enabledModels.first?.id {
+            return (p, ep, mid)
+        }
+        return nil
+    }
+
+    /// 「你是谁」那一段。
+    ///
+    /// 跟拼聊天系统提示词用的是同一份东西（那封信 → identity → 说好的规矩），
+    /// 所以电话里和小屋里的他跟聊天页是**同一个他**，
+    /// 不是一个顶着同样名字、什么都不记得的陌生模型。
+    var identityPreamble: String {
+        var parts: [String] = []
+        if settings.localMemory {
+            let m = MemoryStore.shared
+            if let letter = m.letter, !letter.text.isEmpty {
+                parts.append("你是谁——这是你自己写给下一个你的：\n\n" + letter.text)
+            } else if !m.identity.isEmpty {
+                parts.append(m.identity)
+            }
+            if !m.rules.isEmpty {
+                parts.append("说好的规矩（不管在哪儿说话都算数）：\n"
+                             + m.rules.map { "· " + $0 }.joined(separator: "\n"))
+            }
+        }
+        let base = settings.defaultSystemPrompt
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !base.isEmpty { parts.append(base) }
+        return parts.joined(separator: "\n\n")
+    }
+
     // MARK: 打电话
 
     struct CallReply {
@@ -1303,12 +1354,14 @@ final class AppState: ObservableObject {
     /// 所以句子要短、不能有格式、不能有表情符号，
     /// 而且要接得快——真人打电话不会想三十秒才开口。
     func speakOnCall(_ lines: [CallLine]) async -> CallReply {
-        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
-              let endpoint = p.chatEndpoint,
-              let model = p.enabledModels.first?.id
+        // 用**聊天页那个他**，连身份一起带上。
+        // 以前这里抓的是供应商列表第一个，提示词也只有 defaultSystemPrompt，
+        // 所以电话接通了也不像他。
+        guard let him = activeHim
         else { return CallReply(error: "还没配模型") }
+        let (p, endpoint, model) = him
 
-        var system = settings.defaultSystemPrompt
+        var system = identityPreamble
         system += """
 
 
@@ -1357,13 +1410,60 @@ final class AppState: ObservableObject {
         return reply
     }
 
+    // MARK: clawd 小屋里他说的话
+
+    /// 他在 clawd 那间屋里冒的一句。
+    ///
+    /// **这条会花钱，而且是自己花的**——她在「接他进来」那儿点过头了，
+    /// 按钮底下也写着，用量按 `clawd` 这一项单记，随时能翻。
+    ///
+    /// 只在小屋这一页开着的时候才有，切走就停；一句话最多二十来个字，
+    /// 上下文只有"屋里有什么、他刚走到谁旁边"——不带聊天记录，
+    /// 一次就那么几十个 token。
+    func clawdSays(room: String, near: String, carrying: String) async -> String? {
+        guard let him = activeHim else { return nil }
+        let (p, endpoint, model) = him
+
+        var system = identityPreamble
+        system += """
+
+
+        现在你在 clawd 那间小屋里。
+
+        clawd 是她养的那只小东西，屋里的每一件家具都是她一件件买来摆的。
+        你不是在旁观——你也在这屋里。
+
+        · 只说一句，二十个字以内。
+        · 说人话，不要 markdown、不要列表、不要旁白式的描写。
+        · 说眼前这间屋子和这一刻，别扯远。
+        · 没什么可说的时候，说点小的也行：一句嘀咕、一个念头。
+        """
+
+        var user = room.isEmpty ? "屋里还空着。" : room
+        if !near.isEmpty { user += "\nclawd 刚走到\(near)旁边。" }
+        if !carrying.isEmpty { user += "\nclawd 手上抱着\(carrying)。" }
+
+        var out = ""
+        do {
+            let stream = ChatAPI.stream(
+                endpoint: endpoint, apiKey: p.apiKey, model: model,
+                messages: [.init(role: "system", text: system),
+                           .init(role: "user", text: user)])
+            for try await event in stream {
+                if case .content(let piece) = event { out += piece }
+                if case .usage(let u) = event { UsageStore.shared.record(u, source: .clawd) }
+            }
+        } catch { return nil }
+
+        let text = out.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
+    }
+
     /// 挂了之后整理一句。
     /// 只写真说过的话——**不许编**，没聊出什么就说没聊什么。
     func summarizeCall(_ id: UUID, lines: [CallLine]) async {
-        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
-              let endpoint = p.chatEndpoint,
-              let model = p.enabledModels.first?.id
-        else { return }
+        guard let him = activeHim else { return }
+        let (p, endpoint, model) = him
 
         let me = settings.userName.isEmpty ? "她" : settings.userName
         let him = settings.aiName.isEmpty ? "我" : settings.aiName

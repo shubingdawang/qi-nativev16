@@ -13,10 +13,6 @@ struct ChatView: View {
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
     @ObservedObject private var keyboard = KeyboardWatcher.shared
-    // 必须真的**订阅** CallStore，不能只是 CallStore.shared 这样读一下。
-    // 只读不订阅的话，他打过来／挂断的时候 SwiftUI 根本不知道要重画，
-    // 要等下一次别的什么状态变了才顺带刷出来——看起来就是"打电话有延迟"。
-    @ObservedObject private var calls = CallStore.shared
 
     @State private var drawerOpen = false
     @State private var sideOpen = false
@@ -214,26 +210,12 @@ struct ChatView: View {
                     }
             }
 
-            // 他打过来了：卡片压在所有东西上面
-            if let incoming = calls.incoming {
-                VStack {
-                    IncomingCallView(
-                        call: incoming,
-                        onAnswer: { CallStore.shared.answer() },
-                        onDecline: {
-                            CallStore.shared.decline()
-                            // 他该知道你没接——这事不该悄无声息
-                            if let id = app.activeID(for: space), let i = app.index(of: id) {
-                                var msg = ChatMessage(role: .user)
-                                msg.content = "（她没接你的电话）"
-                                app.conversations[i].messages.append(msg)
-                            }
-                        })
-                    Spacer()
-                }
-                .padding(.top, 8)
-                .zIndex(99)
-            }
+            // 他打过来那张卡片、还有通话那一屏，都**挪到 RootView 去了**。
+            //
+            // 挂在这儿有个死角：从「通话」历史页点拨号的时候，
+            // 絮语这一页根本不在屏上，谁也没把界面弹出来——
+            // 结果就是"拨出去毫无反应，但历史里有一条记录"。
+            // 通话是全 App 的事，得挂在全 App 都在的那一层。
 
             // clawd 在整页上溜达。挂在这一层是因为它得能走到任何地方，
             // 又不能挡住底下的气泡——它自己那一小块接触摸，别处一律放过去。
@@ -321,12 +303,6 @@ struct ChatView: View {
                     }
                 }
             }
-        }
-        .fullScreenCover(isPresented: Binding(
-            get: { calls.active != nil },
-            set: { if !$0 && calls.active != nil { calls.hangUp(by: "me") } }
-        )) {
-            CallView()
         }
         .fullScreenCover(item: $travelling) { j in
             JourneyPlayerView(journey: j)
@@ -699,20 +675,38 @@ struct ChatView: View {
                         .foregroundStyle(Theme.textSoft(scheme))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        // 这颗胶囊以前是一块死颜色（softFillDeep），
-                        // 所以换玻璃、拉模糊它都纹丝不动。改成跟别处一样走 GlassSurface，
-                        // 半径给得比高度大就是胶囊。
-                        .glassBackground(radius: 20,
-                                         strength: app.settings.glassOpacity,
-                                         extra: 0.2)
+                        // **玻璃不能套在玻璃上。**
+                        //
+                        // 这颗胶囊上一版是一整块 GlassSurface，而它就摆在输入框
+                        // 那块 GlassSurface 上面——等于糊了两遍、深色下那层黑
+                        // 也压了两遍。结果它读起来是一坨比输入框更深的疙瘩，
+                        // 不是一颗胶囊。她说的"很突兀"就是这个。
+                        //
+                        // 玻璃上面该放的是一层薄薄的提亮，不是第二块玻璃。
+                        // 这样照样跟着深浅色走，只是不再自己糊一遍。
+                        .background(
+                            Capsule().fill(scheme == .dark
+                                           ? Color.white.opacity(0.14)
+                                           : Color.white.opacity(0.42))
+                        )
+                        .overlay(
+                            Capsule().strokeBorder(
+                                Color.white.opacity(scheme == .dark ? 0.10 : 0.45),
+                                lineWidth: 0.7)
+                        )
                 }
                 .buttonStyle(.plain)
 
                 Spacer(minLength: 0)
 
                 // 打给他。跟他打过来那条路是同一套界面。
+                // 没模型就是打不通——这个电话是真要问他的，不是摆设。
                 Button {
                     hideKeyboard()
+                    guard app.activeHim != nil else {
+                        notice = "还没选模型，这通电话没人接。去输入框上那颗胶囊选一个。"
+                        return
+                    }
                     if app.settings.haptics {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     }
@@ -720,7 +714,9 @@ struct ChatView: View {
                 } label: {
                     Image(systemName: "phone")
                         .font(.system(size: 16, weight: .light))
-                        .foregroundStyle(Theme.textSoft(scheme))
+                        .foregroundStyle(app.activeHim == nil
+                                         ? Theme.textMuted(scheme).opacity(0.5)
+                                         : Theme.textSoft(scheme))
                         .frame(width: 28, height: 28)
                         .contentShape(Rectangle())
                 }
@@ -791,7 +787,14 @@ struct ChatView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
         .glassBackground(radius: 24, strength: app.settings.glassOpacity)
-        .shadow(color: Theme.shadow(scheme), radius: 14, x: 0, y: 6)
+        // 这道影子以前是 Theme.shadow —— 深色下是 40% 的黑、
+        // 半径 14 往下偏 6，落在底栏上就是**一道边界分明的暗带**，
+        // 玻璃反而像贴上去的一张卡片。她说的"突兀"是这个。
+        //
+        // 玻璃本来就不靠影子跟背景分开，靠的是它自己那圈边光。
+        // 影子只需要托住它一点点：摊得更开、淡到几乎看不见。
+        .shadow(color: .black.opacity(scheme == .dark ? 0.12 : 0.05),
+                radius: 22, x: 0, y: 8)
         .padding(.horizontal, 12)
         // 键盘支起来的时候贴着键盘，收着的时候给底下导航条让出位置
         .padding(.bottom, keyboard.up ? 8 : Layout.tabBarSpace + 26)
@@ -844,7 +847,14 @@ struct ChatView: View {
         }
         .padding(.vertical, 12)
         .glassBackground(radius: 24, strength: app.settings.glassOpacity)
-        .shadow(color: Theme.shadow(scheme), radius: 14, x: 0, y: 6)
+        // 这道影子以前是 Theme.shadow —— 深色下是 40% 的黑、
+        // 半径 14 往下偏 6，落在底栏上就是**一道边界分明的暗带**，
+        // 玻璃反而像贴上去的一张卡片。她说的"突兀"是这个。
+        //
+        // 玻璃本来就不靠影子跟背景分开，靠的是它自己那圈边光。
+        // 影子只需要托住它一点点：摊得更开、淡到几乎看不见。
+        .shadow(color: .black.opacity(scheme == .dark ? 0.12 : 0.05),
+                radius: 22, x: 0, y: 8)
         .padding(.horizontal, 12)
         // 键盘支起来的时候贴着键盘，收着的时候给底下导航条让出位置
         .padding(.bottom, keyboard.up ? 8 : Layout.tabBarSpace + 26)

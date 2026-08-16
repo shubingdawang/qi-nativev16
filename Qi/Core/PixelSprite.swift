@@ -466,31 +466,70 @@ enum ClawdSprites {
         "....ppp..ppp........ppp..ppp...."
     ], palette)
 
-    /// 躲到边上：只露左半边身子和一只手
-    static let peek = PixelSprite([
-        "....pppppppppppppp",
-        "....pppppppppppppp",
-        "....pppppppppppppp",
-        "....pppppppppppppp",
-        "....pppppppppppppp",
-        "....pppkkkpppppppp",
-        "pppppppkkkpppppppp",
-        "pppppppkkkpppppppp",
-        "pppppppppppppppppp",
-        "pppppppppppppppppp",
-        "pppppppppppppppppp",
-        "....pppppppppppppp",
-        "....pppppppppppppp",
-        "....pppppppppppppp",
-        "....pppppppppppppp",
-        "....pppppppppppppp",
-        "....pppppppppppppp",
-        "....ppp..ppp......",
-        "....ppp..ppp......",
-        "....ppp..ppp......",
-        "....ppp..ppp......",
-        "....ppp..ppp......",
-        "....ppp..ppp......"
+    /// 探头（一）：探出来的那一下。
+    ///
+    /// **这张图跟别的一样是整整 32 格宽的一只完整的他**，一格都没少。
+    /// 上一版那张只画了十八格，等于把他从中间锯断——所以看着不是"探头"，
+    /// 是"半个身子没了"。真正的探头得靠**屏幕边缘**去挡：
+    /// 他整只站在屏幕外面，只往里挪十来个点，露出来的那一小条自然就是
+    /// 一只眼睛和扒着边的那只手。
+    ///
+    /// 所以这张图上做了两件事，都是为了让**露出来的那一条**读得懂：
+    ///   · 只留靠外那一只眼睛（另一只在屏幕外，看不见也不用画）
+    ///   · 那只手抬到高处，像扒着墙沿探身子
+    static let peek1 = PixelSprite([
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "pppppppppppppppppppppppppppp....",
+        "pppppppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppkkkpppppppppppppppppp....",
+        "....pppkkkpppppppppppppppppp....",
+        "....pppkkkpppppppppppppppppp....",
+        "....pppppppppppppppppppppppppppp",
+        "....pppppppppppppppppppppppppppp",
+        "....pppppppppppppppppppppppppppp",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp...."
+    ], palette)
+
+    /// 探头（二）：探出来之后没站住，往下缩一格、手也放下来。
+    /// 跟 peek1 来回换，配上位置上那一点点进退，看着就是在探头探脑，
+    /// 不是一张钉死的静态图。
+    static let peek2 = PixelSprite([
+        "................................",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppkkkpppppppppppppppppp....",
+        "pppppppkkkpppppppppppppppppppppp",
+        "pppppppkkkpppppppppppppppppppppp",
+        "....pppppppppppppppppppppppppppp",
+        "....pppppppppppppppppppppppppppp",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "................................"
     ], palette)
 
     /// 头顶那个小气泡，说话的时候冒出来
@@ -542,7 +581,9 @@ enum ClawdMood: String, Codable {
         case .sleeping:
             return [(ClawdSprites.sleep, 2.2), (ClawdSprites.breathe, 2.0)]
         case .peeking:
-            return [(ClawdSprites.peek, 2.0), (ClawdSprites.peek, 2.0)]
+            // 两帧不一样才叫动画。上一版这里是同一张图播两遍，
+            // 等于钉在那儿不动。
+            return [(ClawdSprites.peek1, 1.1), (ClawdSprites.peek2, 0.8)]
         case .thinking:
             // 头顶那两个小方块交替冒，像在运算
             return [(ClawdSprites.thinking, 0.45), (ClawdSprites.thinking2, 0.45)]

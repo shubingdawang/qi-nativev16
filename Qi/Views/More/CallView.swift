@@ -171,6 +171,22 @@ struct CallView: View {
             Text(thinking ? "\(him)正在回应" : clock(elapsed))
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textMuted(scheme))
+
+            // 接的是**谁**，摆在这儿。以前这通电话抓的是供应商列表第一个模型，
+            // 跟聊天页选的那个不是一回事，接起来当然不像他。现在两边同一个。
+            if let m = app.activeHim?.model {
+                Text(m)
+                    .font(.system(size: 9))
+                    .foregroundStyle(Theme.textMuted(scheme).opacity(0.7))
+            }
+
+            // 没配音色也能打，只是他不出声。**得说清楚**，
+            // 不然只有字会像是坏了。
+            if app.activeVoice == nil {
+                Text("没配音色，这通只有字")
+                    .font(.system(size: 9))
+                    .foregroundStyle(Theme.textMuted(scheme).opacity(0.7))
+            }
         }
         .padding(.bottom, 8)
     }
@@ -431,6 +447,7 @@ struct CallHistoryView: View {
     @ObservedObject private var store = CallStore.shared
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
+    @State private var cantDial = false
 
     var body: some View {
         ScrollView {
@@ -504,11 +521,23 @@ struct CallHistoryView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
+                    // 没模型就别拨。以前这儿一按就往电话本里塞一条记录，
+                    // 通话那一屏却压根弹不出来。
+                    guard app.activeHim != nil else {
+                        cantDial = true
+                        return
+                    }
                     CallStore.shared.dial()
                 } label: {
                     Image(systemName: "phone.fill")
                 }
+                .disabled(app.activeHim == nil)
             }
+        }
+        .alert("还没选模型", isPresented: $cantDial) {
+            Button("好") { }
+        } message: {
+            Text("这通电话是真的要问他的，没挂模型就没人接。去絮语页输入框上那颗胶囊选一个。")
         }
     }
 

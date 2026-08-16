@@ -98,12 +98,21 @@ final class CallStore: ObservableObject {
         incoming = nil
     }
 
-    /// 我打给他
-    func dial() {
-        guard active == nil else { return }
+    /// 我打给他。
+    ///
+    /// **没配模型的时候不许拨通**。
+    /// 以前这里什么都不查，所以一个模型都没选也能拨出去：
+    /// 界面弹不出来（那时候通话屏还挂在絮语页上），
+    /// 电话本里却多了一条记录——打给了谁都说不清。
+    /// 现在拨不通就返回 false，由界面告诉她差什么。
+    @discardableResult
+    func dial(canReach: Bool = true) -> Bool {
+        guard active == nil, incoming == nil else { return false }
+        guard canReach else { return false }
         var call = CallRecord(caller: "me")
         call.connectedAt = Date()
         active = call
+        return true
     }
 
     func addLine(_ line: CallLine) {

@@ -4,6 +4,10 @@ struct RootView: View {
 
     @EnvironmentObject var app: AppState
     @ObservedObject private var notifier = Notifier.shared
+    // 必须真的**订阅** CallStore，不能只是 CallStore.shared 这样读一下。
+    // 只读不订阅的话，他打过来／挂断的时候 SwiftUI 根本不知道要重画，
+    // 要等下一次别的什么状态变了才顺带刷出来——看起来就是"打电话有延迟"。
+    @ObservedObject private var calls = CallStore.shared
     @State private var selection = 0
     @State private var navOpen = false
 
@@ -22,6 +26,37 @@ struct RootView: View {
 
             NavDrawerBar(selection: $selection, isOpen: $navOpen,
                          canAutoHide: selection <= 1)
+
+            // 他打过来了：卡片压在所有东西上面。
+            //
+            // 这两样以前挂在絮语页里。**通话是全 App 的事**——
+            // 她可能正在札记、正在设置、正在 clawd 小屋里，
+            // 挂在某一页上就等于那一页不在的时候电话打不通。
+            if let incoming = calls.incoming {
+                VStack {
+                    IncomingCallView(
+                        call: incoming,
+                        onAnswer: { CallStore.shared.answer() },
+                        onDecline: {
+                            CallStore.shared.decline()
+                            // 他该知道你没接——这事不该悄无声息
+                            if let id = app.activeChatID, let i = app.index(of: id) {
+                                var msg = ChatMessage(role: .user)
+                                msg.content = "（她没接你的电话）"
+                                app.conversations[i].messages.append(msg)
+                            }
+                        })
+                    Spacer()
+                }
+                .padding(.top, 8)
+                .zIndex(99)
+            }
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { calls.active != nil },
+            set: { if !$0 && calls.active != nil { calls.hangUp(by: "me") } }
+        )) {
+            CallView()
         }
         .onAppear {
             // 札记、设置这些页面导航常驻，不然翻着翻着就出不去了

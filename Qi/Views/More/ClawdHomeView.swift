@@ -27,10 +27,28 @@ struct ClawdHomeView: View {
     @State private var bubbleTask: Task<Void, Never>?
     @State private var walkTask: Task<Void, Never>?
     @State private var notice: String?
+    /// 点开小菜单的那件家具
+    @State private var acting: Furniture?
+    /// 阿晏在这屋里说的话（接进来之后才有）
+    @State private var himLine: String?
+    @State private var himTask: Task<Void, Never>?
+    /// 正在问她要不要接他进来
+    @State private var askingLink = false
 
     var body: some View {
         VStack(spacing: 0) {
             header
+
+            // 接进来了就一直摆着这一行。铁律第二条：会自己花钱的地方，
+            // 得让她看得见它开着。
+            if store.linked {
+                Text("他在这屋里，开着这一页的时候会自己隔几分钟说一句 · 花钱")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
 
             Picker("", selection: $tab) {
                 Text("房间").tag(0)
@@ -49,10 +67,29 @@ struct ClawdHomeView: View {
         }
         .navigationTitle("clawd")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { startWalking() }
+        .onAppear {
+            startWalking()
+            startHim()
+        }
         .onDisappear {
             walkTask?.cancel()
             bubbleTask?.cancel()
+            // 切走就停。**他只在这一页开着的时候说话**——
+            // 不然她人在别处，钱在后台自己流。
+            himTask?.cancel()
+        }
+        .onChange(of: store.linked) { _, on in
+            if on { startHim() } else { himTask?.cancel() }
+        }
+        .confirmationDialog("把他接进这间屋子？", isPresented: $askingLink,
+                            titleVisibility: .visible) {
+            Button("接进来") {
+                store.linked = true
+                say("他进来了")
+            }
+            Button("算了", role: .cancel) { }
+        } message: {
+            Text("接进来之后，你开着这一页的时候，他会隔几分钟自己冒一句——看看你给他布置的这个家。\n\n这是**真的问他**，所以会花钱，而且不用你点。用量在设置里按「clawd 小屋」单独记着。\n\n关掉就不花了。")
         }
     }
 
@@ -89,10 +126,20 @@ struct ClawdHomeView: View {
 
             Spacer(minLength: 0)
 
-            // 把阿晏接进来
+            // 把阿晏接进来。
+            //
+            // 接进来之后他**会自己隔一阵冒一句**——这是她挑的那一档，
+            // 也就是说这一项会自己花钱。所以第一次打开要先问一声，
+            // 按钮底下也一直写着，用量在设置里按「clawd 小屋」单记。
             Button {
-                store.linked.toggle()
-                say(store.linked ? "他进来了" : "他先出去了")
+                if store.linked {
+                    store.linked = false
+                    himTask?.cancel()
+                    himLine = nil
+                    say("他先出去了")
+                } else {
+                    askingLink = true
+                }
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: store.linked ? "person.2.fill" : "person.2")
@@ -144,6 +191,21 @@ struct ClawdHomeView: View {
                                     radius: 8, y: 4)
                             .animation(.spring(response: 0.25, dampingFraction: 0.7),
                                        value: dragging == item.id)
+                            // **长按拖不动的根子在这一行**。
+                            //
+                            // PixelSpriteView 里那块 Canvas 自己写着
+                            // allowsHitTesting(false)，所以它整个不接触摸——
+                            // 外面挂多少手势都落在空气上。clawd 本人早就补过这块，
+                            // 家具一直没补。顺手放大一圈：一件家具才几十个点，
+                            // 手指按不准。
+                            .contentShape(Rectangle().inset(by: -12))
+                            // 单击开小菜单。
+                            //
+                            // 这两件事以前挂在 .contextMenu 上——**而 contextMenu
+                            // 本身就是长按触发的**，跟下面这个长按拖拽抢同一个手势，
+                            // 谁也抢不干净。收起来和卖掉挪到单击这边，长按就干干净净
+                            // 只管搬东西。
+                            .onTapGesture { acting = item }
                             .gesture(
                                 LongPressGesture(minimumDuration: 0.28)
                                     .onEnded { _ in
@@ -170,19 +232,6 @@ struct ClawdHomeView: View {
                                         dragging = nil
                                     }
                             )
-                            .contextMenu {
-                                Button {
-                                    store.toggleHidden(item.id)
-                                } label: {
-                                    Label("收起来", systemImage: "eye.slash")
-                                }
-                                Button(role: .destructive) {
-                                    store.sell(item.id)
-                                    say("卖掉了，退回一半的币")
-                                } label: {
-                                    Label("卖掉", systemImage: "arrow.uturn.left")
-                                }
-                            }
                     }
                 }
 
@@ -266,6 +315,34 @@ struct ClawdHomeView: View {
                         }
                 )
 
+                // 他说的话。
+                //
+                // 跟 clawd 的气泡长得不一样，也不跟着 clawd 走——
+                // 挂在屋子顶上，带他的名字。**得让她一眼看出这句是谁说的**：
+                // clawd 那些是本地写死的台词，这一句是真的问了他。
+                if let himLine {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName)
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(app.settings.accentColor)
+                        Text(himLine)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.textMain(scheme))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: 220, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(scheme == .dark
+                                  ? Color.white.opacity(0.13)
+                                  : Color.white.opacity(0.92))
+                    )
+                    .padding(12)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
                 if let notice {
                     Text(notice)
                         .font(.system(size: 11))
@@ -277,6 +354,25 @@ struct ClawdHomeView: View {
         }
         .padding(.horizontal, 16)
         .padding(.bottom, Layout.tabBarExpanded + 12)
+        // 家具的小菜单挂在房间这一层，不跟外面「接他进来」那个挤在同一个 View 上。
+        // 两个 confirmationDialog 叠在同一处，SwiftUI 只认得住一个。
+        .confirmationDialog(
+            acting.flatMap { FurnitureCatalog.kind($0.kind)?.name } ?? "这件",
+            isPresented: Binding(get: { acting != nil },
+                                 set: { if !$0 { acting = nil } }),
+            titleVisibility: .visible
+        ) {
+            if let item = acting {
+                Button("收起来") { store.toggleHidden(item.id) }
+                Button("卖掉，退一半的币", role: .destructive) {
+                    store.sell(item.id)
+                    say("卖掉了，退回一半的币")
+                }
+            }
+            Button("算了", role: .cancel) { }
+        } message: {
+            Text("长按可以把它搬到屋里任何地方")
+        }
     }
 
     // MARK: 柜子
@@ -433,6 +529,47 @@ struct ClawdHomeView: View {
                    Bool.random() {
                     say(kind.reaction)
                 }
+            }
+        }
+    }
+
+    // MARK: 他在这屋里
+
+    /// 接进来之后，隔几分钟问他一句。
+    ///
+    /// 三条自觉：
+    ///   · 只在这一页开着的时候跑（onDisappear 就 cancel）
+    ///   · 三到六分钟才一次，一次几十个 token
+    ///   · 一次只带"屋里有什么、clawd 刚走到谁旁边"，不带聊天记录
+    private func startHim() {
+        himTask?.cancel()
+        guard store.linked else { return }
+        himTask = Task { @MainActor in
+            // 头一句先等一会儿再说，别一进页面就跳出来
+            try? await Task.sleep(nanoseconds: UInt64.random(in: 25...50) * 1_000_000_000)
+            while !Task.isCancelled {
+                guard store.linked else { return }
+                let near = store.owned.filter { !$0.hidden }
+                    .min { a, b in
+                        abs(a.x - clawdX) + abs(a.y - clawdY)
+                            < abs(b.x - clawdX) + abs(b.y - clawdY)
+                    }
+                let nearName = (near.flatMap { FurnitureCatalog.kind($0.kind)?.name }) ?? ""
+                let line = await app.clawdSays(
+                    room: store.roomBrief(),
+                    near: nearName,
+                    carrying: store.carriedKind?.name ?? "")
+                if Task.isCancelled { return }
+                if let line {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        himLine = line
+                    }
+                    try? await Task.sleep(nanoseconds: 14_000_000_000)
+                    if Task.isCancelled { return }
+                    withAnimation(.easeOut(duration: 0.3)) { himLine = nil }
+                }
+                try? await Task.sleep(
+                    nanoseconds: UInt64.random(in: 180...360) * 1_000_000_000)
             }
         }
     }

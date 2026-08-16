@@ -211,6 +211,18 @@ struct GlassSurface: View {
     var extra: Double = 0
     /// 强行指定一种玻璃。不传就跟着设置走。
     var style: GlassStyle? = nil
+    /// 深色下压暗多少。
+    ///
+    /// **这个必须是参数，不能只读 `Theme.glassDim` 那个 static。**
+    /// 这就是"拉『深色下压暗』滑块没有即时反馈"的根子：
+    /// static 变了 SwiftUI 不知道，它一比较发现
+    /// `GlassSurface(radius: 20, strength: 0.6)` 跟上一帧一模一样，
+    /// 就直接跳过 body 不重画——那层黑于是一直是旧的，
+    /// 非得别的什么东西也变了才顺带刷出来。
+    /// 跟交接文档第 6 条（只读不订阅 = 界面不刷新）是同一个病。
+    ///
+    /// 默认值在每次构造的时候现取，所以所有调用处一个字都不用改。
+    var dim: Double = Theme.glassDim
 
     @Environment(\.colorScheme) private var scheme
 
@@ -237,8 +249,8 @@ struct GlassSurface: View {
         // 模糊那档 material 在新系统上也被映射成自适应的了——
         // 三套各走各的，当然对不齐。现在统统锁死成浅色，再统一压暗。
         .overlay {
-            if scheme == .dark, Theme.glassDim > 0.01 {
-                shape.fill(.black.opacity(Theme.glassDim))
+            if scheme == .dark, dim > 0.01 {
+                shape.fill(.black.opacity(dim))
             }
         }
         .environment(\.colorScheme, .light)
@@ -483,8 +495,13 @@ struct BlurView: UIViewRepresentable {
 
     private func apply(_ view: UIVisualEffectView, context: Context) {
         let c = context.coordinator
-        // 换了玻璃种类就得重来一个 animator，同一个改不了目标效果
-        if c.style != style || c.animator == nil {
+        // 换了玻璃种类就得重来一个 animator，同一个改不了目标效果。
+        //
+        // 多加一条 `state != .active`：animator 一旦掉出 active
+        // （跑完了、被系统收了、视图被搬走过），之后再赋 fractionComplete
+        // 它**一律不理**——表现又是"拉滑块没反应"。
+        // 这是下面那条 0.995 的兜底：万一还是漏到终态，下一帧重建一个。
+        if c.style != style || c.animator == nil || c.animator?.state != .active {
             c.animator?.stopAnimation(true)
             c.animator?.finishAnimation(at: .current)
             view.effect = nil

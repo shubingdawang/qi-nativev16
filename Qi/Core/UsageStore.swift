@@ -111,6 +111,7 @@ enum UsageSource: String, Codable, CaseIterable, Identifiable {
     case distill     // 提炼
     case divination  // 占卜
     case sticker     // 表情包关键词
+    case clawd       // clawd 小屋里他说的话
     // 这里原来有个 journey（旅行卡）。删掉了——
     // 交接文档里说"旅行卡的用量没埋点"，但翻了一遍 create_journey
     // 才发现它**根本不调模型**：图是去相册和图库搜的，音乐是搜的，
@@ -133,6 +134,7 @@ enum UsageSource: String, Codable, CaseIterable, Identifiable {
         case .distill:    return "提炼"
         case .divination: return "占卜"
         case .sticker:    return "表情包"
+        case .clawd:      return "clawd 小屋"
         case .image:      return "画图"
         case .tts:        return "朗读"
         case .asr:        return "语音转字"
@@ -150,6 +152,7 @@ enum UsageSource: String, Codable, CaseIterable, Identifiable {
         case .distill:    return "sparkles"
         case .divination: return "moon.stars"
         case .sticker:    return "face.smiling"
+        case .clawd:      return "house"
         case .image:      return "photo.artframe"
         case .tts:        return "waveform"
         case .asr:        return "mic"

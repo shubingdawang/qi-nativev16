@@ -293,6 +293,7 @@ struct AppearanceView: View {
                    range: 0...0.5, step: nil,
                    readout: "\(Int(app.settings.glassDim * 100))%",
                    note: "只在深色模式下生效。压的是一层黑，**不动底下那块玻璃**——磨砂还是磨砂、模糊还是模糊，只是整体沉下去。三套压的是同一个量，所以不会有的暗有的亮。拉到 0 就是完全不压，深色下玻璃跟浅色一样亮。")
+            liveSample
             SettingsDivider()
             slider(title: "自己的气泡染色",
                    value: $app.settings.bubbleTint,
@@ -314,6 +315,60 @@ struct AppearanceView: View {
             .tint(app.settings.accentColor)
             .padding(.horizontal, 16)
             .padding(.vertical, 11)
+        }
+    }
+
+    // MARK: 上面两根滑块的现场样品
+
+    /// 两块样品，浅色一块深色一块，底下垫的是当前壁纸。
+    ///
+    /// 摆这个是因为上面两根滑块拉起来"没有即时反馈"：
+    ///   · 「深色下压暗」按设计**只在深色模式下生效**——她要是正用着浅色，
+    ///     拉到底屏幕上也一点变化都没有，看着就跟坏了一样。
+    ///     右边这块钉死成深色，拉到哪儿它就沉到哪儿，当场看得见。
+    ///   · 「模糊程度」两块一起变，往右糊、往左清楚。
+    ///
+    /// （另外那个真的 bug 在 Theme 里：压暗以前读的是一个 static，
+    ///   不在 GlassSurface 的参数里，SwiftUI 一比较觉得没变就跳过重画。）
+    private var liveSample: some View {
+        HStack(spacing: 10) {
+            sampleTile("浅色", dark: false)
+            sampleTile("深色", dark: true)
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 13)
+    }
+
+    private func sampleTile(_ label: String, dark: Bool) -> some View {
+        ZStack {
+            sampleGround
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(dark ? Color.white : Color.black.opacity(0.72))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 15)
+                .glassBackground(radius: 14, strength: app.settings.glassOpacity)
+                .padding(9)
+                // 钉死这块的深浅。GlassSurface 那层黑看的就是这个。
+                .environment(\.colorScheme, dark ? .dark : .light)
+        }
+        .frame(height: 74)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    /// 样品底下垫的东西：有壁纸用壁纸，没有就用主题色拉个渐变。
+    /// 纯色底下是糊不出东西的，所以一定要垫点有花纹的。
+    @ViewBuilder
+    private var sampleGround: some View {
+        if let name = app.settings.wallpaperName, let img = ImageStore.load(name) {
+            Image(uiImage: img)
+                .resizable()
+                .scaledToFill()
+        } else {
+            LinearGradient(
+                colors: [app.settings.accentColor.opacity(0.75),
+                         app.settings.accentColor.opacity(0.25)],
+                startPoint: .topLeading, endPoint: .bottomTrailing)
         }
     }
 
