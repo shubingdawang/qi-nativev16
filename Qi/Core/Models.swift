@@ -305,6 +305,11 @@ struct AppSettings: Codable {
     var glassOpacity: Double = 1.0
     /// 玻璃是哪一套做法
     var glassStyle: GlassStyle = .frosted
+    /// 深色模式下把玻璃压暗多少（0~0.5）。
+    /// 压的是一层黑，**不动底下那块 material**——
+    /// 所以磨砂还是磨砂、模糊还是模糊，只是整体沉下去，
+    /// 而且三套压的是同一个量，不会有的暗有的亮。
+    var glassDim: Double = 0.22
     /// 自带工具的总开关。关掉之后他手上一件本地工具都没有。
     var nativeToolsEnabled: Bool = true
     /// 用本机那份记忆库（不走 MCP、不用开电脑）。

@@ -95,8 +95,27 @@ struct AppearanceView: View {
                     .multilineTextAlignment(.trailing)
                     .font(.system(size: 14, design: .monospaced))
                     .textFieldStyle(.plain)
-                    .frame(maxWidth: 110)
+                    .frame(maxWidth: 100)
                     .onSubmit { applyCustom() }
+
+                // 边打边看。光看六位十六进制没人知道那是什么颜色，
+                // 打错一位也看得出来——填不满六位就画一个空框。
+                ZStack {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(previewColor ?? Color.clear)
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .strokeBorder(previewColor == nil
+                                      ? Theme.textMuted(scheme).opacity(0.35)
+                                      : Color.white.opacity(0.5),
+                                      lineWidth: 1)
+                    if previewColor == nil {
+                        Image(systemName: "questionmark")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
+                }
+                .frame(width: 26, height: 26)
+                .animation(.easeOut(duration: 0.15), value: previewColor)
                 Button("用") { applyCustom() }
                     .font(.system(size: 14, weight: .medium))
                     .buttonStyle(.plain)
@@ -240,9 +259,15 @@ struct AppearanceView: View {
                 .font(.system(size: 14, design: .monospaced))
                 .textFieldStyle(.plain)
                 .frame(maxWidth: 110)
-            if let c = Color(hexString: text.wrappedValue) {
-                Circle().fill(c).frame(width: 18, height: 18)
+            // 字色这两行同理，一直摆一个方块：填对了显示颜色，
+            // 没填对显示一个空框，比"什么都不显示"好判断
+            ZStack {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color(hexString: text.wrappedValue) ?? Color.clear)
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .strokeBorder(Theme.textMuted(scheme).opacity(0.3), lineWidth: 1)
             }
+            .frame(width: 22, height: 22)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 13)
@@ -262,6 +287,12 @@ struct AppearanceView: View {
                    range: 0...1, step: nil,
                    readout: "\(Int(app.settings.glassOpacity * 100))%",
                    note: "往右越糊，背后的壁纸化成色块，玻璃看着越实；往左越清楚，能看出壁纸原来是什么。\n\n这根滑块以前调的是整层的透明度——往左只是让玻璃越来越淡、直到快没了，那不是玻璃变了，是玻璃不见了。")
+            SettingsDivider()
+            slider(title: "深色下压暗",
+                   value: $app.settings.glassDim,
+                   range: 0...0.5, step: nil,
+                   readout: "\(Int(app.settings.glassDim * 100))%",
+                   note: "只在深色模式下生效。压的是一层黑，**不动底下那块玻璃**——磨砂还是磨砂、模糊还是模糊，只是整体沉下去。三套压的是同一个量，所以不会有的暗有的亮。拉到 0 就是完全不压，深色下玻璃跟浅色一样亮。")
             SettingsDivider()
             slider(title: "自己的气泡染色",
                    value: $app.settings.bubbleTint,
@@ -361,6 +392,13 @@ struct AppearanceView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
         }
+    }
+
+    /// 她正在打的那串色号对应什么颜色。打不全或者打错就是 nil。
+    private var previewColor: Color? {
+        var hex = customHex.trimmingCharacters(in: .whitespaces)
+        if hex.hasPrefix("#") { hex.removeFirst() }
+        return Color(hexString: hex)
     }
 
     private func applyCustom() {

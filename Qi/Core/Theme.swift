@@ -57,6 +57,8 @@ enum Theme {
     /// 玻璃用哪一套做法。同上，AppState 同步过来，
     /// 这样 GlassSurface 这种到处都在用的小 View 不必层层传设置。
     nonisolated(unsafe) static var glassStyle: GlassStyle = .frosted
+    /// 深色下压暗多少。三套压同一个量，不然会有的暗有的亮。
+    nonisolated(unsafe) static var glassDim: Double = 0.22
 
     static func textMain(_ scheme: ColorScheme) -> Color {
         let hex = scheme == .dark ? customTextHexDark : customTextHex
@@ -210,6 +212,8 @@ struct GlassSurface: View {
     /// 强行指定一种玻璃。不传就跟着设置走。
     var style: GlassStyle? = nil
 
+    @Environment(\.colorScheme) private var scheme
+
     private var kind: GlassStyle { style ?? Theme.glassStyle }
 
     private var shape: RoundedRectangle {
@@ -224,12 +228,19 @@ struct GlassSurface: View {
             case .blur:    blur
             }
         }
-        // **玻璃不跟着深色模式变黑。**
+        // 深色下统一压一层黑。
         //
-        // 系统的 material 是跟着 colorScheme 走的：深色下它会变成一块黑玻璃。
-        // 但这个 App 的玻璃底下永远是壁纸，不是系统背景——
-        // 深色模式下把玻璃也刷黑，壁纸就被闷死了，看着很奇怪。
-        // 所以这儿把玻璃**锁在浅色那一套**，字色照旧跟着深浅色走。
+        // **压的是黑，不是换 material**——所以磨砂还是磨砂、模糊还是模糊，
+        // 只是整体沉下去。而且三套压的是同一个量，这就是"三个同步"：
+        // 之前磨砂用的是非自适应的 extraLight（不跟深色变），
+        // 通透用的是 iOS 26 的液态玻璃（跟着变），
+        // 模糊那档 material 在新系统上也被映射成自适应的了——
+        // 三套各走各的，当然对不齐。现在统统锁死成浅色，再统一压暗。
+        .overlay {
+            if scheme == .dark, Theme.glassDim > 0.01 {
+                shape.fill(.black.opacity(Theme.glassDim))
+            }
+        }
         .environment(\.colorScheme, .light)
     }
 
@@ -353,7 +364,7 @@ struct GlassSurface: View {
             .overlay {
                 shape.fill(
                     LinearGradient(
-                        colors: [.black.opacity(0.05), .black.opacity(0.13)],
+                        colors: [.black.opacity(0.03), .black.opacity(0.08)],
                         startPoint: .top, endPoint: .bottom)
                 )
             }
@@ -362,18 +373,9 @@ struct GlassSurface: View {
                     shape.fill(.white.opacity(extra * 0.10))
                 }
             }
-            .overlay {
-                // 下缘那道内阴影。它不是"边"——边是一圈实线，
-                // 这个只压住底部一小截，让这块看着有厚度、浮在上面。
-                shape.fill(
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0.82),
-                            .init(color: .black.opacity(0.10), location: 1)
-                        ],
-                        startPoint: .top, endPoint: .bottom)
-                )
-            }
+        // 底下那道内阴影去掉了——她说"灰得有点突兀"。
+        // 确实：一块玻璃底下压一道灰边，看着像没对齐的两层纸，
+        // 不像厚度。上下那点明暗差已经够说明这是一个面了。
     }
 
     /// 底下那一层。
@@ -396,8 +398,17 @@ struct GlassSurface: View {
     private func base(liquid: Bool, blur style: UIBlurEffect.Style) -> some View {
         #if compiler(>=6.2)
         if liquid, #available(iOS 26.0, *) {
-            // `.clear` 那档才是"几乎不挡东西、靠折射成形"的那块玻璃
-            Color.clear.glassEffect(.clear, in: shape)
+            // 液态玻璃本身没有"糊多少"这个参数，所以它以前完全不理那根滑块。
+            // 解法：**底下垫一层可调的模糊，上面盖真的液态玻璃**。
+            // 滑块往左，垫的那层几乎没有，就是纯液态玻璃（最通透）；
+            // 往右垫得越厚，背后越糊。液态玻璃那层折射和边光一直都在，
+            // 所以她喜欢的那个质感没丢。
+            ZStack {
+                BlurView(style: .light, intensity: blurAmount * 0.75)
+                    .clipShape(shape)
+                    .opacity(blurAmount)
+                Color.clear.glassEffect(.clear, in: shape)
+            }
         } else if liquid {
             shape.fill(.ultraThinMaterial)
         } else {
@@ -457,6 +468,11 @@ struct BlurView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> UIVisualEffectView {
         let view = UIVisualEffectView(effect: nil)
+        // **必须在 UIKit 这一层锁死**。SwiftUI 的 .environment(\.colorScheme)
+        // 传不进 UIViewRepresentable 里的 UIKit 视图——它看的是 trait collection。
+        // 不锁的话，新系统会把 .light/.extraLight 这些老档映射成自适应的，
+        // 深色下就自己变黑了，跟别的两套对不上。
+        view.overrideUserInterfaceStyle = .light
         apply(view, context: context)
         return view
     }

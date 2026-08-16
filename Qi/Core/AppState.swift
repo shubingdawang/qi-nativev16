@@ -20,6 +20,7 @@ final class AppState: ObservableObject {
             Theme.customTextHexDark = settings.textHexDark
             Theme.preset = settings.preset
             Theme.glassStyle = settings.glassStyle
+            Theme.glassDim = settings.glassDim
         }
     }
     @Published var mcpServers: [MCPServer] = [] {
