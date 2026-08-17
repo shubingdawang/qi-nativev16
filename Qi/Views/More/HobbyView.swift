@@ -152,8 +152,9 @@ struct HobbyView: View {
 
     private var likeTabs: some View {
         HStack(spacing: 10) {
-            pill("喜欢 すき", on: like, tint: HomePalette.bodyPink) { like = true }
-            pill("讨厌 きらい", on: !like, tint: HomePalette.sage) { like = false }
+            // 日文去掉了。她人在日本但不懂日文，「すき／きらい」对她只是花纹。
+            pill("喜欢", on: like, tint: HomePalette.bodyPink) { like = true }
+            pill("讨厌", on: !like, tint: HomePalette.sage) { like = false }
         }
     }
 
@@ -179,6 +180,27 @@ struct HobbyView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 7) {
                 chip("全部", on: category == nil) { category = nil }
+                // 「相同」= 原来底下那条「撞上啦」。
+                // 它跟别的标签不一样：不是筛选，是点开看你俩撞上的那些，
+                // 所以带个心、颜色也不一样。位置照她说的，卡在「全部」和「文艺」中间。
+                Button {
+                    showingMatches = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "heart.fill").font(.system(size: 9))
+                        Text("相同")
+                            .font(.system(size: 11, weight: .medium))
+                        if store.matches.count > 0 {
+                            Text("\(store.matches.count)")
+                                .font(.system(size: 10, weight: .semibold))
+                        }
+                    }
+                    .foregroundStyle(HomePalette.bodyPink)
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(HomePalette.bodyPink.opacity(0.18)))
+                }
+                .buttonStyle(.plain)
                 ForEach(HobbyCategory.allCases) { c in
                     chip(c.rawValue, on: category == c) {
                         category = (category == c) ? nil : c
@@ -317,39 +339,22 @@ struct HobbyView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: 底下那条「撞上啦」+ 加号
+    // MARK: 加号
 
+    /// 只剩加号了——「撞上啦」挪进了上面那排标签，改叫「相同」。
+    /// 加号落到最底下，不再跟别的东西挤在一行。
     private var matchBar: some View {
-        HStack(spacing: 10) {
-            Button {
-                showingMatches = true
-            } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 10))
-                        .foregroundStyle(HomePalette.bodyPink)
-                    Text("撞上啦：\(store.matches.count) 个（点我）")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textSoft(scheme))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
-                .glassBackground(radius: 20, strength: app.settings.glassOpacity, extra: 0.2)
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                adding = true
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(.white)
-                    .frame(width: 46, height: 46)
-                    .background(Circle().fill(app.settings.primaryColor.opacity(0.9)))
-                    .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
-            }
-            .buttonStyle(.plain)
+        Button {
+            adding = true
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(.white)
+                .frame(width: 46, height: 46)
+                .background(Circle().fill(app.settings.primaryColor.opacity(0.9)))
+                .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
         }
+        .buttonStyle(.plain)
         .padding(.trailing, 16)
         .padding(.bottom, Layout.tabBarExpanded + 14)
     }

@@ -21,6 +21,8 @@ final class AppState: ObservableObject {
             Theme.preset = settings.preset
             Theme.glassStyle = settings.glassStyle
             Theme.glassDim = settings.glassDim
+            // 身体开着的时候，渴／想她／累／压着这四维读身体，别两套各算各的
+            DesireEngine.mirrorsBody = settings.bodyEnabled
         }
     }
     @Published var mcpServers: [MCPServer] = [] {

@@ -19,8 +19,13 @@ struct Track: Codable, Hashable, Identifiable {
     var title: String = ""
     var artist: String = ""
     var album: String = ""
-    /// 封面图地址
+    /// 封面图地址（网上来的那种）
     var artworkURL: String = ""
+    /// 封面图存在本机的文件名。
+    /// 自己导进来的音频，封面是从文件里的 **APIC 帧**扒出来存下来的——
+    /// 她那首《天天 Close to you》文件里就带着一张 107KB 的 JPEG，
+    /// 以前我们只读歌名歌手、把封面整个漏掉了，所以歌词页永远是个音符图标。
+    var artworkName: String = ""
     /// 网上那段试听
     var previewURL: String = ""
     /// 自己导进来的文件名
@@ -59,6 +64,7 @@ extension Track {
         artist = (try? c.decodeIfPresent(String.self, forKey: .artist)) ?? ""
         album = (try? c.decodeIfPresent(String.self, forKey: .album)) ?? ""
         artworkURL = (try? c.decodeIfPresent(String.self, forKey: .artworkURL)) ?? ""
+        artworkName = (try? c.decodeIfPresent(String.self, forKey: .artworkName)) ?? ""
         previewURL = (try? c.decodeIfPresent(String.self, forKey: .previewURL)) ?? ""
         localName = (try? c.decodeIfPresent(String.self, forKey: .localName)) ?? ""
         lyrics = (try? c.decodeIfPresent(String.self, forKey: .lyrics)) ?? ""
@@ -367,29 +373,60 @@ enum MusicStore {
 
         // 文件里常带着歌名和歌手。读元数据在新系统上是异步的，
         // 这里不等它——先用文件名顶上，读到了再补。
-        let stored = t
+        MusicStore.readMeta(of: name, fallbackTitle: t.title)
+        return t
+    }
+
+    /// 把音频文件里的元数据读出来补进库里：歌名、歌手、专辑、**封面**、内嵌歌词。
+    ///
+    /// 单独拎出来是因为**老库里那些歌也要补**——
+    /// 这个功能是后加的，她之前导进去的歌全都没有封面。
+    /// 放到那首的时候会回头调一次这里（见 `MusicLibrary.ensureMeta`）。
+    static func readMeta(of name: String, fallbackTitle: String) {
+        let stored = fallbackTitle
         Task.detached {
             let asset = AVURLAsset(url: MusicStore.url(name))
             guard let items = try? await asset.load(.commonMetadata) else { return }
-            var title = stored.title, artist = "", album = ""
+            var title = stored, artist = "", album = ""
+            var artData: Data?
+            var embedded = ""
             for item in items {
                 // try? 已经把两层可选压成一层了，不用再解一次
-                guard let key = item.commonKey?.rawValue,
-                      let value = try? await item.load(.stringValue),
-                      !value.isEmpty
-                else { continue }
-                if key == "title" { title = value }
-                if key == "artist" { artist = value }
-                if key == "albumName" { album = value }
+                if let key = item.commonKey?.rawValue {
+                    // 封面是 Data 不是 String，得单独走一条
+                    if key == "artwork" {
+                        artData = try? await item.load(.dataValue)
+                        continue
+                    }
+                    if let value = try? await item.load(.stringValue), !value.isEmpty {
+                        if key == "title" { title = value }
+                        if key == "artist" { artist = value }
+                        if key == "albumName" { album = value }
+                    }
+                }
+                // 内嵌歌词（USLT）。**大部分文件里根本没有**——
+                // 她给的那首就没有，只有 YouTube 的版权说明。
+                // 没有的话下面 MusicLibrary 会去网易云按歌名歌手补一次。
+                if let id = item.identifier?.rawValue,
+                   id.contains("lyrics") || id.contains("USLT"),
+                   let value = try? await item.load(.stringValue),
+                   value.count > 20 {
+                    embedded = value
+                }
             }
             // 跨线程只传不会再变的值，别把 var 直接捞过去
             let readTitle = title, readArtist = artist, readAlbum = album
+            let readLyrics = embedded
+            let artName = artData.flatMap { UIImage(data: $0) }.flatMap {
+                ImageStore.save($0, quality: 0.9)
+            }
             await MainActor.run {
                 MusicLibrary.shared.refine(name, title: readTitle,
-                                           artist: readArtist, album: readAlbum)
+                                           artist: readArtist, album: readAlbum,
+                                           artworkName: artName ?? "",
+                                           lyrics: readLyrics)
             }
         }
-        return t
     }
 
     static func delete(_ track: Track) {
@@ -435,6 +472,16 @@ final class MusicPlayer: NSObject, ObservableObject {
         lines = Lyrics.parse(raw)
     }
 
+    /// 元数据是异步读出来的（封面、歌名、歌手都可能晚几百毫秒才到）。
+    /// 正在放的就是这首的话，把读到的那份换上去——
+    /// 不然封面要等下次重放才出得来。
+    func refreshCurrent(with track: Track) {
+        guard current?.id == track.id else { return }
+        current = track
+        if !track.lyrics.isEmpty { lines = Lyrics.parse(track.lyrics) }
+        publishNowPlaying()
+    }
+
     func start(_ track: Track) {
         stop()
         let url: URL? = track.localName.isEmpty
@@ -477,6 +524,9 @@ final class MusicPlayer: NSObject, ObservableObject {
         p.play()
         publishNowPlaying()
         wireRemoteCommands()
+        // 缺封面就回头读一次文件，缺歌词就去网上补一次。
+        // 放在起播之后：这两件事都不该挡着歌先响。
+        MusicLibrary.shared.ensureMeta(for: track)
     }
 
     func pause() {
@@ -541,6 +591,14 @@ final class MusicPlayer: NSObject, ObservableObject {
         if !t.album.isEmpty { info[MPMediaItemPropertyAlbumTitle] = t.album }
         if duration > 0 { info[MPMediaItemPropertyPlaybackDuration] = duration }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+
+        // 本地那张封面（从文件的 APIC 帧扒出来的）直接就能用，不用等网络
+        if !t.artworkName.isEmpty, let image = ImageStore.load(t.artworkName) {
+            info[MPMediaItemPropertyArtwork] =
+                MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+            return
+        }
 
         // 封面单独去拿。拿到之前先把上面那些字显示出来，
         // 别为了等一张图让整条「正在播放」都不出现。
@@ -615,11 +673,52 @@ final class MusicLibrary: ObservableObject {
     }
 
     /// 元数据读出来之后补上
-    func refine(_ localName: String, title: String, artist: String, album: String) {
+    func refine(_ localName: String, title: String, artist: String, album: String,
+                artworkName: String = "", lyrics: String = "") {
         guard let i = tracks.firstIndex(where: { $0.localName == localName }) else { return }
         if !title.isEmpty { tracks[i].title = title }
         if !artist.isEmpty { tracks[i].artist = artist }
         if !album.isEmpty { tracks[i].album = album }
+        if !artworkName.isEmpty { tracks[i].artworkName = artworkName }
+        if !lyrics.isEmpty { tracks[i].lyrics = lyrics }
+        let t = tracks[i]
+        // 正在放的就是这首的话，当场把封面和歌词换上去，
+        // 不然她得退出去重放一遍才看得见
+        MusicPlayer.shared.refreshCurrent(with: t)
+        if t.lyrics.isEmpty { Task { await fetchLyricsOnline(for: t.id) } }
+    }
+
+    /// 放某一首之前先看看它缺不缺东西。
+    ///
+    /// 本地那些歌是**老库里就有的**——封面和内嵌歌词是这一版才开始读的，
+    /// 所以放到它们的时候回头读一次文件；网上那些歌缺歌词就去补一次。
+    /// 两件事都不花钱：一个是读本机文件，一个是一次普通 GET。
+    func ensureMeta(for track: Track) {
+        if !track.localName.isEmpty && track.artworkName.isEmpty {
+            MusicStore.readMeta(of: track.localName, fallbackTitle: track.title)
+        } else if track.lyrics.isEmpty {
+            Task { await fetchLyricsOnline(for: track.id) }
+        }
+    }
+
+    /// 文件里没有歌词的时候，去网易云那个公开接口按「歌名 歌手」补一次。
+    ///
+    /// **只查歌词，不换歌**：她导进来的那首还是放本地文件。
+    /// 这一步不花钱（不调模型），只是一次普通 GET；查不到就算了，不打扰她。
+    /// 每首只查一次——查过了 lyrics 就不空了，进不来第二次。
+    func fetchLyricsOnline(for id: UUID) async {
+        guard let i = tracks.firstIndex(where: { $0.id == id }) else { return }
+        let t = tracks[i]
+        guard t.lyrics.isEmpty else { return }
+        let key = [t.title, t.artist].filter { !$0.isEmpty }.joined(separator: " ")
+        guard key.count >= 2 else { return }
+        guard let found = try? await MusicSearch.searchNeteaseDirect(key, limit: 5) else { return }
+        // 挑歌名最像的那条，别拿搜索结果第一条硬套
+        let best = found.first { $0.title.localizedCaseInsensitiveContains(t.title) }
+            ?? found.first { t.title.localizedCaseInsensitiveContains($0.title) }
+            ?? found.first
+        guard let lrc = best?.lyrics, !lrc.isEmpty else { return }
+        setLyrics(lrc, for: id)
     }
 
     /// 给某一首配上歌词。

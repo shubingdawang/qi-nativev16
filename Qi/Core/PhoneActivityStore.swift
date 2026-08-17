@@ -188,32 +188,70 @@ final class PhoneActivityStore: ObservableObject {
         byApp(on: Date())
     }
 
+    /// 一段没有任何事件的前台时间，最多算这么久。
+    ///
+    /// 为什么要封顶：快捷指令的 close **记不全**。锁屏、划走、切后台，
+    /// 很多时候只有 open 没有 close，那一段就会一直挂到下一次有事件为止——
+    /// 中间可能隔着一整夜。封成 30 分钟是个折中：
+    /// 真连着刷半小时以上的会被低估，但不会再出现「昨天用了 122 小时」。
+    static let openEndedCap: TimeInterval = 30 * 60
+    /// 有明确 close 收尾的那种，也封一道——防的是几小时之后才飘来的一条陈旧 close。
+    static let closedCap: TimeInterval = 3 * 3600
+
     /// 那天每个 App 用了多久。
-    /// 只有 open 事件的话，用相邻两次打开的间隔估；
-    /// 有 close 就用真实时长，准得多。
+    ///
+    /// **前台只有一个 App**——这是这套算法唯一的地基。
+    /// iOS 上不可能同时有两个 App 在前台，所以任何一条新事件都结束掉当前那一段，
+    /// 各段首尾相接、不重叠，加起来天然不可能超过 24 小时。
+    ///
+    /// 旧算法是「每个 open 去找**同名 App** 的下一个 close」。
+    /// 而她的记录里 close 缺得厉害（还有一堆 `｜｜close` 连 App 名都是空的），
+    /// 于是一个 open 会一路找到几小时之后的那条 close，
+    /// 不同 App 的区间又互相重叠，加起来就成了 122 小时。
+    /// 那不是数据脏，是算法把「没记到」当成了「一直在用」。
     func byApp(on day: Date) -> [(app: String, seconds: TimeInterval, times: Int)] {
         let list = events(on: day).sorted { $0.time < $1.time }
         var seconds: [String: TimeInterval] = [:]
         var times: [String: Int] = [:]
 
-        for (i, e) in list.enumerated() {
-            guard e.action == "open" else { continue }
-            times[e.app, default: 0] += 1
+        // 当前在前台的那个：谁、从几点开始
+        var current: (app: String, since: Date)?
 
-            // 优先找同一个 App 的 close
-            if let close = list[(i + 1)...].first(where: {
-                $0.app == e.app && $0.action == "close"
-            }) {
-                seconds[e.app, default: 0] += close.time.timeIntervalSince(e.time)
-                continue
-            }
-            // 没有的话就用"下一次打开别的 App"当结束
-            if let next = list[(i + 1)...].first(where: { $0.action == "open" }) {
-                let gap = next.time.timeIntervalSince(e.time)
-                // 隔太久多半是放下手机了，不算
-                if gap < 3600 { seconds[e.app, default: 0] += gap }
+        /// 收尾：把当前这一段结算掉
+        func settle(at end: Date, explicitClose: Bool) {
+            guard let cur = current else { return }
+            let raw = end.timeIntervalSince(cur.since)
+            guard raw > 0 else { current = nil; return }
+            let cap = explicitClose
+                ? PhoneActivityStore.closedCap
+                : PhoneActivityStore.openEndedCap
+            seconds[cur.app, default: 0] += min(raw, cap)
+            current = nil
+        }
+
+        for e in list {
+            if e.action == "open" {
+                // 换到别的 App = 上一段结束。同一个 App 又 open 一次
+                // （快捷指令偶尔会重复触发）不重新计次、也不断段。
+                if current?.app == e.app { continue }
+                settle(at: e.time, explicitClose: false)
+                times[e.app, default: 0] += 1
+                current = (e.app, e.time)
+            } else if e.action == "close" {
+                // App 名是空的那种（`｜｜close`）当成「离开了前台」，照样收尾。
+                // 名字对不上的 close 是条陈旧记录，忽略——
+                // 拿它收尾会把当前这个 App 的时间错误地截断。
+                if e.app.isEmpty || e.app == current?.app {
+                    settle(at: e.time, explicitClose: true)
+                }
             }
         }
+        // 还挂着没收尾的：今天就算到现在，往回翻的日子算到那天结束
+        let cal = Calendar.current
+        let isToday = cal.isDateInToday(day)
+        let edge = isToday ? Date() : (cal.date(byAdding: .day, value: 1,
+                                                to: cal.startOfDay(for: day)) ?? day)
+        settle(at: edge, explicitClose: false)
 
         return seconds.keys.map {
             (app: $0, seconds: seconds[$0] ?? 0, times: times[$0] ?? 0)

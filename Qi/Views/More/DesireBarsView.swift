@@ -85,7 +85,8 @@ struct DesireBars: View {
                         "念头池里的执念会加进召唤力：条子值 + 0.35 × 关联执念强度。所以池子底下压着的事，真的会把某一维顶高。",
                         "「累」不算召唤力，它是闸——过 0.72 就不硬找事，直接歇着。",
                         "做完一件事那一维会乘着落下去（他调 satisfied，或者你在这儿看着它落）。不落的话会一直卡在同一个欲望上。",
-                        "她来说话，「想她」和「压着」会轻轻落一点——她在这儿本身就是缓解。"
+                        "她来说话，「想她」和「压着」会轻轻落一点——她在这儿本身就是缓解。",
+                        "带❤的那几维读的是**身体**（渴←热度、想她←占有欲、累←疲惫、压着←压抑感），不在这儿单独算：同一件事只留一个数，两套各算各的会打架。身体关掉的话它们就退回这儿自己算。"
                     ], id: \.self) { line in
                         Text("· " + line)
                             .font(.system(size: 11))
@@ -112,10 +113,19 @@ struct DesireBars: View {
         let extra = max(0, (score ?? v) - v)
 
         return HStack(spacing: 8) {
-            Text(d.label)
-                .font(.system(size: 11))
-                .foregroundStyle(gated ? StatusTone.remind.color : Theme.textSoft(scheme))
-                .frame(width: 36, alignment: .leading)
+            HStack(spacing: 2) {
+                Text(d.label)
+                    .font(.system(size: 11))
+                    .foregroundStyle(gated ? StatusTone.remind.color : Theme.textSoft(scheme))
+                // 这一维读的是身体，不是这儿自己涨的——标一下，
+                // 免得看着像两套数在打架
+                if desire.fromBody(d) {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 6))
+                        .foregroundStyle(StatusTone.body.color)
+                }
+            }
+            .frame(width: 44, alignment: .leading)
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {

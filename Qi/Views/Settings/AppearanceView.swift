@@ -10,6 +10,10 @@ struct AppearanceView: View {
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
     @State private var customHex = ""
+    /// 那两根玻璃滑块拖到一半的值。只喂给底下那两块样品——
+    /// 全局那份等松手才改（不然拖一下就要重画全屏的玻璃，手感直接死掉）
+    @State private var blurDraft: Double?
+    @State private var dimDraft: Double?
 
     /// 设置页那张外观卡片也要用同一组色，所以放成 static
     static let accentPresets: [(String, String)] = [
@@ -469,13 +473,15 @@ struct AppearanceView: View {
                    value: $app.settings.glassOpacity,
                    range: 0...1, step: nil,
                    readout: "\(Int(app.settings.glassOpacity * 100))%",
-                   note: "往右越糊，背后的壁纸化成色块，玻璃看着越实；往左越清楚，能看出壁纸原来是什么。\n\n这根滑块以前调的是整层的透明度——往左只是让玻璃越来越淡、直到快没了，那不是玻璃变了，是玻璃不见了。")
+                   note: "往右越糊，背后的壁纸化成色块，玻璃看着越实；往左越清楚，能看出壁纸原来是什么。\n\n这根滑块以前调的是整层的透明度——往左只是让玻璃越来越淡、直到快没了，那不是玻璃变了，是玻璃不见了。",
+                   onDraft: { blurDraft = $0 })
             SettingsDivider()
             slider(title: "深色下压暗",
                    value: $app.settings.glassDim,
                    range: 0...0.5, step: nil,
                    readout: "\(Int(app.settings.glassDim * 100))%",
-                   note: "只在深色模式下生效。压的是一层黑，**不动底下那块玻璃**——磨砂还是磨砂、模糊还是模糊，只是整体沉下去。三套压的是同一个量，所以不会有的暗有的亮。拉到 0 就是完全不压，深色下玻璃跟浅色一样亮。")
+                   note: "只在深色模式下生效。压的是一层黑，**不动底下那块玻璃**——磨砂还是磨砂、模糊还是模糊，只是整体沉下去。拉到 0 就是完全不压，深色下玻璃跟浅色一样亮。",
+                   onDraft: { dimDraft = $0 })
             liveSample
             SettingsDivider()
             slider(title: "自己的气泡染色",
@@ -514,9 +520,17 @@ struct AppearanceView: View {
     /// （另外那个真的 bug 在 Theme 里：压暗以前读的是一个 static，
     ///   不在 GlassSurface 的参数里，SwiftUI 一比较觉得没变就跳过重画。）
     private var liveSample: some View {
-        HStack(spacing: 10) {
-            sampleTile("浅色", dark: false)
-            sampleTile("深色", dark: true)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                sampleTile("浅色", dark: false)
+                sampleTile("深色", dark: true)
+            }
+            // 她说「底下那个深色浅色的预览其实我没懂是什么作用」——那就写清楚。
+            Text("这两块是上面两根滑块的样品：左边钉死浅色、右边钉死深色。"
+                 + "「压暗」只在深色下生效，所以拉它的时候只有右边那块会沉下去——"
+                 + "你要是正用着浅色，屏幕上看不出变化，看这儿就行。")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted(scheme))
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 13)
@@ -530,7 +544,11 @@ struct AppearanceView: View {
                 .foregroundStyle(dark ? Color.white : Color.black.opacity(0.72))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 15)
-                .glassBackground(radius: 14, strength: app.settings.glassOpacity)
+                // 拖的时候用草稿值：全局那份要等松手才改，
+                // 但这两块小的必须当场跟着动，不然拉了半天没反馈
+                .glassBackground(radius: 14,
+                                 strength: blurDraft ?? app.settings.glassOpacity,
+                                 dim: dimDraft ?? app.settings.glassDim)
                 .padding(9)
                 // 钉死这块的深浅。GlassSurface 那层黑看的就是这个。
                 .environment(\.colorScheme, dark ? .dark : .light)
@@ -561,32 +579,12 @@ struct AppearanceView: View {
                         range: ClosedRange<Double>,
                         step: Double?,
                         readout: String,
-                        note: String? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Text(title)
-                    .font(.system(size: 15))
-                    .foregroundStyle(Theme.textMain(scheme))
-                Spacer()
-                Text(readout)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.textMuted(scheme))
-            }
-            if let step {
-                Slider(value: value, in: range, step: step)
-                    .tint(app.settings.accentColor)
-            } else {
-                Slider(value: value, in: range)
-                    .tint(app.settings.accentColor)
-            }
-            if let note {
-                Text(note)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textMuted(scheme))
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 11)
+                        note: String? = nil,
+                        onDraft: ((Double?) -> Void)? = nil) -> some View {
+        SettingsSlider(title: title, value: value, range: range, step: step,
+                       readout: readout, note: note,
+                       tint: app.settings.accentColor,
+                       scheme: scheme, onDraft: onDraft)
     }
 
     // MARK: 预览

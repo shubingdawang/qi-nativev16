@@ -350,9 +350,10 @@ struct SideMenuItem: Identifiable, Hashable {
         .init(id: "music",     title: "音乐", icon: "music.note"),
         .init(id: "pixel",     title: "像素", icon: Icon.sticker),
         .init(id: "clawdart",  title: "表情工坊", icon: "paintbrush.pointed"),
-        .init(id: "journal",   title: "手帐", icon: "book.closed"),
+        // 手帐跟备忘以前是同一个图标（都是 book.closed），一眼分不出谁是谁
+        .init(id: "journal",   title: "手帐", icon: "book.pages"),
         .init(id: "library",   title: "书房", icon: Icon.diary),
-        .init(id: "memo",      title: "备忘", icon: Icon.notes),
+        .init(id: "memo",      title: "备忘", icon: "note.text"),
         .init(id: "promise",   title: "承诺", icon: "hand.raised"),
         .init(id: "mood",      title: "心情", icon: Icon.heart),
         .init(id: "hobby",     title: "爱好", icon: "heart.text.square"),

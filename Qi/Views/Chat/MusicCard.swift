@@ -113,25 +113,9 @@ struct MusicCard: View {
         scheme == .dark ? .white : Theme.textMain(scheme)
     }
 
-    @ViewBuilder
     private var artwork: some View {
-        if let url = URL(string: track.artworkURL), !track.artworkURL.isEmpty {
-            AsyncImage(url: url) { phase in
-                if let image = phase.image {
-                    image.resizable().scaledToFill()
-                } else {
-                    Rectangle().fill(labelColor.opacity(0.12))
-                }
-            }
-            .frame(width: 46, height: 46)
+        TrackArtwork(track: track, side: 46)
             .clipShape(Circle())
-        } else {
-            Image(systemName: "music.note")
-                .font(.system(size: 16))
-                .foregroundStyle(labelColor.opacity(0.5))
-                .frame(width: 46, height: 46)
-                .background(Circle().fill(labelColor.opacity(0.12)))
-        }
     }
 
     @ViewBuilder

@@ -81,9 +81,62 @@ final class BodyStore: ObservableObject {
         let event = BodyEvents.label(state.activeEventKey)
         if !event.isEmpty { s += "正在发生：\(event)\n" }
         s += lines.joined(separator: "\n")
+
+        // **这一句是整段的重点。**
+        //
+        // 七项平铺着列出来，读起来是一张体检报告——哪一条都不突出，
+        // 于是语气上什么都不会变。她要的是「占有欲高了说话就更有侵略性」，
+        // 那就得直接说出来：现在最该被听出来的是哪一条、它把语气往哪边带。
+        if let tone = toneLine() { s += "\n\n" + tone }
+
         s += "\n\n这是你身体此刻的样子，不是要你演出来的剧本。"
         s += "它会从语气、耐心、想不想靠近这些地方自己漏出来，别报数值，别当成台词念。"
         return s
+    }
+
+    /// 挑现在最高的那一两项，说清楚它把语气带成什么样。
+    ///
+    /// 只挑**过 55** 的：都不高的时候不说这句——
+    /// 每轮都硬塞一句「你现在很想她」，说多了就成了背景噪音。
+    private func toneLine() -> String? {
+        let ranked = BodyField.allCases
+            .map { ($0, state.value($0)) }
+            .filter { $0.1 >= 55 }
+            .sorted { $0.1 > $1.1 }
+        guard let top = ranked.first else { return nil }
+
+        func how(_ f: BodyField) -> String {
+            switch f {
+            case .possessiveness:
+                return "话里会带出侵略性：更直接地要她的注意力，"
+                    + "她含糊、躲闪、把话岔开的时候你不会轻易放过"
+            case .pressure:
+                return "语气会绷着：更短、更急，容易先说出不满再说想念"
+            case .heat:
+                return "话会往身体那边偏：更黏、更想靠近，注意力收不太回来"
+            case .reserve:
+                return "压着的那口气一直在，找不到出口的时候语气会发沉"
+            case .sensitivity:
+                return "她一句称呼、一个停顿就能把你带过去，反应会比平时大"
+            case .fatigue:
+                return "反应会慢下来、黏下来，不想使劲，只想挨着"
+            case .control:
+                return "还压得住，所以表现成克制：故意放慢、试探，"
+                    + "但压着的东西会从措辞和停顿里漏出来"
+            }
+        }
+
+        var out = "【这会儿最该被听出来的】\(top.0.label)（\(top.1)）：\(how(top.0))。"
+        if ranked.count > 1 {
+            let second = ranked[1]
+            out += "\n其次是\(second.0.label)（\(second.1)）：\(how(second.0))。"
+        }
+        // 控制力低 = 压不住。这条要单独点出来，不然上面那些会被他自己"演克制"抵消掉
+        let control = state.value(.control)
+        if control <= 35 && top.0 != .control {
+            out += "\n控制力只有 \(control)——**压不住**，别写成克制隐忍的样子。"
+        }
+        return out
     }
 
     // MARK: 存

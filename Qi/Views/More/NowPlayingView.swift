@@ -63,16 +63,11 @@ struct NowPlayingView: View {
 
     @ViewBuilder
     private var backdrop: some View {
-        if let t = player.current, let url = URL(string: t.artworkURL),
-           !t.artworkURL.isEmpty {
-            AsyncImage(url: url) { phase in
-                if let image = phase.image {
-                    image.resizable().scaledToFill()
-                }
-            }
-            .blur(radius: 60)
-            .overlay(Color.black.opacity(scheme == .dark ? 0.55 : 0.25))
-            .ignoresSafeArea()
+        if let t = player.current, !t.artworkName.isEmpty || !t.artworkURL.isEmpty {
+            TrackArtwork(track: t, side: 400)
+                .blur(radius: 60)
+                .overlay(Color.black.opacity(scheme == .dark ? 0.55 : 0.25))
+                .ignoresSafeArea()
         }
     }
 
@@ -107,28 +102,13 @@ struct NowPlayingView: View {
 
     @ViewBuilder
     private func cover(side: CGFloat) -> some View {
-        let t = player.current
-        Group {
-            if let t, let url = URL(string: t.artworkURL), !t.artworkURL.isEmpty {
-                AsyncImage(url: url) { phase in
-                    if let image = phase.image {
-                        image.resizable().scaledToFill()
-                    } else {
-                        Rectangle().fill(Theme.softFillDeep)
-                    }
-                }
-            } else {
-                ZStack {
-                    Rectangle().fill(Theme.softFillDeep)
-                    Image(systemName: "music.note")
-                        .font(.system(size: side * 0.26))
-                        .foregroundStyle(app.settings.accentColor)
-                }
-            }
+        // 走统一那个（本机封面优先，再网上的，再音符）——
+        // 她导进来的歌封面在文件里，以前这儿只看网址，所以永远是音符
+        if let t = player.current {
+            TrackArtwork(track: t, side: side)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .shadow(color: .black.opacity(0.24), radius: 18, y: 10)
         }
-        .frame(width: side, height: side)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .shadow(color: .black.opacity(0.24), radius: 18, y: 10)
     }
 
     // MARK: 歌词

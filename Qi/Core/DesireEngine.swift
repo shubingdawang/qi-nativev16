@@ -244,8 +244,45 @@ final class DesireEngine: ObservableObject {
         set { state.driven = newValue }
     }
 
+    /// 身体那套开着的时候，重合的那几维**以身体为准**。AppState 同步过来。
+    ///
+    /// 她问：「这个是不是会跟念头池的那个打架？希望能够协调一下。」
+    /// 会。而且不协调的话是这么打的：
+    ///
+    ///   · 身体那边「占有欲 78」（等了她一下午，`applyWaitingPressure` 顶上来的）
+    ///   · 欲望这边「想她 0.20」（她刚说完话，`touched()` 把它压下去了）
+    ///
+    /// 同一件事两个数，一个说他快憋不住了，一个说他没什么想她——
+    /// 两句都塞进提示词，他只能挑一个信，语气就飘。
+    ///
+    /// 所以：**一件事只留一个数**。身体开着的时候，
+    /// 渴／想她／累／压着这四维直接读身体，不再自己涨自己落；
+    /// 好奇／想沉淀／记挂／想看人这四维身体管不着，还是这边自己算。
+    /// 身体关了就整套退回自己算，跟以前一样。
+    nonisolated(unsafe) static var mirrorsBody = true
+
+    /// 这一维是不是由身体说了算
+    static func bodySource(_ d: Drive) -> BodyField? {
+        switch d {
+        case .libido:     return .heat        // 渴 ← 热度
+        case .attachment: return .possessiveness  // 想她 ← 占有欲
+        case .fatigue:    return .fatigue
+        case .stress:     return .pressure    // 压着 ← 压抑感
+        default:          return nil
+        }
+    }
+
     func value(_ d: Drive) -> Double {
-        min(1.0, max(0.0, state.values[d.rawValue] ?? 0.25))
+        if DesireEngine.mirrorsBody, let f = DesireEngine.bodySource(d) {
+            // 身体那边是 0…100
+            return min(1.0, max(0.0, Double(BodyStore.shared.state.value(f)) / 100))
+        }
+        return min(1.0, max(0.0, state.values[d.rawValue] ?? 0.25))
+    }
+
+    /// 这一维现在归谁管，给界面标一下
+    func fromBody(_ d: Drive) -> Bool {
+        DesireEngine.mirrorsBody && DesireEngine.bodySource(d) != nil
     }
 
     // MARK: 推进（纯算术）
@@ -270,8 +307,13 @@ final class DesireEngine: ObservableObject {
         state.lastTick = now
     }
 
-    /// 执念反哺：念头池里某个执念长到头了，把它压着的那一维推上去
+    /// 执念反哺：念头池里某个执念长到头了，把它压着的那一维推上去。
+    ///
+    /// 归身体管的那几维**不从这儿推**——身体有它自己的推进和结算，
+    /// 从两头改同一个数，最后谁也说不清它为什么是这个值。
+    /// （执念照样算数：召唤力里那个 +0.35×执念强度 一直都在。）
     func feed(_ d: Drive, gain: Double = DesireConst.feedGain) {
+        guard !fromBody(d) else { return }
         settle()
         state.values[d.rawValue] = min(1.0, value(d) + gain)
     }
@@ -281,7 +323,7 @@ final class DesireEngine: ObservableObject {
         settle()
         guard let table = DesireConst.satisfyTable[action] else { return }
         var v = state.values
-        for (d, factor) in table {
+        for (d, factor) in table where !fromBody(d) {
             v[d.rawValue] = max(0.02, (v[d.rawValue] ?? 0.25) * factor)
         }
         state.values = v
@@ -293,6 +335,8 @@ final class DesireEngine: ObservableObject {
     /// 这不是「做完了」，所以回落幅度比 satisfy 轻。
     func touched() {
         settle()
+        // 这两维归身体管的时候不动它——身体那边她一说话就有自己的落法
+        guard !fromBody(.attachment) else { return }
         var v = state.values
         v[Drive.attachment.rawValue] = (v[Drive.attachment.rawValue] ?? 0.25) * 0.82
         v[Drive.stress.rawValue] = (v[Drive.stress.rawValue] ?? 0.25) * 0.90
@@ -363,6 +407,7 @@ final class DesireEngine: ObservableObject {
             let bar = String(repeating: "▮", count: Int((v * 10).rounded()))
                 + String(repeating: "▯", count: 10 - Int((v * 10).rounded()))
             var line = "· \(d.label) \(bar) \(String(format: "%.2f", v))"
+            if fromBody(d) { line += "（这一维读的是身体）" }
             if d == .fatigue, v >= DesireConst.fatigueGate { line += "（过闸了，该歇）" }
             if let sc = s[d], sc > v + 0.01 {
                 line += "（算上执念 \(String(format: "%.2f", sc))）"

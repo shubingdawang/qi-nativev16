@@ -582,9 +582,11 @@ extension View {
     func glassBackground(radius: CGFloat = Theme.cardRadius,
                          strength: Double = 1,
                          extra: Double = 0,
-                         style: GlassStyle? = nil) -> some View {
+                         style: GlassStyle? = nil,
+                         dim: Double? = nil) -> some View {
         background(GlassSurface(radius: radius, strength: strength,
-                                extra: extra, style: style))
+                                extra: extra, style: style,
+                                dim: dim ?? Theme.glassDim))
     }
 }
 

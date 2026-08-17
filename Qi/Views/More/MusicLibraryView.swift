@@ -137,25 +137,7 @@ struct MusicLibraryView: View {
         } label: {
             HStack(spacing: 11) {
                 // 那个「正在播放的音乐头像」。转起来，一眼看出它是活的。
-                ZStack {
-                    if let url = URL(string: track.artworkURL), !track.artworkURL.isEmpty {
-                        AsyncImage(url: url) { phase in
-                            if let image = phase.image {
-                                image.resizable().scaledToFill()
-                            } else {
-                                Rectangle().fill(Theme.softFillDeep)
-                            }
-                        }
-                    } else {
-                        ZStack {
-                            Rectangle().fill(Theme.softFillDeep)
-                            Image(systemName: "music.note")
-                                .font(.system(size: 16))
-                                .foregroundStyle(app.settings.accentColor)
-                        }
-                    }
-                }
-                .frame(width: 46, height: 46)
+                TrackArtwork(track: track, side: 46)
                 .clipShape(Circle())
                 .overlay { Circle().strokeBorder(.white.opacity(0.35), lineWidth: 1) }
 
@@ -294,24 +276,8 @@ struct ListeningBar: View {
     var body: some View {
         if let track = player.current {
             HStack(spacing: 10) {
-                if let url = URL(string: track.artworkURL), !track.artworkURL.isEmpty {
-                    AsyncImage(url: url) { phase in
-                        if let image = phase.image {
-                            image.resizable().scaledToFill()
-                        } else {
-                            Rectangle().fill(Theme.softFillDeep)
-                        }
-                    }
-                    .frame(width: 34, height: 34)
+                TrackArtwork(track: track, side: 34)
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                } else {
-                    Image(systemName: "music.note")
-                        .font(.system(size: 13))
-                        .foregroundStyle(app.settings.accentColor)
-                        .frame(width: 34, height: 34)
-                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(Theme.softFillDeep))
-                }
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(track.title)

@@ -719,11 +719,14 @@ struct ChatView: View {
                     }
                     CallStore.shared.dial()
                 } label: {
+                    // 跟这一排别的图标同色。
+                    //
+                    // 以前没选模型的时候它是 `textMuted × 0.5`，淡得像坏了——
+                    // 她说的「这个电话 icon 颜色比其他的都淡」就是这个。
+                    // 打不通这件事不该靠把图标画糊来说，点下去那句提示已经说了。
                     Image(systemName: "phone")
                         .font(.system(size: 16, weight: .light))
-                        .foregroundStyle(app.activeHim == nil
-                                         ? Theme.textMuted(scheme).opacity(0.5)
-                                         : Theme.textSoft(scheme))
+                        .foregroundStyle(Theme.textSoft(scheme))
                         .frame(width: 28, height: 28)
                         .contentShape(Rectangle())
                 }

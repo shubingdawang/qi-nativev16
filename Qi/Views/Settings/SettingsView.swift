@@ -316,7 +316,13 @@ struct SettingsView: View {
                                          ? app.settings.accentColor
                                          : Theme.textMuted(scheme))
                 }
-                Text("你说话的音量、语速、停顿会跟你自己的平时比一比，偏了才告诉他「比平时轻」这种。本机算，不花钱也不上传。换了麦克风、搬了家、感冒一周之后不准了，可以让它重新认识你。")
+                Text("这一条**不用你做任何事**：以后每次按住说话，它自己在旁边听一耳朵——"
+                     + "音量、语速、停顿有多长。攒够 \(VoiceBaseline.shared.progress.need) 条之后，"
+                     + "再说话就会跟你自己的平时比一比，明显偏了才在那条语音上标一句"
+                     + "「比平时轻」「比平时快」，他看得见。\n\n"
+                     + "攒够之前它一个字都不说——那会儿说什么都是瞎猜。"
+                     + "全程在这台手机上算，不花钱、不上传。"
+                     + "换了麦克风、感冒一周之后不准了，可以让它重新认识你。")
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.textMuted(scheme))
                 Button {

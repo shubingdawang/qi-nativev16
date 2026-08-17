@@ -33,9 +33,20 @@ struct FolderGridView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 18) {
 
-                folderCell(title: "全部", count: looseCount, tint: app.settings.accentColor)
+                // 「全部」是个视图不是文件夹：所有图都在里面，不能删也不能改名。
+                // 画得跟文件夹不一样（叠起来的照片，不是文件夹壳），
+                // 免得她再以为这是个删不掉的文件夹。
+                allCell
                     .contentShape(Rectangle())
-                    .onTapGesture { opened = "" }
+                    .onTapGesture { opened = MediaStore.allFolder }
+
+                // 没归类的那些。**有才显示**——一张没有的时候摆个空桶只是噪音。
+                if looseCount > 0 {
+                    folderCell(title: "未归类", count: looseCount,
+                               tint: app.settings.accentColor.opacity(0.75))
+                        .contentShape(Rectangle())
+                        .onTapGesture { opened = "" }
+                }
 
                 ForEach(Array(folders.enumerated()), id: \.element) { index, name in
                     // 长按菜单挂在卡片本身上。挂在 NavigationLink 外面的话，
@@ -91,11 +102,8 @@ struct FolderGridView: View {
             TextField("新名字", text: $renameText)
             Button("取消", role: .cancel) { renaming = nil }
             Button("改好了") {
-                let newName = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
-                if let old = renaming, !newName.isEmpty, newName != old {
-                    for item in store.list(kind, folder: old) {
-                        store.move(item, to: newName)
-                    }
+                if let old = renaming {
+                    store.renameFolder(kind, from: old, to: renameText)
                 }
                 renaming = nil
             }
@@ -125,34 +133,55 @@ struct FolderGridView: View {
         ) {
             Button("连里面的一起删", role: .destructive) {
                 if let name = deletingFolder {
-                    for item in store.list(kind, folder: name) {
-                        store.remove(item)
-                    }
+                    store.deleteFolder(kind, name: name, keepImages: false)
                 }
                 deletingFolder = nil
             }
             Button("只删文件夹，图片拿出来") {
                 if let name = deletingFolder {
-                    for item in store.list(kind, folder: name) {
-                        store.move(item, to: "")
-                    }
+                    store.deleteFolder(kind, name: name, keepImages: true)
                 }
                 deletingFolder = nil
             }
             Button("算了", role: .cancel) { deletingFolder = nil }
         } message: {
             let n = deletingFolder.map { store.list(kind, folder: $0).count } ?? 0
-            Text("里面有 \(n) 张。删掉就找不回来了，也可以只删文件夹、把图片挪到「全部」里。")
+            Text("里面有 \(n) 张。删掉就找不回来了，也可以只删文件夹、把图片退回「未归类」。")
         }
         .alert("新建文件夹", isPresented: $creating) {
             TextField("起个名字", text: $newName)
             Button("取消", role: .cancel) {}
             Button("建好了") {
-                let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !name.isEmpty else { return }
-                // 文件夹是靠图片上的归属撑起来的，
-                // 所以先放一张占位的空记录，等有图挪进来就实了
-                store.items.append(MediaItem(fileName: "", kind: kind, folder: name))
+                // 文件夹现在是独立存的，空的就是空的——
+                // 不再往 items 里塞占位空记录（那是「空文件夹显示 1」的根）
+                store.createFolder(kind, name: newName)
+            }
+        }
+    }
+
+    /// 「全部」那一格：一摞照片，不是文件夹壳
+    private var allCell: some View {
+        VStack(spacing: 8) {
+            ZStack {
+                ForEach([2, 1, 0], id: \.self) { i in
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(app.settings.accentColor.opacity(0.18 + Double(2 - i) * 0.10))
+                        .frame(width: 54 - CGFloat(i) * 4, height: 50 - CGFloat(i) * 4)
+                        .rotationEffect(.degrees(Double(i) * -5))
+                        .offset(x: CGFloat(i) * 3, y: CGFloat(i) * -2)
+                }
+                Image(systemName: "photo.on.rectangle")
+                    .font(.system(size: 17, weight: .light))
+                    .foregroundStyle(app.settings.accentColor)
+            }
+            .frame(width: 68, height: 68)
+            VStack(spacing: 1) {
+                Text("全部")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Text("\(store.count(kind))")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.textMuted(scheme))
             }
         }
     }
@@ -212,15 +241,22 @@ struct MediaGridView: View {
     @State private var tagging = false
     @State private var taggingText = ""
 
+    /// 「全部」是所有图，别的就是那个文件夹里的
+    private var inScope: [MediaItem] {
+        folder == MediaStore.allFolder
+            ? store.list(kind).filter { !$0.fileName.isEmpty }
+            : store.list(kind, folder: folder)
+    }
+
     private var items: [MediaItem] {
-        let base = store.list(kind, folder: folder).filter { !$0.fileName.isEmpty }
+        let base = inScope
         guard !keyword.isEmpty else { return base }
         return base.filter { $0.note.localizedCaseInsensitiveContains(keyword) }
     }
 
     /// 还没写关键词的表情包
     private var untagged: [MediaItem] {
-        store.list(kind, folder: folder).filter { !$0.fileName.isEmpty && $0.note.isEmpty }
+        inScope.filter { $0.note.isEmpty }
     }
 
     private var columns: [GridItem] {
@@ -321,7 +357,8 @@ struct MediaGridView: View {
             .padding(.top, 8)
             .padding(.bottom, Layout.tabBarExpanded + 12)
         }
-        .navigationTitle(folder.isEmpty ? "全部" : folder)
+        .navigationTitle(folder == MediaStore.allFolder
+                         ? "全部" : (folder.isEmpty ? "未归类" : folder))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -346,7 +383,7 @@ struct MediaGridView: View {
                     }
                 }
             }
-            if !folder.isEmpty {
+            if !folder.isEmpty && folder != MediaStore.allFolder {
                 Button("拿出来") {
                     if let m = moving { store.move(m, to: "") }
                     moving = nil
@@ -382,7 +419,9 @@ struct MediaGridView: View {
             for p in list {
                 if let data = try? await p.loadTransferable(type: Data.self),
                    let image = UIImage(data: data) {
-                    await MainActor.run { store.add(image, kind: kind, folder: folder) }
+                    // 在「全部」里加图 = 加到未归类（「全部」不是个能装东西的地方）
+                    let dest = folder == MediaStore.allFolder ? "" : folder
+                    await MainActor.run { store.add(image, kind: kind, folder: dest) }
                 }
             }
             await MainActor.run { picked = [] }
