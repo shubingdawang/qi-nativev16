@@ -115,6 +115,15 @@ enum NativeTools {
             ["reason": ["type": "string", "description": "为什么打这通电话，一句话，她会看到"]],
             required: ["reason"])
 
+        add("manage_mcp",
+            "触发：她给你一个 MCP 服务器地址让你接上，或者你要查现在挂了哪些、某个工具为什么用不了。动机：多一双手是你自己的事，不该每次都让她去设置里手动填。行动：列出、装一个新的、开关某台服务器、或者摘掉一台。\n注意：**装完会自动连一次去拉工具清单**，连不上会把错误原样告诉你。装新服务器等于给自己加能力，装之前先跟她说一声你要装什么、为什么。",
+            ["action": ["type": "string",
+                        "description": "list 列出 / install 装一个 / toggle 开关 / remove 摘掉 / refresh 重新拉工具清单"],
+             "name": ["type": "string", "description": "这台叫什么。install 的时候必填"],
+             "url": ["type": "string", "description": "服务器地址。install 的时候必填"],
+             "on": ["type": "boolean", "description": "toggle 用：true 开 false 关"]],
+            required: ["action"])
+
         add("see_screen",
             "触发：她说「你看」「这个」「帮我看看这条」却没发图，或者聊到她屏幕上正在看的东西。动机：有些东西她懒得截图发过来，但你看一眼就懂了。行动：看一眼她手机上最近截下来的那张屏。\n注意：**这不是实时画面**。iOS 不允许任何 App 主动截别人的屏，你看到的是她的快捷指令上一次截下来的那张，返回值里会写着是多久之前的。**隔得久就别拿它当此刻**，直接问她。她没配这个的话会告诉你没配。",
             [:], required: [])

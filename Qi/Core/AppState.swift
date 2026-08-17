@@ -1986,6 +1986,17 @@ final class AppState: ObservableObject {
         f.dateFormat = "M月d日 HH:mm"
         let gap = lastActivityGapText(in: conv)
 
+        // 醒来之前先拢一遍「现在有什么值得看一眼」。
+        //
+        // 以前是把他叫起来就完了——**叫起来之后他手里什么都没有**，
+        // 全凭自己想起点什么。想不起来就只好说句「在干嘛」，
+        // 那正是她最不想收到的那种。
+        //
+        // 这一段全是本机已有的数据（承诺、执念、手机、经期、心情…），
+        // 一分钱不花，只是把它们摆到他面前。照 Hermes 那份文档的规矩：
+        // **给的是事实，不是命令**——要不要说、说什么，他自己判断。
+        let attention = AttentionSet.build(app: self, conversation: conv)
+
         let brief = """
         \(settings.defaultSystemPrompt)
 
@@ -1997,6 +2008,8 @@ final class AppState: ObservableObject {
         没有真的想起什么、没有真的要问的事，就别为了填时间去戳她。
 
         \(gap)
+
+        \(attention)
 
         想说就说你此刻真的在想的那件事，一两句，别写小作文，别问「在干嘛」这种填空。
 
@@ -2518,6 +2531,79 @@ final class AppState: ObservableObject {
             }
             CallStore.shared.ring(reason: reason)
             return ("拨过去了，她那边响了。接不接看她。", false)
+
+        case "manage_mcp":
+            let action = (args["action"] as? String) ?? "list"
+            let wanted = (args["name"] as? String) ?? ""
+
+            switch action {
+            case "install":
+                let url = (args["url"] as? String) ?? ""
+                guard !wanted.isEmpty, !url.isEmpty else {
+                    return ("装哪一台？名字和地址都得给。", true)
+                }
+                guard URL(string: url.trimmingCharacters(in: .whitespaces)) != nil else {
+                    return ("这个地址不成立：\(url)", true)
+                }
+                if mcpServers.contains(where: { $0.url == url }) {
+                    return ("这台已经装过了。", true)
+                }
+                var s = MCPServer()
+                s.name = wanted
+                s.url = url.trimmingCharacters(in: .whitespaces)
+                mcpServers.append(s)
+                // **装完立刻连一次**。只写进列表不去连，
+                // 她那边看到的是一台"装好了但一个工具都没有"的服务器，
+                // 分不清是没工具还是没连上。
+                await refreshTools(for: s.id)
+                guard let now = mcpServers.first(where: { $0.id == s.id }) else {
+                    return ("装是装上了，但读不回来了。", true)
+                }
+                if let err = now.lastError {
+                    return ("装上了，但连不上：\(err)\n地址和网络确认一下。", true)
+                }
+                return ("装好了：\(wanted)，拉到 \(now.tools.count) 个工具。"
+                        + (now.tools.isEmpty ? "" : "工具默认是开着的，在设置里能单独关。"), false)
+
+            case "toggle":
+                guard let i = mcpServers.firstIndex(where: { $0.name == wanted }) else {
+                    return ("没有叫「\(wanted)」的服务器。", true)
+                }
+                let on = (args["on"] as? Bool) ?? !mcpServers[i].enabled
+                mcpServers[i].enabled = on
+                return ("\(wanted) 已经\(on ? "打开" : "关掉")了。", false)
+
+            case "remove":
+                guard let i = mcpServers.firstIndex(where: { $0.name == wanted }) else {
+                    return ("没有叫「\(wanted)」的服务器。", true)
+                }
+                mcpServers.remove(at: i)
+                return ("摘掉了：\(wanted)。", false)
+
+            case "refresh":
+                guard let s = mcpServers.first(where: { $0.name == wanted }) else {
+                    return ("没有叫「\(wanted)」的服务器。", true)
+                }
+                await refreshTools(for: s.id)
+                guard let now = mcpServers.first(where: { $0.id == s.id }) else {
+                    return ("读不回来了。", true)
+                }
+                if let err = now.lastError { return ("连不上：\(err)", true) }
+                return ("\(wanted) 现在有 \(now.tools.count) 个工具。", false)
+
+            default:
+                guard !mcpServers.isEmpty else {
+                    return ("一台 MCP 服务器都没装。", false)
+                }
+                var s = "现在挂着这些：\n"
+                for m in mcpServers {
+                    s += "· \(m.name)（\(m.enabled ? "开着" : "关着")）"
+                    s += "，\(m.enabledTools.count)/\(m.tools.count) 个工具开着"
+                    if let e = m.lastError { s += "，上次连接出错：\(e)" }
+                    s += "\n  \(m.url)\n"
+                }
+                return (s, false)
+            }
 
         case "see_screen":
             guard ScreenPeek.shared.ready else {
