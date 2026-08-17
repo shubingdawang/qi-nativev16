@@ -28,15 +28,18 @@ final class ClawdCanvas: ObservableObject {
 
     /// 把画布现在的样子拍成 PNG。
     /// 背景是透明的，所以拍出来带 alpha，贴到聊天里不会有一块白底。
-    ///
-    /// 用 async 版而不是回调版：回调那个要跨隔离域捕获闭包，
-    /// 在严格并发检查下会被 Sendable 卡住。
     func snapshot() async -> Data? {
         guard let web else { return nil }
         let config = WKSnapshotConfiguration()
         config.afterScreenUpdates = true
-        let image = try? await web.takeSnapshot(with: config)
-        return image?.pngData()
+        // 这个 SDK 的 takeSnapshot **只有回调版**，没有自动桥接出来的 async。
+        // 拿 continuation 包一层：回调本身就标了 @MainActor @Sendable，
+        // 从里面 resume 是安全的，Data 也是 Sendable。
+        return await withCheckedContinuation { cont in
+            web.takeSnapshot(with: config) { image, _ in
+                cont.resume(returning: image?.pngData())
+            }
+        }
     }
 }
 
@@ -131,7 +134,7 @@ struct ClawdStudioView: View {
     private var preview: some View {
         ZStack {
             // 棋盘格，让人一眼看出背景是透明的
-            Checkerboard()
+            TransparencyGrid()
             ClawdCanvasView(canvas: canvas)
         }
         .frame(height: 260)
@@ -391,7 +394,10 @@ struct ClawdStudioView: View {
 
 /// 透明背景的那种灰白方格。摆一层在预览底下，
 /// 她才看得出来这张图**是没有底色的**。
-struct Checkerboard: View {
+///
+/// 名字不叫 Checkerboard 是因为 PixelStudioView 里已经有一个同名的
+/// `Shape` 了——两个都是顶层类型，重名直接编译不过。
+struct TransparencyGrid: View {
     var side: CGFloat = 10
     @Environment(\.colorScheme) private var scheme
 
