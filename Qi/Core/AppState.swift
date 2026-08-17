@@ -1490,6 +1490,69 @@ final class AppState: ObservableObject {
         }
     }
 
+    // MARK: 身体
+
+    /// 把身体落下的那段时间补算回来。
+    /// **纯算术不花钱**，所以进 App、切回前台、开身体页都可以随便叫。
+    func catchUpBody() {
+        guard settings.bodyEnabled else { return }
+        // 她上次说话是什么时候——等待加压那一段要用
+        var lastHer: Date?
+        if let id = activeChatID, let conv = conversation(id) {
+            lastHer = conv.messages.last(where: { $0.role == .user })?.createdAt
+        }
+        BodyStore.shared.catchUp(lastHerMessageAt: lastHer)
+    }
+
+    /// 结算最近这一段聊天对身体的影响。
+    ///
+    /// **这一下要花钱，所以只有她按那个按钮才会走到这儿。**
+    /// 不做成自动的：自动结算意味着她每聊几句就被扣一次，
+    /// 而且她根本不知道什么时候扣的。
+    func settleBody(windowSize: Int = 24) async -> String {
+        guard let him = activeHim else { return "还没配模型。" }
+        let (p, endpoint, model) = him
+        catchUpBody()
+
+        // 取最近这些回合当窗口
+        guard let id = activeChatID, let conv = conversation(id) else {
+            return "还没有可以结算的对话。"
+        }
+        let recent = conv.messages
+            .filter { $0.role != .system && $0.errorText == nil && !$0.isEmptyContent }
+            .suffix(windowSize)
+        guard !recent.isEmpty else { return "最近没有对话，没什么可结算的。" }
+
+        let me = settings.userName.isEmpty ? "她" : settings.userName
+        let his = settings.aiName.isEmpty ? "你" : settings.aiName
+        var window = ""
+        for m in recent {
+            window += "\(m.role == .user ? me : his)：\(m.content)\n"
+        }
+
+        var raw = ""
+        do {
+            let stream = ChatAPI.stream(
+                endpoint: endpoint, apiKey: p.apiKey, model: model,
+                messages: [
+                    .init(role: "system", text: BodySettlement.prompt(BodyStore.shared.state)),
+                    .init(role: "user", text: window)
+                ])
+            for try await event in stream {
+                if case .content(let piece) = event { raw += piece }
+                if case .usage(let u) = event { UsageStore.shared.record(u, source: .other) }
+            }
+        } catch {
+            return "结算没跑成：" + error.localizedDescription
+        }
+
+        guard let outcome = BodySettlement.parse(raw) else {
+            return "他返回的东西解不出来，这一次没算。"
+        }
+        BodyStore.shared.applySettlement(outcome)
+        return outcome.reason.isEmpty ? "结算完了。" : outcome.reason
+    }
+
     // MARK: 勿扰
     //
     // 「他自己醒来」那套里本来就有安静时段，但那是**排好的**，
@@ -1601,6 +1664,11 @@ final class AppState: ObservableObject {
                 parts.append("说好的规矩（不管在哪儿说话都算数）：\n"
                              + m.rules.map { "· " + $0 }.joined(separator: "\n"))
             }
+        }
+        // 他此刻的身体。**这不是设定，是状态**——
+        // 它每小时都在自己走，她开不开 App 都一样。
+        if settings.bodyEnabled {
+            parts.append(BodyStore.shared.brief())
         }
         let base = settings.defaultSystemPrompt
             .trimmingCharacters(in: .whitespacesAndNewlines)

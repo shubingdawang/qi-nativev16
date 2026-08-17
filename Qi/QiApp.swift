@@ -31,6 +31,8 @@ struct QiApp: App {
                 // 读的地方一律走 app.dndOn（它自己会算过没过期），
                 // 这一下只是把界面上那面旗子也收掉。
                 app.clearExpiredDND()
+                // 身体那套落下的时间补算回来。纯算术，不花钱。
+                app.catchUpBody()
                 WakeEngine.shared.app = app
                 // resume 里会顺手把点进来的那条兜底通知兑现掉：
                 // 那一刻才真的去算他要说什么

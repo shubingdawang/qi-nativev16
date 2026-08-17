@@ -358,6 +358,13 @@ struct AppSettings: Codable {
     /// 让他自己醒来。默认关着——醒一次就是一次调用。
     var wake = WakeConfig()
 
+    /// 他的身体那一套。
+    ///
+    /// **推进是纯算术，不花钱**，所以开着不会有账单；
+    /// 花钱的是「结算」那一下，而那个必须她主动点。
+    /// 默认开着，因为不开的话札记「身体」那一页就是空的。
+    var bodyEnabled: Bool = true
+
     // 勿扰那两个字段**故意不放在这儿**，放在 AppState 里走 UserDefaults。
     //
     // 因为这个结构体用的是编译器合成的解码器，而 Storage.load 是
@@ -544,6 +551,7 @@ extension AppSettings {
         tavilyKey = (try? c.decodeIfPresent(String.self, forKey: .tavilyKey)) ?? ""
         pricing = (try? c.decodeIfPresent(Pricing.self, forKey: .pricing)) ?? Pricing()
         wake = (try? c.decodeIfPresent(WakeConfig.self, forKey: .wake)) ?? WakeConfig()
+        bodyEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .bodyEnabled)) ?? true
         wallpaperMode = (try? c.decodeIfPresent(String.self, forKey: .wallpaperMode)) ?? "image"
         solidHex = (try? c.decodeIfPresent(String.self, forKey: .solidHex)) ?? ""
         gradientFrom = (try? c.decodeIfPresent(String.self, forKey: .gradientFrom)) ?? "F7C9B8"

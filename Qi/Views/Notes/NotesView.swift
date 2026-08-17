@@ -1199,7 +1199,10 @@ struct StatusPane: View {
     var body: some View {
         PaneScroll {
 
-            // ---- 身体状况 ----
+            // ---- 本地那套（不用开电脑）----
+            LocalBodyCard()
+
+            // ---- 身体状况（电脑那边的，留着能对账）----
             HStack {
                 Text("身体状况").font(.system(size: 15, weight: .semibold))
                 if offline {
