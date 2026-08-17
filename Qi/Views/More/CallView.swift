@@ -503,10 +503,21 @@ struct CallView: View {
         var line = CallLine(fromMe: false, text: reply.text)
         // 有语音就一起存下来，挂了之后还能回听
         if let file = reply.voiceFile { line.voiceName = file }
+        // 他这句演了什么，摆在气泡角落。
+        // **不然配了音色的人听得出来，没配的人完全不知道有这回事。**
+        if !reply.acting.isEmpty { line.tone = reply.acting.joined(separator: "·") }
         store.addLine(line)
+
         if let file = reply.voiceFile {
             VoicePlayer.shared.toggle(file)
+        } else if reply.systemVoice {
+            // 退到系统合成这一档**拿不到音频文件**——那套是直接出声的。
+            // 所以这句没有语音条可以回听，当场念完就没了。
+            SystemVoice.shared.speak(reply.text)
         }
+        // 换了谁念、退到系统音了，都照实说一声。
+        // 悄悄换一个声音而不说，比没声音更让人错乱。
+        if !reply.voiceNote.isEmpty { notice = reply.voiceNote }
 
         // 他说了再见的话，别立刻挂——留十五秒
         if reply.saidGoodbye {
@@ -543,6 +554,7 @@ struct CallView: View {
         guard let done = store.hangUp(by: who) else { return }
         ticker?.cancel()
         VoicePlayer.shared.stop()
+        SystemVoice.shared.stop()
         if app.settings.haptics {
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         }

@@ -88,6 +88,88 @@ enum TTSAPI {
         Task { @MainActor in UsageStore.shared.recordCall(.tts) }
         return data
     }
+
+    // MARK: 兜底链
+
+    /// 合成的结果。**要让调用方知道这次是不是退到系统音了**——
+    /// 悄悄换成另一个声音而不说，比没声音更让人错乱。
+    struct Spoken {
+        var data: Data?
+        /// 退到 iOS 自带的合成器了（没有音频文件，得当场念）
+        var systemVoice = false
+        var note = ""
+    }
+
+    /// 把配着的音色**挨个试一遍**，全挂了退到系统合成。
+    ///
+    /// 以前只用 `activeVoice`——也就是列表里第一个能用的。
+    /// 那一家一挂（密钥过期、额度用完、网断了），**就彻底没声音**，
+    /// 而她可能配了第二个音色正闲着。
+    ///
+    /// 参考里那条链是 ElevenLabs → edge-tts → 系统合成。
+    /// 中间那档我们接不了（要她电脑上跑东西，又是一条要维护的链路），
+    /// 所以做成：**她配的每一个 → iOS 自带的**。
+    ///
+    /// 系统那个音色难听，这一点不装懂——但**有声音好过没声音**，
+    /// 而且返回值里会写明这次是退下来的，界面照实说。
+    static func speak(_ text: String, using services: [VoiceService]) async -> Spoken {
+        let usable = services.filter { $0.enabled && $0.ready }
+        var errors: [String] = []
+
+        for v in usable {
+            do {
+                let data = try await synthesize(text, with: v)
+                if errors.isEmpty { return Spoken(data: data) }
+                // 前面有挂掉的，说一声换了谁
+                return Spoken(data: data, note: "换成「\(v.name)」念的。")
+            } catch {
+                errors.append("\(v.name)：\(error.localizedDescription)")
+            }
+        }
+
+        if usable.isEmpty {
+            return Spoken(systemVoice: true, note: "还没配音色，用的是系统的声音。")
+        }
+        return Spoken(systemVoice: true,
+                      note: "配的音色都没通，退回系统的声音了。\n"
+                          + errors.joined(separator: "\n"))
+    }
+}
+
+// MARK: - 系统自带的那个声音
+
+/// iOS 自带的合成器。
+///
+/// **这是兜底，不是选项**——音色是机械的，跟她配的那个不是一回事。
+/// 但配的那家挂掉的时候，有一个机械的声音总好过一片安静。
+///
+/// 它**不产生文件**：系统这套是直接出声，拿不到音频数据。
+/// 所以退到这一档的时候没有语音条可以回听，界面上要说清楚。
+@MainActor
+final class SystemVoice {
+
+    static let shared = SystemVoice()
+    private let synth = AVSpeechSynthesizer()
+
+    private init() {}
+
+    func speak(_ text: String) {
+        guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        stop()
+        try? AVAudioSession.sharedInstance()
+            .setCategory(.playback, mode: .spokenAudio, options: .duckOthers)
+        try? AVAudioSession.sharedInstance().setActive(true)
+
+        let u = AVSpeechUtterance(string: text)
+        u.voice = AVSpeechSynthesisVoice(language: "zh-CN")
+        // 默认那个语速念中文偏快，压一点点更像说话
+        u.rate = AVSpeechUtteranceDefaultSpeechRate * 0.94
+        synth.speak(u)
+    }
+
+    func stop() {
+        if synth.isSpeaking { synth.stopSpeaking(at: .immediate) }
+    }
 }
 
 // MARK: - 存和放
