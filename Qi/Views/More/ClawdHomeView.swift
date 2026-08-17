@@ -13,6 +13,14 @@ struct ClawdHomeView: View {
     @State private var tab = 0            // 0 房间，1 柜子，2 商店
     @State private var dragging: UUID?
     @State private var dragPoint: CGPoint = .zero
+    /// 地板从房间高度的百分之几开始。
+    ///
+    /// 墙和地板的分界线画在 0.62（见下面 `room` 里那两块 Rectangle）。
+    /// 他是**脚站在这个 y 上**的，所以能站的范围要比分界线再低一点，
+    /// 不然半只身子会插进墙里——她说的「他现在可以走到墙壁的区域」就是这个。
+    static let floorTop: Double = 0.70
+    static let floorBottom: Double = 0.94
+
     @State private var mood: ClawdMood = .idle
     @State private var clawdX: Double = 0.5
     /// 他现在站在房间高度的百分之几。以前写死在 0.78，只能左右走。
@@ -181,12 +189,18 @@ struct ClawdHomeView: View {
                 // 家具
                 ForEach(store.owned.filter { !$0.hidden }) { item in
                     if let kind = FurnitureCatalog.kind(item.kind) {
-                        PixelSpriteView(sprite: kind.sprite, scale: 3.2)
+                        // **平时是一件真家具的大小**（scale 6），
+                        // 只有长按拖的时候才缩成迷你——她的原话：
+                        // 「购买了小床，这个小床就会在房间里显现，
+                        //   并且不是这种迷你的效果，是真的一张像素的小床，
+                        //   当我长按拖动小床时，才会变成现在这种迷你的样子。」
+                        PixelSpriteView(sprite: kind.sprite,
+                                        scale: dragging == item.id ? 2.6 : 6)
                             .position(
                                 x: (dragging == item.id ? dragPoint.x : item.x) * geo.size.width,
                                 y: (dragging == item.id ? dragPoint.y : item.y) * geo.size.height
                             )
-                            .scaleEffect(dragging == item.id ? 1.12 : 1)
+                            
                             .shadow(color: .black.opacity(dragging == item.id ? 0.22 : 0),
                                     radius: 8, y: 4)
                             .animation(.spring(response: 0.25, dampingFraction: 0.7),
@@ -227,7 +241,23 @@ struct ClawdHomeView: View {
                                     }
                                     .onEnded { _ in
                                         if dragging == item.id {
-                                            store.move(item.id, to: dragPoint)
+                                            // **拖到他身上 = 交给他搬。**
+                                            //
+                                            // 她说「拖动小床给他，他依旧不会搬动小床」——
+                                            // 一半是引擎不让搬（portable 把家具排除了，已经改），
+                                            // 另一半是这儿：拖到哪儿都只是把家具挪过去，
+                                            // 压根没有「递给他」这回事。
+                                            let dx = dragPoint.x - clawdX
+                                            let dy = dragPoint.y - clawdY
+                                            if (dx * dx + dy * dy).squareRoot() < 0.13 {
+                                                store.pickUp(item.kind)
+                                                mood = .carrying
+                                                say(store.overhead(kind)
+                                                    ? "举起来了！这个……有点沉"
+                                                    : "接住了，放哪儿？")
+                                            } else {
+                                                store.move(item.id, to: dragPoint)
+                                            }
                                         }
                                         dragging = nil
                                     }
@@ -255,8 +285,18 @@ struct ClawdHomeView: View {
                     }
                     HStack(alignment: .bottom, spacing: 2) {
                         ClawdView(mood: mood, scale: 1.8, shadow: true)
-                        // 手上那件。跟聊天页读的是同一个 store，所以两边同步。
-                        if let kind = store.carriedKind {
+                            // 大件**举过头顶**（她画的那张参考图就是这个动作）。
+                            // 聊天页读的是同一个 store、同一套判断，所以两边一模一样：
+                            // 这边在搬床，切过去那边也在搬床，也是举着的。
+                            .overlay(alignment: .top) {
+                                if let kind = store.carriedKind, store.overhead(kind) {
+                                    PixelSpriteView(sprite: kind.sprite, scale: 1.3)
+                                        .offset(y: -22)
+                                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+                                }
+                            }
+                        // 小东西还是端在手边
+                        if let kind = store.carriedKind, !store.overhead(kind) {
                             PixelSpriteView(sprite: kind.sprite, scale: 1.5)
                                 .offset(y: -8)
                                 .transition(.scale(scale: 0.5).combined(with: .opacity))
@@ -266,8 +306,15 @@ struct ClawdHomeView: View {
                         .scaleEffect(held ? 1.14 : 1)
                         .shadow(color: .black.opacity(held ? 0.26 : 0),
                                 radius: 10, y: 8)
-                        // 走路的时候左右翻个身，朝着要去的方向
+                        // 走路的时候左右翻个身，朝着要去的方向。
+                        //
+                        // **这一下不能带动画**。外面那几条 `.animation(...)`
+                        // 会把它也接管掉，于是 x 从 1 连续变到 -1——
+                        // 中间要经过 0，看着就是整只被压扁再翻过来，
+                        // 也就是她说的「走路还会转圈」。
+                        // 加一条时长为 0 的动画把它单独摘出来。
                         .scaleEffect(x: facingLeft ? -1 : 1, y: 1)
+                        .animation(nil, value: facingLeft)
                         // 精灵那块 Canvas 是不接触摸的，得自己补一块感应区，
                         // 不然点也点不到、更别说长按拖
                         .contentShape(Rectangle().inset(by: -10))
@@ -303,7 +350,7 @@ struct ClawdHomeView: View {
                         .onChanged { value in
                             if case .second(_, let drag?) = value {
                                 clawdX = min(0.92, max(0.08, drag.location.x / geo.size.width))
-                                clawdY = min(0.94, max(0.10, drag.location.y / geo.size.height))
+                                clawdY = min(ClawdHomeView.floorBottom, max(ClawdHomeView.floorTop, drag.location.y / geo.size.height))
                             }
                         }
                         .onEnded { _ in
@@ -498,8 +545,10 @@ struct ClawdHomeView: View {
                 if Task.isCancelled { return }
                 guard mood != .happy, !held else { continue }
 
+                // **只在地板上走。** 地板是从 0.62 往下那一块，
+                // 以前这儿是 0.22…0.90——0.22 在墙上，所以他会走进墙里去。
                 let targetX = Double.random(in: 0.12...0.88)
-                let targetY = Double.random(in: 0.22...0.90)
+                let targetY = Double.random(in: ClawdHomeView.floorTop...ClawdHomeView.floorBottom)
                 let dist = ((targetX - clawdX) * (targetX - clawdX)
                             + (targetY - clawdY) * (targetY - clawdY)).squareRoot()
 

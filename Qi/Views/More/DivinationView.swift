@@ -8,7 +8,17 @@ struct DivinationView: View {
     @Environment(\.colorScheme) private var scheme
     @StateObject private var store = DivinationStore.shared
 
-    @State private var mode = 0            // 0 塔罗，1 六爻
+    /// 六套占法。名字 + 一句「它管什么」。
+    static let modes: [(String, String)] = [
+        ("塔罗",   "看心境、看关系、看一件事的来龙去脉"),
+        ("六爻",   "断具体的事：成不成、在哪儿、什么时候"),
+        ("骰子",   "问得急、要一句痛快话的时候用"),
+        ("八字",   "看一个人的底子。四柱是本机按干支算的，不联网"),
+        ("水晶球", "问得含糊也行——它看的是氛围，不是条款"),
+        ("解梦",   "把梦原样讲出来，他来读")
+    ]
+
+    @State private var mode = 0
     @State private var question = ""
     @State private var showHistory = false
 
@@ -18,15 +28,29 @@ struct DivinationView: View {
             // 一条分段控件顶在内容前面。原来钉在屏幕最底下，
             // 一是够不着，二是跟导航条挤在一起。
             VStack(spacing: 6) {
-                Picker("", selection: $mode) {
-                    Text("塔罗").tag(0)
-                    Text("六爻").tag(1)
+                // 六套了，分段控件挤不下——改成横着滑的一排。
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 7) {
+                        ForEach(Array(DivinationView.modes.enumerated()), id: \.offset) { i, m in
+                            Button {
+                                withAnimation(.easeOut(duration: 0.16)) { mode = i }
+                            } label: {
+                                Text(m.0)
+                                    .font(.app(12, weight: mode == i ? .semibold : .regular))
+                                    .foregroundStyle(mode == i ? .white : Theme.textSoft(scheme))
+                                    .padding(.horizontal, 13)
+                                    .padding(.vertical, 7)
+                                    .background(Capsule().fill(mode == i
+                                        ? app.settings.accentColor.opacity(0.85)
+                                        : Theme.softFillDeep))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 1)
                 }
-                .pickerStyle(.segmented)
 
-                Text(mode == 0
-                     ? "看心境、看关系、看一件事的来龙去脉"
-                     : "断具体的事：成不成、在哪儿、什么时候")
+                Text(DivinationView.modes[min(mode, DivinationView.modes.count - 1)].1)
                     .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -37,11 +61,23 @@ struct DivinationView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    if mode == 0 {
-                        TarotPane(question: $question)
-                    } else {
-                        LiuyaoPane(question: $question)
+                    switch mode {
+                    case 0: TarotPane(question: $question)
+                    case 1: LiuyaoPane(question: $question)
+                    case 2: DicePane(question: $question)
+                    case 3: BaziPane(question: $question)
+                    case 4: CrystalPane(question: $question)
+                    default: DreamPane()
                     }
+
+                    // 没做的那三样，**明说**。
+                    // 排一张错的盘比不排更糟——她会拿着假盘去信。
+                    Text("紫微斗数、奇门遁甲、星盘这三样还没做：它们要真历法（节气、闰月）"
+                         + "和星历表才排得对，我现在给不出对的盘面，就不给假的。"
+                         + "想要的话得先接一份现成的历法数据，那是单独一轮的事。")
+                        .font(.app(10))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                        .padding(.horizontal, 2)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 4)
@@ -49,7 +85,13 @@ struct DivinationView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: mode)
-        .background { WallpaperBackground() }
+        .background {
+            ZStack {
+                WallpaperBackground()
+                // 那层玄学花纹。淡到不抢戏，但一眼能看出这不是个记事本。
+                OracleOrnament(tint: app.settings.accentColor, scheme: scheme)
+            }
+        }
         .navigationTitle("占卜")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -87,6 +129,10 @@ struct TarotPane: View {
     @State private var record: DivinationRecord?
     @State private var reading = ""
     @State private var asking = false
+    /// 手指扫到的那张（抬起来的那张）。再点它一下才真的抽走。
+    @State private var hovering: Int?
+    /// 三秒不碰就落回去
+    @State private var collapseTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -164,7 +210,12 @@ struct TarotPane: View {
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
 
-                    // 摊开的一排，扇形铺开
+                    // 摊开的一排，扇形铺开。
+                    //
+                    // 她要的选法：「长按移动，手放在哪张牌上就弹出哪张，
+                    // 再次点击才抽出，3s 没有点击就收回。」
+                    // 所以这儿是**手指扫过去 → 那张抬起来**，
+                    // 再点那张抬起来的才真的抽走；三秒不碰它自己落回去。
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: -26) {
                             ForEach(deck.indices, id: \.self) { i in
@@ -173,8 +224,27 @@ struct TarotPane: View {
                         }
                         .padding(.horizontal, 30)
                         .padding(.vertical, 20)
+                        .coordinateSpace(name: "fan")
+                        // 手指按住扫过：扫到谁谁抬起来。
+                        // minimumDistance 0，所以按着不动也算。
+                        .gesture(
+                            DragGesture(minimumDistance: 0, coordinateSpace: .named("fan"))
+                                .onChanged { v in
+                                    // 一张 62 宽、叠着 -26，所以每张往右挪 36
+                                    let i = Int((v.location.x - 30) / 36)
+                                    guard deck.indices.contains(i) else { return }
+                                    if hovering != i {
+                                        hovering = i
+                                        if app.settings.haptics {
+                                            UIImpactFeedbackGenerator(style: .soft)
+                                                .impactOccurred()
+                                        }
+                                    }
+                                    scheduleCollapse()
+                                }
+                        )
                     }
-                    .frame(height: 170)
+                    .frame(height: 190)
 
                     if picked.count == spread.count {
                         Button {
@@ -200,8 +270,21 @@ struct TarotPane: View {
         }
     }
 
+    /// 三秒不碰，抬起来那张就落回去
+    private func scheduleCollapse() {
+        collapseTask?.cancel()
+        collapseTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                hovering = nil
+            }
+        }
+    }
+
     private func cardBack(_ i: Int) -> some View {
         let chosen = picked.contains(i)
+        let lifted = hovering == i
         return RoundedRectangle(cornerRadius: 7, style: .continuous)
             .fill(
                 LinearGradient(
@@ -218,20 +301,40 @@ struct TarotPane: View {
             }
             .frame(width: 62, height: 100)
             .rotationEffect(.degrees(Double(i % 7) - 3))
-            .offset(y: chosen ? -22 : 0)
-            .shadow(color: .black.opacity(0.16), radius: 4, x: 1, y: 3)
+            // 抬起来那张要更高、更大、还带一圈光，跟已经抽走的那些分得开
+            .offset(y: chosen ? -22 : (lifted ? -34 : 0))
+            .scaleEffect(lifted ? 1.14 : 1)
+            .overlay {
+                if lifted {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.85), lineWidth: 1.6)
+                }
+            }
+            .shadow(color: .black.opacity(lifted ? 0.3 : 0.16),
+                    radius: lifted ? 10 : 4, x: 1, y: lifted ? 8 : 3)
+            .zIndex(lifted ? 10 : 0)
             .onTapGesture {
                 guard let spread else { return }
                 if let at = picked.firstIndex(of: i) {
                     picked.remove(at: at)
-                } else if picked.count < spread.count {
-                    picked.append(i)
-                    if app.settings.haptics {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                } else if lifted {
+                    // **抬起来的那张，再点一下才真的抽走**（她要的那个节奏）
+                    if picked.count < spread.count {
+                        picked.append(i)
+                        hovering = nil
+                        collapseTask?.cancel()
+                        if app.settings.haptics {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        }
                     }
+                } else {
+                    // 还没抬起来的：第一下先抬起来
+                    hovering = i
+                    scheduleCollapse()
                 }
             }
             .animation(.spring(response: 0.28, dampingFraction: 0.7), value: chosen)
+            .animation(.spring(response: 0.26, dampingFraction: 0.72), value: lifted)
     }
 
     private func resultCard(_ record: DivinationRecord) -> some View {
@@ -602,7 +705,7 @@ struct DivinationHistoryView: View {
                 ForEach(store.records) { r in
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 6) {
-                            Text(r.kind == "tarot" ? "塔罗" : "六爻")
+                            Text(r.kindLabel)
                                 .font(.app(10))
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 2)
@@ -630,6 +733,12 @@ struct DivinationHistoryView: View {
                             } ?? ""))
                                 .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
+                        } else if !r.layout.isEmpty {
+                            // 新那几套（骰子/八字/水晶球/解梦）的盘面就是一段文字
+                            Text(r.layout)
+                                .font(.app(11))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                                .lineLimit(3)
                         }
 
                         if !r.reading.isEmpty {

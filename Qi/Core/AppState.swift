@@ -444,6 +444,9 @@ final class AppState: ObservableObject {
         // 她来说话了，「想她」和「压着」这两维自然会落一点。
         // 落得比做完一件事轻——她在这儿本身就是一种缓解，但不等于那件事做了。
         DesireEngine.shared.touched()
+        // 她这一句在他那儿是什么反应（夸/凶/撒娇/冷淡…）。
+        // 关键词规则，不调模型；认不出来就什么都不动。
+        EmotionEngine.shared.appraise(text)
         let turn = UUID()
         var userMsg = ChatMessage(role: .user, content: text)
         userMsg.turnID = turn
@@ -1710,6 +1713,11 @@ final class AppState: ObservableObject {
         if settings.bodyEnabled {
             parts.append(BodyStore.shared.brief())
         }
+        // 她刚那句话在他这儿掀起了什么。
+        // **只在真有情绪的时候才拼**——平静的时候一个字都不加。
+        if let feeling = EmotionEngine.shared.brief() {
+            parts.append(feeling)
+        }
         let base = settings.defaultSystemPrompt
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if !base.isEmpty { parts.append(base) }
@@ -2324,6 +2332,15 @@ final class AppState: ObservableObject {
         · 三五句话说完，别写小作文。
 
         不要重新抽牌，不要说"我再帮你抽一张"。抽到什么就是什么。
+
+        下面这几套的读法不一样，别混着讲：
+        · **骰子**：给的是一句痛快话。别把它讲成塔罗那种层层递进。
+        · **八字**：盘面上写着日主和五行。**月柱是按公历月近似的**，
+          盘面里也标了——讲的时候别拿月柱下重结论。这一套讲底子、讲倾向，
+          不讲具体哪天发生什么。
+        · **水晶球**：只有一个象。就着那个象说，别硬编细节。
+        · **解梦**：她讲的是梦本身。**先问她梦里最不舒服的是哪一处**，
+          再讲。梦是她的，你不比她更懂那个梦。
         """
 
         var out = ""
@@ -2698,6 +2715,14 @@ final class AppState: ObservableObject {
                 conversations[i].messages.append(msg)
             }
             return (doll.brief(), false)
+
+        case "feel":
+            let feeling = (args["feeling"] as? String) ?? ""
+            let delta = (args["delta"] as? Double) ?? 0
+            let why = (args["why"] as? String) ?? ""
+            guard !feeling.isEmpty else { return ("你听着是什么感觉？", true) }
+            return (EmotionEngine.shared.rejudge(feeling: feeling,
+                                                 delta: delta, why: why), false)
 
         case "read_desire":
             return (DesireEngine.shared.brief(), false)

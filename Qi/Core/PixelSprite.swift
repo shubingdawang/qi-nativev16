@@ -466,6 +466,60 @@ enum ClawdSprites {
         "....ppp..ppp........ppp..ppp...."
     ], palette)
 
+    // MARK: 探头（这一版：只画头）
+    //
+    // 她说了第三次：「聊天页探头这个之前的窗已经修过两三次了，
+    // 都是半个身子藏在屏幕里，并不是探头。探头是指只探出头来，
+    // 手可以挥动或者做其他动作。」
+    //
+    // 前两版都在调「往里挪多少点」——**那条路走不通**。
+    // 他整只站在屏幕外、横着挪回来，露出来的必然是「从头到脚的一条竖边」，
+    // 也就是半个身子。挪多挪少只是那条边宽窄的区别。
+    //
+    // 只探出头，得**从图上就只画头**：下面这两张里没有身子也没有腿，
+    // 只有一颗脑袋和一只扒着边／挥着的手。这样露出来的就只可能是头。
+    // 空格是透明的，所以身子不是被挡住——是根本不存在。
+
+    /// 探头（一）：扒着边看
+    static let peekHead1 = PixelSprite([
+        "................................",
+        "................................",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppkkkppppppppppppkkkppp....",
+        "....pppkkkppppppppppppkkkppp....",
+        "....pppkkkppppppppppppkkkppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppp....",
+        "..pppp..........................",
+        "................................",
+        "................................"
+    ], palette)
+
+    /// 探头（二）：手抬起来挥
+    static let peekHead2 = PixelSprite([
+        "..pppp..........................",
+        "..pppp..........................",
+        "..pppppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppkkkppppppppppppkkkppp....",
+        "....pppkkkppppppppppppkkkppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "................................",
+        "................................",
+        "................................",
+        "................................"
+    ], palette)
+
     /// 探头（一）：探出来的那一下。
     ///
     /// **这张图跟别的一样是整整 32 格宽的一只完整的他**，一格都没少。
@@ -583,7 +637,10 @@ enum ClawdMood: String, Codable {
         case .peeking:
             // 两帧不一样才叫动画。上一版这里是同一张图播两遍，
             // 等于钉在那儿不动。
-            return [(ClawdSprites.peek1, 1.1), (ClawdSprites.peek2, 0.8)]
+            // **只有头的那两张。**
+            // 老的 peek1/peek2 是整只（含身子和腿），横着挪进来露出的是
+            // 「从头到脚的一条竖边」——她说了三次的「半个身子」就是那个。
+            return [(ClawdSprites.peekHead1, 1.1), (ClawdSprites.peekHead2, 0.7)]
         case .thinking:
             // 头顶那两个小方块交替冒，像在运算
             return [(ClawdSprites.thinking, 0.45), (ClawdSprites.thinking2, 0.45)]

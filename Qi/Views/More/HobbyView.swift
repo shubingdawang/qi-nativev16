@@ -11,6 +11,10 @@ struct HobbyView: View {
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
 
+    /// 「试出来的」那张卡要读它。**得订阅**，
+    /// 不然「收进去 / 算了」点完那一行不会消失
+    @ObservedObject private var emotion = EmotionEngine.shared
+
     /// 看谁的：true 是她，false 是他
     @State private var mine = true
     /// 看喜欢还是讨厌
@@ -70,6 +74,10 @@ struct HobbyView: View {
                             .padding(.top, 40)
                             .frame(maxWidth: .infinity)
                     }
+
+                    // 「试出来的」：他被戳到的时候攒下的线索。
+                    // **只在看他那一栏的时候摆**——这些是关于他的。
+                    if !mine { probedCard }
 
                     ForEach(grouped, id: \.0) { group in
                         Text("· " + group.0)
@@ -337,6 +345,83 @@ struct HobbyView: View {
                 .background(Capsule().fill(Theme.softFillDeep))
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: 试出来的
+
+    /// 他被夸到／被戳到的时候攒下来的线索。
+    ///
+    /// 她的原话：「掉好感能让我知道他不喜欢什么，相当于可以跟爱好库联动，
+    /// 能试出他的不喜欢。」
+    ///
+    /// **但这些只是线索，不是结论**——所以它不自动进库，
+    /// 每条后面摆两个按钮：收进去，或者算了。
+    /// 猜出来的东西不该替他填进「他讨厌」那一栏。
+    @ViewBuilder
+    private var probedCard: some View {
+        let dislikes = emotion.state.dislikeHints
+        let likes = emotion.state.likeHints
+        if !dislikes.isEmpty || !likes.isEmpty {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 5) {
+                    Image(systemName: "sparkle.magnifyingglass")
+                        .font(.app(11))
+                        .foregroundStyle(app.settings.accentColor)
+                    Text("试出来的")
+                        .font(.app(12, weight: .medium))
+                        .foregroundStyle(Theme.textMain(scheme))
+                }
+                Text("他被戳到或者被夸到的时候，我把那句话里提到的东西记了一笔。**是线索不是结论**——你点「收进去」才算数。")
+                    .font(.app(10.5))
+                    .foregroundStyle(Theme.textMuted(scheme))
+
+                ForEach(likes) { h in hintRow(h, like: true) }
+                ForEach(dislikes) { h in hintRow(h, like: false) }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassCard()
+        }
+    }
+
+    private func hintRow(_ h: EmotionEngine.Hint, like: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Image(systemName: like ? "heart.fill" : "leaf.fill")
+                    .font(.app(9))
+                    .foregroundStyle(like ? HomePalette.bodyPink : HomePalette.sage)
+                Text(h.text)
+                    .font(.app(13, weight: .medium))
+                    .foregroundStyle(Theme.textMain(scheme))
+                if h.hits > 1 {
+                    Text("×\(h.hits)")
+                        .font(.app(10))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+                Spacer()
+                Button("收进去") {
+                    var one = Hobby()
+                    one.mine = false            // 这是他那一栏的
+                    one.text = h.text
+                    one.like = like
+                    one.reason = "从你们的对话里试出来的：「\(h.quote)」"
+                    store.add(one)
+                    EmotionEngine.shared.forget(h)
+                }
+                .font(.app(11))
+                .buttonStyle(.plain)
+                .foregroundStyle(app.settings.accentColor)
+                Button("算了") { EmotionEngine.shared.forget(h) }
+                    .font(.app(11))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+            if !h.quote.isEmpty {
+                Text("当时那句：\(h.quote)")
+                    .font(.app(10))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+        }
+        .padding(.vertical, 3)
     }
 
     // MARK: 加号

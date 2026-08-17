@@ -32,13 +32,23 @@ struct ClawdGridEditor: View {
     /// 撤销栈。每动一下压一份进去——**她要的第一件事就是这个**。
     @State private var history: [ClawdDoodle] = []
     @State private var mode: Mode = .paint
-    @State private var brush: ClawdDoodle.Ink = .body
+    /// 现在用的颜色（六位色号，带 #）。**存色号不存枚举**——
+    /// 她要画衣服、扫把、洗澡的泡泡，固定那几个色根本不够用。
+    @State private var brushHex = ClawdSVG.bodyColor
+    /// 手边这一排色。前面是常用的，她自己调过的会插到最前面留着。
+    @AppStorage("clawdPalette") private var paletteRaw = ClawdDoodle.defaultPaletteRaw
     @State private var stampKind: ClawdStamp.Kind = .eye
     @State private var selected: UUID?
 
     enum Mode: String, CaseIterable {
         case paint = "画格子"
         case stamp = "摆零件"
+    }
+
+    /// 那一排色。存成一串（`#RRGGBB` 用逗号隔开），好塞进 AppStorage。
+    private var palette: [String] {
+        get { paletteRaw.split(separator: ",").map(String.init) }
+        nonmutating set { paletteRaw = newValue.joined(separator: ",") }
     }
 
     var body: some View {
@@ -91,7 +101,7 @@ struct ClawdGridEditor: View {
                 // 上了色的格子
                 ForEach(doc.paintedCells, id: \.key) { item in
                     Rectangle()
-                        .fill(item.ink.color)
+                        .fill(Color(hexString: item.hex) ?? .clear)
                         .frame(width: cell, height: cell)
                         .offset(x: CGFloat(item.x) * cell, y: CGFloat(item.y) * cell)
                 }
@@ -140,7 +150,7 @@ struct ClawdGridEditor: View {
 
         if mode == .paint {
             push()
-            doc.toggle(x: x, y: y, ink: brush)
+            doc.toggle(x: x, y: y, hex: brushHex)
             emit()
             return
         }
@@ -161,41 +171,63 @@ struct ClawdGridEditor: View {
     // MARK: 画格子那一栏
 
     private var paintTools: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("用哪个颜色")
-                .font(.app(12, weight: .medium))
-                .foregroundStyle(Theme.textMain(scheme))
-            HStack(spacing: 8) {
-                ForEach(ClawdDoodle.Ink.allCases, id: \.self) { ink in
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("用哪个颜色")
+                    .font(.app(12, weight: .medium))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Spacer()
+                // 想要的色不在下面那一排里，就自己调一个。
+                // 她说「给 clawd 画衣服、安排动作（扫地、洗澡）都需要其他颜色」——
+                // 那就不能只给六个固定色。
+                ColorPicker("", selection: Binding(
+                    get: { Color(hexString: brushHex) ?? .gray },
+                    set: { c in
+                        brushHex = "#" + c.hexString
+                        if !palette.contains(brushHex) { palette.insert(brushHex, at: 0) }
+                        if palette.count > 24 { palette.removeLast() }
+                    }
+                ), supportsOpacity: false)
+                    .labelsHidden()
+                    .frame(width: 30)
+
+                Button {
+                    brushHex = ClawdDoodle.eraserHex
+                } label: {
+                    Image(systemName: "eraser")
+                        .font(.app(13))
+                        .foregroundStyle(brushHex == ClawdDoodle.eraserHex
+                                         ? app.settings.accentColor : Theme.textSoft(scheme))
+                        .frame(width: 32, height: 30)
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Theme.softFillDeep))
+                }
+                .buttonStyle(.plain)
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 34), spacing: 7)], spacing: 7) {
+                ForEach(palette, id: \.self) { hex in
                     Button {
-                        brush = ink
+                        brushHex = hex
                     } label: {
-                        VStack(spacing: 4) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(ink.color)
-                                    .frame(width: 34, height: 34)
-                                if ink == .eraser {
-                                    Image(systemName: "eraser")
-                                        .font(.app(13))
-                                        .foregroundStyle(Theme.textSoft(scheme))
-                                }
-                            }
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color(hexString: hex) ?? .gray)
+                            .frame(height: 32)
                             .overlay {
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .strokeBorder(brush == ink
+                                    .strokeBorder(brushHex == hex
                                                   ? app.settings.accentColor
                                                   : Theme.softStroke,
-                                                  lineWidth: brush == ink ? 2 : 0.8)
+                                                  lineWidth: brushHex == hex ? 2.4 : 0.8)
                             }
-                            Text(ink.label)
-                                .font(.app(9.5))
-                                .foregroundStyle(Theme.textMuted(scheme))
-                        }
                     }
                     .buttonStyle(.plain)
                 }
             }
+
+            Text("画衣服、扫把、泡泡这些就在格子上直接画——颜色不够就点右上角那个调色盘，调过的会留在这一排里。")
+                .font(.app(10.5))
+                .foregroundStyle(Theme.textMuted(scheme))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard()
@@ -344,66 +376,53 @@ struct ClawdDoodle: Codable, Equatable {
     static var cellW: Double { 320.0 / Double(cols) }
     static var cellH: Double { 230.0 / Double(rows) }
 
-    enum Ink: String, CaseIterable, Codable {
-        case body, dark, eye, blush, white, eraser
+    /// 橡皮。用一个不可能画出来的值当记号。
+    static let eraserHex = "#ERASE"
 
-        var label: String {
-            switch self {
-            case .body:   return "身体"
-            case .dark:   return "深色"
-            case .eye:    return "黑"
-            case .blush:  return "腮红"
-            case .white:  return "白"
-            case .eraser: return "擦掉"
-            }
-        }
+    /// 手边默认那一排色。
+    ///
+    /// **不是只有 clawd 那几个色**——她要给他画衣服、画扫把、画洗澡的泡泡，
+    /// 所以这一排是一套能凑合过日子的常用色：clawd 本体两色 + 黑白灰 +
+    /// 皮肤 + 红橙黄绿青蓝紫 + 几个柔和色。
+    /// 她自己用调色盘调过的会插在最前面，跟着 AppStorage 一起留着。
+    static let defaultPaletteRaw = [
+        ClawdSVG.bodyColor, ClawdSVG.darkColor,
+        "#000000", "#FFFFFF", "#9AA0A6", "#4A4A4A",
+        "#FFD9B8", "#FF9A8B", "#FF6B81", "#E03131",
+        "#FF922B", "#FFD43B", "#94D82D", "#37B24D",
+        "#22B8CF", "#4DABF7", "#4C6EF5", "#9775FA",
+        "#F783AC", "#8B5E34", "#C9A227", "#DEE2E6"
+    ].joined(separator: ",")
 
-        var hex: String {
-            switch self {
-            case .body:   return ClawdSVG.bodyColor
-            case .dark:   return ClawdSVG.darkColor
-            case .eye:    return "#000000"
-            case .blush:  return "#FF9A8B"
-            case .white:  return "#FFFFFF"
-            case .eraser: return "#00000000"
-            }
-        }
-
-        var color: Color {
-            // Color(hexString:) 自己会把开头那个 # 剥掉，不用在这儿动手
-            self == .eraser
-                ? Color.white.opacity(0.12)
-                : (Color(hexString: hex) ?? .gray)
-        }
-    }
-
-    /// 上了色的格子。键是 "x,y"，值是颜色。
-    /// 用字典不用二维数组：Codable 好写，也省得存一大片空格子。
+    /// 上了色的格子。键是 "x,y"，值是**六位色号**。
+    ///
+    /// 以前值存的是一个六选一的枚举，画个衣服都凑不出颜色——
+    /// 她说「颜色会不会太少了」，说的就是这个。改成直接存色号，
+    /// 想要多少种就有多少种。
     var cells: [String: String] = [:]
     var stamps: [ClawdStamp] = []
 
     var isEmpty: Bool { cells.isEmpty && stamps.isEmpty }
 
-    struct Painted { let key: String; let x: Int; let y: Int; let ink: Ink }
+    struct Painted { let key: String; let x: Int; let y: Int; let hex: String }
 
     var paintedCells: [Painted] {
         cells.compactMap { key, value in
             let parts = key.split(separator: ",")
             guard parts.count == 2,
-                  let x = Int(parts[0]), let y = Int(parts[1]),
-                  let ink = Ink(rawValue: value) else { return nil }
-            return Painted(key: key, x: x, y: y, ink: ink)
+                  let x = Int(parts[0]), let y = Int(parts[1]) else { return nil }
+            return Painted(key: key, x: x, y: y, hex: value)
         }
         .sorted { $0.key < $1.key }
     }
 
-    mutating func toggle(x: Int, y: Int, ink: Ink) {
+    mutating func toggle(x: Int, y: Int, hex: String) {
         let key = "\(x),\(y)"
         // 橡皮 = 擦掉；同一个颜色再点一次也是擦掉（她说的「再点一下删减」）
-        if ink == .eraser || cells[key] == ink.rawValue {
+        if hex == ClawdDoodle.eraserHex || cells[key] == hex {
             cells.removeValue(forKey: key)
         } else {
-            cells[key] = ink.rawValue
+            cells[key] = hex
         }
     }
 
@@ -415,7 +434,7 @@ struct ClawdDoodle: Codable, Equatable {
             let y = Double(c.y) * ClawdDoodle.cellH
             out += String(format:
                 "<rect x=\"%.2f\" y=\"%.2f\" width=\"%.2f\" height=\"%.2f\" fill=\"%@\"/>\n",
-                x, y, ClawdDoodle.cellW + 0.5, ClawdDoodle.cellH + 0.5, c.ink.hex)
+                x, y, ClawdDoodle.cellW + 0.5, ClawdDoodle.cellH + 0.5, c.hex)
         }
         for s in stamps { out += s.svg() + "\n" }
         return out
@@ -427,6 +446,8 @@ struct ClawdStamp: Identifiable, Codable, Equatable {
 
     enum Kind: String, CaseIterable, Codable {
         case eye, sleepy, blush, spark, tear, heart, brow, mouth
+        // 道具。她说想给他安排动作——扫地、洗澡这些，光有表情零件摆不出来。
+        case broom, bubble, star, bow
 
         var label: String {
             switch self {
@@ -438,6 +459,10 @@ struct ClawdStamp: Identifiable, Codable, Equatable {
             case .heart:  return "心"
             case .brow:   return "眉毛"
             case .mouth:  return "嘴"
+            case .broom:  return "扫把"
+            case .bubble: return "泡泡"
+            case .star:   return "星星"
+            case .bow:    return "蝴蝶结"
             }
         }
     }
@@ -486,6 +511,23 @@ struct ClawdStamp: Identifiable, Codable, Equatable {
             return "<rect x=\"8\" y=\"20\" width=\"32\" height=\"7\" fill=\"" + ClawdSVG.darkColor + "\" transform=\"rotate(-12 24 24)\"/>"
         case .mouth:
             return "<rect x=\"14\" y=\"18\" width=\"20\" height=\"12\" rx=\"5\" fill=\"" + ClawdSVG.darkColor + "\"/>"
+        case .broom:
+            return "<rect x=\"22\" y=\"2\" width=\"5\" height=\"30\" fill=\"#8B5E34\"/>"
+                + "<rect x=\"12\" y=\"32\" width=\"25\" height=\"6\" fill=\"#C9A227\"/>"
+                + "<rect x=\"14\" y=\"38\" width=\"4\" height=\"8\" fill=\"#C9A227\"/>"
+                + "<rect x=\"22\" y=\"38\" width=\"4\" height=\"8\" fill=\"#C9A227\"/>"
+                + "<rect x=\"30\" y=\"38\" width=\"4\" height=\"8\" fill=\"#C9A227\"/>"
+        case .bubble:
+            return "<rect x=\"14\" y=\"14\" width=\"20\" height=\"20\" rx=\"10\" fill=\"#BFE6FF\" opacity=\".75\"/>"
+                + "<rect x=\"19\" y=\"19\" width=\"6\" height=\"6\" rx=\"3\" fill=\"#FFFFFF\" opacity=\".8\"/>"
+        case .star:
+            return "<rect x=\"21\" y=\"8\" width=\"6\" height=\"32\" fill=\"#FFD43B\"/>"
+                + "<rect x=\"8\" y=\"21\" width=\"32\" height=\"6\" fill=\"#FFD43B\"/>"
+                + "<rect x=\"14\" y=\"14\" width=\"20\" height=\"20\" fill=\"#FFD43B\" opacity=\".55\"/>"
+        case .bow:
+            return "<rect x=\"6\" y=\"16\" width=\"14\" height=\"16\" rx=\"4\" fill=\"#FF6B81\"/>"
+                + "<rect x=\"28\" y=\"16\" width=\"14\" height=\"16\" rx=\"4\" fill=\"#FF6B81\"/>"
+                + "<rect x=\"20\" y=\"20\" width=\"8\" height=\"8\" rx=\"2\" fill=\"#E03131\"/>"
         }
     }
 }
@@ -522,6 +564,23 @@ struct ClawdStampShape: View {
                         .rotationEffect(.degrees(-12))
                 case .mouth:
                     box(14, 18, 20, 12, Color(hexString: ClawdSVG.darkColor)!, u, radius: 5)
+                case .broom:
+                    box(22, 2, 5, 30, Color(hexString: "8B5E34")!, u)
+                    box(12, 32, 25, 6, Color(hexString: "C9A227")!, u)
+                    box(14, 38, 4, 8, Color(hexString: "C9A227")!, u)
+                    box(22, 38, 4, 8, Color(hexString: "C9A227")!, u)
+                    box(30, 38, 4, 8, Color(hexString: "C9A227")!, u)
+                case .bubble:
+                    box(14, 14, 20, 20, Color(hexString: "BFE6FF")!.opacity(0.75), u, radius: 10)
+                    box(19, 19, 6, 6, Color.white.opacity(0.8), u, radius: 3)
+                case .star:
+                    box(21, 8, 6, 32, Color(hexString: "FFD43B")!, u)
+                    box(8, 21, 32, 6, Color(hexString: "FFD43B")!, u)
+                    box(14, 14, 20, 20, Color(hexString: "FFD43B")!.opacity(0.55), u)
+                case .bow:
+                    box(6, 16, 14, 16, Color(hexString: "FF6B81")!, u, radius: 4)
+                    box(28, 16, 14, 16, Color(hexString: "FF6B81")!, u, radius: 4)
+                    box(20, 20, 8, 8, Color(hexString: "E03131")!, u, radius: 2)
                 }
             }
         }

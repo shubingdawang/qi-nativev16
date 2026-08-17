@@ -54,8 +54,13 @@ enum FurnitureCatalog {
         "s": Color(hexString: "C4B9A0")!    // 灰褐
     ]
 
+    // 同一件东西按**精细程度**分档，这是她要的：
+    // 「没有任何装饰的小床就是基础小床（假设只要 80 金币），
+    //   有主题的小床比如圣诞配色的（带圣诞元素、袜子铃铛之类的）可以是 150 金币，
+    //   越精细越贵。」
+    // 所以床有三张：素的 80、草莓的 140、圣诞的 150。别的大件以后照这个加。
     static let all: [FurnitureKind] = [
-        .init(id: "bed", name: "小床", price: 120, sprite: PixelSprite([
+        .init(id: "bed", name: "小床", price: 80, sprite: PixelSprite([
             "wwwwwwwwwwww",
             "wccccccccccw",
             "wccccccccccw",
@@ -66,6 +71,30 @@ enum FurnitureCatalog {
             "d..........d",
             "d..........d"
         ], p), category: .furniture, reaction: "爬上去睡一会儿"),
+
+        .init(id: "bed_berry", name: "草莓小床", price: 140, sprite: PixelSprite([
+            "wwwwwwwwwwww",
+            "wccccccccccw",
+            "wnncnnncnncw",
+            "wnnnnnnnnnnw",
+            "wnrnnnrnnrnw",
+            "wnnnnnnnnnnw",
+            "wwwwwwwwwwww",
+            "d..........d",
+            "d..........d"
+        ], p), category: .furniture, reaction: "滚到草莓被子里"),
+
+        .init(id: "bed_xmas", name: "圣诞小床", price: 150, sprite: PixelSprite([
+            "..y......y..",
+            "wwwwwwwwwwww",
+            "wccccccccccw",
+            "wrrcrrcrrcrw",
+            "wggggggggggw",
+            "wrgrgrgrgrgw",
+            "wwwwwwwwwwww",
+            "dyy......yyd",
+            "d..........d"
+        ], p), category: .furniture, reaction: "把袜子挂到床头上"),
 
         .init(id: "lamp", name: "台灯", price: 60, sprite: PixelSprite([
             "..yyyy..",
@@ -459,10 +488,26 @@ final class ClawdStore: ObservableObject {
 
     /// 能随身带着走的东西：吃的、喝的、玩具、穿戴。
     /// 沙发和书架这种搬是能搬，但不该抱着满屋子跑。
-    func portable(_ kind: FurnitureKind) -> Bool {
+    /// 他能不能搬得动这件。
+    ///
+    /// **现在是什么都能搬。** 以前家具、植物、电器是搬不动的——
+    /// 她说「我给他买了小床，但是拖动小床给他，他依旧不会搬动小床」，
+    /// 根子就在这儿：不是手势没接上，是引擎直接判了「这件不给搬」。
+    /// 他是一只想帮忙的螃蟹，一张床而已，举过头顶就是了。
+    func portable(_ kind: FurnitureKind) -> Bool { true }
+
+    /// 这件要不要**举过头顶**。
+    ///
+    /// 她画了张参考图：搬床是双手举过头顶（或者抱在胸前），不是拎在手边。
+    /// 但一罐可乐举过头顶太滑稽——所以按大小分：
+    /// 家具、植物、电器这类大件举起来，吃的喝的小玩意儿端在手边。
+    ///
+    /// **两个页面读的是同一个判断**，所以小屋里在举床，
+    /// 切到聊天页他也在举床。
+    func overhead(_ kind: FurnitureKind) -> Bool {
         switch kind.category {
-        case .drink, .food, .toy, .wear, .decor: return true
-        case .furniture, .plant, .gadget:        return false
+        case .furniture, .plant, .gadget: return true
+        case .drink, .food, .toy, .wear, .decor: return false
         }
     }
 

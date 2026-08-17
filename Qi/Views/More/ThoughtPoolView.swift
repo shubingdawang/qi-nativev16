@@ -100,6 +100,10 @@ struct ThoughtPoolView: View {
 
                 DesireBars()
 
+                // 好感度摆在这儿：跟念头池、八条驱动条是同一摊东西，
+                // 都是「他此刻是什么样」——分散到三页反而看不出彼此的关系
+                FeelingCard()
+
                 if !pool.resolvedOnes.isEmpty {
                     Button {
                         withAnimation { showResolved.toggle() }

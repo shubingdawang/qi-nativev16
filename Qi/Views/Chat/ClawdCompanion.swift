@@ -70,8 +70,18 @@ struct ClawdRoamer: View {
                 // 它读的是 ClawdStore.carrying——**小屋和聊天页共用同一个**，
                 // 所以在小屋搬起箱子，切过来这边他手上也抱着。
                 HStack(alignment: .bottom, spacing: 1) {
-                    ClawdView(mood: mood, scale: 1.1, shadow: true)
-                    if let kind = room.carriedKind {
+                    // 手上有大件的时候**举过头顶**（她画的那张参考图），
+                    // 小东西（喝的吃的）还是端在手边——一罐可乐举过头顶太滑稽。
+                    ClawdView(mood: room.carrying == nil ? mood : .carrying,
+                              scale: 1.1, shadow: true)
+                        .overlay(alignment: .top) {
+                            if let kind = room.carriedKind, room.overhead(kind) {
+                                PixelSpriteView(sprite: kind.sprite, scale: 0.8)
+                                    .offset(y: -14)
+                                    .transition(.scale(scale: 0.5).combined(with: .opacity))
+                            }
+                        }
+                    if let kind = room.carriedKind, !room.overhead(kind) {
                         PixelSpriteView(sprite: kind.sprite, scale: 1.0)
                             // sipLift 是喝的时候把罐子举到嘴边那一下。
                             // 平时是 0，喝的时候抬起来、往身子里侧靠一点。
@@ -281,7 +291,14 @@ struct ClawdRoamer: View {
     /// 十三个点正好是一只眼睛加上扒着边那只手的宽度——
     /// 再多就成了"站在边上"，再少就什么都看不见。
     private func peekX(right: Bool) -> Double {
-        let m = Double((halfWidth - 13) / max(pageWidth, 1))
+        // 露出**大半颗头**。
+        //
+        // 以前是「只往里挪 13 个点」，配的又是整只的图，
+        // 于是露出来的是从头到脚的一条竖边——她说了三次的「半个身子」。
+        // 现在配的是只有头的那张图（`peekHead1/2`），
+        // 所以挪进来多少露的都只可能是头，那就挪得爽快点：
+        // 露出六成，一颗脑袋加那只挥着的手正好都在。
+        let m = Double((halfWidth * 0.4) / max(pageWidth, 1))
         return right ? 1 + m : -m
     }
 

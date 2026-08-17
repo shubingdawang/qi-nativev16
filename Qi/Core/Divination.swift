@@ -199,9 +199,38 @@ struct Hexagram: Codable, Hashable {
 /// 一次占卜的结果
 struct DivinationRecord: Codable, Identifiable, Hashable {
     var id: UUID = UUID()
-    var kind: String = "tarot"       // tarot 或 liuyao
+    /// tarot / liuyao / dice / bazi / dream / ball
+    var kind: String = "tarot"
     var question: String = ""
     var createdAt: Date = Date()
+
+    init() {}
+
+    /// 自己写了 init 之后，编译器就不再送 memberwise init 了——
+    /// 现有那两处 `DivinationRecord(kind:question:)` 要靠这一条
+    init(kind: String, question: String, layout: String = "") {
+        self.kind = kind
+        self.question = question
+        self.layout = layout
+    }
+
+    /// 容错解码。**这次加了 `layout` 字段**——不写这个的话，
+    /// 合成的解码器碰到老记录里没有这个键会直接抛，
+    /// 她占过的那些卦会整份读不出来（规矩见 Models.swift 末尾那一段）。
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
+        kind = (try? c.decodeIfPresent(String.self, forKey: .kind)) ?? "tarot"
+        question = (try? c.decodeIfPresent(String.self, forKey: .question)) ?? ""
+        createdAt = (try? c.decodeIfPresent(Date.self, forKey: .createdAt)) ?? Date()
+        spreadName = (try? c.decodeIfPresent(String.self, forKey: .spreadName)) ?? ""
+        cards = (try? c.decodeIfPresent([DrawnCard].self, forKey: .cards)) ?? []
+        tosses = (try? c.decodeIfPresent([Int].self, forKey: .tosses)) ?? []
+        primary = try? c.decodeIfPresent(Hexagram.self, forKey: .primary)
+        changed = try? c.decodeIfPresent(Hexagram.self, forKey: .changed)
+        reading = (try? c.decodeIfPresent(String.self, forKey: .reading)) ?? ""
+        layout = (try? c.decodeIfPresent(String.self, forKey: .layout)) ?? ""
+    }
 
     // 塔罗
     var spreadName: String = ""
@@ -215,9 +244,31 @@ struct DivinationRecord: Codable, Identifiable, Hashable {
     /// 他写的解读
     var reading: String = ""
 
+    /// 这一卦是**哪一套占法**
+    var kindLabel: String {
+        switch kind {
+        case "tarot":   return "塔罗"
+        case "liuyao":  return "六爻"
+        case "dice":    return "骰子"
+        case "bazi":    return "八字"
+        case "dream":   return "解梦"
+        case "ball":    return "水晶球"
+        default:        return kind
+        }
+    }
+
+    /// 新那几套占法各自的「盘面」。
+    /// 存成一段现成的文字：这些盘面结构差得远，
+    /// 各给一组字段的话这个结构体会长成一张表。
+    var layout: String = ""
+
     /// 给他看的那段，把牌面原样摆出来
     var briefForModel: String {
-        var s = "【\(kind == "tarot" ? "塔罗" : "六爻")】\n问的是：\(question)\n"
+        // 新那几套：盘面已经是拼好的文字了，直接给他
+        if !layout.isEmpty {
+            return "【\(kindLabel)】\n问的是：\(question)\n\(layout)"
+        }
+        var s = "【\(kindLabel)】\n问的是：\(question)\n"
         if kind == "tarot" {
             s += "牌阵：\(spreadName)\n"
             for c in cards {
