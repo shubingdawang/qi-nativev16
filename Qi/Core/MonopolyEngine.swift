@@ -5,7 +5,8 @@ import Foundation
 /// ## 从哪儿搬来的
 ///
 /// `github.com/RennAkira/spicy-monopoly`（Ren & Puppy，CC BY-NC 4.0，
-/// 授权全文在 `Qi/Resources/Monopoly/授权-CC-BY-NC-4.0.txt`，非商业，署名保留）。
+/// 授权全文在 `Qi/Resources/Monopoly/LICENSE-CC-BY-NC-4.0.txt`，非商业，署名保留）。
+/// （文件名用纯英文：中文名的资源打进包里，重签/解压那一环容易出幺蛾子。）
 /// 上游是 Python 引擎 + 可选的 HTTP/MCP 服务。
 ///
 /// **这版一行网络请求都没有。** 她说得很清楚：不想为了玩个游戏一直开着电脑。
