@@ -128,6 +128,8 @@ final class WakeEngine: ObservableObject {
         Notifier.shared.pendingNudge = false
         guard config.enabled, let app, !running else { return }
         guard state.firedToday < config.dailyLimit else { return }
+        // 兜底通知那条路也得过勿扰这一关，不然绕过去了
+        guard !app.dndOn else { return }
 
         running = true
         var s = state
@@ -280,6 +282,11 @@ final class WakeEngine: ObservableObject {
         guard let app else { return }
         guard state.firedToday < config.dailyLimit else { return }
         guard !isQuiet(now) else { return }
+        // 勿扰开着就别醒。
+        //
+        // 安静时段管的是**每天固定那几个钟头**，勿扰管的是**临时的**：
+        // 她要出门、在开会、现在想安静一会儿。两件事，所以两道都要过。
+        guard !app.dndOn else { return }
         // 手机正在她手里、她正看着聊天页的时候别插话
         if UIApplication.shared.applicationState == .active, app.isChatVisible { return }
 
@@ -442,8 +449,35 @@ final class WakeEngine: ObservableObject {
 
     var nextAllowed: String {
         if !config.enabled { return "关着" }
+        if app?.dndOn == true { return "勿扰中" }
         if state.firedToday >= config.dailyLimit { return "今天的次数用完了" }
         if isQuiet(Date()) { return "安静时段" }
         return String(format: "现在 %.1f 次/小时", lambdaNow)
+    }
+}
+
+// MARK: - 容错解码
+//
+// 理由和写法见 Models.swift 末尾那一整段。
+// WakeConfig 嵌在 AppSettings 里，它解不开会连累整份设置一起没；
+// WakeState 存的是他自己那几个内部量，丢了只是重新开始积累，
+// 但一样别让它把 wake.json 整个作废。
+//
+// **必须写在这个文件里**（合成的 CodingKeys 是 private，文件作用域），
+// 也**必须写在 extension 里**（不然 `WakeConfig()` 会没）。
+
+extension WakeConfig {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = (try? c.decodeIfPresent(Bool.self, forKey: .enabled)) ?? false
+        lambdaBase = (try? c.decodeIfPresent(Double.self, forKey: .lambdaBase)) ?? 1.5
+        dailyLimit = (try? c.decodeIfPresent(Int.self, forKey: .dailyLimit)) ?? 6
+        quietFrom = (try? c.decodeIfPresent(Double.self, forKey: .quietFrom)) ?? 23.5
+        quietTo = (try? c.decodeIfPresent(Double.self, forKey: .quietTo)) ?? 8.0
+        useServer = (try? c.decodeIfPresent(Bool.self, forKey: .useServer)) ?? false
+        serverURL = (try? c.decodeIfPresent(String.self, forKey: .serverURL)) ?? ""
+        logSilent = (try? c.decodeIfPresent(Bool.self, forKey: .logSilent)) ?? true
+        nudges = (try? c.decodeIfPresent(Bool.self, forKey: .nudges)) ?? true
+        nudgeHorizon = (try? c.decodeIfPresent(Double.self, forKey: .nudgeHorizon)) ?? 24
     }
 }

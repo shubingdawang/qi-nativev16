@@ -21,12 +21,37 @@ enum Storage {
         documentsURL.appendingPathComponent(name)
     }
 
+    /// 解不出来的文件都留在这儿，一份都不丢
+    nonisolated(unsafe) private(set) static var salvaged: [String] = []
+
+    /// 读一份数据。
+    ///
+    /// **解码失败绝不能静默地当作"没有"。**
+    ///
+    /// 每一处调用都写成 `Storage.load(…) ?? 默认值`，所以只要这里返回 nil，
+    /// 上面那一层就当成"第一次用"——providers.json 解不开等于**密钥全没**，
+    /// conversations.json 解不开等于**聊天记录全没**，而且下一次保存
+    /// 就把空的那份原地写回去，覆盖掉本来还好好的文件。
+    ///
+    /// 最常见的失败原因是**加了一个新字段**：合成的解码器碰到缺的键会直接抛，
+    /// 属性写了默认值也不管用（那是给 memberwise init 用的，解码器不看）。
+    /// 那几个要紧的类型现在都自己写了容错解码器，但兜底这一层还是得有：
+    /// 万一以后又有谁没写，至少文件被挪到一边留着，而不是被覆盖掉。
     static func load<T: Decodable>(_ type: T.Type, from name: String) -> T? {
         let url = fileURL(name)
         guard let data = try? Data(contentsOf: url) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return try? decoder.decode(T.self, from: data)
+        do {
+            return try decoder.decode(T.self, from: data)
+        } catch {
+            // 挪到一边，别让下一次保存把它盖掉
+            let stamp = Int(Date().timeIntervalSince1970)
+            let backup = fileURL("\(name).坏了-\(stamp)")
+            try? FileManager.default.moveItem(at: url, to: backup)
+            salvaged.append(backup.lastPathComponent)
+            return nil
+        }
     }
 
     static func save<T: Encodable>(_ value: T, to name: String) {

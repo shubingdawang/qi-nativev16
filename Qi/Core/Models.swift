@@ -347,6 +347,14 @@ struct AppSettings: Codable {
     var pricing = Pricing()
     /// 让他自己醒来。默认关着——醒一次就是一次调用。
     var wake = WakeConfig()
+
+    // 勿扰那两个字段**故意不放在这儿**，放在 AppState 里走 UserDefaults。
+    //
+    // 因为这个结构体用的是编译器合成的解码器，而 Storage.load 是
+    // `try?` + `?? AppSettings()`：往它里面加一个新的非可选字段，
+    // 旧版本存下来的 settings.json 缺那个键，一解码就抛，
+    // **她整份设置会被静默重置**——壁纸、密钥、配色全没。
+    // clawd 那几个开关也是为此走的 UserDefaults。
     /// 正文字色。留空就跟着深浅色自动走。
     var textHex: String = ""
     /// 深色模式下单独的字色，留空同上
@@ -391,5 +399,180 @@ extension Color {
         let g = Double((value >> 8) & 0xFF) / 255.0
         let b = Double(value & 0xFF) / 255.0
         self = Color(red: r, green: g, blue: b)
+    }
+}
+
+// MARK: - 容错解码
+//
+// **这一整段是为了「加了个新字段，她的数据就整份没掉」不再发生。**
+//
+// 编译器合成的解码器碰到缺的键会**直接抛**——属性写了默认值也不管用，
+// 那个默认值是给 memberwise init 用的，解码器根本不看它。
+// 而所有读取都是 `Storage.load(…) ?? 默认值`，一抛就等于：
+//
+//   · settings.json      解不开 → 壁纸、字色、配色、地址全回默认
+//   · providers.json     解不开 → **密钥全没**
+//   · conversations.json 解不开 → **聊天记录全没**
+//
+// 而且下一次保存会把空的那份原地写回去，把本来还好好的文件盖掉。
+// 上个版本刚加进 AppSettings 的 `glassDim` 就是这么一颗雷。
+//
+// 写法一律是 `(try? …decodeIfPresent…) ?? 默认值`：
+// `try?` 碰上返回可选值的方法会自动拍平一层，所以「缺了 / 类型不对 /
+// 里头那层解不开」统统等于 nil，正好落到默认值上。
+//
+// **三条规矩：**
+//
+// 1. 这些 init 一律写在 **extension** 里，不能写进结构体本体——
+//    结构体里一旦有自己的 init，memberwise init 就没了，
+//    `ChatMessage(role: .user)` 那四十来处调用会全部编译不过。
+//
+// 2. extension 必须跟结构体**在同一个文件里**。合成出来的 CodingKeys
+//    是 private 的，而 private 在 Swift 里是文件作用域——
+//    另起一个文件就看不见那个枚举了。所以 Pricing 的在 UsageStore.swift、
+//    WakeConfig 的在 WakeEngine.swift，不在这儿。
+//
+// 3. **以后往这些结构体里加字段，记得来这儿补一行。**
+//    漏了不会报错，只是那个字段永远读不出来。加完自己数一遍。
+
+extension AppSettings {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        appearance = (try? c.decodeIfPresent(AppearanceMode.self, forKey: .appearance)) ?? .auto
+        accentHex = (try? c.decodeIfPresent(String.self, forKey: .accentHex)) ?? "677E9C"
+        fontSize = (try? c.decodeIfPresent(Double.self, forKey: .fontSize)) ?? 16
+        bubbleOpacity = (try? c.decodeIfPresent(Double.self, forKey: .bubbleOpacity)) ?? 1.0
+        wallpaperName = try? c.decodeIfPresent(String.self, forKey: .wallpaperName)
+        wallpaperHistory = (try? c.decodeIfPresent([String].self, forKey: .wallpaperHistory)) ?? []
+        wallpaperDim = (try? c.decodeIfPresent(Double.self, forKey: .wallpaperDim)) ?? 0
+        aiName = (try? c.decodeIfPresent(String.self, forKey: .aiName)) ?? "阿晏"
+        userName = (try? c.decodeIfPresent(String.self, forKey: .userName)) ?? "饼饼"
+        aiAvatarName = try? c.decodeIfPresent(String.self, forKey: .aiAvatarName)
+        userAvatarName = try? c.decodeIfPresent(String.self, forKey: .userAvatarName)
+        defaultSystemPrompt = (try? c.decodeIfPresent(String.self, forKey: .defaultSystemPrompt)) ?? ""
+        inputPlaceholder = (try? c.decodeIfPresent(String.self, forKey: .inputPlaceholder)) ?? "Stay with ayan"
+        pulseBaseURL = (try? c.decodeIfPresent(String.self, forKey: .pulseBaseURL)) ?? ""
+        adminBaseURL = (try? c.decodeIfPresent(String.self, forKey: .adminBaseURL)) ?? ""
+        contextLimit = (try? c.decodeIfPresent(Int.self, forKey: .contextLimit)) ?? 0
+        typewriter = (try? c.decodeIfPresent(Bool.self, forKey: .typewriter)) ?? true
+        haptics = (try? c.decodeIfPresent(Bool.self, forKey: .haptics)) ?? true
+        enterToSend = (try? c.decodeIfPresent(Bool.self, forKey: .enterToSend)) ?? false
+        handleY = (try? c.decodeIfPresent(Double.self, forKey: .handleY)) ?? 0.62
+        clawdX = (try? c.decodeIfPresent(Double.self, forKey: .clawdX)) ?? 0.78
+        clawdY = (try? c.decodeIfPresent(Double.self, forKey: .clawdY)) ?? 0.66
+        glassOpacity = (try? c.decodeIfPresent(Double.self, forKey: .glassOpacity)) ?? 1.0
+        glassStyle = (try? c.decodeIfPresent(GlassStyle.self, forKey: .glassStyle)) ?? .frosted
+        glassDim = (try? c.decodeIfPresent(Double.self, forKey: .glassDim)) ?? 0.22
+        nativeToolsEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .nativeToolsEnabled)) ?? true
+        localMemory = (try? c.decodeIfPresent(Bool.self, forKey: .localMemory)) ?? false
+        localPulse = (try? c.decodeIfPresent(Bool.self, forKey: .localPulse)) ?? false
+        disabledNativeTools = (try? c.decodeIfPresent([String].self, forKey: .disabledNativeTools)) ?? []
+        segmentAssistant = (try? c.decodeIfPresent(Bool.self, forKey: .segmentAssistant)) ?? false
+        segmentUser = (try? c.decodeIfPresent(Bool.self, forKey: .segmentUser)) ?? false
+        segmentUserDelay = (try? c.decodeIfPresent(Double.self, forKey: .segmentUserDelay)) ?? 6
+        bubbleTint = (try? c.decodeIfPresent(Double.self, forKey: .bubbleTint)) ?? 0
+        togetherSince = (try? c.decodeIfPresent(Date.self, forKey: .togetherSince))
+            ?? Calendar.current.date(from: DateComponents(year: 2026, month: 6, day: 27))
+            ?? Date()
+        preset = (try? c.decodeIfPresent(ThemePreset.self, forKey: .preset)) ?? .original
+        voiceInput = (try? c.decodeIfPresent(VoiceInputMode.self, forKey: .voiceInput)) ?? .onDevice
+        siliconKey = (try? c.decodeIfPresent(String.self, forKey: .siliconKey)) ?? ""
+        searchEngine = (try? c.decodeIfPresent(SearchEngine.self, forKey: .searchEngine)) ?? .duck
+        tavilyKey = (try? c.decodeIfPresent(String.self, forKey: .tavilyKey)) ?? ""
+        pricing = (try? c.decodeIfPresent(Pricing.self, forKey: .pricing)) ?? Pricing()
+        wake = (try? c.decodeIfPresent(WakeConfig.self, forKey: .wake)) ?? WakeConfig()
+        textHex = (try? c.decodeIfPresent(String.self, forKey: .textHex)) ?? ""
+        textHexDark = (try? c.decodeIfPresent(String.self, forKey: .textHexDark)) ?? ""
+    }
+}
+
+/// 密钥就在这里面。这一份解不开，等于她所有供应商全没，得一个个重填。
+extension Provider {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
+        name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? ""
+        baseURL = (try? c.decodeIfPresent(String.self, forKey: .baseURL)) ?? ""
+        apiKey = (try? c.decodeIfPresent(String.self, forKey: .apiKey)) ?? ""
+        apiPath = (try? c.decodeIfPresent(String.self, forKey: .apiPath)) ?? "/chat/completions"
+        enabled = (try? c.decodeIfPresent(Bool.self, forKey: .enabled)) ?? true
+        models = (try? c.decodeIfPresent([AIModel].self, forKey: .models)) ?? []
+    }
+}
+
+extension AIModel {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // 没 id 的模型是坏数据，但让它只坏自己：这儿要是抛出去，
+        // 外面整个 models 数组会一起退成空的，那一家的模型就全没了。
+        id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+        displayName = (try? c.decodeIfPresent(String.self, forKey: .displayName)) ?? id
+        enabled = (try? c.decodeIfPresent(Bool.self, forKey: .enabled)) ?? true
+    }
+}
+
+/// 聊天记录。这一份解不开，你们说过的话就全没了。
+extension Conversation {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
+        title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? "新对话"
+        messages = (try? c.decodeIfPresent([ChatMessage].self, forKey: .messages)) ?? []
+        providerID = try? c.decodeIfPresent(UUID.self, forKey: .providerID)
+        modelID = try? c.decodeIfPresent(String.self, forKey: .modelID)
+        systemPrompt = (try? c.decodeIfPresent(String.self, forKey: .systemPrompt)) ?? ""
+        createdAt = (try? c.decodeIfPresent(Date.self, forKey: .createdAt)) ?? Date()
+        updatedAt = (try? c.decodeIfPresent(Date.self, forKey: .updatedAt)) ?? Date()
+        pinned = (try? c.decodeIfPresent(Bool.self, forKey: .pinned)) ?? false
+        space = (try? c.decodeIfPresent(String.self, forKey: .space)) ?? ChatSpace.chat.rawValue
+        memoryGroupID = try? c.decodeIfPresent(UUID.self, forKey: .memoryGroupID)
+        useMemoryTools = (try? c.decodeIfPresent(Bool.self, forKey: .useMemoryTools)) ?? true
+        syncWithClaude = (try? c.decodeIfPresent(Bool.self, forKey: .syncWithClaude)) ?? false
+        isGroup = (try? c.decodeIfPresent(Bool.self, forKey: .isGroup)) ?? false
+        members = (try? c.decodeIfPresent([GroupMember].self, forKey: .members)) ?? []
+    }
+}
+
+/// 每一条消息。
+///
+/// 里头那些嵌套的东西（Track / Journey / XHSNote / ToolRun …）各自也可能
+/// 解不开——但它们全是可选或者数组，坏了就退成 nil / 空数组，
+/// **这条消息本身还在**，正文不会跟着丢。
+extension ChatMessage {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
+        role = (try? c.decodeIfPresent(MessageRole.self, forKey: .role)) ?? .assistant
+        content = (try? c.decodeIfPresent(String.self, forKey: .content)) ?? ""
+        reasoning = try? c.decodeIfPresent(String.self, forKey: .reasoning)
+        reasoningSeconds = try? c.decodeIfPresent(Double.self, forKey: .reasoningSeconds)
+        imageNames = (try? c.decodeIfPresent([String].self, forKey: .imageNames)) ?? []
+        files = (try? c.decodeIfPresent([FileAttachment].self, forKey: .files)) ?? []
+        stickerID = try? c.decodeIfPresent(UUID.self, forKey: .stickerID)
+        turnID = try? c.decodeIfPresent(UUID.self, forKey: .turnID)
+        createdAt = (try? c.decodeIfPresent(Date.self, forKey: .createdAt)) ?? Date()
+        isStreaming = (try? c.decodeIfPresent(Bool.self, forKey: .isStreaming)) ?? false
+        errorText = try? c.decodeIfPresent(String.self, forKey: .errorText)
+        totalTokens = try? c.decodeIfPresent(Int.self, forKey: .totalTokens)
+        toolRuns = (try? c.decodeIfPresent([ToolRun].self, forKey: .toolRuns)) ?? []
+        starred = (try? c.decodeIfPresent(Bool.self, forKey: .starred)) ?? false
+        senderID = try? c.decodeIfPresent(UUID.self, forKey: .senderID)
+        senderName = (try? c.decodeIfPresent(String.self, forKey: .senderName)) ?? ""
+        quotedMessageID = try? c.decodeIfPresent(UUID.self, forKey: .quotedMessageID)
+        quotedName = (try? c.decodeIfPresent(String.self, forKey: .quotedName)) ?? ""
+        quotedText = (try? c.decodeIfPresent(String.self, forKey: .quotedText)) ?? ""
+        actionText = (try? c.decodeIfPresent(String.self, forKey: .actionText)) ?? ""
+        voiceName = (try? c.decodeIfPresent(String.self, forKey: .voiceName)) ?? ""
+        track = try? c.decodeIfPresent(Track.self, forKey: .track)
+        trackCaption = (try? c.decodeIfPresent(String.self, forKey: .trackCaption)) ?? ""
+        journey = try? c.decodeIfPresent(Journey.self, forKey: .journey)
+        note = try? c.decodeIfPresent(XHSNote.self, forKey: .note)
+        noteLoading = (try? c.decodeIfPresent(Bool.self, forKey: .noteLoading)) ?? false
+        noteHint = (try? c.decodeIfPresent(String.self, forKey: .noteHint)) ?? ""
+        choices = (try? c.decodeIfPresent([String].self, forKey: .choices)) ?? []
+        choiceQuestion = (try? c.decodeIfPresent(String.self, forKey: .choiceQuestion)) ?? ""
+        chosenOption = (try? c.decodeIfPresent(String.self, forKey: .chosenOption)) ?? ""
+        translation = try? c.decodeIfPresent(String.self, forKey: .translation)
+        isTranslating = (try? c.decodeIfPresent(Bool.self, forKey: .isTranslating)) ?? false
     }
 }

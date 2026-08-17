@@ -27,6 +27,10 @@ struct QiApp: App {
         .onChange(of: phase) { _, newPhase in
             switch newPhase {
             case .active:
+                // 「开两小时」那种到点了自己松开，别等她想起来再去关。
+                // 读的地方一律走 app.dndOn（它自己会算过没过期），
+                // 这一下只是把界面上那面旗子也收掉。
+                app.clearExpiredDND()
                 WakeEngine.shared.app = app
                 // resume 里会顺手把点进来的那条兜底通知兑现掉：
                 // 那一刻才真的去算他要说什么

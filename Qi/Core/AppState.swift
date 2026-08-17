@@ -1288,6 +1288,73 @@ final class AppState: ObservableObject {
         }
     }
 
+    // MARK: 勿扰
+    //
+    // 「他自己醒来」那套里本来就有安静时段，但那是**排好的**，
+    // 管的是每天固定那几个钟头。勿扰管的是**临时的**：
+    // 我要出门了、我在开会、我现在想安静一会儿。两件事，所以是两个开关。
+    //
+    // 开着的时候：他打不了电话，也不会自己醒来说话。
+    // **挡的是他来找她，不是她去找他**——她照样随时能开口。
+    //
+    // 这两个字段没进 AppSettings，走的是 UserDefaults，理由见 Models.swift
+    // 里那段注释（往 AppSettings 加非可选字段会把她旧的设置整份冲掉）。
+
+    /// 勿扰开着没有
+    @Published var dnd: Bool = UserDefaults.standard.bool(forKey: "dnd") {
+        didSet { UserDefaults.standard.set(dnd, forKey: "dnd") }
+    }
+    /// 到这个点自己解除。nil 就是一直开着，直到她（或者他）关掉。
+    @Published var dndUntil: Date? = {
+        let t = UserDefaults.standard.double(forKey: "dndUntil")
+        return t > 0 ? Date(timeIntervalSince1970: t) : nil
+    }() {
+        didSet {
+            UserDefaults.standard.set(dndUntil?.timeIntervalSince1970 ?? 0,
+                                      forKey: "dndUntil")
+        }
+    }
+
+    /// 现在是不是**真的**在勿扰。
+    ///
+    /// 别直接读 `dnd`——「开两小时」那种设了 `dndUntil`，
+    /// 时间一过就该自动松开，不该等她想起来再去关。
+    var dndOn: Bool {
+        guard dnd else { return false }
+        if let until = dndUntil, Date() >= until { return false }
+        return true
+    }
+
+    /// 勿扰还剩多久，给界面显示用。一直开着的话返回空。
+    var dndNote: String {
+        guard dndOn, let until = dndUntil else { return "" }
+        let m = Int(until.timeIntervalSinceNow / 60)
+        if m <= 0 { return "" }
+        return m < 60
+            ? "还有 \(m) 分钟"
+            : "到 " + until.formatted(date: .omitted, time: .shortened)
+    }
+
+    /// 开 / 关勿扰。`hours` 给了就是「开这么久」，不给就一直开着。
+    func setDND(_ on: Bool, hours: Double? = nil) {
+        dnd = on
+        if on, let h = hours, h > 0 {
+            dndUntil = Date().addingTimeInterval(h * 3600)
+        } else {
+            dndUntil = nil
+        }
+    }
+
+    /// 到点了就把过期的那面旗子收掉，免得界面上一直亮着「开」。
+    /// 纯读的地方一律走 `dndOn`（它自己会算过没过期），
+    /// 这个只在进 App、切回前台的时候叫一次。
+    func clearExpiredDND() {
+        if dnd, let until = dndUntil, Date() >= until {
+            dnd = false
+            dndUntil = nil
+        }
+    }
+
     // MARK: 他是谁 —— 聊天以外的地方也要认得出他
 
     /// 聊天页现在挂着的那个他：哪个供应商、走哪个地址、哪个模型。
@@ -1459,11 +1526,68 @@ final class AppState: ObservableObject {
         return text.isEmpty ? nil : text
     }
 
+    // MARK: 没接通的那些电话
+
+    /// 没接到 / 拒接了，往聊天里落一句。
+    ///
+    /// **这一条一律用模板，一个 token 都不花。**
+    /// 死胡同上的兜底不该悄悄调模型——她没点任何东西，
+    /// 只是没接电话而已。
+    ///
+    /// 两种情况写的东西不一样：
+    ///   · 她随手回了一句（在忙／在外面／…）→ 那句话当成**她说的**回到聊天里，
+    ///     他该知道的是"她为什么没接"，不只是"她没接"
+    ///   · 响完没接 → 他留一条言。没接到的电话也还是说了点什么，
+    ///     而不是一片安静
+    func noteMissedCall(_ call: CallRecord, note: String) {
+        guard let cid = activeChatID, let i = index(of: cid) else { return }
+
+        if !note.isEmpty {
+            var mine = ChatMessage(role: .user)
+            mine.content = "（没接你的电话）" + note
+            conversations[i].messages.append(mine)
+            return
+        }
+
+        var mine = ChatMessage(role: .user)
+        mine.content = "（她没接你的电话）"
+        conversations[i].messages.append(mine)
+
+        var his = ChatMessage(role: .assistant)
+        his.content = call.reason.isEmpty
+            ? "📞 没接到你。不急，回来跟我说话。"
+            : "📞 没接到你。\(call.reason)——不急，回来跟我说话。"
+        conversations[i].messages.append(his)
+    }
+
+    /// 挂断之后先把这一行落下去：`📞 语音通话 · 2 分 17 秒`。
+    ///
+    /// **记录是记录，小结是彩头。**
+    /// 以前只有小结写成功了才会有记录，小结一失败这通电话在聊天里
+    /// 就等于没发生过。现在反过来：先落记录，小结回来了再补到同一条上，
+    /// 补不上也不影响那一行还在。
+    ///
+    /// 太短的不落（照参考里那个数：五秒）——误触拨号不该在聊天里留疤。
+    @discardableResult
+    func logCall(_ call: CallRecord) -> UUID? {
+        guard call.duration >= 5 else { return nil }
+        guard let cid = activeChatID, let i = index(of: cid) else { return nil }
+        var msg = ChatMessage(role: .assistant)
+        msg.content = "📞 语音通话 · " + call.durationText
+        conversations[i].messages.append(msg)
+        return msg.id
+    }
+
     /// 挂了之后整理一句。
     /// 只写真说过的话——**不许编**，没聊出什么就说没聊什么。
-    func summarizeCall(_ id: UUID, lines: [CallLine]) async {
-        guard let him = activeHim else { return }
-        let (p, endpoint, model) = him
+    ///
+    /// `messageID` 是 `logCall` 落下的那一行；小结写好就补到它后面，
+    /// 不再单独新起一条。
+    func summarizeCall(_ id: UUID, lines: [CallLine], messageID: UUID? = nil) async {
+        // 这个函数下面本来就有一个叫 him 的（是他的**名字**，用来拼记录），
+        // 所以这儿换个名字，别撞上。
+        guard let reach = activeHim else { return }
+        let (p, endpoint, model) = reach
 
         let me = settings.userName.isEmpty ? "她" : settings.userName
         let him = settings.aiName.isEmpty ? "我" : settings.aiName
@@ -1497,12 +1621,19 @@ final class AppState: ObservableObject {
         CallStore.shared.setSummary(id, text: summary)
 
         // 写回聊天记录——通话是你们共同经历的一部分，
-        // 不该孤零零躺在通话列表里
-        if let cid = activeID(for: .chat), let i = index(of: cid) {
-            var msg = ChatMessage(role: .assistant)
-            msg.content = "📞 刚才那通电话：" + summary
-            conversations[i].messages.append(msg)
+        // 不该孤零零躺在通话列表里。
+        guard let cid = activeID(for: .chat), let i = index(of: cid) else { return }
+
+        // logCall 已经落过一行了，就补在那一行下面，别再起一条
+        if let messageID,
+           let mi = conversations[i].messages.firstIndex(where: { $0.id == messageID }) {
+            conversations[i].messages[mi].content += "\n" + summary
+            return
         }
+
+        var msg = ChatMessage(role: .assistant)
+        msg.content = "📞 刚才那通电话：" + summary
+        conversations[i].messages.append(msg)
     }
 
     // MARK: 他自己醒过来
@@ -2172,8 +2303,22 @@ final class AppState: ObservableObject {
             if CallStore.shared.incoming != nil {
                 return ("已经在响了，她还没接。", true)
             }
+            // 勿扰开着就打不出去。**告诉他为什么**，别让他以为打通了——
+            // 他要是不知道，会接着等她接电话。
+            if dndOn {
+                return ("她开了勿扰，现在打不过去。" + (dndNote.isEmpty ? "" : "（\(dndNote)）")
+                        + "有话就在这儿说，她回来会看到。", true)
+            }
             CallStore.shared.ring(reason: reason)
             return ("拨过去了，她那边响了。接不接看她。", false)
+
+        case "set_dnd":
+            let on = (args["on"] as? Bool) ?? true
+            let hours = args["hours"] as? Double
+            setDND(on, hours: hours)
+            if !on { return ("勿扰关了，你可以再找她。", false) }
+            return ("勿扰开了" + (dndNote.isEmpty ? "，一直开着到她说关" : "，\(dndNote)")
+                    + "。这期间你打不了电话、也不会自己醒来找她——她找你还是照旧。", false)
 
         case "web_search":
             let query = (args["query"] as? String) ?? ""

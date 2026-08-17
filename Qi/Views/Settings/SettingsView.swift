@@ -294,6 +294,38 @@ struct SettingsView: View {
         // 分成两小块写。SwiftUI 的 ViewBuilder 一层最多认十个，
         // 这张卡片的行数早就超了，得靠 Group 收一收。
         SettingsCard(title: "通用设置") {
+            // 勿扰。
+            //
+            // 「自己醒来」里那个安静时段管的是**每天固定那几个钟头**，
+            // 这个管的是**眼下这一阵**：要出门、在开会、现在想安静。
+            // 开着的时候他打不了电话、也不会自己醒来找你——
+            // **挡的是他来找你，不是你去找他**，你照样随时能开口。
+            //
+            // 也可以直接跟他说「我要出门了，开勿扰」，他会自己按。
+            Toggle(isOn: Binding(get: { app.dndOn },
+                                 set: { app.setDND($0) })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text("勿扰")
+                            .font(.system(size: 15))
+                            .foregroundStyle(Theme.textMain(scheme))
+                        if !app.dndNote.isEmpty {
+                            Text(app.dndNote)
+                                .font(.system(size: 10))
+                                .foregroundStyle(app.settings.accentColor)
+                        }
+                    }
+                    Text("他不打电话、也不自己醒来找你。你找他不受影响")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+            }
+            .tint(app.settings.accentColor)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+
+            SettingsDivider()
+
             Group {
                 // 名字和头像放一行：右边那枚圆点一按就去相册挑
                 nameRow(title: "我",
@@ -491,6 +523,30 @@ struct SettingsView: View {
                 SettingsRowLabel(title: "清空全部对话", icon: "trash", tint: .red)
             }
             .buttonStyle(.plain)
+
+            // 有文件解不开的时候才出现。
+            //
+            // 这种事以前是**完全静默**的：解不开就当成"没有"，
+            // 接着下一次保存把空的写回去，原来那份就真没了。
+            // 现在坏的那份会被挪到一边留着，这里把文件名摆出来——
+            // 至少你知道发生过，也知道去哪儿捞。
+            if !Storage.salvaged.isEmpty {
+                SettingsDivider()
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("有 \(Storage.salvaged.count) 份数据这次没读进来")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color(hexString: "E5544B") ?? .red)
+                    Text(Storage.salvaged.joined(separator: "\n"))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                    Text("原件已经改名留在 App 的文稿目录里，没有被覆盖。")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
         }
     }
 

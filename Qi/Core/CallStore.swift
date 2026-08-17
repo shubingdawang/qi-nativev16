@@ -63,6 +63,17 @@ final class CallStore: ObservableObject {
     /// 正在通话中的那通
     @Published var active: CallRecord?
 
+    /// 刚刚错过的那一通（响完没接／她拒接）。
+    ///
+    /// 界面看见它就替这通电话在聊天里落一句话，然后把它清掉。
+    /// **这是「每个死胡同都得说句话」那条**：没接到的电话也还是说了点什么，
+    /// 而不是一片安静。
+    @Published var missed: (call: CallRecord, note: String)?
+
+    /// 响多久没接就算没接到
+    private let ringSeconds: UInt64 = 30
+    private var ringTask: Task<Void, Never>?
+
     private var loaded = false
 
     init() {
@@ -78,24 +89,48 @@ final class CallStore: ObservableObject {
         var call = CallRecord(caller: "him")
         call.reason = reason
         incoming = call
+
+        // 响一会儿没接就自己收线，落成一通未接来电。
+        //
+        // 以前那张卡片会一直挂在那儿等——**电话不该那样**，
+        // 而且不收线就永远走不到"未接留言"那条路上去。
+        ringTask?.cancel()
+        ringTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: ringSeconds * 1_000_000_000)
+            if Task.isCancelled { return }
+            guard let now = incoming, now.id == call.id else { return }
+            var m = now
+            m.endedAt = Date()
+            m.endedBy = "没接"
+            records.insert(m, at: 0)
+            incoming = nil
+            missed = (m, "")
+        }
     }
 
     /// 接了
     func answer() {
         guard var call = incoming else { return }
+        ringTask?.cancel()
         call.connectedAt = Date()
         active = call
         incoming = nil
     }
 
-    /// 不接
+    /// 不接。
+    ///
+    /// `reason` 是她随手回的那一句（在忙／在外面／想打字聊／自己写的）。
+    /// 这句话会当成**她说的话**回到聊天里——
+    /// 他该知道的是"她为什么没接"，不只是"她没接"。
     func decline(reason: String = "") {
         guard var call = incoming else { return }
+        ringTask?.cancel()
         call.endedAt = Date()
         call.endedBy = "me"
         if !reason.isEmpty { call.summary = "拒接时说：" + reason }
         records.insert(call, at: 0)
         incoming = nil
+        missed = (call, reason)
     }
 
     /// 我打给他。
@@ -119,13 +154,16 @@ final class CallStore: ObservableObject {
         active?.lines.append(line)
     }
 
-    /// 挂了
-    func hangUp(by who: String) {
-        guard var call = active else { return }
+    /// 挂了。把收好的这一通还回去——
+    /// 界面要拿它的时长往聊天里落一行记录。
+    @discardableResult
+    func hangUp(by who: String) -> CallRecord? {
+        guard var call = active else { return nil }
         call.endedAt = Date()
         call.endedBy = who
         records.insert(call, at: 0)
         active = nil
+        return call
     }
 
     func setSummary(_ id: UUID, text: String) {

@@ -6,68 +6,142 @@ struct IncomingCallView: View {
 
     let call: CallRecord
     var onAnswer: () -> Void
-    var onDecline: () -> Void
+    /// 带上她随手回的那一句。什么都没回就是空字符串。
+    var onDecline: (String) -> Void
 
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
     @State private var breathing = false
+    /// 正在自己写一句
+    @State private var writing = false
+    @State private var note = ""
+
+    /// 随手能点的三句。
+    /// 照参考里那个意思：**他该知道的是"她为什么没接"，不只是"她没接"**。
+    private let quick = ["在忙", "在外面", "想打字聊"]
 
     var body: some View {
-        HStack(spacing: 12) {
-            // clawd 顶上来当头像
-            ClawdView(mood: .idle, scale: 1.1)
-                .frame(width: 46, height: 46)
-                .background(
-                    Circle().fill(app.settings.accentColor.opacity(0.16))
-                )
-                .scaleEffect(breathing ? 1.06 : 1)
+        VStack(spacing: 9) {
+            HStack(spacing: 12) {
+                // clawd 顶上来当头像
+                ClawdView(mood: .idle, scale: 1.1)
+                    .frame(width: 46, height: 46)
+                    .background(
+                        Circle().fill(app.settings.accentColor.opacity(0.16))
+                    )
+                    .scaleEffect(breathing ? 1.06 : 1)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Theme.textMain(scheme))
-                Text(call.reason.isEmpty ? "邀请你语音通话" : call.reason)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.textMuted(scheme))
-                    .lineLimit(2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    Text(call.reason.isEmpty ? "邀请你语音通话" : call.reason)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 4)
+
+                Button {
+                    onDecline("")
+                } label: {
+                    Image(systemName: "phone.down.fill")
+                        .font(.system(size: 15))
+                        .foregroundStyle(.white)
+                        .frame(width: 42, height: 42)
+                        .background(Circle().fill(Color(hexString: "E5544B")!))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    onAnswer()
+                } label: {
+                    Image(systemName: "phone.fill")
+                        .font(.system(size: 15))
+                        .foregroundStyle(.white)
+                        .frame(width: 42, height: 42)
+                        .background(Circle().fill(Color(hexString: "4CAF6E")!))
+                }
+                .buttonStyle(.plain)
+                .scaleEffect(breathing ? 1.05 : 1)
             }
 
-            Spacer(minLength: 4)
-
-            Button {
-                onDecline()
-            } label: {
-                Image(systemName: "phone.down.fill")
-                    .font(.system(size: 15))
-                    .foregroundStyle(.white)
-                    .frame(width: 42, height: 42)
-                    .background(Circle().fill(Color(hexString: "E5544B")!))
+            // 不接，但回一句。
+            //
+            // 直接摁红键也行——那就是纯粹的不接。这一排是给"不是不想理你，
+            // 是现在不方便"留的口子：点哪句，哪句就当成她说的话回到聊天里。
+            if writing {
+                HStack(spacing: 8) {
+                    TextField("回他一句…", text: $note)
+                        .font(.system(size: 13))
+                        .textFieldStyle(.plain)
+                        .submitLabel(.send)
+                        .onSubmit { send(note) }
+                    Button {
+                        send(note)
+                    } label: {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundStyle(app.settings.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(note.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            } else {
+                HStack(spacing: 7) {
+                    ForEach(quick, id: \.self) { q in
+                        Button { send(q) } label: {
+                            Text(q)
+                                .font(.system(size: 11))
+                                .foregroundStyle(Theme.textSoft(scheme))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(
+                                    Capsule().fill(scheme == .dark
+                                                   ? Color.white.opacity(0.13)
+                                                   : Color.white.opacity(0.55))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Button {
+                        withAnimation(.easeOut(duration: 0.18)) { writing = true }
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule().fill(scheme == .dark
+                                               ? Color.white.opacity(0.13)
+                                               : Color.white.opacity(0.55))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    Spacer(minLength: 0)
+                }
             }
-            .buttonStyle(.plain)
-
-            Button {
-                onAnswer()
-            } label: {
-                Image(systemName: "phone.fill")
-                    .font(.system(size: 15))
-                    .foregroundStyle(.white)
-                    .frame(width: 42, height: 42)
-                    .background(Circle().fill(Color(hexString: "4CAF6E")!))
-            }
-            .buttonStyle(.plain)
-            .scaleEffect(breathing ? 1.05 : 1)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
         .glassBackground(radius: 20, strength: app.settings.glassOpacity, extra: 0.25)
         .padding(.horizontal, 12)
         .shadow(color: .black.opacity(0.18), radius: 16, y: 6)
+        .animation(.easeOut(duration: 0.2), value: writing)
         .onAppear {
             withAnimation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true)) {
                 breathing = true
             }
         }
         .transition(.move(edge: .top).combined(with: .opacity))
+    }
+
+    /// 回一句就挂。太长的截掉——这是一句话，不是一条消息。
+    private func send(_ text: String) {
+        let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        onDecline(String(clean.prefix(60)))
     }
 }
 
@@ -407,18 +481,25 @@ struct CallView: View {
     }
 
     private func hangUp(by who: String) {
-        guard let call = store.active else { return }
-        let lines = call.lines
-        let id = call.id
-        store.hangUp(by: who)
+        guard store.active != nil else { return }
+        guard let done = store.hangUp(by: who) else { return }
         ticker?.cancel()
         VoicePlayer.shared.stop()
         if app.settings.haptics {
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         }
-        // 通话不是孤立的日志，整理一句写回你们的记录里
-        if lines.count >= 2 {
-            Task { await app.summarizeCall(id, lines: lines) }
+
+        // 通话不是孤立的日志，落回你们的记录里。
+        //
+        // **顺序反过来了**：先落 `📞 语音通话 · 2 分 17 秒` 这一行，
+        // 小结回来了再补到同一条上。以前是小结成功才有记录，
+        // 小结一失败这通电话在聊天里就等于没发生过。
+        let mid = app.logCall(done)
+        // 太短的不值得再花一次钱去总结（参考里那个数：二十秒）
+        if done.lines.count >= 2, done.duration >= 20 {
+            let id = done.id
+            let lines = done.lines
+            Task { await app.summarizeCall(id, lines: lines, messageID: mid) }
         }
         dismiss()
     }

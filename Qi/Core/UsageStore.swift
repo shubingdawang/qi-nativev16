@@ -384,3 +384,28 @@ enum UsageFormat {
         return String(format: "%.2f", v)
     }
 }
+
+// MARK: - 容错解码
+//
+// 理由和写法见 Models.swift 末尾那一整段。
+// Pricing 嵌在 AppSettings 里，它解不开会连累整份设置一起没。
+//
+// **必须写在这个文件里**：合成出来的 CodingKeys 是 private 的，
+// 而 private 在 Swift 里是文件作用域，换个文件就看不见了。
+// 也**必须写在 extension 里**，不能写进结构体本体，否则 `Pricing()` 会没。
+
+extension Pricing {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        mode = (try? c.decodeIfPresent(BillingMode.self, forKey: .mode)) ?? .perCall
+        perCall = (try? c.decodeIfPresent(Double.self, forKey: .perCall)) ?? 0.04
+        input = (try? c.decodeIfPresent(Double.self, forKey: .input)) ?? 0
+        cacheRead = (try? c.decodeIfPresent(Double.self, forKey: .cacheRead)) ?? 0
+        cacheWrite = (try? c.decodeIfPresent(Double.self, forKey: .cacheWrite)) ?? 0
+        output = (try? c.decodeIfPresent(Double.self, forKey: .output)) ?? 0
+        perImage = (try? c.decodeIfPresent(Double.self, forKey: .perImage)) ?? 0
+        perTTS = (try? c.decodeIfPresent(Double.self, forKey: .perTTS)) ?? 0
+        perASR = (try? c.decodeIfPresent(Double.self, forKey: .perASR)) ?? 0
+        perSearch = (try? c.decodeIfPresent(Double.self, forKey: .perSearch)) ?? 0
+    }
+}

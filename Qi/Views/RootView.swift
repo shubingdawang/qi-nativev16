@@ -37,15 +37,10 @@ struct RootView: View {
                     IncomingCallView(
                         call: incoming,
                         onAnswer: { CallStore.shared.answer() },
-                        onDecline: {
-                            CallStore.shared.decline()
-                            // 他该知道你没接——这事不该悄无声息
-                            if let id = app.activeChatID, let i = app.index(of: id) {
-                                var msg = ChatMessage(role: .user)
-                                msg.content = "（她没接你的电话）"
-                                app.conversations[i].messages.append(msg)
-                            }
-                        })
+                        // 接不接、为什么不接，都由 CallStore 收好，
+                        // 底下那个 onChange 统一往聊天里落话——
+                        // 拒接和"响完没接"最后走的是同一条路。
+                        onDecline: { note in CallStore.shared.decline(reason: note) })
                     Spacer()
                 }
                 .padding(.top, 8)
@@ -57,6 +52,15 @@ struct RootView: View {
             set: { if !$0 && calls.active != nil { calls.hangUp(by: "me") } }
         )) {
             CallView()
+        }
+        // 没接通的那些电话，在聊天里落一句。
+        //
+        // **每个死胡同都得说句话**：她回了一句就把那句话当成她说的送过去，
+        // 什么都没回就由他留一条言。全是模板，不花钱。
+        .onChange(of: calls.missed?.call.id) { _, _ in
+            guard let m = calls.missed else { return }
+            app.noteMissedCall(m.call, note: m.note)
+            calls.missed = nil
         }
         .onAppear {
             // 札记、设置这些页面导航常驻，不然翻着翻着就出不去了
