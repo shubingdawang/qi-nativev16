@@ -122,6 +122,17 @@ struct AppearanceView: View {
                 }
                 .frame(width: 26, height: 26)
                 .animation(.easeOut(duration: 0.15), value: previewColor)
+                // 主题色也给一个调色盘：不知道要哪个色的时候，
+                // 打色号是没法「试」出来的。调完直接生效，不用再按「用」。
+                ColorPicker("", selection: Binding(
+                    get: { Color(hexString: customHex) ?? app.settings.accentColor },
+                    set: { c in
+                        customHex = c.hexString
+                        app.settings.accentHex = c.hexString
+                    }
+                ), supportsOpacity: false)
+                    .labelsHidden()
+                    .frame(width: 30)
                 Button("用") { applyCustom() }
                     .font(.app(14, weight: .medium))
                     .buttonStyle(.plain)
@@ -438,8 +449,7 @@ struct AppearanceView: View {
                 .font(.app(14, design: .monospaced))
                 .textFieldStyle(.plain)
                 .frame(maxWidth: 110)
-            // 字色这两行同理，一直摆一个方块：填对了显示颜色，
-            // 没填对显示一个空框，比"什么都不显示"好判断
+            // 填对了显示颜色，没填对显示一个空框，比"什么都不显示"好判断
             ZStack {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(Color(hexString: text.wrappedValue) ?? Color.clear)
@@ -447,6 +457,14 @@ struct AppearanceView: View {
                     .strokeBorder(Theme.textMuted(scheme).opacity(0.3), lineWidth: 1)
             }
             .frame(width: 22, height: 22)
+            // 她说「所有选择颜色的地方都加上调色盘」——字色这两行以前只能打色号。
+            // 留空＝跟着深浅色自动走，所以取色器只在她真的调了之后才写值。
+            ColorPicker("", selection: Binding(
+                get: { Color(hexString: text.wrappedValue) ?? Theme.textMain(scheme) },
+                set: { text.wrappedValue = $0.hexString }
+            ), supportsOpacity: false)
+                .labelsHidden()
+                .frame(width: 30)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 13)

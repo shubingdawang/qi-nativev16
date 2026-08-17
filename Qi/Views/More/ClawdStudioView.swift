@@ -88,7 +88,7 @@ struct ClawdStudioView: View {
 
     @State private var svg = ClawdSVG.skeleton
     @State private var css = ClawdSVG.baseCSS
-    /// 0 零件 · 1 图形 · 2 样式
+    /// 0 画（摆积木，不碰代码）· 1 零件 · 2 图形（SVG）· 3 样式（CSS）
     @State private var tab = 0
     @State private var saving = false
     @State private var name = ""
@@ -145,9 +145,10 @@ struct ClawdStudioView: View {
 
     private var picker: some View {
         Picker("", selection: $tab) {
-            Text("零件").tag(0)
-            Text("图形").tag(1)
-            Text("样式").tag(2)
+            Text("画").tag(0)
+            Text("零件").tag(1)
+            Text("图形").tag(2)
+            Text("样式").tag(3)
         }
         .pickerStyle(.segmented)
         .padding(.horizontal, 16)
@@ -159,8 +160,16 @@ struct ClawdStudioView: View {
     @ViewBuilder
     private var editor: some View {
         switch tab {
-        case 0: kit
-        case 1: code($svg, hint: "这是 SVG。clawd 的身子、手、腿、脸都在这儿。")
+        case 0:
+            // 摆积木：**一个字的代码都不用看**。
+            // 她说改代码这条路她走不了，所以这个排第一，默认就是它。
+            ClawdGridEditor { drawn in
+                // 画的东西整块塞进骨架的 #face 里——
+                // 这样它跟身子一起呼吸，导出那条路一个字都不用改
+                svg = ClawdSVG.replaceFace(in: ClawdSVG.skeleton, with: drawn)
+            }
+        case 1: kit
+        case 2: code($svg, hint: "这是 SVG。clawd 的身子、手、腿、脸都在这儿。")
         default: code($css, hint: "这是 CSS。颜色、动画都在这儿。")
         }
     }

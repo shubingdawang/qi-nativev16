@@ -103,11 +103,35 @@ enum DollWidget {
         .stage svg { width: 100%; height: 100%; display: block; }
         .hotspot {
           position: absolute; border: 0; padding: 0; margin: 0;
-          background: var(--accent); opacity: 0; border-radius: 50%;
-          transition: opacity .18s ease, transform .18s ease;
+          background: transparent; border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          transition: transform .18s ease;
         }
-        .hotspot.touched { opacity: .5; transform: scale(1.35); }
-        .hint .hotspot { opacity: .16; }
+        /* 平时露一个小点，让她一眼看出哪儿能碰 */
+        .hotspot .dot {
+          width: 9px; height: 9px; border-radius: 50%;
+          background: var(--accent); opacity: .45;
+          transition: all .2s ease;
+        }
+        .hotspot .tag {
+          position: absolute; top: 100%; margin-top: 1px;
+          font-size: 9px; font-weight: 400; color: var(--muted);
+          opacity: 0; transition: opacity .2s ease; white-space: nowrap;
+        }
+        .hotspot.touched { transform: scale(1.25); }
+        .hotspot.touched .dot { opacity: 1; width: 26px; height: 26px; }
+        .hotspot.touched .tag { opacity: 1; }
+        /* 「哪儿能点」按下去：全部标出来 */
+        .hint .hotspot .dot { opacity: .95; width: 16px; height: 16px; }
+        .hint .hotspot .tag { opacity: 1; }
+        /* 刚发生的那一句，压在画面底下 */
+        .said {
+          position: absolute; left: 10px; right: 10px; bottom: 10px;
+          font-size: 12px; line-height: 1.45; color: var(--ink);
+          background: var(--fill); border-radius: 12px; padding: 8px 10px;
+          backdrop-filter: blur(6px);
+        }
+        .said:empty { display: none; }
         .row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
         button.chip {
           font: 12px/1 -apple-system, "PingFang SC", sans-serif;
@@ -144,29 +168,53 @@ enum DollWidget {
 
         var S = null;
 
-        // 四个姿势。用同一副骨架，只改几段 path / 角度——
-        // 手上没有立绘素材，与其用镜像翻转硬凑，不如画得简单但一致。
-        function figure(pose, camera) {
+        // 四个姿势。
+        //
+        // 上一版是几根线条 + 一个圆脑袋，她的原话是「有点太粗糙了，
+        // 不太看得懂发生了什么」——**看不懂的一半原因是那根本不像个人**。
+        // 这一版还是纯 SVG（手上没有立绘素材），但把该有的都画出来：
+        // 头发、脸（眼睛/腮红/嘴）、身子是件连衣裙、四肢有粗细。
+        // 身体数值也画进去：脸红跟着「热」走、抖跟着「抖」走。
+        function figure(pose, camera, body) {
+          var warm = Math.min(1, (body.warmth || 0) / 70);
           var poses = {
-            sit:   { spine: "M100,96 C100,140 100,168 100,196", legs: "M100,196 C86,224 74,238 62,250 M100,196 C114,222 124,240 136,252", arms: "M100,120 C80,136 70,152 66,170 M100,120 C120,136 130,152 134,170", head: 0 },
-            lean:  { spine: "M100,96 C108,140 112,168 116,196", legs: "M116,196 C104,226 92,240 78,252 M116,196 C132,220 142,238 152,250", arms: "M104,120 C84,132 70,142 58,150 M104,120 C126,138 138,156 142,176", head: -8 },
-            curl:  { spine: "M100,100 C96,134 92,158 94,182", legs: "M94,182 C74,196 62,210 60,228 M94,182 C110,200 118,216 116,234", arms: "M98,122 C82,132 72,146 74,162 M98,122 C114,132 122,146 120,162", head: 10 },
-            reach: { spine: "M100,96 C100,140 100,168 100,196", legs: "M100,196 C88,226 78,240 68,252 M100,196 C112,224 122,240 132,252", arms: "M100,118 C78,110 62,100 52,86 M100,118 C122,134 132,152 136,172", head: -4 }
+            sit:   { dress: "M100,112 L74,196 L126,196 Z", legs: "M88,196 C84,222 76,236 66,248 M112,196 C116,222 124,236 134,248", arms: "M84,124 C70,142 64,158 62,174 M116,124 C130,142 136,158 138,174", head: 0 },
+            lean:  { dress: "M104,112 L84,196 L134,196 Z", legs: "M96,196 C90,224 82,238 72,250 M120,196 C126,220 136,236 148,246", arms: "M88,124 C72,136 62,144 54,150 M120,124 C134,144 140,160 142,178", head: -8 },
+            curl:  { dress: "M100,114 L80,186 L124,186 Z", legs: "M90,186 C74,196 64,210 62,226 M112,186 C120,202 122,216 118,232", arms: "M86,126 C74,136 68,148 70,162 M114,126 C126,136 130,148 128,162", head: 10 },
+            reach: { dress: "M100,112 L74,196 L126,196 Z", legs: "M88,196 C84,224 76,238 68,250 M112,196 C118,222 126,238 134,248", arms: "M84,122 C68,110 58,98 52,84 M116,124 C130,142 136,158 138,176", head: -4 }
           };
           var p = poses[pose] || poses.sit;
           // 机位：整体缩放和平移，不是换素材
           var cam = { front: "translate(0,0) scale(1)", side: "translate(10,0) scale(1) rotate(-6 100 150)",
-                      close: "translate(0,-26) scale(1.28)", top: "translate(0,10) scale(0.94) rotate(3 100 150)" };
+                      close: "translate(0,-30) scale(1.34)", top: "translate(0,10) scale(0.94) rotate(3 100 150)" };
           var t = cam[camera] || cam.front;
+          // 眼睛：热到一定程度就眯起来
+          var eyes = warm > 0.55
+            ? '<path d="M86,72 q6,-5 12,0" stroke="var(--ink)" stroke-width="3" fill="none" stroke-linecap="round"/>' +
+              '<path d="M102,72 q6,-5 12,0" stroke="var(--ink)" stroke-width="3" fill="none" stroke-linecap="round"/>'
+            : '<circle cx="92" cy="72" r="3.2" fill="var(--ink)"/><circle cx="108" cy="72" r="3.2" fill="var(--ink)"/>';
           return '<svg viewBox="0 0 200 280" xmlns="http://www.w3.org/2000/svg">' +
-            '<g transform="' + t + '" fill="none" stroke="var(--line)" stroke-width="6" stroke-linecap="round">' +
+            '<g transform="' + t + '">' +
+              // 腿和胳膊：有粗细，收笔是圆的
+              '<g fill="none" stroke="var(--skin2)" stroke-width="11" stroke-linecap="round">' +
+                '<path d="' + p.legs + '"/></g>' +
+              '<g fill="none" stroke="var(--skin2)" stroke-width="9" stroke-linecap="round">' +
+                '<path d="' + p.arms + '"/></g>' +
+              // 连衣裙
+              '<path d="' + p.dress + '" fill="var(--accent)" opacity=".85"/>' +
+              // 脖子和头
+              '<rect x="94" y="96" width="12" height="14" rx="5" fill="var(--skin2)"/>' +
               '<g transform="rotate(' + p.head + ' 100 78)">' +
-                '<circle cx="100" cy="74" r="24" fill="var(--skin)" stroke="var(--line)"/>' +
-                '<path d="M78,62 C84,44 116,44 122,62" stroke="var(--hair)" stroke-width="10"/>' +
+                '<circle cx="100" cy="76" r="24" fill="var(--skin)"/>' +
+                eyes +
+                '<circle cx="82" cy="82" r="6" fill="#FF8FA0" opacity="' + (0.18 + warm * 0.5).toFixed(2) + '"/>' +
+                '<circle cx="118" cy="82" r="6" fill="#FF8FA0" opacity="' + (0.18 + warm * 0.5).toFixed(2) + '"/>' +
+                '<path d="M95,88 q5,4 10,0" stroke="var(--ink)" stroke-width="2.4" fill="none" stroke-linecap="round"/>' +
+                // 头发：一顶盖过去，两侧垂下来
+                '<path d="M74,74 C74,44 126,44 126,74 L120,66 C112,58 88,58 80,66 Z" fill="var(--hair)"/>' +
+                '<path d="M76,72 C70,92 72,104 76,110" stroke="var(--hair)" stroke-width="8" fill="none" stroke-linecap="round"/>' +
+                '<path d="M124,72 C130,92 128,104 124,110" stroke="var(--hair)" stroke-width="8" fill="none" stroke-linecap="round"/>' +
               '</g>' +
-              '<path d="' + p.spine + '" stroke="var(--skin2)" stroke-width="20"/>' +
-              '<path d="' + p.arms + '"/>' +
-              '<path d="' + p.legs + '"/>' +
             '</g></svg>';
         }
 
@@ -179,7 +227,7 @@ enum DollWidget {
 
         function render(s) {
           S = s;
-          document.getElementById("art").innerHTML = figure(s.pose, s.camera);
+          document.getElementById("art").innerHTML = figure(s.pose, s.camera, s.body);
 
           var hs = document.getElementById("spots");
           if (hs.childElementCount !== s.zones.length) {
@@ -192,9 +240,13 @@ enum DollWidget {
               b.style.top = "calc(" + xy[1] + "% - 26px)";
               b.style.width = "52px"; b.style.height = "52px";
               b.setAttribute("aria-label", z.label);
+              // 能点的地方**默认就露一个小点**。
+              // 上一版全透明，她说「不太看得懂发生了什么」——
+              // 一半是因为根本看不出哪儿能点。
+              b.innerHTML = '<i class="dot"></i><b class="tag">' + z.label + '</b>';
               b.onclick = function () {
                 b.classList.add("touched");
-                setTimeout(function () { b.classList.remove("touched"); }, 600);
+                setTimeout(function () { b.classList.remove("touched"); }, 700);
                 act("touch_zone", { zone: z.id });
               };
               hs.appendChild(b);
@@ -211,9 +263,13 @@ enum DollWidget {
           setBar("voi", "声", b.voice);
           setBar("int", "强度", s.intensity);
 
+          // 最新那一句压在画面上，剩下的往下排
+          var all = s.take.shots || [];
+          document.getElementById("said").textContent = all.length ? all[all.length - 1] : "";
+
           var shots = document.getElementById("shots");
           shots.innerHTML = "";
-          (s.take.shots || []).slice(-3).forEach(function (t) {
+          all.slice(-4, -1).forEach(function (t) {
             var p = document.createElement("p"); p.textContent = t; shots.appendChild(p);
           });
 
@@ -303,6 +359,9 @@ enum DollWidget {
           <div class="stage" id="stage">
             <div id="art"></div>
             <div id="spots"></div>
+            <!-- 刚刚发生的那一句，直接压在画面上。
+                 底下那三行小字她说看不出发生了什么，那就把最新那句摆到画里 -->
+            <div class="said" id="said"></div>
           </div>
           <div class="row" id="poses"></div>
           <div class="row" id="cameras"></div>

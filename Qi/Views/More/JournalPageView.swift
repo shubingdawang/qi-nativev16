@@ -354,6 +354,15 @@ struct JournalPageView: View {
             if showingPapers {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 7) {
+                        // 现成的几张纸之外，也能自己调一个——
+                        // 她说「所有选择颜色的地方都加上调色盘」
+                        ColorPicker("", selection: Binding(
+                            get: { Color(hexString: page.paperHex) ?? Color(hexString: "F3E9D8")! },
+                            set: { page.paperHex = $0.hexString; store.save(page) }
+                        ), supportsOpacity: false)
+                            .labelsHidden()
+                            .frame(width: 42, height: 30)
+
                         ForEach(JournalKit.papers, id: \.1) { name, hex in
                             Button {
                                 page.paperHex = hex
