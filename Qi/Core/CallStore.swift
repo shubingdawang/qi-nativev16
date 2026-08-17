@@ -48,6 +48,9 @@ struct CallLine: Codable, Identifiable, Hashable {
     var at: Date = Date()
     /// 这句的语音文件（他说的那些会存下来）
     var voiceName: String = ""
+    /// 她这句**是怎么说的**——跟她平时比偏在哪儿。本机算，不花钱。
+    /// 见 VoiceProsody。
+    var tone: String = ""
 }
 
 @MainActor

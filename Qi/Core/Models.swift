@@ -115,6 +115,12 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     var actionText: String = ""
     /// 这条如果是语音，指向本地那个 mp3
     var voiceName: String = ""
+    /// 这条语音**是怎么说的**——「有点比平时轻，停顿比平时多」这种。
+    ///
+    /// 跟她自己的平时比出来的（见 VoiceProsody），本机算，不花钱。
+    /// 存在消息上而不是全局飘着，是 ears 踩过的坑：
+    /// 全局漂浮注入会让模型搞不清是谁什么时候说的。
+    var voiceTone: String = ""
     /// 他放的一首歌
     var track: Track? = nil
     var trackCaption: String = ""
@@ -563,6 +569,7 @@ extension ChatMessage {
         quotedText = (try? c.decodeIfPresent(String.self, forKey: .quotedText)) ?? ""
         actionText = (try? c.decodeIfPresent(String.self, forKey: .actionText)) ?? ""
         voiceName = (try? c.decodeIfPresent(String.self, forKey: .voiceName)) ?? ""
+        voiceTone = (try? c.decodeIfPresent(String.self, forKey: .voiceTone)) ?? ""
         track = try? c.decodeIfPresent(Track.self, forKey: .track)
         trackCaption = (try? c.decodeIfPresent(String.self, forKey: .trackCaption)) ?? ""
         journey = try? c.decodeIfPresent(Journey.self, forKey: .journey)

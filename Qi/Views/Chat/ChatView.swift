@@ -34,6 +34,8 @@ struct ChatView: View {
     @State private var transcribing = false
     /// 刚录好、还没发出去的那段语音（存在 Voices 里的文件名）
     @State private var pendingVoice: String?
+    /// 刚录那条**是怎么说的**，跟 pendingVoice 一起发出去
+    @State private var pendingTone: String = ""
     /// 光标前面刚打了个 @，正等着挑人
     @State private var mentioning = false
     @State private var notice: String?
@@ -458,7 +460,11 @@ struct ChatView: View {
                         Text("语音 \(Int(VoiceStore.duration(v)))″")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(Theme.textMain(scheme))
-                        Text("跟文字一起发出去")
+                        // 攒够八条之前这里一直是「跟文字一起发出去」，
+                        // 之后才会变成他能听出来的那句。
+                        // 摆出来是因为：这是他会「听」到的东西，
+                        // 不该只有他知道，她自己也得看得见。
+                        Text(pendingTone.isEmpty ? "跟文字一起发出去" : pendingTone)
                             .font(.system(size: 10))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
@@ -466,6 +472,9 @@ struct ChatView: View {
                     Button {
                         VoiceStore.delete(v)
                         pendingVoice = nil
+                        // 语气是这条语音的，语音扔了它也得跟着走，
+                        // 不然会挂到下一条纯文字消息上
+                        pendingTone = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 15))
@@ -912,6 +921,11 @@ struct ChatView: View {
     private func stopListening() async {
         defer { listening = false }
 
+        // 停之前先把振幅序列拿走——stop() 之后 recorder 还留着它，
+        // 但下一次按住说话就会重置，所以在这儿取最稳
+        let shape = recorder.samples
+        let step = recorder.sampleInterval
+
         guard let url = recorder.stop() else { return }
         guard recorder.seconds > 0.4 else {
             try? FileManager.default.removeItem(at: url)
@@ -939,6 +953,9 @@ struct ChatView: View {
             } else {
                 draft = draft.isEmpty ? text : draft + " " + text
             }
+            // 她**是怎么说的**。本机算，不花钱，不联网。
+            // 认不出字也照样算——语气跟识别成不成功是两回事。
+            noteTone(shape: shape, step: step, text: text)
         default:
             do {
                 let t: Transcript
@@ -954,10 +971,25 @@ struct ChatView: View {
                 }
                 let line = t.briefForModel
                 draft = draft.isEmpty ? line : draft + " " + line
+                noteTone(shape: shape, step: step, text: t.text)
             } catch {
                 notice = error.localizedDescription
             }
         }
+    }
+
+    /// 算这一句的语气，记进基线，留给待发送的那条消息。
+    ///
+    /// 全是本机的纯算术，一分钱不花、一个字节不上传。
+    /// 攒够 8 条之前 `note` 一律返回空——那会儿它还不知道什么叫「她的平时」，
+    /// **宁可不说也不要说错**。
+    private func noteTone(shape: [Double], step: Double, text: String) {
+        let f = VoiceProsody.features(samples: shape, interval: step, text: text)
+        guard f.usable else { return }
+        pendingTone = VoiceBaseline.shared.note(for: f)
+        // 只有正常走完这一轮才记进基线。半截的、太短的都不算，
+        // 不然基线会被污染。
+        VoiceBaseline.shared.remember(f)
     }
 
     private func insertMention(_ name: String) {
@@ -993,8 +1025,10 @@ struct ChatView: View {
         let files = pendingFiles
         let sticker = pendingSticker
         let voice = pendingVoice ?? ""
+        let tone = pendingTone
         draft = ""
         pendingVoice = nil
+        pendingTone = ""
         pendingImages = []
         pendingFiles = []
         pickedItems = []
@@ -1002,7 +1036,8 @@ struct ChatView: View {
         quoting = nil
         mentioning = false
         app.send(text: text, images: images, in: conv.id,
-                 files: files, sticker: sticker, quoting: quoted, voiceName: voice)
+                 files: files, sticker: sticker, quoting: quoted,
+                 voiceName: voice, voiceTone: tone)
     }
 
     private func loadPicked(_ items: [PhotosPickerItem]) {

@@ -153,8 +153,8 @@ struct CallView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var store = CallStore.shared
+    // 只留录音机。实时识别那条撤了——见 startListening 上面那段。
     @StateObject private var recorder = VoiceRecorder()
-    @StateObject private var speech = SpeechRecognizer()
 
     @State private var draft = ""
     @State private var muted = false
@@ -278,6 +278,13 @@ struct CallView: View {
                     .glassBackground(radius: 18,
                                      strength: app.settings.glassOpacity,
                                      extra: line.fromMe ? 0.3 : 0)
+                // 她这句是怎么说的。摆出来她自己也看得见——
+                // 这是他"听"到的东西，不该只有他知道。
+                if !line.tone.isEmpty {
+                    Text(line.tone)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
                 if !line.voiceName.isEmpty {
                     Button {
                         VoicePlayer.shared.toggle(line.voiceName)
@@ -392,12 +399,24 @@ struct CallView: View {
 
     // MARK: 说话
 
+    /// 按住说话。
+    ///
+    /// **不管走哪条识别，都先录成文件**——聊天页早就是这么做的，
+    /// 这儿一直没跟上。改过来有三个好处：
+    ///
+    ///   · `.onDevice` 那档以前走的是 AVAudioEngine，没有文件也没有电平，
+    ///     所以**打电话的时候一点语气都读不到**（她问的就是这件事）
+    ///   · 边录边实时识别，两个东西抢同一个麦克风输入，谁都录不干净。
+    ///     参考里那句话说得很实在：「录完再转只多等一两秒，稳得多」
+    ///   · 录下来的那段还能存进这一句，挂了之后回听
     private func startListening() {
         listening = true
-        if app.settings.voiceInput == .onDevice {
-            speech.start()
-        } else {
-            try? recorder.start()
+        do {
+            try recorder.start()
+        } catch {
+            notice = "开不了录音：" + error.localizedDescription
+            listening = false
+            return
         }
         if app.settings.haptics {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -406,40 +425,74 @@ struct CallView: View {
 
     private func stopListening() async {
         defer { listening = false }
+
+        // 先把振幅序列拿走，下一次按住说话就重置了
+        let shape = recorder.samples
+        let step = recorder.sampleInterval
+
+        guard let url = recorder.stop(), recorder.seconds > 0.4 else { return }
+        defer { try? FileManager.default.removeItem(at: url) }
+
         var text = ""
-        if app.settings.voiceInput == .onDevice {
-            text = speech.stop()
-        } else {
-            guard let url = recorder.stop(), recorder.seconds > 0.4 else { return }
-            defer { try? FileManager.default.removeItem(at: url) }
+        switch app.settings.voiceInput {
+        case .onDevice:
+            text = await SpeechRecognizer.recognizeFile(url)
+        case .senseVoice:
             do {
-                let t: Transcript
-                if app.settings.voiceInput == .senseVoice {
-                    t = try await SenseVoiceAPI.transcribe(url, key: app.settings.siliconKey)
-                } else {
-                    let v = app.activeVoice ?? app.voices.first
-                    t = try await ElevenSTT.transcribe(url, key: v?.apiKey ?? "",
-                                                       baseURL: v?.baseURL ?? "")
-                }
-                text = t.briefForModel
+                text = try await SenseVoiceAPI
+                    .transcribe(url, key: app.settings.siliconKey).briefForModel
+            } catch {
+                notice = error.localizedDescription
+                return
+            }
+        default:
+            do {
+                let v = app.activeVoice ?? app.voices.first
+                text = try await ElevenSTT.transcribe(url, key: v?.apiKey ?? "",
+                                                      baseURL: v?.baseURL ?? "").briefForModel
             } catch {
                 notice = error.localizedDescription
                 return
             }
         }
         guard !text.isEmpty else { return }
-        await send(text)
+
+        // 她这一句是**怎么说**的。本机纯算术，不花钱不上传。
+        let f = VoiceProsody.features(samples: shape, interval: step, text: text)
+        var tone = ""
+        if f.usable {
+            tone = VoiceBaseline.shared.note(for: f)
+            VoiceBaseline.shared.remember(f)
+        }
+        await send(text, tone: tone)
     }
 
-    private func send(_ text: String) async {
+    private func send(_ text: String, tone: String = "") async {
         let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty else { return }
         draft = ""
         farewell = 0     // 你一开口，那个倒计时就取消
-        store.addLine(CallLine(fromMe: true, text: clean))
+
+        // **把这次请求绑在这一通电话上。**
+        //
+        // 他要回一句得花好几秒，而这几秒里她可能已经挂了、甚至又拨了一通。
+        // 以前这里什么都不认：回来照样播放语音、照样往 store.addLine——
+        // 于是挂断之后音箱里还会冒出他的声音，紧接着拨的那一通里
+        // 会凭空多出上一通的回复。
+        //
+        // 参考里管这个叫身份协议：**异步结果回来先验身份，再改状态**，
+        // 光有一个「正在说话」的布尔值是不够的。我们这条链路简单，
+        // 一个通话 id 就够——但检查的位置一个都不能少。
+        guard let mine = store.active?.id else { return }
+        var mineLine = CallLine(fromMe: true, text: clean)
+        mineLine.tone = tone
+        store.addLine(mineLine)
 
         thinking = true
         let reply = await app.speakOnCall(store.active?.lines ?? [])
+
+        // 回来了，先看看这通电话还在不在、还是不是刚才那一通
+        guard store.active?.id == mine else { return }
         thinking = false
 
         guard !reply.text.isEmpty else {
@@ -468,13 +521,18 @@ struct CallView: View {
     /// 说完"那我挂了"还会再黏一会儿。
     private func startFarewell() {
         farewell = 15
+        // 这个倒计时也得认电话。不然它挂的可能是**下一通**——
+        // 上一通说完再见，她马上挂了又拨一通，十五秒后这个计时器醒过来，
+        // 一句话没说就把新的那通掐了。
+        guard let mine = store.active?.id else { return }
         Task { @MainActor in
             while farewell > 0 {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 if farewell == 0 { return }   // 你开口了
+                guard store.active?.id == mine else { return }
                 farewell -= 1
             }
-            if farewell == 0, store.active != nil {
+            if farewell == 0, store.active?.id == mine {
                 hangUp(by: "him")
             }
         }

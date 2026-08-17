@@ -396,7 +396,8 @@ final class AppState: ObservableObject {
               files: [FileAttachment] = [],
               sticker: Sticker? = nil,
               quoting quoted: ChatMessage? = nil,
-              voiceName: String = "") {
+              voiceName: String = "",
+              voiceTone: String = "") {
         guard let i = index(of: conversationID) else { return }
         // 攒着的那条已经在记录里了，这一条发出去的时候它会跟着一起带上，
         // 所以这儿只要把倒计时掐掉就行，不用再单独跑一轮
@@ -408,6 +409,9 @@ final class AppState: ObservableObject {
         userMsg.turnID = turn
         // 她按住说的那段，跟着这条一起留下来，能点开再听
         userMsg.voiceName = voiceName
+        // 她是怎么说的。本机算的，跟这条绑在一起——
+        // 不能全局飘着，不然他分不清是谁什么时候说的
+        userMsg.voiceTone = voiceTone
         if let quoted {
             userMsg.quotedMessageID = quoted.id
             userMsg.quotedName = quoted.role == .user
@@ -875,6 +879,60 @@ final class AppState: ObservableObject {
     }
 
     /// 把附件里读出来的文字接在消息后面，标清楚是哪个文件
+    // MARK: 他收到的那条，比她以为的少
+
+    /// 两句话之间隔了多久。隔得够久才说，不然每条都挂个时间是噪音。
+    ///
+    /// **他本来完全不知道时间。** 发给模型的每条只有正文，
+    /// `createdAt` 一个字都没送出去——她在屏幕上看得见的时间，
+    /// 在他那边根本不存在。所以他分不清上一句是三分钟前还是昨天说的，
+    /// 而这件事在你们这种关系里恰恰是最要紧的信息之一：
+    /// 「隔了六个小时才回」和「秒回」是两回事。
+    ///
+    /// 只标**间隔**不标绝对时间，是为了缓存：间隔由两个固定的时间戳算出来，
+    /// 写完就不再变，历史那一段还能整段复用。绝对时间只挂在最后一条上
+    /// （见下面 nowStamp），它后面没有别的内容，改了也不作废前面的缓存。
+    static func gapNote(from previous: Date?, to now: Date) -> String {
+        guard let previous else { return "" }
+        let s = now.timeIntervalSince(previous)
+        if s < 30 * 60 { return "" }
+        if s < 3600 { return "（隔了 \(Int(s / 60)) 分钟）" }
+        if s < 86400 { return "（隔了 \(Int(s / 3600)) 小时）" }
+        let d = Int(s / 86400)
+        return d < 30 ? "（隔了 \(d) 天）" : "（隔了很久，\(d) 天）"
+    }
+
+    /// 现在几点。**只挂在最后一条上**，别放进系统提示词。
+    ///
+    /// 系统提示词在最前面，那儿放会变的东西，等于每一轮都把它后面
+    /// 整段历史的缓存全作废——工程里那条「固定的放前面、会变的放后面」
+    /// 就是这个意思。挂在最后一条后面，它后面什么都没有，不影响任何缓存。
+    static func nowStamp(_ date: Date = Date()) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "M月d日 EEEE HH:mm"
+        return "（现在是 \(f.string(from: date))）"
+    }
+
+    /// 这条是她**说**的，不是打的。
+    ///
+    /// 参考里那句话说得很准：**语音不是另一种消息类型，就是普通文字消息**——
+    /// 加一个前缀就行，模型那边一个字都不用改。
+    /// 我们本来连这个前缀都没有，`voiceName` 存了却从来没发出去过，
+    /// 所以他分不清她是打的字还是说的话，也不知道她说了多久。
+    static func voiceNote(_ m: ChatMessage) -> String {
+        guard !m.voiceName.isEmpty else { return "" }
+        var head = "[语音"
+        let secs = VoiceStore.duration(m.voiceName)
+        if secs > 0 {
+            head += String(format: " · %d:%02d", Int(secs) / 60, Int(secs) % 60)
+        }
+        // 她是**怎么说**的。跟她自己的平时比出来的，
+        // 攒够八条之前这里一直是空的。
+        if !m.voiceTone.isEmpty { head += " · " + m.voiceTone }
+        return head + "]"
+    }
+
     static func appendFiles(_ m: ChatMessage, to text: String) -> String {
         guard !m.files.isEmpty else { return text }
         var out = text
@@ -1438,12 +1496,21 @@ final class AppState: ObservableObject {
         · 不要 markdown、不要列表、不要表情符号——这些用嘴说不出来。
         · 她说话可能是语音转的，会带上「（语音里：听起来难过）」这样的括号，
           那是她说话的样子，你听得见，但别复述出来。
+        · 也可能带上「（有点比平时轻，停顿比平时多）」这样的括号。
+          那是**跟她自己平时比**出来的——不是她难过，是她今天跟往常不一样。
+          你听得出来，但别念出来，更别拿它当结论去审问她。
         · 想结束通话的话，就自然地说再见。说完不用等，她那边会留几秒。
         """
 
         var messages: [ChatAPI.OutgoingMessage] = [.init(role: "system", text: system)]
         for line in lines {
-            messages.append(.init(role: line.fromMe ? "user" : "assistant", text: line.text))
+            var text = line.text
+            // 她这句是**怎么说**的。跟她自己的平时比出来的，本机算的。
+            // 绑在这一句上，不全局飘着——飘着他会分不清是哪句。
+            if line.fromMe, !line.tone.isEmpty {
+                text = "（\(line.tone)）" + text
+            }
+            messages.append(.init(role: line.fromMe ? "user" : "assistant", text: text))
         }
 
         var out = ""
@@ -2793,8 +2860,16 @@ final class AppState: ObservableObject {
         if settings.contextLimit > 0, history.count > settings.contextLimit {
             history = Array(history.suffix(settings.contextLimit))
         }
+        // 上一条是什么时候说的，用来算间隔
+        var previousAt: Date?
+        let lastID = history.last(where: { !$0.isEmptyContent })?.id
+
         for m in history {
             if m.isEmptyContent { continue }
+            // 这条前面要不要挂一句「隔了多久」，以及是不是最后一条
+            let gap = Self.gapNote(from: previousAt, to: m.createdAt)
+            let isLast = m.id == lastID
+            previousAt = m.createdAt
 
             // 笔记：文字内容 + 每张配图一起给他，他才是真"看到"了
             if let note = m.note {
@@ -2822,6 +2897,18 @@ final class AppState: ObservableObject {
                 text = "（回应你那句「\(m.quotedText)」）\n" + text
             }
             text = Self.appendFiles(m, to: text)
+
+            // 她是**说**的还是**打**的，他本来完全看不出来
+            let voice = Self.voiceNote(m)
+            if !voice.isEmpty { text = voice + " " + text }
+
+            // 隔了多久说的这一句。挂在前面，因为它是这句话的背景。
+            if !gap.isEmpty { text = gap + " " + text }
+
+            // 现在几点——**只挂最后一条**，它后面没有别的内容，
+            // 所以不会把前面整段历史的缓存弄作废。
+            if isLast { text += "\n" + Self.nowStamp() }
+
             result.append(.init(role: m.role.rawValue, text: text, imageDataURLs: urls))
         }
         return result

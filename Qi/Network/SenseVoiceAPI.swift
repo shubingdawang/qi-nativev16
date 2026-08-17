@@ -176,9 +176,21 @@ final class VoiceRecorder: NSObject, ObservableObject {
     /// 说话的大小声，画波形用
     @Published var level: Double = 0
 
+    /// 这一条录音的振幅序列，`sampleInterval` 秒采一个。
+    ///
+    /// 画波形只要最新那一个值，但**听语气要整条**——
+    /// 音量、停顿、语速都是从这串数里算出来的（见 VoiceProsody）。
+    /// 一条十秒的语音也就 250 个 Double，两 KB 不到，留着不亏。
+    private(set) var samples: [Double] = []
+    /// 两个采样之间隔多久。
+    /// 原来是 0.1 秒，太粗了——**短于 0.2 秒的停顿整个漏掉**，
+    /// 而说话中间的停顿恰恰大多是那个量级。
+    let sampleInterval: Double = 0.04
+
     private var recorder: AVAudioRecorder?
     private var ticker: Task<Void, Never>?
     private var fileURL: URL?
+    private var startedAt: Date?
 
     func start() throws {
         stop()
@@ -201,15 +213,23 @@ final class VoiceRecorder: NSObject, ObservableObject {
         fileURL = url
         recording = true
         seconds = 0
+        samples = []
+        startedAt = Date()
 
         ticker = Task { @MainActor in
             while !Task.isCancelled, recording {
-                try? await Task.sleep(nanoseconds: 100_000_000)
-                seconds += 0.1
+                try? await Task.sleep(
+                    nanoseconds: UInt64(sampleInterval * 1_000_000_000))
+                // 时长按真实时钟算，不靠累加。
+                // Task.sleep 从来不准，一条十秒的语音累加下来能差好几百毫秒，
+                // 而语速（字 / 秒）是拿它当分母的。
+                if let s = startedAt { seconds = Date().timeIntervalSince(s) }
                 r.updateMeters()
                 // dB 是负数，-60 到 0，换算成 0~1
                 let db = Double(r.averagePower(forChannel: 0))
-                level = max(0, min(1, (db + 55) / 55))
+                let v = max(0, min(1, (db + 55) / 55))
+                level = v
+                samples.append(v)
             }
         }
     }
@@ -223,6 +243,9 @@ final class VoiceRecorder: NSObject, ObservableObject {
         recorder = nil
         recording = false
         level = 0
+        // samples **故意不清空**：停下来之后正是要拿它去算语气的时候。
+        // 下一次 start() 会把它重置。
+        startedAt = nil
         try? AVAudioSession.sharedInstance().setActive(false,
                                                        options: .notifyOthersOnDeactivation)
         let url = fileURL

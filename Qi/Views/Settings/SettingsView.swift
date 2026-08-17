@@ -294,6 +294,47 @@ struct SettingsView: View {
         // 分成两小块写。SwiftUI 的 ViewBuilder 一层最多认十个，
         // 这张卡片的行数早就超了，得靠 Group 收一收。
         SettingsCard(title: "通用设置") {
+            // 它认识你的声音到什么程度了。
+            //
+            // 语气不是拿写死的阈值判的，是**跟你自己的平时比**——
+            // 所以它得先认识你的平时。攒够八条之前它一个字都不说，
+            // 那会儿说什么都是瞎猜。
+            //
+            // 全程本机算，一分钱不花，一个字节不上传。
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("听你的语气")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    Spacer()
+                    Text(VoiceBaseline.shared.ready
+                         ? "已经认识你了"
+                         : "还在认识你 \(VoiceBaseline.shared.progress.have)"
+                           + "/\(VoiceBaseline.shared.progress.need)")
+                        .font(.system(size: 12))
+                        .foregroundStyle(VoiceBaseline.shared.ready
+                                         ? app.settings.accentColor
+                                         : Theme.textMuted(scheme))
+                }
+                Text("你说话的音量、语速、停顿会跟你自己的平时比一比，偏了才告诉他「比平时轻」这种。本机算，不花钱也不上传。换了麦克风、搬了家、感冒一周之后不准了，可以让它重新认识你。")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                Button {
+                    VoiceBaseline.shared.reset()
+                } label: {
+                    Text("重新认识我的声音")
+                        .font(.system(size: 12))
+                        .foregroundStyle(app.settings.accentColor)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+
+            SettingsDivider()
+
             // 勿扰。
             //
             // 「自己醒来」里那个安静时段管的是**每天固定那几个钟头**，
@@ -507,10 +548,43 @@ struct SettingsView: View {
 
     private var dataCard: some View {
         SettingsCard(title: "数据") {
+            // 上次备份是什么时候。
+            //
+            // 她用 AltStore 侧载，**免费账号签的包七天到期**，
+            // 过期就得重装，重装等于从零开始。所以超过七天就在这儿变色，
+            // 不是唠叨，是这台机器上真实存在的期限。
+            HStack(spacing: 8) {
+                Image(systemName: BackupClock.overdue
+                      ? "exclamationmark.triangle.fill" : "checkmark.circle")
+                    .font(.system(size: 13))
+                    .foregroundStyle(BackupClock.overdue
+                                     ? (Color(hexString: "E5544B") ?? .red)
+                                     : StatusTone.done.color)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(BackupClock.note)
+                        .font(.system(size: 14, weight: BackupClock.overdue
+                                      ? .medium : .regular))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    if BackupClock.overdue {
+                        Text("包七天就到期，过期得重装。导一份出来放网盘里。")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+
+            SettingsDivider()
+
             Button { exportBackup() } label: {
                 SettingsRowLabel(title: "导出备份", icon: "square.and.arrow.up")
             }
             .buttonStyle(.plain)
+
+            SettingsNote("导出的是**整包**：聊天记录、供应商和密钥、记忆库（身份、说好的规矩、那封信、承诺、日记、心情）、备忘、通话记录、经期、念头池、clawd 小屋——所有存成 json 的都在里面。\n\n**图片和录音不在**：壁纸、表情、像素画、语音是单独的文件，装进来备份会从几百 KB 涨到几百 MB。\n\n以前那版只有聊天记录、供应商和设置三样，记忆库整个没在里面。手里要是还留着旧备份，建议重新导一份。")
+
             SettingsDivider()
 
             Button { showingImporter = true } label: {
@@ -640,16 +714,15 @@ struct SettingsView: View {
     }
 
     private func exportBackup() {
+        // 先把内存里攒着没落盘的都写下去，再整个目录扫一遍。
+        //
+        // **不再手写要带哪几样。** 上一版只装了 providers / conversations /
+        // settings，记忆库、备忘、通话、承诺、经期、clawd 小屋全都不在里面——
+        // 而记忆库是这个 App 里最不可替代的东西，她还每七天重装一次。
+        //
+        // 记忆库那边每改一次就自己落盘了，这儿不用再催它。
         app.saveNow()
-        let backup = Backup(
-            providers: app.providers,
-            conversations: app.conversations,
-            settings: app.settings
-        )
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted]
-        guard let data = try? encoder.encode(backup) else {
+        guard let data = BackupBundle.make() else {
             alertMessage = "导出失败，数据编码出错。"
             return
         }
@@ -660,6 +733,7 @@ struct SettingsView: View {
         do {
             try data.write(to: url, options: .atomic)
             exportURL = url
+            BackupClock.markDone()
         } catch {
             alertMessage = "导出失败：\(error.localizedDescription)"
         }
@@ -675,14 +749,34 @@ struct SettingsView: View {
             defer { if needsStop { url.stopAccessingSecurityScopedResource() } }
             do {
                 let data = try Data(contentsOf: url)
-                let decoder = JSONDecoder()
-                decoder.dateDecodingStrategy = .iso8601
-                let backup = try decoder.decode(Backup.self, from: data)
-                app.providers = backup.providers
-                app.conversations = backup.conversations
-                app.settings = backup.settings
-                app.saveNow()
-                alertMessage = "导入成功。"
+                switch BackupBundle.restore(data) {
+                case .bundle(let count):
+                    // **不动内存里那些 store，只把文件写回去。**
+                    //
+                    // 它们全是单例，App 一启动就把文件读进来了；这会儿直接改文件
+                    // 它们不知道，而且下一次保存还会拿内存里的旧数据把刚还原的
+                    // 文件盖回去。所以必须重开一次——这句话得说清楚，
+                    // 不然她会以为没生效。
+                    alertMessage = "还原了 \(count) 份数据。\n\n"
+                        + "现在请把 App 完全关掉再打开。\n\n"
+                        + "记忆库、聊天记录这些是开 App 那一刻读进内存的，"
+                        + "不重开的话你看到的还是旧的，而且下一次保存会把刚还原的盖掉。"
+                case .legacy:
+                    // 她手里可能还留着以前导出的老备份，照样认
+                    let decoder = JSONDecoder()
+                    decoder.dateDecodingStrategy = .iso8601
+                    let backup = try decoder.decode(Backup.self, from: data)
+                    app.providers = backup.providers
+                    app.conversations = backup.conversations
+                    app.settings = backup.settings
+                    app.saveNow()
+                    alertMessage = "导入成功。\n\n"
+                        + "这是旧版的备份，里面只有供应商、聊天记录和设置，"
+                        + "记忆库、备忘、通话记录那些不在里面。\n\n"
+                        + "现在导出的备份是整包的，建议重新导一份。"
+                case .unreadable(let why):
+                    alertMessage = why
+                }
             } catch {
                 alertMessage = "这个文件读不了，可能不是本 App 导出的备份。\n\(error.localizedDescription)"
             }
@@ -802,8 +896,31 @@ struct SettingsNote: View {
     let text: String
     init(_ text: String) { self.text = text }
     @Environment(\.colorScheme) private var scheme
+
+    /// 把 `**重点**` 真的画成粗体。
+    ///
+    /// 以前这里是 `Text(text)`，而 text 是个**变量**——
+    /// SwiftUI 只对写死的字面量解析 markdown，拿变量渲染的时候
+    /// 那两对星号是原样显示出来的。整个设置页里所有说明文字都中了这一枪。
+    ///
+    /// 但也不能简单换成 `Text(.init(text))`：markdown 会把换行吃掉，
+    /// 而这些说明大多靠 `\n\n` 分段。所以按行拆开各自解析，再用换行拼回去，
+    /// 粗体有了，分段也还在。
+    private var rendered: AttributedString {
+        var out = AttributedString()
+        for (i, line) in text.components(separatedBy: "\n").enumerated() {
+            if i > 0 { out += AttributedString("\n") }
+            if let a = try? AttributedString(markdown: line) {
+                out += a
+            } else {
+                out += AttributedString(line)
+            }
+        }
+        return out
+    }
+
     var body: some View {
-        Text(text)
+        Text(rendered)
             .font(.system(size: 11))
             .foregroundStyle(Theme.textMuted(scheme))
             .frame(maxWidth: .infinity, alignment: .leading)
