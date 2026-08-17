@@ -9,6 +9,7 @@ enum MemoryTools {
 
     static let names: Set<String> = [
         "add_memory", "search_memories", "get_all_memories", "delete_memory",
+        "recall_entity",
         "update_memory", "annotate_memory", "get_memory_log",
         "add_diary", "get_diaries", "delete_diary", "annotate_diary",
         "log_period", "period_status", "add_period_note",
@@ -109,15 +110,38 @@ enum MemoryTools {
             ["rules": ["type": "array", "items": str]], required: ["rules"])
 
         add("add_memory",
-            "添加一条新记忆到记忆库，记录关于饼饼或阿晏的重要信息",
+            """
+            添加一条新记忆到记忆库，记录关于饼饼或阿晏的重要信息。
+
+            **事实会过期，但过期的事实不删。** 她从苍南搬到日本，\
+            「她在苍南」不是错的，是**那会儿是真的**。\
+            所以新记忆顶掉旧记忆的时候填 supersedes（旧那条的 id 前 8 位）——\
+            旧的会留着、标上「从现在起不算数」，而不是被删掉。\
+            不填也行，我会把可能过时的那几条列给你，你再决定。
+            """,
             ["content": str, "tags": strs,
              "level": ["type": "number", "description": "重要程度 1-5，5 最重要，默认 3"],
-             "author": ["type": "string", "description": "记录者：阿晏 或 饼饼，默认阿晏"]],
+             "author": ["type": "string", "description": "记录者：阿晏 或 饼饼，默认阿晏"],
+             "supersedes": ["type": "string", "description": "这条顶掉了哪条旧记忆，填那条的 id 前 8 位。旧的不会被删，只标成「那会儿是真的」"],
+             "since": ["type": "string", "description": "这件事**从什么时候起**成立。跟「什么时候记下来的」不是一回事，比如「她 6 月就搬去日本了，我今天才知道」"]],
             required: ["content"])
 
         add("search_memories",
-            "搜索记忆库，支持关键词、标签、重要程度过滤",
-            ["query": str, "tags": strs, "level": num, "limit": num])
+            "搜索记忆库，支持关键词、标签、重要程度过滤。**默认只给现在还成立的**——已经被顶掉的旧事实不会混进来。想翻旧账（「她以前住哪儿」这种）就把 include_past 打开。",
+            ["query": str, "tags": strs, "level": num, "limit": num,
+             "include_past": ["type": "boolean", "description": "连已经不成立的旧事实一起给，默认 false"]])
+
+        add("recall_entity",
+            """
+            顺着一个人、一样东西、一个地方，把散在各处的记忆**串成一条线**，按时间排。
+
+            跟 search_memories 的区别：搜索给的是「哪几条提到了这个词」，\
+            这个给的是「这件事是怎么一路变过来的」——**已经作废的那些也会列出来**，\
+            因为一件事怎么变的，得连着看才知道。\
+            末尾还会告诉你这条线上还牵着谁，可以接着往下走。
+            """,
+            ["name": ["type": "string", "description": "顺着谁/哪样东西找。人名、地名、东西名都行"]],
+            required: ["name"])
 
         add("get_all_memories", "获取记忆库中的所有记忆")
 
@@ -249,31 +273,102 @@ enum MemoryTools {
             if m.memories.contains(where: { $0.content == content }) {
                 return ("该记忆已存在，未重复添加。", false)
             }
-            let item = MemoryItem(
+            // 顺手把这条里提到的人和东西抠出来（不调模型，见 MemoryEntities）
+            let known = Array(Set(m.memories.flatMap { $0.entities ?? [] })).prefix(300)
+            let ents = MemoryEntities.pull(content, tags: tags("tags"),
+                                           known: Array(known))
+            var item = MemoryItem(
                 id: UUID().uuidString, content: content,
                 tags: tags("tags"), level: max(1, min(5, i("level", 3))),
                 author: s("author").isEmpty ? "阿晏" : s("author"),
                 created_at: MemoryStore.now, updated_at: MemoryStore.now)
+            item.valid_from = s("since").isEmpty ? MemoryStore.now : s("since")
+            item.entities = ents.isEmpty ? nil : ents
+
+            // 他明说了这条顶掉哪条旧的 → 旧的**不删**，只标作废
+            var supersedeNote = ""
+            if let old = m.memoryIndex(s("supersedes")) {
+                m.memories[old].invalid_at = MemoryStore.now
+                m.memories[old].superseded_by = item.id
+                supersedeNote = "\n旧的那条没删，只标了「从现在起不算数」：\(m.memories[old].content.prefix(24))…"
+                m.note("作废", by: item.author, memID: m.memories[old].id,
+                       before: m.memories[old].content, after: content)
+            }
             m.memories.insert(item, at: 0)
             m.saveMemories()
             m.note("新增", by: item.author, memID: item.id, after: content)
-            return ("记住了。现在一共 \(m.memories.count) 条。", false)
+
+            // 没明说的话，**提醒一下**可能过时的那几条——但绝不替他作废。
+            // 猜错了作废等于让他忘掉一件真事，那比多留一条旧记录严重得多。
+            var hint = ""
+            if s("supersedes").isEmpty, !ents.isEmpty {
+                let overlap = m.memories.dropFirst().filter { old in
+                    old.isLive
+                    && !Set(old.entities ?? []).isDisjoint(with: Set(ents))
+                }.prefix(3)
+                if !overlap.isEmpty {
+                    hint = "\n\n提到同样这些（\(ents.prefix(3).joined(separator: "、"))）的还有："
+                    for o in overlap { hint += "\n· [\(o.shortID)] \(o.content.prefix(30))" }
+                    hint += "\n要是其中哪条**已经不成立了**，再调一次 add_memory 时把 supersedes 填上那个 id——"
+                    hint += "旧的不会被删，只会标成「那会儿是真的」。"
+                }
+            }
+            return ("记住了。现在一共 \(m.memories.count) 条。"
+                    + supersedeNote + hint, false)
 
         case "search_memories":
             let q = s("query")
             let want = tags("tags")
             let minLevel = i("level", 0)
             let limit = i("limit", 20)
+            // **默认只给现在还成立的**（graphiti 那套的核心）。
+            // 「她在苍南」和「她在日本」不是矛盾是先后，
+            // 搜的时候给他现在这条就够了；要翻旧账再把 include_past 打开。
+            let includePast = (args["include_past"] as? Bool) ?? false
             var hits = m.memories.filter { mem in
-                (q.isEmpty || mem.content.localizedCaseInsensitiveContains(q))
+                (q.isEmpty || mem.content.localizedCaseInsensitiveContains(q)
+                 || (mem.entities ?? []).contains { $0.localizedCaseInsensitiveContains(q) })
                 && (want.isEmpty || !Set(mem.tags).isDisjoint(with: Set(want)))
                 && mem.level >= minLevel
+                && (includePast || mem.isLive)
             }
             // 新的排前面。星级高的更重要，但"最近发生的"更容易是她在问的那件事。
             hits.sort { $0.created_at > $1.created_at }
             hits = Array(hits.prefix(limit))
             if hits.isEmpty { return ("没找到相关的记忆。", false) }
             return (hits.map(line).joined(separator: "\n"), false)
+
+        case "recall_entity":
+            // graphiti 的「顺着图走一遍」在本机的版本。
+            // 不建真图：实体名就是边，顺着同一个名字把散在各处的记忆串起来，
+            // **按时间排**，作废的也留着——一条线看下来才知道这件事是怎么变的。
+            let who = s("name")
+            guard !who.isEmpty else { return ("要顺着谁/哪样东西找？", true) }
+            let related = m.memories.filter {
+                ($0.entities ?? []).contains { e in
+                    e.localizedCaseInsensitiveContains(who)
+                        || who.localizedCaseInsensitiveContains(e)
+                } || $0.content.localizedCaseInsensitiveContains(who)
+            }.sorted { $0.created_at < $1.created_at }
+
+            guard !related.isEmpty else {
+                return ("没有跟「\(who)」有关的记忆。", false)
+            }
+            let live = related.filter(\.isLive)
+            var out = "跟「\(who)」有关的，一共 \(related.count) 条"
+            out += related.count > live.count
+                ? "（其中 \(related.count - live.count) 条已经不算数了，也列出来——"
+                  + "一件事是怎么变的，得连着看）：\n"
+                : "：\n"
+            out += related.map(line).joined(separator: "\n")
+            // 顺带把这条线上还牵着谁列出来，他可以接着往下走
+            let neighbours = Set(related.flatMap { $0.entities ?? [] })
+                .subtracting([who])
+            if !neighbours.isEmpty {
+                out += "\n\n这条线上还牵着：" + neighbours.prefix(8).joined(separator: "、")
+                out += "（想接着往下走就再调一次 recall_entity）"
+            }
+            return (out, false)
 
         case "get_all_memories":
             if m.memories.isEmpty { return ("记忆库还是空的。", false) }
@@ -653,6 +748,10 @@ enum MemoryTools {
         tags.insert(String(repeating: "★", count: max(1, min(5, mem.level))), at: 0)
         var s = "[\(mem.shortID)][\(mem.author)][\(tags.joined(separator: "、"))]"
         s += " \(day(mem.created_at))：\(mem.content)"
+        // 已经不成立的要**明着标出来**。不标的话他会拿一件过去的事当现在。
+        if !mem.isLive {
+            s += "　⟨那会儿是真的，\(day(mem.invalid_at ?? ""))起不算数了⟩"
+        }
         if let anns = mem.annotations, !anns.isEmpty {
             for a in anns {
                 s += "\n    ⤷ \(a.author)批注：把「\(a.original)」改成「\(a.correction)」"

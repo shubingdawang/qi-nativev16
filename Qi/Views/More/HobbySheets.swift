@@ -380,7 +380,8 @@ struct HobbyMatchesSheet: View {
                     .padding(18)
                 }
             }
-            .navigationTitle("撞上啦 きみと おなじ")
+            // 日文去掉，标题照她说的改
+            .navigationTitle("我们的共同之处")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

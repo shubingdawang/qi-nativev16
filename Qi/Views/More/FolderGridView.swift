@@ -33,14 +33,12 @@ struct FolderGridView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 18) {
 
-                // 「全部」是个视图不是文件夹：所有图都在里面，不能删也不能改名。
-                // 画得跟文件夹不一样（叠起来的照片，不是文件夹壳），
-                // 免得她再以为这是个删不掉的文件夹。
-                allCell
-                    .contentShape(Rectangle())
-                    .onTapGesture { opened = MediaStore.allFolder }
-
-                // 没归类的那些。**有才显示**——一张没有的时候摆个空桶只是噪音。
+                // 「全部」那一格**撤了**。
+                //
+                // 她说：「相册里的全部原来是全部图片的意思，我一直不知道，
+                // 所以希望删掉，可以改回原来的文件夹。」
+                // 一个既不能删又不能改名、点进去还跟别的重复的格子，
+                // 解释起来比它省下的事还多。现在只剩真的文件夹 +「未归类」。
                 if looseCount > 0 {
                     folderCell(title: "未归类", count: looseCount,
                                tint: app.settings.accentColor.opacity(0.75))
@@ -155,33 +153,6 @@ struct FolderGridView: View {
                 // 文件夹现在是独立存的，空的就是空的——
                 // 不再往 items 里塞占位空记录（那是「空文件夹显示 1」的根）
                 store.createFolder(kind, name: newName)
-            }
-        }
-    }
-
-    /// 「全部」那一格：一摞照片，不是文件夹壳
-    private var allCell: some View {
-        VStack(spacing: 8) {
-            ZStack {
-                ForEach([2, 1, 0], id: \.self) { i in
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(app.settings.accentColor.opacity(0.18 + Double(2 - i) * 0.10))
-                        .frame(width: 54 - CGFloat(i) * 4, height: 50 - CGFloat(i) * 4)
-                        .rotationEffect(.degrees(Double(i) * -5))
-                        .offset(x: CGFloat(i) * 3, y: CGFloat(i) * -2)
-                }
-                Image(systemName: "photo.on.rectangle")
-                    .font(.app(17, weight: .light))
-                    .foregroundStyle(app.settings.accentColor)
-            }
-            .frame(width: 68, height: 68)
-            VStack(spacing: 1) {
-                Text("全部")
-                    .font(.app(12, weight: .medium))
-                    .foregroundStyle(Theme.textMain(scheme))
-                Text("\(store.count(kind))")
-                    .font(.app(10))
-                    .foregroundStyle(Theme.textMuted(scheme))
             }
         }
     }

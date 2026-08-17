@@ -451,7 +451,7 @@ struct HobbyView: View {
                 Image(systemName: "heart.fill")
                     .font(.app(26))
                     .foregroundStyle(HomePalette.bodyPink)
-                Text("撞上啦！")
+                Text("我们的共同之处")
                     .font(.app(19, weight: .semibold))
                     .foregroundStyle(Theme.textMain(scheme))
                 Text("你俩同时\(a.like ? "喜欢" : "讨厌")上了")

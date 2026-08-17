@@ -89,13 +89,19 @@ struct MusicFloatingView: View {
         .fullScreenCover(isPresented: $showingLyrics) {
             NowPlayingView()
         }
+        // 转起来。**三个时机都要管**：进来、开始放、换了一首——
+        // 以前只管前两个，所以她看到的常常是「一直没动」
         .onAppear { startSpin() }
         .onChange(of: player.playing) { _, on in if on { startSpin() } }
+        .onChange(of: player.current?.id) { _, _ in startSpin() }
     }
 
     /// 转封面。放着才转，停了就停在原地——一眼能看出它是不是活的。
     private func startSpin() {
         guard player.playing else { return }
+        // 先把角度归零再起，不然第二次调用时 spin 已经是 360，
+        // 「从 360 转到 360」= 一动不动（她说的「动画貌似没有正常播放」）
+        spin = 0
         withAnimation(.linear(duration: 12).repeatForever(autoreverses: false)) {
             spin = 360
         }
@@ -138,9 +144,10 @@ struct MusicFloatingView: View {
 
     private func card(_ track: Track) -> some View {
         HStack(spacing: 9) {
+            // **不转**。方的封面一转就成了菱形（她说的「点开悬浮窗封面图变成菱形」）——
+            // 转只留给收起来时那颗圆的，圆的怎么转都还是圆的。
             TrackArtwork(track: track, side: 34)
                 .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                .rotationEffect(.degrees(spin * 0.4))
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(track.title)
@@ -157,8 +164,24 @@ struct MusicFloatingView: View {
             .contentShape(Rectangle())
             .onTapGesture { showingLyrics = true }
 
-            // 放着的时候跳三根小柱子
-            if player.playing { bars }
+            // 那三根竖线以前只是个「在放着」的装饰，她问「不知道有什么作用」——
+            // 装饰占着一个位置却什么都不干，那就换成有用的：
+            // **点它切「放完之后干什么」**（停 / 单曲循环 / 随机）。
+            Button {
+                player.repeatMode = player.repeatMode.next
+                if app.settings.haptics {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                }
+            } label: {
+                Image(systemName: player.repeatMode.icon)
+                    .font(.app(11))
+                    .foregroundStyle(player.repeatMode == .off
+                                     ? Theme.textMuted(scheme)
+                                     : app.settings.accentColor)
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
 
             Button {
                 player.playing ? player.pause() : player.resume()
@@ -194,22 +217,6 @@ struct MusicFloatingView: View {
                     if outward > 26 { withAnimation { mini = true } }
                 }
         )
-    }
-
-    /// 那三根跳动的小柱子
-    private var bars: some View {
-        HStack(spacing: 2) {
-            ForEach(0..<3, id: \.self) { i in
-                Capsule()
-                    .fill(app.settings.accentColor.opacity(0.75))
-                    .frame(width: 2.5, height: player.playing ? 11 : 4)
-                    .animation(
-                        .easeInOut(duration: 0.42 + Double(i) * 0.13)
-                            .repeatForever(autoreverses: true),
-                        value: player.playing)
-            }
-        }
-        .frame(height: 12)
     }
 
     private var nowLine: String? {

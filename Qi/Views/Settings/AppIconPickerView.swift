@@ -109,6 +109,12 @@ struct AppIconPickerView: View {
         .background { WallpaperBackground() }
         .navigationTitle("App 图标")
         .navigationBarTitleDisplayMode(.inline)
+        // 每次进来、以及从系统那个提示回来之后，都以系统那份为准重读一遍
+        .onAppear { current = UIApplication.shared.alternateIconName }
+        .onReceive(NotificationCenter.default.publisher(
+            for: UIApplication.didBecomeActiveNotification)) { _ in
+            current = UIApplication.shared.alternateIconName
+        }
     }
 
     /// 找这一项该显示哪张图。
@@ -142,11 +148,18 @@ struct AppIconPickerView: View {
                     failed = "没换成：" + error.localizedDescription
                 } else {
                     failed = nil
-                    current = key
                     if app.settings.haptics {
                         UINotificationFeedbackGenerator().notificationOccurred(.success)
                     }
                 }
+                // **不管成没成，都以系统那份为准重读一次。**
+                //
+                // 她说「即使更换了依旧还是勾选的原先的图标，但是桌面上的已经更改了」——
+                // 症结是这儿原来写的是 `current = key`（拿我们**以为**的值去更新）。
+                // 系统弹那个提示的时候 App 会走一遍失焦/回焦，
+                // 中间任何一步没对上，勾就跟真实状态脱节了。
+                // 直接问系统「现在到底是哪个」，就不会有这种偏差。
+                current = UIApplication.shared.alternateIconName
             }
         }
     }

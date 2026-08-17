@@ -223,6 +223,29 @@ struct NowPlayingView: View {
                 .buttonStyle(.plain)
             }
 
+            // 放完之后干什么。**以前一首放完就停了**，她说的就是这个。
+            // 一个按钮轮着切：停 → 单曲循环 → 随机。
+            Button {
+                player.repeatMode = player.repeatMode.next
+                if app.settings.haptics {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: player.repeatMode.icon)
+                        .font(.app(11))
+                    Text(player.repeatMode.label)
+                        .font(.app(11))
+                }
+                .foregroundStyle(player.repeatMode == .off
+                                 ? Theme.textMuted(scheme)
+                                 : app.settings.accentColor)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(Theme.softFillDeep))
+            }
+            .buttonStyle(.plain)
+
             if player.current?.isPreview == true {
                 Text("这是三十秒的试听。整首得自己把文件导进来——网易云、QQ 音乐下载的歌存在它们自己的沙盒里，别的 App 读不到，这是 iOS 的硬规矩。")
                     .font(.app(10))

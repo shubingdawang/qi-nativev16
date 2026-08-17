@@ -114,6 +114,15 @@ struct MusicLibraryView: View {
         }
         .navigationTitle("音乐")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    PlayCountView()
+                } label: {
+                    Image(systemName: "chart.bar")
+                }
+            }
+        }
         .fullScreenCover(isPresented: $showingLyrics) { NowPlayingView() }
         .fileImporter(isPresented: $importing,
                       allowedContentTypes: [.audio, .mp3, .mpeg4Audio, .data],

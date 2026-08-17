@@ -33,16 +33,46 @@ struct MemoryItem: Codable, Identifiable, Hashable {
     var updated_at: String
     var annotations: [MemoryAnnotation]?
 
+    // MARK: 时序那几样（照 getzep/graphiti 那套搬的）
+    //
+    // 她点名要的就是 graphiti——**时序知识图谱**。它跟普通记忆库的区别只有一句：
+    // **事实会过期，但过期的事实不删。**
+    //
+    //   · 「她在苍南」和「她在日本」不是矛盾，是**先后**
+    //   · 删掉旧的那条，就等于他从来不知道她曾经在苍南
+    //   · 所以旧的留着，只标上「从什么时候起不成立了」，
+    //     再指一下是被哪条顶掉的
+    //
+    // 搜的时候默认只给**现在还成立的**，问「以前呢」才把作废的翻出来。
+
+    /// 这条事实**从什么时候起**成立。不填就是记下来那天。
+    var valid_from: String?
+    /// 什么时候不成立了。**空的就是现在还算数。**
+    var invalid_at: String?
+    /// 被哪一条顶掉的（新那条的 id）
+    var superseded_by: String?
+    /// 这条里提到的人和东西。顺着它能把散落各处的记忆串起来——
+    /// 这是 graphiti 那个「图」在本机的轻量版：不建真图，
+    /// 靠实体名当边，够用而且不用维护一张图。
+    var entities: [String]?
+
+    /// 现在还算不算数
+    var isLive: Bool { (invalid_at ?? "").isEmpty }
+
     /// 工具里认的是 ID 前八位，跟原来那套一致
     var shortID: String { String(id.prefix(8)) }
 
     init(id: String, content: String, tags: [String], level: Int,
          author: String, created_at: String, updated_at: String,
-         annotations: [MemoryAnnotation]? = nil) {
+         annotations: [MemoryAnnotation]? = nil,
+         valid_from: String? = nil, invalid_at: String? = nil,
+         superseded_by: String? = nil, entities: [String]? = nil) {
         self.id = id; self.content = content; self.tags = tags
         self.level = level; self.author = author
         self.created_at = created_at; self.updated_at = updated_at
         self.annotations = annotations
+        self.valid_from = valid_from; self.invalid_at = invalid_at
+        self.superseded_by = superseded_by; self.entities = entities
     }
 
     /// 电脑那边的 memories.json 里，level 有的是数字 5，有的是字符串 "5"
@@ -58,6 +88,47 @@ struct MemoryItem: Codable, Identifiable, Hashable {
         created_at = (try? c.decode(String.self, forKey: .created_at)) ?? ""
         updated_at = (try? c.decode(String.self, forKey: .updated_at)) ?? created_at
         annotations = try? c.decode([MemoryAnnotation].self, forKey: .annotations)
+        // 这四样是后加的，老记录里没有——**必须是可选的、必须 try?**，
+        // 不然她那几百条老记忆会整份读不出来
+        valid_from = try? c.decode(String.self, forKey: .valid_from)
+        invalid_at = try? c.decode(String.self, forKey: .invalid_at)
+        superseded_by = try? c.decode(String.self, forKey: .superseded_by)
+        entities = try? c.decode([String].self, forKey: .entities)
+    }
+}
+
+/// 从一句话里抠出「提到了谁、提到了什么」。
+///
+/// graphiti 那边这一步是拿模型做的（实体抽取 + 消歧）。**我们不调模型**——
+/// 那样每存一条记忆就要花一次钱，违反她定的那条铁律。
+/// 所以走一套穷办法，但穷得诚实：
+///
+///   · 引号里的（「」""）几乎一定是个东西
+///   · 已经在别的记忆里出现过的实体，再遇到就认出来（**越用越准**）
+///   · tags 本来就是她自己标的，直接算实体
+///
+/// 抠不出来就空着。**宁可少抠也别乱抠**——抠错了会把不相干的记忆串到一起。
+enum MemoryEntities {
+
+    static func pull(_ text: String, tags: [String], known: [String]) -> [String] {
+        var out: [String] = []
+
+        // 引号里的
+        for (open, close) in [("「", "」"), ("\u{201C}", "\u{201D}"), ("\"", "\"")] {
+            var rest = Substring(text)
+            while let a = rest.range(of: open),
+                  let b = rest.range(of: close, range: a.upperBound..<rest.endIndex) {
+                let inner = String(rest[a.upperBound..<b.lowerBound])
+                if (1...14).contains(inner.count) { out.append(inner) }
+                rest = rest[b.upperBound...]
+            }
+        }
+        // 见过的实体，再遇到就认
+        for k in known where k.count >= 2 && text.contains(k) { out.append(k) }
+        out.append(contentsOf: tags.filter { $0.count >= 2 })
+
+        var seen = Set<String>()
+        return out.filter { seen.insert($0).inserted }.prefix(8).map { $0 }
     }
 }
 

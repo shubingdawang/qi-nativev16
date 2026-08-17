@@ -28,26 +28,26 @@ struct DivinationView: View {
             // 一条分段控件顶在内容前面。原来钉在屏幕最底下，
             // 一是够不着，二是跟导航条挤在一起。
             VStack(spacing: 6) {
-                // 六套了，分段控件挤不下——改成横着滑的一排。
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 7) {
-                        ForEach(Array(DivinationView.modes.enumerated()), id: \.offset) { i, m in
-                            Button {
-                                withAnimation(.easeOut(duration: 0.16)) { mode = i }
-                            } label: {
-                                Text(m.0)
-                                    .font(.app(12, weight: mode == i ? .semibold : .regular))
-                                    .foregroundStyle(mode == i ? .white : Theme.textSoft(scheme))
-                                    .padding(.horizontal, 13)
-                                    .padding(.vertical, 7)
-                                    .background(Capsule().fill(mode == i
-                                        ? app.settings.accentColor.opacity(0.85)
-                                        : Theme.softFillDeep))
-                            }
-                            .buttonStyle(.plain)
+                // 六套。**均分整行**——原来是横滑的一排，
+                // 右边空一小块，看着像少了点东西（她说的「显得很空」）。
+                HStack(spacing: 5) {
+                    ForEach(Array(DivinationView.modes.enumerated()), id: \.offset) { i, m in
+                        Button {
+                            withAnimation(.easeOut(duration: 0.16)) { mode = i }
+                        } label: {
+                            Text(m.0)
+                                .font(.app(11.5, weight: mode == i ? .semibold : .regular))
+                                .foregroundStyle(mode == i ? .white : Theme.textSoft(scheme))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 7)
+                                .background(Capsule().fill(mode == i
+                                    ? app.settings.accentColor.opacity(0.85)
+                                    : Theme.softFillDeep))
                         }
+                        .buttonStyle(.plain)
                     }
-                    .padding(.vertical, 1)
                 }
 
                 Text(DivinationView.modes[min(mode, DivinationView.modes.count - 1)].1)
@@ -70,14 +70,10 @@ struct DivinationView: View {
                     default: DreamPane()
                     }
 
-                    // 没做的那三样，**明说**。
-                    // 排一张错的盘比不排更糟——她会拿着假盘去信。
-                    Text("紫微斗数、奇门遁甲、星盘这三样还没做：它们要真历法（节气、闰月）"
-                         + "和星历表才排得对，我现在给不出对的盘面，就不给假的。"
-                         + "想要的话得先接一份现成的历法数据，那是单独一轮的事。")
-                        .font(.app(10))
-                        .foregroundStyle(Theme.textMuted(scheme))
-                        .padding(.horizontal, 2)
+                    // 「紫微/奇门/星盘还没做」那段说明**撤了**。
+                    // 她说：「没做好在我们这边知道就行了，app 不需要知道。」
+                    // 对——那是我跟她之间的账，不该占着她的屏幕。
+                    // （那三样为什么没做，记在 需求清单.md 里。）
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 4)
@@ -742,10 +738,13 @@ struct DivinationHistoryView: View {
                         }
 
                         if !r.reading.isEmpty {
+                            // **不截断**。她说「希望可以显示完全的他的解答，
+                            // 之前测过一次，多出来的字变成…了」——
+                            // 一段解读被砍掉一半，等于这条记录白留了。
                             Text(r.reading)
                                 .font(.app(12))
                                 .foregroundStyle(Theme.textSoft(scheme))
-                                .lineLimit(4)
+                                .textSelection(.enabled)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

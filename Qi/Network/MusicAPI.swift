@@ -444,6 +444,14 @@ final class MusicPlayer: NSObject, ObservableObject {
     static let shared = MusicPlayer()
 
     @Published var current: Track?
+    /// 放完一首之后干什么：停 / 单曲循环 / 随机。默认停。
+    ///
+    /// **不用 @AppStorage**：那个是给 View 用的，挂在 ObservableObject 上
+    /// 改了不会通知界面，按钮的图标会一直是旧的。自己存 UserDefaults。
+    @Published var repeatMode: Repeat = Repeat(
+        rawValue: UserDefaults.standard.string(forKey: "musicRepeat") ?? "") ?? .off {
+        didSet { UserDefaults.standard.set(repeatMode.rawValue, forKey: "musicRepeat") }
+    }
     @Published var playing = false
     @Published var progress: Double = 0
     @Published var duration: Double = 0
@@ -518,7 +526,7 @@ final class MusicPlayer: NSObject, ObservableObject {
             forName: .AVPlayerItemDidPlayToEndTime,
             object: p.currentItem, queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.stop() }
+            Task { @MainActor in self?.finished() }
         }
 
         p.play()
@@ -527,6 +535,63 @@ final class MusicPlayer: NSObject, ObservableObject {
         // 缺封面就回头读一次文件，缺歌词就去网上补一次。
         // 放在起播之后：这两件事都不该挡着歌先响。
         MusicLibrary.shared.ensureMeta(for: track)
+    }
+
+    /// 放完一首之后干什么。
+    ///
+    /// 她说「一首歌播完就不再播了」——以前放完直接 stop，
+    /// 连「刚才放的是哪首」都一起清掉，歌词页就空成一张白纸。
+    enum Repeat: String, CaseIterable {
+        case off, one, shuffle
+        var label: String {
+            switch self {
+            case .off:     return "放完就停"
+            case .one:     return "单曲循环"
+            case .shuffle: return "随机播放"
+            }
+        }
+        var icon: String {
+            switch self {
+            case .off:     return "arrow.right.to.line"
+            case .one:     return "repeat.1"
+            case .shuffle: return "shuffle"
+            }
+        }
+        var next: Repeat {
+            switch self {
+            case .off: return .one
+            case .one: return .shuffle
+            case .shuffle: return .off
+            }
+        }
+    }
+
+    /// 放完一首。按当前模式决定下一步。
+    ///
+    /// **不管哪种模式，`current` 都留着**——她说「即使没有播放音乐，
+    /// 也应该停留在上一次播放的音乐页面」。以前放完就清空，
+    /// 歌词页当场变成一张「这首还没有歌词」的白纸。
+    func finished() {
+        countPlay()
+        switch repeatMode {
+        case .one:
+            seek(to: 0)
+            player?.play()
+            playing = true
+        case .shuffle:
+            let pool = MusicLibrary.shared.tracks.filter { $0.id != current?.id }
+            if let next = pool.randomElement() { start(next) } else { seek(to: 0); pause() }
+        case .off:
+            // 停在结尾，但**不清空**：歌还在，封面歌词都还在
+            seek(to: 0)
+            pause()
+        }
+    }
+
+    /// 这首放完了，计一次数。她要的「每首歌播放次数统计」就靠它。
+    private func countPlay() {
+        guard let t = current else { return }
+        MusicLibrary.shared.countPlay(t.id)
     }
 
     func pause() {
@@ -658,9 +723,29 @@ final class MusicLibrary: ObservableObject {
     }
     private var loaded = false
 
+    /// 每首放过多少次。**单独存**，不塞进 Track——
+    /// 那个结构体嵌在每条消息里，加一个字段等于把整份聊天记录也撑大一圈。
+    @Published private(set) var plays: [String: Int] = [:] {
+        didSet { if loaded { Storage.save(plays, to: "music-plays.json") } }
+    }
+
     init() {
         tracks = Storage.load([Track].self, from: "music.json") ?? []
+        plays = Storage.load([String: Int].self, from: "music-plays.json") ?? [:]
         loaded = true
+    }
+
+    func countPlay(_ id: UUID) {
+        plays[id.uuidString, default: 0] += 1
+    }
+
+    func playCount(_ t: Track) -> Int { plays[t.id.uuidString] ?? 0 }
+
+    /// 放得最多的那些，给「听得最多」那一页用
+    var mostPlayed: [(Track, Int)] {
+        tracks.map { ($0, playCount($0)) }
+            .filter { $0.1 > 0 }
+            .sorted { $0.1 > $1.1 }
     }
 
     func add(_ track: Track) {
