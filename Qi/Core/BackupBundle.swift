@@ -74,13 +74,13 @@ enum BackupBundle {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        let root: [String: Any] = [
+        let bundle: [String: Any] = [
             "version": version,
             "createdAt": f.string(from: Date()),
             "files": files,
             "defaults": flags
         ]
-        return try? JSONSerialization.data(withJSONObject: root,
+        return try? JSONSerialization.data(withJSONObject: bundle,
                                            options: [.prettyPrinted, .sortedKeys])
     }
 
@@ -112,14 +112,14 @@ enum BackupBundle {
         }
 
         var written = 0
-        let root = Storage.documentsURL
+        let dir = Storage.documentsURL
         for (name, value) in files {
             guard name.hasSuffix(".json"), let text = value as? String else { continue }
             // 别让备份文件里的路径把东西写到 Documents 外面去。
             // 这份文件是她自己导出的，但一个能往任意路径写文件的口子
             // 不该因为"来源可信"就留着。
             guard !name.hasPrefix("/"), !name.contains("..") else { continue }
-            let url = root.appendingPathComponent(name)
+            let url = dir.appendingPathComponent(name)
             // 记忆库在 Memory/ 子目录里，第一次还原的时候那个目录还不存在
             try? FileManager.default.createDirectory(
                 at: url.deletingLastPathComponent(), withIntermediateDirectories: true)

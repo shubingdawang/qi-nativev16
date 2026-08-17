@@ -2379,6 +2379,36 @@ final class AppState: ObservableObject {
             CallStore.shared.ring(reason: reason)
             return ("拨过去了，她那边响了。接不接看她。", false)
 
+        case "read_hobbies":
+            return (HobbyStore.shared.brief(), false)
+
+        case "note_hobby":
+            let what = (args["text"] as? String) ?? ""
+            let why = (args["reason"] as? String) ?? ""
+            guard !what.isEmpty else { return ("记什么？", true) }
+            // 原因必填是这个库的规矩，对他也一样
+            guard !why.isEmpty else { return ("得说清楚为什么。说不出理由的喜欢不值得记。", true) }
+            var h = Hobby()
+            // **他记的永远落在他自己那一栏。** 他不能替她记。
+            h.mine = false
+            h.text = what
+            h.like = (args["like"] as? Bool) ?? true
+            h.category = HobbyCategory(rawValue: (args["category"] as? String) ?? "")
+                ?? .other
+            h.sub = (args["sub"] as? String) ?? ""
+            h.reason = why
+            HobbyStore.shared.add(h)
+            // 撞上了就告诉他一声——这事他该知道
+            if let other = HobbyStore.shared.items.first(where: {
+                $0.mine && $0.key == h.key
+            }) {
+                if other.like == h.like {
+                    return ("记下了。而且**你俩撞上了**——她也\(h.like ? "喜欢" : "讨厌")\(what)。", false)
+                }
+                return ("记下了。她在这件事上跟你相反：她\(other.like ? "喜欢" : "讨厌")\(what)。", false)
+            }
+            return ("记下了：\(h.like ? "喜欢" : "讨厌")\(what)。", false)
+
         case "set_dnd":
             let on = (args["on"] as? Bool) ?? true
             let hours = args["hours"] as? Double

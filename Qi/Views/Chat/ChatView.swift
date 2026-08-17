@@ -167,7 +167,14 @@ struct ChatView: View {
             // 聊天页顶上留白，什么都不放，让内容自己往上顶。
             VStack(spacing: 6) {
                 ListeningBar()
-                    .padding(.horizontal, 14)
+                    .padding(.leading, 14)
+                    // 右边给三条杠让出位置。
+                    //
+                    // **这就是「音乐和三条杠重合了、关不掉」的原因**：
+                    // 那颗把手是 44 宽 + 10 的右边距，占着右边 54 个点，
+                    // 而这条播放器铺满整宽，它的关闭叉正好压在把手底下——
+                    // 点下去接到的是把手，抽屉弹出来，音乐关不掉。
+                    .padding(.trailing, showsDrawer ? 68 : 14)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             // 整页铺到状态栏底下了，这段留白自己补

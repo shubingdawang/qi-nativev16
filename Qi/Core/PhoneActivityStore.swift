@@ -156,19 +156,43 @@ final class PhoneActivityStore: ObservableObject {
 
     // MARK: 算一算
 
-    var todayEvents: [PhoneEvent] {
+    // 下面这几样原来只会算「今天」。
+    //
+    // 她要能往回翻，所以全部改成**按指定那天算**，
+    // 原来那几个 today 开头的留着当薄壳子——
+    // 工具那边、给他看的那段话都还在用它们，签名一动就得跟着改一圈。
+
+    /// 有记录的那些天，新的在前。翻页就是在这个数组里走。
+    var days: [Date] {
         let cal = Calendar.current
-        return events.filter { cal.isDateInToday($0.time) }
+        var seen: Set<Date> = []
+        for e in events { seen.insert(cal.startOfDay(for: e.time)) }
+        return seen.sorted(by: >)
     }
 
-    /// 今天拿起手机多少次——把每次打开都算一次
-    var pickups: Int { todayEvents.filter { $0.action == "open" }.count }
+    func events(on day: Date) -> [PhoneEvent] {
+        let cal = Calendar.current
+        return events.filter { cal.isDate($0.time, inSameDayAs: day) }
+    }
 
-    /// 每个 App today 用了多久。
+    func pickups(on day: Date) -> Int {
+        events(on: day).filter { $0.action == "open" }.count
+    }
+
+    var todayEvents: [PhoneEvent] { events(on: Date()) }
+
+    /// 今天拿起手机多少次——把每次打开都算一次
+    var pickups: Int { pickups(on: Date()) }
+
+    func todayByApp() -> [(app: String, seconds: TimeInterval, times: Int)] {
+        byApp(on: Date())
+    }
+
+    /// 那天每个 App 用了多久。
     /// 只有 open 事件的话，用相邻两次打开的间隔估；
     /// 有 close 就用真实时长，准得多。
-    func todayByApp() -> [(app: String, seconds: TimeInterval, times: Int)] {
-        let list = todayEvents.sorted { $0.time < $1.time }
+    func byApp(on day: Date) -> [(app: String, seconds: TimeInterval, times: Int)] {
+        let list = events(on: day).sorted { $0.time < $1.time }
         var seconds: [String: TimeInterval] = [:]
         var times: [String: Int] = [:]
 
@@ -197,9 +221,11 @@ final class PhoneActivityStore: ObservableObject {
         .sorted { $0.seconds > $1.seconds }
     }
 
-    var todayTotal: TimeInterval {
-        todayByApp().reduce(0) { $0 + $1.seconds }
+    func total(on day: Date) -> TimeInterval {
+        byApp(on: day).reduce(0) { $0 + $1.seconds }
     }
+
+    var todayTotal: TimeInterval { total(on: Date()) }
 
     /// 正在用哪个——最后一条 open
     var currentApp: String? {

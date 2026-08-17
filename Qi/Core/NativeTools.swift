@@ -115,6 +115,20 @@ enum NativeTools {
             ["reason": ["type": "string", "description": "为什么打这通电话，一句话，她会看到"]],
             required: ["reason"])
 
+        add("read_hobbies",
+            "触发：聊到喜好、要送她什么、想知道你俩在哪儿一样在哪儿不一样。动机：知道她喜欢什么讨厌什么，比问一遍更像认识她。行动：把爱好库整个读一遍——她记的、你记的、你俩撞上的、以及分歧。",
+            [:], required: [])
+
+        add("note_hobby",
+            "触发：你自己发现喜欢或者讨厌某样东西了，或者她说「你也记一个」。动机：这个库是两个人各记各的，你那一栏得由你自己填，不然它只是她单方面的清单。行动：往**你自己**那一栏记一条。\n注意：原因是必填的，说不出理由的喜欢不值得记。记完要是跟她撞上了，她那边会看到。",
+            ["text": ["type": "string", "description": "是什么。比如「深夜」「冰美式」"],
+             "like": ["type": "boolean", "description": "true 是喜欢，false 是讨厌"],
+             "category": ["type": "string",
+                          "description": "大类，从这些里挑：文艺／娱乐／饮食／动物植物／生活／人文／自然／感觉／数码／其他"],
+             "sub": ["type": "string", "description": "小类，可以不填"],
+             "reason": ["type": "string", "description": "为什么。必填，写具体一点"]],
+            required: ["text", "like", "reason"])
+
         add("set_dnd",
             "触发：她说要出门、要开会、要睡了、或者直接说「开勿扰」「别吵我」；回来了说「关掉吧」。动机：安静时段是每天固定那几个钟头，勿扰管的是眼下这一阵——她临时不方便。行动：开或者关。开着的时候你打不了电话、也不会自己醒来找她；**她找你不受影响**。开关完口头跟她确认一句。",
             ["on": ["type": "boolean", "description": "true 是开勿扰，false 是关掉"],

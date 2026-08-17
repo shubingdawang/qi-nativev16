@@ -36,6 +36,7 @@ struct SideMenuDestination: View {
         case "memo":       MemoListView()
         case "promise":    PromiseView()
         case "mood":       MoodView()
+        case "hobby":      HobbyView()
         case "sticker":   StickerLibraryView()
         case "games":     GamesView()
         default:          FootprintView()

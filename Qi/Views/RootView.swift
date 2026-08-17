@@ -315,7 +315,23 @@ struct NavDrawerBar: View {
         // 跟别处一样走 GlassSurface，这样设置里的玻璃浓度也管得着它。
         // 半径给得比高度大，画出来就是胶囊。
         .background {
-            GlassSurface(radius: 30, strength: app.settings.glassOpacity, extra: 0.2)
+            // 拖的那一下换成实心，停着才用真玻璃。
+            //
+            // **这就是「导航栏拖动有虚影」的原因**：GlassSurface 底下是
+            // UIVisualEffectView，它得去采样背后那块画面；整根条在
+            // `.offset` 里快速位移的时候采样跟不上，就拖出一道糊影。
+            //
+            // 右边那根小把手早就踩过这个坑、也在那儿写了注释，
+            // 但条本身一直漏着。同一个解法：只在**拖的时候**换实心，
+            // 松手立刻变回玻璃，所以它照样跟着磨砂／通透／模糊一起变。
+            if dragX != 0 {
+                Capsule(style: .continuous)
+                    .fill(scheme == .dark
+                          ? Color(hexString: "2A2C30")!.opacity(0.94)
+                          : Color.white.opacity(0.94))
+            } else {
+                GlassSurface(radius: 30, strength: app.settings.glassOpacity, extra: 0.2)
+            }
         }
         .shadow(color: .black.opacity(scheme == .dark ? 0.34 : 0.10),
                 radius: 14, x: 0, y: 5)
