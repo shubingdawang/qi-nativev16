@@ -292,6 +292,9 @@ struct AppSettings: Codable {
     var pulseBaseURL: String = ""
     /// 主动消息服务（server.js）的地址，比如 http://192.168.1.5:3000
     var adminBaseURL: String = ""
+    /// 网易云那套接口的地址（NeteaseCloudMusicApi 那个 Node 服务）。
+    /// 留空就只有 iTunes 那三十秒试听。
+    var neteaseBaseURL: String = ""
     /// 每次请求带上最近多少条消息（0 = 全部）。
     /// 按次计费的账户不用抠这个——一次就是一次，带多少条都是同样的钱，
     /// 所以默认给 0，让他记得住前因后果。
@@ -512,6 +515,7 @@ extension AppSettings {
         inputPlaceholder = (try? c.decodeIfPresent(String.self, forKey: .inputPlaceholder)) ?? "Stay with ayan"
         pulseBaseURL = (try? c.decodeIfPresent(String.self, forKey: .pulseBaseURL)) ?? ""
         adminBaseURL = (try? c.decodeIfPresent(String.self, forKey: .adminBaseURL)) ?? ""
+        neteaseBaseURL = (try? c.decodeIfPresent(String.self, forKey: .neteaseBaseURL)) ?? ""
         contextLimit = (try? c.decodeIfPresent(Int.self, forKey: .contextLimit)) ?? 0
         typewriter = (try? c.decodeIfPresent(Bool.self, forKey: .typewriter)) ?? true
         haptics = (try? c.decodeIfPresent(Bool.self, forKey: .haptics)) ?? true

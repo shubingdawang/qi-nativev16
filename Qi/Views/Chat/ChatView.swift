@@ -165,22 +165,13 @@ struct ChatView: View {
 
             // 窗口标题不在这儿了——它在右边三杠点进去的那个列表里。
             // 聊天页顶上留白，什么都不放，让内容自己往上顶。
-            VStack(spacing: 6) {
-                ListeningBar()
-                    .padding(.leading, 14)
-                    // 右边给三条杠让出位置。
-                    //
-                    // **这就是「音乐和三条杠重合了、关不掉」的原因**：
-                    // 那颗把手是 44 宽 + 10 的右边距，占着右边 54 个点，
-                    // 而这条播放器铺满整宽，它的关闭叉正好压在把手底下——
-                    // 点下去接到的是把手，抽屉弹出来，音乐关不掉。
-                    .padding(.trailing, showsDrawer ? 68 : 14)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            // 整页铺到状态栏底下了，这段留白自己补
-            .padding(.top, 52)
-            .animation(.spring(response: 0.3, dampingFraction: 0.85),
-                       value: MusicPlayer.shared.current?.id)
+            // 放歌那条**不在这儿了**。
+            //
+            // 它以前是顶上一条横贯全屏的 bar，右端压在三条杠底下，
+            // 关闭叉点不着（她说的「重合了、关不掉」），
+            // 而且一直霸占着顶部那一条。
+            // 现在是能拖的悬浮窗，挂在 RootView 上——全 App 都看得见，
+            // 翻到札记、设置那些页面也还在。见 MusicFloatingView。
 
             // 右上角那个抽屉把手，跟原来一样
             if showsDrawer {

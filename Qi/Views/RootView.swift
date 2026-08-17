@@ -27,6 +27,10 @@ struct RootView: View {
             NavDrawerBar(selection: $selection, isOpen: $navOpen,
                          canAutoHide: selection <= 1)
 
+            // 放歌那个小窗。挂在这一层是因为**放歌是全 App 的事**：
+            // 她翻到札记、设置、clawd 小屋，歌照样在放，窗也该还在。
+            MusicFloatingView()
+
             // 他打过来了：卡片压在所有东西上面。
             //
             // 这两样以前挂在絮语页里。**通话是全 App 的事**——

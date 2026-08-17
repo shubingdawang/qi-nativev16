@@ -540,7 +540,10 @@ struct SettingsView: View {
             SettingsDivider()
             SettingsField(title: "主动消息", placeholder: "http://…:3000",
                           text: $app.settings.adminBaseURL, mono: true)
-            SettingsNote("你电脑上跑的那两个服务。填局域网或 Tailscale 地址都行。电脑没开的时候，心跳页会显示最后一次读到的数据。")
+            SettingsDivider()
+            SettingsField(title: "网易云（可留空）", placeholder: "http://…:3000",
+                          text: $app.settings.neteaseBaseURL, mono: true)
+            SettingsNote("前两个是你电脑上跑的那两个服务。填局域网或 Tailscale 地址都行。电脑没开的时候，心跳页会显示最后一次读到的数据。\n\n**网易云这一栏可以不填。** 手机会直接打网易云的公开接口——整首歌、带歌词（有翻译就中英一起），不用开电脑、不用登录、不用配任何东西。\n\n这一栏只解决一件事：**VIP 的歌**。那个要登录态，只能走你电脑上的 NeteaseCloudMusicApi（netease-music-mcp 底下用的就是它，填它的地址，不是那个项目自己的 API server——前者路由公开稳定，后者版本一动就可能变）。\n\n顺序是：填了就先用你电脑那套 → 没通就直连 → 直连也没有才退回 iTunes 三十秒试听。一路退到底也不会让你一首都听不成。")
         }
     }
 

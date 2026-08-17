@@ -18,12 +18,18 @@ struct MusicLibraryView: View {
     @State private var searching = false
     @State private var webResults: [Track] = []
     @State private var notice: String?
+    @State private var showingLyrics = false
 
     private var mine: [Track] { library.search(keyword) }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
+
+                // 正在放的那首。**点它进歌词页**——她指名的那个入口。
+                if let now = player.current {
+                    nowPlayingRow(now)
+                }
 
                 HStack(spacing: 8) {
                     HStack(spacing: 5) {
@@ -108,6 +114,7 @@ struct MusicLibraryView: View {
         }
         .navigationTitle("音乐")
         .navigationBarTitleDisplayMode(.inline)
+        .fullScreenCover(isPresented: $showingLyrics) { NowPlayingView() }
         .fileImporter(isPresented: $importing,
                       allowedContentTypes: [.audio, .mp3, .mpeg4Audio, .data],
                       allowsMultipleSelection: true) { result in
@@ -121,6 +128,64 @@ struct MusicLibraryView: View {
             }
             notice = added > 0 ? "导进来 \(added) 首" : "这些文件读不出来"
         }
+    }
+
+    /// 正在放的那一条。整条都能点，进歌词页。
+    private func nowPlayingRow(_ track: Track) -> some View {
+        Button {
+            showingLyrics = true
+        } label: {
+            HStack(spacing: 11) {
+                // 那个「正在播放的音乐头像」。转起来，一眼看出它是活的。
+                ZStack {
+                    if let url = URL(string: track.artworkURL), !track.artworkURL.isEmpty {
+                        AsyncImage(url: url) { phase in
+                            if let image = phase.image {
+                                image.resizable().scaledToFill()
+                            } else {
+                                Rectangle().fill(Theme.softFillDeep)
+                            }
+                        }
+                    } else {
+                        ZStack {
+                            Rectangle().fill(Theme.softFillDeep)
+                            Image(systemName: "music.note")
+                                .font(.system(size: 16))
+                                .foregroundStyle(app.settings.accentColor)
+                        }
+                    }
+                }
+                .frame(width: 46, height: 46)
+                .clipShape(Circle())
+                .overlay { Circle().strokeBorder(.white.opacity(0.35), lineWidth: 1) }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(track.title)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Theme.textMain(scheme))
+                        .lineLimit(1)
+                    Text(nowLine ?? (track.subtitle.isEmpty ? "一起听着" : track.subtitle))
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+            .padding(12)
+            .glassCard(padding: 0)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var nowLine: String? {
+        guard let i = player.currentLine,
+              player.lines.indices.contains(i) else { return nil }
+        return player.lines[i].text
     }
 
     private func row(_ track: Track, local: Bool) -> some View {
@@ -175,8 +240,40 @@ struct MusicLibraryView: View {
         guard !keyword.isEmpty else { return }
         searching = true
         notice = nil
+
+        // 三条路，从好到差依次退。
+        //
+        // ① 她要是配了电脑上那套，先走它——**只有那条能放 VIP**
+        // ② 没配（或者没通）就**手机直连网易云**：整首 + 歌词，不用电脑、
+        //    不用登录、不用配任何东西。这条是常态
+        // ③ 直连也不成，才退回 iTunes 那三十秒
+        //
+        // 一路退到底也不报错让她一首都听不成——
+        // **有得听比有个错误提示强。**
+
+        let base = app.settings.neteaseBaseURL.trimmingCharacters(in: .whitespaces)
+        if !base.isEmpty {
+            if let r = try? await MusicSearch.searchNetease(keyword, base: base, limit: 8),
+               !r.isEmpty {
+                webResults = r
+                searching = false
+                return
+            }
+            notice = "你电脑那套没通，用直连的"
+        }
+
+        if let r = try? await MusicSearch.searchNeteaseDirect(keyword, limit: 10),
+           !r.isEmpty {
+            webResults = r
+            searching = false
+            return
+        }
+
         do {
             webResults = try await MusicSearch.search(keyword, limit: 8)
+            if notice == nil, !webResults.isEmpty {
+                notice = "网易云没搜到能放的，这些是 iTunes 的三十秒试听"
+            }
         } catch {
             notice = error.localizedDescription
             webResults = []
