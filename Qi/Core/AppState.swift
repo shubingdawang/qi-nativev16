@@ -1411,20 +1411,27 @@ final class AppState: ObservableObject {
 
         let text = conversations[ci].messages[mi].content
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-        guard let voice = activeVoice else { return "语音服务还没配好" }
 
-        do {
-            let data = try await TTSAPI.synthesize(text, with: voice)
-            guard let file = VoiceStore.save(data) else { return "存不下来" }
-            guard let ci2 = index(of: conversationID),
-                  let mi2 = conversations[ci2].messages.firstIndex(where: { $0.id == messageID })
-            else { return nil }
-            conversations[ci2].messages[mi2].voiceName = file
-            VoicePlayer.shared.toggle(file)
-            return nil
-        } catch {
-            return error.localizedDescription
+        // 挨个试配着的音色，全挂了退到系统的声音。
+        // 以前只用第一个，那家一挂就彻底没声音，
+        // 而她可能配了第二个音色正闲着。
+        let spoken = await TTSAPI.speak(VoiceDirection.forSpeech(text), using: voices)
+
+        guard let data = spoken.data else {
+            // 系统那套是直接出声的，拿不到文件，所以没有语音条能存
+            if spoken.systemVoice {
+                SystemVoice.shared.speak(VoiceDirection.strip(text))
+                return spoken.note.isEmpty ? nil : spoken.note
+            }
+            return spoken.note.isEmpty ? "念不出来" : spoken.note
         }
+        guard let file = VoiceStore.save(data) else { return "存不下来" }
+        guard let ci2 = index(of: conversationID),
+              let mi2 = conversations[ci2].messages.firstIndex(where: { $0.id == messageID })
+        else { return nil }
+        conversations[ci2].messages[mi2].voiceName = file
+        VoicePlayer.shared.toggle(file)
+        return spoken.note.isEmpty ? nil : spoken.note
     }
 
     // MARK: 小红书
@@ -1608,6 +1615,12 @@ final class AppState: ObservableObject {
         var voiceFile: String? = nil
         var saidGoodbye: Bool = false
         var error: String = ""
+        /// 这一句他演了些什么（[轻声][叹气] 那些）
+        var acting: [String] = []
+        /// 配的音色都没通，退到系统那个声音了
+        var systemVoice = false
+        /// 这次出声有什么要跟她说的（换了谁念、退到系统音了）
+        var voiceNote = ""
     }
 
     /// 通话里回一句。
@@ -1641,6 +1654,11 @@ final class AppState: ObservableObject {
           你听得出来，但别念出来，更别拿它当结论去审问她。
         · 想结束通话的话，就自然地说再见。说完不用等，她那边会留几秒。
         """
+        // 让她**听得出他的表情**。
+        //
+        // 前面那一摊做完之后链路是瘸的：他听得出她怎么说，
+        // 而她听到的他永远是平的——TTS 拿到一串字从头念到尾一个调。
+        system += VoiceDirection.hint
 
         var messages: [ChatAPI.OutgoingMessage] = [.init(role: "system", text: system)]
         for line in lines {
@@ -1665,22 +1683,29 @@ final class AppState: ObservableObject {
             return CallReply(error: error.localizedDescription)
         }
 
-        let text = out.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return CallReply(error: "他没说话") }
+        let raw = out.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return CallReply(error: "他没说话") }
 
-        var reply = CallReply(text: text)
+        // **同一段话，两个去处，处理相反**：
+        //   给她看的要把 [轻声][叹气] 这些剥干净（屏幕上冒出舞台提示就出戏了）
+        //   给 TTS 的原样留着（认得的模型照着演，认不得的当普通字念）
+        let shown = VoiceDirection.strip(raw)
+        var reply = CallReply(text: shown.isEmpty ? raw : shown)
+        reply.acting = VoiceDirection.found(in: raw)
+
         // 听着像要挂了
         for word in ["再见", "拜拜", "晚安", "挂了", "先这样", "回头聊", "睡吧"] {
-            if text.contains(word) { reply.saidGoodbye = true; break }
+            if shown.contains(word) { reply.saidGoodbye = true; break }
         }
 
-        // 电话里当然要出声。配了才念，没配就只有字。
-        if let voice = activeVoice {
-            if let data = try? await TTSAPI.synthesize(text, with: voice),
-               let file = VoiceStore.save(data) {
-                reply.voiceFile = file
-            }
+        // 出声。**挨个试配着的音色，全挂了退到系统的声音**——
+        // 以前只用第一个，那一家挂掉就彻底没声音。
+        let spoken = await TTSAPI.speak(VoiceDirection.forSpeech(raw), using: voices)
+        if let data = spoken.data, let file = VoiceStore.save(data) {
+            reply.voiceFile = file
         }
+        reply.systemVoice = spoken.systemVoice
+        reply.voiceNote = spoken.note
         return reply
     }
 
@@ -2441,23 +2466,26 @@ final class AppState: ObservableObject {
         case "send_voice_message":
             let text = (args["text"] as? String) ?? ""
             guard !text.isEmpty else { return ("要说的话是空的。", true) }
-            guard let voice = activeVoice else {
-                return ("语音服务还没配好，去「设置 → 语音」填一下。", true)
+            // 挨个试配着的音色。这条**不退系统音**——
+            // 语音条是要存下来给她回听的，而系统那套直接出声、拿不到文件，
+            // 存不下的语音条等于一条点了没反应的消息。
+            let spoken = await TTSAPI.speak(VoiceDirection.forSpeech(text), using: voices)
+            guard let data = spoken.data else {
+                return (spoken.systemVoice
+                        ? "配的音色都没通，语音发不出去（\(spoken.note)）。要不直接打字说？"
+                        : "念不出来。", true)
             }
-            do {
-                let data = try await TTSAPI.synthesize(text, with: voice)
-                guard let file = VoiceStore.save(data) else {
-                    return ("语音存不下来，空间可能满了。", true)
-                }
-                if let cid = activeToolConversationID, let i = index(of: cid) {
-                    var msg = ChatMessage(role: .assistant, content: text)
-                    msg.voiceName = file
-                    conversations[i].messages.append(msg)
-                }
-                return ("语音发出去了。", false)
-            } catch {
-                return (error.localizedDescription, true)
+            guard let file = VoiceStore.save(data) else {
+                return ("语音存不下来，空间可能满了。", true)
             }
+            if let cid = activeToolConversationID, let i = index(of: cid) {
+                // 屏幕上显示的那份要把表演标签剥干净
+                var msg = ChatMessage(role: .assistant,
+                                      content: VoiceDirection.strip(text))
+                msg.voiceName = file
+                conversations[i].messages.append(msg)
+            }
+            return ("语音发出去了。" + spoken.note, false)
 
         case "draw_pixel":
             let subject = (args["subject"] as? String) ?? ""
