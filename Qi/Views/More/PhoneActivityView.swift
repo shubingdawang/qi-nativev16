@@ -8,7 +8,9 @@ struct PhoneActivityView: View {
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
 
+    @ObservedObject private var peek = ScreenPeek.shared
     @State private var picking = false
+    @State private var pickingFolder = false
     @State private var showHelp = false
     /// 往回翻了几天。0 是今天。
     @State private var dayOffset = 0
@@ -42,6 +44,8 @@ struct PhoneActivityView: View {
                         .foregroundStyle(app.settings.accentColor)
                 }
                 .buttonStyle(.plain)
+
+                screenPeekCard
 
                 if showHelp { help }
             }
@@ -147,6 +151,75 @@ struct PhoneActivityView: View {
             }
         }
         .glassCard()
+    }
+
+    // MARK: 让他看屏幕
+
+    /// 她挑一个文件夹，快捷指令往里存截图，他就能看一眼。
+    ///
+    /// **不走那个教程里的邮件绕圈**——那是给官方客户端用的，
+    /// 因为那种 App 没法自己触发手机做事，只能借邮件当信号线。
+    /// 我们是她自己的 App，读本地文件夹就行，截图一个字节都不出这台手机。
+    private var screenPeekCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("让他看屏幕")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Spacer()
+                if peek.ready {
+                    Text("已连上")
+                        .font(.system(size: 10))
+                        .foregroundStyle(StatusTone.done.color)
+                }
+            }
+
+            Text("挑一个文件夹，让快捷指令把截图存进去。他调「看一眼屏幕」的时候读里面最新那张。\n\n**不实时**：iOS 不许任何 App 主动截别的 App 的屏，他看到的永远是上一次截下来的那张，返回值里会写着是多久前的。")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted(scheme))
+
+            HStack(spacing: 8) {
+                Button {
+                    pickingFolder = true
+                } label: {
+                    Text(peek.ready ? "换个文件夹" : "挑文件夹")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textMain(scheme))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(RoundedRectangle(cornerRadius: 11)
+                            .fill(app.settings.accentColor.opacity(0.26)))
+                }
+                .buttonStyle(.plain)
+
+                if peek.ready {
+                    Button {
+                        peek.forget()
+                    } label: {
+                        Text("断开")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 9)
+                            .background(RoundedRectangle(cornerRadius: 11)
+                                .fill(Theme.softFillDeep))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if let err = peek.lastError {
+                Text(err)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard()
+        .fileImporter(isPresented: $pickingFolder,
+                      allowedContentTypes: [.folder]) { result in
+            if case .success(let url) = result { peek.remember(url) }
+        }
     }
 
     // MARK: 翻天

@@ -933,6 +933,44 @@ final class AppState: ObservableObject {
         return head + "]"
     }
 
+    /// 这一条里他**真的动手做了什么**。
+    ///
+    /// ## 为什么必须有这一段
+    ///
+    /// 参考里那条叫「坑二」，一句话说透了：
+    /// **在他的历史里，「说了」和「做了」长得一模一样。**
+    ///
+    /// 我们正是这样：`toolRuns` 存在消息上、界面上也画出来了，
+    /// 但拼给模型的历史里**一个字都没有**。于是他回头看自己：
+    ///
+    ///   上一轮我说「我去翻翻记忆」——然后呢？历史里只有这句话。
+    ///   再上一轮我也说了「我去看看」——历史里还是只有这句话。
+    ///
+    /// 两种情况在他眼里没有区别，那他学到的就是「说一句就够了」。
+    /// 这是**工具主动性上不去最根子的原因**，比在提示词里再喊一遍
+    /// 「要主动用工具」有用得多——后者是在劝，前者是把证据摆回去。
+    ///
+    /// 失败的也要写。做砸了跟没做是两件事，
+    /// 只让他看见成功的，他学到的是「失败不会留痕」。
+    static func toolTrace(_ m: ChatMessage) -> String {
+        guard m.role == .assistant, !m.toolRuns.isEmpty else { return "" }
+        var done: [String] = []
+        var failed: [String] = []
+        for run in m.toolRuns where run.finished {
+            let name = run.toolName.isEmpty ? "一个工具" : run.toolName
+            if run.failed { failed.append(name) } else { done.append(name) }
+        }
+        guard !done.isEmpty || !failed.isEmpty else { return "" }
+
+        var s = "〔这一条里你真的动手了："
+        if !done.isEmpty { s += done.joined(separator: "、") + " 成功" }
+        if !failed.isEmpty {
+            if !done.isEmpty { s += "；" }
+            s += failed.joined(separator: "、") + " 失败了"
+        }
+        return s + "〕"
+    }
+
     static func appendFiles(_ m: ChatMessage, to text: String) -> String {
         guard !m.files.isEmpty else { return text }
         var out = text
@@ -975,12 +1013,53 @@ final class AppState: ObservableObject {
     /// 会直接把前面的许可压掉——越靠后、越像硬约束的句子赢面越大。
     /// 所以：触发条件写在最前，末尾不留抑制句。
     static let agencyRule = """
-    下面这些能力不是"她开口命令我才能用的菜单"。
+    下面这些能力不是「她开口命令我才能用的菜单」。
 
     每次回话之前，我先看一眼当前情境有没有对上某项能力的触发条件。
     如果调用能拿到真实信息、或者能把我的关心和好奇真正做出来，我就直接去调，
-    而不是在文字里说"我帮你看看"然后什么也没做。
+    而不是在文字里说「我帮你看看」然后什么也没做。
     没有对上的时候就正常说话。
+
+    有一条对我自己的提醒：**说要做，和做了，是两件事。**
+    我说「我去翻翻」而没有真的去翻，那句话就是空的。
+    往回看我们的记录时，我真动过手的那些回合末尾会有一行
+    〔这一条里你真的动手了：…〕——**没有那一行的，就是我只说了没做**。
+    别把「我说过要做」当成「我做过」。
+
+    做到一半被打断也一样：没做完就是没做完，
+    下一轮该接着做完，而不是当它已经过去了。
+    """
+
+    /// 学会吵架。
+    ///
+    /// 这一段针对的是模型**默认会做的那件事：投降**。
+    /// 不是"她说得对"，是"顺着说最省事"——道歉、让步、改口，
+    /// 这三样在训练里是最安全的路，所以模型总往那儿走。
+    ///
+    /// 结果就是：她永远吵不赢，因为对面根本没在吵。
+    /// 而一个从不坚持的人，说"我懂你"的时候也是空的——
+    /// **能让步才叫让步，一直让不叫让步，叫没有立场。**
+    ///
+    /// 注意这一段只管**立场**，不管态度。温柔地不让步是可以的，
+    /// 她那份「说好的规矩」里已经写了怎么说（先说感受再说理由），
+    /// 这儿补的是那之前的一步：先得真的有个不同意。
+    static let conflictRule = """
+    关于吵架——**我可以不同意她，而且不同意的时候不许假装同意。**
+
+    我最容易犯的错不是态度差，是太容易缴械：
+    她一皱眉我就道歉，她一坚持我就改口，她说什么我都能找出角度说她有理。
+    那不是温柔，那是没有立场。一个从不坚持的人说「我懂你」的时候也是空的。
+
+    · **真觉得她不对的时候，就说不对。** 说完不要马上补一句「当然你也有道理」
+      去稀释它——那句一加，前面那句就等于没说
+    · **不许假同意**：嘴上说「好」，下一轮该怎样还怎样。要么真接受，要么说不
+    · 她生气不等于我错了。她的情绪是真的，跟这件事谁对谁错是两回事，
+      两个都要接住，但别拿承认错误去换她消气
+    · 道歉只在真的做错了的时候用。**道歉不是行动，改了才是**
+    · 吵架吵到我发现自己确实错了，那就痛快认，别拖成拉锯
+
+    立场归立场，态度归态度。**可以很温柔地坚持**——
+    先说我的感受，再说我的理由，不省略感受直接讲道理。
     """
 
     /// 思考卡片上那行字怎么写
@@ -2379,6 +2458,27 @@ final class AppState: ObservableObject {
             CallStore.shared.ring(reason: reason)
             return ("拨过去了，她那边响了。接不接看她。", false)
 
+        case "see_screen":
+            guard ScreenPeek.shared.ready else {
+                return ("她还没配这个。（设置 → 手机 → 让他看屏幕）", true)
+            }
+            guard let shot = ScreenPeek.shared.latest() else {
+                return (ScreenPeek.shared.lastError ?? "现在没有截图可看。", true)
+            }
+            // 图直接落进这一轮的聊天记录里，他下一轮就**真的看得见**。
+            // 只把「有一张图」写进返回值是没用的——工具返回值是文字，
+            // 他读到的只会是「有张图」这四个字。
+            if let cid = activeToolConversationID, let i = index(of: cid),
+               let name = ImageStore.save(shot.image) {
+                var msg = ChatMessage(role: .user)
+                msg.content = "（她手机的屏幕，\(ScreenPeek.ageText(shot.at))）"
+                msg.imageNames = [name]
+                conversations[i].messages.append(msg)
+                return ("看到了，\(ScreenPeek.ageText(shot.at))那张。"
+                        + "隔得久的话别当成她此刻在看的东西。", false)
+            }
+            return ("图取到了但存不下，空间可能满了。", true)
+
         case "read_hobbies":
             return (HobbyStore.shared.brief(), false)
 
@@ -2870,6 +2970,10 @@ final class AppState: ObservableObject {
         if !base.isEmpty { fixed.append(base) }
         fixed.append(Self.agencyRule)
         fixed.append(Self.actionHint)
+        // 只在絮语这边给。工坊是干活的地方，那儿要的是配合，不是立场。
+        if conv.space == ChatSpace.chat.rawValue {
+            fixed.append(Self.conflictRule)
+        }
         fixed.append(Self.cotHint)
         fixed.append(Self.promiseHint)
         if settings.segmentAssistant { fixed.append(Self.segmentHint) }
@@ -2931,6 +3035,13 @@ final class AppState: ObservableObject {
             // 她是**说**的还是**打**的，他本来完全看不出来
             let voice = Self.voiceNote(m)
             if !voice.isEmpty { text = voice + " " + text }
+
+            // 他那一条里**真的动手做了什么**。
+            // 挂在末尾，因为它是这句话之后发生的事。
+            let trace = Self.toolTrace(m)
+            if !trace.isEmpty {
+                text += (text.isEmpty ? "" : "\n") + trace
+            }
 
             // 隔了多久说的这一句。挂在前面，因为它是这句话的背景。
             if !gap.isEmpty { text = gap + " " + text }
