@@ -32,6 +32,8 @@ struct AppearanceView: View {
             ScrollView {
                 VStack(spacing: 18) {
                     accentCard
+                    backdropCard
+                    fontCard
                     glassCard
                     presetCard
                     textColorCard
@@ -128,6 +130,165 @@ struct AppearanceView: View {
         }
     }
 
+    // MARK: 底
+
+    /// 整个 App 的底：一张图 / 一块纯色 / 一道渐变。
+    ///
+    /// 「可调节的渐变主题」是她点名要的。做成三档而不是「壁纸 + 一个渐变开关」，
+    /// 是因为纯色那一档本来也缺——想要一块干净的底以前只能不设壁纸，
+    /// 而那样拿到的是主题写死的颜色，她说了不算。
+    private var backdropCard: some View {
+        SettingsCard(title: "底") {
+            HStack(spacing: 10) {
+                ForEach([("image", "图片"), ("gradient", "渐变"), ("solid", "纯色")],
+                        id: \.0) { key, title in
+                    Button {
+                        app.settings.wallpaperMode = key
+                    } label: {
+                        VStack(spacing: 6) {
+                            backdropSample(key)
+                                .frame(height: 54)
+                                .clipShape(RoundedRectangle(cornerRadius: 10,
+                                                            style: .continuous))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .strokeBorder(app.settings.accentColor,
+                                                      lineWidth:
+                                                        app.settings.wallpaperMode == key ? 2 : 0)
+                                }
+                            Text(title)
+                                .font(.system(size: 11))
+                                .foregroundStyle(app.settings.wallpaperMode == key
+                                                 ? Theme.textMain(scheme)
+                                                 : Theme.textMuted(scheme))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 13)
+
+            if app.settings.wallpaperMode == "gradient" {
+                SettingsDivider()
+                colorRow("从", hex: $app.settings.gradientFrom)
+                colorRow("到", hex: $app.settings.gradientTo)
+                slider(title: "方向",
+                       value: $app.settings.gradientAngle,
+                       range: 0...360, step: 5,
+                       readout: "\(Int(app.settings.gradientAngle))°")
+            }
+
+            if app.settings.wallpaperMode == "solid" {
+                SettingsDivider()
+                colorRow("颜色", hex: $app.settings.solidHex)
+            }
+
+            if app.settings.wallpaperMode == "image" {
+                SettingsNote("图片那档在「设置 → 外观」里换。这儿只管选用哪一种底。")
+            } else {
+                SettingsNote("渐变和纯色是**画出来的**，不占空间、也不会被深色模式压糊。深浅色下都会跟着「壁纸压暗」那根滑块走。")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func backdropSample(_ key: String) -> some View {
+        switch key {
+        case "gradient":
+            LinearGradient(
+                colors: [Color(hexString: app.settings.gradientFrom) ?? .gray,
+                         Color(hexString: app.settings.gradientTo) ?? .gray],
+                startPoint: WallpaperBackground.point(app.settings.gradientAngle),
+                endPoint: WallpaperBackground.point(app.settings.gradientAngle + 180))
+        case "solid":
+            (Color(hexString: app.settings.solidHex) ?? Theme.pageBackground(scheme))
+        default:
+            if let name = app.settings.wallpaperName, let img = ImageStore.load(name) {
+                Image(uiImage: img).resizable().scaledToFill()
+            } else {
+                Theme.pageBackground(scheme)
+            }
+        }
+    }
+
+    /// 一行颜色：**色号能打，也能直接在调色盘上调**。
+    ///
+    /// 她两样都要——打色号是知道自己要哪个色的时候最快，
+    /// 调色盘是不知道要哪个、想试出来的时候唯一好使的东西。
+    private func colorRow(_ title: String, hex: Binding<String>) -> some View {
+        HStack(spacing: 10) {
+            Text(title)
+                .font(.system(size: 15))
+                .foregroundStyle(Theme.textMain(scheme))
+            Spacer(minLength: 8)
+            TextField("六位色号", text: hex)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .multilineTextAlignment(.trailing)
+                .font(.system(size: 14, design: .monospaced))
+                .textFieldStyle(.plain)
+                .frame(maxWidth: 96)
+            // 系统那个取色器就是调色盘：能拖色相、能吸屏幕上的颜色。
+            // 自己画一个不会比它好用。
+            ColorPicker("", selection: Binding(
+                get: { Color(hexString: hex.wrappedValue) ?? .gray },
+                set: { hex.wrappedValue = $0.hexString }
+            ), supportsOpacity: false)
+                .labelsHidden()
+                .frame(width: 30)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+    }
+
+    // MARK: 字
+
+    private var fontCard: some View {
+        SettingsCard(title: "字") {
+            HStack(spacing: 10) {
+                ForEach(AppSettings.fontDesigns, id: \.0) { key, title in
+                    Button {
+                        app.settings.fontDesign = key
+                    } label: {
+                        VStack(spacing: 3) {
+                            Text("栖")
+                                .font(.system(size: 22))
+                            Text(title)
+                                .font(.system(size: 10))
+                        }
+                        .fontDesign(designOf(key))
+                        .foregroundStyle(app.settings.fontDesign == key
+                                         ? Theme.textMain(scheme)
+                                         : Theme.textMuted(scheme))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .background {
+                            if app.settings.fontDesign == key {
+                                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                                    .fill(app.settings.accentColor.opacity(0.22))
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 13)
+
+            SettingsNote("**整个 App 一起换**，不只是这一页。\n\niOS 只给了这四种能全局生效的字形——换一整套字库的话，工程里那几百处写死的系统字号不会跟着变，得一处处改，那是另一件事。")
+        }
+    }
+
+    private func designOf(_ key: String) -> Font.Design {
+        switch key {
+        case "rounded":    return .rounded
+        case "serif":      return .serif
+        case "monospaced": return .monospaced
+        default:           return .default
+        }
+    }
+
     // MARK: 玻璃
 
     private var glassCard: some View {
@@ -218,6 +379,28 @@ struct AppearanceView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 13)
                     .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+
+            // 「家」要真的是全局的，**底也得跟着换**。
+            //
+            // 配色那几档本来只管字色和面板色，底还是各归各的——
+            // 所以选了「家」屏幕上却还是原来那张壁纸，看着就不是一套东西。
+            // 这个按钮把底也换成那张暖纸，一按到位。
+            //
+            // 做成按钮而不是自动跟着切，是因为**不该替她把壁纸盖掉**：
+            // 她可能就想要「家」的字配自己那张照片。
+            if app.settings.preset == .home {
+                SettingsDivider()
+                Button {
+                    app.settings.wallpaperMode = "solid"
+                    app.settings.solidHex = scheme == .dark ? "1C1B19" : "FAF9F5"
+                } label: {
+                    SettingsRowLabel(title: "把底也换成「家」的暖纸",
+                                     value: app.settings.wallpaperMode == "solid"
+                                        ? "已经是了" : nil,
+                                     tint: app.settings.accentColor)
                 }
                 .buttonStyle(.plain)
             }

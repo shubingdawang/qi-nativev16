@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit   // Color.hexString 要用 UIColor 取分量
 
 // MARK: - 供应商 / 模型
 
@@ -361,10 +362,52 @@ struct AppSettings: Codable {
     // 旧版本存下来的 settings.json 缺那个键，一解码就抛，
     // **她整份设置会被静默重置**——壁纸、密钥、配色全没。
     // clawd 那几个开关也是为此走的 UserDefaults。
+    // MARK: 底
+    //
+    // 以前只有两种：垫一张图，或者什么都没有（一块纯色）。
+    // 她要「可调节的渐变主题」，所以拆成三档，由 wallpaperMode 决定走哪条。
+
+    /// 底用哪一种：image 图片 / solid 纯色 / gradient 渐变
+    var wallpaperMode: String = "image"
+    /// 纯色那档用的色号
+    var solidHex: String = ""
+    /// 渐变的两头和方向（角度是度数，0 是从上往下）
+    var gradientFrom: String = "F7C9B8"
+    var gradientTo: String = "A8C8E0"
+    var gradientAngle: Double = 145
+
+    /// 全局字形。
+    ///
+    /// 走 SwiftUI 的 `.fontDesign()`，在根视图上挂一次就管整个 App——
+    /// 工程里几百处 `.font(.system(size:))` 一个都不用改。
+    /// 换整套自定义字库做不到这么干净（`.system` 不会跟着变），
+    /// 所以这儿给的是四种字形，不是字体文件。
+    var fontDesign: String = "default"
+
     /// 正文字色。留空就跟着深浅色自动走。
     var textHex: String = ""
     /// 深色模式下单独的字色，留空同上
     var textHexDark: String = ""
+
+    /// 字形。存的是字符串（好存好读），用的时候换成 SwiftUI 那个类型。
+    var fontDesignValue: Font.Design {
+        switch fontDesign {
+        case "rounded":    return .rounded
+        case "serif":      return .serif
+        case "monospaced": return .monospaced
+        default:           return .default
+        }
+    }
+
+    /// 四种字形。iOS 只给了这四种能**全局生效**的选择——
+    /// 换整套字库的话，工程里那几百处 `.font(.system(size:))` 不会跟着变，
+    /// 得一处处改，那是另一件事。
+    static let fontDesigns: [(String, String)] = [
+        ("default", "默认"),
+        ("rounded", "圆润"),
+        ("serif", "衬线"),
+        ("monospaced", "等宽")
+    ]
 
     /// 日常强调色：图标、选中态、次要按钮都用它。
     ///
@@ -405,6 +448,16 @@ extension Color {
         let g = Double((value >> 8) & 0xFF) / 255.0
         let b = Double(value & 0xFF) / 255.0
         self = Color(red: r, green: g, blue: b)
+    }
+
+    /// 反过来：把颜色变回六位色号。
+    /// 调色盘调完要写回那个输入框，两边得是同一个值。
+    var hexString: String {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a)
+        // 取色器可能给出色域外的值（P3 比 sRGB 宽），夹一下再转
+        let clamp = { (v: CGFloat) in Int((min(1, max(0, v)) * 255).rounded()) }
+        return String(format: "%02X%02X%02X", clamp(r), clamp(g), clamp(b))
     }
 }
 
@@ -487,6 +540,12 @@ extension AppSettings {
         tavilyKey = (try? c.decodeIfPresent(String.self, forKey: .tavilyKey)) ?? ""
         pricing = (try? c.decodeIfPresent(Pricing.self, forKey: .pricing)) ?? Pricing()
         wake = (try? c.decodeIfPresent(WakeConfig.self, forKey: .wake)) ?? WakeConfig()
+        wallpaperMode = (try? c.decodeIfPresent(String.self, forKey: .wallpaperMode)) ?? "image"
+        solidHex = (try? c.decodeIfPresent(String.self, forKey: .solidHex)) ?? ""
+        gradientFrom = (try? c.decodeIfPresent(String.self, forKey: .gradientFrom)) ?? "F7C9B8"
+        gradientTo = (try? c.decodeIfPresent(String.self, forKey: .gradientTo)) ?? "A8C8E0"
+        gradientAngle = (try? c.decodeIfPresent(Double.self, forKey: .gradientAngle)) ?? 145
+        fontDesign = (try? c.decodeIfPresent(String.self, forKey: .fontDesign)) ?? "default"
         textHex = (try? c.decodeIfPresent(String.self, forKey: .textHex)) ?? ""
         textHexDark = (try? c.decodeIfPresent(String.self, forKey: .textHexDark)) ?? ""
     }

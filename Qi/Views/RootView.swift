@@ -47,6 +47,11 @@ struct RootView: View {
                 .zIndex(99)
             }
         }
+        // 全局字形。**挂在这儿一次，整个 App 都跟着变**——
+        // 工程里几百处 `.font(.system(size:))` 一个都不用改，
+        // 这正是 `.fontDesign()` 跟「换一个字体文件」的区别：
+        // 换字库的话 `.system` 不会跟着走，得一处处改。
+        .fontDesign(app.settings.fontDesignValue)
         .fullScreenCover(isPresented: Binding(
             get: { calls.active != nil },
             set: { if !$0 && calls.active != nil { calls.hangUp(by: "me") } }
@@ -359,19 +364,32 @@ struct WallpaperBackground: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
+                // 兜底那层。**「家」那套连底色一起管**——
+                // 她要的是「不管壁纸还是别的什么」都跟 claude.ai 一个感觉，
+                // 所以 pageBackground 在 home 那档返回的就是暖纸色。
                 Theme.pageBackground(scheme)
 
-                if let name = app.settings.wallpaperName,
-                   let image = ImageStore.load(name) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .clipped()
-
-                    if scheme == .dark {
-                        Color.black.opacity(0.30)
+                switch app.settings.wallpaperMode {
+                case "gradient":
+                    gradient
+                case "solid":
+                    if let c = Color(hexString: app.settings.solidHex) { c }
+                default:
+                    if let name = app.settings.wallpaperName,
+                       let image = ImageStore.load(name) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: geo.size.width, height: geo.size.height)
+                            .clipped()
                     }
+                }
+
+                // 压暗那两层对三种底都适用：
+                // 深色模式下统一压一道，再叠她自己拉的那道。
+                // 以前只有图片那一档压，换成渐变就白得晃眼。
+                if hasOwnBackground {
+                    if scheme == .dark { Color.black.opacity(0.30) }
                     if app.settings.wallpaperDim > 0.01 {
                         Color.black.opacity(app.settings.wallpaperDim)
                     }
@@ -380,5 +398,30 @@ struct WallpaperBackground: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .ignoresSafeArea()
+    }
+
+    /// 她自己铺了底没有。铺了才需要压暗，
+    /// 什么都没铺的时候压的是 pageBackground，那层本来就调好了。
+    private var hasOwnBackground: Bool {
+        switch app.settings.wallpaperMode {
+        case "gradient": return true
+        case "solid":    return Color(hexString: app.settings.solidHex) != nil
+        default:         return app.settings.wallpaperName != nil
+        }
+    }
+
+    private var gradient: some View {
+        LinearGradient(
+            colors: [Color(hexString: app.settings.gradientFrom) ?? .gray,
+                     Color(hexString: app.settings.gradientTo) ?? .gray],
+            startPoint: Self.point(app.settings.gradientAngle),
+            endPoint: Self.point(app.settings.gradientAngle + 180))
+    }
+
+    /// 把角度换成渐变的起止点。
+    /// 0 度是从正上方往下，顺时针转。
+    static func point(_ degrees: Double) -> UnitPoint {
+        let r = (degrees - 90) * .pi / 180
+        return UnitPoint(x: 0.5 + cos(r) * 0.75, y: 0.5 + sin(r) * 0.75)
     }
 }

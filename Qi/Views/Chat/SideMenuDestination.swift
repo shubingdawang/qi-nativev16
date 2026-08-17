@@ -37,6 +37,7 @@ struct SideMenuDestination: View {
         case "promise":    PromiseView()
         case "mood":       MoodView()
         case "hobby":      HobbyView()
+        case "clawdart":   ClawdStudioView()
         case "sticker":   StickerLibraryView()
         case "games":     GamesView()
         default:          FootprintView()

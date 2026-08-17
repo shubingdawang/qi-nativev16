@@ -349,6 +349,7 @@ struct SideMenuItem: Identifiable, Hashable {
         .init(id: "phone",     title: "手机", icon: "iphone"),
         .init(id: "music",     title: "音乐", icon: "music.note"),
         .init(id: "pixel",     title: "像素", icon: Icon.sticker),
+        .init(id: "clawdart",  title: "表情工坊", icon: "paintbrush.pointed"),
         .init(id: "library",   title: "书房", icon: Icon.diary),
         .init(id: "memo",      title: "备忘", icon: Icon.notes),
         .init(id: "promise",   title: "承诺", icon: "hand.raised"),
