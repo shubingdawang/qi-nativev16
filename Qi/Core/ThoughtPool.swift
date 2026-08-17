@@ -118,6 +118,10 @@ final class ThoughtPool: ObservableObject {
                     if thoughts[i].strength >= 0.85 {
                         thoughts[i].fedCount += 1
                         feedNote = thoughts[i].text
+                        // 反哺是真的推一下，不只是记一笔。
+                        // 以前这里只留了个 feedNote 给界面看——"反哺欲望"是句空话，
+                        // 因为那时候根本没有欲望这一层。现在有了（DesireEngine）。
+                        DesireEngine.shared.feed(Desire.driveKey(from: thoughts[i].feeds))
                         // 推完回落一点，不然会一直卡在顶上反复推
                         thoughts[i].strength = 0.82
 

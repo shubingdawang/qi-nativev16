@@ -404,6 +404,9 @@ final class AppState: ObservableObject {
         flushPending(conversationID, run: false)
         // 刚说完话，让「自己醒来」那边短期内安静一点——她人就在这儿呢
         WakeEngine.shared.noteRun()
+        // 她来说话了，「想她」和「压着」这两维自然会落一点。
+        // 落得比做完一件事轻——她在这儿本身就是一种缓解，但不等于那件事做了。
+        DesireEngine.shared.touched()
         let turn = UUID()
         var userMsg = ChatMessage(role: .user, content: text)
         userMsg.turnID = turn
@@ -2610,6 +2613,67 @@ final class AppState: ObservableObject {
 
         case "read_thoughts":
             return (ThoughtPool.shared.brief(), false)
+
+        case "monopoly":
+            let g = MonopolyGame.shared
+            let action = (args["action"] as? String) ?? "status"
+            let who = args["who"] as? String
+            switch action {
+            case "roll":      return (g.roll(), false)
+            case "status":    return (g.status(), false)
+            case "done":      return (g.done(who), false)
+            case "skip":      return (g.skip(who), false)
+            case "buyout":    return (g.buyout(who), false)
+            case "pay_toll":  return (g.settleToll(mode: "pay"), false)
+            case "serve":     return (g.settleToll(mode: "serve"), false)
+            case "buy_card":  return (g.buyCard(who), false)
+            case "use_card":
+                let idx = Int((args["index"] as? Double) ?? 1) - 1
+                guard let name = who else { return ("要说清楚是谁打的牌。", true) }
+                return (g.useCard(name, index: max(0, idx)), false)
+            case "duel":
+                guard let w = args["winner"] as? String else { return ("谁赢了？", true) }
+                return (g.duelResult(winner: w), false)
+            case "final":     return (g.finalResult(), false)
+            case "safeword":  return (g.safeword(), false)
+            default:
+                return ("不认识的动作「\(action)」。能用的：roll / status / done / skip / "
+                        + "buyout / pay_toll / serve / buy_card / use_card / duel / final / safeword", true)
+            }
+
+        case "doll_action":
+            let action = (args["action"] as? String) ?? "look"
+            let doll = DollStore.shared
+            if action != "look" {
+                _ = doll.act(action,
+                             zone: args["zone"] as? String,
+                             pose: args["pose"] as? String,
+                             camera: args["camera"] as? String,
+                             narration: args["narration"] as? String)
+            }
+            // 默认放一张卡片。**卡片是活的**——它读的是娃娃现在的状态，
+            // 不是当时那一帧，所以她往回翻也还是能接着点。
+            let wantCard = (args["card"] as? Bool) ?? true
+            if wantCard, let cid = activeToolConversationID, let i = index(of: cid) {
+                var msg = ChatMessage(role: .assistant,
+                                      content: (args["note"] as? String) ?? "")
+                msg.widget = "doll"
+                conversations[i].messages.append(msg)
+            }
+            return (doll.brief(), false)
+
+        case "read_desire":
+            return (DesireEngine.shared.brief(), false)
+
+        case "satisfied":
+            let did = (args["did"] as? String) ?? ""
+            guard let action = DesireAction.allCasesForLabel(did) else {
+                return ("不认识「\(did)」这件事。八件里挑一个："
+                        + DesireAction.allLabels.joined(separator: "／"), true)
+            }
+            DesireEngine.shared.satisfy(action)
+            return ("记下了。\(action.label)这一维压下去了。\n"
+                    + DesireEngine.shared.brief(), false)
 
         case "dial_call":
             let reason = (args["reason"] as? String) ?? "想听听你的声音"

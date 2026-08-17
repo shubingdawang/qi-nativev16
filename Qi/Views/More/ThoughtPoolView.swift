@@ -98,6 +98,8 @@ struct ThoughtPoolView: View {
                         .foregroundStyle(app.settings.accentColor)
                 }
 
+                DesireBars()
+
                 if !pool.resolvedOnes.isEmpty {
                     Button {
                         withAnimation { showResolved.toggle() }
@@ -161,6 +163,7 @@ struct ThoughtPoolView: View {
             }
         }
     }
+
 
     private func bubbleRow(_ t: Thought) -> some View {
         // 越强的字越大、越实

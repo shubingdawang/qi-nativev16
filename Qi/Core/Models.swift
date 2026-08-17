@@ -140,6 +140,10 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     /// 翻译出来的那一段，显示在原文下面
     var translation: String? = nil
     var isTranslating: Bool = false
+    /// 这条消息底下挂一个能点的挂件。现在只有 "doll" 一种。
+    /// 挂件的状态**不存在消息里**——存在各自那个 store 里，
+    /// 所以往回翻聊天记录看到的是它现在的样子，不是当时的截图。
+    var widget: String = ""
 
     var isEmptyContent: Bool {
         content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -652,5 +656,6 @@ extension ChatMessage {
         chosenOption = (try? c.decodeIfPresent(String.self, forKey: .chosenOption)) ?? ""
         translation = try? c.decodeIfPresent(String.self, forKey: .translation)
         isTranslating = (try? c.decodeIfPresent(Bool.self, forKey: .isTranslating)) ?? false
+        widget = (try? c.decodeIfPresent(String.self, forKey: .widget)) ?? ""
     }
 }

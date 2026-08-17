@@ -121,6 +121,26 @@ struct MessageBubbleView: View {
                 if !isUser { Spacer(minLength: 20) }
             }
         }
+        // 挂件也是单独一张卡，不套气泡。
+        // 它是**活的**：往回翻看到的是娃娃现在的样子，不是当时那一帧。
+        else
+        if message.widget == "doll" {
+            VStack(alignment: .leading, spacing: 6) {
+                if !message.content.isEmpty {
+                    Text(message.content)
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.textMain(scheme))
+                }
+                DollInlineCard()
+            }
+            .contextMenu {
+                Button(role: .destructive) {
+                    app.deleteMessage(message.id, in: conversationID)
+                } label: {
+                    Label("删掉", systemImage: Icon.trash)
+                }
+            }
+        }
         // 旅行是单独一张卡，不套气泡
         else
         if let journey = message.journey {

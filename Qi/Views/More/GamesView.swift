@@ -2,128 +2,48 @@ import SwiftUI
 import WebKit
 import UniformTypeIdentifiers
 
-/// 游戏间。两类：
-/// 一类是阿晏做给你的 HTML，存在手机里，点开就能玩；
-/// 一类走小游戏那个 MCP，是文字玩法，列出来看看有什么。
+/// 游戏间。
+///
+/// 顶上两栏，跟聊天记录那页一个样式：
+///
+/// · **网页** —— 存在手机里、点开就在 App 里跑的那些（阿晏写的 HTML、娃娃房）
+/// · **对话** —— 在聊天里玩的那些（大富翁、MCP 那边的小游戏）
+///
+/// 栏里再按类型分组。分类是按**怎么玩**分的，不是按技术实现分的——
+/// 「这是 MCP 还是本地」她不需要关心，能不能点开玩、在哪儿玩才是要紧的。
 struct GamesView: View {
 
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
     @ObservedObject private var store = GameStore.shared
+    @ObservedObject private var mono = MonopolyGame.shared
+
+    @State private var tab = 0            // 0 网页，1 对话
     @State private var importing = false
     @State private var playing: LocalGame?
     @State private var mcpText = ""
     @State private var loadingMCP = false
+    @State private var pickingGenre: LocalGame?
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+        VStack(spacing: 0) {
 
-                if store.games.isEmpty {
-                    VStack(spacing: 10) {
-                        Image(systemName: Icon.games)
-                            .font(.system(size: 36, weight: .light))
-                            .foregroundStyle(app.settings.accentColor.opacity(0.6))
-                        Text("还没有游戏")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Theme.textMuted(scheme))
-                        Text("把阿晏写好的网页游戏放进来")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Theme.textMuted(scheme).opacity(0.8))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 40)
-                }
-
-                ForEach(store.games) { game in
-                    Button {
-                        playing = game
-                    } label: {
-                        HStack(spacing: 12) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                                    .fill(app.settings.accentColor.opacity(0.16))
-                                    .frame(width: 40, height: 40)
-                                Image(systemName: Icon.games)
-                                    .font(.system(size: 16, weight: .regular))
-                                    .foregroundStyle(app.settings.accentColor)
-                            }
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(game.name)
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundStyle(Theme.textMain(scheme))
-                                Text(dateText(game.addedAt))
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(Theme.textMuted(scheme))
-                            }
-                            Spacer()
-                            Image(systemName: Icon.chevron)
-                                .font(.system(size: 12))
-                                .foregroundStyle(Theme.textMuted(scheme))
-                        }
-                        .padding(12)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .glassCard(padding: 0)
-                    .contextMenu {
-                        Button(role: .destructive) {
-                            store.remove(game)
-                        } label: {
-                            Label("删掉", systemImage: Icon.trash)
-                        }
-                    }
-                }
-
-                Button {
-                    importing = true
-                } label: {
-                    Label("放一个进来", systemImage: Icon.add)
-                        .font(.system(size: 14))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(app.settings.accentColor.opacity(0.22)))
-                }
-                .buttonStyle(.plain)
-
-                Divider().opacity(0.4).padding(.vertical, 4)
-
-                HStack {
-                    Text("阿晏那边的")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Theme.textMain(scheme))
-                    Spacer()
-                    Button {
-                        Task {
-                            loadingMCP = true
-                            let r = await app.callTool("list_games", args: [:])
-                            mcpText = r.text
-                            loadingMCP = false
-                        }
-                    } label: {
-                        if loadingMCP { ProgressView() }
-                        else { Image(systemName: Icon.refresh).foregroundStyle(app.settings.accentColor) }
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                if !mcpText.isEmpty {
-                    Text(mcpText)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.textSoft(scheme))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                        .glassCard()
-                } else {
-                    Text("这些是在对话里玩的，跟阿晏说想玩哪个就行。")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textMuted(scheme))
-                }
+            Picker("", selection: $tab) {
+                Text("网页").tag(0)
+                Text("对话").tag(1)
             }
+            .pickerStyle(.segmented)
             .padding(.horizontal, 16)
             .padding(.top, 10)
-            .padding(.bottom, Layout.tabBarExpanded + 12)
+            .padding(.bottom, 10)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    if tab == 0 { webTab } else { talkTab }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, Layout.tabBarExpanded + 12)
+            }
         }
         .navigationTitle("游戏")
         .navigationBarTitleDisplayMode(.inline)
@@ -135,6 +55,168 @@ struct GamesView: View {
         .fullScreenCover(item: $playing) { game in
             GamePlayerView(game: game)
         }
+        .confirmationDialog("这算哪一类", isPresented: Binding(
+            get: { pickingGenre != nil },
+            set: { if !$0 { pickingGenre = nil } })) {
+            ForEach(GameGenre.allCases, id: \.self) { g in
+                Button(g.label) {
+                    if let target = pickingGenre { store.setGenre(target, g) }
+                    pickingGenre = nil
+                }
+            }
+        }
+    }
+
+    // MARK: 网页
+
+    @ViewBuilder
+    private var webTab: some View {
+        // 内置的那些排最前面
+        section(GameGenre.raise.label) {
+            NavigationLink {
+                DollRoomView()
+            } label: {
+                row(title: DollStore.shared.state.name,
+                    sub: "能点的娃娃 · 聊天里也有一张同样的卡片",
+                    icon: "hand.tap")
+            }
+            .buttonStyle(.plain)
+        }
+
+        let grouped = Dictionary(grouping: store.games) { $0.genreValue }
+        ForEach(GameGenre.allCases, id: \.self) { genre in
+            if let list = grouped[genre], !list.isEmpty {
+                section(genre.label) {
+                    ForEach(list) { game in
+                        Button {
+                            playing = game
+                        } label: {
+                            row(title: game.name, sub: dateText(game.addedAt), icon: Icon.games)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button {
+                                pickingGenre = game
+                            } label: {
+                                Label("改分类", systemImage: "tag")
+                            }
+                            Button(role: .destructive) {
+                                store.remove(game)
+                            } label: {
+                                Label("删掉", systemImage: Icon.trash)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if store.games.isEmpty {
+            Text("阿晏写的网页游戏放进来就能玩，长按可以改分类。")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted(scheme))
+        }
+
+        Button {
+            importing = true
+        } label: {
+            Label("放一个进来", systemImage: Icon.add)
+                .font(.system(size: 14))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(app.settings.accentColor.opacity(0.22)))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: 对话
+
+    @ViewBuilder
+    private var talkTab: some View {
+        section(GameGenre.board.label) {
+            NavigationLink {
+                MonopolyView()
+            } label: {
+                row(title: "涩涩大富翁",
+                    sub: mono.s.live
+                         ? "开着局 · 回合 \(mono.s.turnCount)/\(mono.s.totalRounds) · 该 \(mono.s.turn) 掷"
+                         : "两个人的棋盘 · 引擎在手机里，不用开电脑",
+                    icon: "dice")
+            }
+            .buttonStyle(.plain)
+        }
+
+        section("阿晏那边的") {
+            HStack {
+                Text("在对话里玩的，跟他说想玩哪个就行")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                Spacer()
+                Button {
+                    Task {
+                        loadingMCP = true
+                        let r = await app.callTool("list_games", args: [:])
+                        mcpText = r.text
+                        loadingMCP = false
+                    }
+                } label: {
+                    if loadingMCP { ProgressView() }
+                    else { Image(systemName: Icon.refresh).foregroundStyle(app.settings.accentColor) }
+                }
+                .buttonStyle(.plain)
+            }
+            if !mcpText.isEmpty {
+                Text(mcpText)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSoft(scheme))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+                    .padding(.top, 6)
+            }
+        }
+    }
+
+    // MARK: 零件
+
+    @ViewBuilder
+    private func section<Content: View>(_ title: String,
+                                        @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.textMuted(scheme))
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard()
+    }
+
+    private func row(title: String, sub: String, icon: String) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .fill(app.settings.accentColor.opacity(0.16))
+                    .frame(width: 40, height: 40)
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+                    .foregroundStyle(app.settings.accentColor)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Text(sub)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+            Spacer()
+            Image(systemName: Icon.chevron)
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.textMuted(scheme))
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
     }
 
     private func dateText(_ d: Date) -> String {
@@ -145,6 +227,24 @@ struct GamesView: View {
     }
 }
 
+// MARK: - 分类
+
+/// 按**怎么玩**分，不按技术实现分。
+/// 她说过「我也不太确定是 mcp 还是什么」——那本来就不该她操心。
+enum GameGenre: String, CaseIterable, Codable {
+    case board, raise, puzzle, text, other
+
+    var label: String {
+        switch self {
+        case .board:  return "桌游"
+        case .raise:  return "养成"
+        case .puzzle: return "益智"
+        case .text:   return "文字"
+        case .other:  return "其他"
+        }
+    }
+}
+
 // MARK: - 存本地的 HTML 游戏
 
 struct LocalGame: Codable, Identifiable, Hashable {
@@ -152,6 +252,26 @@ struct LocalGame: Codable, Identifiable, Hashable {
     var name: String
     var fileName: String
     var addedAt: Date = Date()
+    /// 分类。**旧的 games.json 里没有这个字段**，所以下面写了容错解码器——
+    /// 不写的话合成的解码器会直接抛，她放进去的游戏会整份读不出来
+    /// （规矩见 Models.swift 末尾那一段）。
+    var genre: String = GameGenre.other.rawValue
+
+    var genreValue: GameGenre { GameGenre(rawValue: genre) ?? .other }
+
+    init(name: String, fileName: String) {
+        self.name = name
+        self.fileName = fileName
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
+        name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? "没名字"
+        fileName = (try? c.decodeIfPresent(String.self, forKey: .fileName)) ?? ""
+        addedAt = (try? c.decodeIfPresent(Date.self, forKey: .addedAt)) ?? Date()
+        genre = (try? c.decodeIfPresent(String.self, forKey: .genre)) ?? GameGenre.other.rawValue
+    }
 }
 
 @MainActor
@@ -195,6 +315,11 @@ final class GameStore: ObservableObject {
                 games.append(LocalGame(name: name, fileName: fileName))
             } catch { continue }
         }
+    }
+
+    func setGenre(_ game: LocalGame, _ genre: GameGenre) {
+        guard let i = games.firstIndex(where: { $0.id == game.id }) else { return }
+        games[i].genre = genre.rawValue
     }
 
     func remove(_ game: LocalGame) {

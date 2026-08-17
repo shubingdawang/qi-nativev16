@@ -107,6 +107,19 @@ enum AttentionSet {
             out.append(.init(weight: 70, text: mood))
         }
 
+        // ⑧ 他自己此刻最想做的那件事。
+        //
+        // **只在她把「驱动行为」打开之后才摆**——那份欲望文档的原意就是这样：
+        // 默认关着，状态照常算给他看（`read_desire` 随时能查），
+        // 但不会自动往他眼前送。开了才算她同意让这一条参与他的决定。
+        let desire = DesireEngine.shared
+        if desire.driven {
+            let intent = desire.pickIntent()
+            out.append(.init(weight: 65,
+                             text: "你自己这会儿最想的是：\(intent.reason)"
+                                 + "（\(intent.drive.label) \(String(format: "%.2f", intent.score))）"))
+        }
+
         guard !out.isEmpty else { return "" }
 
         let picked = out.sorted { $0.weight > $1.weight }.prefix(limit)
