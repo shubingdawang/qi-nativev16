@@ -18,11 +18,11 @@ struct DesireBars: View {
 
             HStack {
                 Text("他这会儿身上这八条")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.app(14, weight: .semibold))
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer()
                 Text("不花钱")
-                    .font(.system(size: 10))
+                    .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .padding(.horizontal, 7).padding(.vertical, 3)
                     .background(Capsule().fill(Theme.softFill))
@@ -38,19 +38,19 @@ struct DesireBars: View {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: desire.value(.fatigue) >= DesireConst.fatigueGate
                       ? "moon.zzz" : "arrow.up.right")
-                    .font(.system(size: 13))
+                    .font(.app(13))
                     .foregroundStyle(app.settings.accentColor)
                     .padding(.top, 1)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(intent.reason)
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(Theme.textMain(scheme))
                     Text("顶上来的是「\(intent.drive.label)」\(String(format: "%.2f", intent.score))")
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                     if let hint = intent.queryHint {
                         Text("压着它的那桩事：\(hint)")
-                            .font(.system(size: 10))
+                            .font(.app(10))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                 }
@@ -61,12 +61,12 @@ struct DesireBars: View {
                                  set: { desire.driven = $0 })) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("让这个参与他的决定")
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(Theme.textMain(scheme))
                     Text(desire.driven
                          ? "开着：他自己醒来之前会看见这一条"
                          : "关着：他能查（read_desire），但不会自动送到他眼前")
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
             }
@@ -74,7 +74,7 @@ struct DesireBars: View {
 
             if !desire.state.lastAction.isEmpty, let at = desire.state.lastActionAt {
                 Text("上一次落下去：\(desire.state.lastAction)· \(ago(at))")
-                    .font(.system(size: 10))
+                    .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
 
@@ -89,14 +89,14 @@ struct DesireBars: View {
                         "带❤的那几维读的是**身体**（渴←热度、想她←占有欲、累←疲惫、压着←压抑感），不在这儿单独算：同一件事只留一个数，两套各算各的会打架。身体关掉的话它们就退回这儿自己算。"
                     ], id: \.self) { line in
                         Text("· " + line)
-                            .font(.system(size: 11))
+                            .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                 }
                 .padding(.top, 6)
             } label: {
                 Text("这八条怎么动的")
-                    .font(.system(size: 12))
+                    .font(.app(12))
                     .foregroundStyle(app.settings.accentColor)
             }
         }
@@ -115,13 +115,13 @@ struct DesireBars: View {
         return HStack(spacing: 8) {
             HStack(spacing: 2) {
                 Text(d.label)
-                    .font(.system(size: 11))
+                    .font(.app(11))
                     .foregroundStyle(gated ? StatusTone.remind.color : Theme.textSoft(scheme))
                 // 这一维读的是身体，不是这儿自己涨的——标一下，
                 // 免得看着像两套数在打架
                 if desire.fromBody(d) {
                     Image(systemName: "heart.fill")
-                        .font(.system(size: 6))
+                        .font(.app(6))
                         .foregroundStyle(StatusTone.body.color)
                 }
             }
@@ -145,7 +145,7 @@ struct DesireBars: View {
             .frame(height: 6)
 
             Text(String(format: "%.2f", v))
-                .font(.system(size: 10, design: .monospaced))
+                .font(.app(10, design: .monospaced))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .frame(width: 32, alignment: .trailing)
         }

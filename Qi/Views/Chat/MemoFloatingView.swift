@@ -80,12 +80,12 @@ struct MemoFloatingView: View {
         return VStack(spacing: 3) {
             ForEach(Array(label.prefix(5)).indices, id: \.self) { i in
                 Text(String(Array(label.prefix(5))[i]))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.app(11, weight: .medium))
                     .foregroundStyle(memo.color ?? Theme.textSoft(scheme))
             }
             if list.count > 1 {
                 Text("\(list.count)")
-                    .font(.system(size: 9))
+                    .font(.app(9))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .padding(.top, 2)
             }
@@ -110,7 +110,7 @@ struct MemoFloatingView: View {
             HStack(spacing: 6) {
                 if !memo.badge.isEmpty {
                     Text(memo.badge)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.app(10, weight: .medium))
                         .padding(.horizontal, 7)
                         .padding(.vertical, 2)
                         .background(Capsule().fill(app.settings.accentColor.opacity(0.22)))
@@ -118,14 +118,14 @@ struct MemoFloatingView: View {
                 Spacer(minLength: 0)
                 if list.count > 1 {
                     Text("\(index + 1)/\(list.count)")
-                        .font(.system(size: 9))
+                        .font(.app(9))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
                 Button {
                     confirmClose = true
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.app(10, weight: .medium))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .frame(width: 20, height: 20)
                 }
@@ -133,14 +133,14 @@ struct MemoFloatingView: View {
             }
 
             Text(memo.text)
-                .font(.system(size: 14))
+                .font(.app(14))
                 .foregroundStyle(memo.color ?? Theme.textMain(scheme))
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
 
             if !memo.author.isEmpty {
                 Text(memo.author + " 写的")
-                    .font(.system(size: 9))
+                    .font(.app(9))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
 
@@ -159,12 +159,12 @@ struct MemoFloatingView: View {
 
             HStack(spacing: 4) {
                 Image(systemName: dockLeft ? "arrow.right" : "arrow.left")
-                    .font(.system(size: 8))
+                    .font(.app(8))
                 Text(dockLeft ? "往右划完成" : "往左划完成")
                 Spacer(minLength: 0)
                 Text("长按取消")
             }
-            .font(.system(size: 9))
+            .font(.app(9))
             .foregroundStyle(Theme.textMuted(scheme))
         }
         .padding(12)
@@ -192,14 +192,14 @@ struct MemoFloatingView: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 13))
+                    .font(.app(13))
                     .foregroundStyle(Color.green.opacity(0.8))
                 VStack(alignment: .leading, spacing: 1) {
                     Text("已完成")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.app(12, weight: .medium))
                         .foregroundStyle(Theme.textMain(scheme))
                     Text("点一下说手误")
-                        .font(.system(size: 9))
+                        .font(.app(9))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
             }

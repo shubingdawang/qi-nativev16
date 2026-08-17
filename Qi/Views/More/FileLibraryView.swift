@@ -82,22 +82,22 @@ struct FileLibraryView: View {
 
             HStack(spacing: 6) {
                 Image(systemName: Icon.search)
-                    .font(.system(size: 12))
+                    .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
                 TextField("搜文件名", text: $keyword)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 14))
+                    .font(.app(14))
                 if !keyword.isEmpty {
                     Button { keyword = "" } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                     .buttonStyle(.plain)
                 }
                 Button { importing = true } label: {
                     Image(systemName: Icon.add)
-                        .font(.system(size: 15))
+                        .font(.app(15))
                         .foregroundStyle(app.settings.accentColor)
                 }
                 .buttonStyle(.plain)
@@ -119,7 +119,7 @@ struct FileLibraryView: View {
                         creatingFolder = true
                     } label: {
                         Image(systemName: Icon.add)
-                            .font(.system(size: 12))
+                            .font(.app(12))
                             .foregroundStyle(Theme.textMuted(scheme))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 7)
@@ -136,14 +136,14 @@ struct FileLibraryView: View {
                     if list.isEmpty {
                         VStack(spacing: 10) {
                             Image(systemName: "tray")
-                                .font(.system(size: 32, weight: .light))
+                                .font(.app(32, weight: .light))
                                 .foregroundStyle(app.settings.accentColor.opacity(0.5))
                             Text(keyword.isEmpty ? "这里还空着" : "没找到")
-                                .font(.system(size: 13))
+                                .font(.app(13))
                                 .foregroundStyle(Theme.textMuted(scheme))
                             if keyword.isEmpty {
                                 Text("点右上角把文件放进来，按日期排好")
-                                    .font(.system(size: 11))
+                                    .font(.app(11))
                                     .foregroundStyle(Theme.textMuted(scheme).opacity(0.8))
                             }
                         }
@@ -153,7 +153,7 @@ struct FileLibraryView: View {
                     ForEach(groupedByDay, id: \.0) { day, items in
                         HStack {
                             Text(day)
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.app(11, weight: .medium))
                                 .foregroundStyle(Theme.textMuted(scheme))
                             Spacer()
                         }
@@ -210,7 +210,7 @@ struct FileLibraryView: View {
     private func chip(_ title: String, active: Bool, run: @escaping () -> Void) -> some View {
         Button(action: run) {
             Text(title)
-                .font(.system(size: 12, weight: active ? .semibold : .regular))
+                .font(.app(12, weight: active ? .semibold : .regular))
                 .foregroundStyle(active ? Theme.textMain(scheme) : Theme.textMuted(scheme))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)
@@ -254,12 +254,12 @@ struct FileLibraryView: View {
         } label: {
             HStack(spacing: 11) {
                 Image(systemName: file.attachment.icon)
-                    .font(.system(size: 17))
+                    .font(.app(17))
                     .foregroundStyle(app.settings.accentColor)
                     .frame(width: 26)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(file.attachment.displayName)
-                        .font(.system(size: 14))
+                        .font(.app(14))
                         .foregroundStyle(Theme.textMain(scheme))
                         .lineLimit(1)
                     HStack(spacing: 6) {
@@ -271,7 +271,7 @@ struct FileLibraryView: View {
                             Text("· 读不出文字")
                         }
                     }
-                    .font(.system(size: 10))
+                    .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
                 }
                 Spacer(minLength: 0)

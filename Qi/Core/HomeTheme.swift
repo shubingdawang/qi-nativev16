@@ -9,6 +9,7 @@ import SwiftUI
 enum ThemePreset: String, CaseIterable, Identifiable, Codable {
     case original = "original"
     case home = "home"
+    case gradient = "gradient"
 
     var id: String { rawValue }
 
@@ -16,15 +17,27 @@ enum ThemePreset: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .original: return "原来的"
         case .home:     return "家"
+        case .gradient: return "渐变"
         }
     }
 
     var note: String {
         switch self {
-        case .original: return "跟着主题色走，什么都能染"
-        case .home:     return "暖纸底、炭字、橘限量。状态只用四种颜色说话。"
+        case .original: return "跟着主题色走，什么都能染。壁纸用你自己那张。"
+        case .home:     return "整套搬 claude.ai：暖纸底、炭字、橘限量，气泡也是那边的样子。壁纸会被它接管。"
+        case .gradient: return "整屏一层渐变当底，气泡还是玻璃。颜色在下面「壁纸」那张卡里调。壁纸会被它接管。"
         }
     }
+
+    /// 这一档要不要**接管壁纸**。
+    ///
+    /// 她说了两次「家的全局主题还是不对」，症结就在这儿：
+    /// 以前「家」只换字色和面板色，底还是她自己那张照片——
+    /// 屏幕上于是成了「claude.ai 的字 + 一张星星壁纸」，怎么看都不是一套。
+    /// 她要的是「**把 claude.ai 的主题搬到我的 app 里**」，那壁纸就得跟着走。
+    ///
+    /// 「原来的」那一档不接管：想用自己的照片就选那档。
+    var ownsBackground: Bool { self != .original }
 }
 
 /// 「家」那套的色值
@@ -96,7 +109,7 @@ struct StatusChip: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11.5))
+            .font(.app(11.5))
             .foregroundStyle(scheme == .dark ? tone.color : tone.color.opacity(0.95))
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
@@ -144,7 +157,7 @@ struct HandIcon: View {
 
     var body: some View {
         Image(systemName: name)
-            .font(.system(size: size, weight: .regular))
+            .font(.app(size, weight: .regular))
             .symbolRenderingMode(.monochrome)
             .foregroundStyle(tone ?? (scheme == .dark
                                       ? HomePalette.inkDark

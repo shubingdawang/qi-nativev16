@@ -27,11 +27,11 @@ struct DollRoomView: View {
                 if !store.state.history.isEmpty {
                     VStack(alignment: .leading, spacing: 5) {
                         Text("刚才发生的")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.app(12, weight: .medium))
                             .foregroundStyle(Theme.textMain(scheme))
                         ForEach(Array(store.state.history.prefix(6).enumerated()), id: \.offset) { _, h in
                             Text("· " + h)
-                                .font(.system(size: 11))
+                                .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
                     }
@@ -42,7 +42,7 @@ struct DollRoomView: View {
                 if !store.state.archive.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("收起来的（\(store.state.archive.count)）")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.app(12, weight: .medium))
                             .foregroundStyle(Theme.textMain(scheme))
                         ForEach(store.state.archive.prefix(12)) { take in
                             Button {
@@ -51,15 +51,15 @@ struct DollRoomView: View {
                                 HStack(spacing: 8) {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(take.title)
-                                            .font(.system(size: 13, weight: .medium))
+                                            .font(.app(13, weight: .medium))
                                             .foregroundStyle(Theme.textMain(scheme))
                                         Text(take.summary)
-                                            .font(.system(size: 10))
+                                            .font(.app(10))
                                             .foregroundStyle(Theme.textMuted(scheme))
                                     }
                                     Spacer()
                                     Image(systemName: Icon.chevron)
-                                        .font(.system(size: 11))
+                                        .font(.app(11))
                                         .foregroundStyle(Theme.textMuted(scheme))
                                 }
                                 .contentShape(Rectangle())
@@ -81,14 +81,14 @@ struct DollRoomView: View {
                             "这一整套都在手机里跑，不联网、不用开电脑，也不花钱。"
                         ], id: \.self) { line in
                             Text("· " + line)
-                                .font(.system(size: 11))
+                                .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
                     }
                     .padding(.top, 6)
                 } label: {
                     Text("怎么玩")
-                        .font(.system(size: 12))
+                        .font(.app(12))
                         .foregroundStyle(app.settings.accentColor)
                 }
                 .padding(.horizontal, 2)
@@ -119,11 +119,11 @@ struct DollRoomView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 10) {
                         Text(take.summary)
-                            .font(.system(size: 11))
+                            .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme))
                         ForEach(take.shots) { shot in
                             Text(shot.text)
-                                .font(.system(size: 14))
+                                .font(.app(14))
                                 .foregroundStyle(Theme.textMain(scheme))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }

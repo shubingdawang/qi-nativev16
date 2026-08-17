@@ -60,18 +60,18 @@ struct ChatSearchView: View {
     private var searchField: some View {
         HStack(spacing: 6) {
             Image(systemName: Icon.search)
-                .font(.system(size: 13))
+                .font(.app(13))
                 .foregroundStyle(Theme.textMuted(scheme))
             TextField("说过的某个词", text: $keyword)
                 .textFieldStyle(.plain)
-                .font(.system(size: 15))
+                .font(.app(15))
                 .submitLabel(.search)
             if !keyword.isEmpty {
                 Button {
                     keyword = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
+                        .font(.app(14))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
                 .buttonStyle(.plain)
@@ -124,13 +124,13 @@ struct ChatSearchView: View {
 
                 if list.isEmpty {
                     Text(emptyHint)
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .padding(.top, 40)
                 } else {
                     HStack {
                         Text("找到 \(list.count) 条")
-                            .font(.system(size: 11))
+                            .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme))
                         Spacer()
                     }
@@ -147,19 +147,19 @@ struct ChatSearchView: View {
                                     Text(hit.message.role == .user
                                          ? (app.settings.userName.isEmpty ? "我" : app.settings.userName)
                                          : (app.settings.aiName.isEmpty ? "他" : app.settings.aiName))
-                                        .font(.system(size: 12, weight: .semibold))
+                                        .font(.app(12, weight: .semibold))
                                         .foregroundStyle(app.settings.accentColor)
                                     Text(hit.conversationTitle)
-                                        .font(.system(size: 11))
+                                        .font(.app(11))
                                         .foregroundStyle(Theme.textMuted(scheme))
                                         .lineLimit(1)
                                     Spacer()
                                     Text(stamp(hit.message.createdAt))
-                                        .font(.system(size: 10))
+                                        .font(.app(10))
                                         .foregroundStyle(Theme.textMuted(scheme))
                                 }
                                 Text(snippet(hit.message.content))
-                                    .font(.system(size: 13))
+                                    .font(.app(13))
                                     .foregroundStyle(Theme.textMain(scheme))
                                     .lineLimit(3)
                                     .frame(maxWidth: .infinity, alignment: .leading)

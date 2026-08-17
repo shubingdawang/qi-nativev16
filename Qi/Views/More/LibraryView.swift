@@ -20,13 +20,13 @@ struct LibraryView: View {
                 if store.books.isEmpty && !busy {
                     VStack(spacing: 8) {
                         Image(systemName: "books.vertical")
-                            .font(.system(size: 32, weight: .light))
+                            .font(.app(32, weight: .light))
                             .foregroundStyle(app.settings.accentColor.opacity(0.5))
                         Text("书架还空着")
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Theme.textMuted(scheme))
                         Text("点右上角导入 txt 或 epub。\n每本书可以单独决定要不要跟他一起读。")
-                            .font(.system(size: 11))
+                            .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme).opacity(0.8))
                             .multilineTextAlignment(.center)
                     }
@@ -37,7 +37,7 @@ struct LibraryView: View {
                     HStack(spacing: 8) {
                         ProgressView().scaleEffect(0.8)
                         Text("正在拆书…")
-                            .font(.system(size: 12))
+                            .font(.app(12))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                     .padding(.vertical, 20)
@@ -45,7 +45,7 @@ struct LibraryView: View {
 
                 if let notice {
                     Text(notice)
-                        .font(.system(size: 12))
+                        .font(.app(12))
                         .foregroundStyle(.orange)
                 }
 
@@ -109,19 +109,19 @@ struct LibraryView: View {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(app.settings.accentColor.opacity(0.22))
                 Text(String(book.title.prefix(1)))
-                    .font(.system(size: 22, weight: .light, design: .serif))
+                    .font(.app(22, weight: .light, design: .serif))
                     .foregroundStyle(Theme.textMain(scheme))
             }
             .frame(width: 44, height: 60)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(book.title)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.app(15, weight: .medium))
                     .foregroundStyle(Theme.textMain(scheme))
                     .lineLimit(2)
                 if !book.author.isEmpty {
                     Text(book.author)
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
                 HStack(spacing: 6) {
@@ -129,15 +129,15 @@ struct LibraryView: View {
                     let n = store.annotations(for: book.id).count
                     if n > 0 { Text("· 划了 \(n) 处") }
                 }
-                .font(.system(size: 10))
+                .font(.app(10))
                 .foregroundStyle(Theme.textMuted(scheme))
 
                 if book.shared {
                     HStack(spacing: 4) {
                         Image(systemName: "person.2.fill")
-                            .font(.system(size: 8))
+                            .font(.app(8))
                         Text("一起读")
-                            .font(.system(size: 9))
+                            .font(.app(9))
                     }
                     .foregroundStyle(app.settings.accentColor)
                     .padding(.horizontal, 6)
@@ -201,7 +201,7 @@ struct ReaderView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 14) {
                             Text(book.chapters[chapter].title)
-                                .font(.system(size: 19, weight: .medium, design: .serif))
+                                .font(.app(19, weight: .medium, design: .serif))
                                 .foregroundStyle(Theme.textMain(scheme))
                                 .padding(.bottom, 4)
 
@@ -247,21 +247,21 @@ struct ReaderView: View {
                 dismiss()
             } label: {
                 Image(systemName: Icon.close)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.app(15, weight: .medium))
                     .foregroundStyle(Theme.textSoft(scheme))
             }
             .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(book?.title ?? "")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.app(13, weight: .medium))
                     .foregroundStyle(Theme.textMain(scheme))
                     .lineLimit(1)
                 HStack(spacing: 5) {
                     Text(book?.progressText ?? "")
                     if !marks.isEmpty { Text("· 这章划了 \(marks.count) 处") }
                 }
-                .font(.system(size: 10))
+                .font(.app(10))
                 .foregroundStyle(Theme.textMuted(scheme))
             }
 
@@ -272,7 +272,7 @@ struct ReaderView: View {
                 withAnimation(.easeInOut(duration: 0.18)) { picking.toggle() }
             } label: {
                 Image(systemName: picking ? "highlighter" : "highlighter")
-                    .font(.system(size: 15))
+                    .font(.app(15))
                     .foregroundStyle(picking ? app.settings.accentColor : Theme.textSoft(scheme))
             }
             .buttonStyle(.plain)
@@ -285,7 +285,7 @@ struct ReaderView: View {
                     else { store.readingID = book.id }
                 } label: {
                     Image(systemName: book.shared ? "person.2.fill" : "person.2")
-                        .font(.system(size: 15))
+                        .font(.app(15))
                         .foregroundStyle(book.shared
                                          ? app.settings.accentColor
                                          : Theme.textSoft(scheme))
@@ -297,7 +297,7 @@ struct ReaderView: View {
                 showChapters = true
             } label: {
                 Text("目录")
-                    .font(.system(size: 13))
+                    .font(.app(13))
                     .foregroundStyle(Theme.textSoft(scheme))
             }
             .buttonStyle(.plain)
@@ -378,7 +378,7 @@ struct ReaderView: View {
                 if chapter > 0 { chapter -= 1 }
             } label: {
                 Text("上一章")
-                    .font(.system(size: 13))
+                    .font(.app(13))
                     .foregroundStyle(chapter > 0
                                      ? app.settings.accentColor
                                      : Theme.textMuted(scheme).opacity(0.4))
@@ -392,7 +392,7 @@ struct ReaderView: View {
                 if let book, chapter < book.chapters.count - 1 { chapter += 1 }
             } label: {
                 Text("下一章")
-                    .font(.system(size: 13))
+                    .font(.app(13))
                     .foregroundStyle(app.settings.accentColor)
             }
             .buttonStyle(.plain)
@@ -411,7 +411,7 @@ struct ReaderView: View {
                     } label: {
                         HStack {
                             Text(book?.chapters[i].title ?? "")
-                                .font(.system(size: 14))
+                                .font(.app(14))
                                 .foregroundStyle(i == chapter
                                                  ? app.settings.accentColor
                                                  : Theme.textMain(scheme))
@@ -420,7 +420,7 @@ struct ReaderView: View {
                             let n = store.annotations(for: bookID, chapter: i).count
                             if n > 0 {
                                 Text("\(n)")
-                                    .font(.system(size: 10))
+                                    .font(.app(10))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
                         }
@@ -465,7 +465,7 @@ struct AnnotationSheet: View {
                                     .fill(app.settings.accentColor.opacity(0.6))
                                     .frame(width: 3)
                                 Text(fresh.quote)
-                                    .font(.system(size: 14))
+                                    .font(.app(14))
                                     .foregroundStyle(Theme.textSoft(scheme))
                                     .lineSpacing(5)
                             }
@@ -477,7 +477,7 @@ struct AnnotationSheet: View {
 
                             if fresh.notes.isEmpty {
                                 Text("还没说什么。这句话为什么打动你？")
-                                    .font(.system(size: 12))
+                                    .font(.app(12))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
                         }
@@ -496,7 +496,7 @@ struct AnnotationSheet: View {
                             draft = ""
                         } label: {
                             Image(systemName: "arrow.up")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.app(14, weight: .semibold))
                                 .foregroundStyle(Theme.textMain(scheme))
                                 .frame(width: 38, height: 38)
                                 .background(Circle().fill(app.settings.accentColor.opacity(0.3)))
@@ -537,14 +537,14 @@ struct AnnotationSheet: View {
             if mine { Spacer(minLength: 40) }
             VStack(alignment: mine ? .trailing : .leading, spacing: 3) {
                 Text(note.text)
-                    .font(.system(size: 14))
+                    .font(.app(14))
                     .foregroundStyle(Theme.textMain(scheme))
                     .padding(.horizontal, 13)
                     .padding(.vertical, 9)
                     .glassBackground(radius: 15, strength: app.settings.glassOpacity,
                                      extra: mine ? 0.3 : 0)
                 Text(stamp(note))
-                    .font(.system(size: 9))
+                    .font(.app(9))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
             if !mine { Spacer(minLength: 40) }

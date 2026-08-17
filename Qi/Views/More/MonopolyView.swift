@@ -33,7 +33,7 @@ struct MonopolyView: View {
 
                 if !MonopolyLib.ready {
                     Text("任务库没读出来。这局开不了——包里少了 monopoly-library.v2.json。")
-                        .font(.system(size: 12))
+                        .font(.app(12))
                         .foregroundStyle(StatusTone.remind.color)
                         .glassCard()
                 }
@@ -46,7 +46,7 @@ struct MonopolyView: View {
 
                 if !output.isEmpty {
                     Text(output)
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(Theme.textMain(scheme))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .textSelection(.enabled)
@@ -58,7 +58,7 @@ struct MonopolyView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             ForEach(Array(game.recentLog.prefix(20).enumerated()), id: \.offset) { _, l in
                                 Text(l)
-                                    .font(.system(size: 11))
+                                    .font(.app(11))
                                     .foregroundStyle(Theme.textMuted(scheme))
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
@@ -66,7 +66,7 @@ struct MonopolyView: View {
                         .padding(.top, 6)
                     } label: {
                         Text("这局都发生了什么")
-                            .font(.system(size: 12))
+                            .font(.app(12))
                             .foregroundStyle(app.settings.accentColor)
                     }
                     .padding(.horizontal, 2)
@@ -95,7 +95,7 @@ struct MonopolyView: View {
     private var intro: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("两个人轮流掷骰，绕 20 格走，踩到哪儿做哪儿的事。")
-                .font(.system(size: 13))
+                .font(.app(13))
                 .foregroundStyle(Theme.textMain(scheme))
             ForEach([
                 "任务库 933 张，全在手机里——不联网、不用开电脑、不花钱。",
@@ -106,11 +106,11 @@ struct MonopolyView: View {
                 "不想做的任务随时跳过，免费，不用给理由。"
             ], id: \.self) { line in
                 Text("· " + line)
-                    .font(.system(size: 11))
+                    .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
             Text("引擎搬自 RennAkira/spicy-monopoly（CC BY-NC 4.0 · Ren & Puppy）")
-                .font(.system(size: 10))
+                .font(.app(10))
                 .foregroundStyle(Theme.textMuted(scheme).opacity(0.8))
                 .padding(.top, 4)
         }
@@ -123,13 +123,13 @@ struct MonopolyView: View {
     private var liveBoard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(game.boardArt())
-                .font(.system(size: 12, design: .monospaced))
+                .font(.app(12, design: .monospaced))
                 .foregroundStyle(Theme.textMain(scheme))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
 
             Text("该 \(game.s.turn) 掷了")
-                .font(.system(size: 12, weight: .medium))
+                .font(.app(12, weight: .medium))
                 .foregroundStyle(app.settings.accentColor)
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 8)], spacing: 8) {
@@ -149,7 +149,7 @@ struct MonopolyView: View {
                 output = game.safeword()
             } label: {
                 Text("404　停")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.app(14, weight: .semibold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 11)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -165,7 +165,7 @@ struct MonopolyView: View {
     private func chip(_ title: String, _ tap: @escaping () -> Void) -> some View {
         Button(action: tap) {
             Text(title)
-                .font(.system(size: 12))
+                .font(.app(12))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
                 .background(RoundedRectangle(cornerRadius: 11, style: .continuous)
@@ -204,11 +204,11 @@ struct MonopolyView: View {
                     }
                     .pickerStyle(.segmented)
                     Text(Mono.intensityNote(flavor))
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                     VStack(alignment: .leading) {
                         Text("回合数：\(Int(rounds))")
-                            .font(.system(size: 12))
+                            .font(.app(12))
                         Slider(value: $rounds, in: 8...40, step: 2)
                     }
                 } header: {

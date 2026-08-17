@@ -62,7 +62,7 @@ struct DiaryStackView: View {
                         if dayOffset < days.count - 1 { dayOffset += 1 }
                     } label: {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.app(12, weight: .semibold))
                             .foregroundStyle(dayOffset < days.count - 1
                                              ? Theme.textSoft(scheme)
                                              : Theme.textMuted(scheme).opacity(0.3))
@@ -73,14 +73,14 @@ struct DiaryStackView: View {
                     .disabled(dayOffset >= days.count - 1)
 
                     Text(day.label)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.app(16, weight: .semibold))
                         .foregroundStyle(Theme.textMain(scheme))
 
                     Button {
                         if dayOffset > 0 { dayOffset -= 1 }
                     } label: {
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.app(12, weight: .semibold))
                             .foregroundStyle(dayOffset > 0
                                              ? Theme.textSoft(scheme)
                                              : Theme.textMuted(scheme).opacity(0.3))
@@ -108,14 +108,14 @@ struct DiaryStackView: View {
 
                 HStack(spacing: 10) {
                     Text("这一天写了 \(day.items.count) 条 · 点开看全文 · 长按能挪")
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                     if day.items.contains(where: { layout.spot($0.id) != nil }) {
                         Button {
                             for e in day.items { layout.reset(e.id) }
                         } label: {
                             Text("摊回去")
-                                .font(.system(size: 10))
+                                .font(.app(10))
                                 .foregroundStyle(app.settings.accentColor)
                         }
                         .buttonStyle(.plain)
@@ -123,7 +123,7 @@ struct DiaryStackView: View {
                 }
             } else {
                 Text("还没有日记")
-                    .font(.system(size: 12))
+                    .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .padding(.top, 40)
             }
@@ -137,20 +137,20 @@ struct DiaryStackView: View {
                             HStack(spacing: 8) {
                                 if !entry.author.isEmpty {
                                     Text(entry.author)
-                                        .font(.system(size: 12, weight: .semibold))
+                                        .font(.app(12, weight: .semibold))
                                         .foregroundStyle(app.settings.accentColor)
                                 }
                                 Text(entry.dateText)
-                                    .font(.system(size: 11))
+                                    .font(.app(11))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
                             if !entry.title.isEmpty {
                                 Text(entry.title)
-                                    .font(.system(size: 18, weight: .medium))
+                                    .font(.app(18, weight: .medium))
                                     .foregroundStyle(Theme.textMain(scheme))
                             }
                             Text(entry.body)
-                                .font(.system(size: 15))
+                                .font(.app(15))
                                 .lineSpacing(7)
                                 .foregroundStyle(Theme.textSoft(scheme))
                                 .textSelection(.enabled)
@@ -158,7 +158,7 @@ struct DiaryStackView: View {
                                 HStack(spacing: 5) {
                                     ForEach(entry.tags, id: \.self) { t in
                                         Text(t)
-                                            .font(.system(size: 10))
+                                            .font(.app(10))
                                             .padding(.horizontal, 8)
                                             .padding(.vertical, 3)
                                             .background(Capsule()
@@ -210,21 +210,21 @@ struct DiaryStackView: View {
 
         return VStack(alignment: .leading, spacing: 7) {
             Text(entry.displayTitle)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.app(14, weight: .semibold))
                 .foregroundStyle(Color(hexString: "3A362E")!)
                 .lineLimit(3)
                 .multilineTextAlignment(.leading)
 
             if !entry.body.isEmpty {
                 Text(entry.body)
-                    .font(.system(size: 11))
+                    .font(.app(11))
                     .foregroundStyle(Color(hexString: "6B655A")!)
                     .lineLimit(2)
             }
 
             if !entry.tags.isEmpty {
                 Text(entry.tags.prefix(4).joined(separator: "、"))
-                    .font(.system(size: 10))
+                    .font(.app(10))
                     .foregroundStyle(Color(hexString: "8A8375")!)
                     .lineLimit(1)
             }

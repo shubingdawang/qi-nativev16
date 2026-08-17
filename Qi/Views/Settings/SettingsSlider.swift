@@ -30,17 +30,24 @@ struct SettingsSlider: View {
     var scheme: ColorScheme
     /// 拖的过程中把实时值喊出去（给旁边的样品用）。松手传 nil。
     var onDraft: ((Double?) -> Void)?
+    /// 拖的过程中就写回去。
+    ///
+    /// 只给**便宜**的滑块开：字号那根就得开——她说
+    /// 「设置里的字号调整没有即时显示，拖动时设置里的字不会跟着变」，
+    /// 而字号一变整页的字当场就跟着长大，那正是她要看的反馈。
+    /// 玻璃那两根不能开：一动就要重画全屏的模糊，拖起来会卡死。
+    var live = false
 
     /// 拖的时候先落在这儿，不碰全局
     @State private var draft: Double?
     @State private var dragging = false
 
-    private var live: Double { draft ?? value }
+    private var liveValue: Double { draft ?? value }
 
     /// 拖的时候读数按草稿算。原来的 readout 是外面按 value 拼好的字符串，
     /// 拖的时候它不会变——所以这里按格式重算一遍。
     private var liveReadout: String {
-        guard let d = draft else { return readout }
+        guard let d = draft, d != value else { return readout }
         // 原来的读数长什么样，就照着拼：带 % 的按百分比，别的按整数
         if readout.hasSuffix("%") { return "\(Int(d * 100))%" }
         if readout.contains(".") { return String(format: "%.1f", d) }
@@ -51,11 +58,11 @@ struct SettingsSlider: View {
         VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text(title)
-                    .font(.system(size: 15))
+                    .font(.app(15))
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer()
                 Text(liveReadout)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.app(12, design: .monospaced))
                     .foregroundStyle(dragging ? tint : Theme.textMuted(scheme))
             }
 
@@ -74,7 +81,7 @@ struct SettingsSlider: View {
 
             if let note {
                 Text(note)
-                    .font(.system(size: 11))
+                    .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
         }
@@ -83,10 +90,11 @@ struct SettingsSlider: View {
     }
 
     private var binding: Binding<Double> {
-        Binding(get: { live },
+        Binding(get: { liveValue },
                 set: { v in
                     draft = v
                     onDraft?(v)
+                    if live { value = v }
                 })
     }
 

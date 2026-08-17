@@ -52,7 +52,7 @@ struct ClawdRoamer: View {
             VStack(alignment: .center, spacing: 3) {
                 if let line, !line.isEmpty {
                     Text(line)
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .foregroundStyle(Theme.textSoft(scheme))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)

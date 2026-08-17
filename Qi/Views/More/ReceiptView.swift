@@ -281,7 +281,7 @@ struct ReceiptSlip: View {
                     .font(Slip.mono(11, .semibold))
                     .foregroundStyle(Slip.accent)
                 Text(UsageFormat.money(usage.cost(pricing)))
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .font(.app(30, weight: .bold, design: .rounded))
                     .foregroundStyle(Slip.accent)
             }
             Text("※ 按你自己填的单价估的，不是真实账单")
@@ -373,7 +373,7 @@ struct ReceiptSlip: View {
                 .font(Slip.mono(10))
                 .foregroundStyle(Slip.inkSoft)
             Text("\(togetherDays)")
-                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .font(.app(26, weight: .bold, design: .rounded))
                 .foregroundStyle(Slip.ink)
             Text("天")
                 .font(Slip.mono(10))

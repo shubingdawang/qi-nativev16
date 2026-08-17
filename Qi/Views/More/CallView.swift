@@ -33,10 +33,10 @@ struct IncomingCallView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.app(15, weight: .semibold))
                         .foregroundStyle(Theme.textMain(scheme))
                     Text(call.reason.isEmpty ? "邀请你语音通话" : call.reason)
-                        .font(.system(size: 12))
+                        .font(.app(12))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .lineLimit(2)
                 }
@@ -47,7 +47,7 @@ struct IncomingCallView: View {
                     onDecline("")
                 } label: {
                     Image(systemName: "phone.down.fill")
-                        .font(.system(size: 15))
+                        .font(.app(15))
                         .foregroundStyle(.white)
                         .frame(width: 42, height: 42)
                         .background(Circle().fill(Color(hexString: "E5544B")!))
@@ -58,7 +58,7 @@ struct IncomingCallView: View {
                     onAnswer()
                 } label: {
                     Image(systemName: "phone.fill")
-                        .font(.system(size: 15))
+                        .font(.app(15))
                         .foregroundStyle(.white)
                         .frame(width: 42, height: 42)
                         .background(Circle().fill(Color(hexString: "4CAF6E")!))
@@ -74,7 +74,7 @@ struct IncomingCallView: View {
             if writing {
                 HStack(spacing: 8) {
                     TextField("回他一句…", text: $note)
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .textFieldStyle(.plain)
                         .submitLabel(.send)
                         .onSubmit { send(note) }
@@ -82,7 +82,7 @@ struct IncomingCallView: View {
                         send(note)
                     } label: {
                         Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 20))
+                            .font(.app(20))
                             .foregroundStyle(app.settings.accentColor)
                     }
                     .buttonStyle(.plain)
@@ -93,7 +93,7 @@ struct IncomingCallView: View {
                     ForEach(quick, id: \.self) { q in
                         Button { send(q) } label: {
                             Text(q)
-                                .font(.system(size: 11))
+                                .font(.app(11))
                                 .foregroundStyle(Theme.textSoft(scheme))
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
@@ -109,7 +109,7 @@ struct IncomingCallView: View {
                         withAnimation(.easeOut(duration: 0.18)) { writing = true }
                     } label: {
                         Image(systemName: "square.and.pencil")
-                            .font(.system(size: 11))
+                            .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme))
                             .padding(.horizontal, 9)
                             .padding(.vertical, 5)
@@ -203,21 +203,21 @@ struct CallView: View {
 
                 if muted {
                     Text("闭麦了，打字他一样听得到")
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .padding(.bottom, 4)
                 }
 
                 if farewell > 0 {
                     Text("他说完了。\(farewell) 秒后自动挂断——你现在开口或者打字，都还能接着聊。")
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .padding(.bottom, 8)
                 }
 
                 if let notice {
                     Text(notice)
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(.orange)
                         .padding(.bottom, 6)
                 }
@@ -239,18 +239,18 @@ struct CallView: View {
                 .padding(.top, 10)
 
             Text(him)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.app(17, weight: .semibold))
                 .foregroundStyle(Theme.textMain(scheme))
 
             Text(thinking ? "\(him)正在回应" : clock(elapsed))
-                .font(.system(size: 11))
+                .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
 
             // 接的是**谁**，摆在这儿。以前这通电话抓的是供应商列表第一个模型，
             // 跟聊天页选的那个不是一回事，接起来当然不像他。现在两边同一个。
             if let m = app.activeHim?.model {
                 Text(m)
-                    .font(.system(size: 9))
+                    .font(.app(9))
                     .foregroundStyle(Theme.textMuted(scheme).opacity(0.7))
             }
 
@@ -258,7 +258,7 @@ struct CallView: View {
             // 不然只有字会像是坏了。
             if app.activeVoice == nil {
                 Text("没配音色，这通只有字")
-                    .font(.system(size: 9))
+                    .font(.app(9))
                     .foregroundStyle(Theme.textMuted(scheme).opacity(0.7))
             }
         }
@@ -271,7 +271,7 @@ struct CallView: View {
             if line.fromMe { Spacer(minLength: 50) }
             VStack(alignment: line.fromMe ? .trailing : .leading, spacing: 3) {
                 Text(line.text)
-                    .font(.system(size: 15))
+                    .font(.app(15))
                     .foregroundStyle(Theme.textMain(scheme))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
@@ -282,7 +282,7 @@ struct CallView: View {
                 // 这是他"听"到的东西，不该只有他知道。
                 if !line.tone.isEmpty {
                     Text(line.tone)
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
                 if !line.voiceName.isEmpty {
@@ -292,9 +292,9 @@ struct CallView: View {
                         HStack(spacing: 4) {
                             Image(systemName: VoicePlayer.shared.playingName == line.voiceName
                                   ? "stop.fill" : "play.fill")
-                                .font(.system(size: 8))
+                                .font(.app(8))
                             Text("听")
-                                .font(.system(size: 9))
+                                .font(.app(9))
                         }
                         .foregroundStyle(app.settings.accentColor)
                     }
@@ -325,7 +325,7 @@ struct CallView: View {
                         Task { await send(draft) }
                     } label: {
                         Image(systemName: "arrow.up")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.app(14, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(width: 36, height: 36)
                             .background(Circle().fill(app.settings.primaryColor.opacity(0.9)))
@@ -345,7 +345,7 @@ struct CallView: View {
                     }
                 } label: {
                     Image(systemName: muted ? "mic.slash.fill" : "mic.fill")
-                        .font(.system(size: 17))
+                        .font(.app(17))
                         .foregroundStyle(muted ? .white : Theme.textMain(scheme))
                         .frame(width: 54, height: 54)
                         .background(
@@ -365,7 +365,7 @@ struct CallView: View {
                         .frame(width: 54, height: 54)
                         .overlay {
                             Image(systemName: "waveform")
-                                .font(.system(size: 17))
+                                .font(.app(17))
                                 .foregroundStyle(Theme.textMain(scheme))
                         }
                         .scaleEffect(listening ? 1 + recorder.level * 0.3 : 1)
@@ -386,7 +386,7 @@ struct CallView: View {
                     hangUp(by: "me")
                 } label: {
                     Image(systemName: "phone.down.fill")
-                        .font(.system(size: 19))
+                        .font(.app(19))
                         .foregroundStyle(.white)
                         .frame(width: 54, height: 54)
                         .background(Circle().fill(Color(hexString: "E5544B")!))
@@ -606,10 +606,10 @@ struct CallHistoryView: View {
                 if store.records.isEmpty {
                     VStack(spacing: 8) {
                         Image(systemName: "phone")
-                            .font(.system(size: 30, weight: .light))
+                            .font(.app(30, weight: .light))
                             .foregroundStyle(app.settings.accentColor.opacity(0.5))
                         Text("还没通过话")
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                     .padding(.top, 60)
@@ -621,32 +621,32 @@ struct CallHistoryView: View {
                             Image(systemName: r.answered
                                   ? (r.caller == "me" ? "phone.arrow.up.right" : "phone.arrow.down.left")
                                   : "phone.down")
-                                .font(.system(size: 11))
+                                .font(.app(11))
                                 .foregroundStyle(r.answered
                                                  ? StatusTone.done.color
                                                  : Color(hexString: "E5544B")!)
                             Text(r.caller == "me" ? "我打的" : "他打的")
-                                .font(.system(size: 13, weight: .medium))
+                                .font(.app(13, weight: .medium))
                                 .foregroundStyle(Theme.textMain(scheme))
                             Spacer()
                             Text(stamp(r.startedAt))
-                                .font(.system(size: 10))
+                                .font(.app(10))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
 
                         if !r.reason.isEmpty {
                             Text("「\(r.reason)」")
-                                .font(.system(size: 11))
+                                .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
 
                         Text(r.resultText)
-                            .font(.system(size: 11))
+                            .font(.app(11))
                             .foregroundStyle(Theme.textSoft(scheme))
 
                         if !r.summary.isEmpty {
                             Text(r.summary)
-                                .font(.system(size: 12))
+                                .font(.app(12))
                                 .foregroundStyle(Theme.textSoft(scheme))
                                 .lineLimit(3)
                         }

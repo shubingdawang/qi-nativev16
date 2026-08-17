@@ -109,7 +109,7 @@ struct ClawdStudioView: View {
                 Button {
                     name = ""; desc = ""; saving = true
                 } label: {
-                    Text("存进表情库").font(.system(size: 14))
+                    Text("存进表情库").font(.app(14))
                 }
             }
         }
@@ -230,7 +230,7 @@ struct ClawdStudioView: View {
                 }
 
                 Text("零件是往代码里插东西，插完可以去「图形」「样式」两页接着改。两边是同一份，改哪边都行。")
-                    .font(.system(size: 11))
+                    .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
             .padding(.horizontal, 16)
@@ -241,12 +241,12 @@ struct ClawdStudioView: View {
     private func code(_ text: Binding<String>, hint: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(hint)
-                .font(.system(size: 11))
+                .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .padding(.horizontal, 16)
             TextEditor(text: text)
                 .scrollContentBackground(.hidden)
-                .font(.system(size: 12, design: .monospaced))
+                .font(.app(12, design: .monospaced))
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .padding(10)
@@ -262,7 +262,7 @@ struct ClawdStudioView: View {
                                   @ViewBuilder content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 12, weight: .medium))
+                .font(.app(12, weight: .medium))
                 .foregroundStyle(Theme.textMuted(scheme))
             content()
         }
@@ -276,7 +276,7 @@ struct ClawdStudioView: View {
             run()
         } label: {
             Text(t)
-                .font(.system(size: 12))
+                .font(.app(12))
                 .foregroundStyle(Theme.textMain(scheme))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
@@ -307,7 +307,7 @@ struct ClawdStudioView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         Text("存进表情库之后，它跟别的表情一样能发，他也能挑着用。")
-                            .font(.system(size: 12))
+                            .font(.app(12))
                             .foregroundStyle(Theme.textSoft(scheme))
 
                         field("叫什么", text: $name, hint: "比如：探头")
@@ -315,14 +315,14 @@ struct ClawdStudioView: View {
                               hint: "写画面内容和动作，不是写它好不好看")
 
                         Text("画面描述是必填的——他看不见图，只能读这段字。写清楚了他才知道什么时候该发它。")
-                            .font(.system(size: 11))
+                            .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme))
 
                         Button {
                             saveToLibrary()
                         } label: {
                             Text("存下")
-                                .font(.system(size: 15, weight: .medium))
+                                .font(.app(15, weight: .medium))
                                 .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 13)
@@ -354,10 +354,10 @@ struct ClawdStudioView: View {
     private func field(_ title: String, text: Binding<String>, hint: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.system(size: 12, weight: .medium))
+                .font(.app(12, weight: .medium))
                 .foregroundStyle(Theme.textMuted(scheme))
             TextField(hint, text: text)
-                .font(.system(size: 15))
+                .font(.app(15))
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 11)

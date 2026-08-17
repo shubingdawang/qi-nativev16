@@ -27,7 +27,7 @@ struct DivinationView: View {
                 Text(mode == 0
                      ? "看心境、看关系、看一件事的来龙去脉"
                      : "断具体的事：成不成、在哪儿、什么时候")
-                    .font(.system(size: 10))
+                    .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -95,7 +95,7 @@ struct TarotPane: View {
                 // 第一步：先问问题
                 VStack(alignment: .leading, spacing: 10) {
                     Text("想问什么")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.app(14, weight: .semibold))
                         .foregroundStyle(Theme.textMain(scheme))
                     TextField("把事情说清楚一点，牌才答得准", text: $question, axis: .vertical)
                         .lineLimit(1...4)
@@ -106,10 +106,10 @@ struct TarotPane: View {
                         let s = TarotDeck.suggest(for: question)
                         VStack(alignment: .leading, spacing: 5) {
                             Text("这个问题适合用「\(s.name)」，抽 \(s.count) 张")
-                                .font(.system(size: 12))
+                                .font(.app(12))
                                 .foregroundStyle(Theme.textMain(scheme))
                             Text(s.goodFor)
-                                .font(.system(size: 11))
+                                .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
                         .padding(11)
@@ -126,7 +126,7 @@ struct TarotPane: View {
                                     start(with: s)
                                 } label: {
                                     Text("\(s.name) · \(s.count)")
-                                        .font(.system(size: 11))
+                                        .font(.app(11))
                                         .foregroundStyle(Theme.textSoft(scheme))
                                         .padding(.horizontal, 11)
                                         .padding(.vertical, 6)
@@ -141,7 +141,7 @@ struct TarotPane: View {
                         start(with: TarotDeck.suggest(for: question))
                     } label: {
                         Text("洗牌")
-                            .font(.system(size: 15, weight: .medium))
+                            .font(.app(15, weight: .medium))
                             .foregroundStyle(Theme.textMain(scheme))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 13)
@@ -158,10 +158,10 @@ struct TarotPane: View {
                 // 第二步：摊开，自己挑
                 VStack(alignment: .leading, spacing: 10) {
                     Text(shuffling ? "在洗…" : "挑 \(spread.count) 张（已挑 \(picked.count)）")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.app(14, weight: .semibold))
                         .foregroundStyle(Theme.textMain(scheme))
                     Text("牌已经洗好了，正反都在里面。凭手感挑，不用想。")
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
 
                     // 摊开的一排，扇形铺开
@@ -181,7 +181,7 @@ struct TarotPane: View {
                             reveal(spread)
                         } label: {
                             Text("翻开")
-                                .font(.system(size: 15, weight: .medium))
+                                .font(.app(15, weight: .medium))
                                 .foregroundStyle(Theme.textMain(scheme))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 13)
@@ -237,7 +237,7 @@ struct TarotPane: View {
     private func resultCard(_ record: DivinationRecord) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(record.question)
-                .font(.system(size: 13))
+                .font(.app(13))
                 .foregroundStyle(Theme.textMuted(scheme))
 
             ForEach(record.cards) { drawn in
@@ -247,7 +247,7 @@ struct TarotPane: View {
                         .fill(app.settings.accentColor.opacity(0.18))
                         .overlay {
                             Text(drawn.card.name)
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.app(11, weight: .medium))
                                 .foregroundStyle(Theme.textMain(scheme))
                                 .rotationEffect(.degrees(drawn.reversed ? 180 : 0))
                                 .padding(4)
@@ -258,17 +258,17 @@ struct TarotPane: View {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
                             Text(drawn.position)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.app(12, weight: .semibold))
                                 .foregroundStyle(app.settings.accentColor)
                             Text(drawn.reversed ? "逆位" : "正位")
-                                .font(.system(size: 10))
+                                .font(.app(10))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
                         Text(drawn.card.name)
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.app(14, weight: .medium))
                             .foregroundStyle(Theme.textMain(scheme))
                         Text(drawn.card.meaning(drawn.reversed))
-                            .font(.system(size: 12))
+                            .font(.app(12))
                             .foregroundStyle(Theme.textSoft(scheme))
                     }
                     Spacer(minLength: 0)
@@ -281,7 +281,7 @@ struct TarotPane: View {
                 reset()
             } label: {
                 Text("再问一次")
-                    .font(.system(size: 13))
+                    .font(.app(13))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
@@ -357,7 +357,7 @@ struct LiuyaoPane: View {
             if record == nil {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("想问什么")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.app(14, weight: .semibold))
                         .foregroundStyle(Theme.textMain(scheme))
                     TextField("六爻断具体的事，问得越具体越准", text: $question, axis: .vertical)
                         .lineLimit(1...3)
@@ -365,7 +365,7 @@ struct LiuyaoPane: View {
                         .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
 
                     Text("比如「丢的耳机在哪儿」「这事这个月能不能成」「他今天会不会来」。别问「我该怎么活」那种——那个塔罗更合适。")
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
 
                     // 六次，从下往上
@@ -380,7 +380,7 @@ struct LiuyaoPane: View {
                         roll()
                     } label: {
                         Text(tosses.count < 6 ? "摇第 \(tosses.count + 1) 爻" : "起卦")
-                            .font(.system(size: 15, weight: .medium))
+                            .font(.app(15, weight: .medium))
                             .foregroundStyle(Theme.textMain(scheme))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 13)
@@ -403,7 +403,7 @@ struct LiuyaoPane: View {
         let toss = tosses.indices.contains(i) ? tosses[i] : nil
         return HStack(spacing: 10) {
             Text("\(["初", "二", "三", "四", "五", "上"][i])爻")
-                .font(.system(size: 10))
+                .font(.app(10))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .frame(width: 28, alignment: .leading)
 
@@ -421,7 +421,7 @@ struct LiuyaoPane: View {
                     }
                 }
                 Text(toss.changes ? "动" : " ")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.app(10, weight: .semibold))
                     .foregroundStyle(StatusTone.focus.color)
                     .frame(width: 16)
             } else {
@@ -467,7 +467,7 @@ struct LiuyaoPane: View {
     private func resultCard(_ record: DivinationRecord) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(record.question)
-                .font(.system(size: 13))
+                .font(.app(13))
                 .foregroundStyle(Theme.textMuted(scheme))
 
             if let p = record.primary {
@@ -476,11 +476,11 @@ struct LiuyaoPane: View {
             if let c = record.changed, let p = record.primary, c.name != p.name {
                 hexBlock("变卦", c)
                 Text("有动爻，事情会变——本卦是眼下，变卦是后来。")
-                    .font(.system(size: 11))
+                    .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
             } else {
                 Text("六爻不动，看本卦就够了。")
-                    .font(.system(size: 11))
+                    .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
 
@@ -493,7 +493,7 @@ struct LiuyaoPane: View {
                 question = ""
             } label: {
                 Text("再问一次")
-                    .font(.system(size: 13))
+                    .font(.app(13))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
@@ -507,14 +507,14 @@ struct LiuyaoPane: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Text(label)
-                    .font(.system(size: 11))
+                    .font(.app(11))
                     .foregroundStyle(app.settings.accentColor)
                 Text(hex.name)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.app(16, weight: .medium))
                     .foregroundStyle(Theme.textMain(scheme))
             }
             Text(hex.judgement)
-                .font(.system(size: 12))
+                .font(.app(12))
                 .foregroundStyle(Theme.textSoft(scheme))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -543,7 +543,7 @@ struct ReadingSection: View {
                     HStack(spacing: 6) {
                         if asking { ProgressView().scaleEffect(0.7) }
                         Text(asking ? "在看…" : "让他讲讲")
-                            .font(.system(size: 14))
+                            .font(.app(14))
                     }
                     .foregroundStyle(Theme.textMain(scheme))
                     .frame(maxWidth: .infinity)
@@ -556,10 +556,10 @@ struct ReadingSection: View {
             } else {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.app(11, weight: .semibold))
                         .foregroundStyle(app.settings.accentColor)
                     Text(reading)
-                        .font(.system(size: 14))
+                        .font(.app(14))
                         .lineSpacing(5)
                         .foregroundStyle(Theme.textMain(scheme))
                         .textSelection(.enabled)
@@ -595,7 +595,7 @@ struct DivinationHistoryView: View {
             LazyVStack(spacing: 10) {
                 if store.records.isEmpty {
                     Text("还没有占过")
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .padding(.top, 60)
                 }
@@ -603,38 +603,38 @@ struct DivinationHistoryView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 6) {
                             Text(r.kind == "tarot" ? "塔罗" : "六爻")
-                                .font(.system(size: 10))
+                                .font(.app(10))
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 2)
                                 .background(Capsule()
                                     .fill(app.settings.accentColor.opacity(0.2)))
                                 .foregroundStyle(Theme.textSoft(scheme))
                             Text(stamp(r.createdAt))
-                                .font(.system(size: 10))
+                                .font(.app(10))
                                 .foregroundStyle(Theme.textMuted(scheme))
                             Spacer()
                         }
                         Text(r.question)
-                            .font(.system(size: 14))
+                            .font(.app(14))
                             .foregroundStyle(Theme.textMain(scheme))
 
                         if r.kind == "tarot" {
                             Text(r.cards.map {
                                 "\($0.card.name)\($0.reversed ? "(逆)" : "")"
                             }.joined(separator: "　"))
-                                .font(.system(size: 11))
+                                .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         } else if let p = r.primary {
                             Text(p.name + (r.changed.map { c in
                                 c.name != p.name ? " → " + c.name : ""
                             } ?? ""))
-                                .font(.system(size: 11))
+                                .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
 
                         if !r.reading.isEmpty {
                             Text(r.reading)
-                                .font(.system(size: 12))
+                                .font(.app(12))
                                 .foregroundStyle(Theme.textSoft(scheme))
                                 .lineLimit(4)
                         }

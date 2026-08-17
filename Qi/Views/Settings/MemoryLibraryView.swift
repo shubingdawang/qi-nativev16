@@ -74,36 +74,29 @@ struct MemoryLibraryView: View {
     // MARK: 总开关
 
     private var switchCard: some View {
-        SettingsCard(title: "本机记忆库") {
+        // 名字照她说的改短：这一整卡叫「本地设置」，两个开关就叫「记忆库」和「心跳」。
+        // 说明全部收进抽屉，默认关着——她说摊开着「很杂乱」。
+        SettingsCard(title: "本地设置") {
             Toggle(isOn: $app.settings.localMemory) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("用本机这份")
-                        .font(.system(size: 15))
-                        .foregroundStyle(Theme.textMain(scheme))
-                    Text("不走 MCP、不用开电脑、不用挂 Tailscale")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textMuted(scheme))
-                }
+                Text("记忆库")
+                    .font(.app(15))
+                    .foregroundStyle(Theme.textMain(scheme))
             }
             .tint(app.settings.accentColor)
             .padding(.horizontal, 16)
             .padding(.vertical, 11)
 
             SettingsNote(app.settings.localMemory
-                ? "记忆库那 28 个工具（wake_up、add_memory、checkpoint、end_of_day…）现在是 App 内置的，名字和参数跟电脑上那套一模一样。\n\n⚠️ 建议去「设置 → MCP」把「小屋」那台关掉——两边都开着的话，同一件事他手上有两套工具，会来回打架。"
-                : "关着的时候他还是走小屋那台 MCP，也就是还得开着电脑。")
+                ? "记忆库那 28 个工具（wake_up、add_memory、checkpoint、end_of_day…）现在是 App 内置的，名字和参数跟电脑上那套一模一样。不走 MCP、不用开电脑、不用挂 Tailscale。\n\n⚠️ 「设置 → MCP」里那台「小屋」要关着——两边都开着的话，同一件事他手上有两套工具，会来回打架。"
+                : "关着的时候他还是走小屋那台 MCP，也就是还得开着电脑。",
+                title: "记忆库这个开关是干嘛的")
 
             SettingsDivider()
 
             Toggle(isOn: $app.settings.localPulse) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("心跳也在本机算")
-                        .font(.system(size: 15))
-                        .foregroundStyle(Theme.textMain(scheme))
-                    Text("不用再开 PulseEngine")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textMuted(scheme))
-                }
+                Text("心跳")
+                    .font(.app(15))
+                    .foregroundStyle(Theme.textMain(scheme))
             }
             .tint(app.settings.accentColor)
             .padding(.horizontal, 16)
@@ -115,7 +108,7 @@ struct MemoryLibraryView: View {
             那套东西本来就是**每次请求现算**的纯公式，不是靠一秒一次 tick 累积出来的，所以少了那个循环什么都不缺。心率历史照样一分钟记一条，存在手机上。
 
             开着之后「札记 → 心跳」和他手上的 get_pulse_status 都走本机，一次网络都不发。
-            """)
+            """, title: "心跳这个开关是干嘛的")
         }
     }
 
@@ -289,7 +282,7 @@ struct MemoryLibraryView: View {
                 VStack(spacing: 0) {
                     TextEditor(text: $pasted)
                         .scrollContentBackground(.hidden)
-                        .font(.system(size: 14))
+                        .font(.app(14))
                         .padding(12)
                         .glassBackground(radius: 16, strength: app.settings.glassOpacity)
                         .padding(16)
@@ -359,18 +352,18 @@ struct MemoryListView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             HStack(spacing: 6) {
                                 Text(String(repeating: "★", count: max(1, min(5, mem.level))))
-                                    .font(.system(size: 11))
+                                    .font(.app(11))
                                     .foregroundStyle(app.settings.accentColor)
                                 Text(mem.author)
-                                    .font(.system(size: 10))
+                                    .font(.app(10))
                                     .foregroundStyle(Theme.textMuted(scheme))
                                 Spacer()
                                 Text(String(mem.created_at.prefix(10)))
-                                    .font(.system(size: 10))
+                                    .font(.app(10))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
                             Text(mem.content)
-                                .font(.system(size: 14))
+                                .font(.app(14))
                                 .foregroundStyle(Theme.textMain(scheme))
                                 // 不加这一条，长文会被上层的 stack 压成一行截断
                                 .fixedSize(horizontal: false, vertical: true)
@@ -378,12 +371,12 @@ struct MemoryListView: View {
                                 .textSelection(.enabled)
                             if !mem.tags.isEmpty {
                                 Text("#" + mem.tags.joined(separator: " #"))
-                                    .font(.system(size: 10))
+                                    .font(.app(10))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
                             ForEach(mem.annotations ?? [], id: \.self) { a in
                                 Text("⤷ \(a.author)：把「\(a.original)」改成「\(a.correction)」")
-                                    .font(.system(size: 11))
+                                    .font(.app(11))
                                     .foregroundStyle(.red.opacity(0.8))
                             }
                         }
@@ -428,22 +421,22 @@ struct MemoryDiaryListView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             HStack(spacing: 6) {
                                 Text(d.author + (d.mood ?? ""))
-                                    .font(.system(size: 12, weight: .medium))
+                                    .font(.app(12, weight: .medium))
                                     .foregroundStyle(app.settings.accentColor)
                                 Spacer()
                                 Text(String(d.created_at.prefix(10)))
-                                    .font(.system(size: 10))
+                                    .font(.app(10))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
                             Text(d.content)
-                                .font(.system(size: 14))
+                                .font(.app(14))
                                 .foregroundStyle(Theme.textMain(scheme))
                                 .fixedSize(horizontal: false, vertical: true)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .textSelection(.enabled)
                             ForEach(d.annotations ?? [], id: \.self) { a in
                                 Text("⤷ \(a.author)：把「\(a.original)」改成「\(a.correction)」")
-                                    .font(.system(size: 11))
+                                    .font(.app(11))
                                     .foregroundStyle(.red.opacity(0.8))
                             }
                         }
@@ -480,16 +473,16 @@ struct MemoryTranscriptListView: View {
                             VStack(alignment: .leading, spacing: 5) {
                                 HStack {
                                     Text(t.title)
-                                        .font(.system(size: 14, weight: .medium))
+                                        .font(.app(14, weight: .medium))
                                         .foregroundStyle(Theme.textMain(scheme))
                                         .lineLimit(1)
                                     Spacer(minLength: 6)
                                     Text("\(t.count) 条")
-                                        .font(.system(size: 10))
+                                        .font(.app(10))
                                         .foregroundStyle(Theme.textMuted(scheme))
                                 }
                                 Text(t.summary ?? "还没写摘要")
-                                    .font(.system(size: 11))
+                                    .font(.app(11))
                                     .foregroundStyle(Theme.textMuted(scheme))
                                     .lineLimit(3)
                                     .multilineTextAlignment(.leading)
@@ -533,10 +526,10 @@ struct MemoryTranscriptReader: View {
                     ForEach(Array((file?.msgs ?? []).enumerated()), id: \.offset) { i, msg in
                         VStack(alignment: .leading, spacing: 3) {
                             Text("\(i)  \(msg.role)")
-                                .font(.system(size: 10))
+                                .font(.app(10))
                                 .foregroundStyle(Theme.textMuted(scheme))
                             Text(msg.text)
-                                .font(.system(size: 13))
+                                .font(.app(13))
                                 .foregroundStyle(Theme.textMain(scheme))
                                 .fixedSize(horizontal: false, vertical: true)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -572,17 +565,17 @@ struct LetterReaderView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     if let letter = store.letter {
                         Text("\(letter.by ?? "他") · \(String(letter.updated_at.prefix(10)))")
-                            .font(.system(size: 11))
+                            .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme))
                         Text(letter.text)
-                            .font(.system(size: 14))
+                            .font(.app(14))
                             .foregroundStyle(Theme.textMain(scheme))
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .textSelection(.enabled)
                     } else {
                         Text("还没有这封信。")
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                 }

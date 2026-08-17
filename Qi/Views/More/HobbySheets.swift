@@ -36,7 +36,7 @@ struct HobbyEditor: View {
 
                         field("内容") {
                             TextField("比如：冰美式", text: $text)
-                                .font(.system(size: 15))
+                                .font(.app(15))
                                 .textFieldStyle(.plain)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 11)
@@ -75,7 +75,7 @@ struct HobbyEditor: View {
                         field("原因（必填）") {
                             TextEditor(text: $reason)
                                 .scrollContentBackground(.hidden)
-                                .font(.system(size: 14))
+                                .font(.app(14))
                                 .frame(height: 90)
                                 .padding(8)
                                 .background(RoundedRectangle(cornerRadius: 11)
@@ -83,7 +83,7 @@ struct HobbyEditor: View {
                                 .overlay(alignment: .topLeading) {
                                     if reason.isEmpty {
                                         Text("为什么喜欢/讨厌它？")
-                                            .font(.system(size: 14))
+                                            .font(.app(14))
                                             .foregroundStyle(Theme.textMuted(scheme))
                                             .padding(.horizontal, 13)
                                             .padding(.vertical, 16)
@@ -97,7 +97,7 @@ struct HobbyEditor: View {
                                 dismiss()
                             } label: {
                                 Text("取消")
-                                    .font(.system(size: 15))
+                                    .font(.app(15))
                                     .foregroundStyle(Theme.textSoft(scheme))
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 13)
@@ -110,7 +110,7 @@ struct HobbyEditor: View {
                                 save()
                             } label: {
                                 Text("存下")
-                                    .font(.system(size: 15, weight: .medium))
+                                    .font(.app(15, weight: .medium))
                                     .foregroundStyle(.white)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 13)
@@ -155,7 +155,7 @@ struct HobbyEditor: View {
                                 @ViewBuilder content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             Text(title)
-                .font(.system(size: 12, weight: .medium))
+                .font(.app(12, weight: .medium))
                 .foregroundStyle(Theme.textMuted(scheme))
             content()
         }
@@ -165,7 +165,7 @@ struct HobbyEditor: View {
                         run: @escaping () -> Void) -> some View {
         Button(action: run) {
             Text(t)
-                .font(.system(size: 14, weight: on ? .semibold : .regular))
+                .font(.app(14, weight: on ? .semibold : .regular))
                 .foregroundStyle(Theme.textMain(scheme))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)
@@ -185,7 +185,7 @@ struct HobbyEditor: View {
             ForEach(names, id: \.self) { n in
                 Button { pick(n) } label: {
                     Text(n)
-                        .font(.system(size: 12))
+                        .font(.app(12))
                         .foregroundStyle(selected == n
                                          ? Theme.textMain(scheme)
                                          : Theme.textSoft(scheme))
@@ -227,7 +227,7 @@ struct HobbyClaimSheet: View {
                         HStack(spacing: 10) {
                             Button { dismiss() } label: {
                                 Text("先放着")
-                                    .font(.system(size: 15))
+                                    .font(.app(15))
                                     .foregroundStyle(Theme.textSoft(scheme))
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 13)
@@ -242,7 +242,7 @@ struct HobbyClaimSheet: View {
                                 dismiss()
                             } label: {
                                 Text("认证为已认领")
-                                    .font(.system(size: 15, weight: .medium))
+                                    .font(.app(15, weight: .medium))
                                     .foregroundStyle(.white)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 13)
@@ -264,18 +264,18 @@ struct HobbyClaimSheet: View {
     private func line(_ title: String, text: Binding<String>, hint: String) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             Text(title)
-                .font(.system(size: 12, weight: .medium))
+                .font(.app(12, weight: .medium))
                 .foregroundStyle(Theme.textMuted(scheme))
             TextEditor(text: text)
                 .scrollContentBackground(.hidden)
-                .font(.system(size: 14))
+                .font(.app(14))
                 .frame(height: 80)
                 .padding(8)
                 .background(RoundedRectangle(cornerRadius: 11).fill(Theme.softFillDeep))
                 .overlay(alignment: .topLeading) {
                     if text.wrappedValue.isEmpty {
                         Text(hint)
-                            .font(.system(size: 14))
+                            .font(.app(14))
                             .foregroundStyle(Theme.textMuted(scheme))
                             .padding(.horizontal, 13)
                             .padding(.vertical, 16)
@@ -302,7 +302,7 @@ struct HobbyHistorySheet: View {
                     VStack(alignment: .leading, spacing: 10) {
                         if hobby.changes.isEmpty {
                             Text("还没有变动")
-                                .font(.system(size: 12))
+                                .font(.app(12))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
                         ForEach(hobby.changes) { c in
@@ -311,7 +311,7 @@ struct HobbyHistorySheet: View {
                                     .font(HomeType.number(11))
                                     .foregroundStyle(Theme.textMuted(scheme))
                                 Text(c.text)
-                                    .font(.system(size: 13))
+                                    .font(.app(13))
                                     .foregroundStyle(Theme.textSoft(scheme))
                             }
                         }
@@ -394,14 +394,14 @@ struct HobbyMatchesSheet: View {
     private func group(_ title: String, _ list: [(mine: Hobby, hers: Hobby)]) -> some View {
         if !list.isEmpty {
             Text("· " + title)
-                .font(.system(size: 12, weight: .medium))
+                .font(.app(12, weight: .medium))
                 .foregroundStyle(Theme.textMuted(scheme))
             ForEach(list, id: \.mine.id) { pair in
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: pair.mine.like == pair.hers.like
                           ? (pair.mine.like ? "heart.fill" : "leaf.fill")
                           : "circle.lefthalf.filled")
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(pair.mine.like == pair.hers.like
                                          ? (pair.mine.like
                                             ? HomePalette.bodyPink : HomePalette.sage)
@@ -409,13 +409,13 @@ struct HobbyMatchesSheet: View {
                         .padding(.top, 2)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(pair.mine.text)
-                            .font(.system(size: 15, weight: .medium))
+                            .font(.app(15, weight: .medium))
                             .foregroundStyle(Theme.textMain(scheme))
                         Text("\(me) · \(pair.mine.like ? "喜欢" : "讨厌") · \(pair.mine.stage.rawValue)")
-                            .font(.system(size: 10))
+                            .font(.app(10))
                             .foregroundStyle(Theme.textMuted(scheme))
                         Text("\(him) · \(pair.hers.like ? "喜欢" : "讨厌") · \(pair.hers.stage.rawValue)")
-                            .font(.system(size: 10))
+                            .font(.app(10))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                     Spacer(minLength: 0)

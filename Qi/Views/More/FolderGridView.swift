@@ -79,11 +79,11 @@ struct FolderGridView: View {
                                 )
                                 .frame(width: 64, height: 59)
                             Image(systemName: Icon.add)
-                                .font(.system(size: 17, weight: .light))
+                                .font(.app(17, weight: .light))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
                         Text("新建")
-                            .font(.system(size: 12))
+                            .font(.app(12))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                 }
@@ -171,16 +171,16 @@ struct FolderGridView: View {
                         .offset(x: CGFloat(i) * 3, y: CGFloat(i) * -2)
                 }
                 Image(systemName: "photo.on.rectangle")
-                    .font(.system(size: 17, weight: .light))
+                    .font(.app(17, weight: .light))
                     .foregroundStyle(app.settings.accentColor)
             }
             .frame(width: 68, height: 68)
             VStack(spacing: 1) {
                 Text("全部")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.app(12, weight: .medium))
                     .foregroundStyle(Theme.textMain(scheme))
                 Text("\(store.count(kind))")
-                    .font(.system(size: 10))
+                    .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
         }
@@ -191,11 +191,11 @@ struct FolderGridView: View {
             FolderIcon(tint: tint, size: 68)
             VStack(spacing: 1) {
                 Text(title)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.app(12, weight: .medium))
                     .foregroundStyle(Theme.textMain(scheme))
                     .lineLimit(1)
                 Text("\(count)")
-                    .font(.system(size: 10))
+                    .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
         }
@@ -270,11 +270,11 @@ struct MediaGridView: View {
                 VStack(spacing: 8) {
                     HStack(spacing: 6) {
                         Image(systemName: Icon.search)
-                            .font(.system(size: 12))
+                            .font(.app(12))
                             .foregroundStyle(Theme.textMuted(scheme))
                         TextField("按关键词找", text: $keyword)
                             .textFieldStyle(.plain)
-                            .font(.system(size: 14))
+                            .font(.app(14))
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 9)
@@ -287,7 +287,7 @@ struct MediaGridView: View {
                             HStack(spacing: 6) {
                                 if tagging { ProgressView().scaleEffect(0.7) }
                                 Text(tagging ? taggingText : "有 \(untagged.count) 张还没写关键词")
-                                    .font(.system(size: 12))
+                                    .font(.app(12))
                             }
                             .foregroundStyle(app.settings.accentColor)
                             .frame(maxWidth: .infinity)
@@ -308,10 +308,10 @@ struct MediaGridView: View {
                     FolderIcon(tint: app.settings.accentColor, size: 74, showPaper: false)
                         .opacity(0.5)
                     Text("这里还空着")
-                        .font(.system(size: 14))
+                        .font(.app(14))
                         .foregroundStyle(Theme.textMuted(scheme))
                     Text("点右上角放几张进来")
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme).opacity(0.8))
                 }
                 .padding(.top, 90)

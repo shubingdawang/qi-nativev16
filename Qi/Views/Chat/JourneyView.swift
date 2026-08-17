@@ -42,17 +42,17 @@ struct JourneyCard: View {
         VStack(spacing: 12) {
             VStack(spacing: 5) {
                 Text("JOURNEYS")
-                    .font(.system(size: 9, weight: .medium))
+                    .font(.app(9, weight: .medium))
                     .tracking(3)
                     .foregroundStyle(app.settings.accentColor.opacity(0.75))
                 Text(journey.title)
-                    .font(.system(size: 19, weight: .medium, design: .serif))
+                    .font(.app(19, weight: .medium, design: .serif))
                     .italic()
                     .foregroundStyle(Theme.textMain(scheme))
                     .multilineTextAlignment(.center)
                 if !journey.subtitle.isEmpty {
                     Text(journey.subtitle)
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .tracking(2)
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
@@ -78,7 +78,7 @@ struct JourneyCard: View {
 
             if !journey.quote.isEmpty {
                 Text(journey.quote)
-                    .font(.system(size: 11, design: .serif))
+                    .font(.app(11, design: .serif))
                     .italic()
                     .foregroundStyle(Theme.textMuted(scheme))
                     .multilineTextAlignment(.center)
@@ -86,7 +86,7 @@ struct JourneyCard: View {
             }
 
             Text("点进去看看")
-                .font(.system(size: 10))
+                .font(.app(10))
                 .foregroundStyle(app.settings.accentColor.opacity(0.7))
                 .padding(.bottom, 14)
         }
@@ -147,12 +147,12 @@ struct JourneyPlayerView: View {
                     } label: {
                         VStack(spacing: 4) {
                             Text(stop.place)
-                                .font(.system(size: 22, weight: .medium, design: .serif))
+                                .font(.app(22, weight: .medium, design: .serif))
                                 .italic()
                                 .foregroundStyle(.white)
                             if !stop.caption.isEmpty {
                                 Text(stop.caption)
-                                    .font(.system(size: 11))
+                                    .font(.app(11))
                                     .tracking(2)
                                     .foregroundStyle(.white.opacity(0.7))
                             }
@@ -166,7 +166,7 @@ struct JourneyPlayerView: View {
                     // 念到一半就浮在中间，念完了收到左下角
                     if !finished {
                         Text(shown)
-                            .font(.system(size: 17, design: .serif))
+                            .font(.app(17, design: .serif))
                             .italic()
                             .foregroundStyle(.white)
                             .multilineTextAlignment(.center)
@@ -179,7 +179,7 @@ struct JourneyPlayerView: View {
                     if finished {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(stop.narration)
-                                .font(.system(size: 13, design: .serif))
+                                .font(.app(13, design: .serif))
                                 .italic()
                                 .foregroundStyle(.white.opacity(0.9))
                                 .lineSpacing(4)
@@ -188,7 +188,7 @@ struct JourneyPlayerView: View {
                                 withAnimation(.easeInOut(duration: 0.22)) { expanded.toggle() }
                             } label: {
                                 Text(expanded ? "收起 ↑" : "展开全文 ↓")
-                                    .font(.system(size: 11))
+                                    .font(.app(11))
                                     .foregroundStyle(.white.opacity(0.6))
                             }
                             .buttonStyle(.plain)
@@ -223,7 +223,7 @@ struct JourneyPlayerView: View {
                 dismiss()
             } label: {
                 Image(systemName: Icon.close)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.app(15, weight: .medium))
                     .foregroundStyle(.white.opacity(0.85))
                     .frame(width: 38, height: 38)
                     .background(Circle().fill(.black.opacity(0.3)))

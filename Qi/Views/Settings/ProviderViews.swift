@@ -172,7 +172,7 @@ struct ProviderFormView: View {
                                     TextField("模型名", text: $provider.models[i].id)
                                         .textInputAutocapitalization(.never)
                                         .autocorrectionDisabled()
-                                        .font(.system(size: 14, design: .monospaced))
+                                        .font(.app(14, design: .monospaced))
                                 }
                                 .swipeActions {
                                     Button(role: .destructive) {

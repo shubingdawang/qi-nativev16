@@ -410,7 +410,7 @@ struct ChatView: View {
                                 insertMention(m.name)
                             } label: {
                                 Text("@" + (m.name.isEmpty ? "没起名" : m.name))
-                                    .font(.system(size: 12))
+                                    .font(.app(12))
                                     .foregroundStyle(Theme.textMain(scheme))
                                     .padding(.horizontal, 11)
                                     .padding(.vertical, 7)
@@ -430,7 +430,7 @@ struct ChatView: View {
                         .fill(Color.red.opacity(0.8))
                         .frame(width: 7, height: 7)
                     Text(listeningHint)
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(Theme.textMain(scheme))
                         .lineLimit(2)
                     Spacer(minLength: 0)
@@ -449,21 +449,21 @@ struct ChatView: View {
                     } label: {
                         Image(systemName: VoicePlayer.shared.playingName == v
                               ? "pause.circle.fill" : "play.circle.fill")
-                            .font(.system(size: 22))
+                            .font(.app(22))
                             .foregroundStyle(app.settings.accentColor)
                     }
                     .buttonStyle(.plain)
 
                     VStack(alignment: .leading, spacing: 1) {
                         Text("语音 \(Int(VoiceStore.duration(v)))″")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.app(12, weight: .medium))
                             .foregroundStyle(Theme.textMain(scheme))
                         // 攒够八条之前这里一直是「跟文字一起发出去」，
                         // 之后才会变成他能听出来的那句。
                         // 摆出来是因为：这是他会「听」到的东西，
                         // 不该只有他知道，她自己也得看得见。
                         Text(pendingTone.isEmpty ? "跟文字一起发出去" : pendingTone)
-                            .font(.system(size: 10))
+                            .font(.app(10))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                     Spacer(minLength: 0)
@@ -475,7 +475,7 @@ struct ChatView: View {
                         pendingTone = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 15))
+                            .font(.app(15))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                     .buttonStyle(.plain)
@@ -492,10 +492,10 @@ struct ChatView: View {
                         .frame(width: 52, height: 52)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(s.name)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.app(12, weight: .medium))
                             .foregroundStyle(Theme.textMain(scheme))
                         Text("跟文字一起发出去")
-                            .font(.system(size: 10))
+                            .font(.app(10))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                     Spacer(minLength: 0)
@@ -503,7 +503,7 @@ struct ChatView: View {
                         pendingSticker = nil
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.app(11, weight: .medium))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                     .buttonStyle(.plain)
@@ -519,15 +519,15 @@ struct ChatView: View {
                     ForEach(pendingFiles) { f in
                         HStack(spacing: 8) {
                             Image(systemName: f.icon)
-                                .font(.system(size: 14))
+                                .font(.app(14))
                                 .foregroundStyle(app.settings.accentColor)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(f.displayName)
-                                    .font(.system(size: 12))
+                                    .font(.app(12))
                                     .foregroundStyle(Theme.textMain(scheme))
                                     .lineLimit(1)
                                 Text(f.unreadable ? "\(f.sizeText) · 读不出文字" : "\(f.sizeText) · 已读出内容")
-                                    .font(.system(size: 10))
+                                    .font(.app(10))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
                             Spacer(minLength: 0)
@@ -536,7 +536,7 @@ struct ChatView: View {
                                 pendingFiles.removeAll { $0.id == f.id }
                             } label: {
                                 Image(systemName: "xmark")
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(.app(10, weight: .medium))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
                             .buttonStyle(.plain)
@@ -553,10 +553,10 @@ struct ChatView: View {
             if waiting {
                 HStack(spacing: 7) {
                     Image(systemName: "hourglass")
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(app.settings.accentColor)
                     Text("攒着呢，你不说了 \(Int(app.settings.segmentUserDelay)) 秒之后一起发。长按发送键马上发。")
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                     Spacer(minLength: 0)
                 }
@@ -575,10 +575,10 @@ struct ChatView: View {
                         Text(q.role == .user
                              ? (app.settings.userName.isEmpty ? "我" : app.settings.userName)
                              : (q.senderName.isEmpty ? app.settings.aiName : q.senderName))
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.app(10, weight: .medium))
                             .foregroundStyle(Theme.textMuted(scheme))
                         Text(q.content)
-                            .font(.system(size: 12))
+                            .font(.app(12))
                             .foregroundStyle(Theme.textSoft(scheme))
                             .lineLimit(1)
                     }
@@ -587,7 +587,7 @@ struct ChatView: View {
                         quoting = nil
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.app(11, weight: .medium))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                     .buttonStyle(.plain)
@@ -640,7 +640,7 @@ struct ChatView: View {
                     }
                 } label: {
                     Image(systemName: "plus")
-                        .font(.system(size: 19, weight: .light))
+                        .font(.app(19, weight: .light))
                         .foregroundStyle(Theme.textSoft(scheme))
                         .frame(width: 26, height: 26)
                         .contentShape(Rectangle())
@@ -654,7 +654,7 @@ struct ChatView: View {
                     }
                 } label: {
                     Image(systemName: Icon.sticker)
-                        .font(.system(size: 17, weight: .light))
+                        .font(.app(17, weight: .light))
                         .foregroundStyle(stickerPanelOpen
                                          ? app.settings.accentColor
                                          : Theme.textSoft(scheme))
@@ -666,7 +666,7 @@ struct ChatView: View {
                     showingTools = true
                 } label: {
                     Image(systemName: "wrench.and.screwdriver")
-                        .font(.system(size: 15, weight: .light))
+                        .font(.app(15, weight: .light))
                         .foregroundStyle(app.hasActiveTools ? app.settings.accentColor : Theme.textSoft(scheme))
                 }
                 .buttonStyle(.plain)
@@ -676,7 +676,7 @@ struct ChatView: View {
                     showingModelPicker = true
                 } label: {
                     Text(app.modelChipLabel(for: conv))
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.app(12, weight: .medium))
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .foregroundStyle(Theme.textSoft(scheme))
@@ -725,7 +725,7 @@ struct ChatView: View {
                     // 她说的「这个电话 icon 颜色比其他的都淡」就是这个。
                     // 打不通这件事不该靠把图标画糊来说，点下去那句提示已经说了。
                     Image(systemName: "phone")
-                        .font(.system(size: 16, weight: .light))
+                        .font(.app(16, weight: .light))
                         .foregroundStyle(Theme.textSoft(scheme))
                         .frame(width: 28, height: 28)
                         .contentShape(Rectangle())
@@ -734,7 +734,7 @@ struct ChatView: View {
 
                 // 按住说话，松手把识别到的话填进输入框
                 Image(systemName: listening ? "mic.fill" : "mic")
-                    .font(.system(size: 16, weight: .light))
+                    .font(.app(16, weight: .light))
                     .foregroundStyle(listening
                                      ? app.settings.accentColor
                                      : Theme.textSoft(scheme))
@@ -776,7 +776,7 @@ struct ChatView: View {
                                 .opacity(canSend || isRunning || waiting ? 0.85 : 0.35))
                             .frame(width: 36, height: 36)
                         Image(systemName: isRunning ? "stop.fill" : "arrow.up")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.app(15, weight: .semibold))
                             .foregroundStyle(.white)
                     }
                 }
@@ -820,7 +820,7 @@ struct ChatView: View {
                 selected = []
             } label: {
                 Text("取消")
-                    .font(.system(size: 14))
+                    .font(.app(14))
                     .foregroundStyle(Theme.textSoft(scheme))
                     .frame(maxWidth: .infinity)
             }
@@ -879,8 +879,8 @@ struct ChatView: View {
             run()
         } label: {
             VStack(spacing: 3) {
-                Image(systemName: icon).font(.system(size: 16, weight: .regular))
-                Text(title).font(.system(size: 11))
+                Image(systemName: icon).font(.app(16, weight: .regular))
+                Text(title).font(.app(11))
             }
             .foregroundStyle(selected.isEmpty
                              ? Theme.textMuted(scheme)
@@ -1171,7 +1171,7 @@ struct MessageListView: View {
     private var emptyHint: some View {
         VStack(spacing: 10) {
             Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 38))
+                .font(.app(38))
                 .foregroundStyle(.tertiary)
             if app.hasUsableModel {
                 Text("说点什么吧").foregroundStyle(.secondary)

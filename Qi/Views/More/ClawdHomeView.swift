@@ -43,7 +43,7 @@ struct ClawdHomeView: View {
             // 得让她看得见它开着。
             if store.linked {
                 Text("他在这屋里，开着这一页的时候会自己隔几分钟说一句 · 花钱")
-                    .font(.system(size: 10))
+                    .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
@@ -115,7 +115,7 @@ struct ClawdHomeView: View {
                     say("今天也来啦，捡到 \(got) 个币")
                 } label: {
                     Text("签到")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.app(12, weight: .medium))
                         .foregroundStyle(Theme.textMain(scheme))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -143,9 +143,9 @@ struct ClawdHomeView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: store.linked ? "person.2.fill" : "person.2")
-                        .font(.system(size: 11))
+                        .font(.app(11))
                     Text(store.linked ? "他在" : "接他进来")
-                        .font(.system(size: 11))
+                        .font(.app(11))
                 }
                 .foregroundStyle(store.linked
                                  ? app.settings.accentColor
@@ -240,7 +240,7 @@ struct ClawdHomeView: View {
                 VStack(spacing: 4) {
                     if let bubble {
                         Text(bubble)
-                            .font(.system(size: 11))
+                            .font(.app(11))
                             .foregroundStyle(Theme.textMain(scheme))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 7)
@@ -323,10 +323,10 @@ struct ClawdHomeView: View {
                 if let himLine {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName)
-                            .font(.system(size: 9, weight: .medium))
+                            .font(.app(9, weight: .medium))
                             .foregroundStyle(app.settings.accentColor)
                         Text(himLine)
-                            .font(.system(size: 12))
+                            .font(.app(12))
                             .foregroundStyle(Theme.textMain(scheme))
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -345,7 +345,7 @@ struct ClawdHomeView: View {
 
                 if let notice {
                     Text(notice)
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .padding(8)
                 }
@@ -388,7 +388,7 @@ struct ClawdHomeView: View {
                                 .frame(height: 60)
                                 .opacity(item.hidden ? 0.35 : 1)
                             Text(kind.name)
-                                .font(.system(size: 10))
+                                .font(.app(10))
                                 .foregroundStyle(item.hidden
                                                  ? Theme.textMuted(scheme)
                                                  : Theme.textMain(scheme))
@@ -405,12 +405,12 @@ struct ClawdHomeView: View {
 
             if store.owned.isEmpty {
                 Text("柜子还空着，去商店买点什么")
-                    .font(.system(size: 12))
+                    .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .padding(.top, 50)
             } else {
                 Text("点一下收起来或者摆回房间")
-                    .font(.system(size: 10))
+                    .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
         }
@@ -425,7 +425,7 @@ struct ClawdHomeView: View {
                     let list = FurnitureCatalog.all.filter { $0.category == cat }
                     if !list.isEmpty {
                         Text(cat.rawValue)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.app(13, weight: .semibold))
                             .foregroundStyle(Theme.textMain(scheme))
 
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10),
@@ -458,11 +458,11 @@ struct ClawdHomeView: View {
                 PixelSpriteView(sprite: kind.sprite, scale: 2.2)
                     .frame(height: 54)
                 Text(kind.name)
-                    .font(.system(size: 10))
+                    .font(.app(10))
                     .foregroundStyle(Theme.textMain(scheme))
                 if owned {
                     Text("已有")
-                        .font(.system(size: 9))
+                        .font(.app(9))
                         .foregroundStyle(StatusTone.done.color)
                 } else {
                     HStack(spacing: 3) {

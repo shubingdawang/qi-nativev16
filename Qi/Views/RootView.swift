@@ -295,9 +295,9 @@ struct NavDrawerBar: View {
                 } label: {
                     VStack(spacing: 3) {
                         Image(systemName: items[i].1)
-                            .font(.system(size: 17, weight: .regular))
+                            .font(.app(17, weight: .regular))
                         Text(items[i].0)
-                            .font(.system(size: 9.5, weight: .medium))
+                            .font(.app(9.5, weight: .medium))
                     }
                     .foregroundStyle(selection == i
                                      ? Theme.textMain(scheme)
@@ -373,19 +373,29 @@ struct WallpaperBackground: View {
                 // 所以 pageBackground 在 home 那档返回的就是暖纸色。
                 Theme.pageBackground(scheme)
 
-                switch app.settings.wallpaperMode {
-                case "gradient":
+                // 「家」和「渐变」是**整套主题**，底归它们管——
+                // 不然选了「家」，屏幕上还是那张照片，字色和底各说各的。
+                // 想用自己那张照片就选「原来的」。
+                if app.settings.preset == .home {
+                    // claude.ai 那张纸。深浅两套都在 HomePalette 里。
+                    (scheme == .dark ? HomePalette.paperDark : HomePalette.paper)
+                } else if app.settings.preset == .gradient {
                     gradient
-                case "solid":
-                    if let c = Color(hexString: app.settings.solidHex) { c }
-                default:
-                    if let name = app.settings.wallpaperName,
-                       let image = ImageStore.load(name) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: geo.size.width, height: geo.size.height)
-                            .clipped()
+                } else {
+                    switch app.settings.wallpaperMode {
+                    case "gradient":
+                        gradient
+                    case "solid":
+                        if let c = Color(hexString: app.settings.solidHex) { c }
+                    default:
+                        if let name = app.settings.wallpaperName,
+                           let image = ImageStore.load(name) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: geo.size.width, height: geo.size.height)
+                                .clipped()
+                        }
                     }
                 }
 
@@ -407,6 +417,9 @@ struct WallpaperBackground: View {
     /// 她自己铺了底没有。铺了才需要压暗，
     /// 什么都没铺的时候压的是 pageBackground，那层本来就调好了。
     private var hasOwnBackground: Bool {
+        // 「家」那张暖纸本来就是调好的，再压一道就成了脏灰
+        if app.settings.preset == .home { return false }
+        if app.settings.preset == .gradient { return true }
         switch app.settings.wallpaperMode {
         case "gradient": return true
         case "solid":    return Color(hexString: app.settings.solidHex) != nil

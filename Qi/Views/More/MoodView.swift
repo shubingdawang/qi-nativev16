@@ -40,7 +40,7 @@ struct MoodView: View {
 
                 if let notice {
                     Text(notice)
-                        .font(.system(size: 12))
+                        .font(.app(12))
                         .foregroundStyle(app.settings.accentColor)
                 }
             }
@@ -70,15 +70,15 @@ struct MoodView: View {
     private var together: some View {
         VStack(spacing: 6) {
             Text("在一起")
-                .font(.system(size: 12))
+                .font(.app(12))
                 .foregroundStyle(Theme.textMuted(scheme))
 
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text("\(daysTogether)")
-                    .font(.system(size: 44, weight: .light, design: .rounded))
+                    .font(.app(44, weight: .light, design: .rounded))
                     .foregroundStyle(app.settings.accentColor)
                 Text("天")
-                    .font(.system(size: 15))
+                    .font(.app(15))
                     .foregroundStyle(Theme.textSoft(scheme))
             }
 
@@ -86,7 +86,7 @@ struct MoodView: View {
                 get: { app.settings.togetherSince },
                 set: { app.settings.togetherSince = $0 }
             ), displayedComponents: .date)
-            .font(.system(size: 12))
+            .font(.app(12))
             .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
@@ -105,7 +105,7 @@ struct MoodView: View {
     private var anniversaries: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("纪念日").font(.system(size: 15, weight: .semibold))
+                Text("纪念日").font(.app(15, weight: .semibold))
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer()
                 if loading { ProgressView().scaleEffect(0.7) }
@@ -113,7 +113,7 @@ struct MoodView: View {
                     Task { await load() }
                 } label: {
                     Image(systemName: Icon.refresh)
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(app.settings.accentColor)
                 }
                 .buttonStyle(.plain)
@@ -123,7 +123,7 @@ struct MoodView: View {
                     addingDay = true
                 } label: {
                     Image(systemName: Icon.add)
-                        .font(.system(size: 15))
+                        .font(.app(15))
                         .foregroundStyle(app.settings.accentColor)
                 }
                 .buttonStyle(.plain)
@@ -131,7 +131,7 @@ struct MoodView: View {
 
             if days.isEmpty {
                 Text(loading ? "在读…" : "还没记过什么日子。点右上角加一个。")
-                    .font(.system(size: 12))
+                    .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
             } else {
                 ForEach(days) { entry in
@@ -142,11 +142,11 @@ struct MoodView: View {
                             .padding(.top, 6)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(entry.displayTitle)
-                                .font(.system(size: 14))
+                                .font(.app(14))
                                 .foregroundStyle(Theme.textMain(scheme))
                             if !entry.author.isEmpty {
                                 Text(entry.author + " 记的")
-                                    .font(.system(size: 10))
+                                    .font(.app(10))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
                         }
@@ -169,7 +169,7 @@ struct MoodView: View {
                 }
 
                 Text("这些存在小屋的记忆里，他也看得见，也能自己加、自己删。")
-                    .font(.system(size: 10))
+                    .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .padding(.top, 2)
             }
@@ -182,10 +182,10 @@ struct MoodView: View {
 
     private var messageCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("留句话").font(.system(size: 15, weight: .semibold))
+            Text("留句话").font(.app(15, weight: .semibold))
                 .foregroundStyle(Theme.textMain(scheme))
             Text("他下次醒来第一眼会看到")
-                .font(.system(size: 11))
+                .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
             TextField("想说的话…", text: $message, axis: .vertical)
                 .lineLimit(2...5)
@@ -203,7 +203,7 @@ struct MoodView: View {
 
     private var moodCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("今天的心情").font(.system(size: 15, weight: .semibold))
+            Text("今天的心情").font(.app(15, weight: .semibold))
                 .foregroundStyle(Theme.textMain(scheme))
             TextField("还行、有点累、很开心…", text: $mood)
                 .padding(10)
@@ -225,7 +225,7 @@ struct MoodView: View {
             Task { await run() }
         } label: {
             Text(title)
-                .font(.system(size: 14))
+                .font(.app(14))
                 .foregroundStyle(Theme.textMain(scheme))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)

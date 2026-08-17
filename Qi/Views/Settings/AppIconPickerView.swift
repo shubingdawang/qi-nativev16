@@ -69,13 +69,13 @@ struct AppIconPickerView: View {
                                     // 描一圈会把图标原本的形状框住，看着不干净
                                     if current == option.key {
                                         Image(systemName: "checkmark.circle.fill")
-                                            .font(.system(size: 17))
+                                            .font(.app(17))
                                             .foregroundStyle(app.settings.accentColor, .white)
                                             .offset(x: 25, y: 25)
                                     }
                                 }
                                 Text(option.title)
-                                    .font(.system(size: 11))
+                                    .font(.app(11))
                                     .foregroundStyle(current == option.key
                                                      ? Theme.textMain(scheme)
                                                      : Theme.textMuted(scheme))
@@ -88,7 +88,7 @@ struct AppIconPickerView: View {
 
                 if let failed {
                     Text(failed)
-                        .font(.system(size: 12))
+                        .font(.app(12))
                         .foregroundStyle(.red)
                 }
 
@@ -100,7 +100,7 @@ struct AppIconPickerView: View {
                         Text("除了「原来的」，这 \(mine.count) 张全是 AppIcons 文件夹里的。想加想删，改那个文件夹再构建一次。")
                     }
                 }
-                .font(.system(size: 11))
+                .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
             }
             .padding(.horizontal, 18)

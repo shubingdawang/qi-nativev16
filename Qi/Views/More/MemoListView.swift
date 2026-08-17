@@ -30,13 +30,13 @@ struct MemoListView: View {
                 if store.onList.isEmpty {
                     VStack(spacing: 8) {
                         Image(systemName: "checklist")
-                            .font(.system(size: 30, weight: .light))
+                            .font(.app(30, weight: .light))
                             .foregroundStyle(app.settings.accentColor.opacity(0.5))
                         Text("还没有记什么")
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Theme.textMuted(scheme))
                         Text("点右上角写一条。长按可以置顶，置顶的会挂到聊天页上。")
-                            .font(.system(size: 11))
+                            .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme).opacity(0.8))
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 30)
@@ -125,7 +125,7 @@ struct MemoRow: View {
         HStack(alignment: .top, spacing: 10) {
             if style != .ticket {
                 Image(systemName: memo.isDone ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 16, weight: .regular))
+                    .font(.app(16, weight: .regular))
                     .foregroundStyle(memo.isDone
                                      ? StatusTone.done.color
                                      : Theme.textMuted(scheme).opacity(0.5))
@@ -136,7 +136,7 @@ struct MemoRow: View {
                 HStack(spacing: 6) {
                     if memo.pinned {
                         Image(systemName: "pin.fill")
-                            .font(.system(size: 9))
+                            .font(.app(9))
                             .foregroundStyle(app.settings.preset == .home
                                              ? HomePalette.amber
                                              : app.settings.accentColor)
@@ -152,7 +152,7 @@ struct MemoRow: View {
                 }
 
                 Text(memo.text)
-                    .font(.system(size: 14))
+                    .font(.app(14))
                     .foregroundStyle(Theme.textMain(scheme))
                     .strikethrough(memo.isDone, color: Theme.textMuted(scheme))
                     .opacity(memo.isDone ? 0.5 : 1)
@@ -167,7 +167,7 @@ struct MemoRow: View {
                         Text("· \(memo.notes.count) 条批注")
                     }
                 }
-                .font(.system(size: 10))
+                .font(.app(10))
                 .foregroundStyle(Theme.textMuted(scheme))
             }
             Spacer(minLength: 0)
@@ -256,23 +256,23 @@ struct MemoEditor: View {
 
                         VStack(alignment: .leading, spacing: 6) {
                             Text("挂出来的那一小节")
-                                .font(.system(size: 13, weight: .medium))
+                                .font(.app(13, weight: .medium))
                                 .foregroundStyle(Theme.textMain(scheme))
                             TextField("十点前 / 很重要 / 别忘了", text: $memo.badge)
                                 .padding(10)
                                 .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
                             Text("置顶之后它会缩在聊天页边上，只露出这几个字。一眼扫过去就知道是什么事，不用点开。")
-                                .font(.system(size: 11))
+                                .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
 
                         Toggle("置顶到聊天页", isOn: $memo.pinned)
-                            .font(.system(size: 14))
+                            .font(.app(14))
 
                         if memo.pinned {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("浮窗上的字色")
-                                    .font(.system(size: 13, weight: .medium))
+                                    .font(.app(13, weight: .medium))
                                     .foregroundStyle(Theme.textMain(scheme))
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 8) {
@@ -281,7 +281,7 @@ struct MemoEditor: View {
                                                 memo.colorHex = hex
                                             } label: {
                                                 Text(name)
-                                                    .font(.system(size: 12))
+                                                    .font(.app(12))
                                                     .foregroundStyle(hex.isEmpty
                                                         ? Theme.textSoft(scheme)
                                                         : (Color(hexString: hex) ?? .primary))
@@ -298,7 +298,7 @@ struct MemoEditor: View {
                                     }
                                 }
                                 Text("只管挂在外面那个浮窗。备忘页里的字跟着深浅色走，不受这个影响。")
-                                    .font(.system(size: 11))
+                                    .font(.app(11))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
                         }
@@ -306,15 +306,15 @@ struct MemoEditor: View {
                         if !isNew {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("批注")
-                                    .font(.system(size: 13, weight: .medium))
+                                    .font(.app(13, weight: .medium))
                                     .foregroundStyle(Theme.textMain(scheme))
                                 ForEach(memo.notes) { n in
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(n.text)
-                                            .font(.system(size: 13))
+                                            .font(.app(13))
                                             .foregroundStyle(Theme.textSoft(scheme))
                                         Text(n.author)
-                                            .font(.system(size: 10))
+                                            .font(.app(10))
                                             .foregroundStyle(Theme.textMuted(scheme))
                                     }
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -369,7 +369,7 @@ struct MemoEditor: View {
     private func field<C: View>(_ title: String, @ViewBuilder content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.system(size: 13, weight: .medium))
+                .font(.app(13, weight: .medium))
                 .foregroundStyle(Theme.textMain(scheme))
             content()
                 .padding(10)
@@ -394,7 +394,7 @@ struct MemoHistoryView: View {
             LazyVStack(spacing: 10) {
                 if store.history.isEmpty {
                     Text("这里还空着")
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .padding(.top, 60)
                 }
@@ -402,7 +402,7 @@ struct MemoHistoryView: View {
                 ForEach(store.history) { memo in
                     VStack(alignment: .leading, spacing: 6) {
                         Text(memo.text)
-                            .font(.system(size: 14))
+                            .font(.app(14))
                             .foregroundStyle(Theme.textMain(scheme))
                             .strikethrough(memo.isDone)
                             .opacity(0.75)
@@ -413,13 +413,13 @@ struct MemoHistoryView: View {
                                 .fill(memo.isDone ? Color.green.opacity(0.7) : Color.orange.opacity(0.7))
                                 .frame(width: 6, height: 6)
                             Text(status(memo))
-                                .font(.system(size: 10))
+                                .font(.app(10))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
 
                         ForEach(memo.notes) { n in
                             Text("· \(n.text)　\(n.author)")
-                                .font(.system(size: 11))
+                                .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
                     }

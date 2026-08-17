@@ -65,7 +65,7 @@ struct HobbyView: View {
                         Text(keyword.isEmpty
                              ? "这儿还空着。右下角加一个。"
                              : "没搜到")
-                            .font(.system(size: 12))
+                            .font(.app(12))
                             .foregroundStyle(Theme.textMuted(scheme))
                             .padding(.top, 40)
                             .frame(maxWidth: .infinity)
@@ -73,7 +73,7 @@ struct HobbyView: View {
 
                     ForEach(grouped, id: \.0) { group in
                         Text("· " + group.0)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.app(12, weight: .medium))
                             .foregroundStyle(Theme.textMuted(scheme))
                             .padding(.top, 4)
                         ForEach(group.1) { h in card(h) }
@@ -130,7 +130,7 @@ struct HobbyView: View {
                     withAnimation(.easeOut(duration: 0.18)) { mine = who }
                 } label: {
                     Text(who ? me : him)
-                        .font(.system(size: 14, weight: mine == who ? .semibold : .regular))
+                        .font(.app(14, weight: mine == who ? .semibold : .regular))
                         .foregroundStyle(mine == who
                                          ? Theme.textMain(scheme)
                                          : Theme.textMuted(scheme))
@@ -165,8 +165,8 @@ struct HobbyView: View {
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: title.hasPrefix("喜欢") ? "heart.fill" : "leaf.fill")
-                    .font(.system(size: 10))
-                Text(title).font(.system(size: 12, weight: on ? .semibold : .regular))
+                    .font(.app(10))
+                Text(title).font(.app(12, weight: on ? .semibold : .regular))
             }
             .foregroundStyle(on ? Theme.textMain(scheme) : Theme.textMuted(scheme))
             .frame(maxWidth: .infinity)
@@ -187,12 +187,12 @@ struct HobbyView: View {
                     showingMatches = true
                 } label: {
                     HStack(spacing: 4) {
-                        Image(systemName: "heart.fill").font(.system(size: 9))
+                        Image(systemName: "heart.fill").font(.app(9))
                         Text("相同")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.app(11, weight: .medium))
                         if store.matches.count > 0 {
                             Text("\(store.matches.count)")
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(.app(10, weight: .semibold))
                         }
                     }
                     .foregroundStyle(HomePalette.bodyPink)
@@ -216,7 +216,7 @@ struct HobbyView: View {
             withAnimation(.easeOut(duration: 0.15)) { run() }
         } label: {
             Text(t)
-                .font(.system(size: 11, weight: on ? .medium : .regular))
+                .font(.app(11, weight: on ? .medium : .regular))
                 .foregroundStyle(on ? .white : Theme.textSoft(scheme))
                 .padding(.horizontal, 11)
                 .padding(.vertical, 5)
@@ -230,15 +230,15 @@ struct HobbyView: View {
     private var search: some View {
         HStack(spacing: 7) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 12))
+                .font(.app(12))
                 .foregroundStyle(Theme.textMuted(scheme))
             TextField("搜一个爱好…", text: $keyword)
-                .font(.system(size: 13))
+                .font(.app(13))
                 .textFieldStyle(.plain)
             if !keyword.isEmpty {
                 Button { keyword = "" } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
                 .buttonStyle(.plain)
@@ -256,14 +256,14 @@ struct HobbyView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: h.like ? "heart.fill" : "leaf.fill")
-                    .font(.system(size: 11))
+                    .font(.app(11))
                     .foregroundStyle(h.like ? HomePalette.bodyPink : HomePalette.sage)
                 Text(h.text)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.app(15, weight: .medium))
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer(minLength: 4)
                 Text(h.stage.rawValue)
-                    .font(.system(size: 9))
+                    .font(.app(9))
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(Capsule().fill(h.stage == .claimed
@@ -273,12 +273,12 @@ struct HobbyView: View {
             }
 
             Text(h.pathText)
-                .font(.system(size: 10))
+                .font(.app(10))
                 .foregroundStyle(Theme.textMuted(scheme))
 
             if !h.reason.isEmpty {
                 Text(h.reason)
-                    .font(.system(size: 12))
+                    .font(.app(12))
                     .foregroundStyle(Theme.textSoft(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -288,15 +288,15 @@ struct HobbyView: View {
             if h.stage == .claimed, !(h.good.isEmpty && h.bad.isEmpty) {
                 VStack(alignment: .leading, spacing: 3) {
                     if !h.good.isEmpty {
-                        Text("它好的：").font(.system(size: 10))
+                        Text("它好的：").font(.app(10))
                             .foregroundStyle(Theme.textMuted(scheme))
-                        Text(h.good).font(.system(size: 11))
+                        Text(h.good).font(.app(11))
                             .foregroundStyle(Theme.textSoft(scheme))
                     }
                     if !h.bad.isEmpty {
-                        Text("它坏的：").font(.system(size: 10))
+                        Text("它坏的：").font(.app(10))
                             .foregroundStyle(Theme.textMuted(scheme))
-                        Text(h.bad + "（能接受）").font(.system(size: 11))
+                        Text(h.bad + "（能接受）").font(.app(11))
                             .foregroundStyle(Theme.textSoft(scheme))
                     }
                 }
@@ -308,7 +308,7 @@ struct HobbyView: View {
 
             HStack(spacing: 12) {
                 Text(stamp(h.createdAt))
-                    .font(.system(size: 9))
+                    .font(.app(9))
                     .foregroundStyle(Theme.textMuted(scheme))
                 Spacer(minLength: 0)
                 small("改") { editing = h }
@@ -330,7 +330,7 @@ struct HobbyView: View {
     private func small(_ t: String, run: @escaping () -> Void) -> some View {
         Button(action: run) {
             Text(t)
-                .font(.system(size: 10))
+                .font(.app(10))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
@@ -348,7 +348,7 @@ struct HobbyView: View {
             adding = true
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 18, weight: .medium))
+                .font(.app(18, weight: .medium))
                 .foregroundStyle(.white)
                 .frame(width: 46, height: 46)
                 .background(Circle().fill(app.settings.primaryColor.opacity(0.9)))
@@ -364,22 +364,22 @@ struct HobbyView: View {
             Color.black.opacity(0.28).ignoresSafeArea()
             VStack(spacing: 12) {
                 Image(systemName: "heart.fill")
-                    .font(.system(size: 26))
+                    .font(.app(26))
                     .foregroundStyle(HomePalette.bodyPink)
                 Text("撞上啦！")
-                    .font(.system(size: 19, weight: .semibold))
+                    .font(.app(19, weight: .semibold))
                     .foregroundStyle(Theme.textMain(scheme))
                 Text("你俩同时\(a.like ? "喜欢" : "讨厌")上了")
-                    .font(.system(size: 12))
+                    .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
                 Text(a.text)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.app(15, weight: .medium))
                     .foregroundStyle(HomePalette.bodyPink)
                 Button {
                     withAnimation(.easeOut(duration: 0.2)) { justMatched = nil }
                 } label: {
                     Text("收下这份默契")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.app(14, weight: .medium))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)

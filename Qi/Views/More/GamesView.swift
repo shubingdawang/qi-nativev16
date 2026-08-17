@@ -24,6 +24,7 @@ struct GamesView: View {
     @State private var mcpText = ""
     @State private var loadingMCP = false
     @State private var pickingGenre: LocalGame?
+    @State private var openingHuman = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -54,6 +55,10 @@ struct GamesView: View {
         }
         .fullScreenCover(item: $playing) { game in
             GamePlayerView(game: game)
+        }
+        .fullScreenCover(isPresented: $openingHuman) {
+            WebPageView(title: "人类端",
+                        url: URL(string: "https://toy.cedarstar.org")!)
         }
         .confirmationDialog("这算哪一类", isPresented: Binding(
             get: { pickingGenre != nil },
@@ -113,7 +118,7 @@ struct GamesView: View {
 
         if store.games.isEmpty {
             Text("阿晏写的网页游戏放进来就能玩，长按可以改分类。")
-                .font(.system(size: 11))
+                .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
         }
 
@@ -121,7 +126,7 @@ struct GamesView: View {
             importing = true
         } label: {
             Label("放一个进来", systemImage: Icon.add)
-                .font(.system(size: 14))
+                .font(.app(14))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
                 .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -147,28 +152,48 @@ struct GamesView: View {
             .buttonStyle(.plain)
         }
 
-        section("阿晏那边的") {
-            HStack {
-                Text("在对话里玩的，跟他说想玩哪个就行")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textMuted(scheme))
-                Spacer()
-                Button {
-                    Task {
-                        loadingMCP = true
-                        let r = await app.callTool("list_games", args: [:])
-                        mcpText = r.text
-                        loadingMCP = false
-                    }
-                } label: {
-                    if loadingMCP { ProgressView() }
-                    else { Image(systemName: Icon.refresh).foregroundStyle(app.settings.accentColor) }
-                }
-                .buttonStyle(.plain)
+        // CEDAR TOY 的**人类端**。
+        //
+        // 以前这儿是个「阿晏那边的」列表：调 list_games 把他能玩的游戏名列出来，
+        // 一堆文字，她也看不见他在玩什么。
+        // 而那些游戏里有一部分是**有人类显示屏的**——她开着这一页，
+        // 就能实时看见他在怎么走、怎么下。所以直接把人类端搬进来。
+        section("人类端") {
+            Button {
+                openingHuman = true
+            } label: {
+                row(title: "CEDAR TOY",
+                    sub: "他在玩的那些，有些能在这儿实时看见",
+                    icon: "person.2")
             }
+            .buttonStyle(.plain)
+
+            Text("点开是全屏的网页。他在对话里玩，你在这儿看——"
+                 + "有人类显示屏的那些游戏，能看见他这一步走了哪儿。")
+                .font(.app(11))
+                .foregroundStyle(Theme.textMuted(scheme))
+
+            Button {
+                Task {
+                    loadingMCP = true
+                    let r = await app.callTool("list_games", args: [:])
+                    mcpText = r.text
+                    loadingMCP = false
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    if loadingMCP { ProgressView().scaleEffect(0.7) }
+                    else { Image(systemName: Icon.refresh).font(.app(11)) }
+                    Text("列一下他那边有哪些")
+                        .font(.app(11))
+                }
+                .foregroundStyle(app.settings.accentColor)
+            }
+            .buttonStyle(.plain)
+
             if !mcpText.isEmpty {
                 Text(mcpText)
-                    .font(.system(size: 12))
+                    .font(.app(12))
                     .foregroundStyle(Theme.textSoft(scheme))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
@@ -184,7 +209,7 @@ struct GamesView: View {
                                         @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 12, weight: .medium))
+                .font(.app(12, weight: .medium))
                 .foregroundStyle(Theme.textMuted(scheme))
             content()
         }
@@ -199,20 +224,20 @@ struct GamesView: View {
                     .fill(app.settings.accentColor.opacity(0.16))
                     .frame(width: 40, height: 40)
                 Image(systemName: icon)
-                    .font(.system(size: 16))
+                    .font(.app(16))
                     .foregroundStyle(app.settings.accentColor)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.app(15, weight: .medium))
                     .foregroundStyle(Theme.textMain(scheme))
                 Text(sub)
-                    .font(.system(size: 11))
+                    .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
             Spacer()
             Image(systemName: Icon.chevron)
-                .font(.system(size: 12))
+                .font(.app(12))
                 .foregroundStyle(Theme.textMuted(scheme))
         }
         .padding(.vertical, 4)
@@ -347,6 +372,62 @@ struct GamePlayerView: View {
                 }
         }
     }
+}
+
+/// 一个全屏的网页。人类端就走这个。
+struct WebPageView: View {
+
+    let title: String
+    let url: URL
+    @Environment(\.dismiss) private var dismiss
+    @State private var reloadTick = 0
+
+    var body: some View {
+        NavigationStack {
+            RemoteWebView(url: url, reloadTick: reloadTick)
+                .ignoresSafeArea(edges: .bottom)
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("退出") { dismiss() }
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            reloadTick += 1
+                        } label: {
+                            Image(systemName: Icon.refresh)
+                        }
+                    }
+                }
+        }
+    }
+}
+
+struct RemoteWebView: UIViewRepresentable {
+    let url: URL
+    /// 加一次就重新载一次。看他下棋走到哪儿的时候要用得上。
+    var reloadTick: Int = 0
+
+    func makeUIView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.allowsInlineMediaPlayback = true
+        let web = WKWebView(frame: .zero, configuration: config)
+        web.isOpaque = false
+        web.backgroundColor = .clear
+        web.load(URLRequest(url: url))
+        context.coordinator.loaded = reloadTick
+        return web
+    }
+
+    func updateUIView(_ web: WKWebView, context: Context) {
+        guard context.coordinator.loaded != reloadTick else { return }
+        context.coordinator.loaded = reloadTick
+        web.load(URLRequest(url: url))
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    final class Coordinator { var loaded = -1 }
 }
 
 /// 跑本地 HTML 的容器

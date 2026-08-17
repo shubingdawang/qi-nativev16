@@ -261,17 +261,17 @@ struct SideMenuPanel: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName)
-                .font(.system(size: 22, weight: .semibold))
+                .font(.app(22, weight: .semibold))
                 .foregroundStyle(Theme.textMain(scheme))
             HStack(spacing: 6) {
                 Text("在一起第 \(daysTogether) 天")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.app(12, weight: .medium))
                     .foregroundStyle(Theme.textSoft(scheme))
                 Circle()
                     .fill(Theme.textMuted(scheme).opacity(0.5))
                     .frame(width: 3, height: 3)
                 Text(Self.today.string(from: Date()))
-                    .font(.system(size: 12))
+                    .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
         }
@@ -305,11 +305,11 @@ struct SideMenuPanel: View {
         } label: {
             HStack(spacing: 13) {
                 Image(systemName: item.icon)
-                    .font(.system(size: 16, weight: .regular))
+                    .font(.app(16, weight: .regular))
                     .foregroundStyle(Theme.textSoft(scheme))
                     .frame(width: 24)
                 Text(item.title)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.app(16, weight: .medium))
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer(minLength: 0)
             }

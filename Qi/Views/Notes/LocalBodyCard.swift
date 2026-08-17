@@ -24,10 +24,10 @@ struct LocalBodyCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("身体")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.app(15, weight: .semibold))
                     .foregroundStyle(Theme.textMain(scheme))
                 Text("本机")
-                    .font(.system(size: 9, weight: .medium))
+                    .font(.app(9, weight: .medium))
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(Capsule().fill(StatusTone.done.color.opacity(0.22)))
                     .foregroundStyle(Theme.textSoft(scheme))
@@ -36,7 +36,7 @@ struct LocalBodyCard: View {
                     app.catchUpBody()
                 } label: {
                     Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
                 .buttonStyle(.plain)
@@ -44,7 +44,7 @@ struct LocalBodyCard: View {
 
             if !app.settings.bodyEnabled {
                 Text("身体那一套关着。去「设置 → 通用设置」打开。")
-                    .font(.system(size: 12))
+                    .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
             } else {
                 // 周期
@@ -56,7 +56,7 @@ struct LocalBodyCard: View {
                 }
 
                 Text(s.cycle.note)
-                    .font(.system(size: 11))
+                    .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -70,7 +70,7 @@ struct LocalBodyCard: View {
 
                 if !s.lastSettlementNote.isEmpty {
                     Text("上次结算：" + s.lastSettlementNote)
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -84,10 +84,10 @@ struct LocalBodyCard: View {
                             ProgressView().scaleEffect(0.7)
                         } else {
                             Image(systemName: "arrow.triangle.merge")
-                                .font(.system(size: 12))
+                                .font(.app(12))
                         }
                         Text(settling ? "在算…" : "结算最近这段")
-                            .font(.system(size: 13))
+                            .font(.app(13))
                     }
                     .foregroundStyle(Theme.textMain(scheme))
                     .frame(maxWidth: .infinity)
@@ -99,12 +99,12 @@ struct LocalBodyCard: View {
                 .disabled(settling)
 
                 Text("**推进是自己走的，不花钱**——周期、数值、等你的时候那点压力，都是本机算的纯算术，你关着 App 也在走。\n\n只有「结算」要花钱：把最近二十来句丢给他，让他判断这段互动让身体动了多少。所以做成按钮，不做成自动的。")
-                    .font(.system(size: 10))
+                    .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
 
                 if let notice {
                     Text(notice)
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textSoft(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -148,14 +148,14 @@ struct LocalBodyCard: View {
     private func box(_ title: String, _ value: String, _ sub: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
-                .font(.system(size: 10))
+                .font(.app(10))
                 .foregroundStyle(Theme.textMuted(scheme))
             Text(value)
-                .font(.system(size: 15, weight: .medium))
+                .font(.app(15, weight: .medium))
                 .foregroundStyle(Theme.textMain(scheme))
                 .lineLimit(1)
             Text(sub)
-                .font(.system(size: 10))
+                .font(.app(10))
                 .foregroundStyle(Theme.textMuted(scheme))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -170,7 +170,7 @@ struct LocalBodyCard: View {
         return VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(f.label)
-                    .font(.system(size: 13))
+                    .font(.app(13))
                     .foregroundStyle(Theme.textSoft(scheme))
                 Spacer()
                 Text("\(v)")
@@ -187,7 +187,7 @@ struct LocalBodyCard: View {
             }
             .frame(height: 5)
             Text(f.describe(v))
-                .font(.system(size: 10))
+                .font(.app(10))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
         }

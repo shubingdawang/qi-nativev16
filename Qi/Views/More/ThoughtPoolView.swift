@@ -37,7 +37,7 @@ struct ThoughtPoolView: View {
                         VStack(spacing: 7) {
                             if pool.flashes.isEmpty {
                                 Text("上面没什么在飘")
-                                    .font(.system(size: 11))
+                                    .font(.app(11))
                                     .foregroundStyle(Theme.textMuted(scheme).opacity(0.7))
                                     .padding(.vertical, 14)
                             }
@@ -56,7 +56,7 @@ struct ThoughtPoolView: View {
                             }
                             if pool.obsessions.isEmpty {
                                 Text("底下是空的，没有压着的事")
-                                    .font(.system(size: 11))
+                                    .font(.app(11))
                                     .foregroundStyle(Theme.textMuted(scheme).opacity(0.7))
                                     .padding(.vertical, 14)
                             }
@@ -71,7 +71,7 @@ struct ThoughtPoolView: View {
                     HStack(spacing: 6) {
                         StatusDot(tone: .focus)
                         Text("「\(feed)」已经压到反过来推人的程度了")
-                            .font(.system(size: 11))
+                            .font(.app(11))
                             .foregroundStyle(Theme.textSoft(scheme))
                     }
                 }
@@ -87,14 +87,14 @@ struct ThoughtPoolView: View {
                             "这跟记忆不一样：记忆是已经落下来的沉淀物，这里是还在转的活水。"
                         ], id: \.self) { line in
                             Text("· " + line)
-                                .font(.system(size: 11))
+                                .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
                     }
                     .padding(.top, 6)
                 } label: {
                     Text("这池子怎么转的")
-                        .font(.system(size: 12))
+                        .font(.app(12))
                         .foregroundStyle(app.settings.accentColor)
                 }
 
@@ -107,7 +107,7 @@ struct ThoughtPoolView: View {
                         Text(showResolved
                              ? "收起已经了却的"
                              : "看看已经了却的（\(pool.resolvedOnes.count)）")
-                            .font(.system(size: 12))
+                            .font(.app(12))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                     .buttonStyle(.plain)
@@ -116,12 +116,12 @@ struct ThoughtPoolView: View {
                         ForEach(pool.resolvedOnes.prefix(20)) { t in
                             HStack(spacing: 8) {
                                 Text(t.text)
-                                    .font(.system(size: 12))
+                                    .font(.app(12))
                                     .foregroundStyle(Theme.textMuted(scheme))
                                     .strikethrough()
                                 Spacer()
                                 Text(t.fedCount >= 3 ? "想透了" : "散了")
-                                    .font(.system(size: 10))
+                                    .font(.app(10))
                                     .foregroundStyle(t.fedCount >= 3
                                                      ? StatusTone.done.color
                                                      : Theme.textMuted(scheme).opacity(0.6))
@@ -180,7 +180,7 @@ struct ThoughtPoolView: View {
                 .scaleEffect(t.isObsession && breathing ? 1.25 : 1)
 
             Text(t.text)
-                .font(.system(size: size, weight: t.isObsession ? .medium : .regular))
+                .font(.app(size, weight: t.isObsession ? .medium : .regular))
                 .foregroundStyle(Theme.textMain(scheme).opacity(opacity))
                 .lineLimit(2)
 
@@ -192,12 +192,12 @@ struct ThoughtPoolView: View {
                     .foregroundStyle(Theme.textMuted(scheme))
                 if t.hits > 1 {
                     Text("被戳 \(t.hits) 次")
-                        .font(.system(size: 9))
+                        .font(.app(9))
                         .foregroundStyle(Theme.textMuted(scheme).opacity(0.8))
                 }
                 if t.fedCount > 0 {
                     Text("推过 \(t.fedCount)/3")
-                        .font(.system(size: 9))
+                        .font(.app(9))
                         .foregroundStyle(StatusTone.focus.color.opacity(0.85))
                 }
             }

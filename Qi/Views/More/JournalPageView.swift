@@ -186,7 +186,7 @@ struct JournalPageView: View {
         switch e.kind {
         case .text:
             Text(e.text)
-                .font(.system(size: 17, weight: .medium, design: .serif))
+                .font(.app(17, weight: .medium, design: .serif))
                 .foregroundStyle(e.color)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -207,12 +207,12 @@ struct JournalPageView: View {
                 }
 
         case .sticker:
-            Text(e.emoji).font(.system(size: 34))
+            Text(e.emoji).font(.app(34))
 
         case .stamp:
             // 邮票：锯齿边靠一圈白点做出来
             Text(e.emoji.isEmpty ? "📮" : e.emoji)
-                .font(.system(size: 26))
+                .font(.app(26))
                 .frame(width: 54, height: 62)
                 .background {
                     ZStack {
@@ -237,7 +237,7 @@ struct JournalPageView: View {
 
         case .note:
             Text(e.text)
-                .font(.system(size: 13))
+                .font(.app(13))
                 .foregroundStyle(Color(hexString: "3A362E")!)
                 .padding(10)
                 .frame(width: 110, alignment: .topLeading)
@@ -268,12 +268,12 @@ struct JournalPageView: View {
                         .frame(width: 116, height: 116)
                         .overlay {
                             Text("点两下贴图")
-                                .font(.system(size: 10))
+                                .font(.app(10))
                                 .foregroundStyle(Color(hexString: "8A8378")!)
                         }
                 }
                 Text(e.text)
-                    .font(.system(size: 10))
+                    .font(.app(10))
                     .foregroundStyle(Color(hexString: "6B655A")!)
                     .frame(width: 116, height: 26)
             }
@@ -285,12 +285,12 @@ struct JournalPageView: View {
             // 摘句：带引号，底下写是谁说的
             VStack(alignment: .leading, spacing: 5) {
                 Text("「" + e.text + "」")
-                    .font(.system(size: 14, design: .serif))
+                    .font(.app(14, design: .serif))
                     .foregroundStyle(e.color)
                     .fixedSize(horizontal: false, vertical: true)
                 if !e.who.isEmpty {
                     Text("—— " + e.who)
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .foregroundStyle(e.color.opacity(0.7))
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
@@ -320,9 +320,9 @@ struct JournalPageView: View {
                         } label: {
                             VStack(spacing: 3) {
                                 Image(systemName: kind.icon)
-                                    .font(.system(size: 15))
+                                    .font(.app(15))
                                 Text(kind.rawValue)
-                                    .font(.system(size: 9))
+                                    .font(.app(9))
                             }
                             .foregroundStyle(Theme.textSoft(scheme))
                             .frame(width: 52, height: 46)
@@ -337,9 +337,9 @@ struct JournalPageView: View {
                     } label: {
                         VStack(spacing: 3) {
                             Image(systemName: "doc.plaintext")
-                                .font(.system(size: 15))
+                                .font(.app(15))
                             Text("纸底")
-                                .font(.system(size: 9))
+                                .font(.app(9))
                         }
                         .foregroundStyle(Theme.textSoft(scheme))
                         .frame(width: 52, height: 46)
@@ -404,7 +404,7 @@ struct JournalPageView: View {
                         Button {
                             commit(e.id) { $0.emoji = s }
                         } label: {
-                            Text(s).font(.system(size: 20))
+                            Text(s).font(.app(20))
                         }
                         .buttonStyle(.plain)
                     }
@@ -430,7 +430,7 @@ struct JournalPageView: View {
     private func small(_ t: String, run: @escaping () -> Void) -> some View {
         Button(action: run) {
             Text(t)
-                .font(.system(size: 11))
+                .font(.app(11))
                 .foregroundStyle(Theme.textSoft(scheme))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
@@ -493,7 +493,7 @@ struct JournalPageView: View {
                 VStack {
                     TextEditor(text: $draftText)
                         .scrollContentBackground(.hidden)
-                        .font(.system(size: 15))
+                        .font(.app(15))
                         .padding(10)
                         .background(RoundedRectangle(cornerRadius: 12)
                             .fill(Theme.softFillDeep))
@@ -567,7 +567,7 @@ struct QuotePickerSheet: View {
                             Text(keyword.isEmpty
                                  ? "还没有收藏的句子。在聊天里长按一句话就能收藏。"
                                  : "没搜到")
-                                .font(.system(size: 12))
+                                .font(.app(12))
                                 .foregroundStyle(Theme.textMuted(scheme))
                                 .padding(.top, 50)
                         }
@@ -578,12 +578,12 @@ struct QuotePickerSheet: View {
                             } label: {
                                 VStack(alignment: .leading, spacing: 5) {
                                     Text(item.text)
-                                        .font(.system(size: 14))
+                                        .font(.app(14))
                                         .foregroundStyle(Theme.textMain(scheme))
                                         .lineLimit(4)
                                         .multilineTextAlignment(.leading)
                                     Text(item.who)
-                                        .font(.system(size: 10))
+                                        .font(.app(10))
                                         .foregroundStyle(Theme.textMuted(scheme))
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)

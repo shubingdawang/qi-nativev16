@@ -26,7 +26,7 @@ struct WakeSettingsView: View {
                     Spacer()
                     Text(String(format: "%.2f 次/小时", app.settings.wake.lambdaBase))
                         .foregroundStyle(.secondary)
-                        .font(.system(size: 13, design: .rounded))
+                        .font(.app(13, design: .rounded))
                 }
                 Slider(value: $app.settings.wake.lambdaBase, in: 0.2...4.0, step: 0.1)
 
@@ -91,7 +91,7 @@ struct WakeSettingsView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
-                        .font(.system(size: 13))
+                        .font(.app(13))
                 }
             } header: {
                 Text("两层")
@@ -155,7 +155,7 @@ struct WakeSettingsView: View {
             Spacer()
             Text(value)
                 .foregroundStyle(.secondary)
-                .font(.system(size: 13, design: .rounded))
+                .font(.app(13, design: .rounded))
         }
     }
 

@@ -23,7 +23,7 @@ struct JournalView: View {
                 }
                 ForEach(store.byMonth, id: \.month) { group in
                     Text(group.month)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.app(13, weight: .semibold))
                         .foregroundStyle(Theme.textMain(scheme))
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(group.pages) { p in
@@ -67,13 +67,13 @@ struct JournalView: View {
     private var empty: some View {
         VStack(spacing: 10) {
             Image(systemName: "book.closed")
-                .font(.system(size: 32, weight: .light))
+                .font(.app(32, weight: .light))
                 .foregroundStyle(app.settings.accentColor.opacity(0.5))
             Text("还没做过手帐")
-                .font(.system(size: 13))
+                .font(.app(13))
                 .foregroundStyle(Theme.textMuted(scheme))
             Text("右上角加一页。胶带、贴纸、邮票、夹子都在底下那排，收藏过的句子能直接贴上去。")
-                .font(.system(size: 11))
+                .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
@@ -104,11 +104,11 @@ struct JournalView: View {
                 .shadow(color: .black.opacity(0.14), radius: 5, y: 3)
 
                 Text(p.displayTitle)
-                    .font(.system(size: 11))
+                    .font(.app(11))
                     .foregroundStyle(Theme.textMain(scheme))
                     .lineLimit(1)
                 Text(dayText(p.day))
-                    .font(.system(size: 9))
+                    .font(.app(9))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
         }
@@ -128,7 +128,7 @@ struct JournalView: View {
             switch e.kind {
             case .text, .quote:
                 Text(e.text)
-                    .font(.system(size: 5))
+                    .font(.app(5))
                     .foregroundStyle(e.color)
                     .lineLimit(3)
                     .frame(maxWidth: 54)
@@ -136,10 +136,10 @@ struct JournalView: View {
                 Rectangle().fill(e.color.opacity(0.62))
                     .frame(width: 30, height: 7)
             case .sticker:
-                Text(e.emoji).font(.system(size: 11))
+                Text(e.emoji).font(.app(11))
             case .stamp:
                 Text(e.emoji.isEmpty ? "📮" : e.emoji)
-                    .font(.system(size: 8))
+                    .font(.app(8))
                     .frame(width: 15, height: 17)
                     .background(Color(hexString: "F6F2E8")!)
             case .clip:

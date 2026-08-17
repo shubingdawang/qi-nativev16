@@ -34,11 +34,11 @@ struct MusicLibraryView: View {
                 HStack(spacing: 8) {
                     HStack(spacing: 5) {
                         Image(systemName: Icon.search)
-                            .font(.system(size: 12))
+                            .font(.app(12))
                             .foregroundStyle(Theme.textMuted(scheme))
                         TextField("找歌，或者搜网上的", text: $keyword)
                             .textFieldStyle(.plain)
-                            .font(.system(size: 14))
+                            .font(.app(14))
                             .submitLabel(.search)
                             .onSubmit { Task { await searchWeb() } }
                     }
@@ -50,7 +50,7 @@ struct MusicLibraryView: View {
                         importing = true
                     } label: {
                         Image(systemName: Icon.add)
-                            .font(.system(size: 16))
+                            .font(.app(16))
                             .foregroundStyle(app.settings.accentColor)
                             .frame(width: 34, height: 34)
                     }
@@ -59,20 +59,20 @@ struct MusicLibraryView: View {
 
                 if let notice {
                     Text(notice)
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(.orange)
                 }
 
                 if library.tracks.isEmpty && webResults.isEmpty {
                     VStack(spacing: 8) {
                         Image(systemName: "music.note.list")
-                            .font(.system(size: 30, weight: .light))
+                            .font(.app(30, weight: .light))
                             .foregroundStyle(app.settings.accentColor.opacity(0.5))
                         Text("还没有歌")
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Theme.textMuted(scheme))
                         Text("点右上角从「文件」导入 mp3、m4a、flac。\n网易云会员下载的歌，先存进「文件」App 再导进来就是整首。\n上面直接搜是网上的三十秒试听。")
-                            .font(.system(size: 11))
+                            .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme).opacity(0.85))
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 20)
@@ -83,7 +83,7 @@ struct MusicLibraryView: View {
 
                 if !mine.isEmpty {
                     Text("我的")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.app(13, weight: .medium))
                         .foregroundStyle(Theme.textMain(scheme))
                     ForEach(mine) { track in
                         row(track, local: true)
@@ -93,14 +93,14 @@ struct MusicLibraryView: View {
                 if searching {
                     HStack(spacing: 8) {
                         ProgressView().scaleEffect(0.7)
-                        Text("在搜…").font(.system(size: 12))
+                        Text("在搜…").font(.app(12))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                 }
 
                 if !webResults.isEmpty {
                     Text("网上的（三十秒试听）")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.app(13, weight: .medium))
                         .foregroundStyle(Theme.textMain(scheme))
                         .padding(.top, 6)
                     ForEach(webResults) { track in
@@ -143,11 +143,11 @@ struct MusicLibraryView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(track.title)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.app(14, weight: .medium))
                         .foregroundStyle(Theme.textMain(scheme))
                         .lineLimit(1)
                     Text(nowLine ?? (track.subtitle.isEmpty ? "一起听着" : track.subtitle))
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .lineLimit(1)
                 }
@@ -155,7 +155,7 @@ struct MusicLibraryView: View {
                 Spacer(minLength: 0)
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11))
+                    .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
             .padding(12)
@@ -177,19 +177,19 @@ struct MusicLibraryView: View {
         } label: {
             HStack(spacing: 11) {
                 Image(systemName: isCurrent && player.playing ? "pause.fill" : "play.fill")
-                    .font(.system(size: 12))
+                    .font(.app(12))
                     .foregroundStyle(app.settings.accentColor)
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(app.settings.accentColor.opacity(0.16)))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(track.title)
-                        .font(.system(size: 14))
+                        .font(.app(14))
                         .foregroundStyle(Theme.textMain(scheme))
                         .lineLimit(1)
                     if !track.subtitle.isEmpty {
                         Text(track.subtitle)
-                            .font(.system(size: 10))
+                            .font(.app(10))
                             .foregroundStyle(Theme.textMuted(scheme))
                             .lineLimit(1)
                     }
@@ -198,7 +198,7 @@ struct MusicLibraryView: View {
 
                 if !local {
                     Text("试听")
-                        .font(.system(size: 9))
+                        .font(.app(9))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
             }
@@ -281,11 +281,11 @@ struct ListeningBar: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(track.title)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.app(12, weight: .medium))
                         .foregroundStyle(Theme.textMain(scheme))
                         .lineLimit(1)
                     Text("一起听着")
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
 
@@ -295,7 +295,7 @@ struct ListeningBar: View {
                     player.playing ? player.pause() : player.resume()
                 } label: {
                     Image(systemName: player.playing ? "pause.fill" : "play.fill")
-                        .font(.system(size: 12))
+                        .font(.app(12))
                         .foregroundStyle(Theme.textSoft(scheme))
                         .frame(width: 28, height: 28)
                 }
@@ -305,7 +305,7 @@ struct ListeningBar: View {
                     player.stop()
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.app(10, weight: .medium))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .frame(width: 24, height: 24)
                 }

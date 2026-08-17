@@ -30,13 +30,13 @@ struct FavoritesView: View {
                 if items.isEmpty {
                     VStack(spacing: 10) {
                         Image(systemName: Icon.star)
-                            .font(.system(size: 34, weight: .light))
+                            .font(.app(34, weight: .light))
                             .foregroundStyle(app.settings.accentColor.opacity(0.55))
                         Text("还没有收藏")
-                            .font(.system(size: 14))
+                            .font(.app(14))
                             .foregroundStyle(Theme.textMuted(scheme))
                         Text("在对话里挑中一句，底下点收藏就行")
-                            .font(.system(size: 11))
+                            .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme).opacity(0.8))
                     }
                     .padding(.top, 80)
@@ -48,20 +48,20 @@ struct FavoritesView: View {
                             Text(item.message.role == .user
                                  ? (app.settings.userName.isEmpty ? "我" : app.settings.userName)
                                  : (app.settings.aiName.isEmpty ? "他" : app.settings.aiName))
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.app(12, weight: .semibold))
                                 .foregroundStyle(app.settings.accentColor)
                             Text(item.title)
-                                .font(.system(size: 11))
+                                .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                                 .lineLimit(1)
                             Spacer()
                             Text(stamp(item.message.createdAt))
-                                .font(.system(size: 10))
+                                .font(.app(10))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
 
                         Text(item.message.content)
-                            .font(.system(size: 14))
+                            .font(.app(14))
                             .foregroundStyle(Theme.textMain(scheme))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .textSelection(.enabled)

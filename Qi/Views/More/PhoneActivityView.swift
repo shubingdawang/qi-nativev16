@@ -26,13 +26,13 @@ struct PhoneActivityView: View {
                     summary
                     ranking
                     Text("一共读到 \(store.events.count) 条记录")
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
 
                 if let err = store.lastError {
                     Text(err)
-                        .font(.system(size: 12))
+                        .font(.app(12))
                         .foregroundStyle(.orange)
                 }
 
@@ -40,7 +40,7 @@ struct PhoneActivityView: View {
                     showHelp.toggle()
                 } label: {
                     Text(showHelp ? "收起说明" : "快捷指令怎么配")
-                        .font(.system(size: 12))
+                        .font(.app(12))
                         .foregroundStyle(app.settings.accentColor)
                 }
                 .buttonStyle(.plain)
@@ -76,16 +76,16 @@ struct PhoneActivityView: View {
     private var setupCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("还没连上")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.app(15, weight: .semibold))
                 .foregroundStyle(Theme.textMain(scheme))
             Text("让快捷指令把记录写进一个 txt，栖直接读那个文件——**全程不走网络**，不会再报网络错误。")
-                .font(.system(size: 12))
+                .font(.app(12))
                 .foregroundStyle(Theme.textSoft(scheme))
             Button {
                 picking = true
             } label: {
                 Text("选那个 txt")
-                    .font(.system(size: 14))
+                    .font(.app(14))
                     .foregroundStyle(Theme.textMain(scheme))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
@@ -101,7 +101,7 @@ struct PhoneActivityView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("SCREEN TIME")
-                    .font(.system(size: 9, weight: .medium))
+                    .font(.app(9, weight: .medium))
                     .tracking(2)
                     .foregroundStyle(Theme.textMuted(scheme))
                 Spacer()
@@ -109,7 +109,7 @@ struct PhoneActivityView: View {
                     picking = true
                 } label: {
                     Text("换文件")
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
                 .buttonStyle(.plain)
@@ -118,7 +118,7 @@ struct PhoneActivityView: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("总时长")
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                     Text(store.clock(store.total(on: shownDay)))
                         .font(HomeType.number(21, weight: .medium))
@@ -126,7 +126,7 @@ struct PhoneActivityView: View {
                     // 「正在用」只有看今天才成立，翻回昨天再说这个就是假的
                     if isToday, let now = store.currentApp {
                         Text("正在用：" + now)
-                            .font(.system(size: 10))
+                            .font(.app(10))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                 }
@@ -136,13 +136,13 @@ struct PhoneActivityView: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("拿起次数")
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                     Text("\(store.pickups(on: shownDay))")
                         .font(HomeType.number(21, weight: .medium))
                         .foregroundStyle(Theme.textMain(scheme))
                     Text("次")
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -164,18 +164,18 @@ struct PhoneActivityView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("让他看屏幕")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.app(14, weight: .semibold))
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer()
                 if peek.ready {
                     Text("已连上")
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .foregroundStyle(StatusTone.done.color)
                 }
             }
 
             Text("挑一个文件夹，让快捷指令把截图存进去。他调「看一眼屏幕」的时候读里面最新那张。\n\n**不实时**：iOS 不许任何 App 主动截别的 App 的屏，他看到的永远是上一次截下来的那张，返回值里会写着是多久前的。")
-                .font(.system(size: 11))
+                .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
 
             HStack(spacing: 8) {
@@ -183,7 +183,7 @@ struct PhoneActivityView: View {
                     pickingFolder = true
                 } label: {
                     Text(peek.ready ? "换个文件夹" : "挑文件夹")
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(Theme.textMain(scheme))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 9)
@@ -197,7 +197,7 @@ struct PhoneActivityView: View {
                         peek.forget()
                     } label: {
                         Text("断开")
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Theme.textMuted(scheme))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 9)
@@ -210,7 +210,7 @@ struct PhoneActivityView: View {
 
             if let err = peek.lastError {
                 Text(err)
-                    .font(.system(size: 11))
+                    .font(.app(11))
                     .foregroundStyle(.orange)
             }
         }
@@ -241,7 +241,7 @@ struct PhoneActivityView: View {
                 if dayOffset < store.days.count - 1 { dayOffset += 1 }
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.app(12, weight: .semibold))
                     .foregroundStyle(dayOffset < store.days.count - 1
                                      ? Theme.textSoft(scheme)
                                      : Theme.textMuted(scheme).opacity(0.3))
@@ -253,11 +253,11 @@ struct PhoneActivityView: View {
 
             VStack(spacing: 1) {
                 Text(dayLabel(shownDay))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.app(15, weight: .semibold))
                     .foregroundStyle(Theme.textMain(scheme))
                 if store.days.count > 1 {
                     Text("有记录的第 \(min(dayOffset, store.days.count - 1) + 1) / \(store.days.count) 天")
-                        .font(.system(size: 9))
+                        .font(.app(9))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
             }
@@ -267,7 +267,7 @@ struct PhoneActivityView: View {
                 if dayOffset > 0 { dayOffset -= 1 }
             } label: {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.app(12, weight: .semibold))
                     .foregroundStyle(dayOffset > 0
                                      ? Theme.textSoft(scheme)
                                      : Theme.textMuted(scheme).opacity(0.3))
@@ -305,13 +305,13 @@ struct PhoneActivityView: View {
     private var ranking: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("最常使用")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.app(13, weight: .semibold))
                 .foregroundStyle(Theme.textMain(scheme))
 
             let list = store.byApp(on: shownDay)
             if list.isEmpty {
                 Text(isToday ? "今天还没有记录" : "这天没有记录")
-                    .font(.system(size: 12))
+                    .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
             let longest = list.first?.seconds ?? 1
@@ -320,11 +320,11 @@ struct PhoneActivityView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text(item.app)
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Theme.textMain(scheme))
                         if isToday, item.app == store.currentApp {
                             Text("使用中")
-                                .font(.system(size: 9))
+                                .font(.app(9))
                                 .foregroundStyle(StatusTone.done.color)
                         }
                         Spacer()
@@ -343,7 +343,7 @@ struct PhoneActivityView: View {
                     }
                     .frame(height: 4)
                     Text("\(item.times) 次")
-                        .font(.system(size: 9))
+                        .font(.app(9))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
             }
@@ -354,7 +354,7 @@ struct PhoneActivityView: View {
     private var help: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("在「快捷指令」App 里：")
-                .font(.system(size: 12, weight: .medium))
+                .font(.app(12, weight: .medium))
                 .foregroundStyle(Theme.textMain(scheme))
             ForEach([
                 "1. 自动化 → 新建 → 打开 App → 挑你想记的那些",
@@ -364,11 +364,11 @@ struct PhoneActivityView: View {
                 "5. 回到这里，选那个 txt"
             ], id: \.self) { line in
                 Text(line)
-                    .font(.system(size: 11))
+                    .font(.app(11))
                     .foregroundStyle(Theme.textSoft(scheme))
             }
             Text("想要更准的时长，就再建一组「关闭 App」的自动化，把 open 换成 close。只有 open 也能用，那样时长是按相邻两次打开的间隔估的。")
-                .font(.system(size: 11))
+                .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .padding(.top, 4)
         }

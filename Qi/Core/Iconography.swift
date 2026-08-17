@@ -46,7 +46,7 @@ struct ThemedIcon: View {
 
     var body: some View {
         Image(systemName: name)
-            .font(.system(size: size, weight: weight))
+            .font(.app(size, weight: weight))
             .symbolRenderingMode(.monochrome)
             .foregroundStyle(color ?? app.settings.accentColor)
     }

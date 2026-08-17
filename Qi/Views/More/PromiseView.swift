@@ -49,13 +49,13 @@ struct PromiseView: View {
                         } label: {
                             HStack(spacing: 6) {
                                 Text("做到了的")
-                                    .font(.system(size: 12, weight: .medium))
+                                    .font(.app(12, weight: .medium))
                                     .foregroundStyle(Theme.textMuted(scheme))
                                 Text("\(kept.count)")
-                                    .font(.system(size: 11))
+                                    .font(.app(11))
                                     .foregroundStyle(Theme.textMuted(scheme).opacity(0.7))
                                 Image(systemName: "chevron.right")
-                                    .font(.system(size: 10, weight: .semibold))
+                                    .font(.app(10, weight: .semibold))
                                     .foregroundStyle(Theme.textMuted(scheme))
                                     .rotationEffect(.degrees(showDone ? 90 : 0))
                                 Spacer()
@@ -94,10 +94,10 @@ struct PromiseView: View {
     private func header(_ title: String, count: Int) -> some View {
         HStack(spacing: 6) {
             Text(title)
-                .font(.system(size: 12, weight: .medium))
+                .font(.app(12, weight: .medium))
                 .foregroundStyle(Theme.textMuted(scheme))
             Text("\(count)")
-                .font(.system(size: 11))
+                .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme).opacity(0.7))
             Spacer()
         }
@@ -107,10 +107,10 @@ struct PromiseView: View {
     private var empty: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("还没有欠着的事")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.app(15, weight: .semibold))
                 .foregroundStyle(Theme.textMain(scheme))
             Text("他答应你什么的时候会自己记进来——不用他专门做什么，说话的时候顺手就记了。你也可以点右上角自己加一条。")
-                .font(.system(size: 12))
+                .font(.app(12))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -126,7 +126,7 @@ struct PromiseView: View {
                 toggle(p)
             } label: {
                 Image(systemName: p.done ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20))
+                    .font(.app(20))
                     .foregroundStyle(p.done
                                      ? app.settings.accentColor
                                      : Theme.textMuted(scheme).opacity(0.55))
@@ -135,7 +135,7 @@ struct PromiseView: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(p.text)
-                    .font(.system(size: 14))
+                    .font(.app(14))
                     .foregroundStyle(p.done ? Theme.textMuted(scheme) : Theme.textMain(scheme))
                     .strikethrough(p.done, color: Theme.textMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
@@ -143,18 +143,18 @@ struct PromiseView: View {
 
                 HStack(spacing: 8) {
                     Text(String(p.madeAt.prefix(10)) + " 答应的")
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                     if let d = p.due, !d.isEmpty {
                         Text(dueLabel(d, done: p.done))
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.app(10, weight: .medium))
                             .foregroundStyle(overdue(d) && !p.done
                                              ? Color.red.opacity(0.85)
                                              : Theme.textMuted(scheme))
                     }
                     if p.done, let at = p.doneAt {
                         Text("· " + String(at.prefix(10)) + " 做到了")
-                            .font(.system(size: 10))
+                            .font(.app(10))
                             .foregroundStyle(app.settings.accentColor.opacity(0.8))
                     }
                 }
@@ -209,7 +209,7 @@ struct PromiseView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("他答应了什么")
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.app(14, weight: .medium))
                                 .foregroundStyle(Theme.textMain(scheme))
                             TextField("比如：周末陪你去看那家花店", text: $draft, axis: .vertical)
                                 .lineLimit(2...5)
@@ -221,7 +221,7 @@ struct PromiseView: View {
 
                         VStack(alignment: .leading, spacing: 8) {
                             Text("说好什么时候之前（可不填）")
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.app(14, weight: .medium))
                                 .foregroundStyle(Theme.textMain(scheme))
                             TextField("2026-09-01", text: $due)
                                 .textInputAutocapitalization(.never)

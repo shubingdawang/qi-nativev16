@@ -329,10 +329,10 @@ struct AppSettings: Codable {
     /// 用本机那份记忆库（不走 MCP、不用开电脑）。
     /// 打开之后记忆库那 29 个工具变成 App 内置的，
     /// **这时候该把「小屋」那台 MCP 关掉**，不然同一件事有两套工具。
-    var localMemory: Bool = false
+    var localMemory: Bool = true
     /// 心跳也在本机算。PulseEngine 那几条公式是纯函数，
     /// 输入只有「当前时间 + 情绪 + 天气 + 突刺」，不需要一台机器一直 tick。
-    var localPulse: Bool = false
+    var localPulse: Bool = true
     /// 单独关掉的自带工具（存短名，不带 app__ 前缀）
     var disabledNativeTools: [String] = []
 
@@ -538,8 +538,8 @@ extension AppSettings {
         glassStyle = (try? c.decodeIfPresent(GlassStyle.self, forKey: .glassStyle)) ?? .frosted
         glassDim = (try? c.decodeIfPresent(Double.self, forKey: .glassDim)) ?? 0.22
         nativeToolsEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .nativeToolsEnabled)) ?? true
-        localMemory = (try? c.decodeIfPresent(Bool.self, forKey: .localMemory)) ?? false
-        localPulse = (try? c.decodeIfPresent(Bool.self, forKey: .localPulse)) ?? false
+        localMemory = (try? c.decodeIfPresent(Bool.self, forKey: .localMemory)) ?? true
+        localPulse = (try? c.decodeIfPresent(Bool.self, forKey: .localPulse)) ?? true
         disabledNativeTools = (try? c.decodeIfPresent([String].self, forKey: .disabledNativeTools)) ?? []
         segmentAssistant = (try? c.decodeIfPresent(Bool.self, forKey: .segmentAssistant)) ?? false
         segmentUser = (try? c.decodeIfPresent(Bool.self, forKey: .segmentUser)) ?? false

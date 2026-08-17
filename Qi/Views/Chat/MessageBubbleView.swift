@@ -62,10 +62,10 @@ struct MessageBubbleView: View {
             }
             VStack(alignment: isUser ? .trailing : .leading, spacing: 1) {
                 Text(displayName)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.app(12, weight: .medium))
                     .foregroundStyle(Theme.textMain(scheme))
                 Text(Self.stamp.string(from: message.createdAt))
-                    .font(.system(size: 9.5))
+                    .font(.app(9.5))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
             if isUser { AvatarView(name: displayName, image: avatarImage, size: 26) }
@@ -128,7 +128,7 @@ struct MessageBubbleView: View {
             VStack(alignment: .leading, spacing: 6) {
                 if !message.content.isEmpty {
                     Text(message.content)
-                        .font(.system(size: 14))
+                        .font(.app(14))
                         .foregroundStyle(Theme.textMain(scheme))
                 }
                 DollInlineCard()
@@ -173,7 +173,7 @@ struct MessageBubbleView: View {
                 voiceBar
                 if !message.content.isEmpty {
                     Text("\u{201C}" + message.content + "\u{201D}")
-                        .font(.system(size: 12))
+                        .font(.app(12))
                         .italic()
                         .foregroundStyle(Theme.textMuted(scheme))
                         .frame(maxWidth: 250, alignment: isUser ? .trailing : .leading)
@@ -202,7 +202,7 @@ struct MessageBubbleView: View {
         HStack(alignment: .top, spacing: 8) {
             if selecting {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 19))
+                    .font(.app(19))
                     .foregroundStyle(isSelected ? app.settings.accentColor : Theme.textMuted(scheme).opacity(0.5))
                     .padding(.top, 6)
             }
@@ -218,10 +218,10 @@ struct MessageBubbleView: View {
                 if !message.actionText.isEmpty {
                     HStack(spacing: 5) {
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 8, weight: .semibold))
+                            .font(.app(8, weight: .semibold))
                             .foregroundStyle(Theme.textMuted(scheme).opacity(0.7))
                         Text(message.actionText)
-                            .font(.system(size: 12))
+                            .font(.app(12))
                             .italic()
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
@@ -300,7 +300,7 @@ struct MessageBubbleView: View {
         .overlay(alignment: .topTrailing) {
             if message.starred && !selecting {
                 Image(systemName: "star.fill")
-                    .font(.system(size: 9))
+                    .font(.app(9))
                     .foregroundStyle(.orange)
                     .padding(.top, 2)
             }
@@ -391,7 +391,7 @@ struct MessageBubbleView: View {
             run()
         } label: {
             Text(title)
-                .font(.system(size: 13))
+                .font(.app(13))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
@@ -421,15 +421,15 @@ struct MessageBubbleView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName) 存图了")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.app(12, weight: .semibold))
                     .foregroundStyle(app.settings.accentColor)
                 Text("往「\(run.cardPlace)」里存了一张图")
-                    .font(.system(size: 13))
+                    .font(.app(13))
                     .foregroundStyle(Theme.textMain(scheme))
                     .lineLimit(1)
                 if !run.cardThought.isEmpty {
                     Text(run.cardThought)
-                        .font(.system(size: 12))
+                        .font(.app(12))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .lineLimit(2)
                 }
@@ -457,7 +457,7 @@ struct MessageBubbleView: View {
                     .fill(Theme.textMuted(scheme).opacity(pulse ? 0.14 : 0.07))
                     .frame(width: 160, height: 10)
                 Text(message.noteHint)
-                    .font(.system(size: 11))
+                    .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .padding(.top, 2)
             }
@@ -488,7 +488,7 @@ struct MessageBubbleView: View {
                         .clipped()
                     if note.imageCount > 1 {
                         Text("\(note.imageCount) 张")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.app(10, weight: .medium))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 7)
                             .padding(.vertical, 3)
@@ -501,31 +501,31 @@ struct MessageBubbleView: View {
             VStack(alignment: .leading, spacing: 5) {
                 if !note.title.isEmpty {
                     Text(note.title)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.app(14, weight: .medium))
                         .foregroundStyle(Theme.textMain(scheme))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                 }
                 if !note.desc.isEmpty {
                     Text(note.desc)
-                        .font(.system(size: 12))
+                        .font(.app(12))
                         .foregroundStyle(Theme.textSoft(scheme))
                         .lineLimit(3)
                         .multilineTextAlignment(.leading)
                 }
                 HStack(spacing: 8) {
                     Text(note.author.isEmpty ? "小红书" : note.author)
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .foregroundStyle(Color(red: 1, green: 0.3, blue: 0.35))
                     Spacer(minLength: 0)
                     if !note.likedCount.isEmpty {
                         Label(note.likedCount, systemImage: "heart")
-                            .font(.system(size: 10))
+                            .font(.app(10))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                     if !note.commentCount.isEmpty {
                         Label(note.commentCount, systemImage: "bubble.left")
-                            .font(.system(size: 10))
+                            .font(.app(10))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                 }
@@ -562,7 +562,7 @@ struct MessageBubbleView: View {
         } label: {
             HStack(spacing: 9) {
                 Image(systemName: playing ? "stop.fill" : "play.fill")
-                    .font(.system(size: 12))
+                    .font(.app(12))
                     .foregroundStyle(app.settings.accentColor)
 
                 // 几根高低不一的竖条，装个声波的样子
@@ -575,7 +575,7 @@ struct MessageBubbleView: View {
                 }
 
                 Text("\(seconds)″")
-                    .font(.system(size: 11))
+                    .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
             .padding(.horizontal, 15)
@@ -598,16 +598,16 @@ struct MessageBubbleView: View {
         VStack(alignment: .leading, spacing: 7) {
             if !message.choiceQuestion.isEmpty {
                 Text(message.choiceQuestion)
-                    .font(.system(size: 14))
+                    .font(.app(14))
                     .foregroundStyle(Theme.textMain(scheme))
             }
             if !message.chosenOption.isEmpty {
                 HStack(spacing: 5) {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(app.settings.accentColor)
                     Text("已选：\(message.chosenOption)")
-                        .font(.system(size: 12))
+                        .font(.app(12))
                         .foregroundStyle(Theme.textSoft(scheme))
                 }
                 .padding(.top, 2)
@@ -618,12 +618,12 @@ struct MessageBubbleView: View {
                 } label: {
                     HStack {
                         Text(option)
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Theme.textMain(scheme))
                             .multilineTextAlignment(.leading)
                         Spacer(minLength: 6)
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.app(10, weight: .semibold))
                             .foregroundStyle(app.settings.accentColor)
                     }
                     .padding(.horizontal, 13)
@@ -652,10 +652,10 @@ struct MessageBubbleView: View {
                 .frame(width: 3)
             VStack(alignment: .leading, spacing: 2) {
                 Text(message.quotedName)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.app(10, weight: .medium))
                     .foregroundStyle(Theme.textMuted(scheme))
                 Text(message.quotedText)
-                    .font(.system(size: 12))
+                    .font(.app(12))
                     .foregroundStyle(Theme.textSoft(scheme))
                     .lineLimit(2)
             }
@@ -716,15 +716,15 @@ struct MessageBubbleView: View {
             } label: {
                 HStack(spacing: 8) {
                     Text("叮叮咣咣了 \(message.toolRuns.count) 下")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.app(14, weight: .medium))
                     if message.toolRuns.contains(where: { $0.failed }) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 11))
+                            .font(.app(11))
                             .foregroundStyle(.orange)
                     }
                     Spacer(minLength: 8)
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.app(11, weight: .semibold))
                         .rotationEffect(.degrees(showTools ? 90 : 0))
                 }
                 .foregroundStyle(Theme.textSoft(scheme))
@@ -746,10 +746,10 @@ struct MessageBubbleView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
                                 Image(systemName: run.failed ? "xmark.circle.fill" : "checkmark.circle.fill")
-                                    .font(.system(size: 11))
+                                    .font(.app(11))
                                     .foregroundStyle(run.failed ? .red : .green)
                                 Text(run.toolName)
-                                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                    .font(.app(13, weight: .semibold, design: .monospaced))
                                 if !run.serverName.isEmpty {
                                     Text(run.serverName)
                                         .font(.caption2)
@@ -758,12 +758,12 @@ struct MessageBubbleView: View {
                             }
                             if !run.arguments.isEmpty, run.arguments != "{}" {
                                 Text(run.arguments)
-                                    .font(.system(size: 11, design: .monospaced))
+                                    .font(.app(11, design: .monospaced))
                                     .foregroundStyle(.secondary)
                                     .lineLimit(4)
                             }
                             Text(run.result)
-                                .font(.system(size: 12))
+                                .font(.app(12))
                                 .foregroundStyle(run.failed ? .red : Theme.textSoft(scheme))
                                 .lineLimit(12)
                                 .textSelection(.enabled)
@@ -780,17 +780,30 @@ struct MessageBubbleView: View {
 
     /// 气泡就是一块玻璃。自己和对方的区别靠左右位置，
     /// 不靠颜色——整块染色会变成不透光的塑料片。
+    @ViewBuilder
     private var bubbleShape: some View {
-        ZStack {
-            GlassSurface(
-                radius: 18,
-                strength: app.settings.glassOpacity * app.settings.bubbleOpacity,
-                extra: isUser ? 0.35 : 0
-            )
-            // 想要一点色的时候才染，默认是 0
-            if isUser && app.settings.bubbleTint > 0.01 {
+        // 「家」＝claude.ai。那边气泡不是玻璃：
+        // **她说的话**是一块实心的浅面板，**他说的话根本没有气泡**——
+        // 就直接印在纸上。所以这一档不走 GlassSurface。
+        if app.settings.preset == .home {
+            if isUser {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(app.settings.accentColor.opacity(0.30 * app.settings.bubbleTint))
+                    .fill(scheme == .dark ? HomePalette.panelDark : HomePalette.panel)
+            } else {
+                Color.clear
+            }
+        } else {
+            ZStack {
+                GlassSurface(
+                    radius: 18,
+                    strength: app.settings.glassOpacity * app.settings.bubbleOpacity,
+                    extra: isUser ? 0.35 : 0
+                )
+                // 想要一点色的时候才染，默认是 0
+                if isUser && app.settings.bubbleTint > 0.01 {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(app.settings.accentColor.opacity(0.30 * app.settings.bubbleTint))
+                }
             }
         }
     }
@@ -814,16 +827,16 @@ struct MessageBubbleView: View {
             ForEach(message.files) { f in
                 HStack(spacing: 9) {
                     Image(systemName: f.icon)
-                        .font(.system(size: 17))
+                        .font(.app(17))
                         .foregroundStyle(app.settings.accentColor)
                         .frame(width: 26)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(f.displayName)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.app(13, weight: .medium))
                             .foregroundStyle(Theme.textMain(scheme))
                             .lineLimit(1)
                         Text(f.sizeText)
-                            .font(.system(size: 10))
+                            .font(.app(10))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                     Spacer(minLength: 0)
@@ -858,10 +871,10 @@ struct MessageBubbleView: View {
             } label: {
                 HStack(spacing: 8) {
                     Text(reasoningTitle)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.app(14, weight: .medium))
                     Spacer(minLength: 8)
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.app(11, weight: .semibold))
                         .rotationEffect(.degrees(showReasoning ? 90 : 0))
                 }
                 .foregroundStyle(Theme.textSoft(scheme))
@@ -906,7 +919,7 @@ struct AvatarView: View {
                 ZStack {
                     Circle().fill(app.settings.accentColor.opacity(0.28))
                     Text(String(name.prefix(1)))
-                        .font(.system(size: size * 0.46, weight: .medium))
+                        .font(.app(size * 0.46, weight: .medium))
                         .foregroundStyle(Theme.textMain(scheme))
                 }
             }
@@ -964,7 +977,7 @@ struct TypingBubble: View {
             VStack(alignment: .leading, spacing: 4) {
                 if !name.isEmpty {
                     Text(name)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.app(11, weight: .medium))
                         .foregroundStyle(app.settings.accentColor)
                         .padding(.leading, 4)
                 }

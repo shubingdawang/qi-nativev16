@@ -88,7 +88,7 @@ struct SettingsView: View {
             // 深浅色
             HStack(spacing: 12) {
                 Text("颜色模式")
-                    .font(.system(size: 15))
+                    .font(.app(15))
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer(minLength: 8)
                 SegmentedChips(
@@ -123,13 +123,13 @@ struct SettingsView: View {
             // 背景。壁纸的事全在这一格里办完，「自定义主题」里不再重复一遍。
             VStack(alignment: .leading, spacing: 10) {
                 Text("背景")
-                    .font(.system(size: 15))
+                    .font(.app(15))
                     .foregroundStyle(Theme.textMain(scheme))
 
                 HStack(spacing: 10) {
                     PhotosPicker(selection: $wallpaperItem, matching: .images) {
                         Text("换张图片")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.app(14, weight: .medium))
                             .foregroundStyle(Theme.textMain(scheme))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
@@ -147,7 +147,7 @@ struct SettingsView: View {
                         app.settings.wallpaperDim = 0
                     } label: {
                         Text("恢复默认")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.app(14, weight: .medium))
                             .foregroundStyle(Theme.textSoft(scheme))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
@@ -162,7 +162,7 @@ struct SettingsView: View {
                 // 换过的那些不删，随时点回去
                 if !app.settings.wallpaperHistory.isEmpty {
                     Text("换过的")
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .padding(.top, 2)
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -197,11 +197,11 @@ struct SettingsView: View {
                 if app.settings.wallpaperName != nil {
                     HStack {
                         Text("压暗")
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Theme.textSoft(scheme))
                         Spacer()
                         Text("\(Int(app.settings.wallpaperDim * 100))%")
-                            .font(.system(size: 12))
+                            .font(.app(12))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                     .padding(.top, 2)
@@ -223,11 +223,11 @@ struct SettingsView: View {
                          item: Binding<PhotosPickerItem?>) -> some View {
         HStack(spacing: 10) {
             Text(title)
-                .font(.system(size: 15))
+                .font(.app(15))
                 .foregroundStyle(Theme.textMain(scheme))
             Spacer(minLength: 8)
             TextField(placeholder, text: text)
-                .font(.system(size: 15))
+                .font(.app(15))
                 .multilineTextAlignment(.trailing)
                 .textFieldStyle(.plain)
                 .frame(maxWidth: 150)
@@ -304,14 +304,14 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text("听你的语气")
-                        .font(.system(size: 15))
+                        .font(.app(15))
                         .foregroundStyle(Theme.textMain(scheme))
                     Spacer()
                     Text(VoiceBaseline.shared.ready
                          ? "已经认识你了"
                          : "还在认识你 \(VoiceBaseline.shared.progress.have)"
                            + "/\(VoiceBaseline.shared.progress.need)")
-                        .font(.system(size: 12))
+                        .font(.app(12))
                         .foregroundStyle(VoiceBaseline.shared.ready
                                          ? app.settings.accentColor
                                          : Theme.textMuted(scheme))
@@ -323,13 +323,13 @@ struct SettingsView: View {
                      + "攒够之前它一个字都不说——那会儿说什么都是瞎猜。"
                      + "全程在这台手机上算，不花钱、不上传。"
                      + "换了麦克风、感冒一周之后不准了，可以让它重新认识你。")
-                    .font(.system(size: 11))
+                    .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
                 Button {
                     VoiceBaseline.shared.reset()
                 } label: {
                     Text("重新认识我的声音")
-                        .font(.system(size: 12))
+                        .font(.app(12))
                         .foregroundStyle(app.settings.accentColor)
                 }
                 .buttonStyle(.plain)
@@ -354,16 +354,16 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text("勿扰")
-                            .font(.system(size: 15))
+                            .font(.app(15))
                             .foregroundStyle(Theme.textMain(scheme))
                         if !app.dndNote.isEmpty {
                             Text(app.dndNote)
-                                .font(.system(size: 10))
+                                .font(.app(10))
                                 .foregroundStyle(app.settings.accentColor)
                         }
                     }
                     Text("他不打电话、也不自己醒来找你。你找他不受影响")
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
             }
@@ -394,10 +394,10 @@ struct SettingsView: View {
             Toggle(isOn: $app.settings.segmentAssistant) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("他分段发")
-                        .font(.system(size: 15))
+                        .font(.app(15))
                         .foregroundStyle(Theme.textMain(scheme))
                     Text("让他自己决定在哪儿断句，一段一个气泡")
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
             }
@@ -410,10 +410,10 @@ struct SettingsView: View {
             Toggle(isOn: $app.settings.segmentUser) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("我分段发")
-                        .font(.system(size: 15))
+                        .font(.app(15))
                         .foregroundStyle(Theme.textMain(scheme))
                     Text("打完先攒着，等你不说了再一起发出去")
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
             }
@@ -425,17 +425,17 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text("等多久")
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Theme.textSoft(scheme))
                         Spacer()
                         Text("\(Int(app.settings.segmentUserDelay)) 秒")
-                            .font(.system(size: 12))
+                            .font(.app(12))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                     Slider(value: $app.settings.segmentUserDelay, in: 2...30, step: 1)
                         .tint(app.settings.accentColor)
                     Text("最后一句发完开始数。这段时间里又发了一条就重新数，直到你真的不说了，才一次性交给他。")
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
                 .padding(.horizontal, 16)
@@ -448,7 +448,7 @@ struct SettingsView: View {
             Group {
             HStack {
                 Text("带上多少历史")
-                    .font(.system(size: 15))
+                    .font(.app(15))
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer(minLength: 8)
                 Picker("", selection: $app.settings.contextLimit) {
@@ -467,7 +467,7 @@ struct SettingsView: View {
 
             Toggle(isOn: $app.settings.enterToSend) {
                 Text("回车当发送用")
-                    .font(.system(size: 15))
+                    .font(.app(15))
                     .foregroundStyle(Theme.textMain(scheme))
             }
             .tint(app.settings.accentColor)
@@ -565,18 +565,18 @@ struct SettingsView: View {
             HStack(spacing: 8) {
                 Image(systemName: BackupClock.overdue
                       ? "exclamationmark.triangle.fill" : "checkmark.circle")
-                    .font(.system(size: 13))
+                    .font(.app(13))
                     .foregroundStyle(BackupClock.overdue
                                      ? (Color(hexString: "E5544B") ?? .red)
                                      : StatusTone.done.color)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(BackupClock.note)
-                        .font(.system(size: 14, weight: BackupClock.overdue
+                        .font(.app(14, weight: BackupClock.overdue
                                       ? .medium : .regular))
                         .foregroundStyle(Theme.textMain(scheme))
                     if BackupClock.overdue {
                         Text("包七天就到期，过期得重装。导一份出来放网盘里。")
-                            .font(.system(size: 11))
+                            .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                 }
@@ -617,13 +617,13 @@ struct SettingsView: View {
                 SettingsDivider()
                 VStack(alignment: .leading, spacing: 4) {
                     Text("有 \(Storage.salvaged.count) 份数据这次没读进来")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.app(13, weight: .medium))
                         .foregroundStyle(Color(hexString: "E5544B") ?? .red)
                     Text(Storage.salvaged.joined(separator: "\n"))
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(.app(10, design: .monospaced))
                         .foregroundStyle(Theme.textMuted(scheme))
                     Text("原件已经改名留在 App 的文稿目录里，没有被覆盖。")
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -808,7 +808,7 @@ struct SettingsCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 8) {
             if let title {
                 Text(title)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.app(12, weight: .medium))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .padding(.leading, 6)
             }
@@ -844,23 +844,23 @@ struct SettingsRowLabel: View {
         HStack(spacing: 10) {
             if let icon {
                 Image(systemName: icon)
-                    .font(.system(size: 14))
+                    .font(.app(14))
                     .foregroundStyle(tint ?? Theme.textSoft(scheme))
                     .frame(width: 20)
             }
             Text(title)
-                .font(.system(size: 15))
+                .font(.app(15))
                 .foregroundStyle(tint ?? Theme.textMain(scheme))
             Spacer(minLength: 8)
             if let value {
                 Text(value)
-                    .font(.system(size: 13))
+                    .font(.app(13))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .lineLimit(1)
             }
             if chevron {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.app(12, weight: .semibold))
                     .foregroundStyle(Theme.textMuted(scheme).opacity(0.7))
             }
         }
@@ -883,11 +883,11 @@ struct SettingsField: View {
     var body: some View {
         HStack(spacing: 10) {
             Text(title)
-                .font(.system(size: 15))
+                .font(.app(15))
                 .foregroundStyle(Theme.textMain(scheme))
             Spacer(minLength: 8)
             TextField(placeholder, text: $text)
-                .font(.system(size: mono ? 13 : 15, design: mono ? .monospaced : .default))
+                .font(.app(mono ? 13 : 15, design: mono ? .monospaced : .default))
                 .textInputAutocapitalization(mono ? .never : .sentences)
                 .autocorrectionDisabled(mono)
                 .keyboardType(mono ? .URL : .default)
@@ -903,8 +903,19 @@ struct SettingsField: View {
 /// 卡片底下那段小字说明
 struct SettingsNote: View {
     let text: String
-    init(_ text: String) { self.text = text }
+    /// 收起来的时候那一行写什么。不传就用「这是什么」。
+    var title: String = "这是什么"
+
+    init(_ text: String, title: String = "这是什么") {
+        self.text = text
+        self.title = title
+    }
+
     @Environment(\.colorScheme) private var scheme
+    @EnvironmentObject private var app: AppState
+    /// **默认收着。** 她说全摊开「很杂乱」——
+    /// 这些说明是给「第一次看不懂」的时候用的，不是每次进设置都要重读一遍。
+    @State private var open = false
 
     /// 把 `**重点**` 真的画成粗体。
     ///
@@ -929,13 +940,34 @@ struct SettingsNote: View {
     }
 
     var body: some View {
-        Text(rendered)
-            .font(.system(size: 11))
-            .foregroundStyle(Theme.textMuted(scheme))
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.top, 2)
-            .padding(.bottom, 12)
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                withAnimation(.easeOut(duration: 0.18)) { open.toggle() }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(title)
+                        .font(.app(11))
+                    Image(systemName: "chevron.down")
+                        .font(.app(8, weight: .semibold))
+                        .rotationEffect(.degrees(open ? 0 : -90))
+                    Spacer()
+                }
+                .foregroundStyle(app.settings.accentColor.opacity(0.85))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if open {
+                Text(rendered)
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 2)
+        .padding(.bottom, 12)
     }
 }
 
@@ -958,7 +990,7 @@ struct SegmentedChips<T: Hashable>: View {
                     }
                 } label: {
                     Text(label)
-                        .font(.system(size: 12.5, weight: selection == value ? .semibold : .regular))
+                        .font(.app(12.5, weight: selection == value ? .semibold : .regular))
                         .foregroundStyle(selection == value
                                          ? Theme.textMain(scheme)
                                          : Theme.textMuted(scheme))

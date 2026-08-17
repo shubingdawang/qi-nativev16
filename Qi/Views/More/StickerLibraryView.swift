@@ -71,11 +71,11 @@ struct StickerLibraryView: View {
             HStack(spacing: 8) {
                 HStack(spacing: 5) {
                     Image(systemName: Icon.search)
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                     TextField("按名字或情绪找", text: $keyword)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 13))
+                        .font(.app(13))
                 }
                 .padding(.horizontal, 11)
                 .padding(.vertical, 8)
@@ -98,7 +98,7 @@ struct StickerLibraryView: View {
                         }
                     } label: {
                         Image(systemName: Icon.add)
-                            .font(.system(size: 16))
+                            .font(.app(16))
                             .foregroundStyle(app.settings.accentColor)
                             .frame(width: 32, height: 32)
                     }
@@ -106,7 +106,7 @@ struct StickerLibraryView: View {
                     let tint = app.settings.accentColor
                     PhotosPicker(selection: $picking, maxSelectionCount: 20, matching: .images) {
                         Image(systemName: Icon.add)
-                            .font(.system(size: 16))
+                            .font(.app(16))
                             .foregroundStyle(tint)
                             .frame(width: 32, height: 32)
                     }
@@ -119,10 +119,10 @@ struct StickerLibraryView: View {
                 if list.isEmpty {
                     VStack(spacing: 8) {
                         Image(systemName: Icon.sticker)
-                            .font(.system(size: 30, weight: .light))
+                            .font(.app(30, weight: .light))
                             .foregroundStyle(app.settings.accentColor.opacity(0.5))
                         Text(emptyText)
-                            .font(.system(size: 12))
+                            .font(.app(12))
                             .foregroundStyle(Theme.textMuted(scheme))
                             .multilineTextAlignment(.center)
                     }
@@ -136,7 +136,7 @@ struct StickerLibraryView: View {
                             StickerImage(sticker: sticker, size: 62)
                                 .frame(height: 68)
                             Text(sticker.name.isEmpty ? "没名字" : sticker.name)
-                                .font(.system(size: 10))
+                                .font(.app(10))
                                 .foregroundStyle(sticker.ready
                                                  ? Theme.textMuted(scheme)
                                                  : Color.orange)

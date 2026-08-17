@@ -144,12 +144,12 @@ struct MusicFloatingView: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(track.title)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.app(12, weight: .medium))
                     .foregroundStyle(Theme.textMain(scheme))
                     .lineLimit(1)
                 // 有歌词就把正在唱的那句摆出来。这一行是她最常瞟的地方。
                 Text(nowLine ?? (track.artist.isEmpty ? "一起听着" : track.artist))
-                    .font(.system(size: 10))
+                    .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .lineLimit(1)
             }
@@ -164,7 +164,7 @@ struct MusicFloatingView: View {
                 player.playing ? player.pause() : player.resume()
             } label: {
                 Image(systemName: player.playing ? "pause.fill" : "play.fill")
-                    .font(.system(size: 12))
+                    .font(.app(12))
                     .foregroundStyle(Theme.textSoft(scheme))
                     .frame(width: 26, height: 26)
                     .contentShape(Rectangle())
@@ -175,7 +175,7 @@ struct MusicFloatingView: View {
                 player.stop()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.app(10, weight: .medium))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .frame(width: 22, height: 22)
                     .contentShape(Rectangle())
@@ -260,7 +260,7 @@ struct TrackArtwork: View {
         ZStack {
             Rectangle().fill(Theme.softFillDeep)
             Image(systemName: "music.note")
-                .font(.system(size: side * 0.36))
+                .font(.app(side * 0.36))
                 .foregroundStyle(app.settings.accentColor.opacity(0.8))
         }
     }

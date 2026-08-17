@@ -55,7 +55,7 @@ struct FootprintView: View {
 
             HStack(alignment: .firstTextBaseline) {
                 Text(dayTitle)
-                    .font(.system(size: 19, weight: .semibold))
+                    .font(.app(19, weight: .semibold))
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer()
                 if !Calendar.current.isDateInToday(picked) {
@@ -87,7 +87,7 @@ struct FootprintView: View {
                         .foregroundStyle(Theme.textSoft(scheme))
                     Spacer()
                     Text(UsageFormat.short(u.reasoning))
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(.app(13, weight: .semibold, design: .rounded))
                         .foregroundStyle(Theme.textSoft(scheme))
                     Text(String(format: "占输出 %.0f%%",
                                 Double(u.reasoning) / Double(max(1, u.output)) * 100))
@@ -103,7 +103,7 @@ struct FootprintView: View {
                     .font(.footnote)
                     .foregroundStyle(Theme.textSoft(scheme))
                 Text(UsageFormat.money(cost))
-                    .font(.system(size: 26, weight: .semibold, design: .rounded))
+                    .font(.app(26, weight: .semibold, design: .rounded))
                     .foregroundStyle(HomePalette.orange)
                 Text("元")
                     .font(.footnote)
@@ -134,7 +134,7 @@ struct FootprintView: View {
                     Spacer()
                     Image(systemName: "chevron.right").font(.caption)
                 }
-                .font(.system(size: 15, weight: .medium))
+                .font(.app(15, weight: .medium))
                 .foregroundStyle(Theme.textMain(scheme))
                 .padding(.vertical, 11)
                 .padding(.horizontal, 14)
@@ -159,7 +159,7 @@ struct FootprintView: View {
                     .foregroundStyle(Theme.textSoft(scheme))
                 Spacer()
                 Text(String(format: "%.0f%%", u.hitRate * 100))
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.app(13, weight: .semibold, design: .rounded))
                     .foregroundStyle(u.hitRate > 0.5 ? HomePalette.sage : Theme.textSoft(scheme))
             }
             GeometryReader { geo in
@@ -185,24 +185,24 @@ struct FootprintView: View {
     private func sourceRow(_ source: UsageSource, _ u: TokenUsage) -> some View {
         HStack(spacing: 10) {
             Image(systemName: source.symbol)
-                .font(.system(size: 13))
+                .font(.app(13))
                 .foregroundStyle(Theme.textSoft(scheme))
                 .frame(width: 20)
             Text(source.label)
-                .font(.system(size: 14))
+                .font(.app(14))
                 .foregroundStyle(Theme.textMain(scheme))
             Spacer()
             if source.isTokenBased {
                 Text(UsageFormat.short(u.total))
-                    .font(.system(size: 13, design: .rounded))
+                    .font(.app(13, design: .rounded))
                     .foregroundStyle(Theme.textSoft(scheme))
             }
             Text("\(u.calls) 次")
-                .font(.system(size: 13, design: .rounded))
+                .font(.app(13, design: .rounded))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .frame(width: 54, alignment: .trailing)
             Text(UsageFormat.money(pricing.cost(u, source: source)))
-                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .font(.app(13, weight: .medium, design: .rounded))
                 .foregroundStyle(Theme.textMain(scheme))
                 .frame(width: 56, alignment: .trailing)
         }
@@ -214,7 +214,7 @@ struct FootprintView: View {
                 .font(.caption)
                 .foregroundStyle(Theme.textSoft(scheme))
             Text(value)
-                .font(.system(size: 22, weight: .medium, design: .rounded))
+                .font(.app(22, weight: .medium, design: .rounded))
                 .foregroundStyle(Theme.textMain(scheme))
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
@@ -287,7 +287,7 @@ struct FootprintView: View {
                             unit: String) -> some View {
         HStack {
             Text(title)
-                .font(.system(size: 14))
+                .font(.app(14))
                 .foregroundStyle(Theme.textMain(scheme))
             Spacer()
             TextField("0", value: Binding(
@@ -296,7 +296,7 @@ struct FootprintView: View {
             ), format: .number)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.trailing)
-                .font(.system(size: 15, design: .rounded))
+                .font(.app(15, design: .rounded))
                 .frame(width: 88)
                 .padding(.vertical, 6)
                 .padding(.horizontal, 10)
@@ -328,18 +328,18 @@ struct FootprintView: View {
 
     private func cardTitle(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 16, weight: .semibold))
+            .font(.app(16, weight: .semibold))
             .foregroundStyle(Theme.textMain(scheme))
     }
 
     private func statRow(_ title: String, _ value: String) -> some View {
         HStack {
             Text(title)
-                .font(.system(size: 14))
+                .font(.app(14))
                 .foregroundStyle(Theme.textMain(scheme))
             Spacer()
             Text(value)
-                .font(.system(size: 14, design: .rounded))
+                .font(.app(14, design: .rounded))
                 .foregroundStyle(Theme.textSoft(scheme))
         }
     }

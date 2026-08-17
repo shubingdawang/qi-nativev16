@@ -36,10 +36,10 @@ struct ToolToggleView: View {
                         if app.mcpServers.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("还没连 MCP")
-                                    .font(.system(size: 14, weight: .semibold))
+                                    .font(.app(14, weight: .semibold))
                                     .foregroundStyle(Theme.textMain(scheme))
                                 Text("连上之后，模型才能真的去查记忆、写日记、记经期。去「设置 → MCP」加一个。")
-                                    .font(.system(size: 12))
+                                    .font(.app(12))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
                             .padding(14)
@@ -87,28 +87,28 @@ struct ToolToggleView: View {
         VStack(spacing: 10) {
             HStack {
                 Text("工具")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.app(17, weight: .semibold))
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer()
                 Button("完成") { dismiss() }
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.app(15, weight: .medium))
                     .foregroundStyle(app.settings.accentColor)
                     .buttonStyle(.plain)
             }
 
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 12))
+                    .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
                 TextField("搜索工具", text: $search)
-                    .font(.system(size: 14))
+                    .font(.app(14))
                     .textFieldStyle(.plain)
                 if !search.isEmpty {
                     Button {
                         search = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                     .buttonStyle(.plain)
@@ -140,7 +140,7 @@ struct ToolToggleView: View {
     private func group<C: View>(_ title: String, @ViewBuilder content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 12, weight: .medium))
+                .font(.app(12, weight: .medium))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .padding(.leading, 6)
             content()
@@ -259,7 +259,7 @@ struct ToolToggleView: View {
                     if indices.isEmpty {
                         SettingsDivider()
                         Text(search.isEmpty ? "这台还没抓到工具清单" : "没有匹配的工具")
-                            .font(.system(size: 12))
+                            .font(.app(12))
                             .foregroundStyle(Theme.textMuted(scheme))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 16)
@@ -284,11 +284,11 @@ struct ToolToggleView: View {
             Button(action: onTap) {
                 HStack(spacing: 8) {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.app(11, weight: .semibold))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .rotationEffect(.degrees(isOpen ? 90 : 0))
                     Text("\(title)（\(count)）")
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.app(15, weight: .medium))
                         .foregroundStyle(Theme.textMain(scheme))
                     Spacer(minLength: 4)
                 }
@@ -310,11 +310,11 @@ struct ToolToggleView: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
-                    .font(.system(size: 13, design: .monospaced))
+                    .font(.app(13, design: .monospaced))
                     .foregroundStyle(Theme.textMain(scheme))
                 if !desc.isEmpty {
                     Text(desc)
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)

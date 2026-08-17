@@ -19,7 +19,7 @@ struct NotesView: View {
 
             HStack(alignment: .top) {
                 Text("札记")
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(.app(22, weight: .semibold))
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer()
             }
@@ -33,12 +33,12 @@ struct NotesView: View {
                         } label: {
                             VStack(spacing: 5) {
                                 Image(systemName: tabs[i].0)
-                                    .font(.system(size: 17, weight: .regular))
+                                    .font(.app(17, weight: .regular))
                                     .foregroundStyle(tab == i
                                                      ? app.settings.accentColor
                                                      : Theme.textMuted(scheme))
                                 Text(tabs[i].1)
-                                    .font(.system(size: 11, weight: .medium))
+                                    .font(.app(11, weight: .medium))
                                     .foregroundStyle(tab == i ? Theme.textMain(scheme) : Theme.textMuted(scheme))
                             }
                             .frame(maxWidth: .infinity)
@@ -84,7 +84,7 @@ struct MCPResultCard: View {
 
     var body: some View {
         Text(prettified)
-            .font(.system(size: 13))
+            .font(.app(13))
             .foregroundStyle(failed ? Color.red : Theme.textSoft(scheme))
             .frame(maxWidth: .infinity, alignment: .leading)
             .textSelection(.enabled)
@@ -117,32 +117,32 @@ struct MCPEntryCard: View {
             HStack(spacing: 6) {
                 if !entry.author.isEmpty {
                     Text(entry.author)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.app(11, weight: .semibold))
                         .foregroundStyle(app.settings.accentColor)
                 }
                 if !entry.dateText.isEmpty {
                     Text(entry.dateText)
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
                 Spacer(minLength: 0)
                 if !entry.id.isEmpty {
                     Text(entry.id)
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(.app(9, design: .monospaced))
                         .foregroundStyle(Theme.textMuted(scheme).opacity(0.6))
                 }
             }
 
             if !entry.title.isEmpty {
                 Text(entry.title)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.app(15, weight: .medium))
                     .foregroundStyle(Theme.textMain(scheme))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             if !entry.body.isEmpty {
                 Text(entry.body)
-                    .font(.system(size: 13))
+                    .font(.app(13))
                     .foregroundStyle(Theme.textSoft(scheme))
                     .lineLimit(expanded ? nil : 3)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -154,7 +154,7 @@ struct MCPEntryCard: View {
                     HStack(spacing: 5) {
                         ForEach(entry.tags, id: \.self) { tag in
                             Text(tag)
-                                .font(.system(size: 10))
+                                .font(.app(10))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
                                 .background(Capsule().fill(app.settings.accentColor.opacity(0.16)))
@@ -188,7 +188,7 @@ struct DeletableEntryList: View {
 
         if let notice {
             Text(notice)
-                .font(.system(size: 12))
+                .font(.app(12))
                 .foregroundStyle(.secondary)
         }
 
@@ -196,11 +196,11 @@ struct DeletableEntryList: View {
             MCPResultCard(text: text, failed: failed)
         } else if entries.isEmpty {
             Text(emptyHint)
-                .font(.system(size: 12))
+                .font(.app(12))
                 .foregroundStyle(.secondary)
         } else {
             Text("共 \(entries.count) 条")
-                .font(.system(size: 11))
+                .font(.app(11))
                 .foregroundStyle(.secondary)
             ForEach(entries) { entry in
                 MCPEntryCard(entry: entry)
@@ -254,12 +254,12 @@ struct FilteredEntryList: View {
             MCPResultCard(text: text, failed: failed)
         } else if entries.isEmpty {
             Text(text.isEmpty ? emptyHint : (keyword.isEmpty ? emptyHint : "没找到"))
-                .font(.system(size: 12))
+                .font(.app(12))
                 .foregroundStyle(.secondary)
         } else {
             if !keyword.isEmpty {
                 Text("找到 \(entries.count) 条")
-                    .font(.system(size: 11))
+                    .font(.app(11))
                     .foregroundStyle(.secondary)
             }
             ForEach(entries) { entry in
@@ -280,7 +280,7 @@ struct MCPEntryList: View {
         if failed || entries.isEmpty {
             if text.isEmpty {
                 Text(emptyHint)
-                    .font(.system(size: 12))
+                    .font(.app(12))
                     .foregroundStyle(.secondary)
             } else {
                 MCPResultCard(text: text, failed: failed)
@@ -339,7 +339,7 @@ struct DiaryPane: View {
     var body: some View {
         PaneScroll {
             VStack(alignment: .leading, spacing: 10) {
-                Text("写一篇").font(.system(size: 15, weight: .semibold))
+                Text("写一篇").font(.app(15, weight: .semibold))
                 Picker("", selection: $author) {
                     Text("饼饼").tag("饼饼")
                     Text("阿晏").tag("阿晏")
@@ -376,14 +376,14 @@ struct DiaryPane: View {
             .glassCard()
 
             HStack {
-                Text("最近的日记").font(.system(size: 15, weight: .semibold))
+                Text("最近的日记").font(.app(15, weight: .semibold))
                 Spacer()
                 // 一条条看是查东西用的，一叠叠看是回味用的
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) { stacked.toggle() }
                 } label: {
                     Image(systemName: stacked ? "list.bullet" : "square.stack")
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(app.settings.accentColor)
                 }
                 .buttonStyle(.plain)
@@ -398,15 +398,15 @@ struct DiaryPane: View {
 
             HStack(spacing: 6) {
                 Image(systemName: Icon.search)
-                    .font(.system(size: 12))
+                    .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
                 TextField("搜日记里的词", text: $keyword)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 14))
+                    .font(.app(14))
                 if !keyword.isEmpty {
                     Button { keyword = "" } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                     .buttonStyle(.plain)
@@ -446,7 +446,7 @@ struct MemoryPane: View {
     var body: some View {
         PaneScroll {
             VStack(alignment: .leading, spacing: 10) {
-                Text("记一条").font(.system(size: 15, weight: .semibold))
+                Text("记一条").font(.app(15, weight: .semibold))
                 Picker("", selection: $author) {
                     Text("饼饼").tag("饼饼")
                     Text("阿晏").tag("阿晏")
@@ -463,7 +463,7 @@ struct MemoryPane: View {
                     .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
 
                 HStack {
-                    Text("重要程度 \(Int(level))").font(.system(size: 13))
+                    Text("重要程度 \(Int(level))").font(.app(13))
                     Slider(value: $level, in: 1...5, step: 1)
                 }
 
@@ -578,7 +578,7 @@ struct PeriodPane: View {
     var body: some View {
         PaneScroll {
             HStack {
-                Text("当前状态").font(.system(size: 15, weight: .semibold))
+                Text("当前状态").font(.app(15, weight: .semibold))
                 Spacer()
                 Button {
                     Task { await model.run(app, tool: "period_status") }
@@ -608,7 +608,7 @@ struct PeriodPane: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("点日历上的某一天，可以记下开始，或者写点当天的情况。")
-                    .font(.system(size: 11))
+                    .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
                 HStack(spacing: 14) {
                     legend(app.settings.accentColor.opacity(0.75), "来了")
@@ -616,7 +616,7 @@ struct PeriodPane: View {
                     HStack(spacing: 5) {
                         Circle().fill(app.settings.accentColor).frame(width: 3.5, height: 3.5)
                         Text("有备注")
-                            .font(.system(size: 11))
+                            .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                 }
@@ -630,7 +630,7 @@ struct PeriodPane: View {
     private func legend(_ color: Color, _ label: String) -> some View {
         HStack(spacing: 5) {
             Circle().fill(color).frame(width: 9, height: 9)
-            Text(label).font(.system(size: 11)).foregroundStyle(Theme.textMuted(scheme))
+            Text(label).font(.app(11)).foregroundStyle(Theme.textMuted(scheme))
         }
     }
 
@@ -651,7 +651,7 @@ struct PeriodPane: View {
 
                 Spacer()
                 Text(monthTitle)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.app(15, weight: .semibold))
                     .foregroundStyle(Theme.textMain(scheme))
                     .contentTransition(.numericText())
                 Spacer()
@@ -668,7 +668,7 @@ struct PeriodPane: View {
             HStack(spacing: 0) {
                 ForEach(["日","一","二","三","四","五","六"], id: \.self) { d in
                     Text(d)
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .frame(maxWidth: .infinity)
                 }
@@ -733,7 +733,7 @@ struct PeriodPane: View {
                         .frame(width: 32, height: 32)
                 }
                 Text("\(cal.component(.day, from: day))")
-                    .font(.system(size: 13, weight: isToday ? .semibold : .regular))
+                    .font(.app(13, weight: isToday ? .semibold : .regular))
                     .foregroundStyle(mark == 1 ? Color.white : Theme.textMain(scheme))
 
                 // 写过备注的那天，底下点一个小点
@@ -854,7 +854,7 @@ struct PeriodPane: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         Text(picked.map { dayTitle($0) } ?? "")
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(.app(17, weight: .semibold))
                             .foregroundStyle(Theme.textMain(scheme))
 
                         // 这天已经写过的备注。以前根本没显示，
@@ -864,21 +864,21 @@ struct PeriodPane: View {
                             if !existing.isEmpty {
                                 VStack(alignment: .leading, spacing: 10) {
                                     Text("这天记过的")
-                                        .font(.system(size: 14, weight: .medium))
+                                        .font(.app(14, weight: .medium))
                                         .foregroundStyle(Theme.textMain(scheme))
                                     ForEach(Array(existing.enumerated()), id: \.offset) { _, n in
                                         VStack(alignment: .leading, spacing: 3) {
                                             HStack(spacing: 6) {
                                                 Text(n.author)
-                                                    .font(.system(size: 11, weight: .medium))
+                                                    .font(.app(11, weight: .medium))
                                                     .foregroundStyle(app.settings.accentColor)
                                                 Text(String(n.time.prefix(16))
                                                     .replacingOccurrences(of: "T", with: " "))
-                                                    .font(.system(size: 10))
+                                                    .font(.app(10))
                                                     .foregroundStyle(Theme.textMuted(scheme))
                                             }
                                             Text(n.text)
-                                                .font(.system(size: 13))
+                                                .font(.app(13))
                                                 .foregroundStyle(Theme.textSoft(scheme))
                                                 .fixedSize(horizontal: false, vertical: true)
                                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -908,7 +908,7 @@ struct PeriodPane: View {
                         .buttonStyle(.plain)
 
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("写点当天的").font(.system(size: 14, weight: .medium))
+                            Text("写点当天的").font(.app(14, weight: .medium))
                             TextField("身体状况、心情、他怎么照顾你的…", text: $note, axis: .vertical)
                                 .lineLimit(3...6)
                                 .padding(10)
@@ -977,17 +977,17 @@ struct PulsePane: View {
         PaneScroll {
             if base.isEmpty && !app.settings.localPulse {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("还没填心跳服务的地址").font(.system(size: 15, weight: .semibold))
+                    Text("还没填心跳服务的地址").font(.app(15, weight: .semibold))
                     Text("去「设置 → 后端服务」填上 PulseEngine 的地址，比如 http://你电脑的地址:8000")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 .glassCard()
             } else {
                 HStack {
-                    Text("阿晏现在").font(.system(size: 15, weight: .semibold))
+                    Text("阿晏现在").font(.app(15, weight: .semibold))
                     if offline {
                         Text("电脑没开")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.app(10, weight: .medium))
                             .padding(.horizontal, 7).padding(.vertical, 3)
                             .background(Capsule().fill(Color.orange.opacity(0.25)))
                     }
@@ -1021,7 +1021,7 @@ struct PulsePane: View {
 
                     if !history.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("今天的心率").font(.system(size: 14, weight: .semibold))
+                            Text("今天的心率").font(.app(14, weight: .semibold))
                             HeartRateChart(points: history, color: app.settings.accentColor)
                                 .frame(height: 90)
                         }
@@ -1034,7 +1034,7 @@ struct PulsePane: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("调一下").font(.system(size: 15, weight: .semibold))
+                    Text("调一下").font(.app(15, weight: .semibold))
                     Text("直接改电脑上那个引擎的状态")
                         .font(.caption).foregroundStyle(.secondary)
 
@@ -1044,7 +1044,7 @@ struct PulsePane: View {
                                 Task { await setEmotion(key) }
                             } label: {
                                 Text(label)
-                                    .font(.system(size: 13))
+                                    .font(.app(13))
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 9)
                                     .background(RoundedRectangle(cornerRadius: 12)
@@ -1060,7 +1060,7 @@ struct PulsePane: View {
                         Task { await spike() }
                     } label: {
                         Label("让心跳漏一拍", systemImage: "bolt.heart")
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
                             .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
@@ -1076,11 +1076,11 @@ struct PulsePane: View {
     private func vital(_ title: String, _ value: String, _ unit: String,
                        _ icon: String, _ color: Color) -> some View {
         VStack(spacing: 4) {
-            Image(systemName: icon).font(.system(size: 15)).foregroundStyle(color)
-            Text(value).font(.system(size: 22, weight: .semibold, design: .rounded))
+            Image(systemName: icon).font(.app(15)).foregroundStyle(color)
+            Text(value).font(.app(22, weight: .semibold, design: .rounded))
                 .foregroundStyle(Theme.textMain(scheme))
             Text(unit.isEmpty ? title : "\(title) · \(unit)")
-                .font(.system(size: 10)).foregroundStyle(Theme.textMuted(scheme))
+                .font(.app(10)).foregroundStyle(Theme.textMuted(scheme))
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
@@ -1089,9 +1089,9 @@ struct PulsePane: View {
 
     private func row(_ k: String, _ v: String) -> some View {
         HStack {
-            Text(k).font(.system(size: 13)).foregroundStyle(Theme.textMuted(scheme))
+            Text(k).font(.app(13)).foregroundStyle(Theme.textMuted(scheme))
             Spacer()
-            Text(v).font(.system(size: 13, weight: .medium))
+            Text(v).font(.app(13, weight: .medium))
                 .foregroundStyle(Theme.textMain(scheme))
         }
     }
@@ -1204,10 +1204,10 @@ struct StatusPane: View {
 
             // ---- 身体状况（电脑那边的，留着能对账）----
             HStack {
-                Text("身体状况").font(.system(size: 15, weight: .semibold))
+                Text("身体状况").font(.app(15, weight: .semibold))
                 if offline {
                     Text("电脑没开")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.app(10, weight: .medium))
                         .padding(.horizontal, 7).padding(.vertical, 3)
                         .background(Capsule().fill(Color.orange.opacity(0.25)))
                 }
@@ -1235,11 +1235,11 @@ struct StatusPane: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack {
                                     Text(item.name)
-                                        .font(.system(size: 13))
+                                        .font(.app(13))
                                         .foregroundStyle(Theme.textSoft(scheme))
                                     Spacer()
                                     Text("\(Int(v))")
-                                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                                        .font(.app(12, weight: .medium, design: .rounded))
                                         .foregroundStyle(app.settings.accentColor)
                                 }
                                 GeometryReader { geo in
@@ -1259,21 +1259,21 @@ struct StatusPane: View {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
                                 Text("上次结算")
-                                    .font(.system(size: 11, weight: .semibold))
+                                    .font(.app(11, weight: .semibold))
                                     .foregroundStyle(Theme.textMuted(scheme))
                                 Text(st.resultName)
-                                    .font(.system(size: 10))
+                                    .font(.app(10))
                                     .padding(.horizontal, 6).padding(.vertical, 2)
                                     .background(Capsule().fill(Theme.softFillDeep))
                                 if st.peaked {
                                     Text("到过峰值")
-                                        .font(.system(size: 10))
+                                        .font(.app(10))
                                         .padding(.horizontal, 6).padding(.vertical, 2)
                                         .background(Capsule().fill(Color.orange.opacity(0.25)))
                                 }
                             }
                             Text(st.settlementReason)
-                                .font(.system(size: 12))
+                                .font(.app(12))
                                 .foregroundStyle(Theme.textSoft(scheme))
                         }
                         .padding(.top, 2)
@@ -1310,10 +1310,10 @@ struct StatusPane: View {
 
     private func infoBox(_ label: String, _ value: String, _ sub: String) -> some View {
         VStack(spacing: 3) {
-            Text(label).font(.system(size: 10)).foregroundStyle(Theme.textMuted(scheme))
-            Text(value).font(.system(size: 16, weight: .semibold))
+            Text(label).font(.app(10)).foregroundStyle(Theme.textMuted(scheme))
+            Text(value).font(.app(16, weight: .semibold))
                 .foregroundStyle(app.settings.accentColor)
-            Text(sub).font(.system(size: 10)).foregroundStyle(Theme.textMuted(scheme))
+            Text(sub).font(.app(10)).foregroundStyle(Theme.textMuted(scheme))
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 11)

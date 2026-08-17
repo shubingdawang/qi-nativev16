@@ -60,6 +60,18 @@ enum Theme {
     /// 深色下压暗多少。三套压同一个量，不然会有的暗有的亮。
     nonisolated(unsafe) static var glassDim: Double = 0.22
 
+    /// 全局字号倍率。AppState 在设置变化时同步过来。
+    ///
+    /// 她说「设置里的字号调整没有即时显示……调完设置里的字也没跟着变，
+    /// 只有输入框里的字变大了，其他没变」。
+    /// 原因：那根滑块只喂给了聊天气泡和输入框，
+    /// 其余八百多处写的都是**写死的系统字号**（`.font(.system(size:))` 那种）。
+    ///
+    /// 所以全工程改走了 `Font.app(_:)`，它会乘上这个倍率。
+    /// （顺带一提：改的时候是脚本批量替换的，连这段注释里的示例都被换掉过一次。）
+    /// 基准 16（滑块的默认值），拉到 22 就是 1.375 倍，整个 App 一起变大。
+    nonisolated(unsafe) static var fontScale: Double = 1.0
+
     static func textMain(_ scheme: ColorScheme) -> Color {
         let hex = scheme == .dark ? customTextHexDark : customTextHex
         if !hex.isEmpty, let c = Color(hexString: hex) { return c }
@@ -629,5 +641,25 @@ extension View {
             ProgressiveBlur(height: height)
                 .ignoresSafeArea(edges: .top)
         }
+    }
+}
+
+extension Font {
+    /// 跟着「字号」那根滑块走的字体。**新代码一律用这个，别再写 `.system(size:)`。**
+    ///
+    /// 写死的字号在她那儿等于「这行字永远这么大」——
+    /// 她把字号拉到最大，屏幕上只有聊天气泡变了，别的纹丝不动。
+    /// **design 默认不填**，这一条很要紧：
+    /// 根视图上挂着一个 `.fontDesign(…)`（设置里那个「字形」），
+    /// 只要这儿显式写了 design，就会把她选的那套字形顶掉。
+    /// 不写的话字形继承全局，只有真需要等宽/衬线的地方才单独指定。
+    static func app(_ size: CGFloat,
+                    weight: Font.Weight = .regular,
+                    design: Font.Design? = nil) -> Font {
+        let scaled = size * Theme.fontScale
+        if let design {
+            return .system(size: scaled, weight: weight, design: design)
+        }
+        return .system(size: scaled, weight: weight)
     }
 }

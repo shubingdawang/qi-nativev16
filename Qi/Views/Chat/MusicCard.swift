@@ -20,20 +20,20 @@ struct MusicCard: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 4) {
                         Image(systemName: "music.note")
-                            .font(.system(size: 9))
+                            .font(.app(9))
                         Text(caption)
-                            .font(.system(size: 10))
+                            .font(.app(10))
                     }
                     .foregroundStyle(labelColor.opacity(0.7))
 
                     Text(track.title)
-                        .font(.system(size: 16, weight: .semibold, design: .serif))
+                        .font(.app(16, weight: .semibold, design: .serif))
                         .foregroundStyle(labelColor)
                         .lineLimit(1)
 
                     if !track.subtitle.isEmpty {
                         Text(track.subtitle)
-                            .font(.system(size: 11))
+                            .font(.app(11))
                             .foregroundStyle(labelColor.opacity(0.7))
                             .lineLimit(1)
                     }
@@ -50,7 +50,7 @@ struct MusicCard: View {
                     player.toggle(track)
                 } label: {
                     Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(labelColor)
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(labelColor.opacity(0.16)))
@@ -88,7 +88,7 @@ struct MusicCard: View {
                         Spacer()
                         Text(clock(player.duration))
                     }
-                    .font(.system(size: 9))
+                    .font(.app(9))
                     .foregroundStyle(labelColor.opacity(0.6))
                 }
                 .padding(.horizontal, 14)

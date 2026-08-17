@@ -73,12 +73,12 @@ struct AppearanceView: View {
                                     .frame(width: 34, height: 34)
                                 if app.settings.accentHex.uppercased() == hex {
                                     Image(systemName: "checkmark")
-                                        .font(.system(size: 12, weight: .bold))
+                                        .font(.app(12, weight: .bold))
                                         .foregroundStyle(.white)
                                 }
                             }
                             Text(name)
-                                .font(.system(size: 11))
+                                .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
                     }
@@ -92,14 +92,14 @@ struct AppearanceView: View {
 
             HStack(spacing: 8) {
                 Text("自定义")
-                    .font(.system(size: 15))
+                    .font(.app(15))
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer(minLength: 8)
                 TextField("六位色号", text: $customHex)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .multilineTextAlignment(.trailing)
-                    .font(.system(size: 14, design: .monospaced))
+                    .font(.app(14, design: .monospaced))
                     .textFieldStyle(.plain)
                     .frame(maxWidth: 100)
                     .onSubmit { applyCustom() }
@@ -116,14 +116,14 @@ struct AppearanceView: View {
                                       lineWidth: 1)
                     if previewColor == nil {
                         Image(systemName: "questionmark")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.app(10, weight: .medium))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                 }
                 .frame(width: 26, height: 26)
                 .animation(.easeOut(duration: 0.15), value: previewColor)
                 Button("用") { applyCustom() }
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.app(14, weight: .medium))
                     .buttonStyle(.plain)
                     .foregroundStyle(app.settings.accentColor)
                     .disabled(Color(hexString: customHex) == nil)
@@ -161,7 +161,7 @@ struct AppearanceView: View {
                                                         app.settings.wallpaperMode == key ? 2 : 0)
                                 }
                             Text(title)
-                                .font(.system(size: 11))
+                                .font(.app(11))
                                 .foregroundStyle(app.settings.wallpaperMode == key
                                                  ? Theme.textMain(scheme)
                                                  : Theme.textMuted(scheme))
@@ -223,14 +223,14 @@ struct AppearanceView: View {
     private func colorRow(_ title: String, hex: Binding<String>) -> some View {
         HStack(spacing: 10) {
             Text(title)
-                .font(.system(size: 15))
+                .font(.app(15))
                 .foregroundStyle(Theme.textMain(scheme))
             Spacer(minLength: 8)
             TextField("六位色号", text: hex)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .multilineTextAlignment(.trailing)
-                .font(.system(size: 14, design: .monospaced))
+                .font(.app(14, design: .monospaced))
                 .textFieldStyle(.plain)
                 .frame(maxWidth: 96)
             // 系统那个取色器就是调色盘：能拖色相、能吸屏幕上的颜色。
@@ -257,9 +257,9 @@ struct AppearanceView: View {
                     } label: {
                         VStack(spacing: 3) {
                             Text("栖")
-                                .font(.system(size: 22))
+                                .font(.app(22))
                             Text(title)
-                                .font(.system(size: 10))
+                                .font(.app(10))
                         }
                         .fontDesign(designOf(key))
                         .foregroundStyle(app.settings.fontDesign == key
@@ -318,7 +318,7 @@ struct AppearanceView: View {
                             }
 
                             Text(s.title)
-                                .font(.system(size: 15, weight: .semibold))
+                                .font(.app(15, weight: .semibold))
                                 .foregroundStyle(.white)
                                 .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
                                 .frame(maxWidth: .infinity)
@@ -361,10 +361,10 @@ struct AppearanceView: View {
                             .padding(.top, 1)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(p.title)
-                                .font(.system(size: 15))
+                                .font(.app(15))
                                 .foregroundStyle(Theme.textMain(scheme))
                             Text(p.note)
-                                .font(.system(size: 11))
+                                .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                                 .multilineTextAlignment(.leading)
                         }
@@ -387,26 +387,18 @@ struct AppearanceView: View {
                 .buttonStyle(.plain)
             }
 
-            // 「家」要真的是全局的，**底也得跟着换**。
+            // 以前这儿有个「把底也换成家的暖纸」的按钮——她没找到，
+            // 所以看到的一直是「claude.ai 的字 + 自己那张照片」，
+            // 于是两次说「家的全局主题还是不对」。
             //
-            // 配色那几档本来只管字色和面板色，底还是各归各的——
-            // 所以选了「家」屏幕上却还是原来那张壁纸，看着就不是一套东西。
-            // 这个按钮把底也换成那张暖纸，一按到位。
-            //
-            // 做成按钮而不是自动跟着切，是因为**不该替她把壁纸盖掉**：
-            // 她可能就想要「家」的字配自己那张照片。
-            if app.settings.preset == .home {
+            // 现在不用按了：**「家」和「渐变」直接接管底**（见 ThemePreset.ownsBackground）。
+            // 想用自己那张照片就选「原来的」。
+            if app.settings.preset.ownsBackground {
                 SettingsDivider()
-                Button {
-                    app.settings.wallpaperMode = "solid"
-                    app.settings.solidHex = scheme == .dark ? "1C1B19" : "FAF9F5"
-                } label: {
-                    SettingsRowLabel(title: "把底也换成「家」的暖纸",
-                                     value: app.settings.wallpaperMode == "solid"
-                                        ? "已经是了" : nil,
-                                     tint: app.settings.accentColor)
-                }
-                .buttonStyle(.plain)
+                SettingsNote(app.settings.preset == .home
+                    ? "这一档是整套的：底是 claude.ai 那张暖纸，你自己那张壁纸先让位（换回「原来的」就回来了）。气泡也跟着换——你说的话是一块浅面板，他说的话不套气泡，直接印在纸上，跟 claude.ai 一样。"
+                    : "这一档整屏是一层渐变。两头的颜色在下面「壁纸」那张卡里调，气泡还是玻璃。",
+                    title: "这一档会动哪些地方")
             }
 
             SettingsNote("「家」那套里橘是限量的——一屏最多一处，留给发送键或者唯一的主按钮。列表、图标、标题一律不用橘，要强调靠字重和面板色。")
@@ -436,14 +428,14 @@ struct AppearanceView: View {
     private func hexRow(title: String, text: Binding<String>) -> some View {
         HStack(spacing: 8) {
             Text(title)
-                .font(.system(size: 15))
+                .font(.app(15))
                 .foregroundStyle(Theme.textMain(scheme))
             Spacer(minLength: 8)
             TextField("默认", text: text)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .multilineTextAlignment(.trailing)
-                .font(.system(size: 14, design: .monospaced))
+                .font(.app(14, design: .monospaced))
                 .textFieldStyle(.plain)
                 .frame(maxWidth: 110)
             // 字色这两行同理，一直摆一个方块：填对了显示颜色，
@@ -464,10 +456,14 @@ struct AppearanceView: View {
 
     private var chatCard: some View {
         SettingsCard(title: "聊天") {
+            // 字号那根**边拖边生效**：她要的就是拖的时候整页的字当场跟着变。
+            // 现在全 App 的字都乘 Theme.fontScale（Font.app），不再只有聊天气泡。
             slider(title: "字号",
                    value: $app.settings.fontSize,
                    range: 13...22, step: 1,
-                   readout: "\(Int(app.settings.fontSize))")
+                   readout: "\(Int(app.settings.fontSize))",
+                   note: "**整个 App 一起变**：设置页、侧边栏、札记、游戏里的字都跟着走，不只是聊天气泡。",
+                   live: true)
             SettingsDivider()
             slider(title: "模糊程度",
                    value: $app.settings.glassOpacity,
@@ -498,7 +494,7 @@ struct AppearanceView: View {
             SettingsDivider()
             Toggle(isOn: $app.settings.haptics) {
                 Text("发送时震动")
-                    .font(.system(size: 15))
+                    .font(.app(15))
                     .foregroundStyle(Theme.textMain(scheme))
             }
             .tint(app.settings.accentColor)
@@ -529,7 +525,7 @@ struct AppearanceView: View {
             Text("这两块是上面两根滑块的样品：左边钉死浅色、右边钉死深色。"
                  + "「压暗」只在深色下生效，所以拉它的时候只有右边那块会沉下去——"
                  + "你要是正用着浅色，屏幕上看不出变化，看这儿就行。")
-                .font(.system(size: 11))
+                .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
         }
         .padding(.horizontal, 16)
@@ -540,7 +536,7 @@ struct AppearanceView: View {
         ZStack {
             sampleGround
             Text(label)
-                .font(.system(size: 12, weight: .medium))
+                .font(.app(12, weight: .medium))
                 .foregroundStyle(dark ? Color.white : Color.black.opacity(0.72))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 15)
@@ -580,11 +576,12 @@ struct AppearanceView: View {
                         step: Double?,
                         readout: String,
                         note: String? = nil,
-                        onDraft: ((Double?) -> Void)? = nil) -> some View {
+                        onDraft: ((Double?) -> Void)? = nil,
+                        live: Bool = false) -> some View {
         SettingsSlider(title: title, value: value, range: range, step: step,
                        readout: readout, note: note,
                        tint: app.settings.accentColor,
-                       scheme: scheme, onDraft: onDraft)
+                       scheme: scheme, onDraft: onDraft, live: live)
     }
 
     // MARK: 预览

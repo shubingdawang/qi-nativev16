@@ -45,7 +45,7 @@ struct PixelStudioView: View {
 
                 if painter == nil {
                     Text("没找到能画图的模型。去「设置 → 供应商」里把带 image 的模型打开，比如 gemini-image 或 gpt-image-2。")
-                        .font(.system(size: 12))
+                        .font(.app(12))
                         .foregroundStyle(.orange)
                         .padding(12)
                         .glassCard(padding: 0)
@@ -60,7 +60,7 @@ struct PixelStudioView: View {
 
                 if !store.items.isEmpty {
                     Text("画过的")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.app(13, weight: .medium))
                         .foregroundStyle(Theme.textMain(scheme))
                         .padding(.top, 4)
 
@@ -146,7 +146,7 @@ struct PixelStudioView: View {
             Text(backdrop == 0
                  ? "深色底 —— 没有黑方块就说明透明是真的"
                  : (backdrop == 1 ? "花色底 —— 看边缘有没有毛边" : "浅色底 —— 看细节够不够"))
-                .font(.system(size: 10))
+                .font(.app(10))
                 .foregroundStyle(Theme.textMuted(scheme))
 
             HStack(spacing: 8) {
@@ -155,7 +155,7 @@ struct PixelStudioView: View {
                     revising = true
                 } label: {
                     Text("改一改")
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                         .background(RoundedRectangle(cornerRadius: 12)
@@ -167,7 +167,7 @@ struct PixelStudioView: View {
                     saveToStickers(art)
                 } label: {
                     Text("存进表情包")
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                         .background(RoundedRectangle(cornerRadius: 12)
@@ -185,12 +185,12 @@ struct PixelStudioView: View {
                         .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
                     HStack(spacing: 8) {
                         Button("算了") { revising = false }
-                            .font(.system(size: 12))
+                            .font(.app(12))
                         Spacer()
                         Button("照这个改") {
                             Task { await run(revise: art) }
                         }
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.app(13, weight: .medium))
                         .disabled(revision.isEmpty || busy)
                     }
                 }
@@ -198,7 +198,7 @@ struct PixelStudioView: View {
 
             if !art.revisions.isEmpty {
                 Text("改过 \(art.revisions.count) 次")
-                    .font(.system(size: 10))
+                    .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -234,7 +234,7 @@ struct PixelStudioView: View {
                                 chosenModel = item.model
                             } label: {
                                 Text(item.model)
-                                    .font(.system(size: 11))
+                                    .font(.app(11))
                                     .foregroundStyle(chosenModel == item.model
                                                      ? Theme.textMain(scheme)
                                                      : Theme.textMuted(scheme))
@@ -250,7 +250,7 @@ struct PixelStudioView: View {
                     }
                 }
                 Text("两家价钱不一样，按需要挑。有参考图的话，擅长照图改的那个更合适。")
-                    .font(.system(size: 10))
+                    .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
 
@@ -271,7 +271,7 @@ struct PixelStudioView: View {
                             self.reference = nil
                         } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 14))
+                                .font(.app(14))
                                 .foregroundStyle(.white, .black.opacity(0.5))
                         }
                         .buttonStyle(.plain)
@@ -281,9 +281,9 @@ struct PixelStudioView: View {
                     PhotosPicker(selection: $picking, matching: .images) {
                         VStack(spacing: 3) {
                             Image(systemName: "photo.badge.plus")
-                                .font(.system(size: 15))
+                                .font(.app(15))
                             Text("参考图")
-                                .font(.system(size: 9))
+                                .font(.app(9))
                         }
                         .foregroundStyle(Theme.textMuted(scheme))
                         .frame(width: 54, height: 54)
@@ -299,7 +299,7 @@ struct PixelStudioView: View {
                     HStack(spacing: 6) {
                         if busy { ProgressView().scaleEffect(0.7) }
                         Text(busy ? "在画…" : "画一张")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.app(14, weight: .medium))
                     }
                     .foregroundStyle(Theme.textMain(scheme))
                     .frame(maxWidth: .infinity)
@@ -313,12 +313,12 @@ struct PixelStudioView: View {
 
             if let notice {
                 Text(notice)
-                    .font(.system(size: 11))
+                    .font(.app(11))
                     .foregroundStyle(.orange)
             }
 
             Text("给参考图的话，可以说「照这张画成像素的」「把图里这只画成开心的」。生成的是透明底，能直接当表情包发。")
-                .font(.system(size: 10))
+                .font(.app(10))
                 .foregroundStyle(Theme.textMuted(scheme))
         }
         .padding(12)

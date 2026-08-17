@@ -23,7 +23,7 @@ struct ShareCardView: View {
                 HStack {
                     Spacer()
                     Text(dateLine)
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .foregroundStyle(Color.black.opacity(0.35))
                 }
                 .padding(.top, 2)
@@ -79,10 +79,10 @@ struct ShareCardView: View {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
                     Text(name)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.app(13, weight: .semibold))
                         .foregroundStyle(Color.black.opacity(0.72))
                     Text(timeText(message.createdAt))
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .foregroundStyle(Color.black.opacity(0.35))
                 }
 
@@ -102,7 +102,7 @@ struct ShareCardView: View {
 
                 if !message.content.isEmpty {
                     Text(message.content)
-                        .font(.system(size: 15))
+                        .font(.app(15))
                         .foregroundStyle(Color.black.opacity(0.82))
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 12)
@@ -127,7 +127,7 @@ struct ShareCardView: View {
                 ZStack {
                     Circle().fill(accent.opacity(0.30))
                     Text(fallback)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.app(15, weight: .medium))
                         .foregroundStyle(Color.black.opacity(0.6))
                 }
             }

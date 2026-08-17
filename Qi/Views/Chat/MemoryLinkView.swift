@@ -28,13 +28,13 @@ struct MemoryLinkView: View {
 
                         VStack(alignment: .leading, spacing: 7) {
                             Text("当前窗口")
-                                .font(.system(size: 11))
+                                .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                             Text(current?.title ?? "")
-                                .font(.system(size: 16, weight: .medium))
+                                .font(.app(16, weight: .medium))
                                 .foregroundStyle(Theme.textMain(scheme))
                             Text(summary)
-                                .font(.system(size: 12))
+                                .font(.app(12))
                                 .foregroundStyle(Theme.textSoft(scheme))
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -51,19 +51,19 @@ struct MemoryLinkView: View {
                                 }
                             )) {
                                 Text("允许动小屋的记忆")
-                                    .font(.system(size: 14, weight: .medium))
+                                    .font(.app(14, weight: .medium))
                                     .foregroundStyle(Theme.textMain(scheme))
                             }
 
                             Text("小屋的记忆库是全公用的。他每聊三五轮会自动 checkpoint 记一笔进度，下次醒来又会一并读回来——那些内容不分窗口。所以真想让这个窗口独门独户，得把这个也关掉：关了之后他在这儿不存也不查，只靠眼前这段对话。")
-                                .font(.system(size: 11))
+                                .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
                         .glassCard()
 
                         if others.isEmpty {
                             Text("还没有别的窗口可以并")
-                                .font(.system(size: 13))
+                                .font(.app(13))
                                 .foregroundStyle(Theme.textMuted(scheme))
                                 .padding(.top, 30)
                                 .frame(maxWidth: .infinity)
@@ -83,7 +83,7 @@ struct MemoryLinkView: View {
                             } label: {
                                 HStack(spacing: 10) {
                                     Image(systemName: linked ? "link" : "link.badge.plus")
-                                        .font(.system(size: 15))
+                                        .font(.app(15))
                                         .foregroundStyle(linked
                                                          ? app.settings.accentColor
                                                          : Theme.textMuted(scheme))
@@ -91,18 +91,18 @@ struct MemoryLinkView: View {
 
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(conv.title)
-                                            .font(.system(size: 14, weight: linked ? .semibold : .regular))
+                                            .font(.app(14, weight: linked ? .semibold : .regular))
                                             .foregroundStyle(Theme.textMain(scheme))
                                             .lineLimit(1)
                                         Text(conv.preview)
-                                            .font(.system(size: 11))
+                                            .font(.app(11))
                                             .foregroundStyle(Theme.textMuted(scheme))
                                             .lineLimit(1)
                                     }
                                     Spacer(minLength: 0)
 
                                     Text(linked ? "已并" : "并上")
-                                        .font(.system(size: 11, weight: .medium))
+                                        .font(.app(11, weight: .medium))
                                         .padding(.horizontal, 10)
                                         .padding(.vertical, 5)
                                         .background(
@@ -120,7 +120,7 @@ struct MemoryLinkView: View {
                         }
 
                         Text("并上之后，他在这几个窗口里都记得同一批事；拆开就各自只记得自己那份。这样不想混在一起的话题可以彻底分开。")
-                            .font(.system(size: 11))
+                            .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme))
                             .padding(.horizontal, 4)
                             .padding(.top, 6)

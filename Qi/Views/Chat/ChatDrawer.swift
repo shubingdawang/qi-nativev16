@@ -83,7 +83,7 @@ struct ChatDrawer: View {
 
             HStack {
                 Text(space == .chat ? "絮语" : "工坊")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.app(17, weight: .semibold))
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer()
                 // 只剩「新对话」了。群聊不再是能新建的东西——
@@ -94,7 +94,7 @@ struct ChatDrawer: View {
                     close()
                 } label: {
                     Image(systemName: Icon.compose)
-                        .font(.system(size: 16))
+                        .font(.app(16))
                         .foregroundStyle(app.settings.accentColor)
                 }
                 .buttonStyle(.plain)
@@ -102,7 +102,7 @@ struct ChatDrawer: View {
                     close()
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.app(14, weight: .medium))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
                 .buttonStyle(.plain)
@@ -115,17 +115,17 @@ struct ChatDrawer: View {
 
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 12))
+                    .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
                 TextField("搜索对话", text: $search)
-                    .font(.system(size: 14))
+                    .font(.app(14))
                     .textFieldStyle(.plain)
                 if !search.isEmpty {
                     Button {
                         search = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                     .buttonStyle(.plain)
@@ -174,13 +174,13 @@ struct ChatDrawer: View {
                         let n = app.memoryPeers(of: id).count
                         if n > 0 {
                             Text("\(n)")
-                                .font(.system(size: 11))
+                                .font(.app(11))
                                 .padding(.horizontal, 7).padding(.vertical, 2)
                                 .background(Capsule().fill(app.settings.accentColor.opacity(0.25)))
                         }
                     }
                 }
-                .font(.system(size: 14))
+                .font(.app(14))
                 .foregroundStyle(Theme.textSoft(scheme))
                 .padding(.horizontal, 18)
                 .padding(.vertical, 14)
@@ -196,7 +196,7 @@ struct ChatDrawer: View {
                     Text("聊天记录")
                     Spacer()
                 }
-                .font(.system(size: 14))
+                .font(.app(14))
                 .foregroundStyle(Theme.textSoft(scheme))
                 .padding(.horizontal, 18)
                 .padding(.vertical, 14)
@@ -212,7 +212,7 @@ struct ChatDrawer: View {
                     Text("这个对话的设定")
                     Spacer()
                 }
-                .font(.system(size: 14))
+                .font(.app(14))
                 .foregroundStyle(Theme.textSoft(scheme))
                 .padding(.horizontal, 18)
                 .padding(.vertical, 14)
@@ -236,7 +236,7 @@ struct ChatDrawer: View {
 
     private func sectionTitle(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 11, weight: .medium))
+            .font(.app(11, weight: .medium))
             .foregroundStyle(Theme.textMuted(scheme))
             .padding(.leading, 6)
             .padding(.top, 2)
@@ -251,14 +251,14 @@ struct ChatDrawer: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "person.2.fill")
-                    .font(.system(size: 14))
+                    .font(.app(14))
                     .foregroundStyle(app.settings.accentColor)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("群聊")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.app(14, weight: .semibold))
                         .foregroundStyle(Theme.textMain(scheme))
                     Text(group?.messages.isEmpty == false ? (group?.preview ?? "") : "协作者共同空间")
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .lineLimit(1)
                 }
@@ -308,7 +308,7 @@ struct ChatDrawer: View {
                 .fill(state.busy ? app.settings.accentColor : Color.green.opacity(0.85))
                 .frame(width: 5, height: 5)
             Text(state.text)
-                .font(.system(size: 10))
+                .font(.app(10))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .lineLimit(1)
         }
@@ -325,7 +325,7 @@ struct ChatDrawer: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(conv.title)
-                            .font(.system(size: 14, weight: isActive ? .semibold : .regular))
+                            .font(.app(14, weight: isActive ? .semibold : .regular))
                             .foregroundStyle(Theme.textMain(scheme))
                             .lineLimit(1)
                         // 他在不在、在干嘛，就挂在标题后面。
@@ -335,7 +335,7 @@ struct ChatDrawer: View {
                         }
                     }
                     Text(conv.preview)
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .lineLimit(1)
                 }

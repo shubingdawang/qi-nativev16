@@ -33,11 +33,11 @@ struct StickerPanel: View {
             HStack(spacing: 8) {
                 HStack(spacing: 5) {
                     Image(systemName: Icon.search)
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                     TextField("按名字或情绪找", text: $keyword)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 13))
+                        .font(.app(13))
                 }
                 .padding(.horizontal, 11)
                 .padding(.vertical, 8)
@@ -56,7 +56,7 @@ struct StickerPanel: View {
                     }
                 } label: {
                     Image(systemName: Icon.add)
-                        .font(.system(size: 16))
+                        .font(.app(16))
                         .foregroundStyle(app.settings.accentColor)
                         .frame(width: 34, height: 34)
                 }
@@ -68,9 +68,9 @@ struct StickerPanel: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "exclamationmark.circle")
-                            .font(.system(size: 11))
+                            .font(.app(11))
                         Text("有 \(drafts.count) 张还没写描述，写完才能发")
-                            .font(.system(size: 11))
+                            .font(.app(11))
                     }
                     .foregroundStyle(.orange)
                     .frame(maxWidth: .infinity)
@@ -83,10 +83,10 @@ struct StickerPanel: View {
             if list.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: Icon.sticker)
-                        .font(.system(size: 26, weight: .light))
+                        .font(.app(26, weight: .light))
                         .foregroundStyle(app.settings.accentColor.opacity(0.5))
                     Text(keyword.isEmpty ? "还没有表情" : "没找到")
-                        .font(.system(size: 12))
+                        .font(.app(12))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
                 .frame(maxWidth: .infinity)
@@ -184,7 +184,7 @@ struct StickerEditorView: View {
 
                         VStack(alignment: .leading, spacing: 6) {
                             Text("画面描述")
-                                .font(.system(size: 13, weight: .medium))
+                                .font(.app(13, weight: .medium))
                                 .foregroundStyle(Theme.textMain(scheme))
                             TextField("一个角色躺在蓝色被窝里刷牙，身体轻轻晃动。",
                                       text: $sticker.description, axis: .vertical)
@@ -192,7 +192,7 @@ struct StickerEditorView: View {
                                 .padding(10)
                                 .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
                             Text("这是他理解这张表情的全部依据。写画面里有什么、在做什么动作，不用写好不好看。没有描述的表情，对他来说就是一张看不懂的图。")
-                                .font(.system(size: 11))
+                                .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
 
@@ -202,7 +202,7 @@ struct StickerEditorView: View {
 
                         VStack(alignment: .leading, spacing: 6) {
                             Text("归谁")
-                                .font(.system(size: 13, weight: .medium))
+                                .font(.app(13, weight: .medium))
                                 .foregroundStyle(Theme.textMain(scheme))
                             Picker("", selection: $sticker.owner) {
                                 Text(app.settings.userName.isEmpty ? "我的" : app.settings.userName + "的")
@@ -212,7 +212,7 @@ struct StickerEditorView: View {
                             }
                             .pickerStyle(.segmented)
                             Text("放进他的库，他才能在聊天里主动发。你只能发自己库里的。")
-                                .font(.system(size: 11))
+                                .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
                     }
@@ -257,14 +257,14 @@ struct StickerEditorView: View {
                                 @ViewBuilder content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.system(size: 13, weight: .medium))
+                .font(.app(13, weight: .medium))
                 .foregroundStyle(Theme.textMain(scheme))
             content()
                 .textFieldStyle(.plain)
                 .padding(10)
                 .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
             Text(hint)
-                .font(.system(size: 11))
+                .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
         }
     }

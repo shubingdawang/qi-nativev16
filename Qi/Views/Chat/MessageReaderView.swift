@@ -49,17 +49,17 @@ struct MessageReaderView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         HStack(spacing: 8) {
                             Text(senderName)
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.app(13, weight: .semibold))
                                 .foregroundStyle(app.settings.accentColor)
                             Text(stamp)
-                                .font(.system(size: 11))
+                                .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                             Spacer()
                         }
 
                         if !message.actionText.isEmpty {
                             Text(message.actionText)
-                                .font(.system(size: 14))
+                                .font(.app(14))
                                 .italic()
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
@@ -95,7 +95,7 @@ struct MessageReaderView: View {
                         }
                     } label: {
                         Text(copied ? "已拷贝" : "复制全文")
-                            .font(.system(size: 14))
+                            .font(.app(14))
                             .foregroundStyle(copied ? Theme.textMuted(scheme) : app.settings.accentColor)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 15)
@@ -111,7 +111,7 @@ struct MessageReaderView: View {
                         copied = false
                     } label: {
                         Text(picking ? "退出选择" : "选一段复制")
-                            .font(.system(size: 14))
+                            .font(.app(14))
                             .foregroundStyle(app.settings.accentColor)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 15)
@@ -126,7 +126,7 @@ struct MessageReaderView: View {
                 dismiss()
             } label: {
                 Image(systemName: Icon.close)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.app(14, weight: .medium))
                     .foregroundStyle(Theme.textSoft(scheme))
                     .frame(width: 34, height: 34)
                     .glassBackground(radius: 17, strength: app.settings.glassOpacity)
@@ -170,7 +170,7 @@ struct CharacterPicker: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(hint)
-                .font(.system(size: 11))
+                .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
 
             // 用 flow 布局把字铺开，每个字一个可点的小格
@@ -198,7 +198,7 @@ struct CharacterPicker: View {
                     onPick(String(chars[r]))
                 } label: {
                     Text("复制选中的 \(r.count) 个字")
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(Theme.textMain(scheme))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)

@@ -39,14 +39,14 @@ struct NowPlayingView: View {
                     cover(side: 260)
                     Spacer(minLength: 0)
                     Text("这首还没有歌词")
-                        .font(.system(size: 12))
+                        .font(.app(12))
                         .foregroundStyle(Theme.textMuted(scheme))
                     Button {
                         draftLyrics = player.current?.lyrics ?? ""
                         editingLyrics = true
                     } label: {
                         Text("粘一段进来")
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(app.settings.accentColor)
                     }
                     .buttonStyle(.plain)
@@ -75,7 +75,7 @@ struct NowPlayingView: View {
         HStack {
             Button { dismiss() } label: {
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.app(15, weight: .medium))
                     .foregroundStyle(Theme.textSoft(scheme))
                     .frame(width: 40, height: 40)
                     .contentShape(Rectangle())
@@ -88,7 +88,7 @@ struct NowPlayingView: View {
                     editingLyrics = true
                 } label: {
                     Image(systemName: "text.quote")
-                        .font(.system(size: 14))
+                        .font(.app(14))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .frame(width: 40, height: 40)
                         .contentShape(Rectangle())
@@ -121,7 +121,7 @@ struct NowPlayingView: View {
                     Color.clear.frame(height: 90)
                     ForEach(player.lines) { line in
                         Text(line.text)
-                            .font(.system(size: line.index == player.currentLine ? 17 : 15,
+                            .font(.app(line.index == player.currentLine ? 17 : 15,
                                           weight: line.index == player.currentLine
                                             ? .semibold : .regular))
                             .foregroundStyle(line.index == player.currentLine
@@ -164,11 +164,11 @@ struct NowPlayingView: View {
             if let t = player.current {
                 VStack(spacing: 2) {
                     Text(t.title)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.app(16, weight: .semibold))
                         .foregroundStyle(Theme.textMain(scheme))
                         .lineLimit(1)
                     Text(t.subtitle.isEmpty ? "一起听着" : t.subtitle)
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .lineLimit(1)
                 }
@@ -197,7 +197,7 @@ struct NowPlayingView: View {
                     player.seek(to: max(0, player.progress - 15))
                 } label: {
                     Image(systemName: "gobackward.15")
-                        .font(.system(size: 19))
+                        .font(.app(19))
                         .foregroundStyle(Theme.textSoft(scheme))
                 }
                 .buttonStyle(.plain)
@@ -206,7 +206,7 @@ struct NowPlayingView: View {
                     player.playing ? player.pause() : player.resume()
                 } label: {
                     Image(systemName: player.playing ? "pause.fill" : "play.fill")
-                        .font(.system(size: 22))
+                        .font(.app(22))
                         .foregroundStyle(.white)
                         .frame(width: 58, height: 58)
                         .background(Circle().fill(app.settings.primaryColor.opacity(0.9)))
@@ -217,7 +217,7 @@ struct NowPlayingView: View {
                     player.seek(to: min(player.duration, player.progress + 15))
                 } label: {
                     Image(systemName: "goforward.15")
-                        .font(.system(size: 19))
+                        .font(.app(19))
                         .foregroundStyle(Theme.textSoft(scheme))
                 }
                 .buttonStyle(.plain)
@@ -225,7 +225,7 @@ struct NowPlayingView: View {
 
             if player.current?.isPreview == true {
                 Text("这是三十秒的试听。整首得自己把文件导进来——网易云、QQ 音乐下载的歌存在它们自己的沙盒里，别的 App 读不到，这是 iOS 的硬规矩。")
-                    .font(.system(size: 10))
+                    .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 24)
@@ -244,11 +244,11 @@ struct NowPlayingView: View {
                 WallpaperBackground()
                 VStack(alignment: .leading, spacing: 10) {
                     Text("粘 LRC 或者纯文字都行。带 `[00:12.34]` 时间戳的会跟着歌走，没有时间戳的就一句句排着。")
-                        .font(.system(size: 11))
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                     TextEditor(text: $draftLyrics)
                         .scrollContentBackground(.hidden)
-                        .font(.system(size: 13, design: .monospaced))
+                        .font(.app(13, design: .monospaced))
                         .padding(10)
                         .background(RoundedRectangle(cornerRadius: 12)
                             .fill(Theme.softFillDeep))

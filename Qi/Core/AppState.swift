@@ -16,14 +16,23 @@ final class AppState: ObservableObject {
     @Published var settings = AppSettings() {
         didSet {
             scheduleSave(.settings)
-            Theme.customTextHex = settings.textHex
-            Theme.customTextHexDark = settings.textHexDark
-            Theme.preset = settings.preset
-            Theme.glassStyle = settings.glassStyle
-            Theme.glassDim = settings.glassDim
-            // 身体开着的时候，渴／想她／累／压着这四维读身体，别两套各算各的
-            DesireEngine.mirrorsBody = settings.bodyEnabled
+            syncTheme()
         }
+    }
+
+    /// 把设置里那几样推给 `Theme`（它那些静态方法到处在用，不方便层层传设置）。
+    /// **init 里也要手动叫一次**——在自己的 init 里赋值不触发 didSet。
+    private func syncTheme() {
+        Theme.customTextHex = settings.textHex
+        Theme.customTextHexDark = settings.textHexDark
+        Theme.preset = settings.preset
+        Theme.glassStyle = settings.glassStyle
+        Theme.glassDim = settings.glassDim
+        // 身体开着的时候，渴／想她／累／压着这四维读身体，别两套各算各的
+        DesireEngine.mirrorsBody = settings.bodyEnabled
+        // 字号：16 是基准。全 App 的字都乘这个倍率（Font.app），
+        // 不再是只有聊天气泡和输入框跟着变
+        Theme.fontScale = max(0.7, min(1.6, settings.fontSize / 16))
     }
     @Published var mcpServers: [MCPServer] = [] {
         didSet { scheduleSave(.mcp) }
@@ -56,8 +65,34 @@ final class AppState: ObservableObject {
         mcpServers = Storage.load([MCPServer].self, from: "mcp.json") ?? MCPServer.defaults
         voices = Storage.load([VoiceService].self, from: "voices.json") ?? VoiceService.defaults
         saveEnabled = true
+        migrateLocalFirst()
+        // **启动时得手动同步一次**：Swift 里在自己的 init 里给属性赋值
+        // 是不触发 didSet 的，所以上面那句 `settings = Storage.load(...)`
+        // 并不会把字色、配色、字号倍率推给 Theme——
+        // 不补这一下，得等她进设置随便动一个开关，界面才对。
+        syncTheme()
         // 装好第一次打开时，自动去把工具清单抓下来
         Task { await self.refreshAllToolsIfNeeded() }
+    }
+
+    /// 一次性把默认值扳到「本地优先」。
+    ///
+    /// 她原话：「记忆库这个『用本机这份』和『心跳也在本机算』默认打开，
+    /// 小屋 mcp 默认关闭，不然每次我都要去设置，有点麻烦。」
+    ///
+    /// 光改 `AppSettings` 里那两个默认值不够——她的 settings.json 里
+    /// 已经存着 false 了，存着的值会盖过默认值。所以这里扳一次，
+    /// 扳完记个标记，以后她自己关掉就不会再被扳回来。
+    private func migrateLocalFirst() {
+        let key = "migratedLocalFirst"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        UserDefaults.standard.set(true, forKey: key)
+        settings.localMemory = true
+        settings.localPulse = true
+        // 小屋那台关掉：跟本机记忆库同时开着的话，同一件事他手上有两套工具
+        for i in mcpServers.indices where mcpServers[i].name.contains("小屋") {
+            mcpServers[i].enabled = false
+        }
     }
 
     // MARK: 存盘（合并写入，避免每敲一个字就写一次文件）
