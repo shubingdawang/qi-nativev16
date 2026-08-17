@@ -36,7 +36,7 @@ struct DesireBars: View {
 
             // 此刻最想做的
             HStack(alignment: .top, spacing: 8) {
-                Image(systemName: desire.value(.fatigue) >= DesireEngine.fatigueGate
+                Image(systemName: desire.value(.fatigue) >= DesireConst.fatigueGate
                       ? "moon.zzz" : "arrow.up.right")
                     .font(.system(size: 13))
                     .foregroundStyle(app.settings.accentColor)
@@ -107,7 +107,7 @@ struct DesireBars: View {
 
     private func row(_ d: Drive, score: Double?) -> some View {
         let v = desire.value(d)
-        let gated = d == .fatigue && v >= DesireEngine.fatigueGate
+        let gated = d == .fatigue && v >= DesireConst.fatigueGate
         // 执念加成那一截画得淡一点，一眼能看出「这一截不是它自己涨的」
         let extra = max(0, (score ?? v) - v)
 

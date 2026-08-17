@@ -333,6 +333,13 @@ final class DollStore: ObservableObject {
 /// 这一层是本地模板（`LocalContentProvider`）——**不花钱、不联网、断网也有**。
 /// 他要是想写得更好，就用 `doll_action` 带上 `narration` 自己写一句递进来，
 /// 那就是原文档里那层 `MCPContentProvider`。两条路走同一个入口。
+///
+/// **标 `@MainActor`**：它要读 `DollStore.poses` 那几张表、要调
+/// `DiaryLayout.steadyHash`，那两处都挂在 MainActor 上。
+/// 不标的话就是「在非隔离上下文里调 MainActor 的东西」——v91 第一次构建
+/// 死在这儿。调它的地方（`DollStore.act`、几个 View）本来就都在主线程上，
+/// 标上不损失任何东西。
+@MainActor
 enum DollContent {
 
     static func touchLine(zone: String, state: DollStore.State) -> String {

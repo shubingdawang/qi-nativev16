@@ -162,13 +162,14 @@ enum DesireAction: String, Codable, CaseIterable {
     }
 }
 
-@MainActor
-final class DesireEngine: ObservableObject {
-
-    static let shared = DesireEngine()
-
-    // MARK: 照抄的常数
-
+/// 照抄的那几个常数。
+///
+/// **单独放在这儿、不放进 `DesireEngine` 里**：那个类是 `@MainActor` 的，
+/// 挂在它上面的 `static let` 会跟着变成 MainActor 隔离的，
+/// 于是「默认参数里引用它」这种普通写法就编不过
+/// （`feed(_:gain: = DesireConst.feedGain)` 那一行，v91 第一次构建就是死在这儿）。
+/// 常数本来也不属于任何 actor——它们就是几个数。
+enum DesireConst {
     /// 执念给召唤力的加成系数
     static let fixationBoost = 0.35
     /// 累过这条就不硬找事
@@ -188,6 +189,12 @@ final class DesireEngine: ObservableObject {
         .vent:       [.stress: 0.45, .attachment: 0.85],
         .rest:       [.fatigue: 0.55]
     ]
+}
+
+@MainActor
+final class DesireEngine: ObservableObject {
+
+    static let shared = DesireEngine()
 
     // MARK: 存着的东西
 
@@ -264,7 +271,7 @@ final class DesireEngine: ObservableObject {
     }
 
     /// 执念反哺：念头池里某个执念长到头了，把它压着的那一维推上去
-    func feed(_ d: Drive, gain: Double = DesireEngine.feedGain) {
+    func feed(_ d: Drive, gain: Double = DesireConst.feedGain) {
         settle()
         state.values[d.rawValue] = min(1.0, value(d) + gain)
     }
@@ -272,7 +279,7 @@ final class DesireEngine: ObservableObject {
     /// 做完了，对应维度乘性回落
     func satisfy(_ action: DesireAction) {
         settle()
-        guard let table = DesireEngine.satisfyTable[action] else { return }
+        guard let table = DesireConst.satisfyTable[action] else { return }
         var v = state.values
         for (d, factor) in table {
             v[d.rawValue] = max(0.02, (v[d.rawValue] ?? 0.25) * factor)
@@ -307,7 +314,7 @@ final class DesireEngine: ObservableObject {
             let boost = pool.obsessions
                 .filter { Desire.driveKey(from: $0.feeds) == d }
                 .reduce(0.0) { $0 + $1.strength }
-            out[d] = value(d) + DesireEngine.fixationBoost * boost
+            out[d] = value(d) + DesireConst.fixationBoost * boost
         }
         return out
     }
@@ -325,7 +332,7 @@ final class DesireEngine: ObservableObject {
     func pickIntent() -> Intent {
         settle()
         // 疲惫闸：过线就不硬找事
-        if value(.fatigue) >= DesireEngine.fatigueGate {
+        if value(.fatigue) >= DesireConst.fatigueGate {
             return Intent(action: .rest, drive: .fatigue,
                           reason: DesireAction.rest.reason,
                           score: value(.fatigue), queryHint: nil)
@@ -356,7 +363,7 @@ final class DesireEngine: ObservableObject {
             let bar = String(repeating: "▮", count: Int((v * 10).rounded()))
                 + String(repeating: "▯", count: 10 - Int((v * 10).rounded()))
             var line = "· \(d.label) \(bar) \(String(format: "%.2f", v))"
-            if d == .fatigue, v >= DesireEngine.fatigueGate { line += "（过闸了，该歇）" }
+            if d == .fatigue, v >= DesireConst.fatigueGate { line += "（过闸了，该歇）" }
             if let sc = s[d], sc > v + 0.01 {
                 line += "（算上执念 \(String(format: "%.2f", sc))）"
             }
