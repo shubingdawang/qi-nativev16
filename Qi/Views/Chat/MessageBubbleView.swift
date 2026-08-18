@@ -20,15 +20,15 @@ struct MessageBubbleView: View {
     var onOpenMenu: () -> Void = {}
     /// 重来一次（报错卡住的时候全靠它）
     var onRetry: () -> Void = {}
-
-    /// 翻到第几版。0 = 现在这版，1 起是改之前的旧版。
-    @State private var editPage = 0
     var onCloseMenu: () -> Void = {}
     /// 这条上面要不要挂头像、名字和时间。
     /// 同一个人连着说的几句只在第一句上挂，不然一屏全是头像。
     var showsHeader: Bool = true
     /// 长按头像，把这个人 @ 进输入框。群聊里才接。
     var onMention: (String) -> Void = { _ in }
+    /// 翻到第几版。0 = 现在这版，1 起是改之前的旧版。
+    /// **放在存储属性后面**——夹在中间会把外面那个按顺序传参的调用搞乱。
+    @State private var editPage = 0
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
     @State private var showReasoning = false

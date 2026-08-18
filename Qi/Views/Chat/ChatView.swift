@@ -1110,9 +1110,9 @@ struct MessageListView: View {
                             onOpenReader: { onOpenReader(message) },
                             onOpenJourney: { j, at in onOpenJourney(j, at) },
                             onEdit: { onEdit(message) },
-                            onRetry: { onRetry(message) },
                             menuOpenID: menuOpenID,
                             onOpenMenu: { onOpenMenu(message.id) },
+                            onRetry: { onRetry(message) },
                             onCloseMenu: onCloseMenu,
                             showsHeader: showsHeader(at: index),
                             onMention: { onMention($0) }
