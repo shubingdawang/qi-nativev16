@@ -125,6 +125,7 @@ struct ChatView: View {
                             editText = msg.content
                             editingMessage = msg
                         },
+                        onRetry: { msg in app.retry(msg.id, in: conv.id) },
                         onMention: { name in
                             // insertMention 是原来给候选条用的，直接复用：
                             // 光标前有 @ 就替换掉，没有就补一个
@@ -1080,6 +1081,7 @@ struct MessageListView: View {
     var onOpenMenu: (UUID) -> Void = { _ in }
     var onCloseMenu: () -> Void = {}
     var onEdit: (ChatMessage) -> Void = { _ in }
+    var onRetry: (ChatMessage) -> Void = { _ in }
     /// 长按头像 @ 这个人
     var onMention: (String) -> Void = { _ in }
     /// 这个窗口是不是正在等他回话
@@ -1108,6 +1110,7 @@ struct MessageListView: View {
                             onOpenReader: { onOpenReader(message) },
                             onOpenJourney: { j, at in onOpenJourney(j, at) },
                             onEdit: { onEdit(message) },
+                            onRetry: { onRetry(message) },
                             menuOpenID: menuOpenID,
                             onOpenMenu: { onOpenMenu(message.id) },
                             onCloseMenu: onCloseMenu,

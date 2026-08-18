@@ -675,6 +675,26 @@ final class AppState: ObservableObject {
         runTurn(conversationID)
     }
 
+    /// 从某一条重来一次。
+    ///
+    /// 以前只有「重新生成最后一条」，而且**报错那条根本点不到**——
+    /// 网断一次这一窗就死在那儿了。现在长按任意一条都能重来：
+    ///
+    ///   · 点在他说的话上（包括那块红色报错）：把这条**和它后面的**都删掉，重跑
+    ///   · 点在她自己说的话上：只把这条后面的回复删掉，她那句留着，重跑
+    func retry(_ messageID: UUID, in conversationID: UUID) {
+        guard let i = index(of: conversationID),
+              let at = conversations[i].messages.firstIndex(where: { $0.id == messageID })
+        else { return }
+        // 正在跑就先停下来，不然两轮会打架
+        cancelStream(for: conversationID)
+        let isUserMsg = conversations[i].messages[at].role == .user
+        let cut = isUserMsg ? at + 1 : at
+        guard cut <= conversations[i].messages.count else { return }
+        conversations[i].messages.removeSubrange(cut...)
+        runTurn(conversationID)
+    }
+
     func cancelStream(for id: UUID) {
         streamTasks[id]?.cancel()
         streamTasks[id] = nil
@@ -2465,6 +2485,16 @@ final class AppState: ObservableObject {
         guard let ci = index(of: conversationID),
               let mi = conversations[ci].messages.firstIndex(where: { $0.id == messageID })
         else { return }
+        // 改之前把旧的那版留下来。她说的：「编辑后可以 ‹› 查看历史消息」——
+        // 改错了、或者想看看原来是怎么写的，翻得回去。
+        let before = conversations[ci].messages[mi].content
+        if before != text, !before.isEmpty {
+            conversations[ci].messages[mi].edits.append(before)
+            // 留最近十版够了，再多就是负担
+            if conversations[ci].messages[mi].edits.count > 10 {
+                conversations[ci].messages[mi].edits.removeFirst()
+            }
+        }
         conversations[ci].messages[mi].content = text
         conversations[ci].updatedAt = Date()
     }
@@ -3155,10 +3185,15 @@ final class AppState: ObservableObject {
             await tagStickers(Array(todo)) { d, _ in done = d }
             return ("看完写好了 \(done) 张。想看写成什么样就用 list_my_stickers。", false)
 
+        case "list_recent_images":
+            // 存错一张比不存更糟。先看清楚有哪些，再决定 index 填几。
+            let want = max(1, min(20, Int((args["limit"] as? NSNumber)?.intValue ?? 8)))
+            return (imageMenu(want), false)
+
         case "save_sticker":
             let index = Int((args["index"] as? NSNumber)?.intValue ?? 1)
             guard let image = recentUserImage(offset: index) else {
-                return ("没找到她最近发的第 \(index) 张图。", true)
+                return ("没找到第 \(index) 张图。\n" + imageMenu(), true)
             }
             guard let data = image.pngData(),
                   var made = store.add(data: data, ext: "png", owner: "assistant")
@@ -3179,7 +3214,7 @@ final class AppState: ObservableObject {
             guard !folder.isEmpty else { return ("要给个文件夹名。", true) }
             let index = Int((args["index"] as? NSNumber)?.intValue ?? 1)
             guard let image = recentUserImage(offset: index) else {
-                return ("没找到她最近发的第 \(index) 张图。", true)
+                return ("没找到第 \(index) 张图。\n" + imageMenu(), true)
             }
             MediaStore.shared.add(image, kind: "photo", folder: folder)
             if let last = MediaStore.shared.items.last {
@@ -3228,16 +3263,70 @@ final class AppState: ObservableObject {
     }
 
     /// 往回找她最近发的第 n 张图
-    private func recentUserImage(offset: Int) -> UIImage? {
-        guard let cid = activeToolConversationID, let i = index(of: cid) else { return nil }
-        var names: [String] = []
+    /// 她最近发过的图，**从新到旧**排好队，每张带一个号。
+    ///
+    /// 号就是工具里那个 `index`：#1 是最新的一张。
+    /// 一条消息里带好几张的话，**最右边（最后一张）算更新**，
+    /// 所以那条里从左到右是 #3 #2 #1 这样倒着数。
+    ///
+    /// ⚠️ 以前这儿只看 `imageNames`，**表情消息一张都数不到**——
+    /// 她从表情面板发的图走的是 `stickerID` 那条路。
+    /// 「没找到她最近发的第 1 张图」就是这么来的：图明明在屏幕上，
+    /// 他手里那份清单却是空的。现在两种都认。
+    struct RecentImage {
+        var index: Int
+        /// 相册里的文件名，或者表情的文件名
+        var name: String
+        var isSticker: Bool
+        /// 她发这张图的时候说了什么（没说就空着）
+        var caption: String
+    }
+
+    func recentUserImages(limit: Int = 12) -> [RecentImage] {
+        guard let cid = activeToolConversationID ?? activeID(for: .chat),
+              let i = index(of: cid) else { return [] }
+        var out: [RecentImage] = []
         for m in conversations[i].messages.reversed() where m.role == .user {
-            names.append(contentsOf: m.imageNames.reversed())
-            if names.count >= offset { break }
+            if let sid = m.stickerID, let st = StickerStore.shared.sticker(id: sid) {
+                out.append(.init(index: out.count + 1, name: st.fileName,
+                                 isSticker: true,
+                                 caption: st.name.isEmpty ? m.content : st.name))
+            }
+            for n in m.imageNames.reversed() {
+                out.append(.init(index: out.count + 1, name: n,
+                                 isSticker: false, caption: m.content))
+            }
+            if out.count >= limit { break }
         }
+        return Array(out.prefix(limit))
+    }
+
+    private func recentUserImage(offset: Int) -> UIImage? {
+        let all = recentUserImages()
         let idx = max(1, offset) - 1
-        guard idx < names.count else { return nil }
-        return ImageStore.load(names[idx])
+        guard idx < all.count else { return nil }
+        let ref = all[idx]
+        if ref.isSticker {
+            guard let st = StickerStore.shared.stickers.first(where: { $0.fileName == ref.name })
+            else { return nil }
+            return UIImage(contentsOfFile: StickerStore.shared.url(of: st).path)
+        }
+        return ImageStore.load(ref.name)
+    }
+
+    /// 找不到那张图的时候，把「现在能选的有哪些」摆出来，
+    /// 别只回一句「没找到」让他瞎猜。
+    private func imageMenu(_ limit: Int = 12) -> String {
+        let all = recentUserImages(limit: limit)
+        guard !all.isEmpty else {
+            return "她最近一张图都没发过（表情也没有）。"
+        }
+        var s = "现在能选的有 \(all.count) 张（#1 是最新的）："
+        for r in all {
+            s += "\n· #\(r.index) \(r.isSticker ? "[表情]" : "[图片]")"
+            if !r.caption.isEmpty { s += " 她当时说：\(r.caption.prefix(20))" }
+        }
+        return s
     }
 
     /// 从服务器重新抓一遍工具清单
@@ -3415,6 +3504,22 @@ final class AppState: ObservableObject {
         if settings.contextLimit > 0, history.count > settings.contextLimit {
             history = Array(history.suffix(settings.contextLimit))
         }
+        // 每张图的号：从最后一条往回数，#1 是最新那张。
+        // 一条里有好几张的话，最后一张更"新"，所以那条里从左到右是倒着数的。
+        var imageTags: [UUID: [Int]] = [:]
+        var counter = 0
+        for m in history.reversed() where m.role == .user {
+            if m.stickerID != nil {
+                counter += 1
+                imageTags[m.id] = [counter]
+            }
+            if !m.imageNames.isEmpty {
+                var ns: [Int] = []
+                for _ in m.imageNames { counter += 1; ns.append(counter) }
+                imageTags[m.id] = ns.reversed()
+            }
+        }
+
         // 上一条是什么时候说的，用来算间隔
         var previousAt: Date?
         let lastID = history.last(where: { !$0.isEmptyContent })?.id
@@ -3440,14 +3545,27 @@ final class AppState: ObservableObject {
             if let sid = m.stickerID {
                 guard let s = StickerStore.shared.sticker(id: sid) else { continue }
                 let thumb = StickerStore.shared.thumbDataURL(of: s)
+                var st = s.briefForModel
+                if let ns = imageTags[m.id], let n = ns.first {
+                    st += "（这张是 #\(n)）"
+                }
                 result.append(.init(role: m.role.rawValue,
-                                    text: s.briefForModel,
+                                    text: st,
                                     imageDataURLs: thumb.map { [$0] } ?? []))
                 continue
             }
 
             let urls = m.imageNames.compactMap { ImageStore.base64DataURL($0) }
             var text = m.content
+            // 给图编号。**没有号他就是在瞎猜**——她一次发三张，
+            // 他调 save_sticker 的时候只能填个 index，凭什么知道是第几张？
+            // 号跟 recentUserImages 里那套完全一致：#1 永远是最新的一张。
+            if let ns = imageTags[m.id], !ns.isEmpty {
+                let tag = ns.map { "#\($0)" }.joined(separator: " ")
+                text += (text.isEmpty ? "" : "\n")
+                    + "（这条带了 \(ns.count) 张图，从左到右是 \(tag)"
+                    + "——要存哪张、要发哪张，就用这个号）"
+            }
             if !m.quotedText.isEmpty {
                 text = "（回应你那句「\(m.quotedText)」）\n" + text
             }

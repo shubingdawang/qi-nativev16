@@ -49,7 +49,9 @@ struct SettingsView: View {
             .onChange(of: aiAvatarItem) { _, item in loadAvatar(item, into: \.aiAvatarName) }
             .fileImporter(
                 isPresented: $showingImporter,
-                allowedContentTypes: [.json],
+                // 只写 .json 的话，从微信/QQ 存下来的那份会是灰的选不中——
+                // 那些文件系统认不出类型，只当成一坨 data。所以两种都收。
+                allowedContentTypes: [.json, .data],
                 allowsMultipleSelection: false
             ) { result in
                 importBackup(result)

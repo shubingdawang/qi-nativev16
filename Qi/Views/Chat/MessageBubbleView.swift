@@ -18,6 +18,11 @@ struct MessageBubbleView: View {
     /// 同一时刻只有一条开着菜单，所以这个状态放在外面统一管
     var menuOpenID: UUID? = nil
     var onOpenMenu: () -> Void = {}
+    /// 重来一次（报错卡住的时候全靠它）
+    var onRetry: () -> Void = {}
+
+    /// 翻到第几版。0 = 现在这版，1 起是改之前的旧版。
+    @State private var editPage = 0
     var onCloseMenu: () -> Void = {}
     /// 这条上面要不要挂头像、名字和时间。
     /// 同一个人连着说的几句只在第一句上挂，不然一屏全是头像。
@@ -264,11 +269,26 @@ struct MessageBubbleView: View {
                 }
 
                 if let error = message.errorText {
-                    Text(error)
-                        .font(.footnote)
-                        .foregroundStyle(.white)
-                        .padding(10)
-                        .background(RoundedRectangle(cornerRadius: 14).fill(Color.red.opacity(0.85)))
+                    // 报错气泡以前是块**死的**红方块：不能长按、没有按钮，
+                    // 网断一次这一窗就再也接不下去了。现在底下挂两个按钮。
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(error)
+                            .font(.footnote)
+                            .foregroundStyle(.white)
+                        HStack(spacing: 10) {
+                            Button("重试") { onRetry() }
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.white)
+                            Text("·").foregroundStyle(.white.opacity(0.5))
+                            Button("删掉这条") {
+                                app.deleteMessage(message.id, in: conversationID)
+                            }
+                            .font(.footnote)
+                            .foregroundStyle(.white.opacity(0.85))
+                        }
+                    }
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 14).fill(Color.red.opacity(0.85)))
                 } else if !message.content.isEmpty {
                     // 一段一段分开发，跟原来那样，不是糊成一大坨
                     ForEach(Array(contentSegments.enumerated()), id: \.offset) { _, seg in
@@ -279,6 +299,12 @@ struct MessageBubbleView: View {
                         .padding(.vertical, 6)
                         .padding(.horizontal, 12)
                         .background(bubbleShape)
+                }
+
+                // 改过的话，底下挂一个 ‹1/3› ——翻得回去看原来写的什么。
+                // **只是看**，翻到旧版不会改数据，松手回到最新那版。
+                if !message.edits.isEmpty {
+                    editHistoryBar
                 }
 
                 if let tokens = message.totalTokens, !isUser {
@@ -329,13 +355,17 @@ struct MessageBubbleView: View {
                 Text(t)
                     .font(.system(size: max(11, app.settings.fontSize - 2)))
                     .foregroundStyle(Theme.textMuted(scheme))
-                    .textSelection(.enabled)
             }
         }
         .padding(.horizontal, 13)
         .padding(.vertical, 9)
         .background(bubbleShape)
-        .textSelection(.enabled)
+        // ⚠️ 这儿以前有一句 .textSelection(.enabled)。**它把长按吃掉了**——
+        // iOS 的文字选择自带长按手势，优先级比我们这条高，
+        // 于是长按弹出来的是系统那个「拷贝 | 分享…」，
+        // 我们的横条菜单（编辑/收藏/引用/念出来/翻译/删除）一个都出不来。
+        // 想选字就双击进全屏那一页，那边的 textSelection 还留着。
+        // 顺手把「复制」补进横条里，省得没了系统菜单反而拷不了。
         // 双击进全屏，长按出横条菜单。
         // 双击写在前面，不然长按会先把它吃掉。
         .onTapGesture(count: 2) {
@@ -359,10 +389,45 @@ struct MessageBubbleView: View {
         }
     }
 
+    /// 改过几版的翻页条。第 n 版里 n = edits.count + 1 是现在这版。
+    private var editHistoryBar: some View {
+        HStack(spacing: 8) {
+            Button {
+                editPage = max(0, editPage - 1)
+            } label: {
+                Image(systemName: "chevron.left").font(.system(size: 10))
+            }
+            .disabled(editPage == 0)
+
+            Text("\(editPage + 1)/\(message.edits.count + 1)")
+                .font(.caption2)
+                .foregroundStyle(Theme.textMuted(scheme))
+
+            Button {
+                editPage = min(message.edits.count, editPage + 1)
+            } label: {
+                Image(systemName: "chevron.right").font(.system(size: 10))
+            }
+            .disabled(editPage >= message.edits.count)
+
+            if editPage < message.edits.count {
+                Text("改之前的第 \(editPage + 1) 版")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Theme.textMuted(scheme))
+    }
+
     /// 长按弹出来的那条横菜单：一条细胶囊，不像系统那个糊住半屏
     private var actionBar: some View {
         HStack(spacing: 0) {
+            barItem("复制") { UIPasteboard.general.string = message.content }
+            barDivider
             barItem("编辑") { onEdit() }
+            barDivider
+            barItem("重发") { onRetry() }
             barDivider
             barItem("收藏") { app.toggleStar([message.id], in: conversationID) }
             barDivider
@@ -673,13 +738,20 @@ struct MessageBubbleView: View {
     ///
     /// 开关在「设置 → 通用设置 → 他分段发」。关着就一整段一个气泡——
     /// 有人就是喜欢一大块读完，不喜欢消息一条条弹。
+    /// 现在屏幕上该显示哪一版。翻到旧版就显示旧版，翻回 0 就是最新的。
+    private var shownContent: String {
+        guard editPage > 0, editPage <= message.edits.count else { return message.content }
+        // edits 里最早的在最前面，而 ‹› 是往回翻，所以要倒着数
+        return message.edits[message.edits.count - editPage]
+    }
+
     private var contentSegments: [String] {
-        guard app.settings.segmentAssistant || isUser else { return [message.content] }
-        let parts = message.content
+        guard app.settings.segmentAssistant || isUser else { return [shownContent] }
+        let parts = shownContent
             .components(separatedBy: "\n\n")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        return parts.isEmpty ? [message.content] : parts
+        return parts.isEmpty ? [shownContent] : parts
     }
 
     /// 思考卡片上的那行字。

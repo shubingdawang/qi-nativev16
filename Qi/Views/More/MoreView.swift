@@ -290,10 +290,14 @@ struct FootprintView: View {
                 .font(.app(14))
                 .foregroundStyle(Theme.textMain(scheme))
             Spacer()
-            TextField("0", value: Binding(
+            // ⚠️ 以前是 `TextField(value:format: .number)`。
+            // **那样填不进小数**：她敲下小数点的那一刻，"0." 被解析成 0，
+            // 输入框立刻被改写回 "0"，点就没了，永远只能是整数。
+            // 改成收字符串、只在**收键盘的时候**才解析，中间敲什么就显示什么。
+            PriceField(value: Binding(
                 get: { app.settings.pricing[keyPath: keyPath] },
                 set: { app.settings.pricing[keyPath: keyPath] = $0 }
-            ), format: .number)
+            ))
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.trailing)
                 .font(.app(15, design: .rounded))
@@ -496,5 +500,54 @@ struct HeatmapView: View {
         case 9...19: return Color.accentColor.opacity(0.74)
         default: return Color.accentColor
         }
+    }
+}
+
+// MARK: - 能填小数的价格输入框
+
+/// `TextField(value:format:)` 每敲一个键就解析一次，
+/// 于是 "0." 变成 0、"0.0" 变成 0——**小数点根本落不下去**。
+/// 这个改成拿字符串当中间态：她敲什么就显示什么，
+/// 只有失去焦点（收键盘/切走）的时候才真的解析一次写回去。
+struct PriceField: View {
+
+    @Binding var value: Double
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField("0", text: $text)
+            .focused($focused)
+            .onAppear { text = format(value) }
+            .onChange(of: focused) { _, now in
+                if now {
+                    // 刚点进来：0 就清空，省得她要先删掉那个 0
+                    if value == 0 { text = "" }
+                } else {
+                    commit()
+                }
+            }
+            .onChange(of: value) { _, v in
+                if !focused { text = format(v) }
+            }
+            .onSubmit { commit() }
+    }
+
+    private func commit() {
+        let t = text.replacingOccurrences(of: "，", with: ".")
+            .replacingOccurrences(of: "。", with: ".")
+            .trimmingCharacters(in: .whitespaces)
+        value = Double(t) ?? 0
+        text = format(value)
+    }
+
+    /// 0.04 显示成 0.04，不是 0.040000000000000001，也不是 4e-02
+    private func format(_ v: Double) -> String {
+        if v == 0 { return "0" }
+        let s = String(format: "%.6f", v)
+        var out = s
+        while out.hasSuffix("0") { out.removeLast() }
+        if out.hasSuffix(".") { out.removeLast() }
+        return out
     }
 }

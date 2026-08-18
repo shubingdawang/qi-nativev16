@@ -95,6 +95,9 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     var stickerID: UUID? = nil
     /// 同一次发送出去的文字和表情共用一个 turn，界面上会紧挨着排
     var turnID: UUID? = nil
+    /// 改过几版。每改一次，**旧的那版原样存进来**（最早的在最前面）。
+    /// 气泡底下那个 ‹1/3› 就是翻它——改错了能翻回去看原来写的什么。
+    var edits: [String] = []
     var createdAt: Date = Date()
     /// 正在流式输出中
     var isStreaming: Bool = false
@@ -678,6 +681,7 @@ extension ChatMessage {
         files = (try? c.decodeIfPresent([FileAttachment].self, forKey: .files)) ?? []
         stickerID = try? c.decodeIfPresent(UUID.self, forKey: .stickerID)
         turnID = try? c.decodeIfPresent(UUID.self, forKey: .turnID)
+        edits = (try? c.decodeIfPresent([String].self, forKey: .edits)) ?? []
         createdAt = (try? c.decodeIfPresent(Date.self, forKey: .createdAt)) ?? Date()
         isStreaming = (try? c.decodeIfPresent(Bool.self, forKey: .isStreaming)) ?? false
         errorText = try? c.decodeIfPresent(String.self, forKey: .errorText)

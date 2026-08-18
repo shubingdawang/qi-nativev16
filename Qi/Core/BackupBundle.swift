@@ -102,14 +102,42 @@ enum BackupBundle {
     /// 还会拿内存里的旧数据把刚还原的文件盖回去。
     /// 所以还原完必须让她重开一次 App——界面上会明确说这句话。
     static func restore(_ data: Data) -> Restored {
-        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return .unreadable("这个文件不是 JSON，可能不是本 App 导出的备份。") }
+        // 微信/邮件转一手的文件常常带 UTF-8 BOM 或者前后有空白，
+        // 直接丢给 JSONSerialization 会解不开——**它解不开不等于这不是备份**。
+        // 以前这儿直接说「可能不是本 App 导出的备份」，
+        // 她拿着一份好好的备份被挡在门外，还查不出为什么。
+        var cleaned = data
+        if cleaned.starts(with: [0xEF, 0xBB, 0xBF]) { cleaned = cleaned.dropFirst(3) }
+        while let f = cleaned.first, f == 0x20 || f == 0x0A || f == 0x0D || f == 0x09 {
+            cleaned = cleaned.dropFirst()
+        }
+        while let l = cleaned.last, l == 0x20 || l == 0x0A || l == 0x0D || l == 0x09 || l == 0x00 {
+            cleaned = cleaned.dropLast()
+        }
+        guard let root = try? JSONSerialization.jsonObject(with: cleaned) as? [String: Any]
+        else {
+            // 说清楚到底怎么了，别让她对着一句笼统的话干瞪眼
+            let head = String(data: cleaned.prefix(60), encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? "（读不出文字）"
+            return .unreadable(
+                "这个文件解不成 JSON。\n\n大小：\(data.count) 字节\n"
+                + "开头是：\(head)\n\n"
+                + "要是开头看着像 { \"createdAt\" … 那就是备份没错，"
+                + "多半是传的时候被截断了（微信里存下来的常有这问题）——"
+                + "换 AirDrop 或者「存到文件」再试一次。")
+        }
 
         // 老版备份：只有那三样，没有 files
         guard let files = root["files"] as? [String: Any] else {
-            return root["conversations"] != nil ? .legacy
-                : .unreadable("这个文件里没有可还原的数据。")
+            if root["conversations"] != nil { return .legacy }
+            return .unreadable(
+                "这个 JSON 里没有 files 也没有 conversations，还原不了。\n\n"
+                + "它最外层的键是：" + root.keys.sorted().prefix(8).joined(separator: "、"))
         }
+        // ⚠️ **不检查 version。** 旧构建导出的备份也照收——
+        // 她拿旧构建的备份喂给新构建，卡在这儿一次了。
+        // 里面全是 json 文件名 → 内容，字段对不上的那份自己会退回默认值，
+        // 因为每个 store 的解码器都是容错的。
 
         var written = 0
         let dir = Storage.documentsURL
