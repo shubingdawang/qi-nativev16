@@ -101,29 +101,15 @@ enum DollWidget {
           background: linear-gradient(160deg, var(--bg1), var(--bg2));
         }
         .stage svg { width: 100%; height: 100%; display: block; }
-        .hotspot {
-          position: absolute; border: 0; padding: 0; margin: 0;
-          background: transparent; border-radius: 50%;
-          display: flex; align-items: center; justify-content: center;
-          transition: transform .18s ease;
+        /* 热区在 SVG 里。平时露一个小点，碰一下涨大闪一下。 */
+        .spot { cursor: pointer; }
+        .spotdot {
+          fill: var(--accent); opacity: .45;
+          transition: r .2s ease, opacity .2s ease;
         }
-        /* 平时露一个小点，让她一眼看出哪儿能碰 */
-        .hotspot .dot {
-          width: 9px; height: 9px; border-radius: 50%;
-          background: var(--accent); opacity: .45;
-          transition: all .2s ease;
-        }
-        .hotspot .tag {
-          position: absolute; top: 100%; margin-top: 1px;
-          font-size: 9px; font-weight: 400; color: var(--muted);
-          opacity: 0; transition: opacity .2s ease; white-space: nowrap;
-        }
-        .hotspot.touched { transform: scale(1.25); }
-        .hotspot.touched .dot { opacity: 1; width: 26px; height: 26px; }
-        .hotspot.touched .tag { opacity: 1; }
+        .spot.touched .spotdot { opacity: 1; r: 13; }
         /* 「哪儿能点」按下去：全部标出来 */
-        .hint .hotspot .dot { opacity: .95; width: 16px; height: 16px; }
-        .hint .hotspot .tag { opacity: 1; }
+        .hint .spotdot { opacity: .95; r: 8; }
         /* 刚发生的那一句，压在画面底下 */
         .said {
           position: absolute; left: 10px; right: 10px; bottom: 10px;
@@ -218,38 +204,54 @@ enum DollWidget {
             '</g></svg>';
         }
 
-        // 热区。位置是百分比，跟着舞台缩放走；
-        // 平时不显示，点下去闪一下就收——原文档第 9 节那套。
+        // 热区的位置。**用 SVG 自己的坐标（viewBox 200×280），不是百分比。**
+        //
+        // 上一版是拿百分比定位一层浮在外面的按钮——那等于让热区和画各用一套坐标系，
+        // 中间隔着「SVG 怎么缩放到这个框里」这一层，缩放比例一变就错开。
+        // 她说的「额头上那个点代表脖子、头发上那个点才代表头」就是错开了一格。
+        //
+        // 现在热区是**画进 SVG 里**的圆，跟头、脖子、腰用的是同一套坐标，
+        // 位置直接照着上面 figure() 里那些数写，**不可能再飘**。
         var ZONE_XY = {
-          hair:  [50, 20], cheek: [58, 27], neck: [50, 35],
-          hand:  [30, 45], waist: [50, 60], knee: [42, 76]
+          hair:  [100, 52],   // 头顶那一片头发
+          cheek: [120, 82],   // 脸颊（右边那块腮红的位置）
+          neck:  [100, 103],  // 脖子（那截 rect 是 y96…110）
+          hand:  [62, 172],   // 手（胳膊收笔的地方）
+          waist: [100, 140],  // 腰（裙子上半截）
+          knee:  [78, 226]    // 膝盖（腿弯那儿）
         };
 
         function render(s) {
           S = s;
           document.getElementById("art").innerHTML = figure(s.pose, s.camera, s.body);
 
-          var hs = document.getElementById("spots");
-          if (hs.childElementCount !== s.zones.length) {
-            hs.innerHTML = "";
+          // 热区：画进那张 SVG 里，跟身体同一套坐标。
+          // 每次重画身体之后要重新挂一遍（上面 innerHTML 把旧的冲掉了）。
+          var svg = document.querySelector("#art svg");
+          if (svg) {
+            var ns = "http://www.w3.org/2000/svg";
             s.zones.forEach(function (z) {
-              var xy = ZONE_XY[z.id] || [50, 50];
-              var b = document.createElement("button");
-              b.className = "hotspot";
-              b.style.left = "calc(" + xy[0] + "% - 26px)";
-              b.style.top = "calc(" + xy[1] + "% - 26px)";
-              b.style.width = "52px"; b.style.height = "52px";
-              b.setAttribute("aria-label", z.label);
-              // 能点的地方**默认就露一个小点**。
-              // 上一版全透明，她说「不太看得懂发生了什么」——
-              // 一半是因为根本看不出哪儿能点。
-              b.innerHTML = '<i class="dot"></i><b class="tag">' + z.label + '</b>';
-              b.onclick = function () {
-                b.classList.add("touched");
-                setTimeout(function () { b.classList.remove("touched"); }, 700);
+              var xy = ZONE_XY[z.id] || [100, 140];
+              var g = document.createElementNS(ns, "g");
+              g.setAttribute("class", "spot");
+              g.setAttribute("data-zone", z.id);
+              // 摸得着的那个圈（透明、大一点，手指够得着）
+              var hit = document.createElementNS(ns, "circle");
+              hit.setAttribute("cx", xy[0]); hit.setAttribute("cy", xy[1]);
+              hit.setAttribute("r", 20);
+              hit.setAttribute("fill", "transparent");
+              // 看得见的那个小点
+              var dot = document.createElementNS(ns, "circle");
+              dot.setAttribute("class", "spotdot");
+              dot.setAttribute("cx", xy[0]); dot.setAttribute("cy", xy[1]);
+              dot.setAttribute("r", 4.5);
+              g.appendChild(dot); g.appendChild(hit);
+              g.addEventListener("click", function () {
+                g.classList.add("touched");
+                setTimeout(function () { g.classList.remove("touched"); }, 700);
                 act("touch_zone", { zone: z.id });
-              };
-              hs.appendChild(b);
+              });
+              svg.appendChild(g);
             });
           }
 
@@ -358,7 +360,8 @@ enum DollWidget {
         </style></head><body>
           <div class="stage" id="stage">
             <div id="art"></div>
-            <div id="spots"></div>
+            <!-- 热区现在画在上面那张 SVG 里（同一套坐标，不会再错开），
+                 这一层不需要了 -->
             <!-- 刚刚发生的那一句，直接压在画面上。
                  底下那三行小字她说看不出发生了什么，那就把最新那句摆到画里 -->
             <div class="said" id="said"></div>

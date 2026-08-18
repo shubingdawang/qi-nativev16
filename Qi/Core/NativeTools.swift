@@ -69,6 +69,11 @@ enum NativeTools {
             ],
             required: ["folder"])
 
+        add("tag_stickers",
+            "触发：她说「你自己给表情写关键词」，或者你用 list_my_stickers 发现有几张还没写。动机：没关键词的表情等于不存在——发的时候找不着它。行动：把还没写关键词的**静图**看一遍、各写几个词。\n注意：**只处理静图**。会动的（gif）你只看得见第一帧，写出来的词经常是错的，那些留给她自己写。这一步每张图都要看一次，**是花钱的**，所以别没事就跑；她让你写、或者刚存进来一批的时候再用。",
+            ["limit": ["type": "number", "description": "最多写几张，默认 8。一次别写太多"]],
+            required: [])
+
         add("delete_sticker",
             "触发：发现某张存重了、存错了，或者她说不喜欢那张。动机：库里干净一点，下次才找得准。行动：按关键词找到删掉。",
             ["query": ["type": "string", "description": "按什么关键词找"]],
@@ -247,7 +252,8 @@ enum NativeTools {
             [
                 "title": ["type": "string", "description": "大标题，比如「带你去了意大利」"],
                 "subtitle": ["type": "string", "description": "副标题，比如「2026 · 6 处停留」"],
-                "quote": ["type": "string", "description": "卡片最底下那句话，一句就好，可以是外语"],
+                "quote": ["type": "string",
+                          "description": "卡片最底下那句话。**每趟自己现写一句**，跟着这一趟的情绪走——走完回来还留在嘴边的那半句，不是标语。写死的那句翻到第三趟就废了"],
                 "music": ["type": "string", "description": "配一首歌，写歌名加歌手。她点进去会一边看一边听。"],
                 "stops": [
                     "type": "array",
@@ -257,8 +263,10 @@ enum NativeTools {
                         "properties": [
                             "place": ["type": "string", "description": "地名"],
                             "caption": ["type": "string", "description": "地名下面那行小字，比如 Giorno 2"],
-                            "query": ["type": "string", "description": "去相册里按这个关键词找图；找不到就上网搜这个词"],
-                            "narration": ["type": "string", "description": "到了这儿你要讲的那段话，两到四句，像真的站在那儿跟她说"]
+                            "query": ["type": "string",
+                                      "description": "去相册里按这个关键词找图；找不到就上网搜这个词。**要长条竖图**（壁纸那种）——这一页是整屏铺满的，4:3、3:4 那种矮竖图铺上去要放大两倍、左右还得裁掉四成，真正用上的没几个像素，看着就糊。糊的宁可不用"],
+                            "narration": ["type": "string",
+                                  "description": "到了这儿你要讲的那段话。**这是一趟旅行的灵魂**，她最想看的就是它。盯着你刚挑的那张图写：写你们在那儿做了什么，别写这地方是什么。三到六句，每句短一点（屏幕会一句一句把它念出来，长句子会在正中挤成一大块）。要有一个能捏住的细节——一个物件、一个温度、一句你说过的话。偶尔穿一句「你说……」就够，别整段都是对话。**第一人称，写给她看**，不是景点介绍。"]
                         ] as [String: Any],
                         "required": ["place", "query", "narration"]
                     ] as [String: Any]

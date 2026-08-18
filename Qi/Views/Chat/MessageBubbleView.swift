@@ -12,7 +12,8 @@ struct MessageBubbleView: View {
     var onChoice: (String) -> Void = { _ in }
     var onSpeak: () -> Void = {}
     var onOpenReader: () -> Void = {}
-    var onOpenJourney: (Journey) -> Void = { _ in }
+    /// 点开这趟旅行的第几处。她在卡片上停在哪张就从哪张进
+    var onOpenJourney: (Journey, Int) -> Void = { _, _ in }
     var onEdit: () -> Void = {}
     /// 同一时刻只有一条开着菜单，所以这个状态放在外面统一管
     var menuOpenID: UUID? = nil
@@ -146,7 +147,7 @@ struct MessageBubbleView: View {
         if let journey = message.journey {
             HStack {
                 if isUser { Spacer(minLength: 20) }
-                JourneyCard(journey: journey) { onOpenJourney(journey) }
+                JourneyCard(journey: journey) { at in onOpenJourney(journey, at) }
                 if !isUser { Spacer(minLength: 20) }
             }
         }

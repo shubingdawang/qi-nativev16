@@ -33,10 +33,49 @@ struct JourneyStop: Codable, Hashable, Identifiable {
 struct JourneyCard: View {
 
     let journey: Journey
-    var onOpen: () -> Void
+    /// 点开第几处。**带上序号**——她滑到哪张就该从哪张进去，
+    /// 不是每次都从第一处重来。
+    var onOpen: (Int) -> Void
 
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
+
+    /// 现在停在第几张
+    @State private var focus: Int? = 0
+    /// 停够 1.5 秒就进去的那个计时
+    @State private var dwell: Task<Void, Never>?
+
+    /// 一根竖条。静止 118，滑到中间被放大到 146（容器 152，留了 6 的余量）。
+    @ViewBuilder
+    private func bar(_ stop: JourneyStop, focused: Bool) -> some View {
+        Group {
+            if let img = ImageStore.load(stop.imageName) {
+                Image(uiImage: img).resizable().scaledToFill()
+            } else {
+                Rectangle().fill(Theme.softFillDeep)
+            }
+        }
+        .frame(width: focused ? 52 : 36, height: 118)
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay(alignment: .bottom) {
+            // 正中那张才写地名——六个名字全摆出来会糊成一片
+            if focused, !stop.place.isEmpty {
+                Text(stop.place)
+                    .font(.app(9))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .padding(.horizontal, 3)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(.black.opacity(0.35)))
+                    .padding(.bottom, 4)
+            }
+        }
+        // 浮起来是靠影子说话的
+        .shadow(color: .black.opacity(focused ? 0.34 : 0.12),
+                radius: focused ? 10 : 3, y: focused ? 6 : 2)
+        .zIndex(focused ? 10 : 0)
+        .animation(.spring(response: 0.28, dampingFraction: 0.78), value: focused)
+    }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -59,22 +98,49 @@ struct JourneyCard: View {
             }
             .padding(.top, 16)
 
-            // 一排竖条照片，最后一张会被裁掉一点，暗示还能往右
-            HStack(spacing: 6) {
-                ForEach(journey.stops.prefix(6)) { stop in
-                    if let img = ImageStore.load(stop.imageName) {
-                        Image(uiImage: img)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 36, height: 118)
-                            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-                    } else {
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .fill(Theme.softFillDeep)
-                            .frame(width: 36, height: 118)
+            // 一排竖条照片，滑到中间那张会**长大**。
+            //
+            // 照原作者那版做的（nonchaiovo/journey-cards，MIT）。
+            // 他那份文档里专门写了这处最容易做砸的地方（「坑 3」）：
+            // **放大要有地方长**——容器高度得比放大后的高度再多几个像素，
+            // 不然那张在一个刚好装得下它的盒子里长大，看着一点都不「跳出来」。
+            // 所以这儿静止 118、放大到 146、容器给 152。
+            // 再配上更深的影子和抬高的层级，才有浮起来的感觉。
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 7) {
+                    ForEach(Array(journey.stops.prefix(8).enumerated()), id: \.element.id) { i, stop in
+                        bar(stop, focused: focus == i)
+                            .id(i)
+                            .scrollTransition(axis: .horizontal) { content, phase in
+                                // 越靠近中间越大。identity 就是正中那张。
+                                content
+                                    .scaleEffect(x: 1, y: phase.isIdentity ? 1.24 : 1.0)
+                                    .opacity(phase.isIdentity ? 1 : 0.72)
+                            }
+                            .onTapGesture { onOpen(i) }
                     }
                 }
+                .scrollTargetLayout()
+                .padding(.horizontal, 26)
+                .padding(.vertical, 17)
             }
+            // 磁力吸附：松手自动停在一张上，不会停在两张中间
+            .scrollTargetBehavior(.viewAligned)
+            .scrollPosition(id: $focus)
+            .frame(height: 152)
+            // 停在一张上 1.5 秒就自己进去——她指名要这个（原作者那版的手感）。
+            // 不会像误触：那张已经明显长大、还浮起来写着地名，
+            // 一眼就知道「等下要进的是这处」。
+            .onChange(of: focus) { _, now in
+                dwell?.cancel()
+                guard let now else { return }
+                dwell = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    guard !Task.isCancelled else { return }
+                    onOpen(now)
+                }
+            }
+            .onDisappear { dwell?.cancel() }
 
             if !journey.quote.isEmpty {
                 Text(journey.quote)
@@ -85,15 +151,13 @@ struct JourneyCard: View {
                     .padding(.horizontal, 14)
             }
 
-            Text("点进去看看")
+            Text("滑一滑，停一下就进去")
                 .font(.app(10))
                 .foregroundStyle(app.settings.accentColor.opacity(0.7))
                 .padding(.bottom, 14)
         }
         .frame(width: 285)
         .glassBackground(radius: 18, strength: app.settings.glassOpacity)
-        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .onTapGesture(perform: onOpen)
     }
 }
 
@@ -103,6 +167,8 @@ struct JourneyCard: View {
 struct JourneyPlayerView: View {
 
     let journey: Journey
+    /// 从第几处开始。她在卡片上停在哪张，就从哪张进来。
+    var startAt: Int = 0
 
     @EnvironmentObject var app: AppState
     @Environment(\.dismiss) private var dismiss
@@ -242,7 +308,7 @@ struct JourneyPlayerView: View {
         )
         .statusBarHidden()
         .onAppear {
-            go(0)
+            go(startAt)
             // 进来就把歌放上，出去就停——不然退出了还在响
             if let track = journey.track { MusicPlayer.shared.start(track) }
         }

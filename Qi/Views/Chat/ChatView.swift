@@ -49,6 +49,8 @@ struct ChatView: View {
     @State private var reading: ChatMessage?
     @State private var browsing: BrowserLink?
     @State private var travelling: Journey?
+    /// 从这趟旅行的第几处进去（她在卡片上停在哪张）
+    @State private var travellingAt = 0
     @State private var showingGroup = false
     @State private var showingMemoryLink = false
 
@@ -106,7 +108,8 @@ struct ChatView: View {
                         onOpenReader: { msg in
                             reading = msg
                         },
-                        onOpenJourney: { j in
+                        onOpenJourney: { j, at in
+                            travellingAt = at
                             travelling = j
                         },
                         menuOpenID: menuOpenID,
@@ -305,7 +308,7 @@ struct ChatView: View {
             }
         }
         .fullScreenCover(item: $travelling) { j in
-            JourneyPlayerView(journey: j)
+            JourneyPlayerView(journey: j, startAt: travellingAt)
         }
         .fullScreenCover(item: $reading) { msg in
             MessageReaderView(
@@ -1072,7 +1075,7 @@ struct MessageListView: View {
     var onChoice: (String) -> Void = { _ in }
     var onSpeak: (ChatMessage) -> Void = { _ in }
     var onOpenReader: (ChatMessage) -> Void = { _ in }
-    var onOpenJourney: (Journey) -> Void = { _ in }
+    var onOpenJourney: (Journey, Int) -> Void = { _, _ in }
     var menuOpenID: UUID? = nil
     var onOpenMenu: (UUID) -> Void = { _ in }
     var onCloseMenu: () -> Void = {}
@@ -1103,7 +1106,7 @@ struct MessageListView: View {
                             onChoice: { onChoice($0) },
                             onSpeak: { onSpeak(message) },
                             onOpenReader: { onOpenReader(message) },
-                            onOpenJourney: { onOpenJourney($0) },
+                            onOpenJourney: { j, at in onOpenJourney(j, at) },
                             onEdit: { onEdit(message) },
                             menuOpenID: menuOpenID,
                             onOpenMenu: { onOpenMenu(message.id) },

@@ -3115,6 +3115,24 @@ final class AppState: ObservableObject {
             }
             return ("你现在有 \(mine.count) 个表情：\n" + lines.joined(separator: "\n"), false)
 
+        case "tag_stickers":
+            // 相册里那些还没写关键词的**静图**，让他自己看一遍写。
+            //
+            // 为什么只给静图：会动的他只看得见第一帧，写出来的词经常离题——
+            // 那些还是她自己写。这条界线是她定的。
+            let limit = max(1, min(20, Int((args["limit"] as? Double) ?? 8)))
+            let todo = MediaStore.shared.list("sticker")
+                .filter { $0.note.isEmpty && !$0.fileName.isEmpty }
+                .filter { !($0.fileName.lowercased().hasSuffix(".gif")) }
+                .prefix(limit)
+            guard !todo.isEmpty else {
+                return ("表情包里没有缺关键词的静图了。（会动的那些留着她自己写——"
+                        + "你只看得见第一帧。）", false)
+            }
+            var done = 0
+            await tagStickers(Array(todo)) { d, _ in done = d }
+            return ("看完写好了 \(done) 张。想看写成什么样就用 list_my_stickers。", false)
+
         case "save_sticker":
             let index = Int((args["index"] as? NSNumber)?.intValue ?? 1)
             guard let image = recentUserImage(offset: index) else {
