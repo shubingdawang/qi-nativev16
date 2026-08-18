@@ -27,6 +27,7 @@ struct MemoryLibraryView: View {
             ScrollView {
                 VStack(spacing: 18) {
                     switchCard
+                    if !store.candidates.isEmpty { candidateCard }
                     contentCard
                     letterCard
                     importCard
@@ -87,7 +88,7 @@ struct MemoryLibraryView: View {
             .padding(.vertical, 11)
 
             SettingsNote(app.settings.localMemory
-                ? "记忆库那 28 个工具（wake_up、add_memory、checkpoint、end_of_day…）现在是 App 内置的，名字和参数跟电脑上那套一模一样。不走 MCP、不用开电脑、不用挂 Tailscale。\n\n⚠️ 「设置 → MCP」里那台「小屋」要关着——两边都开着的话，同一件事他手上有两套工具，会来回打架。"
+                ? "记忆库那 38 个工具（wake_up、add_memory、surface_memories、checkpoint…）现在是 App 内置的，名字和参数跟电脑上那套一模一样。不走 MCP、不用开电脑、不用挂 Tailscale。\n\n⚠️ 「设置 → MCP」里那台「小屋」要关着——两边都开着的话，同一件事他手上有两套工具，会来回打架。"
                 : "关着的时候他还是走小屋那台 MCP，也就是还得开着电脑。",
                 title: "记忆库这个开关是干嘛的")
 
@@ -129,6 +130,79 @@ struct MemoryLibraryView: View {
             row("当前状态", store.currentState.text.isEmpty ? "空" : "有")
             SettingsDivider()
             row("上次聊到哪", store.checkpoint?.text.isEmpty == false ? "有" : "空")
+            if !store.glossary.isEmpty {
+                SettingsDivider()
+                NavigationLink { GlossaryListView() } label: {
+                    SettingsRowLabel(title: "你俩的黑话",
+                                     value: "\(store.glossary.count) 个", chevron: true)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    // MARK: 等你点头的
+
+    /// 他拿不准的事落在这儿，她点头才进正式记忆库。
+    ///
+    /// 出处：wusaki0723/Aelios 的候选队列（它那套是模型抽事实 → 队列 → 人审）。
+    /// 我们把中间那步砍了（要调模型），只留「他提 → 她点头」这一头一尾。
+    /// 道理跟她在第 40 条里说的一样：**猜出来的东西不替他填进那一栏。**
+    private var candidateCard: some View {
+        SettingsCard(title: "等你点头（\(store.candidates.count)）") {
+            ForEach(Array(store.candidates.enumerated()), id: \.element.id) { idx, c in
+                if idx > 0 { SettingsDivider() }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(c.content)
+                        .font(.app(15))
+                        .foregroundStyle(Theme.textMain(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !c.why.isEmpty {
+                        Text("他说：" + c.why)
+                            .font(.app(13))
+                            .foregroundStyle(Theme.textSoft(scheme))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    HStack(spacing: 10) {
+                        Button {
+                            store.acceptCandidate(c.id)
+                        } label: {
+                            Text("收进去")
+                                .font(.app(14))
+                                .padding(.horizontal, 14).padding(.vertical, 7)
+                                .background(app.settings.accentColor.opacity(0.16),
+                                            in: Capsule())
+                                .foregroundStyle(app.settings.accentColor)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            store.dropCandidate(c.id)
+                        } label: {
+                            Text("不是这样")
+                                .font(.app(14))
+                                .padding(.horizontal, 14).padding(.vertical, 7)
+                                .background(Theme.textSoft(scheme).opacity(0.12),
+                                            in: Capsule())
+                                .foregroundStyle(Theme.textSoft(scheme))
+                        }
+                        .buttonStyle(.plain)
+
+                        Spacer()
+                        Text(String(c.created_at.prefix(10)))
+                            .font(.app(12))
+                            .foregroundStyle(Theme.textSoft(scheme))
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+
+            SettingsNote("""
+            他拿不准的事会先放在这儿，**点了「收进去」才算数**。
+
+            猜出来的东西不替你填进记忆库——这跟爱好页那张「试出来的」卡是同一个道理。
+            """, title: "这一栏是什么")
         }
     }
 
@@ -335,12 +409,15 @@ struct MemoryListView: View {
     @ObservedObject private var store = MemoryStore.shared
     @State private var search = ""
 
+    /// 她自己搜的时候走的是跟他一样那套混合检索（BM25 + 整串命中，
+    /// 见 MemoryRecall.swift）。以前是 contains，搜「日本的房子」搜不出
+    /// 「她在日本租的那间」，得一字不差才行。
     private var list: [MemoryItem] {
         guard !search.isEmpty else { return store.memories }
-        return store.memories.filter {
-            $0.content.localizedCaseInsensitiveContains(search)
-            || $0.tags.contains { $0.localizedCaseInsensitiveContains(search) }
-        }
+        let rel = MemoryRecall.relevance(query: search, in: store.memories)
+        return store.memories
+            .filter { (rel[$0.id] ?? 0) >= MemoryRecall.recallFloor }
+            .sorted { MemoryRecall.searchOrder($0, $1, rel) }
     }
 
     var body: some View {
@@ -357,6 +434,19 @@ struct MemoryListView: View {
                                 Text(mem.author)
                                     .font(.app(10))
                                     .foregroundStyle(Theme.textMuted(scheme))
+                                if mem.pinned == true {
+                                    Image(systemName: "pin.fill")
+                                        .font(.system(size: 9))
+                                        .foregroundStyle(app.settings.accentColor)
+                                }
+                                if mem.resolved == false {
+                                    Text("还悬着")
+                                        .font(.app(9))
+                                        .padding(.horizontal, 5).padding(.vertical, 1)
+                                        .background(app.settings.accentColor.opacity(0.14),
+                                                    in: Capsule())
+                                        .foregroundStyle(app.settings.accentColor)
+                                }
                                 Spacer()
                                 Text(String(mem.created_at.prefix(10)))
                                     .font(.app(10))
@@ -383,6 +473,26 @@ struct MemoryListView: View {
                         .padding(13)
                         .glassBackground(radius: 16, strength: app.settings.glassOpacity)
                         .contextMenu {
+                            // 钉住的不随时间沉下去（上限 20 条，Ombre-Brain 那套）
+                            Button {
+                                guard let i = store.memoryIndex(mem.id) else { return }
+                                if store.memories[i].pinned == true {
+                                    store.memories[i].pinned = nil
+                                } else if store.pinnedCount < MemoryRecall.pinLimit {
+                                    store.memories[i].pinned = true
+                                }
+                                store.saveMemories()
+                            } label: {
+                                Label(mem.pinned == true ? "松开" : "钉住", systemImage: "pin")
+                            }
+                            Button {
+                                guard let i = store.memoryIndex(mem.id) else { return }
+                                store.memories[i].resolved = (mem.resolved == false)
+                                store.saveMemories()
+                            } label: {
+                                Label(mem.resolved == false ? "了结了" : "标成还悬着",
+                                      systemImage: "flag")
+                            }
                             Button(role: .destructive) {
                                 if let i = store.memoryIndex(mem.id) {
                                     store.memories.remove(at: i)
@@ -588,5 +698,53 @@ struct LetterReaderView: View {
         .navigationTitle("写给下一个你")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+    }
+}
+
+// MARK: - 黑话表
+
+/// 出处：Aelios 的 glossary。
+/// 「小屋」「换窗」「札记」这种词从来不作为一件事被记下来，
+/// 只是被反复用——所以搜记忆搜不到，但不知道意思就接不上话。
+struct GlossaryListView: View {
+
+    @EnvironmentObject var app: AppState
+    @Environment(\.colorScheme) private var scheme
+    @ObservedObject private var store = MemoryStore.shared
+
+    var body: some View {
+        ZStack {
+            WallpaperBackground()
+            ScrollView {
+                LazyVStack(spacing: 10) {
+                    ForEach(store.glossary) { g in
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(g.term)
+                                .font(.app(15))
+                                .foregroundStyle(Theme.textMain(scheme))
+                            Text(g.meaning)
+                                .font(.app(13))
+                                .foregroundStyle(Theme.textSoft(scheme))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(13)
+                        .glassBackground(radius: 16, strength: app.settings.glassOpacity)
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                store.glossary.removeAll { $0.term == g.term }
+                                store.saveGlossary()
+                            } label: {
+                                Label("删掉", systemImage: "trash")
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, Layout.tabBarExpanded + 16)
+            }
+        }
+        .navigationTitle("你俩的黑话")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

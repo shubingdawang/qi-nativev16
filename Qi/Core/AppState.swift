@@ -126,6 +126,11 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// 给这个文件外面的东西用的存盘入口。
+    /// （滚雪球压缩在 ContextCompactor 里改完 digest 要存一下，
+    /// 而 scheduleSave 是私有的。）
+    func saveConversations() { scheduleSave(.conversations) }
+
     func saveNow() {
         Storage.save(providers, to: "providers.json")
         Storage.save(conversations, to: "conversations.json")
@@ -549,8 +554,12 @@ final class AppState: ObservableObject {
         conversations[ci].messages.append(placeholder)
         let assistantID = placeholder.id
 
-        let apiMessages = buildGroupMessages(for: member, in: conversations[ci])
-        let toolDefs = mcpToolDefinitions(for: conversations[ci])
+        // 群里也一样，到回合数就先滚一次雪球（关着就跳过）。
+        // 压完得重新取一遍这一窗——上面那个 ci 是压之前的。
+        await ContextCompactor.compactIfNeeded(conversationID, app: self)
+        let ci2 = index(of: conversationID) ?? ci
+        let apiMessages = buildGroupMessages(for: member, in: conversations[ci2])
+        let toolDefs = mcpToolDefinitions(for: conversations[ci2])
 
         do {
             var round = 0
@@ -622,10 +631,16 @@ final class AppState: ObservableObject {
         let persona = member.persona.trimmingCharacters(in: .whitespacesAndNewlines)
         if !persona.isEmpty { head += "\n\n关于你自己：\n" + persona }
         head += "\n\n" + Self.agencyRule
+        let digestBlock = ContextCompactor.systemBlock(conv)
+        if !digestBlock.isEmpty { head += "\n\n" + digestBlock }
         if let shared = memoryContext(for: conv) { head += "\n\n" + shared }
         result.append(.init(role: "system", text: head))
 
         var history = conv.messages.filter { $0.role != .system && $0.errorText == nil }
+        if let through = conv.digest?.throughID,
+           let cut = history.firstIndex(where: { $0.id == through }) {
+            history = Array(history.suffix(from: cut + 1))
+        }
         if settings.contextLimit > 0, history.count > settings.contextLimit {
             history = Array(history.suffix(settings.contextLimit))
         }
@@ -697,12 +712,19 @@ final class AppState: ObservableObject {
             name: settings.aiName.isEmpty ? "阿晏" : settings.aiName,
             conversationID: conversationID)
 
-        var apiMessages = buildAPIMessages(from: conv)
         let toolDefs = mcpToolDefinitions(for: conv)
         let apiKey = p.apiKey
 
         let task = Task { @MainActor in
             do {
+                // 到回合数了就先滚一次雪球（她把「滚雪球压缩」关掉就直接跳过）。
+                // **必须在拼消息之前**——压完之后前面那堆原文才换成浓缩件。
+                await ContextCompactor.compactIfNeeded(conversationID, app: self)
+                // 压完之后要重新取一遍这一窗——digest 变了。
+                // 取不到就退回压之前那份，**不能 return**，
+                // 不然底下那条流式占位气泡会一直转着下不来。
+                let latest = self.index(of: conversationID).map { self.conversations[$0] } ?? conv
+                var apiMessages = self.buildAPIMessages(from: latest)
                 // 模型可能要调工具、看完结果再接着说，所以要来回好几轮。
                 // 上限 8 轮，防止它自己跟自己没完没了。
                 var round = 0
@@ -3370,6 +3392,12 @@ final class AppState: ObservableObject {
 
         var sys = fixed.joined(separator: "\n\n")
 
+        // 这一窗前面压过的那份浓缩件 + 他当时的原话。
+        // **摆在记忆库那段前面**——这是他自己这一窗的经历，
+        // 比「小屋里存着的事实」更贴身，顺序不能反。
+        let digestBlock = ContextCompactor.systemBlock(conv)
+        if !digestBlock.isEmpty { sys += "\n\n" + digestBlock }
+
         // 并了记忆的话，把那边聊过的接在最后——这段每轮都在变
         if let shared = memoryContext(for: conv) {
             sys += "\n\n" + shared
@@ -3378,6 +3406,12 @@ final class AppState: ObservableObject {
             result.append(.init(role: "system", text: sys, imageDataURLs: []))
         }
         var history = conv.messages.filter { $0.role != .system && $0.errorText == nil }
+        // 压过的那些原文不再往下发——它们已经在上面那份浓缩件里了。
+        // 这就是「滚雪球」跟老的「直接砍」的区别：砍是丢掉，压是换成一份更短的。
+        if let through = conv.digest?.throughID,
+           let cut = history.firstIndex(where: { $0.id == through }) {
+            history = Array(history.suffix(from: cut + 1))
+        }
         if settings.contextLimit > 0, history.count > settings.contextLimit {
             history = Array(history.suffix(settings.contextLimit))
         }

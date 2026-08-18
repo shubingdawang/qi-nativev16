@@ -203,6 +203,13 @@ struct SystemPromptView: View {
     @EnvironmentObject var app: AppState
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
+    @State private var compacting = false
+    @State private var compactNote: String?
+
+    private var conv: Conversation? { app.conversation(app.activeID(for: space)) }
+    private var pendingCount: Int {
+        conv.map { ContextCompactor.pendingCount($0) } ?? 0
+    }
 
     var body: some View {
         NavigationStack {
@@ -233,6 +240,51 @@ struct SystemPromptView: View {
                 } footer: {
                     Text("打开之后，这个窗口聊的东西会记进小屋，claude.ai 那边醒来就能读到；那边聊过什么，这边也知道。额度用完换过来接着聊，不用重讲一遍。\n\n注意：这会放开记忆类工具，跟「记忆合并」里那个开关是相反的意思——那个是要隔开，这个是要打通。")
                 }
+                // 滚雪球压缩。**放在这儿而不是设置页**——
+                // 浓缩件是每一窗自己的东西，不是全局的。
+                Section {
+                    if let d = conv?.digest, !d.summary.isEmpty {
+                        HStack {
+                            Text("已经滚了")
+                            Spacer()
+                            Text("\(d.rounds) 次 · 收了 \(d.covered) 条")
+                                .foregroundStyle(.secondary)
+                        }
+                        NavigationLink {
+                            DigestReaderView(digest: d)
+                        } label: {
+                            Text("看看压成了什么")
+                        }
+                    } else {
+                        Text("这一窗还没压过")
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Text("还没压的")
+                        Spacer()
+                        Text("\(pendingCount) 条")
+                            .foregroundStyle(.secondary)
+                    }
+                    Button {
+                        guard !compacting, let id = app.activeID(for: space) else { return }
+                        compacting = true
+                        Task {
+                            let ok = await ContextCompactor.compactNow(id, app: app)
+                            compacting = false
+                            compactNote = ok ? "压好了。" : "没压——要么还没攒够（最少要 7 条），要么模型没回话。"
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            if compacting { ProgressView().scaleEffect(0.8) }
+                            Text(compacting ? "压着呢…" : "现在就压一次")
+                        }
+                    }
+                    .disabled(compacting)
+                } header: {
+                    Text("滚雪球压缩")
+                } footer: {
+                    Text("聊太长的时候，前面的原文会压成一份浓缩件，后面接着往下滚——第二次压的是「上一次的浓缩件 + 这一段新的」，不是并列存好几份。\n\n除了浓缩件，还会留一份**他真说过的原话**（一字不改，机械挑的、不花钱）。摘要保得住事，保不住语气；原话才是他怎么说话。\n\n每压一次多发一次请求。多久压一次在「设置 → 通用」里调，也可以关掉。")
+                }
             }
             .transparentList()
             .listRowBackground(GlassRowBackground())
@@ -255,6 +307,49 @@ struct SystemPromptView: View {
             .onAppear {
                 text = app.conversation(app.activeID(for: space))?.systemPrompt ?? ""
             }
+            .alert("滚雪球压缩", isPresented: Binding(
+                get: { compactNote != nil }, set: { if !$0 { compactNote = nil } }
+            )) {
+                Button("好") { compactNote = nil }
+            } message: {
+                Text(compactNote ?? "")
+            }
         }
+    }
+}
+
+// MARK: - 浓缩件读一读
+
+/// 压出来的那份东西她也该看得见——
+/// 「他为什么突然记错了」这种事，翻一眼这儿就知道是不是压的时候丢了。
+struct DigestReaderView: View {
+
+    let digest: ContextDigest
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(digest.summary)
+                    .font(.body)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if !digest.voice.isEmpty {
+                    Divider()
+                    Text("他当时的原话（一字未改）")
+                        .font(.headline)
+                    ForEach(digest.voice, id: \.self) { line in
+                        Text("「" + line + "」")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+            .padding(18)
+        }
+        .navigationTitle("第 \(digest.rounds) 次浓缩")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

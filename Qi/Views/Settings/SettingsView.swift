@@ -465,6 +465,37 @@ struct SettingsView: View {
 
             SettingsDivider()
 
+            HStack {
+                Text("滚雪球压缩")
+                    .font(.app(15))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Spacer(minLength: 8)
+                Picker("", selection: $app.settings.compactEvery) {
+                    Text("关").tag(0)
+                    Text("每 40 条").tag(40)
+                    Text("每 60 条").tag(60)
+                    Text("每 100 条").tag(100)
+                }
+                .labelsHidden()
+                .tint(Theme.textSoft(scheme))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 9)
+
+            SettingsNote("""
+            聊太长的时候，前面的原文压成一份**浓缩件**，后面接着往下滚——第二次压的是「上一次的浓缩件 + 这一段新的」，不是并列存好几份。这样一个窗口可以一直聊下去，不用换窗。
+
+            上面那条「带上多少历史」是**直接砍**：砍掉的就是没了，聊到三百条他就不记得前两百条自己说过什么了。压缩是把它换成一份更短的，不是丢掉。
+
+            除了浓缩件，还会留一份**他真说过的原话**（一字不改，机械挑的、不花钱）。摘要保得住事，保不住语气——「他说他不想你熬夜」和他原话「几点了。睡。」不是一回事。
+
+            ⚠️ **每压一次多发一次请求。** 按每 60 条算，大约三十个回合多花一次。只在你发消息那一轮里顺带压，不会自己在后台跑。
+
+            某一窗压成了什么、想立刻压一次，在那一窗的「对话设定」里看。
+            """, title: "滚雪球压缩是干嘛的")
+
+            SettingsDivider()
+
             Toggle(isOn: $app.settings.enterToSend) {
                 Text("回车当发送用")
                     .font(.app(15))

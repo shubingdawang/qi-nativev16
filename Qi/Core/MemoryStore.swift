@@ -8,7 +8,7 @@ import Foundation
 //
 // 这个文件把那台服务整个搬进 App：
 //   · 数据结构跟原来的 JSON 一模一样（字段名都没改），导进来就能用
-//   · 29 个工具全部在本机实现，不走网络
+//   · 38 个工具全部在本机实现，不走网络
 //   · 文件存在 Documents/Memory/ 下面，跟聊天记录一起被 iOS 备份走
 //
 // 也就是说：电脑可以关了，Tailscale 可以不开了。
@@ -56,6 +56,20 @@ struct MemoryItem: Codable, Identifiable, Hashable {
     /// 靠实体名当边，够用而且不用维护一张图。
     var entities: [String]?
 
+    // MARK: 浮沉那几样（照 P0luz/Ombre-Brain 搬的，算法在 MemoryRecall.swift）
+    //
+    // graphiti 管的是「这条还算不算数」，Ombre 管的是另一件事：
+    // **算数的这些里面，现在最该被看见的是哪几条。**
+    // 两套不打架——前者是真假，后者是轻重。
+
+    /// 钉住的核心信念。钉住的**不衰减**，永远浮在最上面。
+    /// 上限 20 条（Ombre 原话：稀缺才逼出重要）。
+    var pinned: Bool?
+    /// 这件事**了结了没有**。
+    /// 空的＝没标过，当成已了结、不额外打扰；
+    /// 明确标成 false 的才算「还悬着」，浮出的时候抬一档。
+    var resolved: Bool?
+
     /// 现在还算不算数
     var isLive: Bool { (invalid_at ?? "").isEmpty }
 
@@ -66,13 +80,15 @@ struct MemoryItem: Codable, Identifiable, Hashable {
          author: String, created_at: String, updated_at: String,
          annotations: [MemoryAnnotation]? = nil,
          valid_from: String? = nil, invalid_at: String? = nil,
-         superseded_by: String? = nil, entities: [String]? = nil) {
+         superseded_by: String? = nil, entities: [String]? = nil,
+         pinned: Bool? = nil, resolved: Bool? = nil) {
         self.id = id; self.content = content; self.tags = tags
         self.level = level; self.author = author
         self.created_at = created_at; self.updated_at = updated_at
         self.annotations = annotations
         self.valid_from = valid_from; self.invalid_at = invalid_at
         self.superseded_by = superseded_by; self.entities = entities
+        self.pinned = pinned; self.resolved = resolved
     }
 
     /// 电脑那边的 memories.json 里，level 有的是数字 5，有的是字符串 "5"
@@ -94,6 +110,8 @@ struct MemoryItem: Codable, Identifiable, Hashable {
         invalid_at = try? c.decode(String.self, forKey: .invalid_at)
         superseded_by = try? c.decode(String.self, forKey: .superseded_by)
         entities = try? c.decode([String].self, forKey: .entities)
+        pinned = try? c.decode(Bool.self, forKey: .pinned)
+        resolved = try? c.decode(Bool.self, forKey: .resolved)
     }
 }
 
@@ -186,6 +204,73 @@ struct DiaryItem: Codable, Identifiable, Hashable {
     var updated_at: String
 
     var shortID: String { String(id.prefix(8)) }
+}
+
+/// 一条**还没进库的**记忆。
+///
+/// 出处：wusaki0723/Aelios。它那套是「4 小时抽一次事实 → 候选队列 →
+/// 夜里整理，人点头才转正」。我们把中间那两步砍了（都要调模型），
+/// 只留最有用的一头一尾：**他拿不准的东西先落在这儿，她点头才进正式库。**
+///
+/// 为什么值得单开一个盒子：她在第 40 条里说得很清楚——
+/// 「猜出来的东西不替他填进那一栏」。同一条道理放到记忆上就是这个队列。
+/// 他觉得像但不确定的事，写进来等她看一眼，不直接算成事实。
+struct MemoryCandidate: Codable, Identifiable, Hashable {
+    var id: String
+    var content: String
+    var tags: [String] = []
+    var level: Int = 3
+    var author: String = "阿晏"
+    /// 他为什么觉得这值得记。她看的就是这一句。
+    var why: String = ""
+    var created_at: String = ""
+
+    var shortID: String { String(id.prefix(8)) }
+
+    init(id: String, content: String, tags: [String] = [], level: Int = 3,
+         author: String = "阿晏", why: String = "", created_at: String = "") {
+        self.id = id; self.content = content; self.tags = tags
+        self.level = level; self.author = author
+        self.why = why; self.created_at = created_at
+    }
+
+    /// **合成的解码器不拿默认值补缺失的键**，缺一个就整份文件读不出来。
+    /// 这份 json 两边都写（手机和电脑），手写改坏一个字段不该毁掉整栏，所以自己解。
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        content = try c.decode(String.self, forKey: .content)
+        tags = (try? c.decode([String].self, forKey: .tags)) ?? []
+        level = (try? c.decode(JSONNumberOrString.self, forKey: .level))?.intValue ?? 3
+        author = (try? c.decode(String.self, forKey: .author)) ?? "阿晏"
+        why = (try? c.decode(String.self, forKey: .why)) ?? ""
+        created_at = (try? c.decode(String.self, forKey: .created_at)) ?? ""
+    }
+}
+
+/// 一个只有他俩懂的词。
+///
+/// 出处：Aelios 的 `glossary_set` / 术语索引。
+/// 记忆库存的是「发生了什么」，术语表存的是「这个词在我们这儿是什么意思」——
+/// 「小屋」「阿晏」「换窗」这种，靠搜记忆是搜不明白的，
+/// 因为它们从来不作为一件事被记下来，只是被反复使用。
+struct GlossaryEntry: Codable, Identifiable, Hashable {
+    var term: String
+    var meaning: String
+    var updated_at: String = ""
+
+    var id: String { term }
+
+    init(term: String, meaning: String, updated_at: String = "") {
+        self.term = term; self.meaning = meaning; self.updated_at = updated_at
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        term = try c.decode(String.self, forKey: .term)
+        meaning = (try? c.decode(String.self, forKey: .meaning)) ?? ""
+        updated_at = (try? c.decode(String.self, forKey: .updated_at)) ?? ""
+    }
 }
 
 /// 叙事脊椎。
@@ -392,6 +477,10 @@ final class MemoryStore: ObservableObject {
     @Published var emotionalEvents: [EmotionalEvent] = []
     @Published var log: [MemoryLogEntry] = []
     @Published var transcripts: [TranscriptMeta] = []
+    /// 等她点头的候选记忆（Aelios 那套的本机版）
+    @Published var candidates: [MemoryCandidate] = []
+    /// 他俩之间的黑话
+    @Published var glossary: [GlossaryEntry] = []
 
     private init() { reload() }
 
@@ -458,10 +547,14 @@ final class MemoryStore: ObservableObject {
         emotionalEvents = read([EmotionalEvent].self, "emotional_events.json") ?? []
         log = read([MemoryLogEntry].self, "memories_log.json") ?? []
         transcripts = read([TranscriptMeta].self, "transcripts.json") ?? []
+        candidates = read([MemoryCandidate].self, "candidates.json") ?? []
+        glossary = read([GlossaryEntry].self, "glossary.json") ?? []
         sortNewestFirst()
     }
 
     func saveMemories() { write(memories, "memories.json") }
+    func saveCandidates() { write(candidates, "candidates.json") }
+    func saveGlossary() { write(glossary, "glossary.json") }
     func saveDiaries() { write(diaries, "diaries.json") }
     func saveState() {
         write(currentState, "current_state.json")
@@ -530,6 +623,7 @@ final class MemoryStore: ObservableObject {
 
     var summaryLine: String {
         "\(memories.count) 条记忆 · \(diaries.count) 篇日记 · \(transcripts.count) 份存档"
+            + (candidates.isEmpty ? "" : " · \(candidates.count) 条等你点头")
     }
 
     // MARK: 存档对话的正文
@@ -616,6 +710,66 @@ final class MemoryStore: ObservableObject {
                    at: 0)
         if log.count > 200 { log = Array(log.prefix(200)) }
         saveLog()
+    }
+
+    // MARK: 浮沉、钉住、候选（这一摊的算法都在 MemoryRecall.swift）
+
+    /// 已经钉住的条数。上限 20，见 `MemoryRecall.pinLimit`。
+    var pinnedCount: Int { memories.filter { $0.pinned == true }.count }
+
+    /// 现在最该被看见的几条。零参数——不用他想好要搜什么。
+    ///
+    /// 排序 = 重要度 ×（钉住的翻倍）×（还悬着的抬一档），同分的新的在前。
+    /// **不按时间打折**——她不要遗忘曲线，理由写在 MemoryRecall.swift 里。
+    func surfaced(_ limit: Int = 6) -> [MemoryItem] {
+        memories.filter(\.isLive)
+            .sorted(by: MemoryRecall.surfaceOrder)
+            .prefix(limit).map { $0 }
+    }
+
+    /// 抠实体的时候要给它一份「已经见过的实体」，越用越准
+    var knownEntities: [String] {
+        Array(Set(memories.flatMap { $0.entities ?? [] })).prefix(300).map { $0 }
+    }
+
+    /// 真正把一条记忆放进库里。工具和「收进去」按钮走的是同一条路，
+    /// 免得两边各建一遍、字段慢慢长歪。
+    @discardableResult
+    func insertMemory(content: String, tags: [String], level: Int,
+                      author: String, since: String? = nil) -> MemoryItem {
+        var item = MemoryItem(
+            id: UUID().uuidString, content: content,
+            tags: tags, level: max(1, min(5, level)),
+            author: author.isEmpty ? "阿晏" : author,
+            created_at: Self.now, updated_at: Self.now)
+        item.valid_from = (since?.isEmpty == false) ? since : Self.now
+        let ents = MemoryEntities.pull(content, tags: tags, known: knownEntities)
+        item.entities = ents.isEmpty ? nil : ents
+        memories.insert(item, at: 0)
+        saveMemories()
+        note("新增", by: item.author, memID: item.id, after: content)
+        return item
+    }
+
+    /// 她点头：候选转正。
+    @discardableResult
+    func acceptCandidate(_ id: String) -> MemoryItem? {
+        guard let i = candidates.firstIndex(where: { $0.id == id || $0.id.hasPrefix(id) })
+        else { return nil }
+        let c = candidates.remove(at: i)
+        saveCandidates()
+        return insertMemory(content: c.content, tags: c.tags,
+                            level: c.level, author: c.author)
+    }
+
+    /// 她摇头：丢掉，不进库。
+    @discardableResult
+    func dropCandidate(_ id: String) -> Bool {
+        guard let i = candidates.firstIndex(where: { $0.id == id || $0.id.hasPrefix(id) })
+        else { return false }
+        candidates.remove(at: i)
+        saveCandidates()
+        return true
     }
 
     // MARK: 导入
@@ -746,6 +900,18 @@ final class MemoryStore: ObservableObject {
                     report.lines.append("情绪事件 \(v.count) 条")
                 } else { report.failed.append(name) }
 
+            case "candidates.json":
+                if let v = try? dec.decode([MemoryCandidate].self, from: data) {
+                    candidates = v; saveCandidates()
+                    report.lines.append("待收的候选 \(v.count) 条")
+                } else { report.failed.append(name) }
+
+            case "glossary.json":
+                if let v = try? dec.decode([GlossaryEntry].self, from: data) {
+                    glossary = v; saveGlossary()
+                    report.lines.append("黑话 \(v.count) 个")
+                } else { report.failed.append(name) }
+
             case "memories_log.json":
                 // 电脑那边的流水里 before/after 是对象，这边只留文字，
                 // 认不出来就跳过，不值得为它卡住整次导入
@@ -787,6 +953,8 @@ final class MemoryStore: ObservableObject {
             }
         }
         put(memories, "memories.json")
+        put(candidates, "candidates.json")
+        put(glossary, "glossary.json")
         put(diaries, "diaries.json")
         put(currentState, "current_state.json")
         put(stateHistory, "state_history.json")
@@ -822,6 +990,7 @@ final class MemoryStore: ObservableObject {
         checkpoint = nil; partnerMessage = nil
         periods = PeriodBook(); moods = [:]
         emotionalEvents = []; log = []; transcripts = []
+        candidates = []; glossary = []
         promises = []; spine = NarrativeSpine(); rules = []; openTasks = []
         letter = nil
     }

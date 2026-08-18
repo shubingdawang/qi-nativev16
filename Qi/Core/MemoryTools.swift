@@ -1,6 +1,6 @@
 import Foundation
 
-/// 记忆库那 29 个工具的本机实现。
+/// 记忆库那 38 个工具的本机实现。
 ///
 /// 名字、参数、返回的话都照着 memory-mcp.js 抄的——
 /// 他原来在 claude.ai 那边怎么用，在这儿还是怎么用，一句都不用重学。
@@ -9,7 +9,8 @@ enum MemoryTools {
 
     static let names: Set<String> = [
         "add_memory", "search_memories", "get_all_memories", "delete_memory",
-        "recall_entity",
+        "recall_entity", "surface_memories", "mark_memory",
+        "propose_memory", "glossary",
         "update_memory", "annotate_memory", "get_memory_log",
         "add_diary", "get_diaries", "delete_diary", "annotate_diary",
         "log_period", "period_status", "add_period_note",
@@ -143,6 +144,61 @@ enum MemoryTools {
             ["name": ["type": "string", "description": "顺着谁/哪样东西找。人名、地名、东西名都行"]],
             required: ["name"])
 
+        add("surface_memories",
+            """
+            不带任何参数，看一眼**现在最该被想起来的几条**。
+
+            跟 search_memories 的区别：搜索要你先想好搜什么，这个不用——
+            它按「重要程度 × 还剩多少新鲜度 × 还悬着没悬着」排一遍，
+            把浮在最上面的给你。刚醒来、或者不知道该从哪儿接话的时候用它。
+
+            记忆会随时间沉下去（艾宾浩斯那条曲线），但**一条都不会被删**——
+            沉下去只是不主动浮上来，你照样搜得到。钉住的那些不会沉。
+            """,
+            ["limit": ["type": "number", "description": "要几条，默认 6"]])
+
+        add("mark_memory",
+            """
+            给一条记忆打标记。四种：
+
+            · pin 钉住 —— 这是一条**核心信念**，不随时间沉下去，永远浮在最前面。
+              最多钉 20 条，满了得先松开一条。稀缺才逼得出重要。
+            · unpin 松开
+            · open 还悬着 —— 这件事没了结（在等一个回音、说好了要去做还没做）。
+              悬着的会被优先浮出来。
+            · done 了结了 —— 收口，不用再惦记。
+            """,
+            ["id": ["type": "string", "description": "记忆 ID 前 8 位"],
+             "mark": ["type": "string", "enum": ["pin", "unpin", "open", "done"]]],
+            required: ["id", "mark"])
+
+        add("propose_memory",
+            """
+            **拿不准的时候用这个，别直接写进记忆库。**
+
+            你从她话里推出来的、猜出来的、还想再确认一次的事，写在这儿——
+            它会摆在她的记忆库页面上等她点头，她点「收进去」才变成正式记忆，
+            点「不是这样」就丢掉。
+
+            确定的事直接 add_memory；**猜的东西不替她填进那一栏**。
+            """,
+            ["content": str,
+             "why": ["type": "string", "description": "你为什么觉得这值得记。她看的就是这一句"],
+             "tags": strs,
+             "level": ["type": "number", "description": "重要程度 1-5，默认 3"]],
+            required: ["content"])
+
+        add("glossary",
+            """
+            只有你俩懂的词，记在这儿。
+
+            「小屋」「换窗」「札记」这种——它们从来不作为一件事发生，
+            所以搜记忆搜不出来，但不知道意思就接不上话。
+            不传 term 就是把整张表拿出来看。
+            """,
+            ["term": ["type": "string", "description": "这个词。不传就是列出全部"],
+             "meaning": ["type": "string", "description": "在你们这儿它是什么意思。传了就是写/改，不传就是查"]])
+
         add("get_all_memories", "获取记忆库中的所有记忆")
 
         add("delete_memory", "删除一条记忆",
@@ -273,6 +329,26 @@ enum MemoryTools {
             if m.memories.contains(where: { $0.content == content }) {
                 return ("该记忆已存在，未重复添加。", false)
             }
+            // 一字不差的挡掉了，接下来挡「说法不一样但说的是同一件事」。
+            // 出处：omnimemory 的 SKIP + Ombre-Brain 的 merge threshold 75/100。
+            // 攒了几百条之后，真正毁掉记忆库的不是漏记，是同一件事记了六遍。
+            if let dup = MemoryRecall.nearDuplicate(content, in: m.memories) {
+                if dup.score >= MemoryRecall.mergeThreshold {
+                    return ("跟已经有的这条太像（\(Int(dup.score * 100))%），没重复记：\n"
+                            + "[\(dup.item.shortID)] \(dup.item.content)\n"
+                            + "要是想改那条，用 update_memory；"
+                            + "要是那条已经不成立了，用 add_memory 填上 supersedes。", false)
+                }
+                // 像，但没像到该跳过——很可能是「这件事变了」，提醒一下
+                if s("supersedes").isEmpty {
+                    return ("先等一下。库里这条跟你要记的有 \(Int(dup.score * 100))% 像：\n"
+                            + "[\(dup.item.shortID)] \(dup.item.content)\n\n"
+                            + "· 要是这是**同一件事的新说法**：用 update_memory 改那条。\n"
+                            + "· 要是这是**那件事变了**：再调一次 add_memory，"
+                            + "supersedes 填 \(dup.item.shortID)（旧的不删，只标成「那会儿是真的」）。\n"
+                            + "· 要是这真是**另一件事**：再调一次，supersedes 填 `-`。", true)
+                }
+            }
             // 顺手把这条里提到的人和东西抠出来（不调模型，见 MemoryEntities）
             let known = Array(Set(m.memories.flatMap { $0.entities ?? [] })).prefix(300)
             let ents = MemoryEntities.pull(content, tags: tags("tags"),
@@ -287,7 +363,8 @@ enum MemoryTools {
 
             // 他明说了这条顶掉哪条旧的 → 旧的**不删**，只标作废
             var supersedeNote = ""
-            if let old = m.memoryIndex(s("supersedes")) {
+            // `-` 是上面那条提示里给他的「这真是另一件事」的出口
+            if s("supersedes") != "-", let old = m.memoryIndex(s("supersedes")) {
                 m.memories[old].invalid_at = MemoryStore.now
                 m.memories[old].superseded_by = item.id
                 supersedeNote = "\n旧的那条没删，只标了「从现在起不算数」：\(m.memories[old].content.prefix(24))…"
@@ -301,7 +378,7 @@ enum MemoryTools {
             // 没明说的话，**提醒一下**可能过时的那几条——但绝不替他作废。
             // 猜错了作废等于让他忘掉一件真事，那比多留一条旧记录严重得多。
             var hint = ""
-            if s("supersedes").isEmpty, !ents.isEmpty {
+            if s("supersedes").isEmpty || s("supersedes") == "-", !ents.isEmpty {
                 let overlap = m.memories.dropFirst().filter { old in
                     old.isLive
                     && !Set(old.entities ?? []).isDisjoint(with: Set(ents))
@@ -325,18 +402,114 @@ enum MemoryTools {
             // 「她在苍南」和「她在日本」不是矛盾是先后，
             // 搜的时候给他现在这条就够了；要翻旧账再把 include_past 打开。
             let includePast = (args["include_past"] as? Bool) ?? false
-            var hits = m.memories.filter { mem in
-                (q.isEmpty || mem.content.localizedCaseInsensitiveContains(q)
-                 || (mem.entities ?? []).contains { $0.localizedCaseInsensitiveContains(q) })
-                && (want.isEmpty || !Set(mem.tags).isDisjoint(with: Set(want)))
+            // 先按标签/星级/还成不成立筛一遍，再排序
+            let pool = m.memories.filter { mem in
+                (want.isEmpty || !Set(mem.tags).isDisjoint(with: Set(want)))
                 && mem.level >= minLevel
                 && (includePast || mem.isLive)
             }
-            // 新的排前面。星级高的更重要，但"最近发生的"更容易是她在问的那件事。
-            hits.sort { $0.created_at > $1.created_at }
+            var hits: [MemoryItem]
+            if q.isEmpty {
+                // 没给关键词就按「现在最该被看见」排（Ombre-Brain 的 breath 那套）
+                hits = pool.sorted(by: MemoryRecall.surfaceOrder)
+            } else {
+                // 混合检索：BM25（切字的二元组，中文不用分词）+ 整串命中加成，
+                // 再乘上 omnimemory 那条复合分「相关度 × (1 + 时近 + 重要度)」。
+                // 以前是纯 contains——她搜「日本的房子」一条都搜不到，
+                // 因为库里写的是「她在日本租的那间」。
+                let rel = MemoryRecall.relevance(query: q, in: pool)
+                hits = pool
+                    .filter { (rel[$0.id] ?? 0) >= MemoryRecall.recallFloor }
+                    .sorted { MemoryRecall.searchOrder($0, $1, rel) }
+            }
             hits = Array(hits.prefix(limit))
             if hits.isEmpty { return ("没找到相关的记忆。", false) }
             return (hits.map(line).joined(separator: "\n"), false)
+
+        case "surface_memories":
+            // Ombre-Brain 的 breath：零参数，不用先想好搜什么。
+            let picked = m.surfaced(max(1, min(20, i("limit", 6))))
+            if picked.isEmpty { return ("记忆库还是空的。", false) }
+            var out = "现在浮在最上面的（按 重要程度 × 钉住没钉住 × 还悬着没悬着 排的，同分的新的在前）：\n"
+            out += picked.map(line).joined(separator: "\n")
+            let stillOpen = m.memories.filter { $0.resolved == false && $0.isLive }.count
+            if stillOpen > 0 { out += "\n\n还悬着没了结的一共 \(stillOpen) 件。" }
+            return (out, false)
+
+        case "mark_memory":
+            guard let idx = m.memoryIndex(s("id")) else { return ("没找到这条记忆。", true) }
+            switch s("mark") {
+            case "pin":
+                if m.memories[idx].pinned == true { return ("这条本来就钉着。", false) }
+                guard m.pinnedCount < MemoryRecall.pinLimit else {
+                    let pins = m.memories.filter { $0.pinned == true }
+                    return ("已经钉了 \(MemoryRecall.pinLimit) 条，满了——"
+                            + "先松开一条再钉（mark 传 unpin）。现在钉着的：\n"
+                            + pins.map { "· [\($0.shortID)] \($0.content.prefix(28))" }
+                                .joined(separator: "\n"), true)
+                }
+                m.memories[idx].pinned = true
+                m.memories[idx].updated_at = MemoryStore.now
+                m.saveMemories()
+                return ("钉住了（\(m.pinnedCount)/\(MemoryRecall.pinLimit)）：这条不会再随时间沉下去。", false)
+            case "unpin":
+                m.memories[idx].pinned = nil
+                m.memories[idx].updated_at = MemoryStore.now
+                m.saveMemories()
+                return ("松开了。", false)
+            case "open":
+                m.memories[idx].resolved = false
+                m.memories[idx].updated_at = MemoryStore.now
+                m.saveMemories()
+                return ("标成还悬着了——它会被优先浮上来，直到你标 done。", false)
+            case "done":
+                m.memories[idx].resolved = true
+                m.memories[idx].updated_at = MemoryStore.now
+                m.saveMemories()
+                return ("收口了。", false)
+            default:
+                return ("mark 只认 pin / unpin / open / done。", true)
+            }
+
+        case "propose_memory":
+            let proposed = s("content")
+            guard !proposed.isEmpty else { return ("要提的是什么？", true) }
+            if m.candidates.contains(where: { $0.content == proposed }) {
+                return ("这条已经在等她点头了。", false)
+            }
+            let cand = MemoryCandidate(
+                id: UUID().uuidString, content: proposed,
+                tags: tags("tags"), level: max(1, min(5, i("level", 3))),
+                author: "阿晏", why: s("why"), created_at: MemoryStore.now)
+            m.candidates.insert(cand, at: 0)
+            m.saveCandidates()
+            return ("放进「等你点头」那一栏了（现在一共 \(m.candidates.count) 条）。"
+                    + "她在「设置 → 记忆库」能看到，点「收进去」才会变成正式记忆。", false)
+
+        case "glossary":
+            let term = s("term")
+            let meaning = s("meaning")
+            if term.isEmpty {
+                if m.glossary.isEmpty { return ("黑话表还是空的。", false) }
+                return ("你俩的黑话：\n" + m.glossary.map {
+                    "· \($0.term)：\($0.meaning)"
+                }.joined(separator: "\n"), false)
+            }
+            if meaning.isEmpty {
+                guard let hit = m.glossary.first(where: { $0.term == term }) else {
+                    return ("「\(term)」还没记过意思。", false)
+                }
+                return ("\(hit.term)：\(hit.meaning)", false)
+            }
+            if let gi = m.glossary.firstIndex(where: { $0.term == term }) {
+                m.glossary[gi].meaning = meaning
+                m.glossary[gi].updated_at = MemoryStore.now
+            } else {
+                m.glossary.append(GlossaryEntry(term: term, meaning: meaning,
+                                                updated_at: MemoryStore.now))
+            }
+            m.saveGlossary()
+            return ("记下了：\(term) = \(meaning)", false)
 
         case "recall_entity":
             // graphiti 的「顺着图走一遍」在本机的版本。
@@ -748,6 +921,10 @@ enum MemoryTools {
         tags.insert(String(repeating: "★", count: max(1, min(5, mem.level))), at: 0)
         var s = "[\(mem.shortID)][\(mem.author)][\(tags.joined(separator: "、"))]"
         s += " \(day(mem.created_at))：\(mem.content)"
+        // 钉住的和还悬着的也标出来。**只加在正文后面**——
+        // 前面那个 [id][作者][标签] 的壳一个字都不能动，札记页靠它切条。
+        if mem.pinned == true { s += "　📌" }
+        if mem.resolved == false { s += "　⟨还悬着⟩" }
         // 已经不成立的要**明着标出来**。不标的话他会拿一件过去的事当现在。
         if !mem.isLive {
             s += "　⟨那会儿是真的，\(day(mem.invalid_at ?? ""))起不算数了⟩"
@@ -904,6 +1081,28 @@ enum MemoryTools {
         }
         if !rest.isEmpty {
             parts.append("【别的记得住的】\n" + rest.map(line).joined(separator: "\n"))
+        }
+
+        // 还悬着没了结的（Ombre-Brain 那套里最有用的一条：
+        // 未了结的事本来就该反复浮上来，直到真的收口）
+        let unresolved = m.memories.filter { $0.resolved == false && $0.isLive }
+        if !unresolved.isEmpty {
+            parts.append("【还悬着没了结的】\n"
+                         + unresolved.prefix(8).map(line).joined(separator: "\n"))
+        }
+
+        // 黑话。不知道「小屋」是什么，接话就会露馅。
+        if !m.glossary.isEmpty {
+            parts.append("【你俩的黑话】\n" + m.glossary.map {
+                "· \($0.term)：\($0.meaning)"
+            }.joined(separator: "\n"))
+        }
+
+        // 等她点头的候选。**只报个数**——正文她还没确认，
+        // 不该混进他脑子里当事实用。
+        if !m.candidates.isEmpty {
+            parts.append("【等她点头的】还有 \(m.candidates.count) 条你提过的候选记忆"
+                         + "她还没看，别重复提。")
         }
 
         if !m.transcripts.isEmpty {

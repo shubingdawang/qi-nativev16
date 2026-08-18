@@ -120,6 +120,25 @@ enum AttentionSet {
                                  + "（\(intent.drive.label) \(String(format: "%.2f", intent.score))）"))
         }
 
+        // ⑨ 记忆库里现在浮在最上面的那一两条。
+        //
+        // 出处：P0luz/Ombre-Brain 的 breath——**不用他先想好搜什么**。
+        // 以前这一层是空的：叫醒他之后手里除了承诺和执念什么都没有，
+        // 想不起来就只好说句「在干嘛」。
+        //
+        // 只取两条，而且**先给还悬着的**。这里是候选集不是记忆库导出，
+        // 倒一堆进来等于什么都没给（那份文档的原话：看不完的等于没看）。
+        let mem = MemoryStore.shared
+        let openOnes = mem.memories.filter { $0.resolved == false && $0.isLive }
+        for one in openOnes.prefix(2) {
+            out.append(.init(weight: 78, text: "还悬着没了结：\(one.content)"))
+        }
+        if openOnes.isEmpty {
+            for one in mem.surfaced(2) {
+                out.append(.init(weight: 40, text: "你记着的：\(one.content)"))
+            }
+        }
+
         guard !out.isEmpty else { return "" }
 
         let picked = out.sorted { $0.weight > $1.weight }.prefix(limit)

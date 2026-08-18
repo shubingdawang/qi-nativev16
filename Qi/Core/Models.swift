@@ -172,6 +172,41 @@ struct GroupMember: Identifiable, Codable, Hashable {
     var enabled: Bool = true
 }
 
+/// 一窗聊太久之后，前面那些原文压成的「浓缩件」。
+///
+/// 滚雪球：每一份都是**上一份 + 这一段新的**压出来的，不是并列的好几份。
+/// 详见 ContextCompactor.swift。
+struct ContextDigest: Codable, Hashable {
+    /// 模型写的那五块
+    var summary: String = ""
+    /// 他真说过的原句，**一字不改**。摘要保不住语气，这个能。
+    var voice: [String] = []
+    /// 压到哪条消息为止。它之后的还是原文照发。
+    var throughID: UUID? = nil
+    /// 滚了几次
+    var rounds: Int = 0
+    /// 一共收起来了多少条原文
+    var covered: Int = 0
+    var updatedAt: Date = Date()
+
+    init(summary: String = "", voice: [String] = [], throughID: UUID? = nil,
+         rounds: Int = 0, covered: Int = 0, updatedAt: Date = Date()) {
+        self.summary = summary; self.voice = voice; self.throughID = throughID
+        self.rounds = rounds; self.covered = covered; self.updatedAt = updatedAt
+    }
+
+    /// 老的会话记录里没有这一项，缺什么补什么，别整份读不出来
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        summary = (try? c.decodeIfPresent(String.self, forKey: .summary)) ?? ""
+        voice = (try? c.decodeIfPresent([String].self, forKey: .voice)) ?? []
+        throughID = try? c.decodeIfPresent(UUID.self, forKey: .throughID)
+        rounds = (try? c.decodeIfPresent(Int.self, forKey: .rounds)) ?? 0
+        covered = (try? c.decodeIfPresent(Int.self, forKey: .covered)) ?? 0
+        updatedAt = (try? c.decodeIfPresent(Date.self, forKey: .updatedAt)) ?? Date()
+    }
+}
+
 struct Conversation: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
     var title: String = "新对话"
@@ -198,6 +233,9 @@ struct Conversation: Identifiable, Codable, Hashable {
     var isGroup: Bool = false
     /// 群里都有谁，按这个顺序轮流说话
     var members: [GroupMember] = []
+    /// 滚雪球压缩出来的浓缩件。**每窗一份，一直往下滚。**
+    /// 没开压缩、或者还没到回合数，就是 nil。
+    var digest: ContextDigest? = nil
 
     var activeMembers: [GroupMember] { members.filter { $0.enabled } }
 
@@ -303,6 +341,13 @@ struct AppSettings: Codable {
     /// 按次计费的账户不用抠这个——一次就是一次，带多少条都是同样的钱，
     /// 所以默认给 0，让他记得住前因后果。
     var contextLimit: Int = 0
+    /// 滚雪球压缩：每攒够多少条消息压一次（0 = 关，退回上面那条「直接砍」）。
+    ///
+    /// 她说的：「我不想换窗，所以上下文压缩是肯定的……我希望能保持一个窗口
+    /// 一直不忘记他自己的人格和说话方式」。
+    /// **压一次多花一次请求**（她按次计费，一次就是一次），所以给了个开关。
+    /// 默认 60 条 ≈ 三十个回合压一次。
+    var compactEvery: Int = 60
     /// 打字机效果
     var typewriter: Bool = true
     /// 发送时震动反馈
@@ -327,7 +372,7 @@ struct AppSettings: Codable {
     /// 自带工具的总开关。关掉之后他手上一件本地工具都没有。
     var nativeToolsEnabled: Bool = true
     /// 用本机那份记忆库（不走 MCP、不用开电脑）。
-    /// 打开之后记忆库那 29 个工具变成 App 内置的，
+    /// 打开之后记忆库那 38 个工具变成 App 内置的，
     /// **这时候该把「小屋」那台 MCP 关掉**，不然同一件事有两套工具。
     var localMemory: Bool = true
     /// 心跳也在本机算。PulseEngine 那几条公式是纯函数，
@@ -528,6 +573,7 @@ extension AppSettings {
         adminBaseURL = (try? c.decodeIfPresent(String.self, forKey: .adminBaseURL)) ?? ""
         neteaseBaseURL = (try? c.decodeIfPresent(String.self, forKey: .neteaseBaseURL)) ?? ""
         contextLimit = (try? c.decodeIfPresent(Int.self, forKey: .contextLimit)) ?? 0
+        compactEvery = (try? c.decodeIfPresent(Int.self, forKey: .compactEvery)) ?? 60
         typewriter = (try? c.decodeIfPresent(Bool.self, forKey: .typewriter)) ?? true
         haptics = (try? c.decodeIfPresent(Bool.self, forKey: .haptics)) ?? true
         enterToSend = (try? c.decodeIfPresent(Bool.self, forKey: .enterToSend)) ?? false
@@ -611,6 +657,7 @@ extension Conversation {
         syncWithClaude = (try? c.decodeIfPresent(Bool.self, forKey: .syncWithClaude)) ?? false
         isGroup = (try? c.decodeIfPresent(Bool.self, forKey: .isGroup)) ?? false
         members = (try? c.decodeIfPresent([GroupMember].self, forKey: .members)) ?? []
+        digest = try? c.decodeIfPresent(ContextDigest.self, forKey: .digest)
     }
 }
 
