@@ -373,6 +373,16 @@ struct AppSettings: Codable {
     /// 查岗开着没有。**默认关**——
     /// 这是三样一起给（屏幕、位置、天气），必须她点头才开。
     var checkInEnabled: Bool = false
+
+    // MARK: 读书那一页的偏好
+    /// 正文字号
+    var readerFont: Double = 17
+    /// 行距
+    var readerSpacing: Double = 8
+    /// 怎么翻页：scroll 上下滑 / slide 左右滑 / curl 仿真翻页
+    var readerPageMode: String = "scroll"
+    /// 马克笔用哪一支（六位色号）
+    var markerHex: String = "F2C94C"
     
     var contextLimit: Int = 0
     /// 滚雪球压缩：每攒够多少条消息压一次（0 = 关，退回上面那条「直接砍」）。
@@ -610,6 +620,10 @@ extension AppSettings {
         fallbackModel = (try? c.decodeIfPresent(String.self, forKey: .fallbackModel)) ?? ""
         helperModel = (try? c.decodeIfPresent(String.self, forKey: .helperModel)) ?? ""
         checkInEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .checkInEnabled)) ?? false
+        readerFont = (try? c.decodeIfPresent(Double.self, forKey: .readerFont)) ?? 17
+        readerSpacing = (try? c.decodeIfPresent(Double.self, forKey: .readerSpacing)) ?? 8
+        readerPageMode = (try? c.decodeIfPresent(String.self, forKey: .readerPageMode)) ?? "scroll"
+        markerHex = (try? c.decodeIfPresent(String.self, forKey: .markerHex)) ?? "F2C94C"
         contextLimit = (try? c.decodeIfPresent(Int.self, forKey: .contextLimit)) ?? 0
         compactEvery = (try? c.decodeIfPresent(Int.self, forKey: .compactEvery)) ?? 60
         typewriter = (try? c.decodeIfPresent(Bool.self, forKey: .typewriter)) ?? true

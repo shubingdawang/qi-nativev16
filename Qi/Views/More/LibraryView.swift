@@ -1,443 +1,13 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
-/// 书房。导进来的书都在这儿。
-struct LibraryView: View {
+// MARK: - 划下那句话的详情
+//
+// ⚠️ 这个文件原来还装着 `LibraryView`（老的那份平铺书单）和 `ReaderView`。
+// 书房 v107 重做之后：
+//   · 书单 → `BookshelfView.swift`（书架 / 书脊 / 封面墙 / 批注页）
+//   · 阅读页 → `ReaderView.swift`（按句选、马克笔、翻页方式、点屏召唤设置）
+// 这儿只剩下这一张「点开某一句看详情」的卡片，两边都在用它。
 
-    @ObservedObject private var store = LibraryStore.shared
-    @EnvironmentObject var app: AppState
-    @Environment(\.colorScheme) private var scheme
-
-    @State private var importing = false
-    @State private var busy = false
-    @State private var notice: String?
-    @State private var reading: Book?
-
-    var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 10) {
-
-                if store.books.isEmpty && !busy {
-                    VStack(spacing: 8) {
-                        Image(systemName: "books.vertical")
-                            .font(.app(32, weight: .light))
-                            .foregroundStyle(app.settings.accentColor.opacity(0.5))
-                        Text("书架还空着")
-                            .font(.app(13))
-                            .foregroundStyle(Theme.textMuted(scheme))
-                        Text("点右上角导入 txt 或 epub。\n每本书可以单独决定要不要跟他一起读。")
-                            .font(.app(11))
-                            .foregroundStyle(Theme.textMuted(scheme).opacity(0.8))
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding(.top, 70)
-                }
-
-                if busy {
-                    HStack(spacing: 8) {
-                        ProgressView().scaleEffect(0.8)
-                        Text("正在拆书…")
-                            .font(.app(12))
-                            .foregroundStyle(Theme.textMuted(scheme))
-                    }
-                    .padding(.vertical, 20)
-                }
-
-                if let notice {
-                    Text(notice)
-                        .font(.app(12))
-                        .foregroundStyle(.orange)
-                }
-
-                ForEach(store.books) { book in
-                    Button {
-                        reading = book
-                    } label: {
-                        bookRow(book)
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button {
-                            store.toggleShared(book.id)
-                        } label: {
-                            Label(book.shared ? "不跟他一起读了" : "叫他一起读",
-                                  systemImage: book.shared ? "person.slash" : "person.2")
-                        }
-                        Button(role: .destructive) {
-                            store.remove(book.id)
-                        } label: {
-                            Label("从书架拿走", systemImage: Icon.trash)
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, Layout.tabBarExpanded + 16)
-        }
-        .navigationTitle("书房")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    importing = true
-                } label: {
-                    Image(systemName: Icon.add)
-                }
-                .disabled(busy)
-            }
-        }
-        .fileImporter(isPresented: $importing,
-                      allowedContentTypes: [
-                          .plainText,
-                          UTType("org.idpf.epub-container") ?? .data,
-                          .data
-                      ],
-                      allowsMultipleSelection: true) { result in
-            guard case .success(let urls) = result else { return }
-            Task { await load(urls) }
-        }
-        .fullScreenCover(item: $reading) { book in
-            ReaderView(bookID: book.id)
-        }
-    }
-
-    private func bookRow(_ book: Book) -> some View {
-        HStack(spacing: 12) {
-            // 没有封面就用书名头一个字凑一个
-            ZStack {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(app.settings.accentColor.opacity(0.22))
-                Text(String(book.title.prefix(1)))
-                    .font(.app(22, weight: .light, design: .serif))
-                    .foregroundStyle(Theme.textMain(scheme))
-            }
-            .frame(width: 44, height: 60)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(book.title)
-                    .font(.app(15, weight: .medium))
-                    .foregroundStyle(Theme.textMain(scheme))
-                    .lineLimit(2)
-                if !book.author.isEmpty {
-                    Text(book.author)
-                        .font(.app(11))
-                        .foregroundStyle(Theme.textMuted(scheme))
-                }
-                HStack(spacing: 6) {
-                    Text(book.progressText)
-                    let n = store.annotations(for: book.id).count
-                    if n > 0 { Text("· 划了 \(n) 处") }
-                }
-                .font(.app(10))
-                .foregroundStyle(Theme.textMuted(scheme))
-
-                if book.shared {
-                    HStack(spacing: 4) {
-                        Image(systemName: "person.2.fill")
-                            .font(.app(8))
-                        Text("一起读")
-                            .font(.app(9))
-                    }
-                    .foregroundStyle(app.settings.accentColor)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(app.settings.accentColor.opacity(0.16)))
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(12)
-        .glassCard(padding: 0)
-    }
-
-    private func load(_ urls: [URL]) async {
-        busy = true
-        notice = nil
-        for u in urls {
-            do {
-                _ = try await store.importBook(from: u)
-            } catch {
-                notice = error.localizedDescription
-            }
-        }
-        busy = false
-    }
-}
-
-// MARK: - 读
-
-/// 读书页。选中一段就是划线，划线之后可以在那句话底下说话。
-struct ReaderView: View {
-
-    let bookID: UUID
-
-    @ObservedObject private var store = LibraryStore.shared
-    @EnvironmentObject var app: AppState
-    @Environment(\.colorScheme) private var scheme
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var chapter = 0
-    @State private var showChapters = false
-    @State private var picking = false
-    @State private var openedAnnotation: Annotation?
-    @State private var fontSize: Double = 17
-
-    private var book: Book? { store.book(bookID) }
-    private var me: String { app.settings.userName.isEmpty ? "我" : app.settings.userName }
-
-    private var marks: [Annotation] {
-        store.annotations(for: bookID, chapter: chapter)
-    }
-
-    var body: some View {
-        ZStack {
-            WallpaperBackground()
-
-            VStack(spacing: 0) {
-                header
-
-                if let book, book.chapters.indices.contains(chapter) {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text(book.chapters[chapter].title)
-                                .font(.app(19, weight: .medium, design: .serif))
-                                .foregroundStyle(Theme.textMain(scheme))
-                                .padding(.bottom, 4)
-
-                            if picking {
-                                // 划线模式：一段一段点，点中的就是划下的
-                                ForEach(paragraphs.indices, id: \.self) { i in
-                                    paragraphButton(paragraphs[i], index: i)
-                                }
-                            } else {
-                                ForEach(paragraphs.indices, id: \.self) { i in
-                                    paragraphText(paragraphs[i], index: i)
-                                }
-                            }
-
-                            chapterNav
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 10)
-                        .padding(.bottom, 60)
-                    }
-                }
-            }
-        }
-        .sheet(isPresented: $showChapters) { chapterList }
-        .sheet(item: $openedAnnotation) { a in
-            AnnotationSheet(annotation: a)
-        }
-        .onAppear { chapter = book?.chapterIndex ?? 0 }
-        .onDisappear {
-            store.saveProgress(bookID, chapter: chapter, offset: 0)
-            if store.readingID == bookID { store.readingID = nil }
-        }
-        .onChange(of: chapter) { _, c in
-            store.saveProgress(bookID, chapter: c, offset: 0)
-        }
-    }
-
-    // MARK: 顶栏
-
-    private var header: some View {
-        HStack(spacing: 12) {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: Icon.close)
-                    .font(.app(15, weight: .medium))
-                    .foregroundStyle(Theme.textSoft(scheme))
-            }
-            .buttonStyle(.plain)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(book?.title ?? "")
-                    .font(.app(13, weight: .medium))
-                    .foregroundStyle(Theme.textMain(scheme))
-                    .lineLimit(1)
-                HStack(spacing: 5) {
-                    Text(book?.progressText ?? "")
-                    if !marks.isEmpty { Text("· 这章划了 \(marks.count) 处") }
-                }
-                .font(.app(10))
-                .foregroundStyle(Theme.textMuted(scheme))
-            }
-
-            Spacer(minLength: 0)
-
-            // 划线开关
-            Button {
-                withAnimation(.easeInOut(duration: 0.18)) { picking.toggle() }
-            } label: {
-                Image(systemName: picking ? "highlighter" : "highlighter")
-                    .font(.app(15))
-                    .foregroundStyle(picking ? app.settings.accentColor : Theme.textSoft(scheme))
-            }
-            .buttonStyle(.plain)
-
-            // 一起读
-            if let book {
-                Button {
-                    store.toggleShared(book.id)
-                    if book.shared { store.readingID = nil }
-                    else { store.readingID = book.id }
-                } label: {
-                    Image(systemName: book.shared ? "person.2.fill" : "person.2")
-                        .font(.app(15))
-                        .foregroundStyle(book.shared
-                                         ? app.settings.accentColor
-                                         : Theme.textSoft(scheme))
-                }
-                .buttonStyle(.plain)
-            }
-
-            Button {
-                showChapters = true
-            } label: {
-                Text("目录")
-                    .font(.app(13))
-                    .foregroundStyle(Theme.textSoft(scheme))
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-        .glassBackground(radius: 0, strength: app.settings.glassOpacity * 0.9)
-    }
-
-    // MARK: 正文
-
-    private var paragraphs: [String] {
-        guard let book, book.chapters.indices.contains(chapter) else { return [] }
-        return book.chapters[chapter].text
-            .components(separatedBy: "\n")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-    }
-
-    private func markFor(_ index: Int) -> Annotation? {
-        marks.first { $0.location == index }
-    }
-
-    private func paragraphText(_ text: String, index: Int) -> some View {
-        let mark = markFor(index)
-        return Text(text)
-            .font(.system(size: fontSize))
-            .foregroundStyle(Theme.textMain(scheme))
-            .lineSpacing(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                if mark != nil {
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(app.settings.accentColor.opacity(0.16))
-                        .padding(.horizontal, -3)
-                }
-            }
-            .contentShape(Rectangle())
-            .onTapGesture {
-                if let mark { openedAnnotation = mark }
-            }
-    }
-
-    private func paragraphButton(_ text: String, index: Int) -> some View {
-        let mark = markFor(index)
-        return Button {
-            if let mark {
-                openedAnnotation = mark
-            } else {
-                let a = store.addAnnotation(bookID: bookID, chapter: chapter,
-                                            quote: text, location: index, author: me)
-                if app.settings.haptics {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                }
-                openedAnnotation = a
-            }
-        } label: {
-            Text(text)
-                .font(.system(size: fontSize))
-                .foregroundStyle(Theme.textMain(scheme))
-                .lineSpacing(8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 2)
-                .background {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(mark != nil
-                              ? app.settings.accentColor.opacity(0.2)
-                              : Theme.textMuted(scheme).opacity(0.05))
-                        .padding(.horizontal, -4)
-                }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var chapterNav: some View {
-        HStack {
-            Button {
-                if chapter > 0 { chapter -= 1 }
-            } label: {
-                Text("上一章")
-                    .font(.app(13))
-                    .foregroundStyle(chapter > 0
-                                     ? app.settings.accentColor
-                                     : Theme.textMuted(scheme).opacity(0.4))
-            }
-            .buttonStyle(.plain)
-            .disabled(chapter == 0)
-
-            Spacer()
-
-            Button {
-                if let book, chapter < book.chapters.count - 1 { chapter += 1 }
-            } label: {
-                Text("下一章")
-                    .font(.app(13))
-                    .foregroundStyle(app.settings.accentColor)
-            }
-            .buttonStyle(.plain)
-            .disabled(chapter >= (book?.chapters.count ?? 1) - 1)
-        }
-        .padding(.top, 24)
-    }
-
-    private var chapterList: some View {
-        NavigationStack {
-            List {
-                ForEach((book?.chapters ?? []).indices, id: \.self) { i in
-                    Button {
-                        chapter = i
-                        showChapters = false
-                    } label: {
-                        HStack {
-                            Text(book?.chapters[i].title ?? "")
-                                .font(.app(14))
-                                .foregroundStyle(i == chapter
-                                                 ? app.settings.accentColor
-                                                 : Theme.textMain(scheme))
-                                .lineLimit(1)
-                            Spacer()
-                            let n = store.annotations(for: bookID, chapter: i).count
-                            if n > 0 {
-                                Text("\(n)")
-                                    .font(.app(10))
-                                    .foregroundStyle(Theme.textMuted(scheme))
-                            }
-                        }
-                    }
-                }
-            }
-            .transparentList()
-            .listRowBackground(GlassRowBackground())
-            .navigationTitle("目录")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-    }
-}
-
-// MARK: - 这一句
-
-/// 点划过的地方弹出来的。上面是那句话，底下是围着它说的话。
 struct AnnotationSheet: View {
 
     @State var annotation: Annotation
@@ -447,6 +17,18 @@ struct AnnotationSheet: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dismiss) private var dismiss
     @State private var draft = ""
+    @State private var jumpFailed = false
+
+    /// 跳回当时聊的那一轮。
+    /// **跳不成要说实话**——那条记录可能已经被她清掉了。
+    private func jump() {
+        guard let turn = fresh.talkIDs.last else { return }
+        if app.jumpToTurn(turn) {
+            dismiss()
+        } else {
+            jumpFailed = true
+        }
+    }
 
     private var me: String { app.settings.userName.isEmpty ? "我" : app.settings.userName }
     private var fresh: Annotation { store.annotation(annotation.id) ?? annotation }
@@ -479,6 +61,33 @@ struct AnnotationSheet: View {
                                 Text("还没说什么。这句话为什么打动你？")
                                     .font(.app(12))
                                     .foregroundStyle(Theme.textMuted(scheme))
+                            }
+
+                            // 跟他围绕这句聊过的话，在聊天记录里。
+                            // 上面那些是**留在这句底下**的往来；
+                            // 这个按钮是回到**当时那一轮对话**里去看。
+                            if !fresh.talkIDs.isEmpty {
+                                Divider().opacity(0.4).padding(.vertical, 4)
+                                Button {
+                                    jump()
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "bubble.left.and.text.bubble.right")
+                                            .font(.app(12))
+                                        Text("看当时聊了什么")
+                                            .font(.app(13))
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.app(10))
+                                    }
+                                    .foregroundStyle(app.settings.accentColor)
+                                }
+                                .buttonStyle(.plain)
+                                if jumpFailed {
+                                    Text("那一轮的记录找不着了（可能被清过）。")
+                                        .font(.app(11))
+                                        .foregroundStyle(.orange)
+                                }
                             }
                         }
                         .padding(18)

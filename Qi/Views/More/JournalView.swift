@@ -107,13 +107,27 @@ struct JournalView: View {
                     .font(.app(11))
                     .foregroundStyle(Theme.textMain(scheme))
                     .lineLimit(1)
-                Text(dayText(p.day))
-                    .font(.app(9))
-                    .foregroundStyle(Theme.textMuted(scheme))
+                HStack(spacing: 3) {
+                    // 给他看的那几页标一下，一眼看得出哪些他能看见
+                    if p.shared {
+                        Image(systemName: "person.2.fill")
+                            .font(.system(size: 7))
+                            .foregroundStyle(app.settings.accentColor)
+                    }
+                    Text(dayText(p.day))
+                        .font(.app(9))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
             }
         }
         .buttonStyle(.plain)
         .contextMenu {
+            Button {
+                store.toggleShared(p.id)
+            } label: {
+                Label(p.shared ? "不给他看了" : "给他看",
+                      systemImage: p.shared ? "person.slash" : "person.2")
+            }
             Button(role: .destructive) { confirmDelete = p } label: {
                 Label("撕掉这一页", systemImage: Icon.trash)
             }

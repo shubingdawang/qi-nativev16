@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI          // Annotation.color 要用 Color
 import Compression
 
 /// 一本书。
@@ -17,9 +18,54 @@ struct Book: Codable, Identifiable, Hashable {
     /// 关着的时候他完全看不到这本书；随时可以打开，读到一半也行。
     var shared: Bool = false
 
+    /// 归在哪个书架上。空的就是「还没归架」。
+    ///
+    /// 她要的样子：「首页的选项 1 是不同的长书架作为分类，
+    /// 有几个分类就有几个书架，分类里有几本书，书架上就有几本书，
+    /// 是书脊面对着我。」
+    var shelf: String = ""
+    /// 封面图的文件名。**没有就拿书名当封面**（她说的）。
+    var coverName: String = ""
+
+    /// 没封面的时候，书名怎么在书脊/封面上摆
+    var coverTitle: String {
+        title.isEmpty ? "无名" : title
+    }
+
     var progressText: String {
         guard !chapters.isEmpty else { return "" }
         return "第 \(chapterIndex + 1) / \(chapters.count) 章"
+    }
+
+    /// 读了百分之几。封面下面那一行要用。
+    var progress: Double {
+        guard chapters.count > 1 else { return chapters.isEmpty ? 0 : offset }
+        return (Double(chapterIndex) + offset) / Double(chapters.count)
+    }
+
+    /// 老书没有这两个字段，直接解会整架书读不出来
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
+        title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
+        author = (try? c.decodeIfPresent(String.self, forKey: .author)) ?? ""
+        chapters = (try? c.decodeIfPresent([BookChapter].self, forKey: .chapters)) ?? []
+        addedAt = (try? c.decodeIfPresent(Date.self, forKey: .addedAt)) ?? Date()
+        chapterIndex = (try? c.decodeIfPresent(Int.self, forKey: .chapterIndex)) ?? 0
+        offset = (try? c.decodeIfPresent(Double.self, forKey: .offset)) ?? 0
+        shared = (try? c.decodeIfPresent(Bool.self, forKey: .shared)) ?? false
+        shelf = (try? c.decodeIfPresent(String.self, forKey: .shelf)) ?? ""
+        coverName = (try? c.decodeIfPresent(String.self, forKey: .coverName)) ?? ""
+    }
+
+    init(id: UUID = UUID(), title: String = "", author: String = "",
+         chapters: [BookChapter] = [], addedAt: Date = Date(),
+         chapterIndex: Int = 0, offset: Double = 0, shared: Bool = false,
+         shelf: String = "", coverName: String = "") {
+        self.id = id; self.title = title; self.author = author
+        self.chapters = chapters; self.addedAt = addedAt
+        self.chapterIndex = chapterIndex; self.offset = offset
+        self.shared = shared; self.shelf = shelf; self.coverName = coverName
     }
 }
 
@@ -42,6 +88,56 @@ struct Annotation: Codable, Identifiable, Hashable {
     var createdAt: Date = Date()
     /// 谁划的
     var author: String = ""
+
+    /// 马克笔什么颜色（六位色号）。她要的：「透明马克笔将句子画起，
+    /// 马克笔的颜色可选」。空的就用默认那支。
+    var colorHex: String = ""
+    /// 这句**跟他聊过没有**。
+    /// 聊过的句子旁边会有一个小气泡，点开能看当时说了什么。
+    var discussed: Bool = false
+    /// 围绕这句聊过的那几条（消息 id），点小气泡就是去翻它们
+    var talkIDs: [UUID] = []
+
+    /// 马克笔的颜色。没选过就用一支暖黄的。
+    var color: Color {
+        Color(hexString: colorHex) ?? Color(hexString: "F2C94C") ?? .yellow
+    }
+
+    /// 老批注没有后面这几个字段，不补容错解码器整份批注会读不出来
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
+        bookID = (try? c.decodeIfPresent(UUID.self, forKey: .bookID)) ?? UUID()
+        chapterIndex = (try? c.decodeIfPresent(Int.self, forKey: .chapterIndex)) ?? 0
+        quote = (try? c.decodeIfPresent(String.self, forKey: .quote)) ?? ""
+        location = (try? c.decodeIfPresent(Int.self, forKey: .location)) ?? 0
+        notes = (try? c.decodeIfPresent([AnnotationNote].self, forKey: .notes)) ?? []
+        createdAt = (try? c.decodeIfPresent(Date.self, forKey: .createdAt)) ?? Date()
+        author = (try? c.decodeIfPresent(String.self, forKey: .author)) ?? ""
+        colorHex = (try? c.decodeIfPresent(String.self, forKey: .colorHex)) ?? ""
+        discussed = (try? c.decodeIfPresent(Bool.self, forKey: .discussed)) ?? false
+        talkIDs = (try? c.decodeIfPresent([UUID].self, forKey: .talkIDs)) ?? []
+    }
+
+    init(id: UUID = UUID(), bookID: UUID, chapterIndex: Int, quote: String,
+         location: Int, author: String, colorHex: String = "") {
+        self.id = id; self.bookID = bookID; self.chapterIndex = chapterIndex
+        self.quote = quote; self.location = location; self.author = author
+        self.colorHex = colorHex
+    }
+}
+
+/// 马克笔那几支。她说「颜色可选」，就给一排常见的，
+/// 都是**半透明**的——真马克笔画上去字还看得见，不是把字盖掉。
+enum MarkerColors {
+    static let all: [(name: String, hex: String)] = [
+        ("暖黄", "F2C94C"),
+        ("薄荷", "6FCF97"),
+        ("天蓝", "56CCF2"),
+        ("蜜桃", "F2994A"),
+        ("樱粉", "EB8FA8"),
+        ("藕紫", "BB6BD9")
+    ]
 }
 
 struct AnnotationNote: Codable, Identifiable, Hashable {

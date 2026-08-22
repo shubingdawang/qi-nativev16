@@ -37,6 +37,20 @@ struct JournalPageView: View {
         .navigationTitle(page.displayTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            // 「给他看」。**默认关**——手帐上常常是随手写的心事，
+            // 她点头他才看得见。开了他就能把这一页原样画成图看见，
+            // 也能往右下角贴一张便签。
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    page.shared.toggle()
+                    store.save(page)
+                } label: {
+                    Image(systemName: page.shared ? "person.2.fill" : "person.2")
+                        .foregroundStyle(page.shared
+                                         ? app.settings.accentColor
+                                         : Theme.textMuted(scheme))
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     withAnimation(.easeOut(duration: 0.2)) { showingPalette.toggle() }
@@ -182,125 +196,11 @@ struct JournalPageView: View {
     /// 画出一样东西。
     /// **不叫 body(of:)**——View 协议本身有个 body，同名太容易出岔子。
     @ViewBuilder
+    /// 一个元素长什么样。**整段搬去 JournalSnapshot.swift 了**——
+    /// 编辑页和「给他看的那张快照」必须是同一份渲染器，
+    /// 两份迟早会长歪，那时候他看到的就不再是她看到的了。
     private func render(_ e: JournalElement) -> some View {
-        switch e.kind {
-        case .text:
-            Text(e.text)
-                .font(.app(17, weight: .medium, design: .serif))
-                .foregroundStyle(e.color)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 220)
-
-        case .tape:
-            // 胶带：半透明一条，两头是撕开的毛边
-            Rectangle()
-                .fill(e.color.opacity(0.62))
-                .frame(width: 110, height: 26)
-                .overlay {
-                    // 撕口那两道
-                    HStack {
-                        Rectangle().fill(.white.opacity(0.25)).frame(width: 3)
-                        Spacer()
-                        Rectangle().fill(.white.opacity(0.25)).frame(width: 3)
-                    }
-                }
-
-        case .sticker:
-            Text(e.emoji).font(.app(34))
-
-        case .stamp:
-            // 邮票：锯齿边靠一圈白点做出来
-            Text(e.emoji.isEmpty ? "📮" : e.emoji)
-                .font(.app(26))
-                .frame(width: 54, height: 62)
-                .background {
-                    ZStack {
-                        Rectangle().fill(Color(hexString: "F6F2E8")!)
-                        Rectangle()
-                            .strokeBorder(e.color.opacity(0.5),
-                                          style: StrokeStyle(lineWidth: 2, dash: [3, 3]))
-                    }
-                }
-
-        case .clip:
-            // 夹子：一个圆角小方块加一道内线
-            RoundedRectangle(cornerRadius: 3)
-                .fill(e.color)
-                .frame(width: 20, height: 30)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 2)
-                        .strokeBorder(.white.opacity(0.6), lineWidth: 1.5)
-                        .padding(4)
-                }
-                .shadow(color: .black.opacity(0.16), radius: 2, y: 1)
-
-        case .note:
-            Text(e.text)
-                .font(.app(13))
-                .foregroundStyle(Color(hexString: "3A362E")!)
-                .padding(10)
-                .frame(width: 110, alignment: .topLeading)
-                .frame(minHeight: 90, alignment: .topLeading)
-                .background(e.color)
-                .shadow(color: .black.opacity(0.12), radius: 3, y: 2)
-
-        case .photo:
-            if let img = ImageStore.load(e.imageName) {
-                Image(uiImage: img)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 120, height: 120)
-                    .clipped()
-            } else {
-                Rectangle().fill(Color.gray.opacity(0.3))
-                    .frame(width: 120, height: 120)
-            }
-
-        case .frame:
-            // 拍立得：白框，底下留一条写字的地方
-            VStack(spacing: 0) {
-                if let img = ImageStore.load(e.imageName) {
-                    Image(uiImage: img).resizable().scaledToFill()
-                        .frame(width: 116, height: 116).clipped()
-                } else {
-                    Rectangle().fill(Color(hexString: "DDD8CE")!)
-                        .frame(width: 116, height: 116)
-                        .overlay {
-                            Text("点两下贴图")
-                                .font(.app(10))
-                                .foregroundStyle(Color(hexString: "8A8378")!)
-                        }
-                }
-                Text(e.text)
-                    .font(.app(10))
-                    .foregroundStyle(Color(hexString: "6B655A")!)
-                    .frame(width: 116, height: 26)
-            }
-            .padding(7)
-            .background(Color.white)
-            .shadow(color: .black.opacity(0.18), radius: 5, y: 3)
-
-        case .quote:
-            // 摘句：带引号，底下写是谁说的
-            VStack(alignment: .leading, spacing: 5) {
-                Text("「" + e.text + "」")
-                    .font(.app(14, design: .serif))
-                    .foregroundStyle(e.color)
-                    .fixedSize(horizontal: false, vertical: true)
-                if !e.who.isEmpty {
-                    Text("—— " + e.who)
-                        .font(.app(10))
-                        .foregroundStyle(e.color.opacity(0.7))
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                }
-            }
-            .frame(maxWidth: 190)
-            .padding(10)
-            .background {
-                Rectangle().fill(Color.white.opacity(0.42))
-            }
-        }
+        JournalElementView(e)
     }
 
     // MARK: 底下那排素材

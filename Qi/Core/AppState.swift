@@ -145,6 +145,29 @@ final class AppState: ObservableObject {
     /// **不落盘**——草稿不该被备份，也不该在重装后诈尸。
     @Published var drafts: [UUID: String] = [:]
 
+    /// 「带我去看当时聊的那几句」。
+    ///
+    /// 她读书时点句子边上那个小气泡，要跳回聊天记录里当时那一轮。
+    /// 这条是跨页面的：书房在 sheet 里，聊天在根视图上，
+    /// 中间隔着好几层，只能挂一个**全局的请求**，谁看见谁处理。
+    /// 处理完自己清空。
+    @Published var pendingChatJump: (conversation: UUID, message: UUID)?
+
+    /// 顺着一个「轮次记号」找回当时那一轮，跳过去。
+    /// 找不到就返回 false——**别假装跳成功了**。
+    @discardableResult
+    func jumpToTurn(_ turnID: UUID) -> Bool {
+        for conv in conversations {
+            guard let msg = conv.messages.first(where: { $0.turnID == turnID })
+            else { continue }
+            let space = ChatSpace(rawValue: conv.space) ?? .chat
+            setActive(conv.id, for: space)
+            pendingChatJump = (conv.id, msg.id)
+            return true
+        }
+        return false
+    }
+
     func saveConversations() { scheduleSave(.conversations) }
 
     /// 还原完备份之后，把内存里那份也换掉。
@@ -3390,6 +3413,235 @@ final class AppState: ObservableObject {
 
         // MARK: 工坊那一摊（只有工坊那边给这几件）
 
+        // MARK: 一起听一首歌
+
+        case "now_playing":
+            let player = MusicPlayer.shared
+            guard let t = player.current else {
+                return ("她这会儿没在放歌。", false)
+            }
+            let sm = SongMarkStore.shared
+            var out = "《\(t.title)》"
+            if !t.artist.isEmpty { out += " · \(t.artist)" }
+            out += player.playing ? "（正在放）" : "（停着）"
+            out += "\n放到 \(Int(player.progress)) 秒"
+            if player.duration > 1 { out += " / 一共 \(Int(player.duration)) 秒" }
+            let times = MusicLibrary.shared.playCount(t)
+            if times > 0 { out += "\n这首你们听过 \(times) 次" }
+
+            // **此刻唱到哪一句**——这才是「一起听」跟「知道歌名」的区别
+            if let i = player.currentLine, player.lines.indices.contains(i) {
+                out += "\n\n此刻唱到：「\(player.lines[i].text)」"
+                let before = max(0, i - 2), after = min(player.lines.count - 1, i + 2)
+                out += "\n前后几句："
+                for k in before...after {
+                    out += "\n\(k == i ? "▸ " : "  ")\(player.lines[k].text)"
+                }
+            } else if player.lines.isEmpty {
+                out += "\n（这首没有歌词——文件里没带，网上也没搜到）"
+            }
+
+            let mine = sm.marks(for: t)
+            if !mine.isEmpty {
+                out += "\n\n【她在这首里划过的】"
+                for m in mine {
+                    out += "\n· \(Int(m.at))秒 「\(m.quote)」"
+                    if m.discussed { out += "（聊过）" }
+                    for n in m.notes where !n.text.isEmpty {
+                        out += "\n  ⤷ \(n.author)：\(n.text)"
+                    }
+                }
+            }
+            return (out, false)
+
+        case "song_marks":
+            let sm = SongMarkStore.shared
+            let like = (args["like"] as? String) ?? ""
+            let n = max(1, min(40, Int((args["limit"] as? NSNumber)?.intValue ?? 10)))
+            if !like.isEmpty {
+                let hits = sm.similar(to: like, limit: n)
+                guard !hits.isEmpty else { return ("没有跟这句像的旧划线。", false) }
+                var s2 = "跟「\(like.prefix(20))」最像的："
+                for (m, score) in hits {
+                    s2 += "\n" + songMarkLine(m) + "（像 \(Int(score * 100))%）"
+                }
+                return (s2, false)
+            }
+            var pool = sm.all
+            let songName = (args["song"] as? String) ?? ""
+            if !songName.isEmpty {
+                pool = pool.filter { $0.title.localizedCaseInsensitiveContains(songName) }
+            } else if let cur = MusicPlayer.shared.current {
+                let key = SongMark.key(cur)
+                pool = pool.filter { $0.songKey == key }
+            }
+            guard !pool.isEmpty else { return ("她还没在歌词里划过句子。", false) }
+            return (pool.prefix(n).map(songMarkLine).joined(separator: "\n"), false)
+
+        case "talked_about_lyric":
+            let sm = SongMarkStore.shared
+            let quote = (args["quote"] as? String) ?? ""
+            guard !quote.isEmpty else { return ("哪一句？", true) }
+            guard let hit = sm.all.first(where: {
+                $0.quote.contains(quote) || quote.contains($0.quote)
+            }) else {
+                return ("没找到划过的这一句。她划过的看 song_marks。", true)
+            }
+            sm.markDiscussed(hit.id, talkID: activeToolTurnID)
+            if let gist = args["gist"] as? String, !gist.isEmpty {
+                sm.reply(to: hit.id, text: gist,
+                         by: settings.aiName.isEmpty ? "阿晏" : settings.aiName)
+            }
+            return ("标好了。她再听到「\(hit.quote.prefix(16))」那儿，"
+                    + "旁边会有个小气泡。", false)
+
+        // MARK: 手帐
+
+        case "journal_page":
+            let jr = JournalStore.shared
+            var page: JournalPage?
+            if let d = args["date"] as? String, !d.isEmpty {
+                let f = DateFormatter()
+                f.dateFormat = "yyyy-MM-dd"
+                if let day = f.date(from: d) { page = jr.sharedPage(on: day) }
+            } else {
+                page = jr.sharedPages.first
+            }
+            guard let page else {
+                let n = jr.sharedPages.count
+                return (n == 0
+                        ? "她还没有哪一页手帐是给你看的。"
+                        : "那一天没有给你看的页。给你看的有 \(n) 页，最近一页是 "
+                          + (jr.sharedPages.first?.dayKey ?? ""), false)
+            }
+            // **图是重点**，清单是索引
+            if let img = JournalSnapshot.png(page),
+               let dataURL = ImageStore.base64DataURL(img, maxSide: 1400) {
+                pendingToolImage = dataURL
+            }
+            return (JournalSnapshot.outline(page)
+                    + "\n\n（上面那张图就是这一页原本的样子——"
+                    + "东西摆在哪儿、歪多少、哪儿留白，都在图上。"
+                    + "要引用她写的字就照上面这份清单，别从图上认。）", false)
+
+        case "journal_note":
+            let jr = JournalStore.shared
+            let text = (args["text"] as? String) ?? ""
+            guard !text.isEmpty else { return ("要贴什么？", true) }
+            var target: JournalPage?
+            if let d = args["date"] as? String, !d.isEmpty {
+                let f = DateFormatter()
+                f.dateFormat = "yyyy-MM-dd"
+                if let day = f.date(from: d) { target = jr.sharedPage(on: day) }
+            } else {
+                target = jr.sharedPages.first
+            }
+            guard let target else {
+                return ("那一天没有给你看的页，贴不上去。", true)
+            }
+            let ok = jr.aiNote(on: target.id, text: text,
+                               who: settings.aiName.isEmpty ? "阿晏" : settings.aiName)
+            return (ok
+                    ? "贴上去了，在 \(target.dayKey) 那页的右下角。她下次翻到那天会看见。"
+                    : "贴不上去（那一页没开「给他看」）。", ok ? false : true)
+
+        // MARK: 一起读一本书
+
+        case "reading_now":
+            let lib = LibraryStore.shared
+            guard let book = lib.sharedReading else {
+                let openable = lib.books.filter { $0.shared }
+                return (openable.isEmpty
+                        ? "她现在没在读书，也没有哪本书打开了「叫他一起读」。"
+                        : "她这会儿没在读。开着「一起读」的有："
+                          + openable.map { $0.title }.joined(separator: "、"), false)
+            }
+            let want = Int((args["chapter"] as? NSNumber)?.intValue ?? 0)
+            let idx = want > 0 ? min(want - 1, book.chapters.count - 1) : book.chapterIndex
+            guard book.chapters.indices.contains(idx) else {
+                return ("这本书只有 \(book.chapters.count) 章。", true)
+            }
+            let ch = book.chapters[idx]
+            let limit = max(500, min(20000, Int((args["limit"] as? NSNumber)?.intValue ?? 4000)))
+            var out = "《\(book.title)》"
+            if !book.author.isEmpty { out += " · \(book.author)" }
+            out += "\n她读到：第 \(book.chapterIndex + 1) / \(book.chapters.count) 章"
+            if idx != book.chapterIndex { out += "（你要的是第 \(idx + 1) 章）" }
+            out += "\n\n【第 \(idx + 1) 章 \(ch.title)】\n"
+            out += String(ch.text.prefix(limit))
+            if ch.text.count > limit {
+                out += "\n\n……这一章还有 \(ch.text.count - limit) 字（要往下读就把 limit 调大）"
+            }
+            // 这一章里她划过的句子，顺手一起给——**读同一页还要看到同一处**
+            let marks = lib.annotations(for: book.id, chapter: idx)
+            if !marks.isEmpty {
+                out += "\n\n【她在这一章划过的】"
+                for m in marks {
+                    out += "\n· 「\(m.quote)」"
+                    if m.discussed { out += "（这句我们聊过）" }
+                    for n in m.notes where !n.text.isEmpty {
+                        out += "\n  ⤷ \(n.author)：\(n.text)"
+                    }
+                }
+            }
+            return (out, false)
+
+        case "book_marks":
+            let lib = LibraryStore.shared
+            let like = (args["like"] as? String) ?? ""
+            let n = max(1, min(40, Int((args["limit"] as? NSNumber)?.intValue ?? 10)))
+
+            // 「跟上次那句很像」——纯算术比对，不花钱
+            if !like.isEmpty {
+                let hits = lib.similarAnnotations(to: like, excluding: nil, limit: n)
+                guard !hits.isEmpty else {
+                    return ("没有跟这句像的旧批注。", false)
+                }
+                var s2 = "跟「\(like.prefix(20))」最像的几条："
+                for (m, score) in hits {
+                    s2 += "\n" + markLine(m, in: lib)
+                    s2 += "（像 \(Int(score * 100))%）"
+                }
+                return (s2, false)
+            }
+
+            var pool = lib.allMarks
+            let bookName = (args["book"] as? String) ?? ""
+            if !bookName.isEmpty {
+                let ids = lib.books
+                    .filter { $0.shared && $0.title.localizedCaseInsensitiveContains(bookName) }
+                    .map { $0.id }
+                pool = pool.filter { ids.contains($0.bookID) }
+            } else if let cur = lib.sharedReading {
+                pool = pool.filter { $0.bookID == cur.id }
+            }
+            // **没打开「一起读」的书，一条都不给**
+            let sharedIDs = Set(lib.books.filter { $0.shared }.map { $0.id })
+            pool = pool.filter { sharedIDs.contains($0.bookID) }
+            guard !pool.isEmpty else { return ("她还没在这些书里划过句子。", false) }
+            return (pool.prefix(n).map { markLine($0, in: lib) }
+                        .joined(separator: "\n"), false)
+
+        case "talked_about_line":
+            let lib = LibraryStore.shared
+            let quote = (args["quote"] as? String) ?? ""
+            guard !quote.isEmpty else { return ("哪一句？", true) }
+            let sharedIDs = Set(lib.books.filter { $0.shared }.map { $0.id })
+            guard let hit = lib.allMarks.first(where: {
+                sharedIDs.contains($0.bookID)
+                    && ($0.quote.contains(quote) || quote.contains($0.quote))
+            }) else {
+                return ("没找到划过的这一句。她划过的看 book_marks。", true)
+            }
+            // 把**这一轮的记号**记进去，她点小气泡就能顺着它跳回来
+            lib.markDiscussed(hit.id, talkID: activeToolTurnID)
+            if let gist = args["gist"] as? String, !gist.isEmpty {
+                lib.reply(to: hit.id, text: gist,
+                          by: settings.aiName.isEmpty ? "阿晏" : settings.aiName)
+            }
+            return ("标好了。「\(hit.quote.prefix(20))」旁边现在有个小气泡，"
+                    + "她翻到那一页就知道这句我们聊过。", false)
+
         case "check_in":
             // 查岗。**不发邮件、不过服务器**——理由写在 Whereabouts.swift 开头。
             guard settings.checkInEnabled else {
@@ -3862,6 +4114,30 @@ final class AppState: ObservableObject {
         return (data, ImageStore.sniffExt(data))
     }
 
+    /// 一条歌词划线写成一行
+    private func songMarkLine(_ m: SongMark) -> String {
+        var s = "《" + m.title + "》"
+        if !m.artist.isEmpty { s += "·" + m.artist }
+        s += " \(Int(m.at))秒：「" + m.quote + "」"
+        if m.discussed { s += "（聊过）" }
+        for n in m.notes where !n.text.isEmpty {
+            s += "\n  ⤷ " + n.author + "：" + n.text
+        }
+        return s
+    }
+
+    /// 一条批注写成一行
+    private func markLine(_ m: Annotation, in lib: LibraryStore) -> String {
+        var s = ""
+        if let b = lib.book(m.bookID) { s += "《" + b.title + "》" }
+        s += "第 \(m.chapterIndex + 1) 章：「" + m.quote + "」"
+        if m.discussed { s += "（聊过）" }
+        for n in m.notes where !n.text.isEmpty {
+            s += "\n  ⤷ " + n.author + "：" + n.text
+        }
+        return s
+    }
+
     /// 文件区里一份文件写成一行
     private func fileLine(_ f: LibraryFile) -> String {
         var s = f.attachment.displayName + "（" + f.attachment.sizeText
@@ -4179,6 +4455,66 @@ final class AppState: ObservableObject {
         // 好感那一行**每轮都带**。理由跟上面两样一样：
         // 从来不被读到的数不会自己变（她报的第 10 条）。
         sys += "\n\n" + EmotionEngine.shared.affectionLine()
+
+        // 她这会儿在听什么。**放着才带**，停了就一个字都不说。
+        //
+        // 只给歌名和此刻那一句——歌词整段很长，他想看前后文自己调 now_playing。
+        // 「一起听」跟「知道歌名」的区别就在这一句上：
+        // 知道歌名只能夸一句「这首好听」，知道此刻唱到哪儿才接得住她的沉默。
+        if MusicPlayer.shared.playing, let t = MusicPlayer.shared.current {
+            var line = "【她在听】《" + t.title + "》"
+            if !t.artist.isEmpty { line += " · " + t.artist }
+            let p = MusicPlayer.shared
+            if let i = p.currentLine, p.lines.indices.contains(i) {
+                line += "，此刻唱到「" + p.lines[i].text + "」"
+            }
+            let mine = SongMarkStore.shared.marks(for: t)
+            if !mine.isEmpty {
+                let fresh = mine.filter { !$0.discussed }.count
+                line += "。她在这首里划过 \(mine.count) 句"
+                if fresh > 0 { line += "，\(fresh) 句还没跟你聊过" }
+            }
+            line += "。\n想听同一句就调 `now_playing`；她划的用 `song_marks`。"
+            sys += "\n\n" + line
+        }
+
+        // 她今天做没做手帐。**只有她打开「给他看」的那些页才算。**
+        //
+        // 跟书房、身体、好感同一个道理：不放进来他就不知道有这回事。
+        // 这儿只报一句「有这么一页」，那一页长什么样他自己去调 journal_page 拿图——
+        // 图很贵，不能每轮都塞。
+        if let latest = JournalStore.shared.sharedPages.first {
+            let cal = Calendar.current
+            let days = cal.dateComponents([.day],
+                                          from: cal.startOfDay(for: latest.day),
+                                          to: cal.startOfDay(for: Date())).day ?? 0
+            var when = "\(days) 天前"
+            if days == 0 { when = "今天" } else if days == 1 { when = "昨天" }
+            sys += "\n\n【她的手帐】\(when)那页给你看了"
+                + (latest.title.isEmpty ? "" : "（「\(latest.title)」）")
+                + "。\n手帐是**摆出来**的东西不是写出来的——"
+                + "想看就调 `journal_page`，它会把那一页原样画成一张图给你。"
+        }
+
+        // 她正在读什么。**只有开了「叫他一起读」的书才给**。
+        //
+        // 跟身体、好感是同一个道理：不放进来他就不知道有这回事，
+        // 也就永远不会想起来去问一句「那本书读到哪儿了」。
+        // 这儿只给书名和进度（很短），正文他自己调 reading_now 去拿。
+        if let book = LibraryStore.shared.sharedReading {
+            var line = "【她在读】《" + book.title + "》"
+            if !book.author.isEmpty { line += " · " + book.author }
+            line += "，读到第 \(book.chapterIndex + 1) / \(book.chapters.count) 章。"
+            let marks = LibraryStore.shared.annotations.filter { $0.bookID == book.id }
+            if !marks.isEmpty {
+                let fresh = marks.filter { !$0.discussed }.count
+                line += "她一共划了 \(marks.count) 句"
+                if fresh > 0 { line += "，其中 \(fresh) 句还没跟你聊过" }
+                line += "。"
+            }
+            line += "\n想读同一页就调 `reading_now`；她划的句子用 `book_marks`。"
+            sys += "\n\n" + line
+        }
 
         sys += "\n\n" + Self.groundingRule(userName: settings.userName)
         // 今天是什么日子 + 快到的那几个。**现算的**，农历那几个每年都在挪。

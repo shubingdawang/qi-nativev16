@@ -32,7 +32,7 @@ struct SideMenuDestination: View {
         case "phone":      PhoneActivityView()
         case "music":      MusicLibraryView()
         case "pixel":      PixelStudioView()
-        case "library":    LibraryView()
+        case "library":    BookshelfView()
         case "memo":       MemoListView()
         case "promise":    PromiseView()
         case "mood":       MoodView()

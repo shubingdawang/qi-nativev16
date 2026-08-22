@@ -20,6 +20,7 @@ final class LibraryStore: ObservableObject {
     init() {
         books = Storage.load([Book].self, from: "books.json") ?? []
         annotations = Storage.load([Annotation].self, from: "annotations.json") ?? []
+        shelfNames = Storage.load([String].self, from: "book-shelves.json") ?? []
         loaded = true
     }
 
@@ -54,6 +55,107 @@ final class LibraryStore: ObservableObject {
         guard let i = books.firstIndex(where: { $0.id == id }) else { return }
         books[i].chapterIndex = chapter
         books[i].offset = offset
+    }
+
+    // MARK: 给他看的
+
+    /// 她这会儿正在读的那本（**而且是愿意跟他一起读的**）。
+    /// 没开「叫他一起读」的书，他连书名都看不到。
+    var sharedReading: Book? {
+        guard let id = readingID, let b = book(id), b.shared else { return nil }
+        return b
+    }
+
+    /// 跟某一句**像**的旧批注。
+    ///
+    /// 她要的：「跟他说上次的批注或写读后感的句子跟这次的很像，
+    /// 他也能知道上次的句子是什么。」
+    ///
+    /// 复用记忆库那套二元组相似度（`MemoryRecall.similarity`）——
+    /// 纯算术、不调模型，跟「她搜记忆」走的是同一把尺子。
+    func similarAnnotations(to quote: String, excluding id: UUID?, limit: Int = 5)
+        -> [(Annotation, Double)] {
+        annotations
+            .filter { $0.id != id }
+            .map { ($0, MemoryRecall.similarity(quote, $0.quote)) }
+            .filter { $0.1 >= 0.25 }
+            .sorted { $0.1 > $1.1 }
+            .prefix(limit)
+            .map { $0 }
+    }
+
+    /// 把某条批注标成「聊过了」——句子边上那个小气泡就是它。
+    func markDiscussed(_ id: UUID, talkID: UUID? = nil) {
+        guard let i = annotations.firstIndex(where: { $0.id == id }) else { return }
+        annotations[i].discussed = true
+        if let talkID, !annotations[i].talkIDs.contains(talkID) {
+            annotations[i].talkIDs.append(talkID)
+        }
+    }
+
+    func setColor(_ id: UUID, hex: String) {
+        guard let i = annotations.firstIndex(where: { $0.id == id }) else { return }
+        annotations[i].colorHex = hex
+    }
+
+    /// 全部批注，新的在前。批注页（首页那个「选项 2」）用它。
+    var allMarks: [Annotation] {
+        annotations.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    // MARK: 书架（分类）
+
+    /// 有哪些书架。**自己建的 + 书上带着的**，并起来。
+    /// 跟相册那套一个道理：空书架推不出来，所以名单要单独存一份。
+    @Published var shelfNames: [String] = [] {
+        didSet { if loaded { Storage.save(shelfNames, to: "book-shelves.json") } }
+    }
+
+    func shelves() -> [String] {
+        var names = Set(shelfNames)
+        names.formUnion(books.map { $0.shelf })
+        names.remove("")
+        return names.sorted()
+    }
+
+    /// 某个书架上的书。传空字符串就是「还没归架」的那些。
+    func books(onShelf shelf: String) -> [Book] {
+        books.filter { $0.shelf == shelf }
+            .sorted { $0.addedAt > $1.addedAt }
+    }
+
+    @discardableResult
+    func createShelf(_ name: String) -> Bool {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !n.isEmpty, !shelves().contains(n) else { return false }
+        shelfNames.append(n)
+        return true
+    }
+
+    func renameShelf(from old: String, to new: String) {
+        let n = new.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !n.isEmpty, n != old else { return }
+        for i in books.indices where books[i].shelf == old { books[i].shelf = n }
+        shelfNames.removeAll { $0 == old }
+        if !shelfNames.contains(n) { shelfNames.append(n) }
+    }
+
+    /// 拆书架。**书不删**，退回「还没归架」——
+    /// 拆个架子把书一起烧了，那不叫整理。
+    func removeShelf(_ name: String) {
+        for i in books.indices where books[i].shelf == name { books[i].shelf = "" }
+        shelfNames.removeAll { $0 == name }
+    }
+
+    func move(_ id: UUID, toShelf shelf: String) {
+        guard let i = books.firstIndex(where: { $0.id == id }) else { return }
+        books[i].shelf = shelf
+        if !shelf.isEmpty { createShelf(shelf) }
+    }
+
+    func setCover(_ id: UUID, fileName: String) {
+        guard let i = books.firstIndex(where: { $0.id == id }) else { return }
+        books[i].coverName = fileName
     }
 
     func toggleShared(_ id: UUID) {

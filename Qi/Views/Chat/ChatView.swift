@@ -354,6 +354,17 @@ struct ChatView: View {
         .sheet(item: $destination) { item in
             SideMenuDestination(item: item)
         }
+        // 她在书房点了句子边上那个小气泡 → 跳回当时聊的那几句。
+        // 书房是从 sheet 里起的，所以先把 sheet 关掉再滚。
+        .onChange(of: app.pendingChatJump?.message) { _, msgID in
+            guard let msgID, let want = app.pendingChatJump,
+                  want.conversation == activeConversation?.id else { return }
+            app.pendingChatJump = nil
+            destination = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                jumpTo = msgID
+            }
+        }
         .sheet(item: $shareImage) { item in
             ShareSheet(items: [item.image])
         }

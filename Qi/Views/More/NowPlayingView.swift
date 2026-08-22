@@ -20,6 +20,13 @@ struct NowPlayingView: View {
     @State private var editingLyrics = false
     @State private var draftLyrics = ""
 
+    // 划歌词那一摊（Duetto 那条「quote any lyric」）
+    @ObservedObject private var marks = SongMarkStore.shared
+    @State private var aiming: LyricLine?
+    @State private var noteDraft = ""
+    @State private var writingNote = false
+    @State private var openedMark: SongMark?
+
     private var hasLyrics: Bool { !player.lines.isEmpty }
 
     var body: some View {
@@ -57,6 +64,14 @@ struct NowPlayingView: View {
             }
         }
         .sheet(isPresented: $editingLyrics) { lyricsEditor }
+        .sheet(item: $openedMark) { m in SongMarkSheet(mark: m) }
+        .alert("划下这一句", isPresented: $writingNote) {
+            TextField("想说点什么，留空也行", text: $noteDraft)
+            Button("取消", role: .cancel) { aiming = nil }
+            Button("画起来") { commitMark() }
+        } message: {
+            Text(aiming.map { "「" + $0.text + "」" } ?? "")
+        }
     }
 
     // MARK: 底
@@ -113,6 +128,68 @@ struct NowPlayingView: View {
 
     // MARK: 歌词
 
+    /// 一句歌词。
+    ///
+    /// 平时点一下＝跳到那儿听（歌词是能用的导航，不只是给人看的字）。
+    /// **按住**＝划下来跟他聊——这是 Duetto 那条「quote any lyric」，
+    /// 跟书房里划句子是同一件事，只是对象换成了歌词。
+    @ViewBuilder
+    private func lyricLine(_ line: LyricLine) -> some View {
+        let now = line.index == player.currentLine
+        let mark = player.current.flatMap { marks.mark(at: line.text, in: $0) }
+
+        HStack(spacing: 4) {
+            Text(line.text)
+                .font(.app(now ? 17 : 15, weight: now ? .semibold : .regular))
+                .foregroundStyle(now ? Theme.textMain(scheme) : Theme.textMuted(scheme))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 3)
+                // 划过的垫一层马克笔（半透明，字还看得见）
+                .background(mark?.color.opacity(0.28) ?? .clear)
+
+            // 聊过的挂个小气泡，点开看当时说了什么
+            if let mark, mark.discussed {
+                Button { openedMark = mark } label: {
+                    Image(systemName: "bubble.left.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(app.settings.accentColor.opacity(0.85))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .id(line.index)
+        .animation(.easeOut(duration: 0.25), value: player.currentLine)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard line.at > 0 else { return }
+            player.seek(to: line.at)
+        }
+        .onLongPressGesture(minimumDuration: 0.35) {
+            if app.settings.haptics {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            }
+            if let mark {
+                openedMark = mark          // 划过的，按住是打开看
+            } else {
+                aiming = line
+                noteDraft = ""
+                writingNote = true
+            }
+        }
+    }
+
+    /// 把瞄准的那一句真的划下来
+    private func commitMark() {
+        guard let line = aiming, let track = player.current else { return }
+        marks.add(line, in: track,
+                  author: app.settings.userName.isEmpty ? "我" : app.settings.userName,
+                  note: noteDraft,
+                  colorHex: app.settings.markerHex)
+        aiming = nil
+        noteDraft = ""
+    }
+
     private var lyrics: some View {
         ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
@@ -120,24 +197,7 @@ struct NowPlayingView: View {
                     // 上下各垫一段，第一句和最后一句也能滚到屏幕正中
                     Color.clear.frame(height: 90)
                     ForEach(player.lines) { line in
-                        Text(line.text)
-                            .font(.app(line.index == player.currentLine ? 17 : 15,
-                                          weight: line.index == player.currentLine
-                                            ? .semibold : .regular))
-                            .foregroundStyle(line.index == player.currentLine
-                                             ? Theme.textMain(scheme)
-                                             : Theme.textMuted(scheme))
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity)
-                            .id(line.index)
-                            .animation(.easeOut(duration: 0.25),
-                                       value: player.currentLine)
-                            // 点一句就跳到那儿。**歌词是能用的导航**，
-                            // 不只是给人看的字。
-                            .onTapGesture {
-                                guard line.at > 0 else { return }
-                                player.seek(to: line.at)
-                            }
+                        lyricLine(line)
                     }
                     Color.clear.frame(height: 140)
                 }
@@ -299,5 +359,150 @@ struct NowPlayingView: View {
         guard s.isFinite, s >= 0 else { return "0:00" }
         let n = Int(s)
         return String(format: "%d:%02d", n / 60, n % 60)
+    }
+}
+
+
+// MARK: - 划下的那句歌词，点开看
+
+/// 跟书房那张 `AnnotationSheet` 是一个样子——
+/// 上面是划下的那一句，底下是围绕它的往来，
+/// 聊过的话可以顺着记号跳回当时那一轮。
+struct SongMarkSheet: View {
+
+    @State var mark: SongMark
+
+    @ObservedObject private var store = SongMarkStore.shared
+    @ObservedObject private var player = MusicPlayer.shared
+    @EnvironmentObject var app: AppState
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var draft = ""
+    @State private var jumpFailed = false
+
+    private var me: String { app.settings.userName.isEmpty ? "我" : app.settings.userName }
+    private var fresh: SongMark { store.marks.first { $0.id == mark.id } ?? mark }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                WallpaperBackground()
+                VStack(spacing: 0) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("《\(fresh.title)》"
+                                 + (fresh.artist.isEmpty ? "" : " · " + fresh.artist))
+                                .font(.app(11))
+                                .foregroundStyle(Theme.textMuted(scheme))
+
+                            HStack(alignment: .top, spacing: 9) {
+                                RoundedRectangle(cornerRadius: 1.5)
+                                    .fill(fresh.color.opacity(0.75))
+                                    .frame(width: 3)
+                                Text(fresh.quote)
+                                    .font(.app(15, design: .serif))
+                                    .foregroundStyle(Theme.textMain(scheme))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+
+                            // 点一下回到歌里那个位置。**划下的句子是能用的书签**。
+                            Button {
+                                player.seek(to: fresh.at)
+                                dismiss()
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "play.circle").font(.app(12))
+                                    Text("从这句听（\(Int(fresh.at)) 秒）").font(.app(12))
+                                }
+                                .foregroundStyle(app.settings.accentColor)
+                            }
+                            .buttonStyle(.plain)
+
+                            Divider().opacity(0.4)
+
+                            ForEach(fresh.notes) { n in
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(n.author)
+                                        .font(.app(10))
+                                        .foregroundStyle(Theme.textMuted(scheme))
+                                    Text(n.text)
+                                        .font(.app(14))
+                                        .foregroundStyle(Theme.textMain(scheme))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                            if fresh.notes.isEmpty {
+                                Text("还没说什么。这一句为什么停下来了？")
+                                    .font(.app(12))
+                                    .foregroundStyle(Theme.textMuted(scheme))
+                            }
+
+                            if !fresh.talkIDs.isEmpty {
+                                Divider().opacity(0.4)
+                                Button { jump() } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "bubble.left.and.text.bubble.right")
+                                            .font(.app(12))
+                                        Text("看当时聊了什么").font(.app(13))
+                                        Spacer()
+                                        Image(systemName: "chevron.right").font(.app(10))
+                                    }
+                                    .foregroundStyle(app.settings.accentColor)
+                                }
+                                .buttonStyle(.plain)
+                                if jumpFailed {
+                                    Text("那一轮的记录找不着了（可能被清过）。")
+                                        .font(.app(11))
+                                        .foregroundStyle(.orange)
+                                }
+                            }
+                        }
+                        .padding(18)
+                    }
+
+                    HStack(spacing: 8) {
+                        TextField("再说一句…", text: $draft, axis: .vertical)
+                            .lineLimit(1...3)
+                            .padding(.horizontal, 13)
+                            .padding(.vertical, 9)
+                            .glassBackground(radius: 16, strength: app.settings.glassOpacity)
+                        Button {
+                            let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard !t.isEmpty else { return }
+                            store.reply(to: fresh.id, text: t, by: me)
+                            draft = ""
+                        } label: {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.app(24))
+                                .foregroundStyle(app.settings.accentColor)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(14)
+                }
+            }
+            .navigationTitle("划下的这句")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("关上") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(role: .destructive) {
+                        store.remove(fresh.id)
+                        dismiss()
+                    } label: {
+                        Image(systemName: Icon.trash)
+                    }
+                }
+            }
+        }
+    }
+
+    /// 跳回当时聊的那一轮。跳不成要说实话。
+    private func jump() {
+        guard let turn = fresh.talkIDs.last else { return }
+        if app.jumpToTurn(turn) { dismiss() } else { jumpFailed = true }
     }
 }

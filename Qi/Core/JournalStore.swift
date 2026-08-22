@@ -81,6 +81,32 @@ struct JournalPage: Codable, Identifiable, Hashable {
     var elements: [JournalElement] = []
     var updatedAt: Date = Date()
 
+    /// 这一页**给不给他看**。
+    ///
+    /// 默认关。跟书房那本书一个规矩：她自己做的东西，
+    /// 她点头他才看得见——手帐尤其，那上面常常是随手写的心事。
+    var shared: Bool = false
+
+    /// 老数据没有 shared 这一项，不补容错解码器整本手帐会读不出来
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
+        day = (try? c.decodeIfPresent(Date.self, forKey: .day)) ?? Date()
+        title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
+        paperHex = (try? c.decodeIfPresent(String.self, forKey: .paperHex)) ?? "F3E9D8"
+        elements = (try? c.decodeIfPresent([JournalElement].self, forKey: .elements)) ?? []
+        updatedAt = (try? c.decodeIfPresent(Date.self, forKey: .updatedAt)) ?? Date()
+        shared = (try? c.decodeIfPresent(Bool.self, forKey: .shared)) ?? false
+    }
+
+    init(id: UUID = UUID(), day: Date = Date(), title: String = "",
+         paperHex: String = "F3E9D8", elements: [JournalElement] = [],
+         updatedAt: Date = Date(), shared: Bool = false) {
+        self.id = id; self.day = day; self.title = title
+        self.paperHex = paperHex; self.elements = elements
+        self.updatedAt = updatedAt; self.shared = shared
+    }
+
     var dayKey: String {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
@@ -230,4 +256,45 @@ final class JournalStore: ObservableObject {
     }
 
     func page(_ id: UUID) -> JournalPage? { pages.first { $0.id == id } }
+
+    /// 某一天那一页（**只找给他看的**）
+    func sharedPage(on day: Date) -> JournalPage? {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        let key = f.string(from: day)
+        return pages.first { $0.shared && $0.dayKey == key }
+    }
+
+    /// 给他看的那些页，新的在前
+    var sharedPages: [JournalPage] {
+        pages.filter { $0.shared }.sorted { $0.day > $1.day }
+    }
+
+    func toggleShared(_ id: UUID) {
+        guard let i = pages.firstIndex(where: { $0.id == id }) else { return }
+        pages[i].shared.toggle()
+    }
+
+    /// 他往某一页上贴一张便签。
+    ///
+    /// 这是 shared-page 那套「两种笔迹」的落点：**同一页上她写的和他写的都在**，
+    /// 而且看得出是谁写的（他的便签是另一个颜色，右下角落款）。
+    /// 位置有意让它偏右下——那儿通常是她留白的地方，别压掉她的东西。
+    @discardableResult
+    func aiNote(on pageID: UUID, text: String, who: String) -> Bool {
+        guard let i = pages.firstIndex(where: { $0.id == pageID }),
+              pages[i].shared else { return false }
+        var e = JournalElement()
+        e.kind = .note
+        e.text = text + "\n—— " + who
+        // 他贴的便签用一支冷色，跟她那些暖色的便签分得开
+        e.colorHex = "CFE3F0"
+        e.x = Double.random(in: 0.55...0.78)
+        e.y = Double.random(in: 0.58...0.82)
+        e.angle = Double.random(in: -6...6)
+        e.z = (pages[i].elements.map { $0.z }.max() ?? 0) + 1
+        pages[i].elements.append(e)
+        pages[i].updatedAt = Date()
+        return true
+    }
 }
