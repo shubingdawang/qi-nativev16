@@ -18,8 +18,10 @@ struct ClawdHomeView: View {
     /// 墙和地板的分界线画在 0.62（见下面 `room` 里那两块 Rectangle）。
     /// 他是**脚站在这个 y 上**的，所以能站的范围要比分界线再低一点，
     /// 不然半只身子会插进墙里——她说的「他现在可以走到墙壁的区域」就是这个。
-    static let floorTop: Double = 0.70
-    static let floorBottom: Double = 0.94
+    /// 地板范围。**跟 ClawdStore 那两个是同一件事**——
+    /// 以前界面一套、store 里 clamp 又一套，于是家具能拖到墙上去。
+    static var floorTop: Double { ClawdStore.floorTop }
+    static var floorBottom: Double { ClawdStore.floorBottom }
 
     @State private var mood: ClawdMood = .idle
     @State private var clawdX: Double = 0.5
@@ -186,8 +188,23 @@ struct ClawdHomeView: View {
                               : Color(hexString: "D9C9AE")!)
                 }
 
-                // 家具
-                ForEach(store.owned.filter { !$0.hidden }) { item in
+                // 家具。
+                //
+                // **画的顺序＝点击的顺序**：SwiftUI 里后画的压在上面，
+                // 触摸也先给它。以前这儿按 `owned` 的原始顺序画，
+                // 于是「后买的地毯」压在「先买的床」上面，
+                // 她点床点到的是地毯（她报的「拖错家具，点床出地毯」）。
+                //
+                // 现在按 y 从小到大画：**远的先画、近的压在上面**——
+                // 这本来就是一间屋子该有的样子，顺手把点击也理顺了。
+                // y 一样时大件先画（地毯这类摊得大的该垫在底下）。
+                ForEach(store.owned.filter { !$0.hidden && !$0.carried }
+                    .sorted { a, b in
+                        if abs(a.y - b.y) > 0.001 { return a.y < b.y }
+                        let sa = FurnitureCatalog.kind(a.kind)?.sprite.width ?? 0
+                        let sb = FurnitureCatalog.kind(b.kind)?.sprite.width ?? 0
+                        return sa > sb
+                    }) { item in
                     if let kind = FurnitureCatalog.kind(item.kind) {
                         // **平时是一件真家具的大小**（scale 6），
                         // 只有长按拖的时候才缩成迷你——她的原话：
@@ -212,7 +229,12 @@ struct ClawdHomeView: View {
                             // 外面挂多少手势都落在空气上。clawd 本人早就补过这块，
                             // 家具一直没补。顺手放大一圈：一件家具才几十个点，
                             // 手指按不准。
-                            .contentShape(Rectangle().inset(by: -12))
+                            // 命中范围。**大件不再往外放**——
+                            // 一张地毯本来就摊得很大，再往外扩 12 点，
+                            // 她想点旁边那张床都会落在地毯上。
+                            // 小东西才需要那点余量（几十个点，手指按不准）。
+                            .contentShape(
+                                Rectangle().inset(by: kind.sprite.width >= 16 ? 0 : -10))
                             // 单击开小菜单。
                             //
                             // 这两件事以前挂在 .contextMenu 上——**而 contextMenu
@@ -325,6 +347,20 @@ struct ClawdHomeView: View {
                 .animation(held ? nil : .easeInOut(duration: walkSeconds), value: clawdY)
                 .animation(.spring(response: 0.28, dampingFraction: 0.6), value: held)
                 .onTapGesture {
+                    // 手上有东西的时候，点他＝**现在就放下**。
+                    //
+                    // 走完一趟他自己会放（见 startWalking），但那要等几秒。
+                    // 她递过去多半是想指个地方，不该逼她干等——
+                    // 点一下就搁在他脚边。
+                    if let kind = store.carriedKind {
+                        store.putDown(at: CGPoint(x: clawdX, y: clawdY))
+                        mood = .idle
+                        say(store.overhead(kind) ? "呼……放下了" : "好，搁这儿")
+                        if app.settings.haptics {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        }
+                        return
+                    }
                     mood = .happy
                     say(tapLine())
                     if app.settings.haptics {
@@ -565,8 +601,21 @@ struct ClawdHomeView: View {
                     mood = store.carrying == nil ? .idle : .carrying
                 }
 
+                // **搬到地方就放下。**
+                //
+                // 她报的：「拖给他之后他不放下」——对，以前他会一直举着，
+                // 举一辈子。递给他是让他**帮忙搬**，不是让他抱着不动。
+                // 现在走完这一趟就搁在脚边，说一句放下了。
+                if let kind = store.carriedKind {
+                    store.putDown(at: CGPoint(x: clawdX, y: clawdY))
+                    mood = .idle
+                    say(store.overhead(kind)
+                        ? "呼……放这儿行吗"
+                        : "搁这儿了")
+                }
+
                 // 走到谁旁边了
-                let near = store.owned.filter { !$0.hidden }
+                let near = store.owned.filter { !$0.hidden && !$0.carried }
                     .min { a, b in
                         let da = abs(a.x - clawdX) + abs(a.y - clawdY)
                         let db = abs(b.x - clawdX) + abs(b.y - clawdY)
@@ -598,7 +647,7 @@ struct ClawdHomeView: View {
             try? await Task.sleep(nanoseconds: UInt64.random(in: 25...50) * 1_000_000_000)
             while !Task.isCancelled {
                 guard store.linked else { return }
-                let near = store.owned.filter { !$0.hidden }
+                let near = store.owned.filter { !$0.hidden && !$0.carried }
                     .min { a, b in
                         abs(a.x - clawdX) + abs(a.y - clawdY)
                             < abs(b.x - clawdX) + abs(b.y - clawdY)

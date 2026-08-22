@@ -117,6 +117,9 @@ struct TarotPane: View {
     @ObservedObject private var store = DivinationStore.shared
 
     /// 洗好摊开的那一排（还没翻）
+    /// 翻开看大的那一张。她要的「牌能往后翻」——
+    /// 结果里点一张就进这个，左右滑一张张看完。
+    @State private var flipped: DrawnCard?
     @State private var deck: [(TarotCard, Bool)] = []
     @State private var picked: [Int] = []
     @State private var spread: TarotSpread?
@@ -264,6 +267,10 @@ struct TarotPane: View {
                 resultCard(record)
             }
         }
+        // 点结果里那张牌 → 翻开看大的，左右能一张张翻（她要的「牌能往后翻」）
+        .sheet(item: $flipped) { d in
+            TarotFlipView(cards: record?.cards ?? [d], start: d)
+        }
     }
 
     /// 三秒不碰，抬起来那张就落回去
@@ -341,18 +348,16 @@ struct TarotPane: View {
 
             ForEach(record.cards) { drawn in
                 HStack(alignment: .top, spacing: 11) {
-                    // 逆位的牌画上去也是倒的
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(app.settings.accentColor.opacity(0.18))
-                        .overlay {
-                            Text(drawn.card.name)
-                                .font(.app(11, weight: .medium))
-                                .foregroundStyle(Theme.textMain(scheme))
-                                .rotationEffect(.degrees(drawn.reversed ? 180 : 0))
-                                .padding(4)
-                                .minimumScaleFactor(0.7)
-                        }
-                        .frame(width: 54, height: 84)
+                    // 真的牌面（见 TarotFace.swift）。以前这儿是一块色底加一行字，
+                    // 二十二张大牌长得一模一样。点一下能翻开看大的。
+                    Button {
+                        flipped = drawn
+                    } label: {
+                        TarotCardFace(card: drawn.card,
+                                      reversed: drawn.reversed,
+                                      width: 54)
+                    }
+                    .buttonStyle(.plain)
 
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {

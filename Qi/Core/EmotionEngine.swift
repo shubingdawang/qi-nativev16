@@ -178,8 +178,8 @@ final class EmotionEngine: ObservableObject {
     // MARK: 评价一句话
 
     /// 她刚说的这句，评一评。**每收到一条她的消息叫一次。**
-    @discardableResult
-    /// 读一句话。返回读出来的东西——**调用方可能还要拿它去推身体**
+    ///
+    /// 返回读出来的东西——**调用方可能还要拿它去推身体**
     /// （见 `BodyReader`），所以别把返回值丢掉。
     @discardableResult
     func appraise(_ text: String) -> Appraisal {

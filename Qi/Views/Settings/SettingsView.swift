@@ -486,6 +486,11 @@ struct SettingsView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 9)
 
+            // 说明**贴着它自己那一项**，不堆到卡片最底下（她提的）。
+            // 隔着五六行才讲的那句话，读到的时候已经忘了在讲哪一项。
+            SettingsNote("历史带得越多，对方越记得住前面说过什么，但每次请求也更费钱。",
+                         title: "带多少合适")
+
             SettingsDivider()
 
             // 主的额度满了接着用谁
@@ -600,7 +605,8 @@ struct SettingsView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 11)
 
-            SettingsNote("历史带得越多，对方越记得住前面说过什么，但每次请求也更费钱。回车默认就是换行。")
+            SettingsNote("默认不是——**换行就是换行**。想一按就发再打开它。",
+                         title: "回车这一项")
             }
         }
     }

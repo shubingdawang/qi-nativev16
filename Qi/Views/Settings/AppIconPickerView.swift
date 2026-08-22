@@ -103,6 +103,33 @@ struct AppIconPickerView: View {
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
             }
+
+            // 自己做一个。
+            // ⚠️ 做出来的**当不了这一排里的图标**（那些必须构建时打进包），
+            // 但能当头像、能存下来、能给我放进下一次构建——
+            // 这一点在那一页里写清楚了，不在这儿吊她胃口。
+            NavigationLink { LogoStudioView() } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "wand.and.stars").font(.app(14))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("做一个自己的")
+                            .font(.app(14))
+                            .foregroundStyle(Theme.textMain(scheme))
+                        Text("一次画一张，满意为止。做出来的要放进下次构建才能当图标")
+                            .font(.app(10))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.app(10))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+                .foregroundStyle(app.settings.accentColor)
+                .padding(14)
+                .glassBackground(radius: 16, strength: app.settings.glassOpacity)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
+            }
             .padding(.horizontal, 18)
             .padding(.bottom, Layout.tabBarExpanded + 12)
         }

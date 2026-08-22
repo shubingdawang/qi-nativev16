@@ -10,9 +10,33 @@ struct Furniture: Codable, Identifiable, Hashable {
     /// 在房间里的位置，用比例存，换手机也不会跑偏
     var x: Double = 0.5
     var y: Double = 0.5
-    /// 藏起来的东西还在，只是不显示
+    /// 她主动**收起来**的（长按 → 收起来）。收起来的东西还在，只是不摆出来。
     var hidden: Bool = false
+    /// **正被他举着**，所以屋里不画它。
+    ///
+    /// ⚠️ 跟 `hidden` **必须分开**：`hidden` 是她的意思，
+    /// 这个是「东西在他手上」。合成一个的话，
+    /// 把他手上那件放下的时候会顺手把她收起来的也翻出来。
+    var carried: Bool = false
     var boughtAt: Date = Date()
+
+    /// 老数据没有 `carried`，不补容错解码器整间屋子会读不出来
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
+        kind = (try? c.decodeIfPresent(String.self, forKey: .kind)) ?? ""
+        x = (try? c.decodeIfPresent(Double.self, forKey: .x)) ?? 0.5
+        y = (try? c.decodeIfPresent(Double.self, forKey: .y)) ?? 0.5
+        hidden = (try? c.decodeIfPresent(Bool.self, forKey: .hidden)) ?? false
+        carried = (try? c.decodeIfPresent(Bool.self, forKey: .carried)) ?? false
+        boughtAt = (try? c.decodeIfPresent(Date.self, forKey: .boughtAt)) ?? Date()
+    }
+
+    init(id: UUID = UUID(), kind: String = "", x: Double = 0.5, y: Double = 0.5,
+         hidden: Bool = false, carried: Bool = false, boughtAt: Date = Date()) {
+        self.id = id; self.kind = kind; self.x = x; self.y = y
+        self.hidden = hidden; self.carried = carried; self.boughtAt = boughtAt
+    }
 }
 
 /// 一件家具长什么样、多少钱
@@ -511,26 +535,63 @@ final class ClawdStore: ObservableObject {
         }
     }
 
+    // MARK: 地板的范围
+    //
+    // 家具只能摆在地板上。**这两个数跟 ClawdHomeView 那两个是同一件事**，
+    // 所以搬到 store 里来，两边读同一份——
+    // 以前界面上有一套、store 里 clamp 到 0.05~0.95 又是另一套，
+    // 于是「家具能拖到墙上去」（她报的）。
+    static let floorTop: Double = 0.70
+    static let floorBottom: Double = 0.94
+
+    /// 把一个点掐回地板里
+    static func onFloor(_ p: CGPoint) -> CGPoint {
+        CGPoint(x: min(0.93, max(0.07, p.x)),
+                y: min(floorBottom, max(floorTop, p.y)))
+    }
+
     /// 拿起 / 放下。放下的时候把它挪到指定位置。
     func pickUp(_ kindID: String) {
         carrying = kindID
+        // **举起来的那件要从屋里消失。**
+        // 她报的：「举起来的东西不该还留在房间」——对，
+        // 以前只设了 carrying，那件家具还原样摆在地上，
+        // 于是床既在他手上、又在地上，两张。
+        if let i = owned.firstIndex(where: { $0.kind == kindID }) {
+            owned[i].carried = true
+        }
     }
 
+    /// 放下。没给位置就放在他脚边。
+    ///
+    /// **一定要把 hidden 关掉**——`pickUp` 把它藏起来了，
+    /// 放下不放出来的话那件家具就永远消失了。
     func putDown(at point: CGPoint?) {
         defer { carrying = nil }
-        guard let kindID = carrying, let point else { return }
-        // 手上这件如果是屋里摆着的那一件，就把它挪到放下的地方
-        if let i = owned.firstIndex(where: { $0.kind == kindID }) {
-            owned[i].x = min(0.95, max(0.05, point.x))
-            owned[i].y = min(0.95, max(0.05, point.y))
-            owned[i].hidden = false
+        guard let kindID = carrying else { return }
+        guard let i = owned.firstIndex(where: { $0.kind == kindID }) else { return }
+        if let point {
+            let p = Self.onFloor(point)
+            owned[i].x = p.x
+            owned[i].y = p.y
         }
+        owned[i].carried = false
     }
 
     private var loaded = false
 
     init() {
         owned = Storage.load([Furniture].self, from: "clawd-room.json") ?? []
+        // 兜底：手上没拿东西，就不该有「因为被举起来」而藏着的家具。
+        //
+        // `pickUp` 会把那件藏起来（不然床既在手上又在地上）。
+        // 万一哪次没走到 `putDown` 就退出了（崩了、被划掉），
+        // 那件就会永远消失。这一句把它捞回来——
+        // **她收起来的那些不受影响**：那是另一条路（`toggleHidden`），
+        // 而这一句只在「手上是空的」时候才跑。
+        if UserDefaults.standard.string(forKey: "clawdCarrying") == nil {
+            for i in owned.indices where owned[i].carried { owned[i].carried = false }
+        }
         coins = UserDefaults.standard.integer(forKey: "clawdCoins")
         let t = UserDefaults.standard.double(forKey: "clawdCheckIn")
         lastCheckIn = t > 0 ? Date(timeIntervalSince1970: t) : nil
@@ -571,10 +632,15 @@ final class ClawdStore: ObservableObject {
         return true
     }
 
+    /// 挪一件家具。**只能挪到地板上**（她报的「家具不该能拖到墙上」）。
+    ///
+    /// 以前这儿的 y 是 0.25~0.88——0.25 已经在墙上了。
+    /// 现在跟 `putDown` 走同一个 `onFloor`，一个地方定规矩。
     func move(_ id: UUID, to point: CGPoint) {
         guard let i = owned.firstIndex(where: { $0.id == id }) else { return }
-        owned[i].x = min(0.92, max(0.08, point.x))
-        owned[i].y = min(0.88, max(0.25, point.y))
+        let p = Self.onFloor(point)
+        owned[i].x = p.x
+        owned[i].y = p.y
     }
 
     func toggleHidden(_ id: UUID) {
@@ -593,7 +659,9 @@ final class ClawdStore: ObservableObject {
     /// 给他看的：房间里现在都有什么
     func roomBrief() -> String {
         guard linked else { return "" }
-        let visible = owned.filter { !$0.hidden }
+        // 他手上举着的那件不算「摆在屋里」——
+        // 不然他一边举着床，房间清单里还写着床摆在地上
+        let visible = owned.filter { !$0.hidden && !$0.carried }
             .compactMap { FurnitureCatalog.kind($0.kind)?.name }
         if visible.isEmpty {
             return "clawd 的房间还空着，她还没给你买东西。"
