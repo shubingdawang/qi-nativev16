@@ -579,10 +579,14 @@ struct AppearanceView: View {
                         .padding(.vertical, 9)
                         .background {
                             ZStack {
+                                // **也吃草稿值**。以前这块只读全局，
+                                // 所以拖滑块的时候「预览」是最后一个变的——
+                                // 她说的「设置的玻璃显示效果比其他地方慢很多」。
                                 GlassSurface(radius: 18,
-                                             strength: app.settings.glassOpacity
+                                             strength: (blurDraft ?? app.settings.glassOpacity)
                                                 * app.settings.bubbleOpacity,
-                                             extra: 0.35)
+                                             extra: 0.35,
+                                             dim: dimDraft ?? app.settings.glassDim)
                                 if app.settings.bubbleTint > 0.01 {
                                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                                         .fill(app.settings.accentColor
@@ -598,8 +602,9 @@ struct AppearanceView: View {
                         .padding(.horizontal, 13)
                         .padding(.vertical, 9)
                         .glassBackground(radius: 18,
-                                         strength: app.settings.glassOpacity
-                                            * app.settings.bubbleOpacity)
+                                         strength: (blurDraft ?? app.settings.glassOpacity)
+                                            * app.settings.bubbleOpacity,
+                                         dim: dimDraft ?? app.settings.glassDim)
                     Spacer(minLength: 40)
                 }
             }

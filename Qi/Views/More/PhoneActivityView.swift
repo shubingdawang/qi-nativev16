@@ -46,6 +46,7 @@ struct PhoneActivityView: View {
                 .buttonStyle(.plain)
 
                 screenPeekCard
+                checkInCard
 
                 if showHelp { help }
             }
@@ -160,6 +161,90 @@ struct PhoneActivityView: View {
     /// **不走那个教程里的邮件绕圈**——那是给官方客户端用的，
     /// 因为那种 App 没法自己触发手机做事，只能借邮件当信号线。
     /// 我们是她自己的 App，读本地文件夹就行，截图一个字节都不出这台手机。
+    @State private var showPeekHow = false
+    @State private var showCheckInHow = false
+    @ObservedObject private var here = WhereaboutsService.shared
+    @AppStorage("checkInPrecision") private var precision = "coarse"
+
+    // MARK: 查岗
+
+    /// 查岗。**不发邮件、不过服务器**——理由写在 `Whereabouts.swift` 开头。
+    private var checkInCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("查岗")
+                    .font(.app(14, weight: .semibold))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Spacer()
+                Toggle("", isOn: $app.settings.checkInEnabled)
+                    .labelsHidden()
+                    .tint(app.settings.accentColor)
+            }
+
+            Text("打开之后他多一件能做的事：**看一眼你此刻的处境再决定要不要开口**——屏幕上开着什么、人在哪个城市、那边什么天气、今天手机用了多久。\n\n**默认关着。** 这是三样一起给，得你点头。")
+                .font(.app(11))
+                .foregroundStyle(Theme.textMuted(scheme))
+
+            if app.settings.checkInEnabled {
+                HStack {
+                    Text("位置给到")
+                        .font(.app(13))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    Spacer(minLength: 8)
+                    Picker("", selection: $precision) {
+                        ForEach(WhereaboutsService.Precision.allCases) { p in
+                            Text(p.label).tag(p.rawValue)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 210)
+                }
+                .padding(.top, 2)
+
+                if precision != "off", !here.authorized {
+                    Button {
+                        here.ask()
+                    } label: {
+                        Text("还没给定位权限，点这儿给")
+                            .font(.app(12))
+                            .foregroundStyle(.orange)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) { showCheckInHow.toggle() }
+                } label: {
+                    Text(showCheckInHow ? "收起说明" : "它到底会拿走什么")
+                        .font(.app(12))
+                        .foregroundStyle(app.settings.accentColor)
+                }
+                .buttonStyle(.plain)
+
+                if showCheckInHow {
+                    Text("""
+                    **只有他调那个工具的时候才会拿一次**，不是一直跟着你。
+
+                    拿的是这几样：
+                    · **屏幕** —— 你的快捷指令上一次截的那张（跟上面「让他看屏幕」同一个文件夹）。没配就没有这一样。
+                    · **位置** —— 上面那一档说了算。「只到城市」就只有「日本 东京都 涩谷区」这种，没有街道；「不给位置」就一个字都没有。
+                    · **天气** —— 拿位置去问 Open-Meteo。**这是整套里唯一离开这台手机的东西**，而且只发经纬度，不发你是谁；那个接口不用注册，所以也没有「谁在什么时候查过哪儿」这种记录。
+                    · **手机用了多久** —— 本来就在这台手机上。
+
+                    参考的那份教程是让 AI **发邮件**触发快捷指令、再**邮件回传**（因为 ChatGPT 那种客户端没法让手机做事，只能借邮件当信号线）。我们就在这台手机上，那一圈全省了——不用两个邮箱、不用授权码、不用 Caddy、不用跟 VPN 节点较劲。
+
+                    ⚠️ 截图**永远不是实时的**。iOS 不许任何 App 主动截别的 App 的屏，他看到的是你上次按快捷指令那一刻的画面，返回值里会写着隔了多久。
+                    """)
+                        .font(.app(11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(14)
+        .glassCard(padding: 0)
+    }
+
     private var screenPeekCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -177,6 +262,41 @@ struct PhoneActivityView: View {
             Text("挑一个文件夹，让快捷指令把截图存进去。他调「看一眼屏幕」的时候读里面最新那张。\n\n**不实时**：iOS 不许任何 App 主动截别的 App 的屏，他看到的永远是上一次截下来的那张，返回值里会写着是多久前的。")
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
+
+            // 她说「我并不知道该怎么使用」——只写「挑个文件夹」确实不够，
+            // 真正要做的是**在快捷指令里配一条**，这儿把步骤写全。
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) { showPeekHow.toggle() }
+            } label: {
+                Text(showPeekHow ? "收起步骤" : "具体怎么弄")
+                    .font(.app(12))
+                    .foregroundStyle(app.settings.accentColor)
+            }
+            .buttonStyle(.plain)
+
+            if showPeekHow {
+                Text("""
+                一共两步，五分钟。
+
+                **第一步 · 在这儿挑个文件夹**
+                点下面「挑文件夹」，在「文件」里随便新建一个（比如「给阿晏看的」），选它。选完这张卡上会写「已连上」。
+
+                **第二步 · 在「快捷指令」App 里配一条**
+                1. 打开快捷指令 → 右上角 ＋ 新建
+                2. 加操作「拍摄屏幕快照」（搜「屏幕快照」）
+                3. 再加操作「存储文件」→ 目标选**刚才那个文件夹**
+                4. 「存储文件」那一步点开，把「询问存储位置」**关掉**，不然每次都要你点一下
+                5. 给它起个名字，比如「给他看」
+
+                **然后怎么用**
+                想让他看你屏幕的时候，从控制中心或者小组件点一下那个快捷指令就行。截完他下次调「看一眼屏幕」读到的就是这张。
+
+                ⚠️ **必须你自己按一下。** iOS 不许 App 在后台截别的 App 的屏——这是系统的规矩，绕不过去，谁都做不到「他想看就能看」。所以这更像是你**递给他一眼**，不是他自己去看。
+                """)
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             HStack(spacing: 8) {
                 Button {

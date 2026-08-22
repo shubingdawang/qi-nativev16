@@ -139,6 +139,20 @@ enum AttentionSet {
             }
         }
 
+        // ⑩ 查岗这件事本身。**只在她打开之后才提一句。**
+        //
+        // 那份参考（p1）第五节讲的就是这一刻：
+        //   > 把本轮运行视为一次自然醒来的机会，不是必须发送消息。
+        // 醒来的时候他手上有这么一件能做的事，得让他知道；
+        // 但**这里只说「有这么个选择」，不说「去做」**——
+        // 跟这一整套候选集的规矩一样，摆事实不下命令。
+        if app.settings.checkInEnabled {
+            out.append(.init(
+                weight: 35,
+                text: "你可以先 check_in 看一眼她这会儿的处境（屏幕/城市/天气/手机用了多久），"
+                    + "看完再决定要不要开口——看过之后说的那句才落地。"))
+        }
+
         guard !out.isEmpty else { return "" }
 
         let picked = out.sorted { $0.weight > $1.weight }.prefix(limit)

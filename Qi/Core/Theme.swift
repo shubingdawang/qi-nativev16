@@ -107,6 +107,32 @@ enum Theme {
         : Color(red: 0.659, green: 0.573, blue: 0.478)   // #a8927a
     }
 
+    /// 浮在壁纸上的**圆按钮／小胶囊**的底色。
+    ///
+    /// 她说的第 3 条：「语音通话 ui 别忘记『家』的主题配色这些 ui 也要适配，
+    /// 后续可能会增加主题配色，所以 ui 适配还挺重要的」。
+    ///
+    /// 她说得对，而且这是**结构问题不是漏改**：通话页那些按钮底色写的是
+    /// `Color.white.opacity(0.85)` 这种死值——「家」那套是暖纸色，
+    /// 一块纯白摁在暖纸上就是一块补丁。以后再加主题只会再补丁一次。
+    /// 所以统一从这儿出，加主题的时候只改这一个函数。
+    static func controlFill(_ scheme: ColorScheme) -> Color {
+        if preset == .home {
+            return scheme == .dark
+                ? HomePalette.paperDark.opacity(0.55)
+                : HomePalette.paper.opacity(0.92)
+        }
+        return scheme == .dark
+            ? Color.white.opacity(0.16)
+            : Color.white.opacity(0.85)
+    }
+
+    /// 上面那种按钮**按下去／关掉**的时候的底色
+    static func controlFillMuted(_ scheme: ColorScheme) -> Color {
+        if preset == .home { return HomePalette.inkSoft.opacity(0.75) }
+        return Color(hexString: "8A8378") ?? .gray
+    }
+
     /// 没设壁纸时的底色
     static func pageBackground(_ scheme: ColorScheme) -> Color {
         if preset == .home {
@@ -320,6 +346,12 @@ struct GlassSurface: View {
             .overlay {
                 shape.strokeBorder(.white.opacity(0.42), lineWidth: 0.8)
             }
+            // 同上：浅色下白边贴白底等于没有，补一道极淡的暗边
+            .overlay {
+                if scheme == .light {
+                    shape.strokeBorder(.black.opacity(0.08), lineWidth: 0.7)
+                }
+            }
     }
 
     // MARK: 通透 —— iOS 那块玻璃
@@ -395,6 +427,20 @@ struct GlassSurface: View {
             .overlay {
                 if extra > 0.01 {
                     shape.fill(.white.opacity(extra * 0.10))
+                }
+            }
+            // 浅色下补一道**极淡的暗边**。
+            //
+            // 她说的第 2 条：「模糊玻璃在浅色模式下边缘不太明显」。
+            // 对——上面那句「一条边都不给」在深色下没问题（底色是暗的，
+            // 玻璃比背景亮，自己就浮出来了），可浅色下背景本来就白，
+            // 一块偏白的玻璃压在白纸上，边界等于不存在。
+            //
+            // 补的是**暗**不是白：真玻璃压在浅色桌面上，接触的那一圈本来就有一道
+            // 极细的暗影。这跟「通透」那套的白色高光是两回事，三套还是分得开。
+            .overlay {
+                if scheme == .light {
+                    shape.strokeBorder(.black.opacity(0.10), lineWidth: 0.7)
                 }
             }
         // 底下那道内阴影去掉了——她说"灰得有点突兀"。

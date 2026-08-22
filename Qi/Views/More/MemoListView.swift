@@ -45,7 +45,16 @@ struct MemoListView: View {
                 }
 
                 ForEach(store.onList) { memo in
-                    MemoRow(memo: memo, style: store.style)
+                    MemoRow(memo: memo, style: store.style,
+                            onToggleDone: {
+                                if memo.isDone {
+                                    store.undoComplete(memo.id)
+                                } else {
+                                    store.complete(memo.id,
+                                                   by: app.settings.userName.isEmpty
+                                                       ? "饼饼" : app.settings.userName)
+                                }
+                            })
                         .onTapGesture { editing = memo }
                         .contextMenu {
                             if memo.isActive {
@@ -120,16 +129,33 @@ struct MemoRow: View {
 
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
+    /// 点那个圈＝勾掉/取消勾掉
+    var onToggleDone: () -> Void = {}
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             if style != .ticket {
-                Image(systemName: memo.isDone ? "checkmark.circle.fill" : "circle")
-                    .font(.app(16, weight: .regular))
-                    .foregroundStyle(memo.isDone
-                                     ? StatusTone.done.color
-                                     : Theme.textMuted(scheme).opacity(0.5))
-                    .padding(.top, 1)
+                // 这个圈**就是打勾的地方**（她问的第 8 条）。
+                // 以前点它跟点别处一样都是进编辑页——那它长成一个待办的样子
+                // 就是骗人。现在点圈＝勾掉，点别处才是编辑。
+                Button {
+                    if app.settings.haptics {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    }
+                    onToggleDone()
+                } label: {
+                    Image(systemName: memo.isDone ? "checkmark.circle.fill" : "circle")
+                        .font(.app(16, weight: .regular))
+                        .foregroundStyle(memo.isDone
+                                         ? StatusTone.done.color
+                                         : Theme.textMuted(scheme).opacity(0.5))
+                        .padding(.top, 1)
+                        // 圈本身才 16 点，四周留出富余，手指按偏一点也能中
+                        .padding(.trailing, 6)
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
 
             VStack(alignment: .leading, spacing: 4) {

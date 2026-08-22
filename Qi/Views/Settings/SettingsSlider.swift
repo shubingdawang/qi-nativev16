@@ -101,9 +101,21 @@ struct SettingsSlider: View {
     private func editing(_ on: Bool) {
         dragging = on
         guard !on else { return }
-        // 松手：把草稿写回去，全局这时候才重画一次
+        // 松手：把草稿写回去，全局这时候才重画一次。
+        //
+        // ⚠️ **清草稿要等下一帧**。
+        // 以前是写完 `value` 紧接着就 `draft = nil`，两件事挤在同一帧里：
+        // 那一帧样品读的是 `draft ?? 全局值`，草稿已经没了、全局那份
+        // 又还没传下来，于是它先闪回旧的样子，下一帧才跳到新的——
+        // 她看到的「样品偶尔会显示效果，然后才是全局玻璃更换」就是这一闪。
+        //
+        // 而且这一闪之后 `onDraft?(nil)` 已经发出去了，
+        // 外面那个 @State 也被清成 nil；多拖几次之后节奏一乱，
+        // 样品就再也接不上即时反馈了（她说的第二半）。
         if let d = draft { value = d }
-        draft = nil
-        onDraft?(nil)
+        DispatchQueue.main.async {
+            draft = nil
+            onDraft?(nil)
+        }
     }
 }

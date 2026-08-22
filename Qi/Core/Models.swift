@@ -361,6 +361,18 @@ struct AppSettings: Codable {
     /// 这一层做在 App 里，跟对面是谁无关：额度满了原地换一个接着说，
     /// 同一个窗口、同一份历史、同一份浓缩件。
     var fallbackModel: String = ""
+    /// **跑杂活的那个模型**（"供应商UUID|模型id"，空的就是自动挑第一个能用的）。
+    ///
+    /// 她说的：「（cove-sensory-mcp）貌似是要接入 minimax 或者 gemini 的，
+    /// 我的中转站有 gemini 的模型，如果他没有的话，可以增加一个选择模型的按钮」。
+    ///
+    /// 杂活是指：给表情写关键词、翻译、总结通话、读图读视频这些
+    /// **不是他在说话**的活。以前一律「挑第一个能用的供应商」——
+    /// 那可能挑到一个不会看图的，或者一个很贵的。现在她自己指。
+    var helperModel: String = ""
+    /// 查岗开着没有。**默认关**——
+    /// 这是三样一起给（屏幕、位置、天气），必须她点头才开。
+    var checkInEnabled: Bool = false
     
     var contextLimit: Int = 0
     /// 滚雪球压缩：每攒够多少条消息压一次（0 = 关，退回上面那条「直接砍」）。
@@ -596,6 +608,8 @@ extension AppSettings {
         neteaseBaseURL = (try? c.decodeIfPresent(String.self, forKey: .neteaseBaseURL)) ?? ""
         modelBySpace = (try? c.decodeIfPresent([String: String].self, forKey: .modelBySpace)) ?? [:]
         fallbackModel = (try? c.decodeIfPresent(String.self, forKey: .fallbackModel)) ?? ""
+        helperModel = (try? c.decodeIfPresent(String.self, forKey: .helperModel)) ?? ""
+        checkInEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .checkInEnabled)) ?? false
         contextLimit = (try? c.decodeIfPresent(Int.self, forKey: .contextLimit)) ?? 0
         compactEvery = (try? c.decodeIfPresent(Int.self, forKey: .compactEvery)) ?? 60
         typewriter = (try? c.decodeIfPresent(Bool.self, forKey: .typewriter)) ?? true

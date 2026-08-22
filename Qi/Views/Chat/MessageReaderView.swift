@@ -177,9 +177,19 @@ struct CharacterPicker: View {
             FlowLayout(spacing: 1) {
                 ForEach(chars.indices, id: \.self) { i in
                     let inRange = range?.contains(i) ?? false
-                    Text(String(chars[i]))
-                        .font(.system(size: app.settings.fontSize))
-                        .foregroundStyle(Theme.textMain(scheme))
+                    let ch = chars[i]
+                    // 空格和换行**不能直接画**：`Text(" ")` 会被排版当成可拉伸的空白，
+                    // `Text("\n")` 更狠，直接顶出一整行高。
+                    // 她说的「偶尔选中空格时会变得很长」就是这两个。
+                    // 换行画成一个淡淡的 ⏎，空格给一个固定窄宽度。
+                    Text(ch == "\n" ? "⏎" : (ch == " " ? "·" : String(ch)))
+                        .font(.system(size: ch.isWhitespace
+                                      ? app.settings.fontSize - 4
+                                      : app.settings.fontSize))
+                        .foregroundStyle(ch.isWhitespace
+                                         ? Theme.textMuted(scheme).opacity(0.45)
+                                         : Theme.textMain(scheme))
+                        .frame(minWidth: ch.isWhitespace ? 10 : 0)
                         .padding(.horizontal, 1)
                         .padding(.vertical, 3)
                         .background(

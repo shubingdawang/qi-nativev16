@@ -159,30 +159,54 @@ final class MediaStore: ObservableObject {
 
 struct ImagePreviewView: View {
 
-    let item: MediaItem
+    /// 这一屏能翻的全部图。**不是只给一张**——
+    /// 她说的第 1 条：「点击查看后并不能放大后移动查看细节，也不能翻页」。
+    /// 只给一张的话，翻页这件事从根上就不成立。
+    let items: [MediaItem]
+    /// 从第几张开始看
+    @State var index: Int
     @ObservedObject var store: MediaStore
     @Environment(\.dismiss) private var dismiss
+
+    /// 放大倍数和位移。**每翻一页都要归零**，
+    /// 不然上一张放大着的状态会带到下一张，看着像卡住了。
     @State private var scale: CGFloat = 1
+    @State private var lastScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+
+    private var current: MediaItem? {
+        items.indices.contains(index) ? items[index] : nil
+    }
 
     var body: some View {
         NavigationStack {
             ZStack {
                 Color.black.ignoresSafeArea()
-                if let image = ImageStore.load(item.fileName) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .scaleEffect(scale)
-                        .gesture(
-                            MagnificationGesture()
-                                .onChanged { scale = max(1, min(4, $0)) }
-                                .onEnded { _ in
-                                    if scale < 1.05 { withAnimation { scale = 1 } }
-                                }
-                        )
-                        .onTapGesture(count: 2) {
-                            withAnimation { scale = scale > 1 ? 1 : 2.5 }
-                        }
+
+                TabView(selection: $index) {
+                    ForEach(items.indices, id: \.self) { i in
+                        page(items[i])
+                            .tag(i)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                // 放大之后要能拖着看细节，而拖和翻页是同一种手势——
+                // 所以**放大着的时候把翻页关掉**，缩回去再打开。
+                .highPriorityGesture(scale > 1.01 ? panGesture : nil)
+                .onChange(of: index) { _, _ in resetZoom() }
+
+                if items.count > 1 {
+                    VStack {
+                        Spacer()
+                        Text("\(index + 1) / \(items.count)")
+                            .font(.app(12))
+                            .foregroundStyle(.white.opacity(0.75))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(.black.opacity(0.35)))
+                            .padding(.bottom, 26)
+                    }
                 }
             }
             .toolbar {
@@ -192,15 +216,18 @@ struct ImagePreviewView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button {
-                            if let image = ImageStore.load(item.fileName) {
+                            if let c = current, let image = ImageStore.load(c.fileName) {
                                 UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
                             }
                         } label: {
                             Label("存到系统相册", systemImage: "square.and.arrow.down")
                         }
                         Button(role: .destructive) {
-                            store.remove(item)
-                            dismiss()
+                            guard let c = current else { return }
+                            store.remove(c)
+                            // 删完还有别的就留在这一页，没有了才退出去
+                            if items.count <= 1 { dismiss() }
+                            else { index = min(index, items.count - 2) }
                         } label: {
                             Label("删除", systemImage: "trash")
                         }
@@ -212,4 +239,54 @@ struct ImagePreviewView: View {
             .toolbarBackground(.hidden, for: .navigationBar)
         }
     }
+
+    @ViewBuilder
+    private func page(_ item: MediaItem) -> some View {
+        Group {
+            // 会动的要逐帧播，`Image(uiImage:)` 只画第一帧
+            if item.fileName.lowercased().hasSuffix(".gif") {
+                AnimatedImageView(url: ImageStore.url(for: item.fileName))
+            } else if let image = ImageStore.load(item.fileName) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                Color.clear
+            }
+        }
+        .scaleEffect(scale)
+        .offset(offset)
+        .gesture(
+            MagnificationGesture()
+                .onChanged { v in
+                    scale = max(1, min(6, lastScale * v))
+                }
+                .onEnded { _ in
+                    lastScale = scale
+                    if scale < 1.05 { withAnimation(.easeOut(duration: 0.2)) { resetZoom() } }
+                }
+        )
+        .onTapGesture(count: 2) {
+            withAnimation(.easeOut(duration: 0.22)) {
+                if scale > 1.01 { resetZoom() }
+                else { scale = 2.5; lastScale = 2.5 }
+            }
+        }
+    }
+
+    /// 放大之后拖着看细节
+    private var panGesture: some Gesture {
+        DragGesture()
+            .onChanged { v in
+                offset = CGSize(width: lastOffset.width + v.translation.width,
+                                height: lastOffset.height + v.translation.height)
+            }
+            .onEnded { _ in lastOffset = offset }
+    }
+
+    private func resetZoom() {
+        scale = 1; lastScale = 1
+        offset = .zero; lastOffset = .zero
+    }
 }
+

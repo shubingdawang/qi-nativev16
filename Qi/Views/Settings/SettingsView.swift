@@ -525,6 +525,41 @@ struct SettingsView: View {
 
             SettingsDivider()
 
+            // 跑杂活的那个模型
+            HStack {
+                Text("跑杂活用哪个")
+                    .font(.app(15))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Spacer(minLength: 8)
+                Menu {
+                    Button("自动挑") { app.settings.helperModel = "" }
+                    ForEach(app.providers.filter { $0.enabled }) { p in
+                        ForEach(p.enabledModels) { m in
+                            Button(p.name + " · " + m.id) {
+                                app.settings.helperModel = p.id.uuidString + "|" + m.id
+                            }
+                        }
+                    }
+                } label: {
+                    Text(helperLabel)
+                        .font(.app(14))
+                        .foregroundStyle(Theme.textSoft(scheme))
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 9)
+
+            SettingsNote("""
+            「杂活」是指**不是他在跟你说话**的那些活：给表情写关键词、翻译、总结通话、看图、以后接进来的看视频听声音。
+
+            以前一律「挑第一个能用的供应商」——可能挑到一个不会看图的，也可能挑到最贵的那个。在这儿指一个便宜又能看图的（比如 Gemini），杂活走它，聊天还是走你在输入框上面选的那个。
+
+            选「自动挑」就是回到老样子。
+            """, title: "什么算杂活")
+
+            SettingsDivider()
+
             HStack {
                 Text("滚雪球压缩")
                     .font(.app(15))
@@ -851,6 +886,16 @@ struct SettingsView: View {
     /// 她的原话：「导入备份应该不是覆盖而是增加……只增加目前没有的，
     /// 已有的忽略。」——所以默认是「只补没有的」，
     /// 「整个盖掉」留给换手机、重装那种真的想回到那一天的场合。
+    /// 跑杂活的现在选的是谁
+    private var helperLabel: String {
+        let saved = app.settings.helperModel
+        guard !saved.isEmpty, let cut = saved.firstIndex(of: "|"),
+              let pid = UUID(uuidString: String(saved[saved.startIndex..<cut])),
+              let p = app.providers.first(where: { $0.id == pid })
+        else { return "自动挑" }
+        return p.name + " · " + String(saved[saved.index(after: cut)...])
+    }
+
     /// 备用那个现在选的是谁
     private var fallbackLabel: String {
         let saved = app.settings.fallbackModel

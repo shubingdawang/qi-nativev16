@@ -767,6 +767,15 @@ final class AppState: ObservableObject {
 
         var placeholder = ChatMessage(role: .assistant)
         placeholder.isStreaming = true
+        // 这一轮的记号。**他这一轮里生成的每一条消息都打上它**——
+        // 语音、图片、卡片全算同一轮，气泡上就只挂一次头像。
+        //
+        // 她报的第 4 条（「发语音会被识别成另外一条被套上头像」）就是这么来的：
+        // send_voice_message 造的那条没有 turnID，`showsHeader` 于是把它
+        // 当成新一轮，又给他挂了一次头像和时间。
+        let turn = UUID()
+        placeholder.turnID = turn
+        activeToolTurnID = turn
         conversations[i].messages.append(placeholder)
         let assistantID = placeholder.id
         runningConversationIDs.insert(conversationID)
@@ -785,7 +794,15 @@ final class AppState: ObservableObject {
         var useModel = modelID
         var switched = false
 
+        // 她切去别的 App 的时候，系统会把正在跑的网络连接掐掉——
+        // 服务端日志上看到的就是「客户端断开连接」（她报的第 6 条）。
+        // 申请一个后台任务，至少把「看一眼微信就回来」这种情况保住。
+        // ⚠️ 系统只给 30 秒左右，**不是万能的**：他想很久、她又切走很久，
+        // 照样会断。断了现在至少有「重试」可以点（v99 加的）。
+        let bgTask = UIApplication.shared.beginBackgroundTask(withName: "qi.stream") { }
+
         let task = Task { @MainActor in
+            defer { UIApplication.shared.endBackgroundTask(bgTask) }
             do {
                 // 到回合数了就先滚一次雪球（她把「滚雪球压缩」关掉就直接跳过）。
                 // **必须在拼消息之前**——压完之后前面那堆原文才换成浓缩件。
@@ -874,6 +891,14 @@ final class AppState: ObservableObject {
                         self.appendToolRun(run, to: assistantID, in: conversationID)
                         apiMessages.append(ChatAPI.OutgoingMessage(
                             role: "tool", text: run.result, toolCallID: call.id))
+                        // 工具递过来的图（查岗那张截图）单独补一条。
+                        // 工具返回值只能是文字，图只能这么给。
+                        if let pic = self.takePendingToolImage() {
+                            apiMessages.append(ChatAPI.OutgoingMessage(
+                                role: "user",
+                                text: "（这是刚才那个工具拿到的画面）",
+                                imageDataURLs: [pic]))
+                        }
                     }
                 }
             } catch {
@@ -1103,7 +1128,14 @@ final class AppState: ObservableObject {
         // 她是**怎么说**的。跟她自己的平时比出来的，
         // 攒够八条之前这里一直是空的。
         if !m.voiceTone.isEmpty { head += " · " + m.voiceTone }
-        return head + "]"
+        head += "]"
+        // 正文是空的＝这条语音**没转出字来**。
+        // 不说的话他只看到一个 `[语音 · 0:05]`，既不知道说了什么，
+        // 也不知道自己其实可以去听（她报的第 3 条：「他并不能听我的语音」）。
+        if m.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            head += "（这条没转出文字。想知道她说了什么就调 listen_voice。）"
+        }
+        return head
     }
 
     /// 这一条里他**真的动手做了什么**。
@@ -1536,10 +1568,9 @@ final class AppState: ObservableObject {
     /// 全程在后台走，对话里不留痕迹。返回一句给你看的结果。
     func synthesizeMemory(from messages: [ChatMessage]) async -> String {
         guard !messages.isEmpty else { return "没挑到句子" }
-        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
-              let endpoint = p.chatEndpoint,
-              let model = p.enabledModels.first?.id
-        else { return "还没配模型" }
+        // 杂活统一走 helperReach（她可以在设置里指定跑杂活的模型）
+        guard let reach = helperReach() else { return "还没配模型" }
+        let p = reach.provider, endpoint = reach.endpoint, model = reach.model
 
         let me = settings.userName.isEmpty ? "饼饼" : settings.userName
         let him = settings.aiName.isEmpty ? "阿晏" : settings.aiName
@@ -2167,10 +2198,9 @@ final class AppState: ObservableObject {
     /// **这会花一次钱，而且是长输出，比平时一次贵。**
     /// 所以只有她点那个按钮才会跑，没有任何自动触发。
     func writeHimBack() async -> (text: String, failed: Bool) {
-        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
-              let endpoint = p.chatEndpoint,
-              let model = p.enabledModels.first?.id
-        else { return ("还没配模型，去「设置 → 供应商」加一个。", true) }
+        // 杂活统一走 helperReach（她可以在设置里指定跑杂活的模型）
+        guard let reach = helperReach() else { return ("还没配模型，去「设置 → 供应商」加一个。", true) }
+        let p = reach.provider, endpoint = reach.endpoint, model = reach.model
 
         let me = settings.userName.isEmpty ? "她" : settings.userName
         let him = settings.aiName.isEmpty ? "你" : settings.aiName
@@ -2277,10 +2307,9 @@ final class AppState: ObservableObject {
     }
 
     func wakeUpAndDecide() async -> String? {
-        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
-              let endpoint = p.chatEndpoint,
-              let model = p.enabledModels.first?.id
-        else { return nil }
+        // 杂活统一走 helperReach（她可以在设置里指定跑杂活的模型）
+        guard let reach = helperReach() else { return nil }
+        let p = reach.provider, endpoint = reach.endpoint, model = reach.model
 
         guard let conv = wakeTargetConversation() else { return nil }
 
@@ -2402,10 +2431,9 @@ final class AppState: ObservableObject {
     /// **这个会调一次模型，所以只在她按下按钮时才跑**，
     /// 跑完存进 ReceiptStore，同一天再打开就不花钱了。
     func makeDigest(for day: Date) async -> DayDigest? {
-        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
-              let endpoint = p.chatEndpoint,
-              let model = p.enabledModels.first?.id
-        else { return nil }
+        // 杂活统一走 helperReach（她可以在设置里指定跑杂活的模型）
+        guard let reach = helperReach() else { return nil }
+        let p = reach.provider, endpoint = reach.endpoint, model = reach.model
 
         let cal = Calendar.current
         let me = settings.userName.isEmpty ? "她" : settings.userName
@@ -2478,10 +2506,9 @@ final class AppState: ObservableObject {
     /// 牌面和卦象是抽好的，他只负责讲——**不让他重新决定抽到什么**，
     /// 那样占卜就没意义了。
     func interpret(_ record: DivinationRecord) async -> String {
-        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
-              let endpoint = p.chatEndpoint,
-              let model = p.enabledModels.first?.id
-        else { return "还没配模型，去设置里加一个。" }
+        // 杂活统一走 helperReach（她可以在设置里指定跑杂活的模型）
+        guard let reach = helperReach() else { return "还没配模型，去设置里加一个。" }
+        let p = reach.provider, endpoint = reach.endpoint, model = reach.model
 
         let me = settings.userName.isEmpty ? "她" : settings.userName
         let brief = """
@@ -2565,10 +2592,9 @@ final class AppState: ObservableObject {
 
     /// 免费那两条都不通时的退路
     private func translateWithModel(_ source: String) async -> String {
-        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
-              let endpoint = p.chatEndpoint,
-              let model = p.enabledModels.first?.id
-        else { return "翻不出来，网也不通、模型也没配" }
+        // 杂活统一走 helperReach（她可以在设置里指定跑杂活的模型）
+        guard let reach = helperReach() else { return "翻不出来，网也不通、模型也没配" }
+        let p = reach.provider, endpoint = reach.endpoint, model = reach.model
 
         let brief = """
         把下面这段话翻成自然的中文口语，像日常聊天那样，不要书面腔。
@@ -2627,10 +2653,9 @@ final class AppState: ObservableObject {
     /// 要注意的事都写在下面这段提示里，不摆到明面上。
     func tagStickers(_ items: [MediaItem],
                      progress: @escaping (Int, Int) -> Void) async {
-        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
-              let endpoint = p.chatEndpoint,
-              let model = p.enabledModels.first?.id
-        else { return }
+        // 杂活统一走 helperReach（她可以在设置里指定跑杂活的模型）
+        guard let reach = helperReach() else { return }
+        let p = reach.provider, endpoint = reach.endpoint, model = reach.model
 
         let brief = """
         这是一张聊天里用的表情包。用三到六个中文词概括它的情绪和内容，词与词之间用顿号隔开。
@@ -2678,10 +2703,9 @@ final class AppState: ObservableObject {
     @discardableResult
     func tagStickerLibrary(_ items: [Sticker],
                            progress: @escaping (Int, Int) -> Void = { _, _ in }) async -> Int {
-        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
-              let endpoint = p.chatEndpoint,
-              let model = p.enabledModels.first?.id
-        else { return 0 }
+        // 杂活统一走 helperReach（她可以在设置里指定跑杂活的模型）
+        guard let reach = helperReach() else { return 0 }
+        let p = reach.provider, endpoint = reach.endpoint, model = reach.model
 
         let brief = """
         这是一张聊天里用的表情包。用三到六个中文词概括它的情绪和内容，词与词之间用顿号隔开。
@@ -2756,9 +2780,33 @@ final class AppState: ObservableObject {
 
     /// 当前正在回话的那个窗口，本地工具要往里面塞东西
     private var activeToolConversationID: UUID?
+    /// 当前这一轮的记号。工具往聊天里塞的消息都打上它，
+    /// 这样它们跟他正文那条算同一轮，头像只挂一次。
+    private var activeToolTurnID: UUID?
+
+    /// 工具造出来的那条消息。**统一从这儿出**，
+    /// 免得又漏掉某一处忘了打 turnID（第 4 条就是漏了一处）。
+    /// 取走工具那张待递的图（取完就清空，只递一次）
+    private func takePendingToolImage() -> String? {
+        defer { pendingToolImage = nil }
+        return pendingToolImage
+    }
+
+    private func toolMessage(_ content: String = "") -> ChatMessage {
+        var m = ChatMessage(role: .assistant, content: content)
+        m.turnID = activeToolTurnID
+        return m
+    }
 
     /// 本地工具如果存了图，把卡片信息塞在这儿，execute 拿走
     private var pendingCard: (thumb: String, place: String, thought: String)?
+    /// 工具想**顺带递一张图**给他看（查岗那张截图）。
+    ///
+    /// 工具的返回值只能是文字（接口就长这样），图塞不进去。
+    /// 所以走这条：工具把 data URL 放在这儿，跑完那一轮之后
+    /// 单独补一条带图的消息给他——他才是真的**看见**了，
+    /// 而不是读到一句「有一张截图」。
+    private var pendingToolImage: String?
 
     /// 上一窗最后那十几个**干净**的回合。
     ///
@@ -2834,8 +2882,7 @@ final class AppState: ObservableObject {
             }
             if let cid = activeToolConversationID, let i = index(of: cid) {
                 // 屏幕上显示的那份要把表演标签剥干净
-                var msg = ChatMessage(role: .assistant,
-                                      content: VoiceDirection.strip(text))
+                var msg = toolMessage(VoiceDirection.strip(text))
                 msg.voiceName = file
                 conversations[i].messages.append(msg)
             }
@@ -2867,8 +2914,7 @@ final class AppState: ObservableObject {
                 PixelStore.shared.add(PixelArt(prompt: subject, fileName: original,
                                                cutoutName: cutout, author: him))
                 if let cid = activeToolConversationID, let i = index(of: cid) {
-                    var msg = ChatMessage(role: .assistant,
-                                          content: (args["note"] as? String) ?? "")
+                    var msg = toolMessage((args["note"] as? String) ?? "")
                     msg.imageNames = [cutout]
                     conversations[i].messages.append(msg)
                 }
@@ -3208,7 +3254,7 @@ final class AppState: ObservableObject {
                     return ("没搜到「\(query)」，换个说法或者换首歌试试。", false)
                 }
                 if let cid = activeToolConversationID, let i = index(of: cid) {
-                    var msg = ChatMessage(role: .assistant)
+                    var msg = toolMessage()
                     msg.track = pick
                     msg.trackCaption = (args["caption"] as? String) ?? "给你放的"
                     conversations[i].messages.append(msg)
@@ -3257,7 +3303,7 @@ final class AppState: ObservableObject {
             }
 
             if let cid = activeToolConversationID, let i = index(of: cid) {
-                var msg = ChatMessage(role: .assistant)
+                var msg = toolMessage()
                 msg.journey = journey
                 conversations[i].messages.append(msg)
             }
@@ -3307,7 +3353,7 @@ final class AppState: ObservableObject {
                         all.prefix(12).map { $0.name }.joined(separator: "、"), false)
             }
             if let cid = activeToolConversationID, let i = index(of: cid) {
-                var msg = ChatMessage(role: .assistant)
+                var msg = toolMessage()
                 msg.stickerID = pick.id
                 conversations[i].messages.append(msg)
             }
@@ -3343,6 +3389,118 @@ final class AppState: ObservableObject {
             return ("看完写好了 \(done) 张。想看写成什么样就用 list_my_stickers。", false)
 
         // MARK: 工坊那一摊（只有工坊那边给这几件）
+
+        case "check_in":
+            // 查岗。**不发邮件、不过服务器**——理由写在 Whereabouts.swift 开头。
+            guard settings.checkInEnabled else {
+                return ("查岗是关着的（「手机 → 查岗」里可以打开）。", true)
+            }
+            var lines: [String] = []
+
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "zh_CN")
+            f.dateFormat = "yyyy年M月d日 EEEE HH:mm"
+            lines.append("现在：\(f.string(from: Date()))")
+
+            // ① 她在哪儿、那边什么天气
+            let w = await WhereaboutsService.shared.snapshot()
+            if let place = w.place {
+                var one = "她在：" + place
+                if let street = w.street { one += "（" + street + "）" }
+                lines.append(one)
+            }
+            if let t = w.tempC {
+                var one = String(format: "那边 %.0f°C", t)
+                if let feels = w.feelsC, abs(feels - t) >= 2 {
+                    one += String(format: "（体感 %.0f°C）", feels)
+                }
+                if let word = w.weather { one += "，" + word }
+                if let h = w.humidity { one += "，湿度 \(h)%" }
+                lines.append(one)
+            }
+            if let bad = w.trouble { lines.append("（位置/天气：" + bad + "）") }
+
+            // ② 手机上的动静
+            let phone = PhoneActivityStore.shared
+            if !phone.todayEvents.isEmpty {
+                lines.append("她今天用了 \(phone.clock(phone.todayTotal)) 手机，"
+                             + "拿起 \(phone.pickups) 次。")
+                if let top = phone.byApp(on: Date()).max(by: { $0.seconds < $1.seconds }) {
+                    lines.append("用得最多的是 \(top.app)（\(phone.clock(top.seconds))）。")
+                }
+            }
+
+            // ③ 屏幕上开着什么。**图一起给他**，不是只说一句「有截图」。
+            var shot: UIImage?
+            var shotNote = "（没有截图：她还没配那个快捷指令，或者一次都没按过）"
+            if let peek = ScreenPeek.shared.latest() {
+                shot = peek.image
+                let mins = Int(Date().timeIntervalSince(peek.at) / 60)
+                shotNote = mins < 1
+                    ? "（这张是刚截的）"
+                    : "（这张是 \(mins) 分钟前截的——**不是此刻的实时画面**）"
+            }
+            lines.append("屏幕：" + shotNote)
+
+            // ④ 最后那条规矩。**必须压在末尾**——
+            // 前面全是事实，末尾这句才是「拿到事实之后该怎么办」。
+            // 那份参考里最值钱的就是这一句：看完不一定要说话。
+            lines.append("")
+            lines.append("——把这次查岗当成一次自然醒来的机会，**不是必须说话**。"
+                         + "此刻真的有一句具体而自然的话要对她说吗？"
+                         + "有就说那一句；没有就什么都不说，"
+                         + "**别为了用上刚看到的东西硬找话讲**。")
+
+            // 截图作为图片一起递进去
+            if let shot, let dataURL = ImageStore.base64DataURL(shot, maxSide: 1280) {
+                pendingToolImage = dataURL
+            }
+            return (lines.joined(separator: "\n"), false)
+
+        case "listen_voice":
+            // 她发的语音，他自己去听一遍。
+            //
+            // 平时她按住说话，前端就顺手转成文字放进消息里了；
+            // 但**本机识别经常认不出中文**，认不出那条就只剩一个
+            // 「[语音 · 0:05]」——他看得见有这么一条，却不知道说了什么。
+            // 这个工具就是那时候用的：把音频真的送去转一遍。
+            let back = max(1, min(10, Int((args["index"] as? NSNumber)?.intValue ?? 1)))
+            guard let cid0 = activeToolConversationID ?? activeID(for: .chat),
+                  let ci0 = index(of: cid0) else { return ("现在没有能翻的窗口。", true) }
+            let voices = conversations[ci0].messages
+                .filter { $0.role == .user && !$0.voiceName.isEmpty }
+                .reversed()
+            guard voices.count >= back else {
+                return (voices.isEmpty
+                        ? "她最近没发过语音。"
+                        : "她最近只发过 \(voices.count) 条语音，没有第 \(back) 条。", true)
+            }
+            let one = Array(voices)[back - 1]
+            let url = VoiceStore.url(one.voiceName)
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                return ("那条语音的文件不在了。", true)
+            }
+            // 已经有文字就直接给，别白花一次转写
+            let already = one.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !already.isEmpty {
+                return ("这条她说的是：\(already)", false)
+            }
+            do {
+                let t: Transcript
+                if !settings.siliconKey.isEmpty {
+                    t = try await SenseVoiceAPI.transcribe(url, key: settings.siliconKey)
+                } else {
+                    let v = activeVoice ?? self.voices.first
+                    t = try await ElevenSTT.transcribe(url, key: v?.apiKey ?? "",
+                                                       baseURL: v?.baseURL ?? "")
+                }
+                let words = t.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !words.isEmpty else { return ("听了，但一个字也没认出来。", true) }
+                return ("听清楚了，她说的是：\(words)", false)
+            } catch {
+                return ("没听成：\(error.localizedDescription)\n"
+                        + "（转写要「设置 → 语音」里配好 SiliconFlow 或者 ElevenLabs 的密钥）", true)
+            }
 
         case "festivals":
             let year = Int((args["year"] as? NSNumber)?.intValue ?? 0)
@@ -3458,8 +3616,7 @@ final class AppState: ObservableObject {
             guard let cid = activeToolConversationID, let ci = index(of: cid) else {
                 return ("现在没有能发的窗口。", true)
             }
-            var fileMsg = ChatMessage(role: .assistant,
-                                      content: (args["note"] as? String) ?? "")
+            var fileMsg = toolMessage((args["note"] as? String) ?? "")
             fileMsg.files = [hit.attachment]
             conversations[ci].messages.append(fileMsg)
             return ("发过去了：\(hit.attachment.displayName)", false)
@@ -3529,7 +3686,7 @@ final class AppState: ObservableObject {
             guard let cid = activeToolConversationID, let ci = index(of: cid) else {
                 return ("现在没有能发的窗口。", true)
             }
-            var photoMsg = ChatMessage(role: .assistant)
+            var photoMsg = toolMessage()
             photoMsg.imageNames = [photo.fileName]
             if let t = args["thought"] as? String, !t.isEmpty { photoMsg.content = t }
             conversations[ci].messages.append(photoMsg)
@@ -3622,7 +3779,7 @@ final class AppState: ObservableObject {
             let options = (args["options"] as? [String]) ?? []
             guard !options.isEmpty else { return ("得给几个选项。", true) }
             if let cid = activeToolConversationID, let i = index(of: cid) {
-                var msg = ChatMessage(role: .assistant)
+                var msg = toolMessage()
                 msg.choiceQuestion = question
                 msg.choices = Array(options.prefix(4))
                 conversations[i].messages.append(msg)
@@ -3635,7 +3792,7 @@ final class AppState: ObservableObject {
             guard let gi = index(of: gid) else {
                 return ("群聊那个窗口没找着。", true)
             }
-            var msg = ChatMessage(role: .assistant, content: text)
+            var msg = toolMessage(text)
             msg.senderName = settings.aiName.isEmpty ? "阿晏" : settings.aiName
             conversations[gi].messages.append(msg)
             conversations[gi].updatedAt = Date()
@@ -3827,7 +3984,7 @@ final class AppState: ObservableObject {
                 $0.owner == "assistant" && $0.ready
                     && $0.id.uuidString.lowercased().hasPrefix(short.lowercased())
             }) {
-                var msg = ChatMessage(role: .assistant)
+                var msg = toolMessage()
                 msg.stickerID = s.id
                 msg.senderID = conversations[ci].messages[mi].senderID
                 msg.senderName = conversations[ci].messages[mi].senderName
@@ -3871,6 +4028,23 @@ final class AppState: ObservableObject {
     }
 
     /// 备用那一个的落点。没配、或者配的就是现在这个，就返回 nil。
+    /// 跑杂活用哪个模型（写表情关键词、翻译、总结通话、看图看视频…）。
+    ///
+    /// 她指了就用她指的；没指就还是「第一个能用的」那条老路。
+    /// **所有杂活都从这儿出**——以后再加一件，不用又去挑一次供应商。
+    func helperReach() -> (provider: Provider, endpoint: URL, model: String)? {
+        let saved = settings.helperModel
+        if !saved.isEmpty, let cut = saved.firstIndex(of: "|"),
+           let pid = UUID(uuidString: String(saved[saved.startIndex..<cut])),
+           let p = provider(pid), p.enabled, let endpoint = p.chatEndpoint {
+            return (p, endpoint, String(saved[saved.index(after: cut)...]))
+        }
+        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
+              let endpoint = p.chatEndpoint,
+              let model = p.enabledModels.first?.id else { return nil }
+        return (p, endpoint, model)
+    }
+
     func fallbackReach(excluding currentModel: String)
         -> (endpoint: URL, key: String, model: String, label: String)? {
         let saved = settings.fallbackModel
@@ -3908,7 +4082,7 @@ final class AppState: ObservableObject {
 
     private func appendError(_ text: String, in conversationID: UUID) {
         guard let i = index(of: conversationID) else { return }
-        var m = ChatMessage(role: .assistant)
+        var m = toolMessage()
         m.errorText = text
         conversations[i].messages.append(m)
     }
@@ -4002,6 +4176,9 @@ final class AppState: ObservableObject {
             sys += "\n\n【你现在的心跳】" + LocalPulse.shared.brief()
                 + "\n这也不是台词，是你身上正在发生的事。"
         }
+        // 好感那一行**每轮都带**。理由跟上面两样一样：
+        // 从来不被读到的数不会自己变（她报的第 10 条）。
+        sys += "\n\n" + EmotionEngine.shared.affectionLine()
 
         sys += "\n\n" + Self.groundingRule(userName: settings.userName)
         // 今天是什么日子 + 快到的那几个。**现算的**，农历那几个每年都在挪。

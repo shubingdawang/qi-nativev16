@@ -569,9 +569,10 @@ struct MessageBubbleView: View {
                     .font(.app(12))
                     .foregroundStyle(app.settings.accentColor)
 
-                // 几根高低不一的竖条，装个声波的样子
+                // 几根高低不一的竖条，装个声波的样子。
+                // 根数跟着时长走——三秒和四十秒不该长得一样。
                 HStack(spacing: 2.5) {
-                    ForEach(0..<14, id: \.self) { i in
+                    ForEach(0..<waveCount(seconds), id: \.self) { i in
                         Capsule()
                             .fill(app.settings.accentColor.opacity(playing ? 0.85 : 0.45))
                             .frame(width: 2, height: waveHeight(i))
@@ -584,11 +585,28 @@ struct MessageBubbleView: View {
             }
             .padding(.horizontal, 15)
             .padding(.vertical, 12)
-            .frame(width: 230, alignment: .leading)
+            .frame(width: voiceWidth(seconds), alignment: .leading)
             .glassBackground(radius: 22, strength: app.settings.glassOpacity)
             .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
         .buttonStyle(.plain)
+    }
+
+    /// 语音条多宽。**按时长长短**（她说的第 5 条）——
+    /// 以前一律 230，三秒和四十秒长得一模一样，看不出哪条更长。
+    ///
+    /// 微信那种是「越长越宽，但有上限」：
+    /// 一秒起步 120，之后每秒加 5，最宽到 260 就不再长了。
+    /// 再宽就顶到屏幕边，反而不好看。
+    private func voiceWidth(_ seconds: Int) -> CGFloat {
+        let s = max(1, min(60, seconds))
+        return min(260, 120 + CGFloat(s) * 5)
+    }
+
+    /// 波形画几根。跟着宽度走，不然短条子里挤 14 根、长条子里又空着一截。
+    private func waveCount(_ seconds: Int) -> Int {
+        let usable = voiceWidth(seconds) - 100      // 减掉按钮、秒数和留白
+        return max(5, min(22, Int(usable / 4.5)))
     }
 
     /// 固定的一组高度，看着像波形又不会每次刷新都乱跳

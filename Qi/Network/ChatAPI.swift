@@ -153,7 +153,19 @@ enum ChatAPI {
     ) throws -> Data {
 
         var payload: [[String: Any]] = []
-        for m in messages {
+        // 缓存标记打在哪一条上。
+        //
+        // 她报的第 7 条：「apikey 打开了缓存，但缓存命中/写入/命中率都是 0」。
+        // 供应商那边打开只是**允许**缓存，Anthropic 那套是**显式**的——
+        // 请求里不带 `cache_control`，一次都不会缓。我们从来没带过，
+        // 所以那三个数永远是 0，一分钱也没省下来。
+        //
+        // 打在**系统提示那一条的末尾**：它是整份请求里最长、最不变的一块
+        // （身份、规矩、能力块、浓缩件），缓住它省得最多。
+        // 后面的历史每轮都在变，标了也命中不了。
+        let cacheAt = messages.lastIndex { $0.role == "system" }
+
+        for (i, m) in messages.enumerated() {
             var item: [String: Any] = ["role": m.role]
 
             if m.role == "tool" {
@@ -185,6 +197,21 @@ enum ChatAPI {
                     parts.append(["type": "image_url", "image_url": ["url": url]])
                 }
                 item["content"] = parts
+            }
+            // 这一条要缓的话，把内容摊成数组、在最后一块上盖章。
+            // 兼容写法：OpenAI 那套接口原样透传这个字段给 Anthropic，
+            // **不认它的中转会把它当成多余的键忽略掉**，不会报错。
+            if i == cacheAt {
+                var parts: [[String: Any]]
+                if let arr = item["content"] as? [[String: Any]] {
+                    parts = arr
+                } else {
+                    parts = [["type": "text", "text": (item["content"] as? String) ?? ""]]
+                }
+                if !parts.isEmpty {
+                    parts[parts.count - 1]["cache_control"] = ["type": "ephemeral"]
+                    item["content"] = parts
+                }
             }
             payload.append(item)
         }

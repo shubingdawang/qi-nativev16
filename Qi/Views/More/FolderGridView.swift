@@ -340,7 +340,10 @@ struct MediaGridView: View {
         }
         .onChange(of: picked) { _, list in importPicked(list) }
         .fullScreenCover(item: $preview) { (item: MediaItem) in
-            ImagePreviewView(item: item, store: store)
+            // 把这一屏能看的全给它，才翻得了页
+            ImagePreviewView(items: items,
+                             index: items.firstIndex(where: { $0.id == item.id }) ?? 0,
+                             store: store)
         }
         .confirmationDialog("挪到哪儿", isPresented: Binding(
             get: { moving != nil },

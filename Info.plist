@@ -35,6 +35,8 @@
 	<string>把你说的话转成文字填进输入框。识别在这台手机上完成，不会送去别的地方。</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>需要本地网络权限，才能连上你自己电脑上跑的服务。</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>他「查岗」的时候会看一眼你在哪儿、那边什么天气。默认只到城市，不给精确地址；也可以在「手机 → 查岗」里整个关掉。</string>
 
 	<!-- 灵动岛／锁屏上那条实时活动。没有这一项，ActivityKit 会直接拒绝。 -->
 	<key>NSSupportsLiveActivities</key>

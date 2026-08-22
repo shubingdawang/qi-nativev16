@@ -194,7 +194,17 @@ final class PhoneActivityStore: ObservableObject {
     /// 很多时候只有 open 没有 close，那一段就会一直挂到下一次有事件为止——
     /// 中间可能隔着一整夜。封成 30 分钟是个折中：
     /// 真连着刷半小时以上的会被低估，但不会再出现「昨天用了 122 小时」。
-    static let openEndedCap: TimeInterval = 30 * 60
+    /// 30 分钟太小了——她报的第 2 条：系统显示 2 小时 37 分，我们只算出 1 小时 35 分。
+    /// 少掉的那一小时就是从这儿漏的：她连着刷一小时中间没有任何事件，
+    /// 那一段被砍成 30 分钟。**改成 60 分钟**。
+    static let openEndedCap: TimeInterval = 60 * 60
+    /// 夜里那一段单独算。
+    ///
+    /// 提到 60 分钟之后，「23 点开了一下就睡了」也会被算成一小时。
+    /// 所以跨在这个时段里、又没有 close 收尾的段，按 15 分钟算——
+    /// 那多半是睡着了，不是在用。
+    static let nightWindow = 2..<7
+    static let nightCap: TimeInterval = 15 * 60
     /// 有明确 close 收尾的那种，也封一道——防的是几小时之后才飘来的一条陈旧 close。
     static let closedCap: TimeInterval = 3 * 3600
 
@@ -222,9 +232,19 @@ final class PhoneActivityStore: ObservableObject {
             guard let cur = current else { return }
             let raw = end.timeIntervalSince(cur.since)
             guard raw > 0 else { current = nil; return }
-            let cap = explicitClose
+            var cap = explicitClose
                 ? PhoneActivityStore.closedCap
                 : PhoneActivityStore.openEndedCap
+            // 这一段是不是压在后半夜。**只看没有 close 收尾的那种**——
+            // 有明确 close 的说明她真的在用到那一刻。
+            if !explicitClose {
+                let h = Calendar.current.component(.hour, from: end)
+                let startH = Calendar.current.component(.hour, from: cur.since)
+                if PhoneActivityStore.nightWindow.contains(h)
+                    || PhoneActivityStore.nightWindow.contains(startH) {
+                    cap = PhoneActivityStore.nightCap
+                }
+            }
             seconds[cur.app, default: 0] += min(raw, cap)
             current = nil
         }

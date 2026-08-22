@@ -98,9 +98,7 @@ struct IncomingCallView: View {
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
                                 .background(
-                                    Capsule().fill(scheme == .dark
-                                                   ? Color.white.opacity(0.13)
-                                                   : Color.white.opacity(0.55))
+                                    Capsule().fill(Theme.controlFill(scheme).opacity(0.7))
                                 )
                         }
                         .buttonStyle(.plain)
@@ -114,9 +112,7 @@ struct IncomingCallView: View {
                             .padding(.horizontal, 9)
                             .padding(.vertical, 5)
                             .background(
-                                Capsule().fill(scheme == .dark
-                                               ? Color.white.opacity(0.13)
-                                               : Color.white.opacity(0.55))
+                                Capsule().fill(Theme.controlFill(scheme).opacity(0.7))
                             )
                     }
                     .buttonStyle(.plain)
@@ -350,8 +346,8 @@ struct CallView: View {
                         .frame(width: 54, height: 54)
                         .background(
                             Circle().fill(muted
-                                ? Color(hexString: "8A8378")!
-                                : Color.white.opacity(scheme == .dark ? 0.16 : 0.85))
+                                ? Theme.controlFillMuted(scheme)
+                                : Theme.controlFill(scheme))
                         )
                 }
                 .buttonStyle(.plain)
@@ -361,7 +357,7 @@ struct CallView: View {
                     Circle()
                         .fill(listening
                               ? app.settings.accentColor.opacity(0.4)
-                              : Color.white.opacity(scheme == .dark ? 0.16 : 0.85))
+                              : Theme.controlFill(scheme))
                         .frame(width: 54, height: 54)
                         .overlay {
                             Image(systemName: "waveform")
