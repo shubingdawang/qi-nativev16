@@ -516,7 +516,23 @@ final class AppState: ObservableObject {
         DesireEngine.shared.touched()
         // 她这一句在他那儿是什么反应（夸/凶/撒娇/冷淡…）。
         // 关键词规则，不调模型；认不出来就什么都不动。
-        EmotionEngine.shared.appraise(text)
+        let read = EmotionEngine.shared.appraise(text)
+        // **同一次判断，两个去处**：情绪落到 VA，身体落到那七项。
+        //
+        // 以前只有前半截，所以那七项跟她这个人没有关系——
+        // 她说「抱抱」和说「别理我」，他身上一模一样，那不叫身体叫背景音乐。
+        // 走同一个 `Appraisal` 是**故意的**：两套关键词迟早会打架，
+        // 到时候她看到的就是「好感涨了但身体在往下沉」。
+        if settings.bodyEnabled {
+            BodyStore.shared.nudge(BodyReader.read(read), quote: text)
+            // **她自己配的那些词**（称呼、口头禅）单独再走一遍。
+            // 跟上面那套不是一回事：上面是通用情绪（夸/凶/撒娇，对谁都成立），
+            // 这一套的词是她填的——只有她知道哪些词在他们之间有分量。
+            let hit = TriggerStore.shared.match(text, spoken: !voiceName.isEmpty)
+            if !hit.isEmpty {
+                BodyStore.shared.nudge(TriggerStore.shared.nudge(from: hit), quote: text)
+            }
+        }
         let turn = UUID()
         var userMsg = ChatMessage(role: .user, content: text)
         userMsg.turnID = turn
@@ -1762,6 +1778,11 @@ final class AppState: ObservableObject {
             lastHer = conv.messages.last(where: { $0.role == .user })?.createdAt
         }
         BodyStore.shared.catchUp(lastHerMessageAt: lastHer)
+        // 顺手掷一次「昨晚做没做梦」。**也是纯算术**，
+        // 六道关卡（时间窗/她安静多久/冷却/周期概率）全在本机算，
+        // 掷中了只是攒着——讲不讲要等她下次说话，
+        // **绝不半夜自己开一次请求**（见 DreamStore 开头那段）。
+        DreamStore.shared.rollIfDue(lastHerMessageAt: lastHer)
     }
 
     /// 结算最近这一段聊天对身体的影响。
@@ -3382,6 +3403,29 @@ final class AppState: ObservableObject {
             }
             return ("发出去了：\(pick.name)", false)
 
+        case "find_sticker":
+            let mood = (args["mood"] as? String) ?? ""
+            guard !mood.isEmpty else { return ("此刻是什么感觉？", true) }
+            let n = max(1, min(12, Int((args["limit"] as? NSNumber)?.intValue ?? 5)))
+            let hits = store.search(mood, owner: "assistant", limit: n)
+            guard !hits.isEmpty else {
+                let total = store.list(owner: "assistant").filter { $0.ready }.count
+                return (total == 0
+                        ? "你还没有能用的表情。"
+                        : "\(total) 张里没有贴「\(mood)」的。换个说法再找，"
+                          + "或者就别发表情了——凑一张不对的比不发糟。", false)
+            }
+            var out = "跟「\(mood)」最贴的几张："
+            for (s2, score) in hits {
+                out += "\n- id=\(s2.id.uuidString.prefix(8))｜\(s2.name)"
+                out += "｜\(s2.description)"
+                if !s2.tags.isEmpty { out += "｜\(s2.tags.joined(separator: "、"))" }
+                out += "｜贴合 \(Int(score * 100))%"
+            }
+            out += "\n\n要用哪张就在回复最后单独起一行写 [[sticker:那个 id]]。"
+            out += "**都不太对就一张都别发。**"
+            return (out, false)
+
         case "list_my_stickers":
             let mine = store.list(owner: "assistant")
             if mine.isEmpty { return ("你的表情包还是空的。", false) }
@@ -4182,6 +4226,31 @@ final class AppState: ObservableObject {
         return ImageStore.load(ref.name)
     }
 
+    /// 聊天里她发过的图，**还没收进表情包的那些**。
+    ///
+    /// 出处：meme_manager 的「自动收集」——它是从聊天里自动抓 + 视觉模型过滤。
+    /// **过滤那一半我们不做**：一张张送去问模型「这算不算表情包」，
+    /// 攒一百张就是一百次钱，判错了她还得自己去删。
+    ///
+    /// 换成不花钱的做法：**把她发过的图摆出来，她自己一眼挑。**
+    /// 挑这件事她一秒一张，比模型准也比模型快；
+    /// 我们只负责**别让她再去相册里翻一遍**——那才是她烦的地方。
+    func unclaimedChatImages(limit: Int = 60) -> [String] {
+        let already = Set(StickerStore.shared.stickers.map { $0.fileName })
+        var out: [String] = []
+        var seen = Set<String>()
+        for conv in conversations.sorted(by: { $0.updatedAt > $1.updatedAt }) {
+            for m in conv.messages.reversed() where m.role == .user {
+                for name in m.imageNames.reversed() {
+                    guard !already.contains(name), seen.insert(name).inserted else { continue }
+                    out.append(name)
+                    if out.count >= limit { return out }
+                }
+            }
+        }
+        return out
+    }
+
     /// 找不到那张图的时候，把「现在能选的有哪些」摆出来，
     /// 别只回一句「没找到」让他瞎猜。
     private func imageMenu(_ limit: Int = 12) -> String {
@@ -4455,6 +4524,16 @@ final class AppState: ObservableObject {
         // 好感那一行**每轮都带**。理由跟上面两样一样：
         // 从来不被读到的数不会自己变（她报的第 10 条）。
         sys += "\n\n" + EmotionEngine.shared.affectionLine()
+
+        // 他做没做梦。
+        //
+        // **掷骰那一下是纯算术、不花钱**，所以随手就掷了；
+        // 但「把梦讲出来」要调模型——按铁律那必须是她主动点的，
+        // 所以这儿只告诉他「你做过一个梦」，讲不讲、怎么讲是他的事，
+        // 而且**绝不半夜自己开一次请求**。
+        if let dream = DreamStore.shared.briefForModel() {
+            sys += "\n\n" + dream
+        }
 
         // 她这会儿在听什么。**放着才带**，停了就一个字都不说。
         //

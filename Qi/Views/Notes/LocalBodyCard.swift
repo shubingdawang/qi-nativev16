@@ -11,6 +11,7 @@ import SwiftUI
 struct LocalBodyCard: View {
 
     @ObservedObject private var store = BodyStore.shared
+    @State private var showLedger = false
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
 
@@ -74,6 +75,85 @@ struct LocalBodyCard: View {
                         .foregroundStyle(Theme.textMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
+
+                // 她说的话动了哪几项。**看得见的数才信得过**——
+                // 跟好感那本流水账一个道理。每一笔都能撤。
+                if !store.nudges.isEmpty {
+                    Divider().opacity(0.4).padding(.vertical, 2)
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) { showLedger.toggle() }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text(showLedger ? "收起流水" : "你说的话动了什么")
+                                .font(.app(12))
+                            Text("\(store.nudges.count) 笔")
+                                .font(.app(10))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                            Spacer()
+                            Image(systemName: showLedger ? "chevron.up" : "chevron.down")
+                                .font(.app(10))
+                        }
+                        .foregroundStyle(app.settings.accentColor)
+                    }
+                    .buttonStyle(.plain)
+
+                    if showLedger {
+                        VStack(alignment: .leading, spacing: 9) {
+                            ForEach(store.nudges.prefix(12)) { e in
+                                VStack(alignment: .leading, spacing: 3) {
+                                    HStack(alignment: .top) {
+                                        Text("「" + e.quote + "」")
+                                            .font(.app(11))
+                                            .foregroundStyle(Theme.textSoft(scheme))
+                                            .lineLimit(2)
+                                        Spacer(minLength: 6)
+                                        Button {
+                                            store.undoNudge(e.id)
+                                        } label: {
+                                            Text("撤掉")
+                                                .font(.app(10))
+                                                .foregroundStyle(Theme.textMuted(scheme))
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                    Text(e.line)
+                                        .font(.app(11, design: .rounded))
+                                        .foregroundStyle(app.settings.accentColor)
+                                    if !e.why.isEmpty {
+                                        Text(e.why)
+                                            .font(.app(10))
+                                            .foregroundStyle(Theme.textMuted(scheme))
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.top, 2)
+
+                        Text("这一层是**关键词读的，读得不准**。它只推身体，**碰不到好感**——好感还是只有他自己能动。读拧了点「撤掉」就回来了，身体本来也会自己往回走。")
+                            .font(.app(10))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                // 词与梦：一头是她说的话进他身体里，
+                // 一头是他身体里的东西自己冒出来。
+                NavigationLink { TriggersDreamsView() } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "moon.stars").font(.app(12))
+                        Text("词与梦").font(.app(13))
+                        Spacer()
+                        if DreamStore.shared.untold != nil {
+                            Text("他做了个梦")
+                                .font(.app(10))
+                                .foregroundStyle(app.settings.accentColor)
+                        }
+                        Image(systemName: "chevron.right").font(.app(10))
+                    }
+                    .foregroundStyle(Theme.textSoft(scheme))
+                    .padding(.vertical, 2)
+                }
+                .buttonStyle(.plain)
 
                 // 结算。**这是整套里唯一花钱的地方，所以要她自己按。**
                 Button {

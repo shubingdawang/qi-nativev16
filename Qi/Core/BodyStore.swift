@@ -21,6 +21,7 @@ final class BodyStore: ObservableObject {
         state = BodyStore.read() ?? BodyEngine.createInitial()
         let t = UserDefaults.standard.double(forKey: "bodyLastSettled")
         lastSettledAt = t > 0 ? Date(timeIntervalSince1970: t) : nil
+        nudges = Storage.load([BodyEntry].self, from: "body-nudges.json") ?? []
         loaded = true
     }
 
@@ -38,6 +39,53 @@ final class BodyStore: ObservableObject {
             state = s
             save()
         }
+    }
+
+    // MARK: 她说的话推一下
+
+    /// 她说的话动了身体的流水账。**看得见的数才信得过**——
+    /// 跟好感那本账一个道理。留最近 60 笔。
+    @Published private(set) var nudges: [BodyEntry] = []
+
+    /// 把一句话读出来的推力落到身体上。
+    ///
+    /// **只推增量**，上下限和往回落还是 `BodyEngine` 那套管的——
+    /// 这一层没有资格直接设一个数，它只是「推一下」。
+    func nudge(_ n: BodyNudge, quote: String) {
+        guard !n.isEmpty else { return }
+        var s = state
+        var applied: [String: Int] = [:]
+        for (f, d) in n.deltas {
+            let before = s.value(f)
+            let after = min(100, max(f.minimum, before + d))
+            guard after != before else { continue }
+            s.values[f.rawValue] = after
+            applied[f.rawValue] = after - before   // 记**真的动了多少**，不是想动多少
+        }
+        guard !applied.isEmpty else { return }
+        state = s
+        save()
+
+        nudges.insert(BodyEntry(quote: String(quote.prefix(40)),
+                                why: n.why, deltas: applied), at: 0)
+        if nudges.count > 60 { nudges.removeLast(nudges.count - 60) }
+        Storage.save(nudges, to: "body-nudges.json")
+    }
+
+    /// 撤掉一笔。她觉得判错了就能拿回来——
+    /// 跟好感那本账一样，**每一笔都能撤**。
+    func undoNudge(_ id: UUID) {
+        guard let i = nudges.firstIndex(where: { $0.id == id }) else { return }
+        let e = nudges[i]
+        var s = state
+        for (key, d) in e.deltas {
+            guard let f = BodyField(rawValue: key) else { continue }
+            s.values[key] = min(100, max(f.minimum, s.value(f) - d))
+        }
+        state = s
+        save()
+        nudges.remove(at: i)
+        Storage.save(nudges, to: "body-nudges.json")
     }
 
     /// 开一个身体事件

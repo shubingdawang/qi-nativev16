@@ -30,6 +30,8 @@ struct StickerLibraryView: View {
     /// 正在让他写关键词
     @State private var tagging = false
     @State private var tagNote: String?
+    /// 「从聊天里收」那一屏
+    @State private var harvesting = false
 
     private var list: [Sticker] {
         store.list(owner: owner, keyword: keyword)
@@ -74,6 +76,9 @@ struct StickerLibraryView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $editing) { s in
             StickerEditorView(sticker: s)
+        }
+        .sheet(isPresented: $harvesting) {
+            HarvestSheet(kind: tab == 2 ? "gif" : "sticker")
         }
         .alert("写关键词", isPresented: Binding(
             get: { tagNote != nil }, set: { if !$0 { tagNote = nil } }
@@ -163,6 +168,18 @@ struct StickerLibraryView: View {
                         }
                         .buttonStyle(.plain)
                         .disabled(tagging)
+                    }
+                    // 从聊天里收。**她发过的图直接摆出来，别让她再去相册翻一遍**
+                    if !app.unclaimedChatImages(limit: 1).isEmpty {
+                        Button {
+                            harvesting = true
+                        } label: {
+                            Image(systemName: "tray.and.arrow.down")
+                                .font(.app(15))
+                                .foregroundStyle(app.settings.accentColor)
+                                .frame(width: 30, height: 32)
+                        }
+                        .buttonStyle(.plain)
                     }
                     let tint = app.settings.accentColor
                     PhotosPicker(selection: $picking, maxSelectionCount: 20, matching: .images) {
@@ -292,5 +309,135 @@ struct StickerLibraryView: View {
             return "他这儿还没有表情。\n加进来的表情他才能在聊天里主动发。"
         }
         return tab == 2 ? "还没有会动的表情\n点右上角从文件里选 GIF 或 WebP" : "还没有表情\n点右上角从相册选"
+    }
+}
+
+
+// MARK: - 从聊天里收表情
+
+/// 她发过的图，一眼挑，挑中的直接进表情包。
+///
+/// 出处：meme_manager 的「自动收集」。它那套是**自动抓 + 视觉模型过滤**——
+/// 过滤那一半我们不做：一张张送去问模型「这算不算表情包」，
+/// 攒一百张就是一百次钱，而且判错了她还得自己去删。
+///
+/// **挑这件事她一秒一张，比模型准也比模型快。**
+/// 真正烦人的不是挑，是「想收一张还得先去相册翻半天」——
+/// 所以我们只做那一半：把她发过的、还没收的，直接摆到她眼前。
+struct HarvestSheet: View {
+
+    /// 收成静图还是动图那一栏
+    let kind: String
+
+    @EnvironmentObject var app: AppState
+    @ObservedObject private var store = StickerStore.shared
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var chosen: Set<String> = []
+    @State private var owner = "user"
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
+
+    private var pool: [String] { app.unclaimedChatImages(limit: 80) }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                WallpaperBackground()
+                VStack(spacing: 0) {
+                    Picker("", selection: $owner) {
+                        Text(app.settings.userName.isEmpty ? "收进我的" : "收进我的").tag("user")
+                        Text("收进他的").tag("assistant")
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+
+                    if pool.isEmpty {
+                        VStack(spacing: 8) {
+                            Image(systemName: "tray")
+                                .font(.app(28, weight: .light))
+                                .foregroundStyle(app.settings.accentColor.opacity(0.5))
+                            Text("聊天里没有还没收的图")
+                                .font(.app(13))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                        }
+                        .padding(.top, 70)
+                        Spacer()
+                    } else {
+                        ScrollView {
+                            LazyVGrid(columns: columns, spacing: 8) {
+                                ForEach(pool, id: \.self) { name in
+                                    cell(name)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 90)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("从聊天里收")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("关上") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("收下 \(chosen.count) 张") { harvest() }
+                        .fontWeight(.semibold)
+                        .disabled(chosen.isEmpty)
+                }
+            }
+        }
+    }
+
+    private func cell(_ name: String) -> some View {
+        let on = chosen.contains(name)
+        return ZStack(alignment: .topTrailing) {
+            Group {
+                if name.lowercased().hasSuffix(".gif") {
+                    AnimatedImageView(url: ImageStore.url(for: name),
+                                      contentMode: .scaleAspectFill)
+                } else if let img = ImageStore.load(name) {
+                    Image(uiImage: img).resizable().scaledToFill()
+                } else {
+                    Color.gray.opacity(0.2)
+                }
+            }
+            .frame(height: 78)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(on ? app.settings.accentColor : .clear, lineWidth: 2)
+            }
+
+            if on {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 15))
+                    .foregroundStyle(.white, app.settings.accentColor)
+                    .padding(3)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if on { chosen.remove(name) } else { chosen.insert(name) }
+        }
+    }
+
+    /// 收下。**原始字节照搬**——gif 过一遍 UIImage 就只剩第一帧了。
+    private func harvest() {
+        for name in chosen {
+            let url = ImageStore.url(for: name)
+            guard let data = try? Data(contentsOf: url) else { continue }
+            let ext = ImageStore.sniffExt(data)
+            guard var made = store.add(data: data, ext: ext, owner: owner) else { continue }
+            // 名字先留空，让她（或者他用 tag_stickers）之后再写——
+            // 这儿硬塞一个「未命名 1」只会变成一堆没人看的占位名
+            made.name = ""
+            store.update(made)
+        }
+        dismiss()
     }
 }

@@ -205,9 +205,42 @@ final class StickerStore: ObservableObject {
     }
 
     /// 阿晏能用哪些——每次请求把这份清单给他，只给文字，不给图，省 token
+    /// 目录里最多摊开这么多张。
+    ///
+    /// 出处：anka-afk/astrbot_plugin_meme_manager——它用**语义检索**解决
+    /// 「表情多了挑不准」。我们不装向量模型（那要打包一个模型进 App），
+    /// 但那个问题是真的：以前不管她攒了多少张，**整本目录都塞进 system**。
+    /// 二十张还行，两百张就是两百行占着他的注意力，
+    /// 而且他多半只会挑最前面那几个——**摊得越开，挑得越糊**。
+    ///
+    /// 所以超过这个数就不摊了，改成「你有 N 张，用 `find_sticker` 找」。
+    static let catalogLimit = 24
+
     var assistantCatalog: String {
         let list = list(owner: "assistant").filter { $0.ready }
         guard !list.isEmpty else { return "" }
+
+        // 多了就不摊开，让他去搜——见 catalogLimit 那段
+        guard list.count <= Self.catalogLimit else {
+            let recent = list.sorted { $0.createdAt > $1.createdAt }
+                .prefix(8)
+                .map { "- id=\($0.id.uuidString.prefix(8))｜\($0.name)｜\($0.description)" }
+            return """
+            你手上有 \(list.count) 张表情。**太多了不全列**，列出来你也是挑最前面那几张。
+
+            要发的时候先用 `find_sticker`，说一句此刻是什么语气（「有点无奈但宠着」「想蹭一下」），
+            我会把最贴的那几张连 id 一起给你。
+
+            最近新收的这几张：
+            \(recent.joined(separator: "\n"))
+
+            触发：此刻的情绪用一张图比用一句话更准——她逗我、我想撒娇、话说完了还想再补个反应。
+            动机：让她看见我的反应本身。
+            行动：挑好之后在回复最后单独起一行写：[[sticker:那个 id 的前 8 位]]
+            我可以只说话、只发表情，或者说完话再附一个。
+            """
+        }
+
         let lines = list.map { s in
             "- id=\(s.id.uuidString.prefix(8))｜\(s.name)｜\(s.description)｜\(s.tags.joined(separator: "、"))"
         }
@@ -220,6 +253,42 @@ final class StickerStore: ObservableObject {
         行动：挑一个最贴近此刻语气的，在回复最后单独起一行写：[[sticker:那个 id 的前 8 位]]
         我可以只说话、只发表情，或者说完话再附一个。
         """
+    }
+
+    // MARK: 按语气找一张
+
+    /// 「此刻是这个感觉，有没有合适的表情」。
+    ///
+    /// meme_manager 那边用的是**本地向量模型**（打包一个 embedding 进 App）。
+    /// 我们不装——那要多几十兆的模型文件，而且首次加载很慢。
+    ///
+    /// 换成 `MemoryRecall.similarity` 那把尺子（字的二元组、纯算术）。
+    /// **说清楚它的斤两**：这不是真的语义检索，它认的是字面的近似——
+    /// 「无奈」找得到「很无奈」「一脸无奈」，但找不到「叹气」。
+    /// 所以除了比字，还比**标签**和**名字**，三样各占一份，
+    /// 比只做一次精确匹配强得多，也别指望它懂近义词。
+    func search(_ mood: String, owner: String = "assistant", limit: Int = 5)
+        -> [(sticker: Sticker, score: Double)] {
+        let q = mood.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return [] }
+        let pool = list(owner: owner).filter { $0.ready }
+
+        return pool.map { s -> (Sticker, Double) in
+            // 三样各算一次，取最高的那个当分——
+            // 一张表情只要有**一处**对上就该被找出来，不该被另外两处拉低。
+            var best = MemoryRecall.similarity(q, s.description)
+            best = max(best, MemoryRecall.similarity(q, s.name))
+            for t in s.tags {
+                // 标签短，整个命中才算数；命中就给一个高分
+                if q.contains(t) || t.contains(q) { best = max(best, 0.85) }
+                best = max(best, MemoryRecall.similarity(q, t) * 0.9)
+            }
+            return (s, best)
+        }
+        .filter { $0.1 >= 0.12 }
+        .sorted { $0.1 > $1.1 }
+        .prefix(limit)
+        .map { $0 }
     }
 
     /// 从回复里把动作抠出来。

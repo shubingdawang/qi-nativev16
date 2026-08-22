@@ -130,6 +130,16 @@ struct MemoryLibraryView: View {
             row("当前状态", store.currentState.text.isEmpty ? "空" : "有")
             SettingsDivider()
             row("上次聊到哪", store.checkpoint?.text.isEmpty == false ? "有" : "空")
+            // 星图：记忆库现在只能**搜**，而搜的前提是她已经知道要搜什么。
+            // 她常常想看的是另一件事：「日本这条线上都牵着什么」——
+            // 那不是一次检索，那是一张图。
+            if store.memories.count >= 6 {
+                SettingsDivider()
+                NavigationLink { ConstellationView() } label: {
+                    SettingsRowLabel(title: "星图", value: "顺着一条线看", chevron: true)
+                }
+                .buttonStyle(.plain)
+            }
             if !store.glossary.isEmpty {
                 SettingsDivider()
                 NavigationLink { GlossaryListView() } label: {
