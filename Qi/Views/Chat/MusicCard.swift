@@ -11,7 +11,12 @@ struct MusicCard: View {
     @ObservedObject private var player = MusicPlayer.shared
     @Environment(\.colorScheme) private var scheme
 
-    private var isCurrent: Bool { player.current?.id == track.id }
+    /// 卡片上显示、以及点下去要放的，**是库里现在最好的那一版**，
+    /// 不是他当初放的时候那份快照。她后来导进来的完整版会自动顶上来。
+    private var shown: Track { MusicLibrary.shared.best(for: track) }
+    /// 认歌名+歌手，不认 id——导进来那份的 id 跟卡片里这份天生不一样，
+    /// 认 id 的话「明明在放」卡片上也不会亮。
+    private var isCurrent: Bool { MusicLibrary.sameSong(player.current, shown) }
     private var isPlaying: Bool { isCurrent && player.playing }
 
     var body: some View {
@@ -26,13 +31,13 @@ struct MusicCard: View {
                     }
                     .foregroundStyle(labelColor.opacity(0.7))
 
-                    Text(track.title)
+                    Text(shown.title)
                         .font(.app(16, weight: .semibold, design: .serif))
                         .foregroundStyle(labelColor)
                         .lineLimit(1)
 
-                    if !track.subtitle.isEmpty {
-                        Text(track.subtitle)
+                    if !shown.subtitle.isEmpty {
+                        Text(shown.subtitle)
                             .font(.app(11))
                             .foregroundStyle(labelColor.opacity(0.7))
                             .lineLimit(1)
@@ -47,7 +52,7 @@ struct MusicCard: View {
                     if app.settings.haptics {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     }
-                    player.toggle(track)
+                    player.toggle(shown)
                 } label: {
                     Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                         .font(.app(13))
@@ -82,7 +87,7 @@ struct MusicCard: View {
                     HStack {
                         Text(clock(player.progress))
                         Spacer()
-                        if track.isPreview {
+                        if shown.isPreview {
                             Text("试听片段")
                         }
                         Spacer()
@@ -114,7 +119,7 @@ struct MusicCard: View {
     }
 
     private var artwork: some View {
-        TrackArtwork(track: track, side: 46)
+        TrackArtwork(track: shown, side: 46)
             .clipShape(Circle())
     }
 

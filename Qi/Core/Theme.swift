@@ -554,7 +554,8 @@ struct GrainOverlay: View {
             .allowsHitTesting(false)
     }
 
-    nonisolated(unsafe) static let tile: UIImage = {
+    // UIImage 本来就是 Sendable，`nonisolated(unsafe)` 是多余的（编译器会提醒）
+    static let tile: UIImage = {
         let side: CGFloat = 64
         // 写死 3 倍。这张图是懒加载的静态量，谁先用到就在谁的线程上生成，
         // 不能去问 UIScreen——那东西是主线程的。

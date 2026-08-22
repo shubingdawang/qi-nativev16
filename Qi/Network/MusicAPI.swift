@@ -752,6 +752,60 @@ final class MusicLibrary: ObservableObject {
         tracks.append(track)
     }
 
+    /// 同一首歌，库里有没有更好的一版。
+    ///
+    /// 她的原话：「阿晏给我播放了一首需要 vip 的音乐（只能听 30s 没有歌词），
+    /// 随后我将歌曲导入后我希望可以直接替换掉这个 30s 的。」
+    ///
+    /// 聊天里那张卡当时存的是一份**快照**——他放的时候只有 iTunes 那段试听，
+    /// 那张卡就永远是试听。可她后来把整首导进来了，同一首歌在库里明明躺着
+    /// 一个有歌词有封面的完整版。
+    ///
+    /// 所以卡片不再认那份快照，每次显示都来这儿问一句：**这首歌现在最好的是哪一版？**
+    /// 排序：本地整首 > 网易云整首 > 试听。顺带把歌词和封面也补过去——
+    /// 有时候整首在别处、歌词却是她单独贴的。
+    func best(for track: Track) -> Track {
+        let key = (track.title + "|" + track.artist).lowercased()
+            .replacingOccurrences(of: " ", with: "")
+        let same = tracks.filter {
+            ($0.title + "|" + $0.artist).lowercased()
+                .replacingOccurrences(of: " ", with: "") == key
+        }
+        guard !same.isEmpty else { return track }
+        func rank(_ t: Track) -> Int {
+            if !t.localName.isEmpty { return 3 }
+            if t.fullLength { return 2 }
+            return 1
+        }
+        var pick = same.max(by: { rank($0) < rank($1) }) ?? track
+        // 库里那份要是还不如手上这份，就用手上的
+        if rank(track) > rank(pick) { pick = track }
+        // 缺的补上：歌词和封面各自去同名的那几份里找一个有的
+        if pick.lyrics.isEmpty {
+            pick.lyrics = same.first(where: { !$0.lyrics.isEmpty })?.lyrics ?? track.lyrics
+        }
+        if pick.artworkName.isEmpty, pick.artworkURL.isEmpty {
+            if let art = same.first(where: { !$0.artworkName.isEmpty }) {
+                pick.artworkName = art.artworkName
+            } else {
+                pick.artworkURL = track.artworkURL
+            }
+        }
+        return pick
+    }
+
+    /// 两首是不是同一首歌（按歌名+歌手认，不认 id）。
+    /// 导进来的那一版跟聊天卡片里那一版 id 天生不一样，认 id 就永远对不上。
+    static func sameSong(_ a: Track?, _ b: Track) -> Bool {
+        guard let a else { return false }
+        if a.id == b.id { return true }
+        func key(_ t: Track) -> String {
+            (t.title + "|" + t.artist).lowercased()
+                .replacingOccurrences(of: " ", with: "")
+        }
+        return key(a) == key(b) && !b.title.isEmpty
+    }
+
     func remove(_ track: Track) {
         MusicStore.delete(track)
         tracks.removeAll { $0.id == track.id }

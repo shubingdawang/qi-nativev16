@@ -21,9 +21,29 @@ struct ChatView: View {
     @State private var showingSystemPrompt = false
     @State private var showingSearch = false
     @State private var showingTools = false
-    @State private var draft = ""
+    /// 输入框里的字。**存在 AppState 里，不是 @State**——
+    /// 见 `AppState.drafts` 那段：切去设置页再回来不能白打。
+    ///
+    /// 写成计算属性（不是 Binding），这样底下几十处 `draft = …`、
+    /// `draft.hasSuffix(…)` 一个字都不用改；TextField 那儿单独给它一个
+    /// `draftBinding`。
+    private var draft: String {
+        get { app.drafts[draftKey] ?? "" }
+        nonmutating set { app.drafts[draftKey] = newValue }
+    }
+    private var draftKey: UUID { activeConversation?.id ?? Self.noConversation }
+    private static let noConversation = UUID()
+    private var draftBinding: Binding<String> {
+        Binding(get: { draft }, set: { draft = $0 })
+    }
+    /// 她在打字。列表看见它变就滚到底。
+    @State private var typingTick = 0
     @State private var pickedItems: [PhotosPickerItem] = []
+    @State private var showingPlus = false
     @State private var pendingImages: [UIImage] = []
+    /// 已经原样存好的动图（gif）。**不走 pendingImages**——
+    /// 那条路要过一遍 UIImage，动画会被压成第一帧。
+    @State private var pendingGIFs: [String] = []
     @State private var pendingFiles: [FileAttachment] = []
     @State private var importingFile = false
     @State private var showingPhotos = false
@@ -44,6 +64,9 @@ struct ChatView: View {
     @State private var shareImage: ShareImage?
     @State private var quoting: ChatMessage?
     @State private var menuOpenID: UUID?
+    /// 菜单是对着哪一条开的。**存整条**，不只是 id——
+    /// 面板挪到这一层之后要拿它的正文去复制、翻译、判断有没有语音。
+    @State private var menuMessage: ChatMessage?
     @State private var editingMessage: ChatMessage?
     @State private var editText = ""
     @State private var reading: ChatMessage?
@@ -113,13 +136,14 @@ struct ChatView: View {
                             travelling = j
                         },
                         menuOpenID: menuOpenID,
-                        onOpenMenu: { id in
+                        onOpenMenu: { msg in
                             withAnimation(.spring(response: 0.26, dampingFraction: 0.8)) {
-                                menuOpenID = id
+                                menuOpenID = msg.id
+                                menuMessage = msg
                             }
                         },
                         onCloseMenu: {
-                            withAnimation(.easeOut(duration: 0.15)) { menuOpenID = nil }
+                            withAnimation(.easeOut(duration: 0.15)) { closeMenu() }
                         },
                         onEdit: { msg in
                             editText = msg.content
@@ -136,7 +160,8 @@ struct ChatView: View {
                                     + "@" + name + " "
                             }
                         },
-                        running: app.runningConversationIDs.contains(conv.id)
+                        running: app.runningConversationIDs.contains(conv.id),
+                        typingTick: typingTick
                     )
                     if selecting {
                         selectionBar(conv)
@@ -210,8 +235,18 @@ struct ChatView: View {
                 Color.black.opacity(0.001)
                     .ignoresSafeArea()
                     .onTapGesture {
-                        withAnimation(.easeOut(duration: 0.15)) { menuOpenID = nil }
+                        withAnimation(.easeOut(duration: 0.15)) { closeMenu() }
                     }
+            }
+
+            // 长按一条消息之后的功能面板。
+            //
+            // **必须排在上面那层透明层后面**（也就是压在它上面），
+            // 否则手指永远先碰到透明层，按钮点了没反应——那正是她报的第 9 条。
+            if let msg = menuMessage, menuOpenID == msg.id {
+                messageMenu(msg)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(20)
             }
 
             // 他打过来那张卡片、还有通话那一屏，都**挪到 RootView 去了**。
@@ -380,9 +415,28 @@ struct ChatView: View {
     private func inputBar(_ conv: Conversation) -> some View {
         VStack(spacing: 8) {
 
-            if !pendingImages.isEmpty {
+            if !pendingImages.isEmpty || !pendingGIFs.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
+                        // 会动的那几张单列一遍——它们没进 pendingImages
+                        // （进了就会被压成第一帧），不在这儿画的话
+                        // 选完看不见、也撤不掉
+                        ForEach(Array(pendingGIFs.enumerated()), id: \.offset) { index, name in
+                            ZStack(alignment: .topTrailing) {
+                                AnimatedImageView(url: ImageStore.url(for: name),
+                                                  contentMode: .scaleAspectFill)
+                                    .frame(width: 58, height: 58)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                Button {
+                                    pendingGIFs.remove(at: index)
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(.white, .black.opacity(0.55))
+                                }
+                                .buttonStyle(.plain)
+                                .padding(2)
+                            }
+                        }
                         ForEach(Array(pendingImages.enumerated()), id: \.offset) { index, image in
                             ZStack(alignment: .topTrailing) {
                                 Image(uiImage: image)
@@ -602,8 +656,11 @@ struct ChatView: View {
                     .fill(Theme.softFillDeep))
             }
 
-            TextField(app.settings.inputPlaceholder, text: $draft, axis: .vertical)
+            TextField(app.settings.inputPlaceholder, text: draftBinding, axis: .vertical)
                 .onChange(of: draft) { _, text in
+                    // 她一开始打字，列表就滚到最底下。
+                    // 以前不滚，打字的时候最后那几条被键盘顶上去看不见了。
+                    typingTick += 1
                     // 末尾是 @ 或者 @ 后面还没打完名字，就把人列出来
                     guard activeConversation?.isGroup == true else {
                         mentioning = false
@@ -631,17 +688,14 @@ struct ChatView: View {
             HStack(spacing: 14) {
                 // 「+」不再只是相册。什么都能发——
                 // 文档、音频、压缩包、随便什么，选了就带上去。
-                Menu {
-                    Button {
-                        showingPhotos = true
-                    } label: {
-                        Label("照片", systemImage: "photo.on.rectangle")
-                    }
-                    Button {
-                        importingFile = true
-                    } label: {
-                        Label("文件", systemImage: "folder")
-                    }
+                // ⚠️ 这儿原来是 `Menu { … }.buttonStyle(.plain)`。
+                // **点了没反应**（她报的）：Menu 套上 .plain 之后，
+                // 那个 buttonStyle 会把菜单自己的手势吃掉，
+                // 键盘正弹着的时候尤其明显——点下去什么都不弹。
+                // 换成普通按钮 + confirmationDialog，行为是确定的。
+                Button {
+                    hideKeyboard()
+                    showingPlus = true
                 } label: {
                     Image(systemName: "plus")
                         .font(.app(19, weight: .light))
@@ -650,6 +704,12 @@ struct ChatView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .confirmationDialog("要发点什么", isPresented: $showingPlus,
+                                    titleVisibility: .hidden) {
+                    Button("照片") { showingPhotos = true }
+                    Button("文件") { importingFile = true }
+                    Button("取消", role: .cancel) {}
+                }
 
                 Button {
                     hideKeyboard()
@@ -898,7 +958,7 @@ struct ChatView: View {
     /// 有文字、有表情、有图、有文件、有语音，任意一样就能发
     private var canSend: Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || !pendingImages.isEmpty
+            || !pendingImages.isEmpty || !pendingGIFs.isEmpty
             || !pendingFiles.isEmpty
             || pendingSticker != nil
             || pendingVoice != nil
@@ -1014,7 +1074,7 @@ struct ChatView: View {
         // 只打了字、没带别的东西，而且开了「我分段发」——
         // 那这一句先攒着，等她真的不说了再一起交给他
         if app.settings.segmentUser
-            && pendingImages.isEmpty && pendingFiles.isEmpty
+            && pendingImages.isEmpty && pendingGIFs.isEmpty && pendingFiles.isEmpty
             && pendingSticker == nil && pendingVoice == nil && quoting == nil {
             let line = draft.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !line.isEmpty else { return }
@@ -1026,6 +1086,7 @@ struct ChatView: View {
 
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         let images = pendingImages
+        let gifs = pendingGIFs
         let quoted = quoting
         let files = pendingFiles
         let sticker = pendingSticker
@@ -1035,12 +1096,14 @@ struct ChatView: View {
         pendingVoice = nil
         pendingTone = ""
         pendingImages = []
+        pendingGIFs = []
         pendingFiles = []
         pickedItems = []
         pendingSticker = nil
         quoting = nil
         mentioning = false
         app.send(text: text, images: images, in: conv.id,
+                 imageNames: gifs,
                  files: files, sticker: sticker, quoting: quoted,
                  voiceName: voice, voiceTone: tone)
     }
@@ -1049,14 +1112,20 @@ struct ChatView: View {
         guard !items.isEmpty else { return }
         Task {
             var loaded: [UIImage] = []
+            var gifs: [String] = []
             for item in items {
-                if let data = try? await item.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
+                guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+                // 会动的原样落盘，别过 UIImage
+                if ImageStore.isAnimated(data) {
+                    if let name = ImageStore.saveOriginal(data) { gifs.append(name) }
+                } else if let image = UIImage(data: data) {
                     loaded.append(image)
                 }
             }
+            let picked = gifs
             await MainActor.run {
                 pendingImages.append(contentsOf: loaded)
+                pendingGIFs.append(contentsOf: picked)
                 pickedItems = []
             }
         }
@@ -1078,7 +1147,7 @@ struct MessageListView: View {
     var onOpenReader: (ChatMessage) -> Void = { _ in }
     var onOpenJourney: (Journey, Int) -> Void = { _, _ in }
     var menuOpenID: UUID? = nil
-    var onOpenMenu: (UUID) -> Void = { _ in }
+    var onOpenMenu: (ChatMessage) -> Void = { _ in }
     var onCloseMenu: () -> Void = {}
     var onEdit: (ChatMessage) -> Void = { _ in }
     var onRetry: (ChatMessage) -> Void = { _ in }
@@ -1086,6 +1155,9 @@ struct MessageListView: View {
     var onMention: (String) -> Void = { _ in }
     /// 这个窗口是不是正在等他回话
     var running: Bool = false
+    /// 她每敲一下这个数就变。变了就滚到底——
+    /// 打字的时候最后几条会被键盘顶上去，不滚就看不见自己在回哪一句。
+    var typingTick: Int = 0
 
     @EnvironmentObject var app: AppState
     @Environment(\.scenePhase) private var scenePhase
@@ -1111,7 +1183,7 @@ struct MessageListView: View {
                             onOpenJourney: { j, at in onOpenJourney(j, at) },
                             onEdit: { onEdit(message) },
                             menuOpenID: menuOpenID,
-                            onOpenMenu: { onOpenMenu(message.id) },
+                            onOpenMenu: { onOpenMenu(message) },
                             onRetry: { onRetry(message) },
                             onCloseMenu: onCloseMenu,
                             showsHeader: showsHeader(at: index),
@@ -1143,6 +1215,11 @@ struct MessageListView: View {
             }
             .onChange(of: conversation.messages.count) { _, _ in
                 withAnimation(.easeOut(duration: 0.22)) {
+                    proxy.scrollTo("__bottom", anchor: .bottom)
+                }
+            }
+            .onChange(of: typingTick) { _, _ in
+                withAnimation(.easeOut(duration: 0.18)) {
                     proxy.scrollTo("__bottom", anchor: .bottom)
                 }
             }
@@ -1188,5 +1265,107 @@ struct MessageListView: View {
                     .foregroundStyle(.tertiary)
             }
         }
+    }
+}
+
+// MARK: - 长按一条消息之后的功能面板
+
+extension ChatView {
+
+    func closeMenu() {
+        menuOpenID = nil
+        menuMessage = nil
+    }
+
+    /// 微信那样的两行格子。
+    ///
+    /// 为什么不是原来那条横的：八个按钮排一条，屏幕装不下（她原话
+    /// 「一长条有点出屏幕了」）。格子每行五个，多少个功能都放得下，
+    /// 而且从底下升上来，永远在手指够得着的地方。
+    @ViewBuilder
+    func messageMenu(_ msg: ChatMessage) -> some View {
+        let cid = app.activeID(for: space)
+        VStack {
+            Spacer()
+            VStack(spacing: 0) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0),
+                                         count: 5),
+                          spacing: 18) {
+                    menuItem("复制", "doc.on.doc") {
+                        UIPasteboard.general.string = msg.content
+                    }
+                    menuItem("引用", "quote.opening") { quoting = msg }
+                    menuItem(msg.starred ? "取消收藏" : "收藏", "star") {
+                        if let cid { app.toggleStar([msg.id], in: cid) }
+                    }
+                    menuItem("删除", "trash") {
+                        if let cid { app.deleteMessage(msg.id, in: cid) }
+                    }
+                    menuItem("多选", "checklist") {
+                        selecting = true
+                        selected.insert(msg.id)
+                    }
+                    menuItem("编辑", "square.and.pencil") {
+                        editText = msg.content
+                        editingMessage = msg
+                    }
+                    menuItem("重发", "arrow.clockwise") {
+                        if let cid { app.retry(msg.id, in: cid) }
+                    }
+                    menuItem(msg.voiceName.isEmpty ? "念出来" : "听", "speaker.wave.2") {
+                        guard let cid else { return }
+                        Task {
+                            if let err = await app.speak(msg.id, in: cid) { notice = err }
+                        }
+                    }
+                    menuItem(msg.translation == nil ? "翻译" : "收起译文", "character.book.closed") {
+                        guard let cid else { return }
+                        if msg.translation == nil {
+                            app.translate(msg.id, in: cid)
+                        } else {
+                            app.clearTranslation(msg.id, in: cid)
+                        }
+                    }
+                    menuItem("全屏看", "arrow.up.left.and.arrow.down.right") {
+                        reading = msg
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 20)
+                .padding(.bottom, 14)
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(Color.black.opacity(0.86))
+            )
+            .padding(.horizontal, 12)
+            .padding(.bottom, 18)
+        }
+        .ignoresSafeArea(.keyboard)
+    }
+
+    private func menuItem(_ title: String, _ icon: String,
+                          run: @escaping () -> Void) -> some View {
+        Button {
+            // **先关面板再做事**：有些动作（重发、删除）会把这条消息本身
+            // 从列表里拿掉，面板还开着就会指着一条不存在的消息
+            withAnimation(.easeOut(duration: 0.15)) { closeMenu() }
+            run()
+        } label: {
+            VStack(spacing: 7) {
+                Image(systemName: icon)
+                    .font(.system(size: 20, weight: .regular))
+                    .foregroundStyle(.white)
+                    .frame(height: 24)
+                Text(title)
+                    .font(.app(11))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }

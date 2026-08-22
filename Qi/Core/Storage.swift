@@ -93,6 +93,30 @@ enum ImageStore {
         }
     }
 
+    /// 按文件**本来的格式**原样存，一个字节都不重编码。
+    ///
+    /// 为什么要有这个：`save(_ image:)` 收的是 UIImage，
+    /// 而 UIImage 只拿得到 gif 的**第一帧**——她发一张会动的图进来，
+    /// 存完就不动了。她说的第 8 条（「保存我的 gif 只能保存成表情包，
+    /// 不会动的」）根子在这儿，不在存表情那一步：
+    /// **动画在她按下发送的那一刻就已经被压没了。**
+    static func saveOriginal(_ data: Data) -> String? {
+        save(data: data, ext: sniffExt(data))
+    }
+
+    /// 认一下这是什么图。只看文件头几个字节，不猜扩展名。
+    static func sniffExt(_ data: Data) -> String {
+        let head = [UInt8](data.prefix(12))
+        if head.count >= 6, head[0] == 0x47, head[1] == 0x49, head[2] == 0x46 { return "gif" }
+        if head.count >= 8, head[0] == 0x89, head[1] == 0x50 { return "png" }
+        if head.count >= 12, head[8] == 0x57, head[9] == 0x45,
+           head[10] == 0x42, head[11] == 0x50 { return "webp" }
+        return "jpg"
+    }
+
+    /// 会动的图。存表情、发图之前都要问一句——动图得走原始字节那条路。
+    static func isAnimated(_ data: Data) -> Bool { sniffExt(data) == "gif" }
+
     static func url(for name: String) -> URL {
         Storage.imagesURL.appendingPathComponent(name)
     }

@@ -22,6 +22,12 @@ struct Sticker: Codable, Identifiable, Hashable {
     var thumbName: String = ""
     /// 是不是动图
     var animated: Bool = false
+    /// 归在哪个**专辑**里。空的就是没归类。
+    ///
+    /// 她的原话：「新增表情包分类功能，同一个角色的表情包可以收录到一块，
+    /// 在添加时可以写上表情包的专辑，并可以选择某张表情包做专辑的 logo，
+    /// 不然表情包多起来很杂。」
+    var album: String = ""
     var createdAt: Date = Date()
 
     var isUser: Bool { owner == "user" }
@@ -39,6 +45,27 @@ struct Sticker: Codable, Identifiable, Hashable {
         if !description.isEmpty { s += "\n画面：\(description)" }
         if !tags.isEmpty { s += "\n语气：\(tags.joined(separator: "、"))" }
         return s
+    }
+}
+
+/// 容错解码。
+///
+/// ⚠️ 这个结构体**以前没有自己的解码器**，而合成的那个碰上缺失的键会直接抛，
+/// `Storage.load([Sticker].self …) ?? []` 接住之后就是**整份表情库变空**。
+/// 这一版加了 `album`，不补这个的话她那一屏表情会在升级那一下全没。
+extension Sticker {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
+        owner = (try? c.decodeIfPresent(String.self, forKey: .owner)) ?? "user"
+        name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? ""
+        description = (try? c.decodeIfPresent(String.self, forKey: .description)) ?? ""
+        tags = (try? c.decodeIfPresent([String].self, forKey: .tags)) ?? []
+        fileName = (try? c.decodeIfPresent(String.self, forKey: .fileName)) ?? ""
+        thumbName = (try? c.decodeIfPresent(String.self, forKey: .thumbName)) ?? ""
+        animated = (try? c.decodeIfPresent(Bool.self, forKey: .animated)) ?? false
+        album = (try? c.decodeIfPresent(String.self, forKey: .album)) ?? ""
+        createdAt = (try? c.decodeIfPresent(Date.self, forKey: .createdAt)) ?? Date()
     }
 }
 
@@ -62,6 +89,7 @@ final class StickerStore: ObservableObject {
 
     init() {
         stickers = Storage.load([Sticker].self, from: "stickers.json") ?? []
+        albumCovers = Storage.load([String: UUID].self, from: "sticker-albums.json") ?? [:]
         loaded = true
     }
 
@@ -71,8 +99,34 @@ final class StickerStore: ObservableObject {
         sticker.thumbName.isEmpty ? nil : url(sticker.thumbName)
     }
 
-    func list(owner: String, keyword: String = "") -> [Sticker] {
+    /// 每个专辑拿哪张当封面（专辑名 → 表情 id）。
+    /// 单独存，不塞进 Sticker——封面是专辑的属性，不是某张图的属性。
+    @Published var albumCovers: [String: UUID] = [:] {
+        didSet { if loaded { Storage.save(albumCovers, to: "sticker-albums.json") } }
+    }
+
+    /// 这一侧有哪些专辑，按名字排
+    func albums(owner: String) -> [String] {
+        Array(Set(stickers.filter { $0.owner == owner }.map { $0.album }))
+            .filter { !$0.isEmpty }
+            .sorted()
+    }
+
+    /// 专辑封面那张图。没指定就用这个专辑里最新的一张。
+    func cover(of album: String, owner: String) -> Sticker? {
+        if let id = albumCovers[album], let hit = sticker(id: id) { return hit }
+        return stickers.filter { $0.owner == owner && $0.album == album }
+            .sorted { $0.createdAt > $1.createdAt }.first
+    }
+
+    func setCover(_ sticker: Sticker) {
+        guard !sticker.album.isEmpty else { return }
+        albumCovers[sticker.album] = sticker.id
+    }
+
+    func list(owner: String, keyword: String = "", album: String = "") -> [Sticker] {
         var out = stickers.filter { $0.owner == owner }
+        if !album.isEmpty { out = out.filter { $0.album == album } }
         if !keyword.isEmpty {
             out = out.filter {
                 $0.name.localizedCaseInsensitiveContains(keyword)

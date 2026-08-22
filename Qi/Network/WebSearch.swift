@@ -62,10 +62,24 @@ enum WebSearch {
             Task { @MainActor in UsageStore.shared.recordCall(.search) }
             return out
         case .duck:
-            // 免费的，记一笔只是为了看看今天搜了几次，不算钱
-            let out = try await duck(query)
-            Task { @MainActor in UsageStore.shared.recordCall(.search) }
-            return out
+            // 免费的，记一笔只是为了看看今天搜了几次，不算钱。
+            //
+            // ⚠️ 这条路有两个天生的毛病，她已经撞上了（「搜索工具超时了用不了」）：
+            //   ① `api.duckduckgo.com` 在中国大陆是**连不上**的，会一直卡到超时；
+            //   ② 就算连得上，它是「即时问答」不是网页搜索——
+            //      只有维基百科那类词条才有内容，搜「明天天气」之类一律返回空。
+            //
+            // 所以失败了不干瞪眼：**自动退到必应的网页搜索**（不用密钥、
+            // 大陆也通）。两条都不行才报错，而且把原因说清楚。
+            do {
+                let out = try await duck(query)
+                Task { @MainActor in UsageStore.shared.recordCall(.search) }
+                return out
+            } catch {
+                let out = try await bing(query)
+                Task { @MainActor in UsageStore.shared.recordCall(.search) }
+                return out
+            }
         }
     }
 
@@ -122,7 +136,9 @@ enum WebSearch {
         else { throw SearchError.nothing(query) }
 
         var req = URLRequest(url: url)
-        req.timeoutInterval = 25
+        // 25 秒太长了——连不上的时候她要干等 25 秒才看到「超时」。
+        // 缩到 8 秒，通不了就赶紧走下面必应那条。
+        req.timeoutInterval = 8
         let (data, _) = try await URLSession.shared.data(for: req)
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { throw SearchError.nothing(query) }
@@ -152,5 +168,63 @@ enum WebSearch {
 
         guard !answer.isEmpty || !hits.isEmpty else { throw SearchError.nothing(query) }
         return (answer, Array(hits.prefix(6)))
+    }
+
+    // MARK: 必应（DuckDuckGo 走不通时的退路）
+
+    /// 抓必应的网页搜索结果页。**不用密钥，大陆也通。**
+    ///
+    /// 抓 HTML 当然比正经 API 脆——它改一次版式我们就得跟着改。
+    /// 但这条路补的是一个真实的洞：她选了 DuckDuckGo，而那个域名在国内
+    /// 根本连不上，于是「联网搜索」这个能力对她等于不存在。
+    /// 脆一点的能用，好过齐整的用不了。
+    private static func bing(_ query: String)
+    async throws -> (answer: String, hits: [SearchHit]) {
+        let q = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+        guard let url = URL(string: "https://cn.bing.com/search?q=\(q)&ensearch=0")
+        else { throw SearchError.nothing(query) }
+
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 12
+        // 不带 UA 的话它会返回一个几乎空的页面
+        req.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+                     + "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile Safari/604.1",
+                     forHTTPHeaderField: "User-Agent")
+
+        let (data, _) = try await URLSession.shared.data(for: req)
+        guard let html = String(data: data, encoding: .utf8) else {
+            throw SearchError.nothing(query)
+        }
+
+        // 每条结果长这样：<h2><a href="…">标题</a></h2> … <p>摘要</p>
+        var hits: [SearchHit] = []
+        let pattern = #"<h2>\s*<a href="([^"]+)"[^>]*>(.*?)</a>.*?<p[^>]*>(.*?)</p>"#
+        if let re = try? NSRegularExpression(pattern: pattern,
+                                             options: [.dotMatchesLineSeparators]) {
+            let ns = html as NSString
+            for m in re.matches(in: html, range: NSRange(location: 0, length: ns.length)) {
+                guard m.numberOfRanges > 3 else { continue }
+                let link = ns.substring(with: m.range(at: 1))
+                let title = strip(ns.substring(with: m.range(at: 2)))
+                let snippet = strip(ns.substring(with: m.range(at: 3)))
+                guard link.hasPrefix("http"), !title.isEmpty else { continue }
+                hits.append(SearchHit(title: title, snippet: snippet, url: link))
+                if hits.count >= 6 { break }
+            }
+        }
+        guard !hits.isEmpty else { throw SearchError.nothing(query) }
+        // 没有现成的总结，就把第一条的摘要顶上去
+        return (hits.first?.snippet ?? "", hits)
+    }
+
+    /// 把标签和 HTML 转义去掉，留干净文字
+    private static func strip(_ raw: String) -> String {
+        var t = raw.replacingOccurrences(of: "<[^>]+>", with: "",
+                                         options: .regularExpression)
+        for (a, b) in [("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"),
+                       ("&quot;", "\""), ("&#39;", "'"), ("&nbsp;", " ")] {
+            t = t.replacingOccurrences(of: a, with: b)
+        }
+        return t.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

@@ -66,7 +66,10 @@ final class Notifier: NSObject, ObservableObject {
     /// AppState 一到前台看见这个，就立刻真的去算他要说什么。
     @Published var pendingNudge = false
 
-    private static let nudgePrefix = "nudge-"
+    /// `nonisolated` 是必须的：`getPendingNotificationRequests` 那个回调
+    /// 是在**任意线程**上跑的，从那儿引用一个 MainActor 隔离的静态量会告警
+    /// （Swift 6 下会直接变成错误）。它就是个常量字符串，本来也不需要隔离。
+    nonisolated private static let nudgePrefix = "nudge-"
 
     /// 预排一批「他想你了」。
     ///

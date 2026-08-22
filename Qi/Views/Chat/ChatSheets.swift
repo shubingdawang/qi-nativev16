@@ -191,6 +191,10 @@ struct ModelPickerView: View {
         guard let id = app.activeID(for: space), let i = app.index(of: id) else { return }
         app.conversations[i].providerID = entry.provider.id
         app.conversations[i].modelID = entry.model.id
+        // 这个区记住这一次的选择。**只记这个区**——
+        // 在工坊换成 opus5 不该把絮语里的阿晏也换掉。
+        app.settings.modelBySpace[space.rawValue] =
+            entry.provider.id.uuidString + "|" + entry.model.id
         dismiss()
     }
 }

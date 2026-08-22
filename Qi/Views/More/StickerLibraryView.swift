@@ -22,10 +22,20 @@ struct StickerLibraryView: View {
     /// GIF 那一栏点「从相册」时开的选择器
     @State private var pickingAnimated = false
     @State private var editing: Sticker?
+    /// 正在让他写关键词
+    @State private var tagging = false
+    @State private var tagNote: String?
 
     private var list: [Sticker] {
         store.list(owner: owner, keyword: keyword)
             .filter { tab == 2 ? $0.animated : !$0.animated }
+    }
+
+    /// 还缺关键词的静图。**只算静图**——会动的她自己写。
+    private var needTagging: [Sticker] {
+        store.list(owner: owner, keyword: "")
+            .filter { !$0.animated && !$0.fileName.isEmpty
+                      && ($0.tags.isEmpty || $0.description.isEmpty) }
     }
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 4)
@@ -53,6 +63,13 @@ struct StickerLibraryView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $editing) { s in
             StickerEditorView(sticker: s)
+        }
+        .alert("写关键词", isPresented: Binding(
+            get: { tagNote != nil }, set: { if !$0 { tagNote = nil } }
+        )) {
+            Button("好") { tagNote = nil }
+        } message: {
+            Text(tagNote ?? "")
         }
     }
 
@@ -103,6 +120,39 @@ struct StickerLibraryView: View {
                             .frame(width: 32, height: 32)
                     }
                 } else {
+                    // 让他给静图写关键词。**只在「表情包」那一栏给**——
+                    // 她说的：「仅限图片表情包，gif 那边我给他写」。
+                    // 会动的他只看得见第一帧，写出来经常离题。
+                    if tab == 1, !needTagging.isEmpty {
+                        Button {
+                            guard !tagging else { return }
+                            tagging = true
+                            let batch = needTagging
+                            Task {
+                                let n = await app.tagStickerLibrary(batch)
+                                tagging = false
+                                tagNote = n > 0
+                                    ? "他看完写好了 \(n) 张。"
+                                    : "一张都没写成——检查一下模型是不是能看图。"
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                if tagging {
+                                    ProgressView().scaleEffect(0.7)
+                                } else {
+                                    Image(systemName: "text.magnifyingglass")
+                                        .font(.app(15))
+                                }
+                                Text(tagging ? "写着呢…" : "让他写词 \(needTagging.count)")
+                                    .font(.app(12))
+                            }
+                            .foregroundStyle(app.settings.accentColor)
+                            .padding(.horizontal, 8)
+                            .frame(height: 32)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(tagging)
+                    }
                     let tint = app.settings.accentColor
                     PhotosPicker(selection: $picking, maxSelectionCount: 20, matching: .images) {
                         Image(systemName: Icon.add)

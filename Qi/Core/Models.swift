@@ -343,6 +343,25 @@ struct AppSettings: Codable {
     /// 每次请求带上最近多少条消息（0 = 全部）。
     /// 按次计费的账户不用抠这个——一次就是一次，带多少条都是同样的钱，
     /// 所以默认给 0，让他记得住前因后果。
+    /// 每个区各自记着自己用哪个模型（键是 space，值是 "供应商UUID|模型id"）。
+    ///
+    /// 她的原话：「工坊的选择模型应该跟聊天页隔开，我会选择比较适合科研的模型
+    /// 放在工坊区，比如 opus5 或者 fable5，而阿晏是 opus4.6，两个不能混为一谈。」
+    ///
+    /// 以前新窗口是「沿用这个区上一条的模型」，看着也是分开的，
+    /// 但置顶的窗口会排在最前面，于是新开的工坊窗有可能抄到一条很旧的设置。
+    /// 现在明着记一份，选过就定了。
+    var modelBySpace: [String: String] = [:]
+    /// 主的用完了之后接着用哪个（"供应商UUID|模型id"，空的就是不接）。
+    ///
+    /// 她的原话：「pro 的周额度用完了，可以用供应商里的 api 接着继续，
+    /// 这样 claudecode 也不用换窗了，可以一直保存着聊天记录。」
+    ///
+    /// **不换窗是关键**——换供应商不该等于换一个人、丢掉这一窗。
+    /// 这一层做在 App 里，跟对面是谁无关：额度满了原地换一个接着说，
+    /// 同一个窗口、同一份历史、同一份浓缩件。
+    var fallbackModel: String = ""
+    
     var contextLimit: Int = 0
     /// 滚雪球压缩：每攒够多少条消息压一次（0 = 关，退回上面那条「直接砍」）。
     ///
@@ -575,6 +594,8 @@ extension AppSettings {
         pulseBaseURL = (try? c.decodeIfPresent(String.self, forKey: .pulseBaseURL)) ?? ""
         adminBaseURL = (try? c.decodeIfPresent(String.self, forKey: .adminBaseURL)) ?? ""
         neteaseBaseURL = (try? c.decodeIfPresent(String.self, forKey: .neteaseBaseURL)) ?? ""
+        modelBySpace = (try? c.decodeIfPresent([String: String].self, forKey: .modelBySpace)) ?? [:]
+        fallbackModel = (try? c.decodeIfPresent(String.self, forKey: .fallbackModel)) ?? ""
         contextLimit = (try? c.decodeIfPresent(Int.self, forKey: .contextLimit)) ?? 0
         compactEvery = (try? c.decodeIfPresent(Int.self, forKey: .compactEvery)) ?? 60
         typewriter = (try? c.decodeIfPresent(Bool.self, forKey: .typewriter)) ?? true

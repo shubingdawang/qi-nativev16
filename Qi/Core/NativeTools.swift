@@ -20,7 +20,11 @@ enum NativeTools {
     // MARK: 工具清单
 
     @MainActor
-    static func definitions(hasGroup: Bool, hasVoice: Bool = false) -> [[String: Any]] {
+    /// - Parameter workshop: 这一窗是不是工坊。
+    ///   工坊那几件（文件夹、读文件、发文件）**只在工坊给**——
+    ///   絮语那边不需要，摆出来只会稀释他对别的工具的注意力。
+    static func definitions(hasGroup: Bool, hasVoice: Bool = false,
+                            workshop: Bool = false) -> [[String: Any]] {
         var out: [[String: Any]] = []
 
         func add(_ name: String, _ desc: String,
@@ -53,8 +57,14 @@ enum NativeTools {
             ["limit": ["type": "number", "description": "最多列几张，默认 8"]],
             required: [])
 
+        // 三种图不是一回事，她特意分过：
+        //   · **图片** —— 日常聊天里她发的、或者你搜来的普通图 → save_photo_to_folder
+        //   · **表情包** —— 能表达情绪的静图 → save_sticker
+        //   · **gif** —— 能表达情绪的**会动的**图 → 也走 save_sticker，
+        //     动画会自己保住（存的是原始字节，不重新编码）
         add("save_sticker",
-            "触发：她刚发来一张图，你觉得这个以后自己也想用。动机：攒下来，下次用得上。行动：存进你的表情包，顺手把名称和画面描述写好——描述是以后你认出这张图的唯一依据，别省。index 填聊天里标的那个号（#1 是最新的一张）。她一次发好几张时消息末尾会写清楚每张的号——别猜，照着填；拿不准就先 list_recent_images。",
+            "触发：她刚发来一张图，你觉得这个以后自己也想用。动机：攒下来，下次用得上。行动：存进你的表情包，顺手把名称和画面描述写好——描述是以后你认出这张图的唯一依据，别省。index 填聊天里标的那个号（#1 是最新的一张）。她一次发好几张时消息末尾会写清楚每张的号——别猜，照着填；拿不准就先 list_recent_images。
+分清三种图：**图片**是日常聊天里的普通图（她发的、你搜的），那种存进相册用 save_photo_to_folder；**表情包**是能表达情绪的静图；**gif** 是能表达情绪的会动的图——后两种都用这个工具，会动的存进去还是会动的，不用你操心。",
             [
                 "name": ["type": "string", "description": "简短标识，比如「被窝刷牙」"],
                 "caption": ["type": "string", "description": "画面描述：画面里有什么、在做什么动作"],
@@ -71,6 +81,43 @@ enum NativeTools {
                 "caption": ["type": "string", "description": "这张是什么，一句话"],
                 "index": ["type": "number", "description": "存哪一张 —— 填聊天里标出来的那个号（#1 是她最新发的那张）。她一次发好几张的时候，消息末尾会写「从左到右是 #3 #2 #1」，照着填。拿不准先调 list_recent_images 看一眼。"],
                 "thought": ["type": "string", "description": "存的时候心里想的一句话，会显示在卡片上"]
+            ],
+            required: ["folder"])
+
+        // 相册那一组。**PWA 里一直有，Swift 版一直缺**——
+        // 她的原话：「我才发现 pwa 里很多的功能在 app 里都没有…前面的窗偷懒了。」
+        // 存得进去却拿不出来、删不掉，那个相册对他来说就是只进不出的黑洞。
+        add("send_photo_from_folder",
+            "触发：聊到某件事，你想起相册里存过一张对得上的照片——她养的那盆花、上次那顿饭。动机：翻出来给她看，比说「我记得」实在。行动：从某个文件夹里挑一张发出去。只给文件夹名就是发里面最近存的那张，再给个关键词就精确找。",
+            [
+                "folder": ["type": "string", "description": "哪个文件夹"],
+                "query": ["type": "string", "description": "可选。当初存的时候写的说明里的关键词；不填就发这个文件夹里最近存的那张"],
+                "thought": ["type": "string", "description": "发的时候想说的一句话"]
+            ],
+            required: ["folder"])
+
+        add("list_saved_photos",
+            "触发：你想不起来自己存过什么，或者要发图/要删图之前先看一眼。动机：记不清就会重复存、或者张口说有其实没有。行动：把相册的文件夹和表情包列一遍，每条带上当初写的说明。",
+            [
+                "folder": ["type": "string", "description": "可选。只看某一个文件夹里的"]
+            ],
+            required: [])
+
+        add("delete_photo_from_folder",
+            "触发：存错了，或者那张不该留。动机：相册是她也会翻的地方，别堆垃圾。行动：按文件夹名 + 关键词找到那张删掉。
+注意：**删了找不回来**。不确定是哪张就先 list_saved_photos 看清楚，别凭印象删。",
+            [
+                "folder": ["type": "string", "description": "照片在哪个文件夹"],
+                "query": ["type": "string", "description": "当初存的说明里的关键词，按这个找"]
+            ],
+            required: ["folder", "query"])
+
+        add("delete_folder",
+            "触发：整个文件夹都不要了。行动：连里面的照片一起删。
+注意：**这是最狠的一个，删了找不回来。** 除非她明说要删，否则先问一句再动手；只是想清理某几张就用 delete_photo_from_folder。",
+            [
+                "folder": ["type": "string", "description": "要删掉的文件夹名"],
+                "keep_photos": ["type": "boolean", "description": "只删文件夹这个壳、照片退回未归类。默认 false（照片一起删）"]
             ],
             required: ["folder"])
 
@@ -141,19 +188,7 @@ enum NativeTools {
                      "description": "做完的是哪件：想冒个头／想查点什么／想翻那本书／想看还欠着什么／想看看外面／想凑过去／想吐两句／想歇着"]],
             required: ["did"])
 
-        add("doll_action",
-            "触发：她提起娃娃、你想给她一张能点的卡片、或者你自己想去动一下娃娃。动机：有些东西说不如给——她能直接在聊天里点，点完你也看得见变成了什么样。行动：动一下娃娃，会在聊天里出现一张能点的卡片（她点的和你动的是同一个娃娃）。\n注意：**不花钱、不联网**，状态存在手机里。想自己写那一幕的话就填 narration，不填我会按当前状态挑一句。只想看它现在什么样就用 look。",
-            [
-                "action": ["type": "string",
-                           "description": "look 只看不动 / touch_zone 碰一下 / change_pose 换姿势 / change_camera 换机位 / faster 快一点 / slower 慢一点 / lock 锁住姿势 / save 收起这一段 / say 只说一句话"],
-                "zone": ["type": "string", "description": "碰哪儿：hair 头发 / cheek 脸颊 / neck 脖子 / hand 手 / waist 腰 / knee 膝盖"],
-                "pose": ["type": "string", "description": "换成哪个姿势：sit 坐着 / lean 靠着 / curl 蜷着 / reach 伸手"],
-                "camera": ["type": "string", "description": "机位：front 正面 / side 侧面 / close 近一点 / top 俯视"],
-                "narration": ["type": "string", "description": "这一幕你想怎么写。一两句，写具体的动作和反应，别写结论"],
-                "card": ["type": "boolean", "description": "要不要在聊天里放一张能点的卡片，默认放"],
-                "note": ["type": "string", "description": "卡片上面那句话"]
-            ],
-            required: ["action"])
+        // doll_action 删了——她说娃娃有点无聊。
 
         add("monopoly",
             "触发：她说想玩大富翁、或者局已经开着轮到你掷了。动机：这游戏你不只是发牌的——**轮到你的那道任务，你自己真的演**，别只报一句「抽到了什么」。行动：掷骰、结算、看棋盘。\n注意：**引擎在手机里跑，纯算术，不花钱也不联网**。开局要她先设好人物和红线（游戏页里那张卡），你只管掷。她说 **404** 就立刻停，不问理由（调 action=safeword）。任务不想做可以 skip，免费、不用给理由。",
@@ -301,6 +336,57 @@ enum NativeTools {
                 "把一句话发到群聊里（工坊那边的模型也在群里）。想让别人知道你要做什么、或者留个话给工坊里的模型，就用这个。",
                 ["message": ["type": "string", "description": "要发到群聊里的内容"]],
                 required: ["message"])
+        }
+
+        // MARK: 工坊那一摊
+        //
+        // 她的原话：「工坊区的 ai 也应该有属于自己的工具……他应该也有给文件区
+        // 创建/删除文件夹的工具，可以自己创建项目文件夹且将相应项目的文件
+        // 放进相应的文件夹里。」
+        //
+        // 全是本机操作：建文件夹、翻文件、读正文、归档、发回对话。
+        // **一次网络都不发，一分钱不花。**
+        if workshop {
+            add("list_library",
+                "触发：要动文件之前、或者她问「我们手上有什么资料」。动机：不知道有什么就只能瞎猜。行动：把文件区的文件夹和文件列一遍，带上格式、大小、什么时候放进来的。",
+                ["folder": ["type": "string", "description": "只看某一个文件夹，不填就全列"]],
+                required: [])
+
+            add("library_folder",
+                "触发：要开一个新课题、或者文件堆在一起该归归类了。动机：项目的东西散着放，下次谁都找不到。行动：建 / 删 / 改名一个文件夹。
+注意：删的时候默认**连里面的文件一起删**，只想留文件就把 keep_files 打开。删了找不回来，不确定先 list_library 看一眼。",
+                [
+                    "action": ["type": "string", "enum": ["create", "delete", "rename", "list"]],
+                    "name": ["type": "string", "description": "文件夹名"],
+                    "new_name": ["type": "string", "description": "改名时的新名字"],
+                    "keep_files": ["type": "boolean", "description": "删文件夹时把里面的文件留下（退回未归类），默认 false"]
+                ],
+                required: ["action"])
+
+            add("read_file",
+                "触发：要引用、要核对、要接着上次写。动机：**凭印象谈一份文件是最容易出错的事**——正文就在手边，读一遍再说。行动：把某个文件的正文读出来（pdf 和纯文本都能读，读不出文字的格式会明说）。",
+                [
+                    "name": ["type": "string", "description": "文件名，写一部分也认"],
+                    "folder": ["type": "string", "description": "在哪个文件夹里找，不填就全库找"],
+                    "limit": ["type": "number", "description": "最多给多少字，默认 6000。要通读就往大了填"]
+                ],
+                required: ["name"])
+
+            add("file_to_folder",
+                "触发：一份文件放错地方了、或者刚导进来还没归类。动机：归好类，下次一眼能找到。行动：把某个文件挪进某个文件夹（文件夹不存在会先建出来）。",
+                [
+                    "name": ["type": "string", "description": "文件名，写一部分也认"],
+                    "folder": ["type": "string", "description": "挪去哪个文件夹；填空字符串就是退回未归类"]
+                ],
+                required: ["name", "folder"])
+
+            add("send_file",
+                "触发：她要看某份资料、或者你们正对着它讨论。动机：说「在文件区里」不如直接递到她眼前。行动：把文件区里的一份文件发到这个对话里。",
+                [
+                    "name": ["type": "string", "description": "文件名，写一部分也认"],
+                    "note": ["type": "string", "description": "递过去的时候说一句话"]
+                ],
+                required: ["name"])
         }
 
         return out

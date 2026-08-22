@@ -384,6 +384,9 @@ struct WallpaperBackground: View {
                 } else {
                     switch app.settings.wallpaperMode {
                     case "gradient":
+                        // 界面上已经选不到这一档了（渐变归「配色」管，
+                        // 启动时也会把老数据搬过去）。留着纯粹是兜底，
+                        // 万一有一份没搬到的设置，屏幕也不会变成一片空白。
                         gradient
                     case "solid":
                         if let c = Color(hexString: app.settings.solidHex) { c }

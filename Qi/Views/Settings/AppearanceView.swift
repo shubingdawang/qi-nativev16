@@ -36,7 +36,6 @@ struct AppearanceView: View {
             ScrollView {
                 VStack(spacing: 18) {
                     accentCard
-                    backdropCard
                     fontCard
                     glassCard
                     presetCard
@@ -147,85 +146,13 @@ struct AppearanceView: View {
 
     // MARK: 底
 
-    /// 整个 App 的底：一张图 / 一块纯色 / 一道渐变。
-    ///
-    /// 「可调节的渐变主题」是她点名要的。做成三档而不是「壁纸 + 一个渐变开关」，
-    /// 是因为纯色那一档本来也缺——想要一块干净的底以前只能不设壁纸，
-    /// 而那样拿到的是主题写死的颜色，她说了不算。
-    private var backdropCard: some View {
-        SettingsCard(title: "底") {
-            HStack(spacing: 10) {
-                ForEach([("image", "图片"), ("gradient", "渐变"), ("solid", "纯色")],
-                        id: \.0) { key, title in
-                    Button {
-                        app.settings.wallpaperMode = key
-                    } label: {
-                        VStack(spacing: 6) {
-                            backdropSample(key)
-                                .frame(height: 54)
-                                .clipShape(RoundedRectangle(cornerRadius: 10,
-                                                            style: .continuous))
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .strokeBorder(app.settings.accentColor,
-                                                      lineWidth:
-                                                        app.settings.wallpaperMode == key ? 2 : 0)
-                                }
-                            Text(title)
-                                .font(.app(11))
-                                .foregroundStyle(app.settings.wallpaperMode == key
-                                                 ? Theme.textMain(scheme)
-                                                 : Theme.textMuted(scheme))
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 13)
-
-            if app.settings.wallpaperMode == "gradient" {
-                SettingsDivider()
-                colorRow("从", hex: $app.settings.gradientFrom)
-                colorRow("到", hex: $app.settings.gradientTo)
-                slider(title: "方向",
-                       value: $app.settings.gradientAngle,
-                       range: 0...360, step: 5,
-                       readout: "\(Int(app.settings.gradientAngle))°")
-            }
-
-            if app.settings.wallpaperMode == "solid" {
-                SettingsDivider()
-                colorRow("颜色", hex: $app.settings.solidHex)
-            }
-
-            if app.settings.wallpaperMode == "image" {
-                SettingsNote("图片那档在「设置 → 外观」里换。这儿只管选用哪一种底。")
-            } else {
-                SettingsNote("渐变和纯色是**画出来的**，不占空间、也不会被深色模式压糊。深浅色下都会跟着「壁纸压暗」那根滑块走。")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func backdropSample(_ key: String) -> some View {
-        switch key {
-        case "gradient":
-            LinearGradient(
-                colors: [Color(hexString: app.settings.gradientFrom) ?? .gray,
-                         Color(hexString: app.settings.gradientTo) ?? .gray],
-                startPoint: WallpaperBackground.point(app.settings.gradientAngle),
-                endPoint: WallpaperBackground.point(app.settings.gradientAngle + 180))
-        case "solid":
-            (Color(hexString: app.settings.solidHex) ?? Theme.pageBackground(scheme))
-        default:
-            if let name = app.settings.wallpaperName, let img = ImageStore.load(name) {
-                Image(uiImage: img).resizable().scaledToFill()
-            } else {
-                Theme.pageBackground(scheme)
-            }
-        }
-    }
+    // ⚠️ 这儿原来有一整张「底」卡（图片 / 渐变 / 纯色 三选一）。**她说删掉。**
+    // 原话：「主题已经全局了，「底」那张卡可以删，渐变的取色挪进「配色 → 渐变」」。
+    //
+    // 她是对的：主题接管底之后，同一件事有了两个开关——
+    // 「配色」里选渐变是一条路，「底」里选渐变又是一条路，两条还能互相打架。
+    // 现在只剩一条：**底跟着「配色」走**，
+    // 渐变的两头颜色和方向就挂在「渐变」那一档下面，纯色挂在「原来的」下面。
 
     /// 一行颜色：**色号能打，也能直接在调色盘上调**。
     ///
@@ -404,11 +331,47 @@ struct AppearanceView: View {
             //
             // 现在不用按了：**「家」和「渐变」直接接管底**（见 ThemePreset.ownsBackground）。
             // 想用自己那张照片就选「原来的」。
+            // 渐变那一档的取色，直接挂在这一档下面——
+            // 她要的就是这个：调什么和选什么在同一个地方。
+            if app.settings.preset == .gradient {
+                SettingsDivider()
+                colorRow("从", hex: $app.settings.gradientFrom)
+                colorRow("到", hex: $app.settings.gradientTo)
+                slider(title: "方向",
+                       value: $app.settings.gradientAngle,
+                       range: 0...360, step: 5,
+                       readout: "\(Int(app.settings.gradientAngle))°")
+            }
+
+            // 「原来的」那一档才轮得到自己铺底：一张图，或者一块纯色。
+            if app.settings.preset == .original {
+                SettingsDivider()
+                HStack(spacing: 10) {
+                    Text("底")
+                        .font(.app(15))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    Spacer(minLength: 8)
+                    Picker("", selection: $app.settings.wallpaperMode) {
+                        Text("图片").tag("image")
+                        Text("纯色").tag("solid")
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 150)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 11)
+                if app.settings.wallpaperMode == "solid" {
+                    colorRow("颜色", hex: $app.settings.solidHex)
+                } else {
+                    SettingsNote("图片在「设置 → 外观」里换。想要一块干净的底就选纯色——它是画出来的，不占空间。")
+                }
+            }
+
             if app.settings.preset.ownsBackground {
                 SettingsDivider()
                 SettingsNote(app.settings.preset == .home
                     ? "这一档是整套的：底是 claude.ai 那张暖纸，你自己那张壁纸先让位（换回「原来的」就回来了）。气泡也跟着换——你说的话是一块浅面板，他说的话不套气泡，直接印在纸上，跟 claude.ai 一样。"
-                    : "这一档整屏是一层渐变。两头的颜色在下面「壁纸」那张卡里调，气泡还是玻璃。",
+                    : "这一档整屏是一层渐变，两头的颜色和方向就在上面调。气泡还是玻璃。",
                     title: "这一档会动哪些地方")
             }
 

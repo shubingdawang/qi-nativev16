@@ -25,7 +25,7 @@ enum ThemePreset: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .original: return "跟着主题色走，什么都能染。壁纸用你自己那张。"
         case .home:     return "整套搬 claude.ai：暖纸底、炭字、橘限量，气泡也是那边的样子。壁纸会被它接管。"
-        case .gradient: return "整屏一层渐变当底，气泡还是玻璃。颜色在下面「壁纸」那张卡里调。壁纸会被它接管。"
+        case .gradient: return "整屏一层渐变当底，气泡还是玻璃。两头的颜色和方向选中之后就在下面调。壁纸会被它接管。"
         }
     }
 

@@ -94,6 +94,13 @@ struct MusicFloatingView: View {
         .onAppear { startSpin() }
         .onChange(of: player.playing) { _, on in if on { startSpin() } }
         .onChange(of: player.current?.id) { _, _ in startSpin() }
+        // 展开再收回来也要重新转。
+        //
+        // 收着的那颗封面（pill）在展开的时候整个从界面上撤掉了，
+        // SwiftUI 会把它身上那条 repeatForever 一起取消；收回来是**新建**一个视图，
+        // 上面什么动画都没有——她看到的就是「展开后再收起就不转了」。
+        // 这三个 onChange 少一个都会有一种「不转」的情况。
+        .onChange(of: mini) { _, _ in startSpin() }
     }
 
     /// 转封面。放着才转，停了就停在原地——一眼能看出它是不是活的。

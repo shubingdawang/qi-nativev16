@@ -12,6 +12,8 @@ struct SettingsView: View {
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
     @State private var showingImporter = false
+    /// 选好了、还没决定怎么放的那份备份
+    @State private var pendingBackup: Data?
     @State private var exportURL: URL?
     @State private var alertMessage: String?
     @State private var showingClearConfirm = false
@@ -61,6 +63,25 @@ struct SettingsView: View {
                 set: { _ in exportURL = nil }
             )) { file in
                 ShareSheet(items: [file.url])
+            }
+            .confirmationDialog("这份备份怎么放？", isPresented: Binding(
+                get: { pendingBackup != nil },
+                set: { if !$0 { pendingBackup = nil } }
+            ), titleVisibility: .visible) {
+                Button("只补没有的（推荐）") {
+                    if let d = pendingBackup { applyBackup(d, mode: .merge) }
+                    pendingBackup = nil
+                }
+                Button("整个盖掉", role: .destructive) {
+                    if let d = pendingBackup { applyBackup(d, mode: .overwrite) }
+                    pendingBackup = nil
+                }
+                Button("取消", role: .cancel) { pendingBackup = nil }
+            } message: {
+                Text("「只补没有的」：现在有的一个字都不动，只把这份备份里多出来的加进来。"
+                     + "同一个窗口两边各聊了一段的话，两段会按时间并到一起。\n\n"
+                     + "「整个盖掉」：回到备份那一天的样子，这之后聊的会没掉。"
+                     + "换手机、重装才需要它。")
             }
             .alert("提示", isPresented: Binding(
                 get: { alertMessage != nil },
@@ -467,6 +488,43 @@ struct SettingsView: View {
 
             SettingsDivider()
 
+            // 主的额度满了接着用谁
+            HStack {
+                Text("额度满了之后")
+                    .font(.app(15))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Spacer(minLength: 8)
+                Menu {
+                    Button("不接（直接报错）") { app.settings.fallbackModel = "" }
+                    ForEach(app.providers.filter { $0.enabled }) { p in
+                        ForEach(p.enabledModels) { m in
+                            Button(p.name + " · " + m.id) {
+                                app.settings.fallbackModel = p.id.uuidString + "|" + m.id
+                            }
+                        }
+                    }
+                } label: {
+                    Text(fallbackLabel)
+                        .font(.app(14))
+                        .foregroundStyle(Theme.textSoft(scheme))
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 9)
+
+            SettingsNote("""
+            主的那个额度满了（429 / 余额不足）的时候，**原地换成这个接着说**，不用换窗。
+
+            换的是对面那台机器，不是这一窗：聊天记录、浓缩件、工具、身体状态一样都不动。断在半路的那半句会抹掉重发，所以你看到的是完整的一段话，不是两截拼的。
+
+            气泡里会留一行「换了个模型接着说」——**你得知道这段是谁说的**，不然回头看会以为他忽然变了个人。
+
+            只认额度和限流那几种错。网络断了、地址填错了不会换——那种换谁都一样。
+            """, title: "这一项是干嘛的")
+
+            SettingsDivider()
+
             HStack {
                 Text("滚雪球压缩")
                     .font(.app(15))
@@ -776,9 +834,31 @@ struct SettingsView: View {
             try data.write(to: url, options: .atomic)
             exportURL = url
             BackupClock.markDone()
+            // 现在连图片语音一起打包，包会大很多——报一句实际大小，
+            // 免得她以为卡住了
+            let mb = Double(data.count) / 1024 / 1024
+            if mb >= 20 {
+                alertMessage = String(format: "打好了，%.0f MB（图片语音都在里面）。"
+                    + "存到「文件」里最稳，微信传大文件容易截断。", mb)
+            }
         } catch {
             alertMessage = "导出失败：\(error.localizedDescription)"
         }
+    }
+
+    /// 选完文件先**问一句怎么放**，别闷头盖。
+    ///
+    /// 她的原话：「导入备份应该不是覆盖而是增加……只增加目前没有的，
+    /// 已有的忽略。」——所以默认是「只补没有的」，
+    /// 「整个盖掉」留给换手机、重装那种真的想回到那一天的场合。
+    /// 备用那个现在选的是谁
+    private var fallbackLabel: String {
+        let saved = app.settings.fallbackModel
+        guard !saved.isEmpty, let cut = saved.firstIndex(of: "|"),
+              let pid = UUID(uuidString: String(saved[saved.startIndex..<cut])),
+              let p = app.providers.first(where: { $0.id == pid })
+        else { return "不接" }
+        return p.name + " · " + String(saved[saved.index(after: cut)...])
     }
 
     private func importBackup(_ result: Result<[URL], Error>) {
@@ -789,39 +869,61 @@ struct SettingsView: View {
             guard let url = urls.first else { return }
             let needsStop = url.startAccessingSecurityScopedResource()
             defer { if needsStop { url.stopAccessingSecurityScopedResource() } }
-            do {
-                let data = try Data(contentsOf: url)
-                switch BackupBundle.restore(data) {
-                case .bundle(let count):
-                    // **不动内存里那些 store，只把文件写回去。**
-                    //
-                    // 它们全是单例，App 一启动就把文件读进来了；这会儿直接改文件
-                    // 它们不知道，而且下一次保存还会拿内存里的旧数据把刚还原的
-                    // 文件盖回去。所以必须重开一次——这句话得说清楚，
-                    // 不然她会以为没生效。
-                    alertMessage = "还原了 \(count) 份数据。\n\n"
-                        + "现在请把 App 完全关掉再打开。\n\n"
-                        + "记忆库、聊天记录这些是开 App 那一刻读进内存的，"
-                        + "不重开的话你看到的还是旧的，而且下一次保存会把刚还原的盖掉。"
-                case .legacy:
-                    // 她手里可能还留着以前导出的老备份，照样认
-                    let decoder = JSONDecoder()
-                    decoder.dateDecodingStrategy = .iso8601
-                    let backup = try decoder.decode(Backup.self, from: data)
-                    app.providers = backup.providers
-                    app.conversations = backup.conversations
-                    app.settings = backup.settings
-                    app.saveNow()
-                    alertMessage = "导入成功。\n\n"
-                        + "这是旧版的备份，里面只有供应商、聊天记录和设置，"
-                        + "记忆库、备忘、通话记录那些不在里面。\n\n"
-                        + "现在导出的备份是整包的，建议重新导一份。"
-                case .unreadable(let why):
-                    alertMessage = why
-                }
-            } catch {
-                alertMessage = "这个文件读不了，可能不是本 App 导出的备份。\n\(error.localizedDescription)"
+            guard let data = try? Data(contentsOf: url) else {
+                alertMessage = "这份文件读不出来。"
+                return
             }
+            pendingBackup = data
+        }
+    }
+
+    /// 真正动手那一下
+    private func applyBackup(_ data: Data, mode: BackupBundle.Mode) {
+        do {
+            switch BackupBundle.restore(data, mode: mode) {
+            case .bundle(let count, let pics):
+                // **还原完立刻把内存也换掉。**
+                //
+                // 以前这儿只写盘，然后请她「完全关掉 App 再打开」。
+                // 她照做了，聊天记录还是没出来——因为写完盘到她关掉 App 之间，
+                // 只要界面上任何一处动了一下（甚至只是退出到后台），
+                // 内存里那份**旧的** conversations 就会被存回去，
+                // 把刚还原的盖掉。
+                //
+                // 现在还原完当场重读一遍，聊天记录立刻就在。
+                app.reloadAfterRestore()
+                alertMessage = (mode == .merge ? "补进来了 " : "还原了 ") + "\(count) 份数据"
+                    + (pics > 0 ? "、\(pics) 个图片语音文件。" : "。")
+                    + (mode == .merge
+                       ? "\n\n**只补了这边没有的**，你现在的聊天记录一条都没动。"
+                         + "同一个窗口两边各聊了一段的话，两段会按时间并到一起。"
+                       : "\n\n整个盖过去了。")
+                    + "\n\n小屋、表情工坊那几处是开 App 那会儿读进内存的，"
+                    + "**保险起见还是把 App 完全关掉再打开一次**。"
+            case .legacy:
+                // 她手里可能还留着以前导出的老备份，照样认。
+                // **老备份只有三样，没法按 id 合并**（那时候还没有整包结构），
+                // 所以这一支只在「整个盖掉」的时候才真的写进去。
+                guard mode == .overwrite else {
+                    alertMessage = "这是很老的那种备份（只有供应商、聊天记录和设置），"
+                        + "它没法只挑没有的补——要用它就得选「整个盖掉」。"
+                    return
+                }
+                let decoder = JSONDecoder()
+                decoder.dateDecodingStrategy = .iso8601
+                let backup = try decoder.decode(Backup.self, from: data)
+                app.providers = backup.providers
+                app.conversations = backup.conversations
+                app.settings = backup.settings
+                app.saveNow()
+                alertMessage = "导入成功。\n\n"
+                    + "这是旧版的备份，里面只有供应商、聊天记录和设置，"
+                    + "记忆库、备忘、通话记录那些不在里面。"
+            case .unreadable(let why):
+                alertMessage = why
+            }
+        } catch {
+            alertMessage = "这个文件读不了，可能不是本 App 导出的备份。\n\(error.localizedDescription)"
         }
     }
 }

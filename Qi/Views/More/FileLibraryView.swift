@@ -21,15 +21,52 @@ final class FileLibraryStore: ObservableObject {
     }
     private var loaded = false
 
+    /// 文件夹自己的名单。
+    ///
+    /// ⚠️ 以前没有这个东西，文件夹是从文件的归属**反推**出来的——
+    /// 所以「新建文件夹」点确认之后什么也不会发生（一个空文件夹推不出来），
+    /// 她看到的就是「点击确认后无反应，也没有创建新的文件夹」。
+    /// 跟相册那个老 bug 一模一样，这儿是同一套解法：文件夹独立存一份。
+    @Published var folderNames: [String] = [] {
+        didSet { if loaded { Storage.save(folderNames, to: "library-folders.json") } }
+    }
+
     init() {
         files = Storage.load([LibraryFile].self, from: "library.json") ?? []
+        folderNames = Storage.load([String].self, from: "library-folders.json") ?? []
         loaded = true
     }
 
     func folders() -> [String] {
-        var names = Set(files.map { $0.folder })
+        // 自己建的 + 文件上带着的（老数据），并起来
+        var names = Set(folderNames)
+        names.formUnion(files.map { $0.folder })
         names.remove("")
         return names.sorted()
+    }
+
+    @discardableResult
+    func createFolder(_ name: String) -> Bool {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !n.isEmpty, !folders().contains(n) else { return false }
+        folderNames.append(n)
+        return true
+    }
+
+    /// 删文件夹。`keepFiles` 为真就只删壳子，文件退回未归类。
+    func deleteFolder(_ name: String, keepFiles: Bool) {
+        for f in files where f.folder == name {
+            if keepFiles { move(f, to: "") } else { remove(f) }
+        }
+        folderNames.removeAll { $0 == name }
+    }
+
+    func renameFolder(from old: String, to new: String) {
+        let n = new.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !n.isEmpty, n != old else { return }
+        for f in files where f.folder == old { move(f, to: n) }
+        folderNames.removeAll { $0 == old }
+        if !folderNames.contains(n) { folderNames.append(n) }
     }
 
     func list(folder: String?, keyword: String) -> [LibraryFile] {
@@ -184,7 +221,11 @@ struct FileLibraryView: View {
             Button("取消", role: .cancel) {}
             Button("建好了") {
                 let name = newFolder.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !name.isEmpty { folder = name }
+                guard !name.isEmpty else { return }
+                // **真的建出来**，不只是把当前视图切过去
+                store.createFolder(name)
+                folder = name
+                newFolder = ""
             }
         } message: {
             Text("建好之后，放进来的文件会归到这个文件夹里。")

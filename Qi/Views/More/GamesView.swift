@@ -76,18 +76,8 @@ struct GamesView: View {
 
     @ViewBuilder
     private var webTab: some View {
-        // 内置的那些排最前面
-        section(GameGenre.raise.label) {
-            NavigationLink {
-                DollRoomView()
-            } label: {
-                row(title: DollStore.shared.state.name,
-                    sub: "能点的娃娃 · 聊天里也有一张同样的卡片",
-                    icon: "hand.tap")
-            }
-            .buttonStyle(.plain)
-        }
-
+        // 娃娃那一栏删了。她的原话：「删掉娃娃游戏，有点无聊」。
+        // 状态文件（doll.json）没动——万一哪天想找回来，数据还在。
         let grouped = Dictionary(grouping: store.games) { $0.genreValue }
         ForEach(GameGenre.allCases, id: \.self) { genre in
             if let list = grouped[genre], !list.isEmpty {

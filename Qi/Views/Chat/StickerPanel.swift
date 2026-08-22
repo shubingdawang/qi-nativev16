@@ -18,11 +18,39 @@ struct StickerPanel: View {
     @State private var picking: [PhotosPickerItem] = []
     @State private var editing: Sticker?
 
+    /// 现在只看哪一册。空的就是全部。
+    @State private var album = ""
+
     private var list: [Sticker] {
-        store.list(owner: "user", keyword: keyword).filter { $0.ready }
+        store.list(owner: "user", keyword: keyword, album: album).filter { $0.ready }
     }
     private var drafts: [Sticker] {
         store.list(owner: "user").filter { !$0.ready }
+    }
+
+    /// 一册的按钮：有封面就把封面画成小圆脸，没有就只有名字
+    @ViewBuilder
+    private func albumChip(name: String, value: String, cover: Sticker?) -> some View {
+        let on = album == value
+        Button {
+            album = on ? "" : value
+        } label: {
+            HStack(spacing: 5) {
+                if let cover {
+                    StickerImage(sticker: cover, size: 20)
+                        .frame(width: 20, height: 20)
+                        .clipShape(Circle())
+                }
+                Text(name)
+                    .font(.app(12))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(on ? app.settings.accentColor.opacity(0.2)
+                                          : Theme.softFillDeep))
+            .foregroundStyle(on ? app.settings.accentColor : Theme.textSoft(scheme))
+        }
+        .buttonStyle(.plain)
     }
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 4)
@@ -60,6 +88,23 @@ struct StickerPanel: View {
                         .foregroundStyle(app.settings.accentColor)
                         .frame(width: 34, height: 34)
                 }
+            }
+
+            // 专辑那一行。**只在真有专辑的时候才出现**——
+            // 一个专辑都没有的时候摆一排空按钮是纯噪音。
+            let albums = store.albums(owner: "user")
+            if !albums.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        albumChip(name: "全部", value: "", cover: nil)
+                        ForEach(albums, id: \.self) { a in
+                            albumChip(name: a, value: a,
+                                      cover: store.cover(of: a, owner: "user"))
+                        }
+                    }
+                    .padding(.horizontal, 1)
+                }
+                .frame(height: 34)
             }
 
             if !drafts.isEmpty {
@@ -108,6 +153,9 @@ struct StickerPanel: View {
                                     .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            // 长按放大预览（她要的）。
+                            // `preview:` 这一支是系统给的大图弹层，
+                            // 会动的要走 AnimatedImageView，不然预览是静止的第一帧。
                             .contextMenu {
                                 Text(sticker.name)
                                 Button {
@@ -120,6 +168,8 @@ struct StickerPanel: View {
                                 } label: {
                                     Label("删掉", systemImage: Icon.trash)
                                 }
+                            } preview: {
+                                StickerPreview(sticker: sticker)
                             }
                         }
                     }
@@ -163,6 +213,7 @@ struct StickerEditorView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dismiss) private var dismiss
     @State private var tagText = ""
+    @State private var coverSet = false
 
     var body: some View {
         NavigationStack {
@@ -198,6 +249,66 @@ struct StickerEditorView: View {
 
                         field("情绪标签", "一到五个词，顿号或逗号隔开") {
                             TextField("困、睡前、软乎乎", text: $tagText)
+                        }
+
+                        // 专辑：同一个角色的收在一块，多起来才不乱
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("专辑")
+                                .font(.app(13, weight: .medium))
+                                .foregroundStyle(Theme.textMain(scheme))
+                            TextField("比如「青蛙」「小猫」，留空就是没归类",
+                                      text: $sticker.album)
+                                .padding(10)
+                                .background(RoundedRectangle(cornerRadius: 12)
+                                    .fill(Theme.softFillDeep))
+                            // 已经有的专辑点一下就填进去，省得每次手打
+                            let existing = store.albums(owner: sticker.owner)
+                            if !existing.isEmpty {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 6) {
+                                        ForEach(existing, id: \.self) { a in
+                                            Button {
+                                                sticker.album = a
+                                            } label: {
+                                                Text(a)
+                                                    .font(.app(11))
+                                                    .padding(.horizontal, 10)
+                                                    .padding(.vertical, 5)
+                                                    .background(Capsule().fill(
+                                                        sticker.album == a
+                                                        ? app.settings.accentColor.opacity(0.2)
+                                                        : Theme.softFillDeep))
+                                                    .foregroundStyle(
+                                                        sticker.album == a
+                                                        ? app.settings.accentColor
+                                                        : Theme.textSoft(scheme))
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                    }
+                                }
+                            }
+                            if !sticker.album.isEmpty {
+                                Button {
+                                    store.setCover(sticker)
+                                    coverSet = true
+                                } label: {
+                                    HStack(spacing: 5) {
+                                        Image(systemName: store.albumCovers[sticker.album] == sticker.id
+                                              ? "checkmark.seal.fill" : "seal")
+                                            .font(.app(11))
+                                        Text(store.albumCovers[sticker.album] == sticker.id
+                                             ? "这张就是「\(sticker.album)」的封面"
+                                             : "把这张设成「\(sticker.album)」的封面")
+                                            .font(.app(11))
+                                    }
+                                    .foregroundStyle(app.settings.accentColor)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            Text("同一个角色的表情收进一个专辑，选表情的时候可以只看这一册。封面就是那一册的脸。")
+                                .font(.app(11))
+                                .foregroundStyle(Theme.textMuted(scheme))
                         }
 
                         VStack(alignment: .leading, spacing: 6) {
@@ -267,5 +378,31 @@ struct StickerEditorView: View {
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
         }
+    }
+}
+
+// MARK: - 长按放大的那一张
+
+/// 长按表情弹出来的大图。
+///
+/// 会动的必须走 `AnimatedImageView`——`Image(uiImage:)` 只画第一帧，
+/// 放大了看还是静的就没意思了。
+struct StickerPreview: View {
+
+    let sticker: Sticker
+    @ObservedObject private var store = StickerStore.shared
+
+    var body: some View {
+        Group {
+            if sticker.animated {
+                AnimatedImageView(url: store.url(of: sticker))
+            } else if let img = UIImage(contentsOfFile: store.url(of: sticker).path) {
+                Image(uiImage: img).resizable().scaledToFit()
+            } else {
+                Color.clear
+            }
+        }
+        .frame(width: 220, height: 220)
+        .padding(10)
     }
 }

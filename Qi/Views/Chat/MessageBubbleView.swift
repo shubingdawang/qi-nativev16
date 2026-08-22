@@ -127,26 +127,9 @@ struct MessageBubbleView: View {
                 if !isUser { Spacer(minLength: 20) }
             }
         }
-        // 挂件也是单独一张卡，不套气泡。
-        // 它是**活的**：往回翻看到的是娃娃现在的样子，不是当时那一帧。
-        else
-        if message.widget == "doll" {
-            VStack(alignment: .leading, spacing: 6) {
-                if !message.content.isEmpty {
-                    Text(message.content)
-                        .font(.app(14))
-                        .foregroundStyle(Theme.textMain(scheme))
-                }
-                DollInlineCard()
-            }
-            .contextMenu {
-                Button(role: .destructive) {
-                    app.deleteMessage(message.id, in: conversationID)
-                } label: {
-                    Label("删掉", systemImage: Icon.trash)
-                }
-            }
-        }
+        // 娃娃那张挂件卡删了（她说「有点无聊」）。
+        // 老聊天记录里可能还留着 widget == "doll" 的消息，
+        // 现在它们就是一条普通空消息，不再画卡片。
         // 旅行是单独一张卡，不套气泡
         else
         if let journey = message.journey {
@@ -339,7 +322,8 @@ struct MessageBubbleView: View {
 
     private func bubble(_ text: String) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            MarkdownText(text: text, fontSize: app.settings.fontSize)
+            // fillWidth: false —— 气泡跟着字数走，不再一律撑成最长的那行
+            MarkdownText(text: text, fontSize: app.settings.fontSize, fillWidth: false)
                 .foregroundStyle(Theme.textMain(scheme))
 
             // 译文贴在原文下面，中间一条虚线隔开
@@ -380,13 +364,12 @@ struct MessageBubbleView: View {
             }
             onOpenMenu()
         }
-        .overlay(alignment: isUser ? .topTrailing : .topLeading) {
-            if menuOpenID == message.id {
-                actionBar
-                    .offset(y: -48)
-                    .transition(.scale(scale: 0.92).combined(with: .opacity))
-            }
-        }
+        // ⚠️ 这儿原来挂着那条横菜单，**两个毛病**：
+        //   ① 八个按钮排成一条，长得出屏幕；
+        //   ② 点了没反应——菜单开着的时候 ChatView 在整屏上盖了一层
+        //      「点别处就关掉」的透明层，那层在气泡**上面**，
+        //      所以手指先碰到的是它，菜单只是被关掉，按钮从没被点到。
+        // 现在整块挪到 ChatView 那层去了（在透明层之上），排成微信那样的格子。
     }
 
     /// 改过几版的翻页条。第 n 版里 n = edits.count + 1 是现在这版。
@@ -419,58 +402,6 @@ struct MessageBubbleView: View {
         .buttonStyle(.plain)
         .foregroundStyle(Theme.textMuted(scheme))
     }
-
-    /// 长按弹出来的那条横菜单：一条细胶囊，不像系统那个糊住半屏
-    private var actionBar: some View {
-        HStack(spacing: 0) {
-            barItem("复制") { UIPasteboard.general.string = message.content }
-            barDivider
-            barItem("编辑") { onEdit() }
-            barDivider
-            barItem("重发") { onRetry() }
-            barDivider
-            barItem("收藏") { app.toggleStar([message.id], in: conversationID) }
-            barDivider
-            barItem("引用") { onQuote() }
-            barDivider
-            barItem(message.voiceName.isEmpty ? "念出来" : "听") { onSpeak() }
-            barDivider
-            barItem(message.translation == nil ? "翻译" : "收起") {
-                if message.translation == nil {
-                    app.translate(message.id, in: conversationID)
-                } else {
-                    app.clearTranslation(message.id, in: conversationID)
-                }
-            }
-            barDivider
-            barItem("删除") { app.deleteMessage(message.id, in: conversationID) }
-        }
-        .padding(.horizontal, 4)
-        .background(Capsule().fill(Color.black.opacity(0.82)))
-        .shadow(color: .black.opacity(0.22), radius: 10, x: 0, y: 4)
-        .fixedSize()
-    }
-
-    private func barItem(_ title: String, run: @escaping () -> Void) -> some View {
-        Button {
-            onCloseMenu()
-            run()
-        } label: {
-            Text(title)
-                .font(.app(13))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var barDivider: some View {
-        Rectangle()
-            .fill(Color.white.opacity(0.22))
-            .frame(width: 1, height: 14)
-    }
-
 
     /// 他存图之后的那张小卡
     private func saveCard(_ run: ToolRun) -> some View {
@@ -884,7 +815,15 @@ struct MessageBubbleView: View {
     private var imageRow: some View {
         VStack(alignment: isUser ? .trailing : .leading, spacing: 6) {
             ForEach(message.imageNames, id: \.self) { name in
-                if let image = ImageStore.load(name) {
+                // 会动的走 AnimatedImageView 逐帧播。
+                // `Image(uiImage:)` 只画第一帧——她发进来的 gif 在聊天里
+                // 会变成一张静图（第 8 条的另一半）。
+                if name.lowercased().hasSuffix(".gif") {
+                    AnimatedImageView(url: ImageStore.url(for: name))
+                        .frame(maxWidth: 220)
+                        .frame(height: 200)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                } else if let image = ImageStore.load(name) {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFit()

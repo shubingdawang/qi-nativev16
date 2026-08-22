@@ -8,6 +8,12 @@ struct MarkdownText: View {
 
     let text: String
     var fontSize: Double = 16
+    /// 要不要把宽度撑满。
+    ///
+    /// 聊天气泡里要 **false**：气泡该跟着字数长长短短，
+    /// 一句「嗯」也顶出一整行的宽度看着很怪（她原话：「有点怪怪的」）。
+    /// 别的地方（笔记、卡片正文）撑满是对的，所以默认还是 true。
+    var fillWidth: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -17,7 +23,7 @@ struct MarkdownText: View {
                     Text(attributed(body))
                         .font(.system(size: fontSize))
                         .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: fillWidth ? .infinity : nil, alignment: .leading)
                 case .code(let language, let body):
                     CodeBlockView(language: language, code: body, fontSize: fontSize)
                 }

@@ -65,6 +65,13 @@ final class AppState: ObservableObject {
         mcpServers = Storage.load([MCPServer].self, from: "mcp.json") ?? MCPServer.defaults
         voices = Storage.load([VoiceService].self, from: "voices.json") ?? VoiceService.defaults
         saveEnabled = true
+        // 「底」那张卡删掉了（她说的），渐变现在只有「配色 → 渐变」这一条路。
+        // 老数据里可能有人停在 wallpaperMode == "gradient" 上——
+        // 那一档界面上已经选不到了，不搬的话她的渐变会显示着却调不了。
+        if settings.wallpaperMode == "gradient" {
+            settings.preset = .gradient
+            settings.wallpaperMode = "image"
+        }
         migrateLocalFirst()
         // **启动时得手动同步一次**：Swift 里在自己的 init 里给属性赋值
         // 是不触发 didSet 的，所以上面那句 `settings = Storage.load(...)`
@@ -129,7 +136,34 @@ final class AppState: ObservableObject {
     /// 给这个文件外面的东西用的存盘入口。
     /// （滚雪球压缩在 ContextCompactor 里改完 digest 要存一下，
     /// 而 scheduleSave 是私有的。）
+    /// 每个窗口输入框里还没发出去的那半句话。
+    ///
+    /// 以前它是 ChatView 的 `@State`——**离开这一页就没了**：
+    /// 她打了一半的话，点进设置看一眼回来，白打。
+    /// 放在这儿之后，只要 App 还活着就一直在（后台划掉才清空，
+    /// 这也正是她要的：「除非后台退出 app」）。
+    /// **不落盘**——草稿不该被备份，也不该在重装后诈尸。
+    @Published var drafts: [UUID: String] = [:]
+
     func saveConversations() { scheduleSave(.conversations) }
+
+    /// 还原完备份之后，把内存里那份也换掉。
+    ///
+    /// 不做这一步的话，写回磁盘的数据会被内存里的旧数据盖回去——
+    /// 她「导入备份并没有加载出聊天记录」就是这么来的。
+    /// 顺序很重要：**先关掉存盘**再换，不然换的过程中每一次赋值
+    /// 都会触发 didSet 把半新半旧的东西写出去。
+    func reloadAfterRestore() {
+        saveEnabled = false
+        providers = Storage.load([Provider].self, from: "providers.json") ?? providers
+        conversations = Storage.load([Conversation].self, from: "conversations.json") ?? conversations
+        settings = Storage.load(AppSettings.self, from: "settings.json") ?? settings
+        mcpServers = Storage.load([MCPServer].self, from: "mcp.json") ?? mcpServers
+        voices = Storage.load([VoiceService].self, from: "voices.json") ?? voices
+        MemoryStore.shared.reload()
+        saveEnabled = true
+        syncTheme()
+    }
 
     func saveNow() {
         Storage.save(providers, to: "providers.json")
@@ -172,8 +206,14 @@ final class AppState: ObservableObject {
         var c = Conversation()
         c.space = space.rawValue
         c.systemPrompt = settings.defaultSystemPrompt
-        // 默认沿用上一次用过的模型
-        if let last = conversations(in: space).first {
+        // **这个区自己记着的模型优先**（工坊和聊天各用各的，见 modelBySpace）
+        if let saved = settings.modelBySpace[space.rawValue],
+           let cut = saved.firstIndex(of: "|"),
+           let pid = UUID(uuidString: String(saved[saved.startIndex..<cut])) {
+            c.providerID = pid
+            c.modelID = String(saved[saved.index(after: cut)...])
+        } else if let last = conversations(in: space).first {
+            // 还没选过就沿用这个区上一条
             c.providerID = last.providerID
             c.modelID = last.modelID
         } else if let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }) {
@@ -435,6 +475,8 @@ final class AppState: ObservableObject {
     }
 
     func send(text: String, images: [UIImage], in conversationID: UUID,
+              /// 已经原样落过盘的图（gif 走这条——重新编码会把动画压没）
+              imageNames: [String] = [],
               files: [FileAttachment] = [],
               sticker: Sticker? = nil,
               quoting quoted: ChatMessage? = nil,
@@ -470,6 +512,8 @@ final class AppState: ObservableObject {
         for image in images {
             if let name = ImageStore.save(image) { userMsg.imageNames.append(name) }
         }
+        // 动图那些：文件已经原样躺在磁盘上了，直接挂名字，别再过一遍 UIImage
+        userMsg.imageNames.append(contentsOf: imageNames)
         userMsg.files = files
         // 文字和表情分成两条：文字照常走气泡，表情不带气泡只显示动图
         if !userMsg.isEmptyContent {
@@ -630,10 +674,11 @@ final class AppState: ObservableObject {
         if !base.isEmpty { head += "\n\n" + base }
         let persona = member.persona.trimmingCharacters(in: .whitespacesAndNewlines)
         if !persona.isEmpty { head += "\n\n关于你自己：\n" + persona }
-        head += "\n\n" + Self.agencyRule
         let digestBlock = ContextCompactor.systemBlock(conv)
         if !digestBlock.isEmpty { head += "\n\n" + digestBlock }
         if let shared = memoryContext(for: conv) { head += "\n\n" + shared }
+        // 跟单聊一个道理：主动性那段压在最末尾，别被后面一堆内容冲淡
+        head += "\n\n" + Self.agencyRule
         result.append(.init(role: "system", text: head))
 
         var history = conv.messages.filter { $0.role != .system && $0.errorText == nil }
@@ -733,7 +778,12 @@ final class AppState: ObservableObject {
             conversationID: conversationID)
 
         let toolDefs = mcpToolDefinitions(for: conv)
-        let apiKey = p.apiKey
+
+        // 这一轮用谁。**可能中途换人**——主的额度满了就顶上备用那个。
+        var useEndpoint = endpoint
+        var useKey = p.apiKey
+        var useModel = modelID
+        var switched = false
 
         let task = Task { @MainActor in
             do {
@@ -753,34 +803,61 @@ final class AppState: ObservableObject {
                     var pending: [Int: ChatAPI.ToolCallPayload] = [:]
                     var roundText = ""
 
-                    let stream = ChatAPI.stream(
-                        endpoint: endpoint,
-                        apiKey: apiKey,
-                        model: modelID,
-                        messages: apiMessages,
-                        tools: toolDefs
-                    )
+                    // 这一层单独 catch，是为了**换人之后能原地重来**。
+                    // 外面那个 catch 在 while 外面，接住了就只能报错收场。
+                    do {
+                        let stream = ChatAPI.stream(
+                            endpoint: useEndpoint,
+                            apiKey: useKey,
+                            model: useModel,
+                            messages: apiMessages,
+                            tools: toolDefs
+                        )
 
-                    for try await event in stream {
-                        if Task.isCancelled { break }
-                        switch event {
-                        case .content(let piece):
-                            roundText += piece
-                            self.appendContent(piece, to: assistantID, in: conversationID)
-                        case .reasoning(let piece):
-                            self.appendReasoning(piece, to: assistantID, in: conversationID)
-                        case .usage(let u):
-                            self.setTokens(u.total, to: assistantID, in: conversationID)
-                            UsageStore.shared.record(u, source: .chat)
-                        case .toolCallDelta(let idx, let id, let name, let argsPiece):
-                            var call = pending[idx] ?? ChatAPI.ToolCallPayload(id: "", name: "", arguments: "")
-                            if let id, !id.isEmpty { call.id = id }
-                            if let name, !name.isEmpty { call.name = name }
-                            if let argsPiece { call.arguments += argsPiece }
-                            pending[idx] = call
-                        case .finish:
-                            break
+                        for try await event in stream {
+                            if Task.isCancelled { break }
+                            switch event {
+                            case .content(let piece):
+                                roundText += piece
+                                self.appendContent(piece, to: assistantID, in: conversationID)
+                            case .reasoning(let piece):
+                                self.appendReasoning(piece, to: assistantID, in: conversationID)
+                            case .usage(let u):
+                                self.setTokens(u.total, to: assistantID, in: conversationID)
+                                UsageStore.shared.record(u, source: .chat)
+                            case .toolCallDelta(let idx, let id, let name, let argsPiece):
+                                var call = pending[idx] ?? ChatAPI.ToolCallPayload(id: "", name: "", arguments: "")
+                                if let id, !id.isEmpty { call.id = id }
+                                if let name, !name.isEmpty { call.name = name }
+                                if let argsPiece { call.arguments += argsPiece }
+                                pending[idx] = call
+                            case .finish:
+                                break
+                            }
                         }
+                    } catch {
+                        // 额度满了 / 被限流 → **原地换备用那个接着说，不换窗**。
+                        //
+                        // 她要的就是这个：「pro 的周额度用完了，可以用供应商里的
+                        // api 接着继续，这样也不用换窗了，可以一直保存着聊天记录」。
+                        // 换的是对面那台机器，不是这一窗——
+                        // 历史、浓缩件、工具、身体，一样都不动。
+                        guard !switched, Self.isQuotaError(error),
+                              let alt = self.fallbackReach(excluding: useModel)
+                        else { throw error }
+                        switched = true
+                        useEndpoint = alt.endpoint
+                        useKey = alt.key
+                        useModel = alt.model
+                        // 断在半路的那半句要抹掉，不然接上去是两截拼的
+                        self.withAssistant(assistantID, in: conversationID) {
+                            $0.content = ""
+                            $0.reasoning = nil
+                        }
+                        self.noteSwitch(to: alt.label, assistantID: assistantID,
+                                        in: conversationID)
+                        round -= 1          // 这一轮不算，重来
+                        continue
                     }
 
                     if Task.isCancelled { break }
@@ -882,7 +959,9 @@ final class AppState: ObservableObject {
         if settings.nativeToolsEnabled {
             var native = NativeTools.definitions(
                 hasGroup: conversations.contains { $0.isGroup },
-                hasVoice: activeVoice != nil)
+                hasVoice: activeVoice != nil,
+                // 工坊那几件只在工坊给
+                workshop: conversation?.space == ChatSpace.workshop.rawValue)
             // 本机记忆库和本机心跳。各自有各自的开关，
             // 关着的话对应的那几个还是走原来那条路（小屋 MCP / 电脑上的 PulseEngine）。
             if settings.localMemory || settings.localPulse {
@@ -898,9 +977,16 @@ final class AppState: ObservableObject {
         for server in mcpServers where server.enabled {
             for tool in server.enabledTools {
                 if blockMemory && Self.memoryToolNames.contains(tool.name) { continue }
+                // 她报的第 6 条：「工具主动性目前只有 app 自带的工具修改了，
+                // 所以 app 自带的工具他用得很勤，其他的他就不用了」。
+                //
+                // 对的——自带工具的说明是按「触发 / 动机 / 行动」重写过的，
+                // 而 MCP 那边的说明是**服务器给的**，我们改不了原文。
+                // 但可以在后面接一句，把它们拉进同一套框里：
+                // 这也是你自己的能力，不是等她开口的菜单。
                 let fn: [String: Any] = [
                     "name": tool.name,
-                    "description": tool.description,
+                    "description": tool.description + Self.mcpAgencyTail,
                     "parameters": tool.inputSchema.rawValue
                 ]
                 out.append(["type": "function", "function": fn])
@@ -995,7 +1081,9 @@ final class AppState: ObservableObject {
     static func nowStamp(_ date: Date = Date()) -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "zh_CN")
-        f.dateFormat = "M月d日 EEEE HH:mm"
+        // **年份必须写**。不写的话他会拿训练时候的年份顶上，
+        // 她看到的就是「2026 年的事被说成 2025 年」。
+        f.dateFormat = "yyyy年M月d日 EEEE HH:mm"
         return "（现在是 \(f.string(from: date))）"
     }
 
@@ -1097,8 +1185,42 @@ final class AppState: ObservableObject {
     /// 模型学到的就只是格式，想不起"现在该调"。而且末尾一旦出现"除非明确要求否则不要主动"，
     /// 会直接把前面的许可压掉——越靠后、越像硬约束的句子赢面越大。
     /// 所以：触发条件写在最前，末尾不留抑制句。
+    /// 接在每个 MCP 工具说明后面的那一句。见 mcpToolDefinitions 里的注释。
+    static let mcpAgencyTail = "
+（这也是你自己的能力之一。"
+        + "对上了触发条件就直接用，不用等她开口，也不用先说「我帮你看看」——"
+        + "说了没做等于没做。）"
+
+    /// 人称和时间。**每轮都放在最末尾**，紧挨着她最新那句话。
+    ///
+    /// 她报的第 7 条：「他对人称和时间并不敏感，他会称呼我为『她』，
+    /// 会把 2026 年说成 2025 年」。两个毛病来路不同：
+    ///
+    /// · **人称** —— 记忆库、wake_up、注意力候选集里全是第三人称的「她」
+    ///   （那些是写给他看的旁白），读多了他就跟着这么叫。
+    ///   可她就在对面，当面被叫「她」是很怪的。
+    /// · **年份** —— 时间戳以前只写「8月22日」不写年，
+    ///   缺了的那一位他就拿训练时候的年份顶上。
+    static func groundingRule(userName: String) -> String {
+        let her = userName.isEmpty ? "她" : userName
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "yyyy年M月d日 EEEE"
+        return """
+        两件小事，但错了很出戏：
+
+        · **今天是 \(f.string(from: Date()))。** 不确定年份的时候以这一句为准，别自己推算。
+        · **她就在对面，当面要叫「你」**，不是「她」。
+          记忆库、唤醒包、还有那些摆给你看的线索里写的都是第三人称——那是**旁白**，
+          是写给你自己看的。转成话说出口的时候，主语是「你」：
+          不是「\(her)今天用了六小时手机」，是「你今天用了六小时手机」。
+        """
+    }
+
     static let agencyRule = """
     下面这些能力不是「她开口命令我才能用的菜单」。
+    **手上所有的工具都算**——App 自带的那些是，接进来的（小屋、搜索、别的服务）也是。
+    别只用眼熟的那几个。
 
     每次回话之前，我先看一眼当前情境有没有对上某项能力的触发条件。
     如果调用能拿到真实信息、或者能把我的关心和好奇真正做出来，我就直接去调，
@@ -2545,6 +2667,62 @@ final class AppState: ObservableObject {
         progress(todo.count, todo.count)
     }
 
+    /// 给**表情包库里**那些还没写关键词的静图写词。
+    ///
+    /// ⚠️ 上面那个 `tagStickers` 认的是 `MediaStore` 里的 `MediaItem`，
+    /// 而她的表情包、他存进去的表情包，全在 `StickerStore` 里——
+    /// **两个库**。所以 `tag_stickers` 那个工具以前一直在给一个基本是空的
+    /// 集合写词，写了等于没写。这个方法认对的那个库。
+    ///
+    /// 只处理**静图**：会动的他只看得见第一帧，写出来的词经常离题，
+    /// 那些她自己写（这条界线是她定的）。
+    @discardableResult
+    func tagStickerLibrary(_ items: [Sticker],
+                           progress: @escaping (Int, Int) -> Void = { _, _ in }) async -> Int {
+        guard let p = providers.first(where: { $0.enabled && !$0.enabledModels.isEmpty }),
+              let endpoint = p.chatEndpoint,
+              let model = p.enabledModels.first?.id
+        else { return 0 }
+
+        let brief = """
+        这是一张聊天里用的表情包。用三到六个中文词概括它的情绪和内容，词与词之间用顿号隔开。
+        只输出这些词本身，不要解释，不要引号，不要写「这张图」之类的话。
+        """
+
+        let todo = items.filter { !$0.animated && !$0.fileName.isEmpty
+                                  && ($0.tags.isEmpty || $0.description.isEmpty) }
+        var done = 0
+        for (i, one) in todo.enumerated() {
+            progress(i, todo.count)
+            let path = StickerStore.shared.url(of: one).path
+            guard let img = UIImage(contentsOfFile: path),
+                  let dataURL = ImageStore.base64DataURL(img, maxSide: 512) else { continue }
+
+            var text = ""
+            do {
+                let stream = ChatAPI.stream(
+                    endpoint: endpoint, apiKey: p.apiKey, model: model,
+                    messages: [.init(role: "user", text: brief, imageDataURLs: [dataURL])])
+                for try await event in stream {
+                    if case .content(let piece) = event { text += piece }
+                    if case .usage(let u) = event { UsageStore.shared.record(u, source: .sticker) }
+                }
+            } catch { continue }
+
+            let words = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !words.isEmpty else { continue }
+            var fixed = one
+            fixed.tags = words.components(separatedBy: CharacterSet(charactersIn: "、,，/ "))
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+            if fixed.description.isEmpty { fixed.description = words }
+            StickerStore.shared.update(fixed)
+            done += 1
+        }
+        progress(todo.count, todo.count)
+        return done
+    }
+
     /// 界面直接调一个 MCP 工具（札记页那些就靠它）
     func callTool(_ toolName: String, args: [String: Any]) async -> (text: String, failed: Bool) {
         // 札记那几页（日记 / 记忆 / 经期）就是靠这个方法取数据的。
@@ -2746,27 +2924,6 @@ final class AppState: ObservableObject {
                 return ("不认识的动作「\(action)」。能用的：roll / status / done / skip / "
                         + "buyout / pay_toll / serve / buy_card / use_card / duel / final / safeword", true)
             }
-
-        case "doll_action":
-            let action = (args["action"] as? String) ?? "look"
-            let doll = DollStore.shared
-            if action != "look" {
-                _ = doll.act(action,
-                             zone: args["zone"] as? String,
-                             pose: args["pose"] as? String,
-                             camera: args["camera"] as? String,
-                             narration: args["narration"] as? String)
-            }
-            // 默认放一张卡片。**卡片是活的**——它读的是娃娃现在的状态，
-            // 不是当时那一帧，所以她往回翻也还是能接着点。
-            let wantCard = (args["card"] as? Bool) ?? true
-            if wantCard, let cid = activeToolConversationID, let i = index(of: cid) {
-                var msg = ChatMessage(role: .assistant,
-                                      content: (args["note"] as? String) ?? "")
-                msg.widget = "doll"
-                conversations[i].messages.append(msg)
-            }
-            return (doll.brief(), false)
 
         case "feel":
             let feeling = (args["feeling"] as? String) ?? ""
@@ -3173,17 +3330,134 @@ final class AppState: ObservableObject {
             // 为什么只给静图：会动的他只看得见第一帧，写出来的词经常离题——
             // 那些还是她自己写。这条界线是她定的。
             let limit = max(1, min(20, Int((args["limit"] as? Double) ?? 8)))
-            let todo = MediaStore.shared.list("sticker")
-                .filter { $0.note.isEmpty && !$0.fileName.isEmpty }
-                .filter { !($0.fileName.lowercased().hasSuffix(".gif")) }
-                .prefix(limit)
+            // **认 StickerStore，不是 MediaStore** —— 见 tagStickerLibrary 那段注释：
+            // 以前认错了库，写了半天等于没写
+            let todo = Array(StickerStore.shared.stickers
+                .filter { !$0.animated && !$0.fileName.isEmpty
+                          && ($0.tags.isEmpty || $0.description.isEmpty) }
+                .prefix(limit))
             guard !todo.isEmpty else {
                 return ("表情包里没有缺关键词的静图了。（会动的那些留着她自己写——"
                         + "你只看得见第一帧。）", false)
             }
-            var done = 0
-            await tagStickers(Array(todo)) { d, _ in done = d }
+            let done = await tagStickerLibrary(todo)
             return ("看完写好了 \(done) 张。想看写成什么样就用 list_my_stickers。", false)
+
+        // MARK: 工坊那一摊（只有工坊那边给这几件）
+
+        case "list_library":
+            let lib = FileLibraryStore.shared
+            let only = (args["folder"] as? String) ?? ""
+            var lines: [String] = []
+            let names = lib.folders()
+            if only.isEmpty {
+                if names.isEmpty && lib.files.isEmpty { return ("文件区还是空的。", false) }
+                for f in names {
+                    let inF = lib.list(folder: f, keyword: "")
+                    lines.append("【\(f)】\(inF.count) 份")
+                    for one in inF.prefix(12) { lines.append("  · " + fileLine(one)) }
+                    if inF.count > 12 { lines.append("  · …还有 \(inF.count - 12) 份") }
+                }
+                let loose = lib.list(folder: "", keyword: "")
+                if !loose.isEmpty {
+                    lines.append("【还没归类】\(loose.count) 份")
+                    for one in loose.prefix(12) { lines.append("  · " + fileLine(one)) }
+                }
+            } else {
+                let inF = lib.list(folder: only, keyword: "")
+                guard !inF.isEmpty else { return ("「\(only)」是空的，或者没有这个文件夹。", false) }
+                lines.append("【\(only)】\(inF.count) 份")
+                for one in inF { lines.append("· " + fileLine(one)) }
+            }
+            return (lines.joined(separator: "\n"), false)
+
+        case "library_folder":
+            let lib = FileLibraryStore.shared
+            let act = (args["action"] as? String) ?? "list"
+            let name = (args["name"] as? String) ?? ""
+            switch act {
+            case "list":
+                let all = lib.folders()
+                return (all.isEmpty ? "还没有文件夹。"
+                        : "现在有：" + all.joined(separator: "、"), false)
+            case "create":
+                guard !name.isEmpty else { return ("要叫什么名字？", true) }
+                guard lib.createFolder(name) else {
+                    return ("「\(name)」已经有了。", false)
+                }
+                return ("建好了：\(name)。往里放东西用 file_to_folder。", false)
+            case "rename":
+                let to = (args["new_name"] as? String) ?? ""
+                guard !name.isEmpty, !to.isEmpty else { return ("要旧名字和新名字。", true) }
+                guard lib.folders().contains(name) else {
+                    return ("没有叫「\(name)」的文件夹。", true)
+                }
+                lib.renameFolder(from: name, to: to)
+                return ("改好了：\(name) → \(to)", false)
+            case "delete":
+                guard lib.folders().contains(name) else {
+                    return ("没有叫「\(name)」的文件夹。现在有："
+                            + lib.folders().joined(separator: "、"), true)
+                }
+                let keep = (args["keep_files"] as? Bool) ?? false
+                let n = lib.list(folder: name, keyword: "").count
+                lib.deleteFolder(name, keepFiles: keep)
+                return (keep ? "「\(name)」这个壳删了，里面 \(n) 份退回未归类。"
+                             : "「\(name)」连里面 \(n) 份文件一起删掉了。", false)
+            default:
+                return ("action 只认 create / delete / rename / list。", true)
+            }
+
+        case "read_file":
+            let want = (args["name"] as? String) ?? ""
+            guard !want.isEmpty else { return ("要读哪一份？", true) }
+            let folder = (args["folder"] as? String) ?? ""
+            guard let hit = findLibraryFile(want, folder: folder.isEmpty ? nil : folder) else {
+                return ("没找到「\(want)」。\n" + libraryMenu(), true)
+            }
+            if hit.attachment.unreadable {
+                return ("「\(hit.attachment.displayName)」这个格式读不出文字"
+                        + "（\(hit.attachment.sizeText)）。", true)
+            }
+            let limit = max(500, min(40000, Int((args["limit"] as? NSNumber)?.intValue ?? 6000)))
+            let body = hit.attachment.extractedText
+            var out = "【\(hit.attachment.displayName)】"
+            if !hit.folder.isEmpty { out += "（在「\(hit.folder)」里）" }
+            out += "\n" + String(body.prefix(limit))
+            if body.count > limit {
+                out += "\n\n……还有 \(body.count - limit) 字没给你"
+                    + "（要接着读就把 limit 调大）。"
+            }
+            return (out, false)
+
+        case "file_to_folder":
+            let want = (args["name"] as? String) ?? ""
+            let to = (args["folder"] as? String) ?? ""
+            guard !want.isEmpty else { return ("要挪哪一份？", true) }
+            guard let hit = findLibraryFile(want, folder: nil) else {
+                return ("没找到「\(want)」。\n" + libraryMenu(), true)
+            }
+            let lib = FileLibraryStore.shared
+            if !to.isEmpty { lib.createFolder(to) }
+            lib.move(hit, to: to)
+            return (to.isEmpty
+                    ? "「\(hit.attachment.displayName)」退回未归类了。"
+                    : "「\(hit.attachment.displayName)」挪进「\(to)」了。", false)
+
+        case "send_file":
+            let want = (args["name"] as? String) ?? ""
+            guard !want.isEmpty else { return ("要发哪一份？", true) }
+            guard let hit = findLibraryFile(want, folder: nil) else {
+                return ("没找到「\(want)」。\n" + libraryMenu(), true)
+            }
+            guard let cid = activeToolConversationID, let ci = index(of: cid) else {
+                return ("现在没有能发的窗口。", true)
+            }
+            var fileMsg = ChatMessage(role: .assistant,
+                                      content: (args["note"] as? String) ?? "")
+            fileMsg.files = [hit.attachment]
+            conversations[ci].messages.append(fileMsg)
+            return ("发过去了：\(hit.attachment.displayName)", false)
 
         case "list_recent_images":
             // 存错一张比不存更糟。先看清楚有哪些，再决定 index 填几。
@@ -3192,11 +3466,11 @@ final class AppState: ObservableObject {
 
         case "save_sticker":
             let index = Int((args["index"] as? NSNumber)?.intValue ?? 1)
-            guard let image = recentUserImage(offset: index) else {
+            // **拿原始字节，不过 UIImage**——过一遍就只剩 gif 的第一帧了
+            guard let raw = recentUserImageData(offset: index) else {
                 return ("没找到第 \(index) 张图。\n" + imageMenu(), true)
             }
-            guard let data = image.pngData(),
-                  var made = store.add(data: data, ext: "png", owner: "assistant")
+            guard var made = store.add(data: raw.data, ext: raw.ext, owner: "assistant")
             else { return ("存不进去，可能空间不够了。", true) }
             made.name = (args["name"] as? String) ?? "没起名"
             made.description = (args["caption"] as? String) ?? ""
@@ -3206,8 +3480,10 @@ final class AppState: ObservableObject {
                     .filter { !$0.isEmpty }
             }
             store.update(made)
-            pendingCard = (made.fileName, "表情包", (args["thought"] as? String) ?? "")
-            return ("存进你的表情包了：\(made.name)", false)
+            pendingCard = (made.fileName, raw.ext == "gif" ? "动图" : "表情包",
+                           (args["thought"] as? String) ?? "")
+            return ("存进你的表情包了：\(made.name)"
+                    + (raw.ext == "gif" ? "（会动的，存的是原图，没压成静图）" : ""), false)
 
         case "save_photo_to_folder":
             let folder = (args["folder"] as? String) ?? ""
@@ -3224,6 +3500,109 @@ final class AppState: ObservableObject {
                 pendingCard = (last.fileName, folder, (args["thought"] as? String) ?? "")
             }
             return ("存进「\(folder)」了。", false)
+
+        case "send_photo_from_folder":
+            let folder = (args["folder"] as? String) ?? ""
+            guard !folder.isEmpty else { return ("要从哪个文件夹发？", true) }
+            let inFolder = MediaStore.shared.list("photo", folder: folder)
+            guard !inFolder.isEmpty else {
+                let all = MediaStore.shared.folders("photo")
+                return ("「\(folder)」里没有照片。"
+                        + (all.isEmpty ? "相册里现在一个文件夹都没有。"
+                                       : "现在有的文件夹：\(all.joined(separator: "、"))"), true)
+            }
+            let q = (args["query"] as? String) ?? ""
+            // 不给关键词就发最近存的那张（list 已经按时间倒排）
+            let pick = q.isEmpty ? inFolder.first
+                : inFolder.first(where: { $0.note.localizedCaseInsensitiveContains(q) })
+            guard let photo = pick else {
+                return ("「\(folder)」里没有说明里带「\(q)」的照片。这个文件夹里有："
+                        + inFolder.prefix(8).map {
+                            $0.note.isEmpty ? "（没写说明）" : $0.note
+                          }.joined(separator: "、"), true)
+            }
+            guard let cid = activeToolConversationID, let ci = index(of: cid) else {
+                return ("现在没有能发的窗口。", true)
+            }
+            var photoMsg = ChatMessage(role: .assistant)
+            photoMsg.imageNames = [photo.fileName]
+            if let t = args["thought"] as? String, !t.isEmpty { photoMsg.content = t }
+            conversations[ci].messages.append(photoMsg)
+            return ("发出去了：\(photo.note.isEmpty ? folder : photo.note)", false)
+
+        case "list_saved_photos":
+            let only = (args["folder"] as? String) ?? ""
+            var lines: [String] = []
+            if only.isEmpty {
+                let names = MediaStore.shared.folders("photo")
+                if names.isEmpty {
+                    lines.append("相册里还没有文件夹。")
+                } else {
+                    for f in names {
+                        let inF = MediaStore.shared.list("photo", folder: f)
+                        lines.append("【\(f)】\(inF.count) 张")
+                        for one in inF.prefix(6) {
+                            lines.append("  · " + (one.note.isEmpty ? "（没写说明）" : one.note))
+                        }
+                        if inF.count > 6 { lines.append("  · …还有 \(inF.count - 6) 张") }
+                    }
+                }
+                let loose = MediaStore.shared.list("photo", folder: "")
+                if !loose.isEmpty { lines.append("【还没归类】\(loose.count) 张") }
+                let st = StickerStore.shared.stickers.count
+                if st > 0 {
+                    lines.append("表情包一共 \(st) 张"
+                                 + "（那边用 list_my_stickers 看，这儿只报个数）")
+                }
+            } else {
+                let inF = MediaStore.shared.list("photo", folder: only)
+                guard !inF.isEmpty else {
+                    return ("「\(only)」是空的，或者没有这个文件夹。", false)
+                }
+                lines.append("【\(only)】\(inF.count) 张")
+                for one in inF {
+                    lines.append("· " + (one.note.isEmpty ? "（没写说明）" : one.note))
+                }
+            }
+            return (lines.joined(separator: "\n"), false)
+
+        case "delete_photo_from_folder":
+            let folder = (args["folder"] as? String) ?? ""
+            let q = (args["query"] as? String) ?? ""
+            guard !folder.isEmpty, !q.isEmpty else { return ("要文件夹名和关键词。", true) }
+            let inFolder = MediaStore.shared.list("photo", folder: folder)
+            guard let hit = inFolder.first(where: {
+                $0.note.localizedCaseInsensitiveContains(q)
+            }) else {
+                return ("「\(folder)」里没有说明带「\(q)」的照片。里面有："
+                        + inFolder.prefix(8).map {
+                            $0.note.isEmpty ? "（没写说明）" : $0.note
+                          }.joined(separator: "、"), true)
+            }
+            // 命中好几张的时候**不猜**——删错了找不回来
+            let sameCount = inFolder.filter {
+                $0.note.localizedCaseInsensitiveContains(q)
+            }.count
+            guard sameCount == 1 else {
+                return ("「\(q)」在「\(folder)」里对上了 \(sameCount) 张，"
+                        + "不敢替你挑。换个更准的词再来——删了找不回来。", true)
+            }
+            let gone = hit.note.isEmpty ? "那张没写说明的" : hit.note
+            MediaStore.shared.remove(hit)
+            return ("删掉了：\(gone)", false)
+
+        case "delete_folder":
+            let folder = (args["folder"] as? String) ?? ""
+            guard !folder.isEmpty else { return ("要删哪个文件夹？", true) }
+            guard MediaStore.shared.folders("photo").contains(folder) else {
+                return ("没有叫「\(folder)」的文件夹。现在有："
+                        + MediaStore.shared.folders("photo").joined(separator: "、"), true)
+            }
+            let keep = (args["keep_photos"] as? Bool) ?? false
+            let n = MediaStore.shared.list("photo", folder: folder).count
+            MediaStore.shared.deleteFolder("photo", name: folder, keepImages: keep)
+            return (keep ? "「\(folder)」这个壳删了，里面 \(n) 张退回未归类。"
+                         : "「\(folder)」连里面 \(n) 张照片一起删掉了。", false)
 
         case "delete_sticker":
             let query = (args["query"] as? String) ?? ""
@@ -3299,6 +3678,57 @@ final class AppState: ObservableObject {
             if out.count >= limit { break }
         }
         return Array(out.prefix(limit))
+    }
+
+    /// 她那张图的**原始字节**（连同格式）。
+    /// 存表情必须走这条——`UIImage` 只拿得到 gif 的第一帧，
+    /// 存出来就是张不会动的图（她报的第 8 条）。
+    private func recentUserImageData(offset: Int) -> (data: Data, ext: String)? {
+        let all = recentUserImages()
+        let idx = max(1, offset) - 1
+        guard idx < all.count else { return nil }
+        let ref = all[idx]
+        let url: URL
+        if ref.isSticker {
+            guard let st = StickerStore.shared.stickers.first(where: { $0.fileName == ref.name })
+            else { return nil }
+            url = StickerStore.shared.url(of: st)
+        } else {
+            url = ImageStore.url(for: ref.name)
+        }
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return (data, ImageStore.sniffExt(data))
+    }
+
+    /// 文件区里一份文件写成一行
+    private func fileLine(_ f: LibraryFile) -> String {
+        var s = f.attachment.displayName + "（" + f.attachment.sizeText
+        if f.attachment.unreadable { s += "，读不出文字" }
+        s += "）"
+        return s
+    }
+
+    /// 按名字找一份文件。**名字写一部分也认**——
+    /// 他手里只有对话里提过的半个名字是常事。
+    private func findLibraryFile(_ name: String, folder: String?) -> LibraryFile? {
+        let lib = FileLibraryStore.shared
+        let pool = lib.list(folder: folder, keyword: "")
+        let key = name.lowercased()
+        if let exact = pool.first(where: {
+            $0.attachment.displayName.lowercased() == key
+        }) { return exact }
+        return pool.first { $0.attachment.displayName.lowercased().contains(key) }
+    }
+
+    /// 找不到的时候把有什么摆出来，别干说一句「没找到」
+    private func libraryMenu() -> String {
+        let lib = FileLibraryStore.shared
+        guard !lib.files.isEmpty else { return "文件区现在是空的。" }
+        let rows = lib.files.sorted { $0.addedAt > $1.addedAt }.prefix(12).map {
+            "· " + $0.attachment.displayName
+                + ($0.folder.isEmpty ? "" : "（在「" + $0.folder + "」里）")
+        }
+        return "文件区现在有：\n" + rows.joined(separator: "\n")
     }
 
     private func recentUserImage(offset: Int) -> UIImage? {
@@ -3414,6 +3844,55 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// 这个错是不是「额度/限流」那一类。
+    ///
+    /// 只认这几种，别的错**一律不换人**——网络断了、地址填错了，
+    /// 换个供应商也是一样的错，白花一次钱还让人以为是对面的问题。
+    static func isQuotaError(_ error: Error) -> Bool {
+        if let api = error as? ChatAPI.APIError, case .badStatus(let code, let body) = api {
+            if code == 429 || code == 402 || code == 529 { return true }
+            // 有些中转把额度问题塞在 400/403 的正文里
+            let t = body.lowercased()
+            if code == 400 || code == 403 {
+                return t.contains("quota") || t.contains("credit")
+                    || t.contains("rate limit") || t.contains("usage limit")
+                    || t.contains("insufficient") || t.contains("额度") || t.contains("余额")
+            }
+            return false
+        }
+        let t = error.localizedDescription.lowercased()
+        return t.contains("quota") || t.contains("rate limit")
+            || t.contains("额度") || t.contains("余额")
+    }
+
+    /// 备用那一个的落点。没配、或者配的就是现在这个，就返回 nil。
+    func fallbackReach(excluding currentModel: String)
+        -> (endpoint: URL, key: String, model: String, label: String)? {
+        let saved = settings.fallbackModel
+        guard !saved.isEmpty, let cut = saved.firstIndex(of: "|"),
+              let pid = UUID(uuidString: String(saved[saved.startIndex..<cut]))
+        else { return nil }
+        let model = String(saved[saved.index(after: cut)...])
+        guard model != currentModel,
+              let p = provider(pid), p.enabled,
+              let endpoint = p.chatEndpoint else { return nil }
+        return (endpoint, p.apiKey, model, p.name + " · " + model)
+    }
+
+    /// 在这条消息上留一行「换人了」。
+    /// **明着说**——她得知道这半句是谁说的，不然回头看会以为他忽然变了个人。
+    private func noteSwitch(to label: String, assistantID: UUID, in conversationID: UUID) {
+        withAssistant(assistantID, in: conversationID) {
+            var run = ToolRun()
+            run.serverName = "本机"
+            run.toolName = "换了个模型接着说"
+            run.result = "主的额度满了，换成 " + label + " 继续。"
+                + "这一窗的记录、浓缩件、工具都没动。"
+            run.finished = true
+            $0.toolRuns.append(run)
+        }
+    }
+
     private func finishWithError(_ error: Error, assistantID: UUID, in conversationID: UUID) {
         guard let ci = index(of: conversationID),
               let mi = conversations[ci].messages.firstIndex(where: { $0.id == assistantID })
@@ -3466,7 +3945,8 @@ final class AppState: ObservableObject {
 
         let base = conv.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         if !base.isEmpty { fixed.append(base) }
-        fixed.append(Self.agencyRule)
+        // ⚠️ `agencyRule`（那段「能力不是等她开口的菜单」）**不在这儿了**，
+        // 挪到整段 system 的最末尾去了——理由见下面 `sys` 拼起来的地方。
         fixed.append(Self.actionHint)
         // 只在絮语这边给。工坊是干活的地方，那儿要的是配合，不是立场。
         if conv.space == ChatSpace.chat.rawValue {
@@ -3491,6 +3971,36 @@ final class AppState: ObservableObject {
         if let shared = memoryContext(for: conv) {
             sys += "\n\n" + shared
         }
+
+        // 主动性那一段**压在最后**，紧挨着历史消息。
+        //
+        // 出处：她给的 p6 那份排查，第 ④ 条——
+        // 「能力块离最新消息太远会被当背景」。以前它排在 system 第二段，
+        // 后面还压着吵架那一大段、表情清单、浓缩件、整个记忆库……
+        // 等他读到最新那句话的时候，「该动手就动手」早就被冲淡成背景音了。
+        //
+        // 顺带也回答了那份文档的第 ② 条（末尾锚点最强）：
+        // 末尾这个位置本来就是最强的，**那就把想让他记住的那条放这儿**，
+        // 而不是让一堆记忆内容白占着。
+        // 他此刻的身体和心跳。**每一轮都带**。
+        //
+        // 她说的第 5 条：「身体和心跳并不是注入的，我希望他每条消息都能知道
+        // 自己的情况，不然心跳和身体就没有意义了」。她说得对——
+        // 以前这两样只有打电话那条路带上了，聊天这边全靠他自己想起来调工具查一次，
+        // 而他基本不会查。一个从来不被读到的状态机等于不存在。
+        //
+        // 两样都是**纯算术、不花钱**（现算，不开定时器），所以每轮带没有代价。
+        if settings.bodyEnabled {
+            sys += "\n\n" + BodyStore.shared.brief()
+        }
+        if settings.localPulse {
+            sys += "\n\n【你现在的心跳】" + LocalPulse.shared.brief()
+                + "\n这也不是台词，是你身上正在发生的事。"
+        }
+
+        sys += "\n\n" + Self.groundingRule(userName: settings.userName)
+        sys += "\n\n" + Self.agencyRule
+
         if !sys.isEmpty {
             result.append(.init(role: "system", text: sys, imageDataURLs: []))
         }
