@@ -38,6 +38,9 @@ struct ChatView: View {
     }
     /// 她在打字。列表看见它变就滚到底。
     @State private var typingTick = 0
+    @FocusState private var inputFocused: Bool
+    /// 从聊天记录点进来的那一条，滚到它那儿并闪一下
+    @State private var jumpTo: UUID?
     @State private var pickedItems: [PhotosPickerItem] = []
     @State private var showingPlus = false
     @State private var pendingImages: [UIImage] = []
@@ -150,6 +153,13 @@ struct ChatView: View {
                             editingMessage = msg
                         },
                         onRetry: { msg in app.retry(msg.id, in: conv.id) },
+                        onOpenLibrary: { place in
+                            // 存到哪儿决定开哪一栏：动图 → GIF，
+                            // 表情包 → 表情包，别的（相册文件夹）→ 图片
+                            StickerLibraryView.openTab = place.contains("动图") ? 2
+                                : (place.contains("表情") ? 1 : 0)
+                            destination = SideMenuItem.all.first { $0.id == "sticker" }
+                        },
                         onMention: { name in
                             // insertMention 是原来给候选条用的，直接复用：
                             // 光标前有 @ 就替换掉，没有就补一个
@@ -161,8 +171,21 @@ struct ChatView: View {
                             }
                         },
                         running: app.runningConversationIDs.contains(conv.id),
-                        typingTick: typingTick
+                        typingTick: typingTick,
+                        jumpTo: jumpTo,
+                        onJumped: { jumpTo = nil }
                     )
+                    // 表情面板开着的时候，点聊天区任何一处就收起来（她要的）。
+                    // **不能盖一层全屏透明层**——那层会连表情本身一起挡住，
+                    // 变成点哪儿都只是关掉、一张也选不中。
+                    // 挂在消息区上就正好：这块本来就是「空白处」。
+                    .simultaneousGesture(TapGesture().onEnded {
+                        if stickerPanelOpen {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                stickerPanelOpen = false
+                            }
+                        }
+                    })
                     if selecting {
                         selectionBar(conv)
                     } else {
@@ -320,8 +343,12 @@ struct ChatView: View {
             }
         }
         .sheet(isPresented: $showingSearch) {
-            ChatSearchView(space: space) { id in
-                app.setActive(id, for: space)
+            ChatSearchView(space: space) { convID, msgID in
+                app.setActive(convID, for: space)
+                // 跳到那一句。延一下等这一窗渲染出来再滚。
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    jumpTo = msgID
+                }
             }
         }
         .sheet(item: $destination) { item in
@@ -657,6 +684,13 @@ struct ChatView: View {
             }
 
             TextField(app.settings.inputPlaceholder, text: draftBinding, axis: .vertical)
+                .focused($inputFocused)
+                .onChange(of: inputFocused) { _, on in
+                    // 点进输入框就滚到最底下。
+                    // 她说的：「点击输入框应该滚动到最下方才对，
+                    // 不然看不见他上面发的消息」——键盘弹起来会顶掉最后几条。
+                    if on { typingTick += 1 }
+                }
                 .onChange(of: draft) { _, text in
                     // 她一开始打字，列表就滚到最底下。
                     // 以前不滚，打字的时候最后那几条被键盘顶上去看不见了。
@@ -1151,6 +1185,7 @@ struct MessageListView: View {
     var onCloseMenu: () -> Void = {}
     var onEdit: (ChatMessage) -> Void = { _ in }
     var onRetry: (ChatMessage) -> Void = { _ in }
+    var onOpenLibrary: (String) -> Void = { _ in }
     /// 长按头像 @ 这个人
     var onMention: (String) -> Void = { _ in }
     /// 这个窗口是不是正在等他回话
@@ -1158,6 +1193,9 @@ struct MessageListView: View {
     /// 她每敲一下这个数就变。变了就滚到底——
     /// 打字的时候最后几条会被键盘顶上去，不滚就看不见自己在回哪一句。
     var typingTick: Int = 0
+    /// 从聊天记录搜索点进来的那一条：滚过去，别停在最底下
+    var jumpTo: UUID? = nil
+    var onJumped: () -> Void = {}
 
     @EnvironmentObject var app: AppState
     @Environment(\.scenePhase) private var scenePhase
@@ -1185,6 +1223,7 @@ struct MessageListView: View {
                             menuOpenID: menuOpenID,
                             onOpenMenu: { onOpenMenu(message) },
                             onRetry: { onRetry(message) },
+                            onOpenLibrary: { place in onOpenLibrary(place) },
                             onCloseMenu: onCloseMenu,
                             showsHeader: showsHeader(at: index),
                             onMention: { onMention($0) }
@@ -1222,6 +1261,16 @@ struct MessageListView: View {
                 withAnimation(.easeOut(duration: 0.18)) {
                     proxy.scrollTo("__bottom", anchor: .bottom)
                 }
+            }
+            // 从聊天记录点进来的那一条：滚到屏幕正中，别停在底下。
+            // **要压过上面那两条**——它们会无脑滚到底，
+            // 所以这条排在后面，最后一个说了算。
+            .onChange(of: jumpTo) { _, target in
+                guard let target else { return }
+                withAnimation(.easeOut(duration: 0.3)) {
+                    proxy.scrollTo(target, anchor: .center)
+                }
+                onJumped()
             }
             // 注意：App 只是切到后台再回来的话不滚。
             // 你可能正翻着上面某句话跑去别的 App 查东西，回来还得在原地。

@@ -74,6 +74,29 @@ struct MarkdownText: View {
     }
 
     private func attributed(_ raw: String) -> AttributedString {
+        // 系统那套 inline markdown **不认 `~~删除线~~`**，
+        // 所以先自己把它挑出来，剩下的再交给系统。
+        // 记忆改过之后显示的就是 `~~记错的~~ 改对的`，
+        // 画不出删除线的话那行读起来是两句自相矛盾的话。
+        if raw.contains("~~") {
+            var out = AttributedString()
+            var rest = Substring(raw)
+            while let a = rest.range(of: "~~"),
+                  let b = rest.range(of: "~~", range: a.upperBound..<rest.endIndex) {
+                out += plain(String(rest[rest.startIndex..<a.lowerBound]))
+                var struck = AttributedString(String(rest[a.upperBound..<b.lowerBound]))
+                struck.strikethroughStyle = .single
+                struck.foregroundColor = .red.opacity(0.75)
+                out += struck
+                rest = rest[b.upperBound...]
+            }
+            out += plain(String(rest))
+            return out
+        }
+        return plain(raw)
+    }
+
+    private func plain(_ raw: String) -> AttributedString {
         // 保留原有换行，只解析行内格式
         if let parsed = try? AttributedString(
             markdown: raw,

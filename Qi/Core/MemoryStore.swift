@@ -62,6 +62,19 @@ struct MemoryItem: Codable, Identifiable, Hashable {
     // **算数的这些里面，现在最该被看见的是哪几条。**
     // 两套不打架——前者是真假，后者是轻重。
 
+    /// 改之前那一版正文。**只在「记错了、改对」的时候留**，
+    /// 显示成 ~~旧的~~ 新的。
+    ///
+    /// ⚠️ 这跟 `invalid_at` 那套是**两件事**，她这次正好撞上了：
+    /// 他把七夕记成 2025 年，她让他改成 2026——这是**记错了**，
+    /// 该直接改掉、把错的划掉；他却当成「事实变了」去作废，
+    /// 于是屏幕上还挂着 2025 那行加一句「2026/8/19 起不算数了」。
+    ///
+    ///   · **记错了** → update_memory 改掉，旧的留成删除线
+    ///   · **事情变了**（她从苍南搬到日本）→ add_memory + supersedes，
+    ///     旧的整条留着标作废——那条**当时是真的**
+    var previous: String?
+
     /// 钉住的核心信念。钉住的**不衰减**，永远浮在最上面。
     /// 上限 20 条（Ombre 原话：稀缺才逼出重要）。
     var pinned: Bool?
@@ -69,6 +82,12 @@ struct MemoryItem: Codable, Identifiable, Hashable {
     /// 空的＝没标过，当成已了结、不额外打扰；
     /// 明确标成 false 的才算「还悬着」，浮出的时候抬一档。
     var resolved: Bool?
+
+    /// 屏幕上和给他看的正文。改过的话，**错的划掉、对的跟在后面**。
+    var display: String {
+        guard let old = previous, !old.isEmpty, old != content else { return content }
+        return "~~" + old + "~~ " + content
+    }
 
     /// 现在还算不算数
     var isLive: Bool { (invalid_at ?? "").isEmpty }
@@ -81,7 +100,7 @@ struct MemoryItem: Codable, Identifiable, Hashable {
          annotations: [MemoryAnnotation]? = nil,
          valid_from: String? = nil, invalid_at: String? = nil,
          superseded_by: String? = nil, entities: [String]? = nil,
-         pinned: Bool? = nil, resolved: Bool? = nil) {
+         pinned: Bool? = nil, resolved: Bool? = nil, previous: String? = nil) {
         self.id = id; self.content = content; self.tags = tags
         self.level = level; self.author = author
         self.created_at = created_at; self.updated_at = updated_at
@@ -89,6 +108,7 @@ struct MemoryItem: Codable, Identifiable, Hashable {
         self.valid_from = valid_from; self.invalid_at = invalid_at
         self.superseded_by = superseded_by; self.entities = entities
         self.pinned = pinned; self.resolved = resolved
+        self.previous = previous
     }
 
     /// 电脑那边的 memories.json 里，level 有的是数字 5，有的是字符串 "5"
@@ -112,6 +132,7 @@ struct MemoryItem: Codable, Identifiable, Hashable {
         entities = try? c.decode([String].self, forKey: .entities)
         pinned = try? c.decode(Bool.self, forKey: .pinned)
         resolved = try? c.decode(Bool.self, forKey: .resolved)
+        previous = try? c.decode(String.self, forKey: .previous)
     }
 }
 

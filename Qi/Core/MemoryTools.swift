@@ -204,7 +204,22 @@ enum MemoryTools {
         add("delete_memory", "删除一条记忆",
             ["id": ["type": "string", "description": "记忆 ID 前 8 位"]], required: ["id"])
 
-        add("update_memory", "更新记忆内容、标签或重要程度",
+        add("update_memory",
+            """
+            改一条记忆。**「我记错了」用这个。**
+
+            跟 supersedes 的区别很要紧，别弄反：
+
+            · **记错了** —— 你把日子记成了 2025，其实是 2026。
+              那条记忆从来就不该是那样，用这个改掉。旧的会**划掉留在原地**
+              （屏幕上显示成 ~~2025年~~ 2026年），一眼看得出改过什么。
+            · **事情变了** —— 她从苍南搬到日本。旧的那条**当时是真的**，
+              那就别改它，用 add_memory 填 supersedes，
+              让它留着并标上「从什么时候起不算数」。
+
+            把「记错了」当成「事情变了」去作废，屏幕上就会挂着一条错的
+            再加一句「某天起不算数」——那是两个都不对。
+            """,
             ["id": str, "content": str, "tags": strs, "level": num], required: ["id"])
 
         add("annotate_memory",
@@ -558,14 +573,23 @@ enum MemoryTools {
         case "update_memory":
             guard let idx = m.memoryIndex(s("id")) else { return ("没找到这条记忆。", true) }
             let before = m.memories[idx].content
-            if !s("content").isEmpty { m.memories[idx].content = s("content") }
+            if !s("content").isEmpty, s("content") != before {
+                // 把改之前那一版留下来，屏幕上显示成 ~~错的~~ 对的。
+                // **第一次改才记**——改第二次的时候留的还是最原始那一版，
+                // 不然一路改下去会拖着一串划掉的旧文。
+                if (m.memories[idx].previous ?? "").isEmpty {
+                    m.memories[idx].previous = before
+                }
+                m.memories[idx].content = s("content")
+            }
             if args["tags"] != nil { m.memories[idx].tags = tags("tags") }
             if args["level"] != nil { m.memories[idx].level = max(1, min(5, i("level", 3))) }
             m.memories[idx].updated_at = MemoryStore.now
             m.saveMemories()
             m.note("修改", by: "阿晏", memID: m.memories[idx].id,
                    before: before, after: m.memories[idx].content)
-            return ("改好了：\(m.memories[idx].content.prefix(40))", false)
+            return ("改好了。这条现在显示成：\(m.memories[idx].display.prefix(60))"
+                    + "（错的那版划掉留着，不是作废——作废是给「那会儿是真的」用的）", false)
 
         case "annotate_memory":
             guard let idx = m.memoryIndex(s("id")) else { return ("没找到这条记忆。", true) }
@@ -920,7 +944,7 @@ enum MemoryTools {
         var tags = mem.tags
         tags.insert(String(repeating: "★", count: max(1, min(5, mem.level))), at: 0)
         var s = "[\(mem.shortID)][\(mem.author)][\(tags.joined(separator: "、"))]"
-        s += " \(day(mem.created_at))：\(mem.content)"
+        s += " \(day(mem.created_at))：\(mem.display)"
         // 钉住的和还悬着的也标出来。**只加在正文后面**——
         // 前面那个 [id][作者][标签] 的壳一个字都不能动，札记页靠它切条。
         if mem.pinned == true { s += "　📌" }

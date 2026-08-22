@@ -4,8 +4,15 @@ import SwiftUI
 struct ChatSearchView: View {
 
     let space: ChatSpace
-    /// 找到了以后跳过去
-    var onJump: (UUID) -> Void
+    /// 找到了以后跳过去：(哪一窗, 哪一条)
+    var onJump: (UUID, UUID) -> Void
+
+    /// 上次搜到哪儿了。**静态量**——这一页是 sheet，关掉就整个销毁，
+    /// 状态放在 @State 里下次进来一定是空的。
+    /// 她要的是「点进去看完退出来，还在刚刚那个位置」。
+    nonisolated(unsafe) static var lastMode = 0
+    nonisolated(unsafe) static var lastKeyword = ""
+    nonisolated(unsafe) static var lastPicked: UUID?
 
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
@@ -14,6 +21,8 @@ struct ChatSearchView: View {
     @State private var mode = 0            // 0 关键词，1 日期
     @State private var keyword = ""
     @State private var day = Date()
+    /// 上次点过的那条，重新进来时滚回去
+    @State private var restoreTo: UUID?
 
     var body: some View {
         NavigationStack {
@@ -50,6 +59,15 @@ struct ChatSearchView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("关上") { dismiss() }
+                }
+            }
+            .onAppear {
+                // 把上次的搜索条件摆回去（她要的「点进去看完退出来，
+                // 还在刚刚那个位置」）
+                if keyword.isEmpty, restoreTo == nil {
+                    mode = Self.lastMode
+                    keyword = Self.lastKeyword
+                    restoreTo = Self.lastPicked
                 }
             }
         }
@@ -118,6 +136,7 @@ struct ChatSearchView: View {
     }
 
     private var resultList: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             LazyVStack(spacing: 8) {
                 let list = hits
@@ -139,7 +158,11 @@ struct ChatSearchView: View {
 
                     ForEach(list) { hit in
                         Button {
-                            onJump(hit.conversationID)
+                            // 记住这次搜的是什么、点的是哪条，下次进来照原样摆回去
+                            Self.lastMode = mode
+                            Self.lastKeyword = keyword
+                            Self.lastPicked = hit.message.id
+                            onJump(hit.conversationID, hit.message.id)
                             dismiss()
                         } label: {
                             VStack(alignment: .leading, spacing: 5) {
@@ -170,10 +193,23 @@ struct ChatSearchView: View {
                         .buttonStyle(.plain)
                         .glassCard(padding: 0)
                         .padding(.horizontal, 14)
+                        .id(hit.message.id)
                     }
                 }
             }
             .padding(.bottom, 30)
+        }
+        // 重新进来的时候，滚回上次点的那一条。
+        // 延一点点再滚——列表是 Lazy 的，刚出现那一帧还没排好版。
+        .onAppear {
+            guard let target = restoreTo else { return }
+            restoreTo = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    proxy.scrollTo(target, anchor: .center)
+                }
+            }
+        }
         }
     }
 

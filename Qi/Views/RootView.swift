@@ -220,9 +220,14 @@ struct NavDrawerBar: View {
     // 又厚又抢眼。现在就是一根圆角小白条：材质跟着设置里的玻璃走，
     // 玻璃换成通透它就跟着变通透，不再是单独一件东西。
     private var handle: some View {
-        Button {
-            toggle(true)
-        } label: {
+        // ⚠️ 这儿原来是 `Button { toggle(true) } label: { … }` 外加一条
+        // `.simultaneousGesture(DragGesture…)`。**simultaneous 的意思就是两个都触发**——
+        // 所以她拖完手一松，按钮那一下也跟着响，导航栏就展开了
+        // （她报的第 7 条：「拖动后能不展开」）。
+        //
+        // 现在拆开：点是点、拖是拖，拖用 highPriorityGesture 抢在点前面，
+        // 拖过就不会再算成一次点击。
+        Group {
             // 平时用真玻璃，**只在拖动的那一下换成实心白条**。
             //
             // 之前整根都画成实心白，是为了躲开拖动时的重影：
@@ -249,19 +254,22 @@ struct NavDrawerBar: View {
                 .padding(.vertical, 16)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .simultaneousGesture(
+        .onTapGesture { toggle(true) }
+        .highPriorityGesture(
             DragGesture(minimumDistance: 14)
+                .onChanged { v in
+                    // **一动就换成实心白条**。
+                    // 以前要拖过 10 点才换，那 10 点里它还是玻璃——
+                    // material 得去采样背后那块画面，位移一快采样跟不上，
+                    // 拖出来的就是那道虚影。她说「不仅有虚影」，就是这一小段。
+                    handleDragY = v.translation.height == 0 ? 0.001 : v.translation.height
+                }
                 .onEnded { v in
-                    // 上下拖是换位置，不影响点击
                     if abs(v.translation.height) > 20, let h = currentScreenHeight {
                         let newY = (h * app.settings.handleY + v.translation.height) / h
                         app.settings.handleY = min(0.9, max(0.1, newY))
                     }
                     handleDragY = 0
-                }
-                .onChanged { v in
-                    if abs(v.translation.height) > 10 { handleDragY = v.translation.height }
                 }
         )
     }

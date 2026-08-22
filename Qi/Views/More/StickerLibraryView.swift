@@ -14,6 +14,11 @@ struct StickerLibraryView: View {
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
 
+    /// 从别处跳进来时想直接落在哪一栏。
+    /// 用静态量传是因为这一页是从 sheet 里起的，中间隔着一个 SideMenuItem，
+    /// 加参数要一路改过去；这一个值只在打开那一瞬间用一次。
+    nonisolated(unsafe) static var openTab: Int?
+
     @State private var tab = 0                // 0 图片，1 表情包，2 GIF
     @State private var owner = "user"
     @State private var keyword = ""
@@ -57,6 +62,12 @@ struct StickerLibraryView: View {
                 FolderGridView(kind: "photo")
             } else {
                 stickerSide
+            }
+        }
+        .onAppear {
+            if let want = Self.openTab {
+                tab = want
+                Self.openTab = nil
             }
         }
         .navigationTitle("相册")

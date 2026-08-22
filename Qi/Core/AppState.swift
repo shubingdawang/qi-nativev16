@@ -1186,8 +1186,7 @@ final class AppState: ObservableObject {
     /// 会直接把前面的许可压掉——越靠后、越像硬约束的句子赢面越大。
     /// 所以：触发条件写在最前，末尾不留抑制句。
     /// 接在每个 MCP 工具说明后面的那一句。见 mcpToolDefinitions 里的注释。
-    static let mcpAgencyTail = "
-（这也是你自己的能力之一。"
+    static let mcpAgencyTail = "\n（这也是你自己的能力之一。"
         + "对上了触发条件就直接用，不用等她开口，也不用先说「我帮你看看」——"
         + "说了没做等于没做。）"
 
@@ -3345,6 +3344,12 @@ final class AppState: ObservableObject {
 
         // MARK: 工坊那一摊（只有工坊那边给这几件）
 
+        case "festivals":
+            let year = Int((args["year"] as? NSNumber)?.intValue ?? 0)
+            let region = (args["region"] as? String) ?? ""
+            let y = year > 0 ? year : Calendar.current.component(.year, from: Date())
+            return (Festivals.yearText(y, region: region), false)
+
         case "list_library":
             let lib = FileLibraryStore.shared
             let only = (args["folder"] as? String) ?? ""
@@ -3999,6 +4004,9 @@ final class AppState: ObservableObject {
         }
 
         sys += "\n\n" + Self.groundingRule(userName: settings.userName)
+        // 今天是什么日子 + 快到的那几个。**现算的**，农历那几个每年都在挪。
+        let fest = Festivals.todayLine()
+        if !fest.isEmpty { sys += "\n\n" + fest }
         sys += "\n\n" + Self.agencyRule
 
         if !sys.isEmpty {

@@ -20,6 +20,8 @@ struct MessageBubbleView: View {
     var onOpenMenu: () -> Void = {}
     /// 重来一次（报错卡住的时候全靠它）
     var onRetry: () -> Void = {}
+    /// 点他存图那张卡 → 打开相册。参数是存到哪儿（表情包 / 动图 / 文件夹名）
+    var onOpenLibrary: (String) -> Void = { _ in }
     var onCloseMenu: () -> Void = {}
     /// 这条上面要不要挂头像、名字和时间。
     /// 同一个人连着说的几句只在第一句上挂，不然一屏全是头像。
@@ -240,7 +242,12 @@ struct MessageBubbleView: View {
 
                 // 存了图的话，先出一张小卡，比那行工具日志好看得多
                 ForEach(message.toolRuns.filter { $0.hasCard }) { run in
-                    saveCard(run)
+                    // 点一下直接进相册那一页（她要的）。
+                    // 存完只给一张看不了的小卡，等于告诉她「存好了，自己去找」。
+                    Button { onOpenLibrary(run.cardPlace) } label: {
+                        saveCard(run)
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 if !message.toolRuns.isEmpty {

@@ -179,9 +179,17 @@ struct DeletableEntryList: View {
     let emptyHint: String
     /// 删一条，返回一句给人看的结果
     var onDelete: (MCPEntry) async -> String
+    /// 给一条写批注（原文划掉、批注标红）。不传就不显示这一项。
+    ///
+    /// 她说「记忆和日记里我的批注、删除这些功能都没掉了」——
+    /// 删有（长按），**批注这一条是真的没有**，从来没接上来过。
+    var onAnnotate: ((MCPEntry, String, String) async -> String)?
 
     @State private var pending: MCPEntry?
     @State private var notice: String?
+    @State private var annotating: MCPEntry?
+    @State private var oldText = ""
+    @State private var newText = ""
 
     var body: some View {
         let entries = failed ? [] : MCPEntryParser.parse(text)
@@ -210,6 +218,15 @@ struct DeletableEntryList: View {
                         } label: {
                             Label("拷贝", systemImage: "doc.on.doc")
                         }
+                        if onAnnotate != nil {
+                            Button {
+                                oldText = ""
+                                newText = ""
+                                annotating = entry
+                            } label: {
+                                Label("写批注", systemImage: "text.bubble")
+                            }
+                        }
                         Button(role: .destructive) {
                             pending = entry
                         } label: {
@@ -230,6 +247,27 @@ struct DeletableEntryList: View {
                 Button("算了", role: .cancel) { pending = nil }
             } message: {
                 Text(pending?.displayTitle ?? "")
+            }
+            // 批注：**不改原文，只叠观点**。原文划掉、批注标红。
+            .alert("写批注", isPresented: Binding(
+                get: { annotating != nil }, set: { if !$0 { annotating = nil } }
+            )) {
+                TextField("原文里的哪一句（可留空）", text: $oldText)
+                TextField("你要说的", text: $newText)
+                Button("取消", role: .cancel) { annotating = nil }
+                Button("写上") {
+                    guard let e = annotating, let run = onAnnotate,
+                          !newText.trimmingCharacters(in: .whitespaces).isEmpty else {
+                        annotating = nil
+                        return
+                    }
+                    let a = oldText, b = newText
+                    annotating = nil
+                    Task { notice = await run(e, a, b) }
+                }
+            } message: {
+                Text("原文一个字都不会改——批注是叠在上面的，"
+                     + "显示的时候原句划掉、你写的标红。")
             }
         }
     }
@@ -515,24 +553,40 @@ struct MemoryPane: View {
                 .buttonStyle(.plain)
             }
 
-            DeletableEntryList(text: model.text, failed: model.failed,
-                               emptyHint: "点上面的搜，或者留空看全部") { entry in
-                let r = await app.deleteMemory(id: String(entry.id.prefix(8)))
-                if !r.failed {
-                    if query.isEmpty {
-                        await model.run(app, tool: "get_all_memories")
-                    } else {
-                        await model.run(app, tool: "search_memories",
-                                        args: ["query": query, "limit": 30])
-                    }
-                }
-                return r.failed ? r.text : "删掉了"
-            }
+            DeletableEntryList(
+                text: model.text, failed: model.failed,
+                emptyHint: "点上面的搜，或者留空看全部",
+                onDelete: { entry in
+                    let r = await app.deleteMemory(id: String(entry.id.prefix(8)))
+                    if !r.failed { await refresh() }
+                    return r.failed ? r.text : "删掉了"
+                },
+                onAnnotate: { entry, original, correction in
+                    let r = await app.callTool("annotate_memory", args: [
+                        "id": String(entry.id.prefix(8)),
+                        "original": original,
+                        "correction": correction,
+                        "author": app.settings.userName.isEmpty ? "饼饼" : app.settings.userName
+                    ])
+                    if !r.failed { await refresh() }
+                    return r.failed ? r.text : "批注写上了"
+                })
         }
         .task {
             if model.text.isEmpty {
                 await model.run(app, tool: "get_all_memories")
             }
+        }
+    }
+
+    /// 改完之后按当前的搜索条件重新拉一遍，
+    /// 不然她改了一条，屏幕上还是旧的那份。
+    private func refresh() async {
+        if query.isEmpty {
+            await model.run(app, tool: "get_all_memories")
+        } else {
+            await model.run(app, tool: "search_memories",
+                            args: ["query": query, "limit": 30])
         }
     }
 }

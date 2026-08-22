@@ -452,13 +452,13 @@ struct MemoryListView: View {
                                     .font(.app(10))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
-                            Text(mem.content)
-                                .font(.app(14))
+                            // 走 MarkdownText：改过的那条是 `~~错的~~ 对的`，
+                            // 要真画成删除线才看得懂（她说的「记得让 app 支持
+                            // markdown 渲染」）。
+                            MarkdownText(text: mem.display,
+                                         fontSize: app.settings.fontSize - 2)
                                 .foregroundStyle(Theme.textMain(scheme))
-                                // 不加这一条，长文会被上层的 stack 压成一行截断
-                                .fixedSize(horizontal: false, vertical: true)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .textSelection(.enabled)
                             if !mem.tags.isEmpty {
                                 Text("#" + mem.tags.joined(separator: " #"))
                                     .font(.app(10))
