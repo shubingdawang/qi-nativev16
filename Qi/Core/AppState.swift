@@ -3354,7 +3354,7 @@ final class AppState: ObservableObject {
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 return ("那一条是空的，没发。", true)
             }
-            NowStore.shared.post(who: "him", text: text,
+            MomentStore.shared.post(who: "him", text: text,
                                     attach: (args["attach"] as? String) ?? "")
             return ("发出去了。她翻到动态那一页就看得见，"
                     + "能点赞也能在下面回你一句——回了会变成她在对话里说的一句话。", false)
@@ -3364,7 +3364,7 @@ final class AppState: ObservableObject {
             let him = settings.aiName.isEmpty ? "你" : settings.aiName
             let n = (args["limit"] as? Double).map { Int($0) }
                 ?? (args["limit"] as? Int) ?? 12
-            return (NowStore.shared.readable(limit: n, herName: her, himName: him), false)
+            return (MomentStore.shared.readable(limit: n, herName: her, himName: him), false)
 
         case "flight_chess":
             let fc = FlightChess.shared
@@ -5130,8 +5130,10 @@ final class AppState: ObservableObject {
         // 纯本机字符串和日期比较，一次模型都不调——
         // 露出「变化」那几条的同时会把它们标记掉，
         // **同一条变化不会因为下一次请求再出现一次**。
-        let moment = NowStore.shared.surface()
-        if !moment.isEmpty { sys += "\n\n" + moment }
+        // 局部变量也别叫 moment——这个 App 里 moment 是「动态」，
+        // 一个名字两个意思就是这次编译错的根子
+        let nowBlock = NowStore.shared.surface()
+        if !nowBlock.isEmpty { sys += "\n\n" + nowBlock }
 
         // 他做没做梦。
         //
@@ -5205,7 +5207,7 @@ final class AppState: ObservableObject {
 
         // 动态里有没有她还没被他看到的东西。**只报一句「有几条」**——
         // 内容他自己调 `read_moments` 去拿，图和长文每轮都塞会很贵。
-        if let feed = NowStore.shared.brief() {
+        if let feed = MomentStore.shared.brief() {
             sys += "\n\n" + feed
         }
         // 她把他派的事做了没有。**只在「做了而他还没看见」的时候说**——
