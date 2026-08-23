@@ -28,18 +28,10 @@ struct FavoritesView: View {
         ScrollView {
             LazyVStack(spacing: 10) {
                 if items.isEmpty {
-                    VStack(spacing: 10) {
-                        Image(systemName: Icon.star)
-                            .font(.app(34, weight: .light))
-                            .foregroundStyle(app.settings.accentColor.opacity(0.55))
-                        Text("还没有收藏")
-                            .font(.app(14))
-                            .foregroundStyle(Theme.textMuted(scheme))
-                        Text("在对话里挑中一句，底下点收藏就行")
-                            .font(.app(11))
-                            .foregroundStyle(Theme.textMuted(scheme).opacity(0.8))
-                    }
-                    .padding(.top, 80)
+                    EmptyNote(icon: Icon.star,
+                              title: "还没有收藏",
+                              hint: "在对话里挑中一句，底下点收藏就行")
+                        .padding(.top, 50)
                 }
 
                 ForEach(items) { item in

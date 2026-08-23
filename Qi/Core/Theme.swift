@@ -117,7 +117,9 @@ enum Theme {
 struct GlassCard: ViewModifier {
     @EnvironmentObject private var app: AppState
     var radius: CGFloat = Theme.cardRadius
-    var padding: CGFloat = 14
+    /// 默认内边距跟着 `Look.inset` 走（比原来大两点）——
+    /// 「简约」不是把东西缩小，是给它留出地方
+    var padding: CGFloat = Look.inset
     @Environment(\.colorScheme) private var scheme
 
     func body(content: Content) -> some View {
@@ -131,7 +133,8 @@ struct GlassCard: ViewModifier {
 }
 
 extension View {
-    func glassCard(radius: CGFloat = Theme.cardRadius, padding: CGFloat = 14) -> some View {
+    func glassCard(radius: CGFloat = Theme.cardRadius,
+                   padding: CGFloat = Look.inset) -> some View {
         modifier(GlassCard(radius: radius, padding: padding))
     }
 

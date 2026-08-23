@@ -28,20 +28,10 @@ struct MemoListView: View {
                 .padding(.bottom, 4)
 
                 if store.onList.isEmpty {
-                    VStack(spacing: 8) {
-                        Image(systemName: "checklist")
-                            .font(.app(30, weight: .light))
-                            .foregroundStyle(app.settings.accentColor.opacity(0.5))
-                        Text("还没有记什么")
-                            .font(.app(13))
-                            .foregroundStyle(Theme.textMuted(scheme))
-                        Text("点右上角写一条。长按可以置顶，置顶的会挂到聊天页上。")
-                            .font(.app(11))
-                            .foregroundStyle(Theme.textMuted(scheme).opacity(0.8))
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 30)
-                    }
-                    .padding(.top, 60)
+                    EmptyNote(icon: "checklist",
+                              title: "还没有记什么",
+                              hint: "点右上角写一条。长按可以置顶，置顶的会挂到聊天页上。")
+                        .padding(.top, 30)
                 }
 
                 ForEach(store.onList) { memo in

@@ -259,7 +259,7 @@ struct DiaryCalendarView: View {
                 // 她说的：这里以前写「本月条目」，可选了某一天之后就不是本月了。
                 // 现在标题只写「条目」，看的是哪一段挂在后面。
                 Text("条目")
-                    .font(.app(15, weight: .semibold))
+                    .heading(15)
                     .foregroundStyle(Theme.textMain(scheme))
                 Text(listTitle)
                     .font(.app(11))
@@ -271,11 +271,7 @@ struct DiaryCalendarView: View {
             }
 
             if listed.isEmpty {
-                Text(day > 0 ? "这天没写" : "这段时间没写")
-                    .font(.app(12))
-                    .foregroundStyle(Theme.textMuted(scheme))
-                    .padding(.vertical, 14)
-                    .frame(maxWidth: .infinity)
+                EmptyNote(title: day > 0 ? "这天没写" : "这段时间没写")
             } else {
                 ForEach(listed) { row($0) }
             }

@@ -35,7 +35,7 @@ struct SettingsView: View {
                 WallpaperBackground()
 
                 ScrollView {
-                    VStack(spacing: 18) {
+                    VStack(spacing: Look.gap + 6) {
                         appearanceCard
                         generalCard
                         servicesCard
@@ -1090,12 +1090,11 @@ struct SettingsCard<Content: View>: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 9) {
             if let title {
-                Text(title)
-                    .font(.app(12, weight: .medium))
-                    .foregroundStyle(Theme.textMuted(scheme))
-                    .padding(.leading, 6)
+                // 原来是一行灰字飘在卡片上面。现在是「一个小点 · 名字 ·
+                // 一道淡出去的线」——同样一行字，但它落在页面上了。
+                SectionHeader(title)
             }
             VStack(spacing: 0) { content }
                 .glassBackground(radius: 20, strength: app.settings.glassOpacity)
@@ -1104,13 +1103,14 @@ struct SettingsCard<Content: View>: View {
 }
 
 /// 卡片里行与行之间那道线。很淡，只是把两行分开，不是框。
+///
+/// 现在它**往右边淡出去**：两头齐的实线是「格子」，
+/// 一头淡的是「间隔」——这一页要的是后者。
 struct SettingsDivider: View {
-    @Environment(\.colorScheme) private var scheme
     var body: some View {
-        Rectangle()
-            .fill(Theme.textMuted(scheme).opacity(0.18))
-            .frame(height: 0.6)
+        Hairline()
             .padding(.leading, 16)
+            .padding(.trailing, 8)
     }
 }
 

@@ -600,15 +600,8 @@ struct CallHistoryView: View {
         ScrollView {
             LazyVStack(spacing: 10) {
                 if store.records.isEmpty {
-                    VStack(spacing: 8) {
-                        Image(systemName: "phone")
-                            .font(.app(30, weight: .light))
-                            .foregroundStyle(app.settings.accentColor.opacity(0.5))
-                        Text("还没通过话")
-                            .font(.app(13))
-                            .foregroundStyle(Theme.textMuted(scheme))
-                    }
-                    .padding(.top, 60)
+                    EmptyNote(icon: "phone", title: "还没通过话")
+                        .padding(.top, 30)
                 }
 
                 ForEach(store.records) { r in

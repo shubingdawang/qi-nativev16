@@ -1261,6 +1261,16 @@ struct MessageListView: View {
     @EnvironmentObject var app: AppState
     @Environment(\.scenePhase) private var scenePhase
 
+    /// 这一条是不是「这一天的第一条」。是就返回那天，好横一道分隔。
+    private func daybreak(at index: Int) -> Date? {
+        let msgs = conversation.messages
+        guard index >= 0, index < msgs.count else { return nil }
+        let now = msgs[index].createdAt
+        guard index > 0 else { return now }
+        return Calendar.current.isDate(now, inSameDayAs: msgs[index - 1].createdAt)
+            ? nil : now
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -1269,6 +1279,11 @@ struct MessageListView: View {
                         emptyHint.padding(.top, 100)
                     }
                     ForEach(Array(conversation.messages.enumerated()), id: \.element.id) { index, message in
+                        // 换天了就横一道。以前一整条时间线是连着的，
+                        // 昨晚睡前那句和今早第一句挨在一起，看着像同一段话。
+                        if let day = daybreak(at: index) {
+                            DayMark(date: day)
+                        }
                         MessageBubbleView(
                             message: message,
                             conversationID: conversation.id,

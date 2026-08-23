@@ -698,10 +698,8 @@ struct DivinationHistoryView: View {
         ScrollView {
             LazyVStack(spacing: 10) {
                 if store.records.isEmpty {
-                    Text("还没有占过")
-                        .font(.app(13))
-                        .foregroundStyle(Theme.textMuted(scheme))
-                        .padding(.top, 60)
+                    EmptyNote(icon: "moon.stars", title: "还没有占过")
+                        .padding(.top, 30)
                 }
                 ForEach(store.records) { r in
                     VStack(alignment: .leading, spacing: 6) {

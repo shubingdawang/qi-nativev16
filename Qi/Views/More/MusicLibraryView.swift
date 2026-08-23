@@ -64,21 +64,12 @@ struct MusicLibraryView: View {
                 }
 
                 if library.tracks.isEmpty && webResults.isEmpty {
-                    VStack(spacing: 8) {
-                        Image(systemName: "music.note.list")
-                            .font(.app(30, weight: .light))
-                            .foregroundStyle(app.settings.accentColor.opacity(0.5))
-                        Text("还没有歌")
-                            .font(.app(13))
-                            .foregroundStyle(Theme.textMuted(scheme))
-                        Text("点右上角从「文件」导入 mp3、m4a、flac。\n网易云会员下载的歌，先存进「文件」App 再导进来就是整首。\n上面直接搜是网上的三十秒试听。")
-                            .font(.app(11))
-                            .foregroundStyle(Theme.textMuted(scheme).opacity(0.85))
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 20)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 50)
+                    EmptyNote(icon: "music.note.list",
+                              title: "还没有歌",
+                              hint: "点右上角从「文件」导入 mp3、m4a、flac。\n"
+                                  + "网易云会员下载的歌，先存进「文件」App 再导进来就是整首。\n"
+                                  + "上面直接搜是网上的三十秒试听。")
+                        .padding(.top, 20)
                 }
 
                 if !mine.isEmpty {

@@ -105,7 +105,7 @@ struct MoodView: View {
     private var anniversaries: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("纪念日").font(.app(15, weight: .semibold))
+                Text("纪念日").heading(15)
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer()
                 if loading { ProgressView().scaleEffect(0.7) }
@@ -182,7 +182,7 @@ struct MoodView: View {
 
     private var messageCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("留句话").font(.app(15, weight: .semibold))
+            Text("留句话").heading(15)
                 .foregroundStyle(Theme.textMain(scheme))
             Text("他下次醒来第一眼会看到")
                 .font(.app(11))
@@ -203,7 +203,7 @@ struct MoodView: View {
 
     private var moodCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("今天的心情").font(.app(15, weight: .semibold))
+            Text("今天的心情").heading(15)
                 .foregroundStyle(Theme.textMain(scheme))
             TextField("还行、有点累、很开心…", text: $mood)
                 .padding(10)

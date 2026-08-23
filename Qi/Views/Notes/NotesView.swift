@@ -351,11 +351,13 @@ struct PaneScroll<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+            // 卡片之间宁可空一格。她那批参考图共同的地方就是舍得留白——
+            // 挤在一起的卡看着像表格，松开之后才像一页纸。
+            VStack(alignment: .leading, spacing: Look.gap) {
                 content
             }
             .padding(.horizontal, 16)
-            .padding(.top, 4)
+            .padding(.top, 8)
             .padding(.bottom, Layout.tabBarExpanded + 12)
         }
         .scrollDismissesKeyboard(.interactively)
@@ -393,7 +395,7 @@ struct DiaryPane: View {
     var body: some View {
         PaneScroll {
             VStack(alignment: .leading, spacing: 10) {
-                Text("写一篇").font(.app(15, weight: .semibold))
+                Text("写一篇").heading(15)
                 Picker("", selection: $author) {
                     Text("饼饼").tag("饼饼")
                     Text("阿晏").tag("阿晏")
@@ -430,7 +432,7 @@ struct DiaryPane: View {
             .glassCard()
 
             HStack {
-                Text("最近的日记").font(.app(15, weight: .semibold))
+                Text("最近的日记").heading(15)
                 Spacer()
                 // 一条条看是查东西用的，一叠叠看是回味用的
                 Button {
@@ -503,7 +505,7 @@ struct MemoryPane: View {
     var body: some View {
         PaneScroll {
             VStack(alignment: .leading, spacing: 10) {
-                Text("记一条").font(.app(15, weight: .semibold))
+                Text("记一条").heading(15)
                 Picker("", selection: $author) {
                     Text("饼饼").tag("饼饼")
                     Text("阿晏").tag("阿晏")
@@ -651,7 +653,7 @@ struct PeriodPane: View {
     var body: some View {
         PaneScroll {
             HStack {
-                Text("当前状态").font(.app(15, weight: .semibold))
+                Text("当前状态").heading(15)
                 Spacer()
                 Button {
                     Task { await model.run(app, tool: "period_status") }
@@ -1050,14 +1052,14 @@ struct PulsePane: View {
         PaneScroll {
             if base.isEmpty && !app.settings.localPulse {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("还没填心跳服务的地址").font(.app(15, weight: .semibold))
+                    Text("还没填心跳服务的地址").heading(15)
                     Text("去「设置 → 后端服务」填上 PulseEngine 的地址，比如 http://你电脑的地址:8000")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 .glassCard()
             } else {
                 HStack {
-                    Text("阿晏现在").font(.app(15, weight: .semibold))
+                    Text("阿晏现在").heading(15)
                     if offline {
                         Text("电脑没开")
                             .font(.app(10, weight: .medium))
@@ -1107,7 +1109,7 @@ struct PulsePane: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("调一下").font(.app(15, weight: .semibold))
+                    Text("调一下").heading(15)
                     Text("直接改电脑上那个引擎的状态")
                         .font(.caption).foregroundStyle(.secondary)
 
@@ -1277,7 +1279,7 @@ struct StatusPane: View {
 
             // ---- 身体状况（电脑那边的，留着能对账）----
             HStack {
-                Text("身体状况").font(.app(15, weight: .semibold))
+                Text("身体状况").heading(15)
                 if offline {
                     Text("电脑没开")
                         .font(.app(10, weight: .medium))

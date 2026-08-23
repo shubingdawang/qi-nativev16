@@ -65,19 +65,10 @@ struct JournalView: View {
     }
 
     private var empty: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "book.closed")
-                .font(.app(32, weight: .light))
-                .foregroundStyle(app.settings.accentColor.opacity(0.5))
-            Text("还没做过手帐")
-                .font(.app(13))
-                .foregroundStyle(Theme.textMuted(scheme))
-            Text("右上角加一页。胶带、贴纸、邮票、夹子都在底下那排，收藏过的句子能直接贴上去。")
-                .font(.app(11))
-                .foregroundStyle(Theme.textMuted(scheme))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-        }
+        EmptyNote(icon: "book.closed",
+                  title: "还没做过手帐",
+                  hint: "右上角加一页。胶带、贴纸、邮票、夹子都在底下那排，"
+                      + "收藏过的句子能直接贴上去。")
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
     }

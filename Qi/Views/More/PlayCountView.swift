@@ -16,19 +16,10 @@ struct PlayCountView: View {
             VStack(alignment: .leading, spacing: 12) {
                 let list = library.mostPlayed
                 if list.isEmpty {
-                    VStack(spacing: 8) {
-                        Image(systemName: "chart.bar")
-                            .font(.app(30, weight: .light))
-                            .foregroundStyle(app.settings.accentColor.opacity(0.6))
-                        Text("还没有听完过一整首")
-                            .font(.app(13))
-                            .foregroundStyle(Theme.textMuted(scheme))
-                        Text("一首完整放完才记一次。听两秒就切走的不算。")
-                            .font(.app(11))
-                            .foregroundStyle(Theme.textMuted(scheme).opacity(0.85))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 70)
+                    EmptyNote(icon: "chart.bar",
+                              title: "还没有听完过一整首",
+                              hint: "一首完整放完才记一次。听两秒就切走的不算。")
+                        .padding(.top, 40)
                 } else {
                     let top = list.first?.1 ?? 1
                     ForEach(Array(list.enumerated()), id: \.offset) { i, item in

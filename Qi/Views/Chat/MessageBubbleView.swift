@@ -85,6 +85,9 @@ struct MessageBubbleView: View {
                     }
             }
             VStack(alignment: isUser ? .trailing : .leading, spacing: 1) {
+                // ⚠️ 名字**不换衬线**，她要苹果自带那套。
+                // （我上一版给它换成了宋体，她说不用——名字天天在眼前，
+                //   那不是"标题"，是她看惯的东西。别再改回去。）
                 Text(displayName)
                     .font(.app(12, weight: .medium))
                     .foregroundStyle(Theme.textMain(scheme))
