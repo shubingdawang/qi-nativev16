@@ -309,7 +309,11 @@ final class WhereaboutsService: NSObject, ObservableObject, CLLocationManagerDel
         // 现在每一步都跟一个闹钟赛跑，谁先到算谁：
         // 地名 6 秒、天气 8 秒。超时就当这一项没有，**别的照给**。
         // 查岗少一行地名不要紧，卡死才要命。
-        let names = await raced(6) { await self.placeName(of: loc) } ?? (nil, nil)
+        // ⚠️ 这儿的类型标注**不能省**：`raced` 是泛型，
+        // 元组过一趟泛型再 `?? (nil, nil)` 之后标签就没了，
+        // 底下 `names.place` 会报「没有这个成员」。写清楚类型，标签才回来。
+        let names: (place: String?, street: String?) =
+            await raced(6) { await self.placeName(of: loc) } ?? (nil, nil)
         out.place = names.place
         out.street = names.street
 

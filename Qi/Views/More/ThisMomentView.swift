@@ -13,7 +13,7 @@ struct ThisMomentView: View {
 
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
-    @ObservedObject private var store = MomentStore.shared
+    @ObservedObject private var store = NowStore.shared
 
     @State private var confirmResolve: ExperienceThread?
     @State private var confirmDelete: ExperienceThread?
@@ -118,8 +118,10 @@ struct ThisMomentView: View {
             }
             Button("再等等", role: .cancel) { confirmResolve = nil }
         } message: {
-            Text((confirmResolve?.meaning ?? "")
-                 + "\n\n它只是离开他的当前生活，**记忆里还留着**——以后照样能想起来。")
+            // ⚠️ 拆成两段拼好再交给 Text。
+            // 写成一长串 `?? "" + "…" + "…"` 的话，
+            // 编译器会在这一行上卡到超时（"unable to type-check in reasonable time"）。
+            Text(resolveNote)
         }
         .confirmationDialog("删掉这一条？",
                             isPresented: Binding(get: { confirmDelete != nil },
@@ -133,6 +135,13 @@ struct ThisMomentView: View {
         } message: {
             Text("跟「过去了」不一样：这是说这条根本不该在这儿，直接抹掉。")
         }
+    }
+
+    /// 「让这段经历过去」那张对话框里的说明
+    private var resolveNote: String {
+        let head = confirmResolve?.meaning ?? ""
+        let tail = "它只是离开他的当前生活，记忆里还留着——以后照样能想起来。"
+        return head.isEmpty ? tail : head + "\n\n" + tail
     }
 
     // MARK: 一段经历
@@ -244,12 +253,12 @@ struct ThisMomentView: View {
         }
     }
 
-    nonisolated(unsafe) static let day: DateFormatter = {
+    static let day: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "M月d日"
         return f
     }()
-    nonisolated(unsafe) static let clock: DateFormatter = {
+    static let clock: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "M月d日 HH:mm"
         return f

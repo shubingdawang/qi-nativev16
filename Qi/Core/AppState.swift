@@ -3354,7 +3354,7 @@ final class AppState: ObservableObject {
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 return ("那一条是空的，没发。", true)
             }
-            MomentStore.shared.post(who: "him", text: text,
+            NowStore.shared.post(who: "him", text: text,
                                     attach: (args["attach"] as? String) ?? "")
             return ("发出去了。她翻到动态那一页就看得见，"
                     + "能点赞也能在下面回你一句——回了会变成她在对话里说的一句话。", false)
@@ -3364,7 +3364,7 @@ final class AppState: ObservableObject {
             let him = settings.aiName.isEmpty ? "你" : settings.aiName
             let n = (args["limit"] as? Double).map { Int($0) }
                 ?? (args["limit"] as? Int) ?? 12
-            return (MomentStore.shared.readable(limit: n, herName: her, himName: him), false)
+            return (NowStore.shared.readable(limit: n, herName: her, himName: him), false)
 
         case "flight_chess":
             let fc = FlightChess.shared
@@ -4191,7 +4191,7 @@ final class AppState: ObservableObject {
             if thread.isEmpty && (meaning ?? "").trimmingCharacters(in: .whitespaces).isEmpty {
                 return ("新采纳一段得写一句 meaning——一句话说清这段经历对你是什么。", true)
             }
-            switch MomentStore.shared.patch(thread: thread.isEmpty ? nil : thread,
+            switch NowStore.shared.patch(thread: thread.isEmpty ? nil : thread,
                                             mode: mode,
                                             meaning: meaning,
                                             anchor: args["anchor"] as? String,
@@ -4247,8 +4247,8 @@ final class AppState: ObservableObject {
             //
             // 这儿也是**唯一**一处现实喂进来的地方：查岗是她主动点的，
             // 不会有后台定时去刷位置（铁律：绝不自己开请求）。
-            if let place = w.place { MomentStore.shared.observe(kind: "地点", value: place) }
-            if let word = w.weather { MomentStore.shared.observe(kind: "天气", value: word) }
+            if let place = w.place { NowStore.shared.observe(kind: "地点", value: place) }
+            if let word = w.weather { NowStore.shared.observe(kind: "天气", value: word) }
 
             // ② 手机上的动静
             let phone = PhoneActivityStore.shared
@@ -5068,7 +5068,7 @@ final class AppState: ObservableObject {
         // 它一整窗都不变，进了缓存前缀等于不额外花钱；
         // 而每轮变的那三段（E/P/L/C）在下面动态那一半。
         // 这正是那份规范第 8 节说的「越稳定的越靠前」。
-        fixed.append(MomentStore.contract)
+        fixed.append(NowStore.contract)
         if settings.segmentAssistant { fixed.append(Self.segmentHint) }
         if conv.syncWithClaude { fixed.append(Self.claudeSyncHint) }
         let catalog = StickerStore.shared.assistantCatalog
@@ -5130,7 +5130,7 @@ final class AppState: ObservableObject {
         // 纯本机字符串和日期比较，一次模型都不调——
         // 露出「变化」那几条的同时会把它们标记掉，
         // **同一条变化不会因为下一次请求再出现一次**。
-        let moment = MomentStore.shared.surface()
+        let moment = NowStore.shared.surface()
         if !moment.isEmpty { sys += "\n\n" + moment }
 
         // 他做没做梦。
@@ -5205,7 +5205,7 @@ final class AppState: ObservableObject {
 
         // 动态里有没有她还没被他看到的东西。**只报一句「有几条」**——
         // 内容他自己调 `read_moments` 去拿，图和长文每轮都塞会很贵。
-        if let feed = MomentStore.shared.brief() {
+        if let feed = NowStore.shared.brief() {
             sys += "\n\n" + feed
         }
         // 她把他派的事做了没有。**只在「做了而他还没看见」的时候说**——

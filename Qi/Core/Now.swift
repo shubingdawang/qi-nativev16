@@ -2,6 +2,13 @@ import Foundation
 
 // MARK: - 此刻：他还身处什么现实里
 //
+// ⚠️ 类型名一律 `Now*`，**不是 `Moment*`**——
+// 「动态」那套（她发一条、他点个赞的那个朋友圈）已经占了
+// `Moment` / `MomentStore` / `MomentComment` 这几个名字。
+// 第一版我照着规范里的 Room 顺手写成了 `MomentStore`，
+// 构建当场报 invalid redeclaration。同一个 App 里两个 MomentStore，
+// 就算编译过了，下一窗也一定会看错。
+//
 // 出处是她发来的那份 `ROOM · 经历连续性系统`。名字照她定的叫**「此刻」**——
 // 「小屋」那个 Room 已经被 clawd 占了（那是像素宠物住的地方），
 // 这一层是引擎里的东西，重名会把下一窗绕晕。
@@ -97,7 +104,7 @@ struct ExperienceThread: Codable, Identifiable, Hashable {
 }
 
 /// P —— 现实权威机械投影出来的持续事实。他改不了，系统也不解释它重不重要。
-struct MomentProjection: Codable, Identifiable, Hashable {
+struct NowProjection: Codable, Identifiable, Hashable {
     var id: String = ""
     var kind: String = "date"
     /// approaching / eve / today / ended
@@ -115,7 +122,7 @@ struct LiveFact: Codable, Identifiable, Hashable {
 }
 
 /// C —— 自上次露出之后第一次跨过的机械边界。**表达 newness，不表达重要性。**
-struct MomentChange: Codable, Identifiable, Hashable {
+struct NowChange: Codable, Identifiable, Hashable {
     var id: String = UUID().uuidString
     var kind: String = ""
     var meaning: String = ""
@@ -125,14 +132,14 @@ struct MomentChange: Codable, Identifiable, Hashable {
 }
 
 @MainActor
-final class MomentStore: ObservableObject {
+final class NowStore: ObservableObject {
 
-    static let shared = MomentStore()
+    static let shared = NowStore()
 
     @Published private(set) var threads: [ExperienceThread] = []
     /// 上一次机械比较时各项现实长什么样。用来判断有没有跨过边界。
     @Published private(set) var live: [LiveFact] = []
-    @Published private(set) var changes: [MomentChange] = []
+    @Published private(set) var changes: [NowChange] = []
 
     private var loaded = false
 
@@ -145,7 +152,7 @@ final class MomentStore: ObservableObject {
     private struct Box: Codable {
         var threads: [ExperienceThread] = []
         var live: [LiveFact] = []
-        var changes: [MomentChange] = []
+        var changes: [NowChange] = []
 
         init() {}
         /// 容错解码器。**不能删**——这个盒子是拿 `try?` 读出来的，
@@ -155,7 +162,7 @@ final class MomentStore: ObservableObject {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             threads = (try? c.decodeIfPresent([ExperienceThread].self, forKey: .threads)) ?? []
             live = (try? c.decodeIfPresent([LiveFact].self, forKey: .live)) ?? []
-            changes = (try? c.decodeIfPresent([MomentChange].self, forKey: .changes)) ?? []
+            changes = (try? c.decodeIfPresent([NowChange].self, forKey: .changes)) ?? []
         }
     }
 
@@ -280,7 +287,7 @@ final class MomentStore: ObservableObject {
 
         // 第一次见到不算变化——那是「开始知道」，不是「变了」
         guard let old, old != v else { save(); return }
-        var c = MomentChange()
+        var c = NowChange()
         c.kind = kind
         c.meaning = meaning ?? (old + " → " + v)
         changes.append(c)
@@ -295,11 +302,11 @@ final class MomentStore: ObservableObject {
     ///
     /// phase 是机械推进的：approaching → eve → today → ended。
     /// **到点不证明结果发生了**，所以 today 之后就是 ended，没有「完成」。
-    var projections: [MomentProjection] {
+    var projections: [NowProjection] {
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
         let year = cal.component(.year, from: today)
-        var out: [MomentProjection] = []
+        var out: [NowProjection] = []
 
         for f in Festivals.all(year: year) + Festivals.all(year: year + 1) {
             let d = cal.startOfDay(for: f.date)
@@ -307,7 +314,7 @@ final class MomentStore: ObservableObject {
             // 只有进了当前生活范围的才投影。七天是「已经进来了」的边界，
             // 再远就不是"正在靠近"，是"日历上有这么一天"。
             guard days >= 0, days <= 7 else { continue }
-            var p = MomentProjection()
+            var p = NowProjection()
             p.id = "date-" + f.name
             p.kind = "date"
             p.phase = days == 0 ? "today" : (days == 1 ? "eve" : "approaching")

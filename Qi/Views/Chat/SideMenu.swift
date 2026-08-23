@@ -296,7 +296,7 @@ struct SideMenuPanel: View {
         return max(1, d + 1)
     }
 
-    nonisolated(unsafe) static let today: DateFormatter = {
+    static let today: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy 年 M 月 d 日"
         return f

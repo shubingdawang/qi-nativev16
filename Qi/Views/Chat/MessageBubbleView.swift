@@ -124,7 +124,7 @@ struct MessageBubbleView: View {
         return app.settings.aiAvatarName.flatMap { ImageStore.load($0) }
     }
 
-    nonisolated(unsafe) static let stamp: DateFormatter = {
+    static let stamp: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd HH:mm"
         return f

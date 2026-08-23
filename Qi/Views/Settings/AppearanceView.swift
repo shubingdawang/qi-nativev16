@@ -40,6 +40,7 @@ struct AppearanceView: View {
                 VStack(spacing: 18) {
                     accentCard
                     fontCard
+                    auroraCard
                     glassCard
                     presetCard
                     textColorCard
@@ -236,7 +237,7 @@ struct AppearanceView: View {
 
     // MARK: 玻璃
 
-    private var glassCard: some View {
+    private var auroraCard: some View {
         SettingsCard(title: "光晕") {
             Toggle(isOn: $auroraOn) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -264,7 +265,9 @@ struct AppearanceView: View {
             嫌花就关掉，关了一层都不画。
             """, title: "说明")
         }
+    }
 
+    private var glassCard: some View {
         SettingsCard(title: "玻璃") {
             // 三块样品直接摆出来，各自用各自那套玻璃画，
             // 底下垫着当前壁纸——光看名字选不出来，得看见才知道差在哪。

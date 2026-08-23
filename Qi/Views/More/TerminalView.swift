@@ -167,7 +167,7 @@ struct TerminalView: View {
         .overlay(alignment: .bottom) { Hairline() }
     }
 
-    nonisolated(unsafe) static let clock: DateFormatter = {
+    static let clock: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "HH:mm:ss"
         return f

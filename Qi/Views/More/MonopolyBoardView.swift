@@ -73,7 +73,11 @@ struct MonopolyBoard: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
+        // 先取出来。**别在 PhotosPicker 的 label 闭包里读 `app.settings`**——
+        // 那个闭包被当成 Sendable，跨 actor 读 @MainActor 的属性现在是警告，
+        // 到 Swift 6 就是错误了。
+        let accent = app.settings.accentColor
+        return VStack(spacing: 10) {
             GeometryReader { geo in
                 let side = min(geo.size.width, 460)
                 let cell = side / 6
@@ -112,7 +116,7 @@ struct MonopolyBoard: View {
                 PhotosPicker(selection: $picking, matching: .images) {
                     Label(boardImage.isEmpty ? "换成我的图" : "再换一张", systemImage: "photo")
                         .font(.app(11))
-                        .foregroundStyle(app.settings.accentColor)
+                        .foregroundStyle(accent)
                 }
                 if !boardImage.isEmpty {
                     Button("用画的这版") { boardImage = "" }
