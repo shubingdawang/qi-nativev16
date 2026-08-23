@@ -135,7 +135,7 @@ struct FolderGridView: View {
                 }
                 deletingFolder = nil
             }
-            Button("只删文件夹，图片拿出来") {
+            Button("仅删除文件夹，保留图片") {
                 if let name = deletingFolder {
                     store.deleteFolder(kind, name: name, keepImages: true)
                 }

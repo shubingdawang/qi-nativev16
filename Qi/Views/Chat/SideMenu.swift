@@ -274,6 +274,14 @@ struct SideMenuPanel: View {
                     .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
+
+            // 抬头和底下那一列之间横一道淡出去的线。
+            // 没有它，名字和第一个菜单项是"挨着"的；有了它，
+            // 上面这一块才成为"抬头"。
+            // ⚠️ 名字本身不换衬线——她要苹果自带那套。
+            Hairline()
+                .padding(.top, 11)
+                .padding(.trailing, 24)
         }
         .padding(.leading, 44)
         .padding(.trailing, 16)
@@ -359,6 +367,11 @@ struct SideMenuItem: Identifiable, Hashable {
         .init(id: "promise",   title: "承诺", icon: "hand.raised"),
         .init(id: "mood",      title: "心情", icon: Icon.heart),
         .init(id: "hobby",     title: "爱好", icon: "heart.text.square"),
-        .init(id: "footprint", title: "足迹", icon: Icon.footprint)
+        // 「此刻」摆在靠前的位置：它讲的是他现在还在过什么日子，
+        // 跟心情、承诺是一路的，不该沉在工具堆里
+        .init(id: "moment",    title: "此刻", icon: "circle.dotted"),
+        .init(id: "footprint", title: "足迹", icon: Icon.footprint),
+        // 终端摆在最后：平时用不着，出事的时候得找得到
+        .init(id: "terminal",  title: "终端", icon: "terminal")
     ]
 }

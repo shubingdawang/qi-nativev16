@@ -43,6 +43,7 @@ enum BackupBundle {
         "clawdCarrying", "clawdCheckIn", "clawdCoins", "clawdLinked",
         "dnd", "dndUntil", "memoStyle", "phoneActivityBookmark",
         "diaryViewMode", "memoDockLeft", "memoDockY", "pixelModel",
+        "auroraOn", "monopolyBoardImage",
         "lastBackupAt"
     ]
 

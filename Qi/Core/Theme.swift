@@ -247,6 +247,17 @@ struct GlassSurface: View {
                 shape.fill(.black.opacity(dim))
             }
         }
+        // 上缘那道拉长的高光。
+        //
+        // 真玻璃在光下不是均匀亮的，上面亮、往下沉。这一版之前有渐变、
+        // 有边缘高光，独独少了这一道，所以它看着是「一块半透明的板」，
+        // 不是「一块玻璃」。加上之后每一张卡都有了厚度。
+        //
+        // **只给圆角够大的那些**：胶囊和小标签本来就只有十几个点高，
+        // 再压一道椭圆高光看着像糊了块油。
+        .overlay {
+            if radius >= 12 { GlassSheen(radius: radius) }
+        }
         .environment(\.colorScheme, .light)
     }
 

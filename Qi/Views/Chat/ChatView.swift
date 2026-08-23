@@ -426,7 +426,7 @@ struct ChatView: View {
                         Spacer()
                     }
                 }
-                .navigationTitle("改一句")
+                .navigationTitle("编辑")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
@@ -676,10 +676,13 @@ struct ChatView: View {
             }
 
             if let q = quoting {
-                HStack(spacing: 8) {
+                // ⚠️ `alignment: .top` + `fixedSize`：不这么写的话，
+                // 那道竖线会跟着容器一路拉长，中间全是空的（她报的第 11 条）。
+                HStack(alignment: .top, spacing: 8) {
                     RoundedRectangle(cornerRadius: 1.5)
                         .fill(app.settings.accentColor.opacity(0.6))
                         .frame(width: 3)
+                        .frame(maxHeight: 30)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(q.role == .user
                              ? (app.settings.userName.isEmpty ? "我" : app.settings.userName)
@@ -701,6 +704,7 @@ struct ChatView: View {
                     }
                     .buttonStyle(.plain)
                 }
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 7)
                 .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -767,7 +771,7 @@ struct ChatView: View {
                     Button("照片") { showingPhotos = true }
                     Button("文件") { importingFile = true }
                     // 戳一戳也是「发点什么」——发过去的是一件事，不是一句话
-                    Button("戳他一下") { showingPoke = true }
+                    Button("戳一戳") { showingPoke = true }
                     Button("取消", role: .cancel) {}
                 }
 
@@ -782,6 +786,11 @@ struct ChatView: View {
                         .foregroundStyle(stickerPanelOpen
                                          ? app.settings.accentColor
                                          : Theme.textSoft(scheme))
+                        // ⚠️ 没有这两行，能点的只有**笔画本身**那几个像素。
+                        // 细线图标（.light）尤其难点——她说的「点不了表情和工具」
+                        // 就是这个。旁边那个 + 号一直有，所以它一直好用。
+                        .frame(width: 30, height: 30)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
 
@@ -792,6 +801,8 @@ struct ChatView: View {
                     Image(systemName: "wrench.and.screwdriver")
                         .font(.app(15, weight: .light))
                         .foregroundStyle(app.hasActiveTools ? app.settings.accentColor : Theme.textSoft(scheme))
+                        .frame(width: 30, height: 30)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
 

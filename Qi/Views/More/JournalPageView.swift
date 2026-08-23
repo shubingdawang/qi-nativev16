@@ -596,7 +596,7 @@ struct QuotePickerSheet: View {
                 }
             }
             .searchable(text: $keyword, prompt: "搜收藏的句子")
-            .navigationTitle("挑一句贴上去")
+            .navigationTitle("插入收藏的句子")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

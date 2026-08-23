@@ -237,7 +237,7 @@ struct SystemPromptView: View {
                             }
                         }
                     )) {
-                        Text("跟 claude.ai 通着")
+                        Text("与 claude.ai 互通")
                     }
                 } header: {
                     Text("两边接得上")
@@ -257,7 +257,7 @@ struct SystemPromptView: View {
                         NavigationLink {
                             DigestReaderView(digest: d)
                         } label: {
-                            Text("看看压成了什么")
+                            Text("查看压缩结果")
                         }
                     } else {
                         Text("这一窗还没压过")

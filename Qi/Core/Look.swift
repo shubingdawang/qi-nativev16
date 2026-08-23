@@ -288,3 +288,233 @@ struct DayMark: View {
         return f.string(from: date)
     }
 }
+
+// MARK: - 第二轮：简约，但要好看
+
+//
+// 她看完第一轮说：**「还是太单调，太简单，没有亮眼的感觉。
+// 想简约一点又想华丽一点。」** 还发了一份网页参考手册让我找灵感。
+//
+// 那两个词看着矛盾，其实不矛盾。手册里那几条恰好把话说破了：
+//
+//   · **参考「语言」，不复制「皮肤」** —— 拆构图、节奏、材质、光线，再自己重做。
+//   · **先做一个主效果** —— 每屏只设一个视觉主角；
+//     「复杂效果叠加通常不是高级，而是吵」。
+//
+// 于是我上一轮做错在哪儿就清楚了：我做的是**整洁**，不是**好看**。
+// 衬线标题、细线、留白——那些解决的是「读得顺」，
+// 但一个界面让人「哇」的从来不是排版对齐，是**材质、光、层次、动**。
+//
+// **简约 = 东西少；华丽 = 每一样都有质感。** 这两件事根本不冲突——
+// 冲突的是「东西少」和「东西糙」。
+//
+// 所以这一轮加四样，一样都不加内容：
+//
+//   1. **一层会流动的光**（全 App 唯一的主效果，其余一律是细节）
+//   2. **玻璃上有光扫过**（材质）
+//   3. **页面有主角**（大号极浅的装饰字 + 宋体大标题）
+//   4. **东西是「落」下来的**（进场微动）
+//
+// ⚠️ 还是那条自律：只管好看，不改任何功能的行为。
+
+/// 一层会慢慢流动的光。**全 App 唯一的主效果。**
+///
+/// 三团极淡的光晕，跟着强调色走，四十秒漂一个来回。
+/// 它不抢任何东西的戏——单独看几乎注意不到，
+/// 但整个 App 会从「一张纸」变成「有空气的地方」。
+/// 这就是「华丽」最便宜的来源：**不是加东西，是给已有的东西加光。**
+///
+/// ⚠️ 用 `RadialGradient` 画，**不用 `.blur()`**。
+/// 径向渐变本身就是软边，零模糊开销；`blur(90)` 那种每一帧都要重算，
+/// 挂在全屏背景上等于一直烧电。她这是随身带一整天的 App，
+/// 好看不能拿续航换。
+///
+/// 淡到什么程度：最浓的那团也只有 0.16。
+/// **看得见就过了**——它该是余光里的东西。
+struct AuroraLayer: View {
+
+    @EnvironmentObject private var app: AppState
+    @Environment(\.colorScheme) private var scheme
+    /// 关掉就一层都不画。她要是嫌花，一个开关的事
+    @AppStorage("auroraOn") private var on = true
+
+    @State private var drift = false
+
+    var body: some View {
+        if on {
+            GeometryReader { geo in
+                let w = geo.size.width, h = geo.size.height
+                ZStack {
+                    blob(app.settings.accentColor, 0.16,
+                         at: CGPoint(x: w * (drift ? 0.22 : 0.34),
+                                     y: h * (drift ? 0.18 : 0.26)),
+                         size: w * 1.15)
+                    blob(Self.companion(app.settings.accentColor), 0.13,
+                         at: CGPoint(x: w * (drift ? 0.86 : 0.74),
+                                     y: h * (drift ? 0.42 : 0.34)),
+                         size: w * 1.0)
+                    blob(app.settings.accentColor, 0.10,
+                         at: CGPoint(x: w * (drift ? 0.44 : 0.58),
+                                     y: h * (drift ? 0.86 : 0.78)),
+                         size: w * 1.3)
+                }
+                .compositingGroup()
+                // 深色下用「滤色」才亮得起来（正常混合在黑底上是三团灰）；
+                // 浅色下**就用正常混合**——试过 plusDarker，
+                // 颜色一叠上去就发脏，像纸受了潮。浅色要的是水彩，不是污渍。
+                .blendMode(scheme == .dark ? .screen : .normal)
+                .opacity(scheme == .dark ? 1 : 0.8)
+                .animation(.easeInOut(duration: 40).repeatForever(autoreverses: true),
+                           value: drift)
+                .onAppear { drift = true }
+            }
+            .allowsHitTesting(false)
+            .ignoresSafeArea()
+        }
+    }
+
+    private func blob(_ color: Color, _ peak: Double,
+                      at center: CGPoint, size: CGFloat) -> some View {
+        RadialGradient(colors: [color.opacity(peak), color.opacity(0)],
+                       center: .center, startRadius: 0, endRadius: size / 2)
+            .frame(width: size, height: size)
+            .position(center)
+    }
+
+    /// 陪衬那一团的颜色：把强调色在色相上挪开一点。
+    /// **同一个色相三团 = 一块糊掉的色斑**；挪开之后才有层次。
+    static func companion(_ c: Color) -> Color {
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(c).getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        return Color(hue: Double((h + 0.13).truncatingRemainder(dividingBy: 1)),
+                     saturation: Double(min(1, s * 0.9)),
+                     brightness: Double(b))
+    }
+}
+
+/// 玻璃上那道扫过去的光。
+///
+/// 真玻璃在光下不是均匀亮的：**上缘有一道拉长的高光**，
+/// 越往下越暗。上一版的玻璃有渐变、有边缘高光，但少了这一道，
+/// 所以它看着是「一块半透明的板」，不是「一块玻璃」。
+///
+/// 一个椭圆的白色渐变压在上三分之一，仅此而已——
+/// 成本几乎为零，但每一张卡片都会跟着变得有厚度。
+struct GlassSheen: View {
+
+    var radius: CGFloat = Theme.cardRadius
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        GeometryReader { geo in
+            EllipticalGradient(
+                colors: [.white.opacity(scheme == .dark ? 0.16 : 0.55),
+                         .white.opacity(0)],
+                center: .init(x: 0.32, y: -0.15),
+                startRadiusFraction: 0,
+                endRadiusFraction: 0.72)
+                .frame(width: geo.size.width, height: geo.size.height)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+        .allowsHitTesting(false)
+    }
+}
+
+/// 一页的主角。
+///
+/// 出处是那份手册**自己的排版**：每一页右上角一个巨大的、极浅的序号，
+/// 左边是标题和一行小字。那个大数字不承担任何信息——
+/// 它是**构图**：有了它，这一页才有"上下左右"，而不是一堆卡片从顶上排下来。
+///
+/// 这是「参考语言，不复制皮肤」的用法：我抄的不是它的米色和紫色，
+/// 是**「用一个巨大的浅色字给页面定锚」**这件事。
+struct PageHero: View {
+
+    let title: String
+    var subtitle: String = ""
+    /// 右上角那个巨大的浅色字。数字、汉字都行，一到两个字最好看
+    var mark: String = ""
+
+    @EnvironmentObject private var app: AppState
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            if !mark.isEmpty {
+                Text(mark)
+                    .font(.serif(64, weight: .bold))
+                    // 极浅。**它是构图，不是内容**——
+                    // 一旦浓到能"读"，它就跟标题抢戏了
+                    .foregroundStyle(app.settings.accentColor
+                        .opacity(scheme == .dark ? 0.16 : 0.13))
+                    .offset(y: -14)
+                    .allowsHitTesting(false)
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title)
+                    .heading(25, weight: .bold)
+                    .foregroundStyle(Theme.textMain(scheme))
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.app(11.5))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+                // 标题底下那一小截实线。**它比整行的分割线更"立"**——
+                // 短而实的一段是"这里是开头"，长而淡的一条是"这里分段"
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(LinearGradient(
+                        colors: [app.settings.accentColor.opacity(0.85),
+                                 app.settings.accentColor.opacity(0.15)],
+                        startPoint: .leading, endPoint: .trailing))
+                    .frame(width: 44, height: 2.5)
+                    .padding(.top, 3)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.top, 6)
+        .padding(.bottom, 4)
+    }
+}
+
+extension View {
+
+    /// 进场：轻轻落下来。
+    ///
+    /// 一屏东西**同时**出现，看着像刷新；错开三十几毫秒一个个落下，
+    /// 看着就像"摆好的"。这是高级感最便宜的一笔——
+    /// 不加任何视觉元素，只改出现的时机。
+    ///
+    /// ⚠️ 只错开前十个。再往后延迟就太长了，
+    /// 她滑到底下还在等东西出现，那不叫讲究，那叫卡。
+    func riseIn(_ index: Int = 0) -> some View {
+        modifier(RiseIn(index: index))
+    }
+
+    /// 玻璃卡片，带那道扫过去的光。
+    /// 想要更好看的地方用它，普通的地方还用 `glassBackground`。
+    func glassCardShiny(radius: CGFloat = Theme.cardRadius,
+                        strength: Double = 1) -> some View {
+        background {
+            ZStack {
+                GlassSurface(radius: radius, strength: strength)
+                GlassSheen(radius: radius)
+            }
+        }
+    }
+}
+
+private struct RiseIn: ViewModifier {
+    let index: Int
+    @State private var shown = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : 9)
+            .onAppear {
+                let delay = Double(min(index, 10)) * 0.035
+                withAnimation(.easeOut(duration: 0.32).delay(delay)) { shown = true }
+            }
+    }
+}

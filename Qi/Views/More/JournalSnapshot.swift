@@ -67,7 +67,7 @@ struct JournalElementView: View {
                                       style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
                         .frame(width: 92, height: 92)
                         .overlay {
-                            Text("挑一张")
+                            Text("选择图片")
                                 .font(.app(10))
                                 .foregroundStyle(Color(hexString: "8A8378") ?? .gray)
                         }

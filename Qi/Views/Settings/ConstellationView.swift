@@ -232,7 +232,7 @@ struct StarSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(node.name)
-                    .font(.app(16, weight: .semibold))
+                    .heading(16)
                     .foregroundStyle(Theme.textMain(scheme))
                 Text(node.galaxy)
                     .font(.app(10))

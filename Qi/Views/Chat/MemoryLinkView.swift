@@ -62,11 +62,8 @@ struct MemoryLinkView: View {
                         .glassCard()
 
                         if others.isEmpty {
-                            Text("还没有别的窗口可以并")
-                                .font(.app(13))
-                                .foregroundStyle(Theme.textMuted(scheme))
-                                .padding(.top, 30)
-                                .frame(maxWidth: .infinity)
+                            EmptyNote(icon: "square.on.square",
+                                      title: "还没有别的窗口可以并")
                         }
 
                         ForEach(others) { conv in
@@ -138,7 +135,7 @@ struct MemoryLinkView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     if current?.memoryGroupID != nil {
-                        Button("全部拆开") {
+                        Button("全部解除") {
                             for peer in app.memoryPeers(of: conversationID) {
                                 app.unlinkMemory(peer.id)
                             }

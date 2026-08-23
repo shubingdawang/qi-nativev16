@@ -29,8 +29,20 @@ if dup:
 else:
     print('工具名 %d 个，没有重的' % len(names))
 
-lines = io.open('Qi/Core/AppState.swift', encoding='utf-8').read().split('\n')
-cases = [l.strip()[6:-2] for l in lines
+# WARN: 只扫 runNative 那一个 switch。
+#
+# 以前是整份 AppState 里所有八格缩进的 case 一起数——
+# 结果 activityText（工具名 -> 一句人话）里的 case 也被算进来，
+# 同一个工具名在两个 switch 里各出现一次就被报成重名。
+# 那是假警报，而**假警报比没有警报更糟**：报几次之后就没人当回事了。
+lines = io.open('Qi/Core/AppState.swift', encoding='utf-8').read().split(chr(10))
+start = next(i for i, l in enumerate(lines) if 'func runNative' in l)
+end = len(lines)
+for i in range(start + 1, len(lines)):
+    if re.match(r'    (private |static )?func ', lines[i]):
+        end = i
+        break
+cases = [l.strip()[6:-2] for l in lines[start:end]
          if l.startswith('        case "') and l.rstrip().endswith('":')]
 dup2 = sorted(k for k, v in collections.Counter(cases).items() if v > 1)
 if dup2:

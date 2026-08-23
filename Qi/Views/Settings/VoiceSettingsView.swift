@@ -79,7 +79,7 @@ struct VoiceSettingsView: View {
                 Button {
                     creatingNew = true
                 } label: {
-                    Label("加一个音色", systemImage: Icon.add)
+                    Label("添加音色", systemImage: Icon.add)
                 }
                 if let notice {
                     Text(notice)

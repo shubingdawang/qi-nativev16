@@ -73,7 +73,7 @@ struct DiaryStackView: View {
                     .disabled(dayOffset >= days.count - 1)
 
                     Text(day.label)
-                        .font(.app(16, weight: .semibold))
+                        .heading(16)
                         .foregroundStyle(Theme.textMain(scheme))
 
                     Button {
@@ -114,7 +114,7 @@ struct DiaryStackView: View {
                         Button {
                             for e in day.items { layout.reset(e.id) }
                         } label: {
-                            Text("摊回去")
+                            Text("复位")
                                 .font(.app(10))
                                 .foregroundStyle(app.settings.accentColor)
                         }

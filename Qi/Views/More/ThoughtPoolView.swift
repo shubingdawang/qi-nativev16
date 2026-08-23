@@ -154,7 +154,7 @@ struct ThoughtPoolView: View {
         .alert("往池子里丢一个", isPresented: $adding) {
             TextField("在想什么", text: $draft)
             Button("取消", role: .cancel) {}
-            Button("丢进去") {
+            Button("放进去") {
                 pool.stir(draft)
             }
         } message: {

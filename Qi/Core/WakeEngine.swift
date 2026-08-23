@@ -137,6 +137,11 @@ final class WakeEngine: ObservableObject {
         s.lastFire = Date()
         state = s
 
+        // 终端那一页。**他自己开口的次数得看得见**——
+        // 这是唯一不是她按出来的请求，出问题最难查。
+        Console.log(.wake, "他自己醒了一次",
+                    "今天第 \(s.firedToday) 次 · 上限 \(config.dailyLimit)")
+
         Task { @MainActor in
             await self.run(app: app)
             self.running = false

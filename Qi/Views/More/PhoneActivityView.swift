@@ -226,10 +226,10 @@ struct PhoneActivityView: View {
                             .padding(9)
                             .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
                                 .fill(Theme.softFillDeep))
-                        Text("不填就用系统自带的那套（只到省市区）。填了地名会更细——"
+                        Text(MD.inline("不填就用系统自带的那套（只到省市区）。填了地名会更细——"
                              + "**「只到城市」那一档照样只给城市**，这条线是你的，不是接口的。"
                              + "只有选「精确」的时候才会给街道和「靠近哪儿」。"
-                             + "\nkey 只存在这台手机上，**一个字都不进仓库**（那个仓库是公开的）。导出备份的时候它会跟供应商密钥一起在包里，所以那份备份别乱发。")
+                             + "\nkey 只存在这台手机上，**一个字都不进仓库**（那个仓库是公开的）。导出备份的时候它会跟供应商密钥一起在包里，所以那份备份别乱发。"))
                             .font(.app(10))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }

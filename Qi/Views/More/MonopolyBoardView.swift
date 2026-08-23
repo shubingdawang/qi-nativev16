@@ -191,7 +191,7 @@ struct MonopolyBoard: View {
                 .foregroundStyle(Theme.textMuted(scheme))
 
             Text("该 \(game.s.turn) 掷")
-                .font(.app(17, weight: .semibold))
+                .heading(17)
                 .foregroundStyle(Theme.textMain(scheme))
                 .multilineTextAlignment(.center)
 

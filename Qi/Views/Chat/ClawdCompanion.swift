@@ -52,6 +52,9 @@ struct ClawdRoamer: View {
     @State private var sleepTask: Task<Void, Never>?
     /// 连着戳了几下（1.5 秒内）
     @State private var pokeStreak = 0
+    /// 手指按下去那一刻。用来分「戳」和「拎起来」
+    @State private var pressAt: Date?
+    @State private var liftTask: Task<Void, Never>?
     @State private var streakTask: Task<Void, Never>?
     /// 空闲的时候在做哪件自己的事。隔一会儿换一件
     @State private var ownThing: ClawdMood = .idle
@@ -95,13 +98,16 @@ struct ClawdRoamer: View {
                               scale: 1.1, shadow: true)
                         .overlay(alignment: .top) {
                             if let kind = room.carriedKind, room.overhead(kind) {
-                                PixelSpriteView(sprite: kind.sprite, scale: 0.8)
-                                    .offset(y: -14)
+                                // 她报的第 10 条：道具太小了。
+                                // 他自己是 1.1 倍，道具原来 0.8——**比他小一半还多**，
+                                // 举过头顶那一下看着像举了个米粒。
+                                PixelSpriteView(sprite: kind.sprite, scale: 1.15)
+                                    .offset(y: -18)
                                     .transition(.scale(scale: 0.5).combined(with: .opacity))
                             }
                         }
                     if let kind = room.carriedKind, !room.overhead(kind) {
-                        PixelSpriteView(sprite: kind.sprite, scale: 1.0)
+                        PixelSpriteView(sprite: kind.sprite, scale: 1.3)
                             // sipLift 是喝的时候把罐子举到嘴边那一下。
                             // 平时是 0，喝的时候抬起来、往身子里侧靠一点。
                             .offset(x: sipLift == 0 ? 0 : -7, y: -6 - sipLift)
@@ -128,98 +134,42 @@ struct ClawdRoamer: View {
             .animation(held ? nil : .easeInOut(duration: walkSeconds), value: app.settings.clawdY)
             .animation(.spring(response: 0.28, dampingFraction: 0.6), value: held)
             .animation(.easeInOut(duration: 0.25), value: line)
-            .onTapGesture {
-                poked = true
-                // 躲着的时候戳他一下，就是喊他出来
-                if peeking {
-                    peeking = false
-                    walkTask?.cancel()
-                    say(["被发现了", "来了来了", "诶嘿"].randomElement() ?? "来了")
-                    walkTask = Task { @MainActor in
-                        await walk(to: Double.random(in: 0.3...0.7),
-                                   Double.random(in: top...bottom))
-                        poked = false
-                        sync()
-                        startWalking()
-                    }
-                    if app.settings.haptics {
-                        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                    }
-                    return
-                }
-                // 睡着的时候被戳 = 惊醒（clawd-on-desk 那套：
-                // 有动静就吓一跳醒过来，不是安静地睁眼）
-                if asleep {
-                    wake(startled: true)
-                    return
-                }
-
-                // 连着戳：1.5 秒内第四下开始抓狂
-                pokeStreak += 1
-                streakTask?.cancel()
-                streakTask = Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 1_500_000_000)
-                    pokeStreak = 0
-                }
-
-                if pokeStreak >= 4 {
-                    mood = .flail
-                    say(["别戳啦！", "呜哇——", "会坏的！"].randomElement() ?? "别戳啦！")
-                    if app.settings.haptics {
-                        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                    }
-                } else {
-                    mood = .happy
-                    say(["唔", "干嘛呀", "在呢", "别戳了", "痒", "嗯？"].randomElement() ?? "唔")
-                    if app.settings.haptics {
-                        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                    }
-                }
-                Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 1_400_000_000)
-                    poked = false
-                    sync()
-                }
-            }
-            // 用 highPriority：聊天页整页还挂着一个拉侧栏的拖拽手势，
-            // 普通 gesture 会被它压住
+            // ⚠️ **一个手势管两件事**：轻点是戳，按住 0.28 秒是拎起来。
+            //
+            // 以前是 `.onTapGesture` + `.highPriorityGesture(长按序列)` 并存，
+            // 高优先级那个把点击吃了（她报的第 1 条）。
+            // 两个手势抢同一块地方，赢的那个不一定是她想要的那个——
+            // 所以干脆只留一个，由它自己分。
+            //
+            // 还得是 highPriority：聊天页整页挂着一个拉侧栏的拖拽，
+            // 普通 gesture 会被它压住。
             .highPriorityGesture(
-                LongPressGesture(minimumDuration: 0.28)
-                    .onEnded { _ in
-                        held = true
-                        walkTask?.cancel()
-                        mood = .happy
-                        if app.settings.haptics {
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                        }
-                        say(["诶——", "放我下来", "飞起来了"].randomElement() ?? "诶")
-                    }
-                    .sequenced(before: DragGesture(minimumDistance: 0))
+                DragGesture(minimumDistance: 0)
                     .onChanged { value in
-                        if case .second(_, let drag?) = value {
-                            app.settings.clawdX = min(right, max(left, drag.location.x / geo.size.width))
-                            app.settings.clawdY = min(bottom, max(top, drag.location.y / geo.size.height))
-                        }
-                    }
-                    .onEnded { _ in
-                        guard held else { return }
-                        held = false
-                        // 把他放到屏幕边上，他就**真的躲到边外面去**，
-                        // 只留一只眼睛在这儿看着——她要的就是这个。
-                        // 以前不管放哪儿都是原地站住然后接着乱跑。
-                        let x = app.settings.clawdX
-                        if x <= 0.07 || x >= 0.93 {
-                            say(["那我躲这儿", "嘘——", "我不出来了"].randomElement() ?? "嘘")
-                            walkTask?.cancel()
-                            walkTask = Task { @MainActor in
-                                // 拖过去的这次不定时——她不喊他就一直躲着
-                                await peekLoop(right: x >= 0.5, forever: true)
+                        if pressAt == nil {
+                            pressAt = Date()
+                            liftTask?.cancel()
+                            liftTask = Task { @MainActor in
+                                try? await Task.sleep(nanoseconds: 280_000_000)
+                                guard pressAt != nil, !held else { return }
+                                lift()
                             }
-                            return
                         }
-                        say(["就这儿吧", "好", "这儿也行"].randomElement() ?? "好")
-                        sync()
-                        startWalking()
+                        guard held else { return }
+                        app.settings.clawdX = min(right, max(left, value.location.x / geo.size.width))
+                        app.settings.clawdY = min(bottom, max(top, value.location.y / geo.size.height))
+                    }
+                    .onEnded { value in
+                        liftTask?.cancel()
+                        let quick = Date().timeIntervalSince(pressAt ?? Date()) < 0.28
+                        let still = abs(value.translation.width) < 12
+                            && abs(value.translation.height) < 12
+                        pressAt = nil
+                        if held {
+                            drop()
+                        } else if quick && still {
+                            pokeTap()
+                        }
                     }
             )
         }
@@ -678,4 +628,104 @@ struct ClawdRoamer: View {
         .thinking,
         .walking
     ]
+
+    /// 戳他一下。
+    ///
+    /// ⚠️ 以前这是 `.onTapGesture`，跟底下那个 `highPriorityGesture`
+    /// （长按拎起来）挂在**同一个视图**上。高优先级的那个会把点击整个吃掉——
+    /// 她说的「点 clawd 无反应，连续点也没反应」就是这么来的：
+    /// 手指一抬，长按还没到 0.28 秒，序列手势失败，
+    /// 而点击又轮不到自己上场，于是什么都没发生。
+    ///
+    /// 现在两件事合成**一个**手势（见 body 里那个 DragGesture），
+    /// 按下去多久、动没动，由它自己分：快而不动 = 戳，按住不放 = 拎起来。
+    @MainActor
+    private func pokeTap() {
+            poked = true
+            // 躲着的时候戳他一下，就是喊他出来
+            if peeking {
+                peeking = false
+                walkTask?.cancel()
+                say(["被发现了", "来了来了", "诶嘿"].randomElement() ?? "来了")
+                walkTask = Task { @MainActor in
+                    await walk(to: Double.random(in: 0.3...0.7),
+                               Double.random(in: top...bottom))
+                    poked = false
+                    sync()
+                    startWalking()
+                }
+                if app.settings.haptics {
+                    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                }
+                return
+            }
+            // 睡着的时候被戳 = 惊醒（clawd-on-desk 那套：
+            // 有动静就吓一跳醒过来，不是安静地睁眼）
+            if asleep {
+                wake(startled: true)
+                return
+            }
+
+            // 连着戳：1.5 秒内第四下开始抓狂
+            pokeStreak += 1
+            streakTask?.cancel()
+            streakTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                pokeStreak = 0
+            }
+
+            if pokeStreak >= 4 {
+                mood = .flail
+                say(["别戳啦！", "呜哇——", "会坏的！"].randomElement() ?? "别戳啦！")
+                if app.settings.haptics {
+                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                }
+            } else {
+                mood = .happy
+                say(["唔", "干嘛呀", "在呢", "别戳了", "痒", "嗯？"].randomElement() ?? "唔")
+                if app.settings.haptics {
+                    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                }
+            }
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 1_400_000_000)
+                poked = false
+                sync()
+            }
+        
+    }
+
+    /// 拎起来
+    @MainActor
+    private func lift() {
+        held = true
+        walkTask?.cancel()
+        mood = .happy
+        if app.settings.haptics {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        }
+        say(["诶——", "放我下来", "飞起来了"].randomElement() ?? "诶")
+    }
+
+    /// 放下
+    @MainActor
+    private func drop() {
+        held = false
+        // 把他放到屏幕边上，他就**真的躲到边外面去**，
+        // 只留一只眼睛在这儿看着——她要的就是这个。
+        // 以前不管放哪儿都是原地站住然后接着乱跑。
+        let x = app.settings.clawdX
+        if x <= 0.07 || x >= 0.93 {
+            say(["那我躲这儿", "嘘——", "我不出来了"].randomElement() ?? "嘘")
+            walkTask?.cancel()
+            walkTask = Task { @MainActor in
+                // 拖过去的这次不定时——她不喊他就一直躲着
+                await peekLoop(right: x >= 0.5, forever: true)
+            }
+            return
+        }
+        say(["就这儿吧", "好", "这儿也行"].randomElement() ?? "好")
+        sync()
+        startWalking()
+    }
 }

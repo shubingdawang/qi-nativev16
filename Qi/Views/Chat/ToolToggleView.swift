@@ -87,7 +87,7 @@ struct ToolToggleView: View {
         VStack(spacing: 10) {
             HStack {
                 Text("工具")
-                    .font(.app(17, weight: .semibold))
+                    .heading(17)
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer()
                 Button("完成") { dismiss() }

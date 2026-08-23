@@ -26,11 +26,17 @@ enum ClawdSVG {
         <rect class="body" x="280" y="60" width="40" height="30"/>
         <!-- 身子 -->
         <rect class="body" x="40" y="0" width="240" height="170" rx="6"/>
-        <!-- 四条腿：左边两条、右边两条，中间空一大段 -->
+        <!-- 四条腿：左边两条、右边两条，中间空一大段。
+             ⚠️ 身子是 x=40..280。**最后一条腿以前写的是 x=270 宽 30**，
+             也就是 270..300 ——整整二十个点戳在身子外面（她报的第 4 条：
+             「表情工坊的 clawd 依旧是一条腿在身体外面的」）。
+             正确的位置照像素版那份图纸换算：图纸 32 格 × 每格 10，
+             腿在第 4-6、9-11、20-22、25-27 格 → 40 / 90 / 200 / 250。
+             这样左右也真的对称了（以前 100 和 210 也是歪的）。 -->
         <rect class="body" x="40"  y="170" width="30" height="60"/>
-        <rect class="body" x="100" y="170" width="30" height="60"/>
-        <rect class="body" x="210" y="170" width="30" height="60"/>
-        <rect class="body" x="270" y="170" width="30" height="60"/>
+        <rect class="body" x="90"  y="170" width="30" height="60"/>
+        <rect class="body" x="200" y="170" width="30" height="60"/>
+        <rect class="body" x="250" y="170" width="30" height="60"/>
         <!-- 脸。改这里 -->
         <g id="face">
           <rect class="eye" x="70"  y="50" width="30" height="30"/>

@@ -224,13 +224,24 @@ struct TarotPane: View {
                         .padding(.horizontal, 30)
                         .padding(.vertical, 20)
                         .coordinateSpace(name: "fan")
-                        // 手指按住扫过：扫到谁谁抬起来。
-                        // minimumDistance 0，所以按着不动也算。
-                        .gesture(
-                            DragGesture(minimumDistance: 0, coordinateSpace: .named("fan"))
-                                .onChanged { v in
+                        // 按住再扫：扫到谁谁抬起来。
+                        //
+                        // ⚠️ **必须先长按**（她报的第 5 条：只能选前几张）。
+                        // 上一版这儿是 `DragGesture(minimumDistance: 0)` 直接挂着，
+                        // 它把横滑整个吃掉了——牌是一排扇形铺在横向 ScrollView 里的，
+                        // 滑不动就等于后面那些牌永远够不着，只剩露在外面的头几张能选。
+                        //
+                        // 加一道 0.22 秒的长按当门槛之后：**随手横滑 = 翻牌堆**，
+                        // **按住再滑 = 挑牌**。两件事不再抢同一个动作。
+                        // （单点某张也照样能把它抬起来，见 cardBack 里那个 onTapGesture。）
+                        .simultaneousGesture(
+                            LongPressGesture(minimumDuration: 0.22)
+                                .sequenced(before: DragGesture(minimumDistance: 0,
+                                                               coordinateSpace: .named("fan")))
+                                .onChanged { value in
+                                    guard case .second(_, let drag?) = value else { return }
                                     // 一张 62 宽、叠着 -26，所以每张往右挪 36
-                                    let i = Int((v.location.x - 30) / 36)
+                                    let i = Int((drag.location.x - 30) / 36)
                                     guard deck.indices.contains(i) else { return }
                                     if hovering != i {
                                         hovering = i
@@ -384,7 +395,7 @@ struct TarotPane: View {
             Button {
                 reset()
             } label: {
-                Text("再问一次")
+                Text("重新占卜")
                     .font(.app(13))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .frame(maxWidth: .infinity)
@@ -596,7 +607,7 @@ struct LiuyaoPane: View {
                 reading = ""
                 question = ""
             } label: {
-                Text("再问一次")
+                Text("重新占卜")
                     .font(.app(13))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .frame(maxWidth: .infinity)

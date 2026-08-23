@@ -107,7 +107,7 @@ struct MomentsView: View {
                 Button {
                     postMine()
                 } label: {
-                    Text("发出去")
+                    Text("发布")
                         .font(.app(13, weight: .medium))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 16)
@@ -119,8 +119,8 @@ struct MomentsView: View {
                           && pickedImage.isEmpty)
             }
 
-            Text("发在这儿**不会打扰他**——他下次说话的时候才会知道有这么一条。"
-                 + "急事直接去对话里说。")
+            Text(MD.inline("发在这儿**不会打扰他**——他下次说话的时候才会知道有这么一条。"
+                 + "急事直接去对话里说。"))
                 .font(.app(10))
                 .foregroundStyle(Theme.textMuted(scheme))
         }
@@ -207,7 +207,7 @@ struct MomentsView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "bubble.right")
-                        Text("回一句")
+                        Text("回复")
                     }
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
@@ -253,15 +253,15 @@ struct MomentsView: View {
                     .glassBackground(radius: 12,
                                      strength: app.settings.glassOpacity * 0.9)
 
-                Text("这一句会**同时发进对话里**——他下一轮就看得见，"
-                     + "跟你在聊天里说话是同一回事。所以点这一下等于跟他说话。")
+                Text(MD.inline("这一句会**同时发进对话里**——他下一轮就看得见，"
+                     + "跟你在聊天里说话是同一回事。所以点这一下等于跟他说话。"))
                     .font(.app(10.5))
                     .foregroundStyle(Theme.textMuted(scheme))
 
                 Spacer()
             }
             .padding(16)
-            .navigationTitle("回一句")
+            .navigationTitle("回复")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

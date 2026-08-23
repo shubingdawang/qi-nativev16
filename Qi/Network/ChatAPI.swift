@@ -79,7 +79,16 @@ enum ChatAPI {
                     if !apiKey.isEmpty {
                         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
                     }
-                    request.httpBody = try buildBody(model: model, messages: messages, tools: tools)
+                    // 名字不叫 payload：底下那个 SSE 循环里已经有一个 payload
+                    // （每行 data: 后面那段），撞名字读起来会以为是同一个东西
+                    let bodyData = try buildBody(model: model, messages: messages, tools: tools)
+                    request.httpBody = bodyData
+
+                    // 终端那一页。**只记不发**——一条都不会进提示词。
+                    let began = Date()
+                    Console.log(.net, "发请求 → " + model,
+                                "\(messages.count) 条消息 · \(tools.count) 个工具 · "
+                                + "\(bodyData.count / 1024) KB")
 
                     let (bytes, response) = try await URLSession.shared.bytes(for: request)
 
@@ -90,6 +99,9 @@ enum ChatAPI {
                             body += line
                             if body.count > 600 { break }
                         }
+                        // 出错这一条最值钱：她八成就是为了它才点开终端的
+                        Console.log(.warn, "HTTP \(http.statusCode) · " + model,
+                                    String(body.prefix(300)))
                         throw APIError.badStatus(http.statusCode, body)
                     }
 
@@ -138,10 +150,14 @@ enum ChatAPI {
                             }
                         }
                     }
+                    Console.log(.net, "回完了 → " + model,
+                                String(format: "用了 %.1f 秒", Date().timeIntervalSince(began)))
                     continuation.finish()
                 } catch is CancellationError {
+                    Console.log(.net, "停了 → " + model, "她按了停，或者这一轮被顶掉了")
                     continuation.finish()
                 } catch {
+                    Console.log(.warn, "请求断了 → " + model, error.localizedDescription)
                     continuation.finish(throwing: error)
                 }
             }

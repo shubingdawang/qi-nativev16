@@ -114,7 +114,7 @@ struct WakeSettingsView: View {
                     notifier.banner(title: app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName,
                                     body: "在呢。这条是试的，没花钱。")
                 } label: {
-                    Label("试一条横幅", systemImage: "bell")
+                    Label("测试横幅", systemImage: "bell")
                 }
                 .disabled(!notifier.authorized)
             } header: {

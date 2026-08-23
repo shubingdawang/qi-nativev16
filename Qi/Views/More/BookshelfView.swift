@@ -70,7 +70,7 @@ struct BookshelfView: View {
                         newShelf = ""
                         creatingShelf = true
                     } label: {
-                        Label("加一个书架", systemImage: "plus.rectangle.on.folder")
+                        Label("新建书架", systemImage: "plus.rectangle.on.folder")
                     }
                 } label: {
                     Image(systemName: Icon.add)
@@ -96,13 +96,13 @@ struct BookshelfView: View {
         .alert("这叠图叫什么", isPresented: $namingManga) {
             TextField("书名", text: $mangaName)
             Button("算了", role: .cancel) { pendingMangaFiles = [] }
-            Button("导进来") { loadManga() }
+            Button("导入") { loadManga() }
         } message: {
-            Text("选中的 \(pendingMangaFiles.count) 张会按**文件名排序**，"
+            Text(MD.inline("选中的 \(pendingMangaFiles.count) 张会按**文件名排序**，"
                  + "每 12 张算一话。（扫描版一向是 01、02 这样命名的，"
-                 + "按名字排比按选中顺序靠谱。）")
+                 + "按名字排比按选中顺序靠谱。）"))
         }
-        .alert("加一个书架", isPresented: $creatingShelf) {
+        .alert("新建书架", isPresented: $creatingShelf) {
             TextField("比如「小说」「诗」「工具书」", text: $newShelf)
             Button("取消", role: .cancel) {}
             Button("建好了") { store.createShelf(newShelf); newShelf = "" }
@@ -130,7 +130,7 @@ struct BookshelfView: View {
                 if busy {
                     HStack(spacing: 8) {
                         ProgressView().scaleEffect(0.8)
-                        Text("正在拆书…").font(.app(12))
+                        Text("正在解析…").font(.app(12))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                     .padding(.horizontal, 18)
@@ -267,19 +267,10 @@ struct BookshelfView: View {
             LazyVStack(spacing: 10) {
                 let all = store.allMarks
                 if all.isEmpty {
-                    VStack(spacing: 8) {
-                        Image(systemName: "highlighter")
-                            .font(.app(30, weight: .light))
-                            .foregroundStyle(app.settings.accentColor.opacity(0.5))
-                        Text("还没划过句子")
-                            .font(.app(13))
-                            .foregroundStyle(Theme.textMuted(scheme))
-                        Text("读书的时候点右上角「选句子」，\n点中的那句就会被马克笔画起来。")
-                            .font(.app(11))
-                            .foregroundStyle(Theme.textMuted(scheme).opacity(0.85))
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding(.top, 70)
+                    EmptyNote(icon: "highlighter",
+                              title: "还没划过句子",
+                              hint: "读书的时候点右上角「选句子」，\n点中的那句就会被马克笔画起来。")
+                        .padding(.top, 40)
                 }
 
                 ForEach(all) { m in
@@ -385,7 +376,7 @@ struct BookshelfView: View {
         Button(role: .destructive) {
             store.remove(book.id)
         } label: {
-            Label("从书房拿走", systemImage: Icon.trash)
+            Label("移出书房", systemImage: Icon.trash)
         }
     }
 

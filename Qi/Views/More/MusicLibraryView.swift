@@ -90,7 +90,7 @@ struct MusicLibraryView: View {
                 }
 
                 if !webResults.isEmpty {
-                    Text("网上的（三十秒试听）")
+                    Text("网络试听（三十秒）")
                         .font(.app(13, weight: .medium))
                         .foregroundStyle(Theme.textMain(scheme))
                         .padding(.top, 6)
@@ -105,6 +105,18 @@ struct MusicLibraryView: View {
         }
         .navigationTitle("音乐")
         .navigationBarTitleDisplayMode(.inline)
+        // 点了一首文件已经不在的歌。**不能一声不吭**——
+        // 以前只是什么都不发生，她只会觉得「这 App 坏了」。
+        .alert("这首歌的文件不在了", isPresented: Binding(
+            get: { player.missingFile != nil },
+            set: { if !$0 { player.missingFile = nil } }
+        )) {
+            Button("好") { player.missingFile = nil }
+        } message: {
+            Text((player.missingFile ?? "") + "\n\n"
+                 + "备份里单个超过 20 MB 的文件是不带的（整包会大到导不出来），"
+                 + "所以还原之后库里那一条还在，音频没了。从「文件」重新导一次就行。")
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink {

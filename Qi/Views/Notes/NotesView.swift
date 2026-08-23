@@ -188,8 +188,6 @@ struct DeletableEntryList: View {
     @State private var pending: MCPEntry?
     @State private var notice: String?
     @State private var annotating: MCPEntry?
-    @State private var oldText = ""
-    @State private var newText = ""
 
     var body: some View {
         let entries = failed ? [] : MCPEntryParser.parse(text)
@@ -220,8 +218,6 @@ struct DeletableEntryList: View {
                         }
                         if onAnnotate != nil {
                             Button {
-                                oldText = ""
-                                newText = ""
                                 annotating = entry
                             } label: {
                                 Label("写批注", systemImage: "text.bubble")
@@ -249,36 +245,41 @@ struct DeletableEntryList: View {
                 Text(pending?.displayTitle ?? "")
             }
             // 批注：**不改原文，只叠观点**。原文划掉、批注标红。
-            .alert("写批注", isPresented: Binding(
-                get: { annotating != nil }, set: { if !$0 { annotating = nil } }
-            )) {
-                TextField("原文里的哪一句（可留空）", text: $oldText)
-                TextField("你要说的", text: $newText)
-                Button("取消", role: .cancel) { annotating = nil }
-                Button("写上") {
-                    guard let e = annotating, let run = onAnnotate,
-                          !newText.trimmingCharacters(in: .whitespaces).isEmpty else {
-                        annotating = nil
-                        return
-                    }
-                    let a = oldText, b = newText
-                    annotating = nil
-                    Task { notice = await run(e, a, b) }
+            //
+            // ⚠️ 以前这儿是个 alert，让她**手打**「原文里的哪一句」——
+            // 等于让她照着屏幕抄一遍，抄错一个字就对不上了。
+            // 她说的：「批注功能选择原句跟双击气泡框一样的方式选择」。
+            // 现在换成一张纸：**原文按句子摊开，点哪句是哪句**。
+            .sheet(item: $annotating) { entry in
+                AnnotateSheet(entry: entry) { original, correction in
+                    guard let run = onAnnotate else { return }
+                    Task { notice = await run(entry, original, correction) }
                 }
-            } message: {
-                Text("原文一个字都不会改——批注是叠在上面的，"
-                     + "显示的时候原句划掉、你写的标红。")
             }
         }
     }
 }
 
 /// 带关键词过滤的条目列表
+///
+/// ⚠️ 她报的第 13 条：「日记没有批注功能需要加上」。
+/// 根子在这儿——日记那一侧用的是这个列表，而**长按菜单一直只长在
+/// `MCPEntryList` 上**（记忆那一侧用的那个）。同样是一条条目，
+/// 一边能删能批注，另一边什么都没有。
+/// 现在两个都带上，谁传了回调就有哪一项。
 struct FilteredEntryList: View {
     let text: String
     let failed: Bool
     var keyword: String = ""
     let emptyHint: String
+    /// 删一条。不传就没有这一项
+    var onDelete: ((MCPEntry) async -> String)?
+    /// 写批注。不传就没有这一项
+    var onAnnotate: ((MCPEntry, String, String) async -> String)?
+
+    @State private var pending: MCPEntry?
+    @State private var annotating: MCPEntry?
+    @State private var notice: String?
 
     var body: some View {
         let all = failed ? [] : MCPEntryParser.parse(text)
@@ -300,8 +301,167 @@ struct FilteredEntryList: View {
                     .font(.app(11))
                     .foregroundStyle(.secondary)
             }
+            if let notice {
+                Text(notice)
+                    .font(.app(11))
+                    .foregroundStyle(.secondary)
+            }
             ForEach(entries) { entry in
                 MCPEntryCard(entry: entry)
+                    .contextMenu {
+                        Button {
+                            UIPasteboard.general.string =
+                                entry.body.isEmpty ? entry.title : entry.body
+                        } label: {
+                            Label("拷贝", systemImage: "doc.on.doc")
+                        }
+                        if onAnnotate != nil {
+                            Button { annotating = entry } label: {
+                                Label("写批注", systemImage: "text.bubble")
+                            }
+                        }
+                        if onDelete != nil {
+                            Button(role: .destructive) { pending = entry } label: {
+                                Label("删掉这条", systemImage: Icon.trash)
+                            }
+                        }
+                    }
+            }
+            .sheet(item: $annotating) { entry in
+                AnnotateSheet(entry: entry) { original, correction in
+                    guard let run = onAnnotate else { return }
+                    Task { notice = await run(entry, original, correction) }
+                }
+            }
+            .confirmationDialog("删掉这条？",
+                                isPresented: Binding(get: { pending != nil },
+                                                     set: { if !$0 { pending = nil } }),
+                                titleVisibility: .visible) {
+                Button("删掉", role: .destructive) {
+                    if let e = pending, let run = onDelete {
+                        Task { notice = await run(e) }
+                    }
+                    pending = nil
+                }
+                Button("算了", role: .cancel) { pending = nil }
+            } message: {
+                Text(pending?.displayTitle ?? "")
+            }
+        }
+    }
+}
+
+/// 写批注那张纸。
+///
+/// 她说的：「记忆和日记的批注功能，选择原句跟双击气泡框一样的方式选择」。
+///
+/// 以前是个 alert，让她**手打**「原文里的哪一句」——
+/// 等于照着屏幕抄一遍，抄错一个字就对不上原文，批注就落空了。
+/// 现在把原文按句子摊开，**点哪句是哪句**；也可以一句都不选，
+/// 那就是给整条写一句话。
+///
+/// ⚠️ 原文一个字都不会改。批注是叠在上面的：显示的时候原句划掉、她写的标红。
+struct AnnotateSheet: View {
+
+    let entry: MCPEntry
+    /// (原句, 批注)
+    let onSave: (String, String) -> Void
+
+    @EnvironmentObject private var app: AppState
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var picked = ""
+    @State private var note = ""
+
+    /// 原文拆成一句一句。按中文的句号问号感叹号和换行断，标点跟着前一句走。
+    private var sentences: [String] {
+        let raw = (entry.title.isEmpty ? "" : entry.title + "\n") + entry.body
+        var out: [String] = []
+        var cur = ""
+        for ch in raw {
+            if ch == "\n" {
+                if !cur.trimmingCharacters(in: .whitespaces).isEmpty { out.append(cur) }
+                cur = ""
+                continue
+            }
+            cur.append(ch)
+            if "。！？!?；;".contains(ch) {
+                out.append(cur)
+                cur = ""
+            }
+        }
+        if !cur.trimmingCharacters(in: .whitespaces).isEmpty { out.append(cur) }
+        return out.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                WallpaperBackground()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+
+                        SectionHeader("挑一句（可以不挑）")
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(Array(sentences.enumerated()), id: \.offset) { _, line in
+                                Button {
+                                    picked = (picked == line ? "" : line)
+                                } label: {
+                                    HStack(alignment: .top, spacing: 8) {
+                                        Image(systemName: picked == line
+                                              ? "largecircle.fill.circle" : "circle")
+                                            .font(.app(13))
+                                            .foregroundStyle(picked == line
+                                                             ? app.settings.accentColor
+                                                             : Theme.textMuted(scheme))
+                                        Text(line)
+                                            .font(.app(13))
+                                            .foregroundStyle(Theme.textMain(scheme))
+                                            .multilineTextAlignment(.leading)
+                                            .strikethrough(picked == line, color: .red.opacity(0.6))
+                                        Spacer(minLength: 0)
+                                    }
+                                    .padding(10)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(RoundedRectangle(cornerRadius: 10)
+                                        .fill(picked == line
+                                              ? app.settings.accentColor.opacity(0.12)
+                                              : Theme.softFillDeep))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
+                        SectionHeader("你要说的")
+                        TextField("写一句", text: $note, axis: .vertical)
+                            .lineLimit(2...6)
+                            .padding(11)
+                            .background(RoundedRectangle(cornerRadius: 12)
+                                .fill(Theme.softFillDeep))
+
+                        Text(picked.isEmpty
+                             ? "没挑句子的话，这条批注就挂在整条上。"
+                             : "「\(picked.prefix(18))…」会划掉，你写的标红跟在后面。原文一个字不改。")
+                            .font(.app(11))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
+                    .padding(16)
+                }
+            }
+            .navigationTitle("写批注")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("写上") {
+                        onSave(picked, note)
+                        dismiss()
+                    }
+                    .disabled(note.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
             }
         }
     }
@@ -395,7 +555,7 @@ struct DiaryPane: View {
     var body: some View {
         PaneScroll {
             VStack(alignment: .leading, spacing: 10) {
-                Text("写一篇").heading(15)
+                Text("写日记").heading(15)
                 Picker("", selection: $author) {
                     Text("饼饼").tag("饼饼")
                     Text("阿晏").tag("阿晏")
@@ -431,9 +591,7 @@ struct DiaryPane: View {
             }
             .glassCard()
 
-            HStack {
-                Text("最近的日记").heading(15)
-                Spacer()
+            SectionHeader(title: "最近的日记") {
                 // 一条条看是查东西用的，一叠叠看是回味用的
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) { viewMode = (viewMode + 1) % 3 }
@@ -478,9 +636,30 @@ struct DiaryPane: View {
             case 1: DiaryCalendarView(entries: parsed)
             case 2: DiaryStackView(entries: parsed)
             default:
-                FilteredEntryList(text: model.text, failed: model.failed,
-                                  keyword: keyword,
-                                  emptyHint: "还没有日记，写一篇吧")
+                // 日记也能删、能批注了（她报的第 13 条）。
+                // 走的是记忆库那两个同名工具：delete_diary / annotate_diary，
+                // 参数跟电脑上那套一模一样。
+                FilteredEntryList(
+                    text: model.text, failed: model.failed,
+                    keyword: keyword,
+                    emptyHint: "还没有日记，写一篇吧",
+                    onDelete: { entry in
+                        await model.run(app, tool: "delete_diary", args: ["id": entry.id])
+                        await model.run(app, tool: "get_diaries", args: ["limit": 50])
+                        return "删掉了。"
+                    },
+                    onAnnotate: { entry, original, correction in
+                        var args: [String: Any] = [
+                            "id": entry.id,
+                            "correction": correction,
+                            "author": app.settings.userName.isEmpty
+                                ? "饼饼" : app.settings.userName
+                        ]
+                        if !original.isEmpty { args["original"] = original }
+                        await model.run(app, tool: "annotate_diary", args: args)
+                        await model.run(app, tool: "get_diaries", args: ["limit": 50])
+                        return "写上了。"
+                    })
             }
         }
         .task {
@@ -537,7 +716,7 @@ struct MemoryPane: View {
                         content = ""; tags = ""
                     }
                 } label: {
-                    Text("存进记忆库")
+                    Text("保存到记忆库")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
                         .background(RoundedRectangle(cornerRadius: 14)
@@ -1109,7 +1288,7 @@ struct PulsePane: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("调一下").heading(15)
+                    Text("调整").heading(15)
                     Text("直接改电脑上那个引擎的状态")
                         .font(.caption).foregroundStyle(.secondary)
 

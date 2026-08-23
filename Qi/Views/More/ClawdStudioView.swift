@@ -109,7 +109,7 @@ struct ClawdStudioView: View {
                 Button {
                     name = ""; desc = ""; saving = true
                 } label: {
-                    Text("存进表情库").font(.app(14))
+                    Text("保存到表情库").font(.app(14))
                 }
             }
         }
@@ -348,7 +348,7 @@ struct ClawdStudioView: View {
                     .padding(18)
                 }
             }
-            .navigationTitle("存进表情库")
+            .navigationTitle("保存到表情库")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

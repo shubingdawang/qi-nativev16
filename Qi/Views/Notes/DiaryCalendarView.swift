@@ -141,7 +141,7 @@ struct DiaryCalendarView: View {
             } label: {
                 HStack(spacing: 5) {
                     Text(yearMode ? "\(String(year)) 年" : "\(String(year)) 年 \(month) 月")
-                        .font(.app(17, weight: .semibold))
+                        .heading(17)
                         .foregroundStyle(Theme.textMain(scheme))
                     Image(systemName: "chevron.down")
                         .font(.app(9, weight: .semibold))

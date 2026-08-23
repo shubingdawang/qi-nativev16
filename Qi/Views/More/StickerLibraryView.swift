@@ -32,6 +32,12 @@ struct StickerLibraryView: View {
     @State private var tagNote: String?
     /// 「从聊天里收」那一屏
     @State private var harvesting = false
+    /// 多选删除（她报的第 14 条）。空集合 = 没在多选。
+    /// **用 `selecting` 单独记一个开关**：选了又全取消的时候，
+    /// 不能因为集合空了就自己退出多选——那会让她刚点错一下就得重来。
+    @State private var selecting = false
+    @State private var chosenIDs: Set<UUID> = []
+    @State private var confirmBatch = false
 
     private var list: [Sticker] {
         store.list(owner: owner, keyword: keyword)
@@ -74,6 +80,65 @@ struct StickerLibraryView: View {
         }
         .navigationTitle("相册")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // 只有表情/GIF 那两档才有多选——图片那一档是另一套（文件夹）
+            if tab != 0 {
+                ToolbarItem(placement: .topBarTrailing) {
+                    if selecting {
+                        Button("完成") {
+                            selecting = false
+                            chosenIDs.removeAll()
+                        }
+                    } else {
+                        Button {
+                            selecting = true
+                        } label: {
+                            Image(systemName: "checkmark.circle")
+                        }
+                    }
+                }
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if selecting {
+                HStack(spacing: 14) {
+                    Text("选了 \(chosenIDs.count) 个")
+                        .font(.app(12))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                    Spacer()
+                    Button(role: .destructive) {
+                        confirmBatch = true
+                    } label: {
+                        Label("删除", systemImage: Icon.trash)
+                            .font(.app(13, weight: .medium))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(chosenIDs.isEmpty
+                                     ? Theme.textMuted(scheme)
+                                     : StatusTone.remind.color)
+                    .disabled(chosenIDs.isEmpty)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .background(.ultraThinMaterial)
+            }
+        }
+        .confirmationDialog("删掉选中的 \(chosenIDs.count) 个？",
+                            isPresented: $confirmBatch, titleVisibility: .visible) {
+            Button("删除", role: .destructive) {
+                // 删之前先把 id 拿出来：一边遍历一边改 store 里那个数组会出事
+                for id in chosenIDs {
+                    if let s = store.stickers.first(where: { $0.id == id }) {
+                        store.remove(s)
+                    }
+                }
+                chosenIDs.removeAll()
+                selecting = false
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("删掉的会进回收站，三十天内还能捞回来。")
+        }
         .sheet(item: $editing) { s in
             StickerEditorView(sticker: s)
         }
@@ -231,8 +296,31 @@ struct StickerLibraryView: View {
                                 .lineLimit(1)
                         }
                         .frame(maxWidth: .infinity)
+                        .overlay(alignment: .topTrailing) {
+                            if selecting {
+                                Image(systemName: chosenIDs.contains(sticker.id)
+                                      ? "checkmark.circle.fill" : "circle")
+                                    .font(.app(17))
+                                    .foregroundStyle(chosenIDs.contains(sticker.id)
+                                                     ? app.settings.accentColor
+                                                     : Theme.textMuted(scheme))
+                                    .background(Circle().fill(.white.opacity(0.65)))
+                                    .padding(4)
+                            }
+                        }
+                        .opacity(selecting && !chosenIDs.contains(sticker.id) ? 0.55 : 1)
                         .contentShape(Rectangle())
-                        .onTapGesture { editing = sticker }
+                        .onTapGesture {
+                            if selecting {
+                                if chosenIDs.contains(sticker.id) {
+                                    chosenIDs.remove(sticker.id)
+                                } else {
+                                    chosenIDs.insert(sticker.id)
+                                }
+                            } else {
+                                editing = sticker
+                            }
+                        }
                         .contextMenu {
                             if !sticker.description.isEmpty {
                                 Text(sticker.description)
@@ -250,10 +338,16 @@ struct StickerLibraryView: View {
                                 Label(sticker.owner == "user" ? "挪给他" : "挪回我这",
                                       systemImage: "arrow.left.arrow.right")
                             }
+                            Button {
+                                selecting = true
+                                chosenIDs = [sticker.id]
+                            } label: {
+                                Label("多选", systemImage: "checkmark.circle")
+                            }
                             Button(role: .destructive) {
                                 store.remove(sticker)
                             } label: {
-                                Label("删掉", systemImage: Icon.trash)
+                                Label("删除", systemImage: Icon.trash)
                             }
                         }
                     }

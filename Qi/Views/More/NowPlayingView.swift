@@ -34,7 +34,11 @@ struct NowPlayingView: View {
             WallpaperBackground()
             // 封面拉大糊掉当底。放歌这一屏该有点氛围，
             // 但不能盖过歌词，所以糊得很狠又压了一层。
-            backdrop
+            // ⚠️ 那块糊掉的封面底**撤了**（她说的「歌词页后面的黑色封面背景删掉」）。
+            // 它是一张放大 400 点、糊 60、再压一层黑的封面。
+            // 本意是让歌词有个氛围，实际效果是：**壁纸被盖住了**，
+            // 而没有封面的歌只剩一块灰方块杵在那儿——比没有还难看。
+            // 现在直接让壁纸透上来，跟 App 其他页一致。
 
             VStack(spacing: 0) {
                 header
@@ -52,7 +56,7 @@ struct NowPlayingView: View {
                         draftLyrics = player.current?.lyrics ?? ""
                         editingLyrics = true
                     } label: {
-                        Text("粘一段进来")
+                        Text("粘贴歌词")
                             .font(.app(13))
                             .foregroundStyle(app.settings.accentColor)
                     }
@@ -75,16 +79,6 @@ struct NowPlayingView: View {
     }
 
     // MARK: 底
-
-    @ViewBuilder
-    private var backdrop: some View {
-        if let t = player.current, !t.artworkName.isEmpty || !t.artworkURL.isEmpty {
-            TrackArtwork(track: t, side: 400)
-                .blur(radius: 60)
-                .overlay(Color.black.opacity(scheme == .dark ? 0.55 : 0.25))
-                .ignoresSafeArea()
-        }
-    }
 
     private var header: some View {
         HStack {

@@ -266,7 +266,7 @@ struct ClawdGridEditor: View {
 
                 Spacer(minLength: 0)
 
-                Text("装在身上")
+                Text("穿在身上")
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
                 Toggle("", isOn: Binding(get: { withBody },
@@ -434,7 +434,7 @@ struct ClawdGridEditor: View {
 
     private var stampTools: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("摆什么")
+            Text("零件")
                 .font(.app(12, weight: .medium))
                 .foregroundStyle(Theme.textMain(scheme))
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 62), spacing: 8)], spacing: 8) {
@@ -474,10 +474,10 @@ struct ClawdGridEditor: View {
                     toolButton("下", icon: "arrow.down") { move(dx: 0, dy: 1) }
                 }
                 HStack(spacing: 8) {
-                    toolButton("左右翻", icon: "arrow.left.and.right.righttriangle.left.righttriangle.right") {
+                    toolButton("左右翻转", icon: "arrow.left.and.right.righttriangle.left.righttriangle.right") {
                         change { $0.flipH.toggle() }
                     }
-                    toolButton("上下翻", icon: "arrow.up.and.down.righttriangle.up.righttriangle.down") {
+                    toolButton("上下翻转", icon: "arrow.up.and.down.righttriangle.up.righttriangle.down") {
                         change { $0.flipV.toggle() }
                     }
                     toolButton("放大", icon: "plus.magnifyingglass") {

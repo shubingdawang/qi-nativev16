@@ -354,6 +354,17 @@ enum MusicStore {
 
     static func url(_ name: String) -> URL { dir.appendingPathComponent(name) }
 
+    /// 这首歌的文件还在不在。
+    ///
+    /// 为什么需要这个：备份里**单个超过 20 MB 的文件是不装的**
+    /// （整包会大到导不出来）。所以一首大歌还原回来之后，
+    /// 库里那一条还在、封面还在、歌词还在，**只有音频没了**——
+    /// 以前点下去 `AVPlayer` 拿到一个不存在的地址，一声不吭什么都不放。
+    /// 她说的「导入备份进来的歌曲并不能播放」就是这个。
+    static func exists(_ name: String) -> Bool {
+        !name.isEmpty && FileManager.default.fileExists(atPath: url(name).path)
+    }
+
     /// 从「文件」里导一首进来。
     /// 网易云会员能下载的歌，先存到「文件」App，再从这儿导入就行。
     static func importFile(from source: URL) -> Track? {
@@ -455,6 +466,9 @@ final class MusicPlayer: NSObject, ObservableObject {
     @Published var playing = false
     @Published var progress: Double = 0
     @Published var duration: Double = 0
+    /// 点了一首文件已经不在的歌。界面拿它弹一句话——
+    /// **不能一声不吭**，不然她只会觉得「这 App 坏了」。
+    @Published var missingFile: String?
 
     private var player: AVPlayer?
     private var observer: Any?
@@ -492,6 +506,14 @@ final class MusicPlayer: NSObject, ObservableObject {
 
     func start(_ track: Track) {
         stop()
+
+        // 文件不在了就直说（备份没带上那些大文件）
+        if !track.localName.isEmpty, !MusicStore.exists(track.localName) {
+            missingFile = track.title.isEmpty ? "这首歌" : track.title
+            Console.log(.warn, "歌文件不在了", track.title + " · " + track.localName)
+            return
+        }
+
         let url: URL? = track.localName.isEmpty
             ? URL(string: track.previewURL)
             : MusicStore.url(track.localName)

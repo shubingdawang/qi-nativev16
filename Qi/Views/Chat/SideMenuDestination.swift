@@ -43,6 +43,8 @@ struct SideMenuDestination: View {
         case "journal":    JournalView()
         case "sticker":   StickerLibraryView()
         case "games":     GamesView()
+        case "terminal":  TerminalView()
+        case "moment":    ThisMomentView()
         default:          FootprintView()
         }
     }

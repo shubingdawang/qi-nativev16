@@ -313,6 +313,13 @@ final class UsageStore: ObservableObject {
 
     func record(_ usage: TokenUsage, source: UsageSource, on date: Date = Date()) {
         guard !usage.isEmpty else { return }
+
+        // 终端那一页。**每一次花钱的调用都从这儿过**，
+        // 所以记在这里一处就够，不用去二十个调用点各加一行。
+        Console.log(.cost, source.label,
+                    "进 \(usage.input) · 出 \(usage.output)"
+                    + (usage.cacheRead > 0 ? " · 命中缓存 \(usage.cacheRead)" : "")
+                    + (usage.reasoning > 0 ? " · 其中思考 \(usage.reasoning)" : ""))
         let k = Self.key(date)
         var day = days[k] ?? DayUsage(day: k)
         var current = day.bySource[source.rawValue] ?? TokenUsage()

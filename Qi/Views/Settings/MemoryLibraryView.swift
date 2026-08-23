@@ -41,8 +41,13 @@ struct MemoryLibraryView: View {
         .navigationTitle("记忆库")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+        // ⚠️ 不能只认 .json：**identity 是 .txt**，
+        // 只挂 json 的话那个文件在选择器里是灰的，根本选不中（她报的第 2 条）。
+        // `.text` 把 txt / md 这些都包进来了；`.data` 兜最后一层——
+        // 有些来源给的 UTI 是 public.data，照样得让她选得中，
+        // 读进来认不认得出是 importFiles 的事，不该在选文件这一步就把她拦住。
         .fileImporter(isPresented: $importing,
-                      allowedContentTypes: [.json],
+                      allowedContentTypes: [.json, .text, .plainText, .data],
                       allowsMultipleSelection: true) { result in
             switch result {
             case .failure(let e): report = "选文件失败：\(e.localizedDescription)"
@@ -90,7 +95,7 @@ struct MemoryLibraryView: View {
             SettingsNote(app.settings.localMemory
                 ? "记忆库那 38 个工具（wake_up、add_memory、surface_memories、checkpoint…）现在是 App 内置的，名字和参数跟电脑上那套一模一样。不走 MCP、不用开电脑、不用挂 Tailscale。\n\n⚠️ 「设置 → MCP」里那台「小屋」要关着——两边都开着的话，同一件事他手上有两套工具，会来回打架。"
                 : "关着的时候他还是走小屋那台 MCP，也就是还得开着电脑。",
-                title: "记忆库这个开关是干嘛的")
+                title: "说明")
 
             SettingsDivider()
 

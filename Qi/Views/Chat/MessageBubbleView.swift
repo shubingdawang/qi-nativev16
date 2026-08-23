@@ -357,7 +357,7 @@ struct MessageBubbleView: View {
 
             // 译文贴在原文下面，中间一条虚线隔开
             if message.isTranslating {
-                Text("正在翻…")
+                Text("正在读取…")
                     .font(.system(size: max(11, app.settings.fontSize - 3)))
                     .foregroundStyle(Theme.textMuted(scheme))
             } else if let t = message.translation, !t.isEmpty {
@@ -750,8 +750,15 @@ struct MessageBubbleView: View {
     }
 
     /// 引用条：左边一道竖线，上面是被引用者的名字
+    ///
+    /// ⚠️ 她报的第 11 条：「引用句子间隔太大了，根据文字长短决定宽度就行」。
+    /// 两处毛病：
+    /// · 里面塞了个 `Spacer(minLength: 0)`，**它会把这条撑到 240 满宽**——
+    ///   引一句「嗯」也占一整条，看着像一块空板子。
+    /// · 竖线没给高度，容器一被撑高它就跟着拉长，中间全是空的。
+    /// 现在：宽度按字走（240 只当上限），高度只包住字。
     private var quoteBlock: some View {
-        HStack(spacing: 8) {
+        HStack(alignment: .top, spacing: 8) {
             RoundedRectangle(cornerRadius: 1.5)
                 .fill(app.settings.accentColor.opacity(0.6))
                 .frame(width: 3)
@@ -763,11 +770,12 @@ struct MessageBubbleView: View {
                     .font(.app(12))
                     .foregroundStyle(Theme.textSoft(scheme))
                     .lineLimit(2)
+                    .multilineTextAlignment(.leading)
             }
-            Spacer(minLength: 0)
         }
+        .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.vertical, 7)
         .frame(maxWidth: 240, alignment: .leading)
         .glassBackground(radius: 12, strength: app.settings.glassOpacity * 0.8)
     }
@@ -848,10 +856,13 @@ struct MessageBubbleView: View {
                             .rotationEffect(.degrees(showProcess ? 90 : 0))
                     }
                     .foregroundStyle(Theme.textSoft(scheme))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 11)
-                    // 这类附属卡片一律铺满可用宽度，只有说的话才按长短决定气泡宽度
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 9)
+                    // ⚠️ 这里以前写着「附属卡片一律铺满可用宽度」——**改了**。
+                    // 她报的第 11 条：宽度该跟着字走。
+                    // 「想了 3.2s · 动了 3 下手」就那么几个字，
+                    // 铺满一整行之后右边一大块空，看着像加载失败。
+                    .fixedSize(horizontal: false, vertical: true)
                     .glassBackground(radius: 16, strength: app.settings.glassOpacity * 0.8)
                 }
                 .buttonStyle(.plain)
@@ -914,7 +925,8 @@ struct MessageBubbleView: View {
                 }
             }
         }
-        .padding(12)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassBackground(radius: 14, strength: app.settings.glassOpacity * 0.7)
     }
@@ -954,7 +966,10 @@ struct MessageBubbleView: View {
                 body()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.bottom, 11)
+            // 步与步之间留一行的空。她说的「两个动作之间需要换一行以免粘在一起」——
+            // 但整体上下的余量收掉了（原来 12/11，现在 9/8），
+            // 所以是「更紧凑，但分得更清」，不是笼统地变松或变紧。
+            .padding(.bottom, 10)
         }
     }
 

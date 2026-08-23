@@ -33,7 +33,7 @@ import CoreLocation
 // 最后一句必须是「不值得说就别说」**，不然他会为了用上刚拿到的东西硬找话说。
 
 /// 她此刻的处境。拿不到的那几样就是 nil，**不编**。
-struct Whereabouts {
+struct Whereabouts: Sendable {
     /// 城市 / 行政区（比如「日本 东京都 涩谷区」）
     var place: String?
     /// 精确到街道的那一档。**只有她把精度调到「精确」才会有**。
@@ -299,13 +299,42 @@ final class WhereaboutsService: NSObject, ObservableObject, CLLocationManagerDel
             out.trouble = lastTrouble ?? "拿不到位置"
             return out
         }
-        let names = await placeName(of: loc)
+        // ⚠️ 这两步都**必须有闹钟**（她报的第 3 条：查岗卡顿甚至卡死，只能大退）。
+        //
+        // 定位那步本来就有 8 秒的兜底，但后面两步没有：
+        // · `CLGeocoder` **不带超时**，挂在墙外的时候能吊很久；
+        // · 天气那条虽然 `timeoutInterval = 10`，赶上重试也不止十秒。
+        // 三步串起来最坏能拖到半分钟以上——她那边看到的就是「点了没反应」。
+        //
+        // 现在每一步都跟一个闹钟赛跑，谁先到算谁：
+        // 地名 6 秒、天气 8 秒。超时就当这一项没有，**别的照给**。
+        // 查岗少一行地名不要紧，卡死才要命。
+        let names = await raced(6) { await self.placeName(of: loc) } ?? (nil, nil)
         out.place = names.place
         out.street = names.street
 
-        var w = await weather(at: loc)
+        var w = await raced(8) { await self.weather(at: loc) } ?? Whereabouts()
+        if w.tempC == nil && out.place != nil { w.trouble = "天气没查到（超时）" }
         w.place = out.place
         w.street = out.street
         return w
+    }
+
+    /// 给一件可能永远不回来的事套一个闹钟。谁先到算谁。
+    ///
+    /// 超时那一路返回 nil，调用方自己决定拿什么顶上——
+    /// **不抛错**：查岗是「顺手看一眼」，不该因为一项没查到就整件事失败。
+    private func raced<T: Sendable>(_ seconds: Double,
+                          _ work: @escaping @Sendable () async -> T) async -> T? {
+        await withTaskGroup(of: T?.self) { group in
+            group.addTask { await work() }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
     }
 }

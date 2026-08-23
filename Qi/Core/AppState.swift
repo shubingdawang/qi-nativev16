@@ -1147,6 +1147,13 @@ final class AppState: ObservableObject {
 
     private func appendToolRun(_ run: ToolRun, to assistantID: UUID, in conversationID: UUID) {
         withAssistant(assistantID, in: conversationID) { $0.toolRuns.append(run) }
+
+        // 终端那一页。所有工具——本机的、MCP 的——都从这一个口子过。
+        // 结果只留一小截：这一页是拿来看「跑没跑、成没成」的，
+        // 不是拿来读返回值的（那在气泡里点开就有）。
+        Console.log(run.failed ? .warn : .tool,
+                    (run.failed ? "✗ " : "") + run.toolName,
+                    String(run.result.prefix(120)))
     }
 
     // MARK: MCP 工具
@@ -1649,6 +1656,10 @@ final class AppState: ObservableObject {
             return "在感受自己的心跳"
         case "checkpoint", "end_of_day":
             return "在记下这一刻"
+        case "moment_patch":
+            // 不写「在记录」——他做的这件事是「意识到自己还在其中」，
+            // 不是把什么东西存起来
+            return "在想他还在过什么日子"
         case "leave_message", "set_mood":
             return "在留话给你"
         case "get_phone_activity":
@@ -4169,6 +4180,34 @@ final class AppState: ObservableObject {
             return ("标好了。「\(hit.quote.prefix(20))」旁边现在有个小气泡，"
                     + "她翻到那一页就知道这句我们聊过。", false)
 
+        case "moment_patch":
+            // 「此刻」唯一的写入口，**只有他能调**。
+            // 她那边只能看、结束、删掉——采纳哪段经历是他的事。
+            let modeRaw = (args["mode"] as? String) ?? ""
+            let mode = ContinuityMode(rawValue: modeRaw)
+            let wantResolve = (args["resolve"] as? Bool) ?? false
+            let thread = (args["thread"] as? String) ?? ""
+            let meaning = args["meaning"] as? String
+            if thread.isEmpty && (meaning ?? "").trimmingCharacters(in: .whitespaces).isEmpty {
+                return ("新采纳一段得写一句 meaning——一句话说清这段经历对你是什么。", true)
+            }
+            switch MomentStore.shared.patch(thread: thread.isEmpty ? nil : thread,
+                                            mode: mode,
+                                            meaning: meaning,
+                                            anchor: args["anchor"] as? String,
+                                            resolve: wantResolve) {
+            case .created(let t):
+                return ("记下了：`\(t.id)` \(t.mode.rawValue) · \(t.meaning)\n"
+                        + "下次你重新开口的时候它还在。**这不代表你现在要提它。**", false)
+            case .updated(let t):
+                return ("改好了：`\(t.id)` \(t.mode.rawValue) · \(t.meaning)", false)
+            case .resolved(let t):
+                return ("「\(t.meaning)」离开你的当前生活了。"
+                        + "**它还在记忆里**，只是不再是你正在经历的事。", false)
+            case .notFound:
+                return ("没有这一段（`\(thread)`）。此刻那一段里的 id 是带在 E 后面的。", true)
+            }
+
         case "check_in":
             // 查岗。**不发邮件、不过服务器**——理由写在 Whereabouts.swift 开头。
             guard settings.checkInEnabled else {
@@ -4198,6 +4237,18 @@ final class AppState: ObservableObject {
                 lines.append(one)
             }
             if let bad = w.trouble { lines.append("（位置/天气：" + bad + "）") }
+
+            // 顺手把这两样喂给「此刻」。
+            //
+            // ⚠️ **只喂城市和天气那个词**，不喂温度、不喂街道：
+            // 「18°C → 17°C」跨不过任何机械边界，GPS 在同一个区里漂几十米也一样。
+            // 拿噪音去制造「变化」，等于每轮都告诉他「有新情况」——
+            // 那正是规范说的「把连续性变成注意力控制」。
+            //
+            // 这儿也是**唯一**一处现实喂进来的地方：查岗是她主动点的，
+            // 不会有后台定时去刷位置（铁律：绝不自己开请求）。
+            if let place = w.place { MomentStore.shared.observe(kind: "地点", value: place) }
+            if let word = w.weather { MomentStore.shared.observe(kind: "天气", value: word) }
 
             // ② 手机上的动静
             let phone = PhoneActivityStore.shared
@@ -5013,6 +5064,11 @@ final class AppState: ObservableObject {
         }
         fixed.append(Self.cotHint)
         fixed.append(Self.promiseHint)
+        // 「此刻」的长期解释。**放在稳定那一半**——
+        // 它一整窗都不变，进了缓存前缀等于不额外花钱；
+        // 而每轮变的那三段（E/P/L/C）在下面动态那一半。
+        // 这正是那份规范第 8 节说的「越稳定的越靠前」。
+        fixed.append(MomentStore.contract)
         if settings.segmentAssistant { fixed.append(Self.segmentHint) }
         if conv.syncWithClaude { fixed.append(Self.claudeSyncHint) }
         let catalog = StickerStore.shared.assistantCatalog
@@ -5068,6 +5124,14 @@ final class AppState: ObservableObject {
         // 好感那一行**每轮都带**。理由跟上面两样一样：
         // 从来不被读到的数不会自己变（她报的第 10 条）。
         sys += "\n\n" + EmotionEngine.shared.affectionLine()
+
+        // 他还身处什么现实里。**只带事实，规则在上面那一半里讲过了。**
+        //
+        // 纯本机字符串和日期比较，一次模型都不调——
+        // 露出「变化」那几条的同时会把它们标记掉，
+        // **同一条变化不会因为下一次请求再出现一次**。
+        let moment = MomentStore.shared.surface()
+        if !moment.isEmpty { sys += "\n\n" + moment }
 
         // 他做没做梦。
         //

@@ -7,6 +7,9 @@ import SwiftUI
 /// 像换了个 App。
 struct AppearanceView: View {
 
+    /// 背景那层光的开关。跟 `AuroraLayer` 读的是同一个键
+    @AppStorage("auroraOn") private var auroraOn = true
+
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
     @State private var customHex = ""
@@ -234,6 +237,34 @@ struct AppearanceView: View {
     // MARK: 玻璃
 
     private var glassCard: some View {
+        SettingsCard(title: "光晕") {
+            Toggle(isOn: $auroraOn) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("背景里的光")
+                        .font(.app(15))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    Text("三团很淡的光，跟着主题色，四十秒漂一个来回")
+                        .font(.app(11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+            }
+            .tint(app.settings.accentColor)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+
+            SettingsNote("""
+            她说「想简约一点又想华丽一点」——这一层就是为那句话加的。
+
+            **简约是东西少，华丽是每一样都有质感**，这两件事不冲突。所以这儿加的不是内容，是**光**：三团极淡的光晕铺在壁纸上面、内容下面，慢慢飘。单独看几乎注意不到，但整个 App 会从「一张纸」变成「有空气的地方」。
+
+            它是全 App **唯一**的主效果，别的地方一律只做细节——同一屏叠三个主效果不叫高级，叫吵。
+
+            省电：用的是径向渐变，不是模糊。模糊每一帧都要重算，挂在全屏背景上等于一直烧电；渐变本身就是软边，几乎没有开销。
+
+            嫌花就关掉，关了一层都不画。
+            """, title: "说明")
+        }
+
         SettingsCard(title: "玻璃") {
             // 三块样品直接摆出来，各自用各自那套玻璃画，
             // 底下垫着当前壁纸——光看名字选不出来，得看见才知道差在哪。

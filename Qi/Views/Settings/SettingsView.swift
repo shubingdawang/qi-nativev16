@@ -36,6 +36,9 @@ struct SettingsView: View {
 
                 ScrollView {
                     VStack(spacing: Look.gap + 6) {
+                        PageHero(title: "设置",
+                                 subtitle: "模型、外观、记忆、备份都在这儿",
+                                 mark: "设")
                         appearanceCard
                         generalCard
                         servicesCard
@@ -344,13 +347,13 @@ struct SettingsView: View {
                                          ? app.settings.accentColor
                                          : Theme.textMuted(scheme))
                 }
-                Text("这一条**不用你做任何事**：以后每次按住说话，它自己在旁边听一耳朵——"
+                Text(MD.inline("这一条**不用你做任何事**：以后每次按住说话，它自己在旁边听一耳朵——"
                      + "音量、语速、停顿有多长。攒够 \(VoiceBaseline.shared.progress.need) 条之后，"
                      + "再说话就会跟你自己的平时比一比，明显偏了才在那条语音上标一句"
                      + "「比平时轻」「比平时快」，他看得见。\n\n"
                      + "攒够之前它一个字都不说——那会儿说什么都是瞎猜。"
                      + "全程在这台手机上算，不花钱、不上传。"
-                     + "换了麦克风、感冒一周之后不准了，可以让它重新认识你。")
+                     + "换了麦克风、感冒一周之后不准了，可以让它重新认识你。"))
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
                 Button {
@@ -421,7 +424,7 @@ struct SettingsView: View {
             Group {
             Toggle(isOn: $app.settings.toolConfirm) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("动手之前问一句")
+                    Text("操作前确认")
                         .font(.app(15))
                         .foregroundStyle(Theme.textMain(scheme))
                     Text("他要删东西、装卸小屋、真打电话之前，先弹一下问你")
@@ -458,9 +461,9 @@ struct SettingsView: View {
                     Text("我分段发")
                         .font(.app(15))
                         .foregroundStyle(Theme.textMain(scheme))
-                    Text("打完先攒着，等你不说了再一起发出去。"
+                    Text(MD.inline("打完先攒着，等你不说了再一起发出去。"
                          + "图、文件、语音、表情**都会一起等**——"
-                         + "所以「先说一句再发语音」和「先发语音再补一句」都行")
+                         + "所以「先说一句再发语音」和「先发语音再补一句」都行"))
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
@@ -499,14 +502,22 @@ struct SettingsView: View {
                     .font(.app(15))
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer(minLength: 8)
-                Picker("", selection: $app.settings.contextLimit) {
-                    Text("全部").tag(0)
-                    Text("最近 10 条").tag(10)
-                    Text("最近 20 条").tag(20)
-                    Text("最近 40 条").tag(40)
+                // ⚠️ 这儿以前是 `Picker`（菜单样式）。她报的「字体大小不同」
+                // 就是它：**Picker 的选中项走系统字号**，比同一张卡里
+                // 「备用模型」「辅助模型」那两行（自己写的 14）明显大一号，
+                // 四行值并排看着高低不齐。
+                // 换成跟那两行一模一样的 Menu + Text，字号才归一。
+                Menu {
+                    Button("全部") { app.settings.contextLimit = 0 }
+                    Button("最近 10 条") { app.settings.contextLimit = 10 }
+                    Button("最近 20 条") { app.settings.contextLimit = 20 }
+                    Button("最近 40 条") { app.settings.contextLimit = 40 }
+                } label: {
+                    Text(Self.historyLabel(app.settings.contextLimit))
+                        .font(.app(14))
+                        .foregroundStyle(Theme.textSoft(scheme))
+                        .lineLimit(1)
                 }
-                .labelsHidden()
-                .tint(Theme.textSoft(scheme))
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 9)
@@ -520,14 +531,19 @@ struct SettingsView: View {
 
             // 主的额度满了接着用谁
             HStack {
-                Text("额度满了之后")
+                Text("备用模型")
                     .font(.app(15))
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer(minLength: 8)
                 Menu {
-                    Button("不接（直接报错）") { app.settings.fallbackModel = "" }
+                    Button("不启用") { app.settings.fallbackModel = "" }
+                    // ⚠️ 她报的第 7 条：「『自动挑』『不接』没有其他选项」。
+                    // 原因是这儿只列 `enabledModels`——**模型那一栏没逐个打勾的话，
+                    // 这个菜单就是空的**，看着像没得选。
+                    // 现在没打勾的时候就把这家的全部列出来：
+                    // 她想指定哪个就指定哪个，不用先回去打勾。
                     ForEach(app.providers.filter { $0.enabled }) { p in
-                        ForEach(p.enabledModels) { m in
+                        ForEach(p.enabledModels.isEmpty ? p.models : p.enabledModels) { m in
                             Button(p.name + " · " + m.id) {
                                 app.settings.fallbackModel = p.id.uuidString + "|" + m.id
                             }
@@ -557,14 +573,14 @@ struct SettingsView: View {
 
             // 跑杂活的那个模型
             HStack {
-                Text("跑杂活用哪个")
+                Text("辅助模型")
                     .font(.app(15))
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer(minLength: 8)
                 Menu {
-                    Button("自动挑") { app.settings.helperModel = "" }
+                    Button("自动选择") { app.settings.helperModel = "" }
                     ForEach(app.providers.filter { $0.enabled }) { p in
-                        ForEach(p.enabledModels) { m in
+                        ForEach(p.enabledModels.isEmpty ? p.models : p.enabledModels) { m in
                             Button(p.name + " · " + m.id) {
                                 app.settings.helperModel = p.id.uuidString + "|" + m.id
                             }
@@ -595,14 +611,18 @@ struct SettingsView: View {
                     .font(.app(15))
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer(minLength: 8)
-                Picker("", selection: $app.settings.compactEvery) {
-                    Text("关").tag(0)
-                    Text("每 40 条").tag(40)
-                    Text("每 60 条").tag(60)
-                    Text("每 100 条").tag(100)
+                Menu {
+                    Button("关") { app.settings.compactEvery = 0 }
+                    Button("每 40 条") { app.settings.compactEvery = 40 }
+                    Button("每 60 条") { app.settings.compactEvery = 60 }
+                    Button("每 100 条") { app.settings.compactEvery = 100 }
+                } label: {
+                    Text(app.settings.compactEvery == 0
+                         ? "关" : "每 \(app.settings.compactEvery) 条")
+                        .font(.app(14))
+                        .foregroundStyle(Theme.textSoft(scheme))
+                        .lineLimit(1)
                 }
-                .labelsHidden()
-                .tint(Theme.textSoft(scheme))
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 9)
@@ -888,7 +908,7 @@ struct SettingsView: View {
                 } else if measuring {
                     ProgressView().scaleEffect(0.7)
                 } else {
-                    Button("算一下") { measureStorage() }
+                    Button("计算") { measureStorage() }
                         .font(.app(12))
                         .buttonStyle(.plain)
                         .foregroundStyle(app.settings.accentColor)
@@ -991,13 +1011,18 @@ struct SettingsView: View {
     /// 她的原话：「导入备份应该不是覆盖而是增加……只增加目前没有的，
     /// 已有的忽略。」——所以默认是「只补没有的」，
     /// 「整个盖掉」留给换手机、重装那种真的想回到那一天的场合。
-    /// 跑杂活的现在选的是谁
+    /// 「带上多少历史」现在选的是哪一档
+    static func historyLabel(_ n: Int) -> String {
+        n <= 0 ? "全部" : "最近 \(n) 条"
+    }
+
+    /// 辅助模型现在选的是谁
     private var helperLabel: String {
         let saved = app.settings.helperModel
         guard !saved.isEmpty, let cut = saved.firstIndex(of: "|"),
               let pid = UUID(uuidString: String(saved[saved.startIndex..<cut])),
               let p = app.providers.first(where: { $0.id == pid })
-        else { return "自动挑" }
+        else { return "自动选择" }
         return p.name + " · " + String(saved[saved.index(after: cut)...])
     }
 
@@ -1007,7 +1032,7 @@ struct SettingsView: View {
         guard !saved.isEmpty, let cut = saved.firstIndex(of: "|"),
               let pid = UUID(uuidString: String(saved[saved.startIndex..<cut])),
               let p = app.providers.first(where: { $0.id == pid })
-        else { return "不接" }
+        else { return "不启用" }
         return p.name + " · " + String(saved[saved.index(after: cut)...])
     }
 

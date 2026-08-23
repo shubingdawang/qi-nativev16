@@ -415,8 +415,8 @@ struct ReaderView: View {
                 }
                 .buttonStyle(.plain)
 
-                Text("一章调一次模型，**要花钱**。补完他就答得上前面的事；"
-                     + "而且只补到你读到的这一章，后面的他还是不知道，剧透不了。")
+                Text(MD.inline("一章调一次模型，**要花钱**。补完他就答得上前面的事；"
+                     + "而且只补到你读到的这一章，后面的他还是不知道，剧透不了。"))
                     .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
             }

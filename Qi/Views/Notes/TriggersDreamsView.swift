@@ -89,7 +89,7 @@ struct TriggersDreamsView: View {
             Button {
                 editing = TriggerWord()
             } label: {
-                SettingsRowLabel(title: "加一个词", icon: "plus")
+                SettingsRowLabel(title: "添加词条", icon: "plus")
             }
             .buttonStyle(.plain)
 

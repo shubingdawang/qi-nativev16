@@ -87,7 +87,7 @@ struct PixelStudioView: View {
                                 Button {
                                     saveToStickers(art)
                                 } label: {
-                                    Label("存进表情包", systemImage: Icon.sticker)
+                                    Label("保存到表情库", systemImage: Icon.sticker)
                                 }
                                 Button(role: .destructive) {
                                     store.remove(art)
@@ -166,7 +166,7 @@ struct PixelStudioView: View {
                 Button {
                     saveToStickers(art)
                 } label: {
-                    Text("存进表情包")
+                    Text("保存到表情库")
                         .font(.app(13))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)

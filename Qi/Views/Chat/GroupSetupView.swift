@@ -73,7 +73,7 @@ struct GroupSetupView: View {
                         app.conversations[i].members.append(m)
                         editing = m
                     } label: {
-                        Label("加一位", systemImage: Icon.add)
+                        Label("添加成员", systemImage: Icon.add)
                     }
                 } header: {
                     Text("群里有谁")

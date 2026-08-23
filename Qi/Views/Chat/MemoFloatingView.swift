@@ -55,7 +55,7 @@ struct MemoFloatingView: View {
         }
         .ignoresSafeArea(edges: .bottom)
         .confirmationDialog("把这条收起来？", isPresented: $confirmClose, titleVisibility: .visible) {
-            Button("收起来", role: .destructive) {
+            Button("收起", role: .destructive) {
                 if let m = current { store.togglePin(m.id) }
                 open = false
             }

@@ -239,7 +239,7 @@ struct FileLibraryView: View {
                     moving = nil
                 }
             }
-            Button("拿出来") {
+            Button("取出") {
                 if let m = moving { store.move(m, to: "") }
                 moving = nil
             }
@@ -327,7 +327,7 @@ struct FileLibraryView: View {
             Button {
                 previewURL = FileStore.url(for: file.attachment)
             } label: {
-                Label("打开看看", systemImage: "eye")
+                Label("打开", systemImage: "eye")
             }
             Button {
                 moving = file

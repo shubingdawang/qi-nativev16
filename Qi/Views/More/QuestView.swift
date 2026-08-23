@@ -101,10 +101,10 @@ struct QuestView: View {
             Text("他还没派过事")
                 .font(.app(14, weight: .medium))
                 .foregroundStyle(Theme.textMain(scheme))
-            Text("这一页是**他给你**的那点小事——跟备忘（你自己记的）、"
+            Text(MD.inline("这一页是**他给你**的那点小事——跟备忘（你自己记的）、"
                  + "承诺（他欠你的）都不是一回事。\n"
                  + "他会在说话的时候顺手派一件，小、具体、今天做得完那种。"
-                 + "你做完了在这儿打个卡，他下次说话就知道了。")
+                 + "你做完了在这儿打个卡，他下次说话就知道了。"))
                 .font(.app(11.5))
                 .foregroundStyle(Theme.textMuted(scheme))
         }
@@ -261,8 +261,8 @@ struct QuestView: View {
                 }
                 .buttonStyle(.plain)
 
-                Text("交上去之后，他下次说话就知道你做了——"
-                     + "**不会自动跳出一句夸你的话**，那种一眼就看得出是流水线。")
+                Text(MD.inline("交上去之后，他下次说话就知道你做了——"
+                     + "**不会自动跳出一句夸你的话**，那种一眼就看得出是流水线。"))
                     .font(.app(10.5))
                     .foregroundStyle(Theme.textMuted(scheme))
 

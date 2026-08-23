@@ -93,7 +93,7 @@ struct ClawdHomeView: View {
         }
         .confirmationDialog("把他接进这间屋子？", isPresented: $askingLink,
                             titleVisibility: .visible) {
-            Button("接进来") {
+            Button("接入") {
                 store.linked = true
                 say("他进来了")
             }
@@ -233,8 +233,11 @@ struct ClawdHomeView: View {
                             // 一张地毯本来就摊得很大，再往外扩 12 点，
                             // 她想点旁边那张床都会落在地毯上。
                             // 小东西才需要那点余量（几十个点，手指按不准）。
-                            .contentShape(
-                                Rectangle().inset(by: kind.sprite.width >= 16 ? 0 : -10))
+                            // ⚠️ 按**画出来的格子**围形，不是按整个矩形
+                            // （她报的第 9 条：床和小桌叠在一起时只能移动床）。
+                            // 家具图的四角都是空的，按矩形算的话，
+                            // 摆在床空角上的小桌整个被床盖住，点谁都是点床。
+                            .contentShape(SpriteHitShape(sprite: kind.sprite))
                             // 单击开小菜单。
                             //
                             // 这两件事以前挂在 .contextMenu 上——**而 contextMenu

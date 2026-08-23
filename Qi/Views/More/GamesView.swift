@@ -116,7 +116,7 @@ struct GamesView: View {
         Button {
             importing = true
         } label: {
-            Label("放一个进来", systemImage: Icon.add)
+            Label("添加", systemImage: Icon.add)
                 .font(.app(14))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
@@ -186,7 +186,7 @@ struct GamesView: View {
                 HStack(spacing: 5) {
                     if loadingMCP { ProgressView().scaleEffect(0.7) }
                     else { Image(systemName: Icon.refresh).font(.app(11)) }
-                    Text("列一下他那边有哪些")
+                    Text("列出可用游戏")
                         .font(.app(11))
                 }
                 .foregroundStyle(app.settings.accentColor)

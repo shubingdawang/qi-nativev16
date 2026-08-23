@@ -83,7 +83,7 @@ struct ChatDrawer: View {
 
             HStack {
                 Text(space == .chat ? "絮语" : "工坊")
-                    .font(.app(17, weight: .semibold))
+                    .heading(17)
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer()
                 // 只剩「新对话」了。群聊不再是能新建的东西——

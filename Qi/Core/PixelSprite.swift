@@ -921,3 +921,45 @@ struct ClawdView: View {
         }
     }
 }
+
+/// 精灵**画出来的那些格子**围成的形状。
+///
+/// 拿来当 `.contentShape` 用：这样只有真的画了东西的地方才接触摸，
+/// 透明的边角不再抢点击。
+///
+/// 为什么需要它（她报的第 9 条）：
+/// > 我并不能自由拖动 clawd 小屋里的家具，当床和小桌同时在时，
+/// > 我不管是点击小桌还是长按小桌，都只能移动床。
+///
+/// 家具是一张张矩形的精灵图，**透明的地方也算在矩形里**。
+/// 一张床的图很大，四角都是空的；小桌摆在床的空角上，
+/// 看着没挨着，实际整个盖在床的矩形里面。
+/// 谁画在上面谁接管那一整块矩形，于是永远是床赢。
+///
+/// 按格子围形之后，床的空角不再接触摸，点小桌就是点小桌。
+struct SpriteHitShape: Shape {
+
+    let sprite: PixelSprite
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let w = max(sprite.width, 1), h = max(sprite.height, 1)
+        let cw = rect.width / CGFloat(w)
+        let ch = rect.height / CGFloat(h)
+        for y in 0..<h {
+            var x = 0
+            while x < w {
+                guard sprite.color(x: x, y: y) != nil else { x += 1; continue }
+                // 同一行里连着的几格并成一条，省下大量子路径
+                var run = 1
+                while x + run < w, sprite.color(x: x + run, y: y) != nil { run += 1 }
+                p.addRect(CGRect(x: rect.minX + CGFloat(x) * cw,
+                                 y: rect.minY + CGFloat(y) * ch,
+                                 width: cw * CGFloat(run),
+                                 height: ch))
+                x += run
+            }
+        }
+        return p
+    }
+}

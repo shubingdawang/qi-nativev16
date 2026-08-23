@@ -133,7 +133,7 @@ struct ProviderFormView: View {
                     Button {
                         provider.models.append(AIModel(id: ""))
                     } label: {
-                        Label("手动加一个模型", systemImage: "plus")
+                        Label("手动添加模型", systemImage: "plus")
                     }
 
                     if let loadError {

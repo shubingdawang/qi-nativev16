@@ -130,7 +130,7 @@ struct FootprintView: View {
             } label: {
                 HStack {
                     Image(systemName: "doc.plaintext")
-                    Text("打一张这天的小票")
+                    Text("打印当日小票")
                     Spacer()
                     Image(systemName: "chevron.right").font(.caption)
                 }

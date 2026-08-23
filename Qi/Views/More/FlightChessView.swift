@@ -284,7 +284,7 @@ struct FlightChessView: View {
             .buttonStyle(.plain)
 
             Button { pasteText = ""; pasting = true } label: {
-                rowLabel("粘贴一段", "整份 index.html 的内容，或者自己写的 JSON", "doc.on.clipboard")
+                rowLabel("粘贴", "整份 index.html 的内容，或者自己写的 JSON", "doc.on.clipboard")
             }
             .buttonStyle(.plain)
 
