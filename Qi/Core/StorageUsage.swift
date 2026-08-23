@@ -52,7 +52,10 @@ enum StorageUsage {
                           bytes: size(of: doc.appendingPathComponent("Music", isDirectory: true)),
                           note: "导进来的整曲"))
         items.append(Item(name: "记忆库",
-                          bytes: size(of: MemoryStore.root),
+                          // 路径自己拼：MemoryStore.root 挂在主线程上，
+                          // 而这个函数是特意放到后台线程跑的（要走几百个文件）。
+                          bytes: size(of: doc.appendingPathComponent("Memory",
+                                                                     isDirectory: true)),
                           note: "记忆、日记、承诺、那封信、聊天存档"))
 
         // 剩下的都算「别的」：一堆 json（聊天记录、设置、各种小账本）

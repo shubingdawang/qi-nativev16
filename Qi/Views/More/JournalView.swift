@@ -169,6 +169,17 @@ struct JournalView: View {
                     Rectangle().fill(Color.gray.opacity(0.3))
                         .frame(width: 33, height: 33)
                 }
+            case .cutout:
+                // 剪贴是透明底的 PNG，**不裁方块也不套框**——
+                // 裁了透明的那圈就没了，看着就不是贴纸了
+                if let img = ImageStore.load(e.imageName) {
+                    Image(uiImage: img).resizable().scaledToFit()
+                        .frame(width: 30, height: 30)
+                } else {
+                    Image(systemName: "scissors")
+                        .font(.app(11))
+                        .foregroundStyle(e.color)
+                }
             case .frame:
                 VStack(spacing: 0) {
                     if let img = ImageStore.load(e.imageName) {

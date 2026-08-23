@@ -165,8 +165,15 @@ final class QuestStore: ObservableObject {
     }
 
     private func saveScore() {
-        Storage.save(Score(points: points, streak: streak, lastDoneDay: lastDoneDay),
-                     to: "quest-score.json")
+        // 不能写 Score(points:streak:lastDoneDay:)——
+        // 自己写了 init(from:) 之后，逐成员构造器就没了。
+        // Score 是私有嵌套类型，文件级 extension 够不着它，
+        // 所以解码器只能留在类型里面，这边先建再填。
+        var s = Score()
+        s.points = points
+        s.streak = streak
+        s.lastDoneDay = lastDoneDay
+        Storage.save(s, to: "quest-score.json")
     }
 
     // MARK: 日子
@@ -322,7 +329,6 @@ final class QuestStore: ObservableObject {
 
     /// 他调 `list_tasks` 拿到的那一段
     func readable(herName: String) -> String {
-        let t = today
         var out = "【\(herName)的事】攒了 \(points) 分"
         if streak > 0 { out += "，连着 \(streak) 天" }
         out += "。\n"
