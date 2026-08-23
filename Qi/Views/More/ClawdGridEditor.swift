@@ -897,7 +897,7 @@ struct ClawdStampShape: View {
 /// 只是个参照，让她知道脸大概画在哪儿。形状跟骨架那几个 rect 对齐。
 /// 画布底下那个淡淡的 clawd 轮廓。
 ///
-/// ⚠️ **坐标不写在这儿**，读 `ClawdSVG.parts`。
+/// ⚠️ **坐标不写在这儿**，读 `ClawdSVG.blocks`。
 /// 这个 Shape 以前是照着骨架又抄了一遍方块，而且抄的是老版本——
 /// 她连着两轮说「一条腿在身体外面」，改的一直是 SVG 那份，
 /// 她看到的却是这一份。同一件东西**只能有一处坐标**。
@@ -905,9 +905,9 @@ struct ClawdSilhouette: Shape {
     func path(in rect: CGRect) -> Path {
         let sx = rect.width / 320, sy = rect.height / 230
         var p = Path()
-        for part in ClawdSVG.parts {
-            p.addRect(CGRect(x: part.x * sx, y: part.y * sy,
-                             width: part.w * sx, height: part.h * sy))
+        for b in ClawdSVG.blocks {
+            p.addRect(CGRect(x: b.x * sx, y: b.y * sy,
+                             width: b.w * sx, height: b.h * sy))
         }
         return p
     }

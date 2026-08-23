@@ -26,37 +26,42 @@ enum ClawdSVG {
     ///  二十个点实实在在戳在外面）。
     ///
     /// 所以这次不是再改一遍坐标，是**把两份合成一份**：
-    /// 方块只在这儿列一次，SVG 那串和剪影那个 Shape 都从这儿生成。
+    /// 方块只在这儿列一次（`blocks`），SVG 那串和剪影那个 Shape 都从它生成。
     /// 抄两份的下场就是这样——改对了一份，她看到的偏偏是另一份。
     ///
     /// 坐标照像素版那份图纸换算（图纸 32 格 × 每格 10）：
     /// 身子占第 4..27 格 → 40..280；
     /// 腿在第 4-6、9-11、20-22、25-27 格 → 40 / 90 / 200 / 250，左右对称。
-    struct Part {
+    /// ⚠️ 叫 `Block` 不叫 `Part`：**这个文件里早就有一个 `Part`**——
+    /// 底下那个是「点一下插一块」的**零件**（腮红、头顶闪光、举高高……）。
+    /// 我第一版顺手也起名 `Part`，构建当场报 ambiguous。
+    /// 同一轮里第二次栽在重名上了，规矩记在这儿：
+    /// **新起一个名字之前，先在这个文件里搜一遍它在不在。**
+    struct Block {
         var x: Double, y: Double, w: Double, h: Double
         /// 圆角。只有身子有
         var rx: Double = 0
     }
 
-    static let parts: [Part] = [
+    static let blocks: [Block] = [
         // 两只手
-        Part(x: 0,   y: 60,  w: 40,  h: 30),
-        Part(x: 280, y: 60,  w: 40,  h: 30),
+        Block(x: 0,   y: 60,  w: 40,  h: 30),
+        Block(x: 280, y: 60,  w: 40,  h: 30),
         // 身子
-        Part(x: 40,  y: 0,   w: 240, h: 170, rx: 6),
+        Block(x: 40,  y: 0,   w: 240, h: 170, rx: 6),
         // 四条腿：左边两条、右边两条，中间空一大段
-        Part(x: 40,  y: 170, w: 30,  h: 60),
-        Part(x: 90,  y: 170, w: 30,  h: 60),
-        Part(x: 200, y: 170, w: 30,  h: 60),
-        Part(x: 250, y: 170, w: 30,  h: 60)
+        Block(x: 40,  y: 170, w: 30,  h: 60),
+        Block(x: 90,  y: 170, w: 30,  h: 60),
+        Block(x: 200, y: 170, w: 30,  h: 60),
+        Block(x: 250, y: 170, w: 30,  h: 60)
     ]
 
-    /// 骨架那串 SVG。**从 `parts` 生成**，别再手写一遍。
+    /// 骨架那串 SVG。**从 `blocks` 生成**，别再手写一遍。
     /// 她要改表情，改的是里面那个 `face` 区块。
     static var skeleton: String {
         var s = "<svg viewBox=\"0 0 320 230\" xmlns=\"http://www.w3.org/2000/svg\">\n"
         s += "  <g id=\"clawd\">\n"
-        for p in parts {
+        for p in blocks {
             s += "    <rect class=\"body\""
             s += " x=\"\(Int(p.x))\" y=\"\(Int(p.y))\""
             s += " width=\"\(Int(p.w))\" height=\"\(Int(p.h))\""
