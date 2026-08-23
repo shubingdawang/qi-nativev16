@@ -25,6 +25,8 @@ struct SideMenuDestination: View {
         switch item.id {
         case "footprint": FootprintView()
         case "favorite":   FavoritesView()
+        case "moments":    MomentsView()
+        case "quests":     QuestView()
         case "thoughts":   ThoughtPoolView()
         case "call":       CallHistoryView()
         case "fortune":    DivinationView()

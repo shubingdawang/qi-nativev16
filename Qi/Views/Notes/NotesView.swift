@@ -372,7 +372,23 @@ struct DiaryPane: View {
     @State private var content = ""
     @State private var mood = ""
     @State private var keyword = ""
-    @AppStorage("diaryStacked") private var stacked = false
+    /// 看法：0 一条条列着 · 1 日历 · 2 一叠叠摊着。
+    /// 点右上角那个图标轮着换，图标画的就是**当前**这种。
+    @AppStorage("diaryViewMode") private var viewMode = 0
+
+    /// 切好的日记。搜索框里有词就先筛一遍——
+    /// 日历和便签也该跟着搜，不然换个看法搜索就哑了。
+    private var parsed: [MCPEntry] {
+        let all = model.failed ? [] : MCPEntryParser.parse(model.text)
+        let k = keyword.trimmingCharacters(in: .whitespaces)
+        guard !k.isEmpty else { return all }
+        return all.filter {
+            $0.title.localizedCaseInsensitiveContains(k)
+            || $0.body.localizedCaseInsensitiveContains(k)
+            || $0.tags.contains { t in t.localizedCaseInsensitiveContains(k) }
+            || $0.dateText.contains(k)
+        }
+    }
 
     var body: some View {
         PaneScroll {
@@ -418,9 +434,9 @@ struct DiaryPane: View {
                 Spacer()
                 // 一条条看是查东西用的，一叠叠看是回味用的
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) { stacked.toggle() }
+                    withAnimation(.easeInOut(duration: 0.2)) { viewMode = (viewMode + 1) % 3 }
                 } label: {
-                    Image(systemName: stacked ? "list.bullet" : "square.stack")
+                    Image(systemName: ["list.bullet", "calendar", "square.stack"][viewMode])
                         .font(.app(13))
                         .foregroundStyle(app.settings.accentColor)
                 }
@@ -454,9 +470,12 @@ struct DiaryPane: View {
             .padding(.vertical, 9)
             .background(Capsule().fill(Theme.softFillDeep))
 
-            if stacked {
-                DiaryStackView(entries: model.failed ? [] : MCPEntryParser.parse(model.text))
-            } else {
+            // 三种看法：查东西用列表，翻日子用日历，回味用那一叠。
+            // 搜索框对三种都管用——parsed 已经按词筛过了。
+            switch viewMode {
+            case 1: DiaryCalendarView(entries: parsed)
+            case 2: DiaryStackView(entries: parsed)
+            default:
                 FilteredEntryList(text: model.text, failed: model.failed,
                                   keyword: keyword,
                                   emptyHint: "还没有日记，写一篇吧")

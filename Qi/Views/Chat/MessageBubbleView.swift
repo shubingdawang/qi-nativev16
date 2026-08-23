@@ -33,8 +33,8 @@ struct MessageBubbleView: View {
     @State private var editPage = 0
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
-    @State private var showReasoning = false
-    @State private var showTools = false
+    /// 「他刚才干了什么」那张卡展开了没有
+    @State private var showProcess = false
     @State private var pulse = false
     /// 点开的是第几张图
     @State private var previewing = false
@@ -249,9 +249,11 @@ struct MessageBubbleView: View {
                     fileRow
                 }
 
-                if let reasoning = message.reasoning, !reasoning.isEmpty {
-                    reasoningBlock(cleanReasoning(reasoning))
-                }
+                // 思考链和工具**合成一张卡**（她给的 p5–p6 那种）。
+                // 以前是上下两块各带一个标题，一轮里他想一下、调三个工具，
+                // 屏幕上就先出一条「想了一会儿」再出一条「叮叮咣咣了 3 下」——
+                // 两条都在说同一件事：他刚才干了什么。
+                processBlock
 
                 // 存了图的话，先出一张小卡，比那行工具日志好看得多
                 ForEach(message.toolRuns.filter { $0.hasCard }) { run in
@@ -269,9 +271,7 @@ struct MessageBubbleView: View {
                     }
                 }
 
-                if !message.toolRuns.isEmpty {
-                    toolBlock
-                }
+                // （工具那一块已经并进上面那张卡了）
 
                 if !message.choices.isEmpty {
                     choiceBlock
@@ -526,7 +526,17 @@ struct MessageBubbleView: View {
         }
     }
 
-    /// 笔记预览卡
+    /// 每家一个色，卡片边框和名字都用它。
+    /// 一眼能认出这是哪儿来的，比多写一行「来自哔哩哔哩」省地方。
+    private func brandColor(_ source: LinkSource) -> Color {
+        switch source {
+        case .xhs:      return Color(red: 1, green: 0.32, blue: 0.37)
+        case .bilibili: return Color(red: 0.98, green: 0.45, blue: 0.62)
+        case .douyin:   return Color(red: 0.16, green: 0.86, blue: 0.83)
+        }
+    }
+
+    /// 链接预览卡（小红书笔记 / B 站视频 / 抖音视频）
     private func noteCard(_ note: XHSNote) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             if let first = note.localImages.first, let img = ImageStore.load(first) {
@@ -536,6 +546,14 @@ struct MessageBubbleView: View {
                         .scaledToFill()
                         .frame(width: 265, height: 150)
                         .clipped()
+                    // 视频的封面上盖一个播放三角——不然跟一张图片没区别
+                    if note.source != .xhs {
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 34))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .shadow(color: .black.opacity(0.3), radius: 4)
+                            .frame(width: 265, height: 150)
+                    }
                     if note.imageCount > 1 {
                         Text("\(note.imageCount) 张")
                             .font(.app(10, weight: .medium))
@@ -544,6 +562,16 @@ struct MessageBubbleView: View {
                             .padding(.vertical, 3)
                             .background(Capsule().fill(Color.black.opacity(0.45)))
                             .padding(8)
+                    }
+                    if !note.duration.isEmpty {
+                        Text(note.duration)
+                            .font(.app(10, weight: .medium))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(Color.black.opacity(0.45)))
+                            .padding(8)
+                            .frame(width: 265, height: 150, alignment: .bottomTrailing)
                     }
                 }
             }
@@ -564,9 +592,15 @@ struct MessageBubbleView: View {
                         .multilineTextAlignment(.leading)
                 }
                 HStack(spacing: 8) {
-                    Text(note.author.isEmpty ? "小红书" : note.author)
+                    Text(note.author.isEmpty ? note.source.rawValue : note.author)
                         .font(.app(10))
-                        .foregroundStyle(Color(red: 1, green: 0.3, blue: 0.35))
+                        .foregroundStyle(brandColor(note.source))
+                        .lineLimit(1)
+                    if !note.playCount.isEmpty {
+                        Label(note.playCount, systemImage: "play.rectangle")
+                            .font(.app(10))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
                     Spacer(minLength: 0)
                     if !note.likedCount.isEmpty {
                         Label(note.likedCount, systemImage: "heart")
@@ -588,7 +622,7 @@ struct MessageBubbleView: View {
         .glassBackground(radius: 16, strength: app.settings.glassOpacity)
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color(red: 1, green: 0.35, blue: 0.4).opacity(0.3), lineWidth: 1)
+                .strokeBorder(brandColor(note.source).opacity(0.3), lineWidth: 1)
         }
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .onTapGesture {
@@ -761,16 +795,6 @@ struct MessageBubbleView: View {
     /// 优先用他自己写的——他在想的过程里可以随时写 [[cot:在想怎么说才不吓着她]]，
     /// 后写的盖掉先写的。写了什么就显示什么，不写才退回秒数。
     /// 报秒数其实没什么意思，"想了 5.6 秒"跟他在想什么毫无关系。
-    private var reasoningTitle: String {
-        if let mine = Self.cotLabel(from: message.reasoning ?? ""), !mine.isEmpty {
-            return mine
-        }
-        if message.isStreaming { return "正在想…" }
-        if let sec = message.reasoningSeconds, sec > 0 {
-            return String(format: "想了一会儿（%.1fs）", sec)
-        }
-        return "想了一会儿"
-    }
 
     /// 把思考里最后一个 [[cot:...]] 抠出来
     static func cotLabel(from reasoning: String) -> String? {
@@ -782,88 +806,170 @@ struct MessageBubbleView: View {
         return ns.substring(with: last.range(at: 1)).trimmingCharacters(in: .whitespaces)
     }
 
-    // MARK: 工具调用
+    // MARK: 他刚才干了什么（思考链 + 工具，一张卡）
+    //
+    // 出处：她给的参考图里那个 ThoughtProcess——
+    // **一个他自己定的标题，点开是一条时间线**，
+    // 想的和做的按先后串在一起。
+    //
+    // 为什么合并：这两块回答的是同一个问题（「他刚才干了什么」），
+    // 分成两张卡，一轮就顶掉半屏，而且她要看全还得点两次。
 
-    private var toolBlock: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.18)) { showTools.toggle() }
-            } label: {
-                HStack(spacing: 8) {
-                    Text("叮叮咣咣了 \(message.toolRuns.count) 下")
-                        .font(.app(14, weight: .medium))
-                    if message.toolRuns.contains(where: { $0.failed }) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.app(11))
-                            .foregroundStyle(.orange)
-                    }
-                    Spacer(minLength: 8)
-                    Image(systemName: "chevron.right")
-                        .font(.app(11, weight: .semibold))
-                        .rotationEffect(.degrees(showTools ? 90 : 0))
-                }
-                .foregroundStyle(Theme.textSoft(scheme))
-                .padding(.horizontal, 15)
-                .padding(.vertical, 13)
-                // 思考链和工具这类**铺满可用宽度**——
-                // 上一版我把「固定长度」理解成了"钉死一个数（258）"，
-                // 结果它们比说的话还短，正好反了。
-                // 她要的是：这类附属卡片长度一律一样、几乎铺满，
-                // 只有说的话才按文字长短决定气泡有多长。
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .glassBackground(radius: 18, strength: app.settings.glassOpacity * 0.85)
-            }
-            .buttonStyle(.plain)
+    /// 有没有东西可展开
+    private var hasProcess: Bool {
+        !(message.reasoning ?? "").isEmpty || !message.toolRuns.isEmpty
+    }
 
-            if showTools {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(message.toolRuns) { run in
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 6) {
-                                Image(systemName: run.failed ? "xmark.circle.fill" : "checkmark.circle.fill")
-                                    .font(.app(11))
-                                    .foregroundStyle(run.failed ? .red : .green)
-                                Text(run.toolName)
-                                    .font(.app(13, weight: .semibold, design: .monospaced))
-                                if !run.serverName.isEmpty {
-                                    Text(run.serverName)
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
-                                }
-                            }
-                            if !run.arguments.isEmpty, run.arguments != "{}" {
-                                Text(run.arguments)
-                                    .font(.app(11, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(4)
-                            }
-                            Text(run.result)
-                                .font(.app(12))
-                                .foregroundStyle(run.failed ? .red : Theme.textSoft(scheme))
-                                .lineLimit(12)
-                                .textSelection(.enabled)
+    @ViewBuilder
+    private var processBlock: some View {
+        if hasProcess {
+            VStack(alignment: .leading, spacing: 6) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { showProcess.toggle() }
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "sparkle")
+                            .font(.app(10))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                        Text(processTitle)
+                            .font(.app(13.5, weight: .medium))
+                            .lineLimit(1)
+                        if message.toolRuns.contains(where: { $0.failed }) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.app(10))
+                                .foregroundStyle(.orange)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Spacer(minLength: 6)
+                        Image(systemName: "chevron.right")
+                            .font(.app(10, weight: .semibold))
+                            .rotationEffect(.degrees(showProcess ? 90 : 0))
                     }
+                    .foregroundStyle(Theme.textSoft(scheme))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 11)
+                    // 这类附属卡片一律铺满可用宽度，只有说的话才按长短决定气泡宽度
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassBackground(radius: 16, strength: app.settings.glassOpacity * 0.8)
                 }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .glassBackground(radius: 14, strength: app.settings.glassOpacity * 0.75)
+                .buttonStyle(.plain)
+
+                if showProcess { processTimeline }
             }
         }
     }
+
+    /// 标题。**他自己写的那句优先**——`[[cot:…]]` 是他给这一轮起的名字，
+    /// 比我们数出来的「3 步」有意思得多。
+    private var processTitle: String {
+        if let mine = Self.cotLabel(from: message.reasoning ?? ""), !mine.isEmpty {
+            return mine
+        }
+        if message.isStreaming { return "正在想…" }
+        var bits: [String] = []
+        if !(message.reasoning ?? "").isEmpty {
+            if let sec = message.reasoningSeconds, sec > 0 {
+                bits.append(String(format: "想了 %.1fs", sec))
+            } else {
+                bits.append("想了一会儿")
+            }
+        }
+        if !message.toolRuns.isEmpty {
+            bits.append("动了 \(message.toolRuns.count) 下手")
+        }
+        return bits.isEmpty ? "过程" : bits.joined(separator: " · ")
+    }
+
+    /// 展开之后那条时间线。左边一条竖线串起来，一步一个点。
+    private var processTimeline: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let r = message.reasoning, !cleanReasoning(r).isEmpty {
+                step(icon: "brain", tint: Theme.textMuted(scheme), title: "想了想") {
+                    Text(cleanReasoning(r))
+                        .font(.system(size: max(11, app.settings.fontSize - 3)))
+                        .foregroundStyle(Theme.textSoft(scheme))
+                        .textSelection(.enabled)
+                }
+            }
+            ForEach(message.toolRuns) { run in
+                step(icon: run.failed ? "xmark" : "wrench.and.screwdriver",
+                     tint: run.failed ? .red : app.settings.accentColor,
+                     title: run.toolName,
+                     note: run.serverName) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        if !run.arguments.isEmpty, run.arguments != "{}" {
+                            Text(run.arguments)
+                                .font(.app(10.5, design: .monospaced))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                                .lineLimit(4)
+                        }
+                        Text(run.result)
+                            .font(.app(11.5))
+                            .foregroundStyle(run.failed ? .red : Theme.textSoft(scheme))
+                            .lineLimit(12)
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassBackground(radius: 14, strength: app.settings.glassOpacity * 0.7)
+    }
+
+    /// 时间线上的一步
+    @ViewBuilder
+    private func step(icon: String, tint: Color, title: String, note: String = "",
+                      @ViewBuilder body: () -> some View) -> some View {
+        HStack(alignment: .top, spacing: 9) {
+            // 左边那根线和点。**线要连着**——断开的点看着像几件不相干的事
+            VStack(spacing: 0) {
+                Circle()
+                    .fill(tint.opacity(0.85))
+                    .frame(width: 6, height: 6)
+                    .padding(.top, 5)
+                Rectangle()
+                    .fill(Theme.textMuted(scheme).opacity(0.22))
+                    .frame(width: 1)
+                    .frame(maxHeight: .infinity)
+            }
+            .frame(width: 6)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 5) {
+                    Image(systemName: icon)
+                        .font(.app(9.5))
+                        .foregroundStyle(tint)
+                    Text(title)
+                        .font(.app(12, weight: .medium, design: .monospaced))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    if !note.isEmpty {
+                        Text(note)
+                            .font(.app(9.5))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
+                }
+                body()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, 11)
+        }
+    }
+
+    // ⚠️ 老的 `toolBlock` 删了：它跟思考链那一块**说的是同一件事**
+    // （他刚才干了什么），现在并进上面那张 `processBlock` 了。
+    // 留着两份的话，改一处另一处就长歪。
 
     /// 气泡就是一块玻璃。自己和对方的区别靠左右位置，
     /// 不靠颜色——整块染色会变成不透光的塑料片。
     @ViewBuilder
     private var bubbleShape: some View {
-        // 「家」＝claude.ai。那边气泡不是玻璃：
+        // 有的主题气泡不是玻璃（「家」＝claude.ai 就是）：
         // **她说的话**是一块实心的浅面板，**他说的话根本没有气泡**——
-        // 就直接印在纸上。所以这一档不走 GlassSurface。
-        if app.settings.preset == .home {
+        // 就直接印在纸上。这一档不走 GlassSurface。
+        if app.settings.preset.skin.bubbles == .panel {
             if isUser {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(scheme == .dark ? HomePalette.panelDark : HomePalette.panel)
+                    .fill(app.settings.preset.skin.cardFill.c(scheme))
             } else {
                 Color.clear
             }
@@ -969,45 +1075,14 @@ struct MessageBubbleView: View {
         ).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// 思考链那一条。折起来是一条，点开在原地往下展开。
-    ///
-    /// 之前做成了"浮起来的气泡"——那个是 clawd 那边要的，我搬错地方了。
-    /// 聊天页要的就是老老实实往下撑：**能看着字一个一个蹦出来**，
-    /// 而且随着字变多，列表会自己滚到底（靠 conversation.scrollTick，
-    /// 那个数把 reasoning 的字数也算进去了）。浮起来的话高度是定的，
-    /// 反而看不出在长。
-    private func reasoningBlock(_ text: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) { showReasoning.toggle() }
-            } label: {
-                HStack(spacing: 8) {
-                    Text(reasoningTitle)
-                        .font(.app(14, weight: .medium))
-                    Spacer(minLength: 8)
-                    Image(systemName: "chevron.right")
-                        .font(.app(11, weight: .semibold))
-                        .rotationEffect(.degrees(showReasoning ? 90 : 0))
-                }
-                .foregroundStyle(Theme.textSoft(scheme))
-                .padding(.horizontal, 15)
-                .padding(.vertical, 13)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .glassBackground(radius: 18, strength: app.settings.glassOpacity * 0.85)
-            }
-            .buttonStyle(.plain)
-
-            if showReasoning {
-                Text(text)
-                    .font(.system(size: max(11, app.settings.fontSize - 3)))
-                    .foregroundStyle(Theme.textSoft(scheme))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-                    .glassBackground(radius: 14, strength: app.settings.glassOpacity * 0.75)
-                    .textSelection(.enabled)
-            }
-        }
-    }
+    // ⚠️ 老的 `reasoningBlock` 删了，理由同 `toolBlock`：两块说的是同一件事，
+    // 现在是一张 `processBlock`。
+    //
+    // 它当年那条注释还是算数的，抄在这儿免得下一窗又改回去：
+    // 这张卡**要老老实实往下撑**，别做成"浮起来的气泡"——
+    // 浮起来高度是定的，就看不见字在一个一个蹦出来了。
+    // （列表会跟着自己滚到底，靠 `conversation.scrollTick`，
+    //   那个数把 reasoning 的字数也算进去了。）
 }
 
 /// 一枚圆头像。没设图就用名字第一个字顶上，

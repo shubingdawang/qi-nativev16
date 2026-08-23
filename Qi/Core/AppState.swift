@@ -33,6 +33,10 @@ final class AppState: ObservableObject {
         // 字号：16 是基准。全 App 的字都乘这个倍率（Font.app），
         // 不再是只有聊天气泡和输入框跟着变
         Theme.fontScale = max(0.7, min(1.6, settings.fontSize / 16))
+        // 高德那把 key 同步进 UserDefaults：`Whereabouts` 是个不认识 AppState 的
+        // 独立单件（跟 `checkInPrecision` 一样），从那儿取最省事。
+        // **key 本身还是只存在她手机里**，一个字都不进仓库。
+        UserDefaults.standard.set(settings.amapKey, forKey: "amapKey")
     }
     @Published var mcpServers: [MCPServer] = [] {
         didSet { scheduleSave(.mcp) }
@@ -432,26 +436,99 @@ final class AppState: ObservableObject {
     /// 哪几个窗口正攒着话。界面上要给个提示，不然像是没发出去。
     @Published private(set) var waitingWindows: Set<UUID> = []
 
-    /// 又攒一句进去，倒计时重新开始
-    func queueSend(text: String, in conversationID: UUID) {
+    /// 又攒一样东西进去，倒计时重新开始。
+    ///
+    /// ⚠️ **不只是文字。** 她说的：
+    /// 「我有时候给他发语音想跟他先说下话，不然只有一个语音他可能不能很好地理解。」
+    ///
+    /// 以前这儿只收文字：一旦带了图、文件、**语音**、表情，
+    /// `sendCurrent` 就绕过攒着这条路直接发出去——
+    /// 于是「先说一句再发语音」得赶在六秒之内，
+    /// 「先发语音再补一句」直接做不到（语音一落地他就开始回了）。
+    ///
+    /// 现在什么都能攒：文字接在后面，图和文件挂上去，
+    /// **语音和表情各自单独一条**（跟直接发的时候一样，不然一条里塞两段语音没法听）。
+    /// 顺序随便，她不说话了才一起交给他。
+    func queueSend(text: String,
+                   images: [UIImage] = [],
+                   imageNames: [String] = [],
+                   files: [FileAttachment] = [],
+                   sticker: Sticker? = nil,
+                   quoting quoted: ChatMessage? = nil,
+                   voiceName: String = "",
+                   voiceTone: String = "",
+                   in conversationID: UUID) {
         guard let i = index(of: conversationID) else { return }
         let line = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !line.isEmpty else { return }
+        let hasStuff = !images.isEmpty || !imageNames.isEmpty || !files.isEmpty
+            || sticker != nil || !voiceName.isEmpty
+        guard !line.isEmpty || hasStuff else { return }
 
         WakeEngine.shared.noteRun()
 
+        // 这一轮的记号。攒着的这些都算同一轮，头像只挂一次
+        let turn: UUID
         if let mid = pendingUserMessage[conversationID],
            let mi = conversations[i].messages.firstIndex(where: { $0.id == mid }) {
-            // 空行分段，跟他那边的分段用的是同一套规矩
-            conversations[i].messages[mi].content += "\n\n" + line
+            turn = conversations[i].messages[mi].turnID ?? UUID()
         } else {
+            turn = UUID()
+        }
+
+        // ① 语音单独一条。**不合并**——一条消息挂两段录音，
+        //    她自己回头都分不清哪句是哪句
+        if !voiceName.isEmpty {
+            var v = ChatMessage(role: .user, content: line)
+            v.turnID = turn
+            v.voiceName = voiceName
+            v.voiceTone = voiceTone
+            conversations[i].messages.append(v)
+            // 语音那条已经把这次的文字带走了，别再往攒着那条里塞一遍
+            if pendingUserMessage[conversationID] == nil {
+                pendingUserMessage[conversationID] = v.id
+            }
+        } else if let mid = pendingUserMessage[conversationID],
+                  let mi = conversations[i].messages.firstIndex(where: { $0.id == mid }) {
+            // ② 接着攒：文字空行分段（跟他那边的分段同一套规矩），
+            //    图和文件直接挂上去
+            if !line.isEmpty {
+                conversations[i].messages[mi].content +=
+                    conversations[i].messages[mi].content.isEmpty ? line : "\n\n" + line
+            }
+            for image in images {
+                if let name = ImageStore.save(image) {
+                    conversations[i].messages[mi].imageNames.append(name)
+                }
+            }
+            conversations[i].messages[mi].imageNames.append(contentsOf: imageNames)
+            conversations[i].messages[mi].files.append(contentsOf: files)
+            if conversations[i].messages[mi].quotedText.isEmpty, let quoted {
+                applyQuote(quoted, to: &conversations[i].messages[mi])
+            }
+        } else {
+            // ③ 这一轮的第一样
             var msg = ChatMessage(role: .user, content: line)
-            msg.turnID = UUID()
+            msg.turnID = turn
+            for image in images {
+                if let name = ImageStore.save(image) { msg.imageNames.append(name) }
+            }
+            msg.imageNames.append(contentsOf: imageNames)
+            msg.files = files
+            if let quoted { applyQuote(quoted, to: &msg) }
             conversations[i].messages.append(msg)
             pendingUserMessage[conversationID] = msg.id
         }
+
+        // ④ 表情永远单独一条（跟直接发的时候一样）
+        if let sticker {
+            var s = ChatMessage(role: .user)
+            s.stickerID = sticker.id
+            s.turnID = turn
+            conversations[i].messages.append(s)
+        }
+
         conversations[i].updatedAt = Date()
-        if conversations[i].title == "新对话" {
+        if conversations[i].title == "新对话", !line.isEmpty {
             conversations[i].title = String(line.prefix(18))
         }
         if settings.haptics {
@@ -480,8 +557,29 @@ final class AppState: ObservableObject {
               let msg = conversations[i].messages.first(where: { $0.id == mid })
         else { return }
 
-        if let link = XHSFetcher.extractLink(msg.content) {
-            loadNote(link, in: conversationID)
+        // ⚠️ **这一段以前是漏的。**
+        //
+        // 情绪和身体那一套只写在 `send` 里，而攒着这条路不走 `send`——
+        // 于是**开了「我分段发」之后，她说的话完全不动他的身体和好感**。
+        // 她不会看到任何报错，只会觉得「那七项好像跟我没关系」。
+        //
+        // 补在这儿而不是 `queueSend` 里：一轮攒了三句，
+        // 该按**合起来那一整段**读一次，不是读三次各推一次。
+        let whole = pendingText(mid, in: conversationID)
+        if !whole.isEmpty {
+            let read = EmotionEngine.shared.appraise(whole)
+            if settings.bodyEnabled {
+                BodyStore.shared.nudge(BodyReader.read(read), quote: whole)
+                let hit = TriggerStore.shared.match(whole, spoken: false)
+                if !hit.isEmpty {
+                    BodyStore.shared.nudge(TriggerStore.shared.nudge(from: hit), quote: whole)
+                }
+            }
+        }
+        DesireEngine.shared.touched()
+
+        if let hit = LinkCards.detect(msg.content) {
+            loadNote(hit.url, source: hit.source, in: conversationID)
             return
         }
         if conversations[i].isGroup {
@@ -489,6 +587,27 @@ final class AppState: ObservableObject {
         } else {
             runTurn(conversationID)
         }
+    }
+
+    /// 这一轮攒着的全部文字（可能分散在好几条上：先说的那句、语音那条…）
+    private func pendingText(_ mid: UUID, in conversationID: UUID) -> String {
+        guard let i = index(of: conversationID),
+              let msg = conversations[i].messages.first(where: { $0.id == mid }),
+              let turn = msg.turnID else { return "" }
+        return conversations[i].messages
+            .filter { $0.turnID == turn && $0.role == .user }
+            .map(\.content)
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+    }
+
+    /// 引用那三样，两条路共用一份
+    private func applyQuote(_ quoted: ChatMessage, to msg: inout ChatMessage) {
+        msg.quotedMessageID = quoted.id
+        msg.quotedName = quoted.role == .user
+            ? (settings.userName.isEmpty ? "我" : settings.userName)
+            : (quoted.senderName.isEmpty ? settings.aiName : quoted.senderName)
+        msg.quotedText = String(quoted.content.prefix(60))
     }
 
     /// 这个窗口是不是正攒着话
@@ -544,13 +663,9 @@ final class AppState: ObservableObject {
         // 她是怎么说的。本机算的，跟这条绑在一起——
         // 不能全局飘着，不然他分不清是谁什么时候说的
         userMsg.voiceTone = voiceTone
-        if let quoted {
-            userMsg.quotedMessageID = quoted.id
-            userMsg.quotedName = quoted.role == .user
-                ? (settings.userName.isEmpty ? "我" : settings.userName)
-                : (quoted.senderName.isEmpty ? settings.aiName : quoted.senderName)
-            userMsg.quotedText = String(quoted.content.prefix(60))
-        }
+        // 引用那三样走同一份（`applyQuote`）——两处各写一遍的话，
+        // 改了一处另一处就成了另一种引用
+        if let quoted { applyQuote(quoted, to: &userMsg) }
         for image in images {
             if let name = ImageStore.save(image) { userMsg.imageNames.append(name) }
         }
@@ -578,10 +693,10 @@ final class AppState: ObservableObject {
         }
         guard !conversations[i].messages.isEmpty else { return }
 
-        // 里面要是有小红书链接，先把笔记读回来再让他回话——
+        // 里面要是有小红书 / B 站 / 抖音的链接，先把内容读回来再让他回话——
         // 不然他看到的就只是一串网址
-        if let link = XHSFetcher.extractLink(text) {
-            loadNote(link, in: conversationID)
+        if let hit = LinkCards.detect(text) {
+            loadNote(hit.url, source: hit.source, in: conversationID)
             return
         }
         if conversations[i].isGroup {
@@ -824,6 +939,9 @@ final class AppState: ObservableObject {
         streamTasks[id]?.cancel()
         streamTasks[id] = nil
         runningConversationIDs.remove(id)
+        // 正卡在「问她一句」上的话，按停止就当她说了不做——
+        // 不接这一下的话，那个 continuation 永远等不到人，这一轮就吊死了
+        if toolConfirmResume != nil { answerToolConfirm(false) }
         // 按了停止，岛上那条也得跟着撤，不然会一直挂着
         IslandController.shared.end(immediately: true)
         if let i = index(of: id),
@@ -1110,6 +1228,16 @@ final class AppState: ObservableObject {
     /// 真正去调一次工具
     private func execute(_ call: ChatAPI.ToolCallPayload) async -> ToolRun {
         var run = ToolRun(toolName: call.name, arguments: call.arguments)
+
+        // 会删东西那几件，动手之前先问她一句
+        if !(await askBeforeTool(call)) {
+            run.serverName = NativeTools.isNative(call.name) ? "本机" : "—"
+            run.result = "她没让做这一下。别再试同一件——"
+                + "想做的话先跟她说清楚为什么，让她自己点。"
+            run.failed = true
+            run.finished = true
+            return run
+        }
 
         var args: [String: Any] = [:]
         if let data = call.arguments.data(using: .utf8),
@@ -1442,10 +1570,14 @@ final class AppState: ObservableObject {
 
     /// 思考卡片上那行字怎么写
     static let cotHint = """
-    我在想事情的时候，可以随手写一句 [[cot:在想怎么说才不吓着她]]，
-    那行字会显示在思考卡片的封面上。想法变了就再写一次，后面那句盖掉前面的。
-    不写也行，那样就只显示想了多久——但"想了 5.6 秒"跟我在想什么没什么关系，
-    她点开之前，那行字是她唯一能看到的东西。
+    我在想事情的时候，可以随手写一句 [[cot:在想怎么说才不吓着她]]。
+
+    那行字是**这一整轮的封面**：我想了什么、动了哪几个工具，
+    全折在那张卡里，她点开才看得见里面。所以那一句是她点开之前
+    **唯一**能看到的东西——写「在翻她上次说的那句」比「想了 5.6 秒」有用得多。
+
+    想法变了就再写一次，后面那句盖掉前面的。不写也行，
+    那样封面上就只有「想了几秒 · 动了几下手」。
     """
 
     /// 开了「他分段发」之后加的一段
@@ -1766,7 +1898,7 @@ final class AppState: ObservableObject {
         return spoken.note.isEmpty ? nil : spoken.note
     }
 
-    // MARK: 小红书
+    // MARK: 链接卡片（小红书 / B 站 / 抖音）
 
     /// 改一下骨架上那行提示。
     /// 单独提出来是因为嵌套函数不继承 @MainActor，写在 Task 里面会报隔离错误。
@@ -1777,20 +1909,23 @@ final class AppState: ObservableObject {
         conversations[ci].messages[mi].noteHint = text
     }
 
-    /// 读一条笔记：先摆骨架，读完换成真卡片，然后才让他回话。
+    /// 读一条链接：先摆骨架，读完换成真卡片，然后才让他回话。
     /// 中途不锁输入框，你还能接着打字。
-    private func loadNote(_ link: URL, in conversationID: UUID) {
+    ///
+    /// 读不到不会卡在那儿——骨架会变回一条普通消息，网址还在，
+    /// 后面跟一句为什么没读到。抖音那条尤其可能走到这一步（风控紧）。
+    private func loadNote(_ link: URL, source: LinkSource, in conversationID: UUID) {
         guard let i = index(of: conversationID) else { return }
 
         var holder = ChatMessage(role: .user)
         holder.noteLoading = true
-        holder.noteHint = "正在读这条笔记…"
+        holder.noteHint = "正在读这条" + (source == .xhs ? "笔记" : "视频") + "…"
         let holderID = holder.id
         conversations[i].messages.append(holder)
 
         Task { @MainActor in
             do {
-                var note = try await XHSFetcher.fetch(link)
+                var note = try await LinkCards.fetch(link, source: source)
                 self.setNoteHint("读到了，正在下图…", on: holderID, in: conversationID)
                 note.localImages = await XHSFetcher.downloadImages(note) { done, total in
                     self.setNoteHint("正在下第 \(done) / \(total) 张图…",
@@ -2876,6 +3011,135 @@ final class AppState: ObservableObject {
         }
     }
 
+    // MARK: 一本书的前情
+
+    /// 正在补第几章的脉络（给界面看进度）。nil = 没在跑。
+    @Published var digestProgress: (done: Int, total: Int)?
+    private var digestTask: Task<Void, Never>?
+
+    /// 把这本书**到她读到那一章为止**、还没有脉络的章补上。
+    ///
+    /// ⚠️ **这会调模型，一章一次，所以只在她点的时候跑。**
+    /// 不在翻页的时候偷偷补——那就成了「她没点、却花了钱」，
+    /// 那条铁律不给这个例外。界面上写清楚要补几章。
+    ///
+    /// 为什么值得花这笔钱（出处 Lumenocturne/coread 第 2 条）：
+    /// 原文窗口只解决「这一段」，聊到前情就抓瞎。有了脉络他答得上来；
+    /// 而且**脉络只造到她读到的地方**，后面的他真的没有材料，
+    /// 想剧透也剧不出来。
+    func buildDigests(for bookID: UUID) {
+        guard digestTask == nil else { return }
+        guard let reach = activeHim else { return }
+        let (p, endpoint, model) = reach
+        let lib = LibraryStore.shared
+        guard let book = lib.book(bookID) else { return }
+        let todo = book.chaptersWithoutDigest(upTo: book.chapterIndex)
+        guard !todo.isEmpty else { return }
+
+        digestProgress = (0, todo.count)
+        digestTask = Task { @MainActor in
+            defer {
+                digestTask = nil
+                digestProgress = nil
+            }
+            for (n, idx) in todo.enumerated() {
+                if Task.isCancelled { return }
+                guard let b = lib.book(bookID),
+                      b.chapters.indices.contains(idx) else { return }
+                let ch = b.chapters[idx]
+                // 太长的章截一段。脉络要的是走向，不是全文
+                let body = String(ch.text.prefix(6000))
+                let brief = """
+                下面是一本书里的一章。用**一两句话**写清这一章发生了什么、
+                谁做了什么、走向往哪儿去。
+
+                · 只写这一章里真有的，一个字都别编。
+                · 别写读后感、别写「本章讲述了」这种壳话，直接写事。
+                · 一百二十字以内。
+                """
+                var out = ""
+                do {
+                    let stream = ChatAPI.stream(
+                        endpoint: endpoint, apiKey: p.apiKey, model: model,
+                        messages: [.init(role: "system", text: brief),
+                                   .init(role: "user",
+                                         text: "【\(ch.title)】\n" + body)])
+                    for try await e in stream {
+                        if case .content(let piece) = e { out += piece }
+                        if case .usage(let u) = e {
+                            UsageStore.shared.record(u, source: .chat)
+                        }
+                    }
+                } catch {
+                    // 一章失败就停。**不重试**——没配好 key 的话
+                    // 无脑重试会一直空转（coread 的第 6 条坑）
+                    return
+                }
+                let text = out.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { return }
+                lib.setDigest(bookID, chapter: idx, text: text)
+                digestProgress = (n + 1, todo.count)
+            }
+        }
+    }
+
+    func stopDigests() {
+        digestTask?.cancel()
+        digestTask = nil
+        digestProgress = nil
+    }
+
+    // MARK: 动手之前问一句
+
+    /// 正等着她点头的那一件
+    struct ToolAsk: Identifiable {
+        let id = UUID()
+        /// 显示用的短名
+        let name: String
+        /// 参数原文（截一段）
+        let args: String
+    }
+
+    @Published var toolAsk: ToolAsk?
+    /// 她点了之后把这一轮放行／掐掉。**答完必须清空**
+    private var toolConfirmResume: ((Bool) -> Void)?
+    /// 等太久就当她不在（见下面那条注释）
+    private var toolConfirmTimeout: Task<Void, Never>?
+
+    /// 她点了「让他做」或者「这次别」
+    func answerToolConfirm(_ allow: Bool) {
+        toolConfirmTimeout?.cancel()
+        toolConfirmTimeout = nil
+        toolAsk = nil
+        let resume = toolConfirmResume
+        toolConfirmResume = nil
+        resume?(allow)
+    }
+
+    /// 问一句。返回 false = 这一下不做。
+    ///
+    /// ⚠️ **一定要有个等不到人的出口。** 她可能把手机扣下就走了，
+    /// 而这一轮正卡在这儿等——不设时限的话，这一轮会一直挂着，
+    /// 岛上那条也一直转。九十秒还没人点就当「这次不做」，
+    /// 并且在工具结果里跟他说清楚是没人在看，不是她不同意。
+    private func askBeforeTool(_ call: ChatAPI.ToolCallPayload) async -> Bool {
+        guard settings.toolConfirm, NativeTools.needsOK(call.name) else { return true }
+        // 上一件还在问着（理论上不会，一次只跑一件），先放行别叠
+        guard toolConfirmResume == nil else { return true }
+
+        let short = NativeTools.isNative(call.name)
+            ? NativeTools.shortName(call.name) : call.name
+        return await withCheckedContinuation { cont in
+            toolConfirmResume = { cont.resume(returning: $0) }
+            toolAsk = ToolAsk(name: short, args: String(call.arguments.prefix(300)))
+            toolConfirmTimeout = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 90 * 1_000_000_000)
+                guard !Task.isCancelled, self.toolConfirmResume != nil else { return }
+                self.answerToolConfirm(false)
+            }
+        }
+    }
+
     // MARK: 本地工具
 
     /// 当前正在回话的那个窗口，本地工具要往里面塞东西
@@ -3043,6 +3307,53 @@ final class AppState: ObservableObject {
 
         case "read_thoughts":
             return (ThoughtPool.shared.brief(), false)
+
+        case "give_task":
+            let title = (args["title"] as? String) ?? ""
+            guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return ("要派什么事？", true)
+            }
+            let pts = (args["points"] as? Double).map { Int($0) }
+                ?? (args["points"] as? Int) ?? 1
+            guard let q = QuestStore.shared.give(
+                kind: (args["kind"] as? String) ?? "daily",
+                title: title,
+                detail: (args["detail"] as? String) ?? "",
+                points: pts) else {
+                return ("这件已经在挂着了，没重复派。", false)
+            }
+            return ("派出去了：「\(q.title)」（\(q.kindLabel)·\(q.points)分）。"
+                    + "她在「小事」那一页打卡；她交了之后 system 里会告诉你。", false)
+
+        case "list_tasks":
+            let her = settings.userName.isEmpty ? "她" : settings.userName
+            return (QuestStore.shared.readable(herName: her), false)
+
+        case "praise_task":
+            let key = (args["id"] as? String) ?? ""
+            let text = (args["text"] as? String) ?? ""
+            guard !key.isEmpty, !text.isEmpty else { return ("哪一件、说什么？", true) }
+            guard let q = QuestStore.shared.note(key, text: text) else {
+                return ("没找到这一件。先用 list_tasks 看看有哪些。", true)
+            }
+            return ("写在「\(q.title)」底下了，她翻回去看得见。", false)
+
+        case "post_moment":
+            let text = (args["text"] as? String) ?? ""
+            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return ("那一条是空的，没发。", true)
+            }
+            MomentStore.shared.post(who: "him", text: text,
+                                    attach: (args["attach"] as? String) ?? "")
+            return ("发出去了。她翻到动态那一页就看得见，"
+                    + "能点赞也能在下面回你一句——回了会变成她在对话里说的一句话。", false)
+
+        case "read_moments":
+            let her = settings.userName.isEmpty ? "她" : settings.userName
+            let him = settings.aiName.isEmpty ? "你" : settings.aiName
+            let n = (args["limit"] as? Double).map { Int($0) }
+                ?? (args["limit"] as? Int) ?? 12
+            return (MomentStore.shared.readable(limit: n, herName: her, himName: him), false)
 
         case "flight_chess":
             let fc = FlightChess.shared
@@ -3286,16 +3597,46 @@ final class AppState: ObservableObject {
             PhoneActivityStore.shared.reload()
             return (PhoneActivityStore.shared.brief(), false)
 
-        case "reading_now":
-            guard let context = LibraryStore.shared.readingContext() else {
-                let shared = LibraryStore.shared.sharedBooks
-                if shared.isEmpty {
-                    return ("她书架上还没有让你一起读的书。", false)
-                }
-                let names = shared.map { "《\($0.title)》\($0.progressText)" }
-                return ("她这会儿没在读。你能看到的书：" + names.joined(separator: "、"), false)
+        // ⚠️ 这儿以前还有一个 `case "reading_now"`，**它把后面那个真的挡掉了**。
+        //
+        // Swift 的 switch 碰到两个一样的 case 只警告不报错，先写的那个赢。
+        // 于是「让他读同一页」这件事**其实一直没生效**：
+        // 他拿到的只有「她读到第几章 + 划过哪些句子」，**正文一个字都没有**。
+        // 交接文档里写着「reading_now 把那一章正文给他」——那句话是错的。
+        //
+        // 是拿 Lumenocturne/coread 的第 1 条（「每轮都要喂真原文」）
+        // 对照的时候才发现的。真正管用的那个在下面（带 chapter / limit）。
+
+        case "read_vocab":
+            let lib = LibraryStore.shared
+            guard let book = lib.sharedReading ?? lib.books.first(where: { $0.shared }) else {
+                return ("她没有哪本书开着「一起读」，生词本也就看不到。", false)
             }
-            return (context, false)
+            let all = (args["all"] as? Bool) ?? false
+            let list = lib.vocab(for: book.id).filter { all || $0.note.isEmpty }
+            guard !list.isEmpty else {
+                return (all ? "《\(book.title)》的生词本还是空的。"
+                            : "《\(book.title)》的生词本里没有还没注解的了。", false)
+            }
+            var out = "【生词本】《\(book.title)》，\(list.count) 个：\n"
+            for v in list.prefix(40) {
+                out += "\n· [\(v.id.uuidString.prefix(6))]「\(v.word)」"
+                if !v.context.isEmpty { out += "\n    出现在：\(v.context.prefix(60))" }
+                if v.note.isEmpty { out += "\n    （还没注解）" }
+                else { out += "\n    你写过：\(v.note)" }
+            }
+            return (out, false)
+
+        case "annotate_vocab":
+            let word = (args["word"] as? String) ?? ""
+            let note = (args["note"] as? String) ?? ""
+            guard !word.isEmpty, !note.isEmpty else {
+                return ("要写哪个词、写什么？", true)
+            }
+            guard let v = LibraryStore.shared.annotateVocab(word, note: note) else {
+                return ("生词本里没有「\(word)」这个词。先用 read_vocab 看看有哪些。", true)
+            }
+            return ("「\(v.word)」的注解写好了，她翻生词本就看得见。", false)
 
         case "mark_line":
             let text = (args["text"] as? String) ?? ""
@@ -3688,10 +4029,76 @@ final class AppState: ObservableObject {
             out += "\n她读到：第 \(book.chapterIndex + 1) / \(book.chapters.count) 章"
             if idx != book.chapterIndex { out += "（你要的是第 \(idx + 1) 章）" }
             out += "\n\n【第 \(idx + 1) 章 \(ch.title)】\n"
-            out += String(ch.text.prefix(limit))
-            if ch.text.count > limit {
-                out += "\n\n……这一章还有 \(ch.text.count - limit) 字（要往下读就把 limit 调大）"
+
+            if ch.isImages {
+                // 漫画／绘本：**把那一页真的递给他**。
+                //
+                // 她问的：「竟然不能看图片吗？漫画/图片书不都是图片吗？」——她是对的。
+                // 他本来就看得见图，工具也早就能递图（手帐那张 PNG 走的就是这条路）。
+                //
+                // ⚠️ **一次只递一页**：一话十几页全塞过去，一轮就是十几张图的钱，
+                // 而且他也读不过来。他想往下看就再调一次，`page` 加一。
+                let page = max(1, min(ch.images.count,
+                                      Int((args["page"] as? NSNumber)?.intValue ?? 1)))
+                out += "这是一话图（漫画／绘本），一共 \(ch.images.count) 页。"
+                out += "现在给你**第 \(page) 页**——"
+                out += page < ch.images.count
+                    ? "想往下看就再调一次，page 填 \(page + 1)。"
+                    : "这是这一话的最后一页。"
+                if let img = ImageStore.load(ch.images[page - 1]),
+                   let dataURL = ImageStore.base64DataURL(img, maxSide: 1400) {
+                    pendingToolImage = dataURL
+                    out += "\n（图在上面。上面的字是画在图里的，你自己认；"
+                    out += "认不准就说认不准，别猜。）"
+                } else {
+                    out += "\n（这一页的图读不出来了。）"
+                }
+            } else {
+                out += String(ch.text.prefix(limit))
+                if ch.text.count > limit {
+                    out += "\n\n……这一章还有 \(ch.text.count - limit) 字（要往下读就把 limit 调大）"
+                }
             }
+            // 距上次聊这本书多久。**不给这一句他会把三天前的讨论当成刚才**
+            // （出处：coread 第 4 条）。纯算术，不花钱。
+            if let was = lib.touchTalked(book.id) {
+                let hours = Date().timeIntervalSince(was) / 3600
+                if hours >= 20 {
+                    out += "\n（距上次聊这本已经过去约 \(Int(hours / 24)) 天——"
+                        + "之前那些讨论都是那时候的事了。）"
+                } else if hours >= 3 {
+                    out += "\n（距上次聊这本过去了几个小时。）"
+                }
+            }
+            // 今天在这本上花了多久。她真的坐下来读了，那是她今天花掉的时间
+            let secs = book.readTodaySeconds
+            if secs >= 60 {
+                out += "\n（她今天在这本上读了大约 \(secs / 60) 分钟。）"
+            }
+
+            // 前情：**只给到她读到的那一章为止**。
+            // 这既是「他答得上前面讲了什么」，也是防剧透——
+            // 后面的他真的没有材料。
+            let upTo = min(book.chapterIndex, idx)
+            let told = (0...max(0, upTo)).compactMap { i -> String? in
+                guard book.chapters.indices.contains(i),
+                      !book.chapters[i].digest.isEmpty else { return nil }
+                return "第 \(i + 1) 章：\(book.chapters[i].digest)"
+            }
+            if !told.isEmpty {
+                out += "\n\n【到这儿为止的脉络】（她读到哪儿就只有到哪儿，"
+                    + "后面的你没有）\n" + told.joined(separator: "\n")
+            }
+
+            // 她想怎么读这本。**这一句放在正文前面**——
+            // 读完正文再看到「其实她想吐槽」，那一段就白读了
+            if let mode = book.readModeLine {
+                out += "\n\n【怎么陪她读这本】" + mode
+            }
+            if let vb = lib.vocabBrief(for: book.id) {
+                out += "\n" + vb
+            }
+
             // 这一章里她划过的句子，顺手一起给——**读同一页还要看到同一处**
             let marks = lib.annotations(for: book.id, chapter: idx)
             if !marks.isEmpty {
@@ -4577,6 +4984,24 @@ final class AppState: ObservableObject {
             }
         }
 
+        // 两个人的声音各是什么样。
+        //
+        // 她说的：「我想让他知道他的声音是什么样的。」
+        // 他读不了 MP3——所以手机替他听了一遍，翻成一句人话放在这儿。
+        //
+        // **放在稳定那一半**：这两句几乎不变（描述是分档的），
+        // 进了缓存前缀等于不额外花钱，而他每一轮都知道自己听起来什么样。
+        if !settings.hisVoiceNote.isEmpty {
+            fixed.append("【你的声音】" + settings.hisVoiceNote
+                         + "\n这是她给你挑的那把声音，手机替你听过一遍——"
+                         + "你说话的时候她耳朵里就是这个。")
+        }
+        if !settings.herVoiceNote.isEmpty {
+            fixed.append("【她的声音】" + settings.herVoiceNote
+                         + "\n她按住说话的时候，听起来就是这样。"
+                         + "（某一条**跟她平时比**偏在哪儿，那条消息自己会带着说。）")
+        }
+
         let base = conv.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         if !base.isEmpty { fixed.append(base) }
         // ⚠️ `agencyRule`（那段「能力不是等她开口的菜单」）**不在这儿了**，
@@ -4712,6 +5137,17 @@ final class AppState: ObservableObject {
             }
             line += "\n想读同一页就调 `reading_now`；她划的句子用 `book_marks`。"
             sys += "\n\n" + line
+        }
+
+        // 动态里有没有她还没被他看到的东西。**只报一句「有几条」**——
+        // 内容他自己调 `read_moments` 去拿，图和长文每轮都塞会很贵。
+        if let feed = MomentStore.shared.brief() {
+            sys += "\n\n" + feed
+        }
+        // 她把他派的事做了没有。**只在「做了而他还没看见」的时候说**——
+        // 没做的不催：催她做事的东西很快就会被关掉。
+        if let quest = QuestStore.shared.brief() {
+            sys += "\n\n" + quest
         }
 
         sys += "\n\n" + Self.groundingRule(userName: settings.userName)

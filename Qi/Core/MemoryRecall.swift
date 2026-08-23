@@ -181,8 +181,32 @@ enum MemoryRecall {
             raw[d.id] = score
         }
         let top = raw.values.max() ?? 0
-        guard top > 0 else { return [:] }
-        return raw.mapValues { $0 / top }
+        var out = top > 0 ? raw.mapValues { $0 / top } : [:]
+
+        // 再拌一层**意思**（`Semantics`，用系统自带的那套，不花钱不占体积）。
+        //
+        // 这一层补的正是 BM25 补不了的那种失手：
+        // 她搜「无奈」，库里写的是「叹气」——一个二元组都对不上，分是 0。
+        // 取高不取平均，理由见 `Semantics.blended`。
+        //
+        // ⚠️ 只在**搜**这条路上拌。判重那条（`nearDuplicate`）不碰：
+        // 那儿判松了会把两件不同的事当成同一件而不给记。
+        // 库大了要收着点：这一层每条都要算一次向量，
+        // 几百条以上就该让它只管**最近那一批**，别让一次搜索卡住半秒。
+        if Semantics.available {
+            let scan = items.count > 400
+                ? Array(items.sorted { itemDate($0) > itemDate($1) }.prefix(400))
+                : items
+            for it in scan {
+                // 正文截一段：句向量对超长文本本来就不准，还慢
+                let body = String((it.content + " " + it.tags.joined(separator: " ")).prefix(200))
+                guard let s = Semantics.similarity(q, body) else { continue }
+                // 语义那半单独压一档（0.75）：它认的是「大概在说同一类事」，
+                // 不该盖过真的把词说对了的那几条
+                out[it.id] = max(out[it.id] ?? 0, s * 0.75)
+            }
+        }
+        return out
     }
 
     /// 复合分（omnimemory 那条公式）：

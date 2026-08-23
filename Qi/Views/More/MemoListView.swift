@@ -163,9 +163,8 @@ struct MemoRow: View {
                     if memo.pinned {
                         Image(systemName: "pin.fill")
                             .font(.app(9))
-                            .foregroundStyle(app.settings.preset == .home
-                                             ? HomePalette.amber
-                                             : app.settings.accentColor)
+                            .foregroundStyle(app.settings.preset.skin.remind
+                                             ?? app.settings.accentColor)
                     }
                     if !memo.badge.isEmpty {
                         // 挂着的事是提醒（琥珀），做完了是好消息（鼠尾草）

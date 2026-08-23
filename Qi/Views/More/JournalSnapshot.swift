@@ -38,21 +38,40 @@ struct JournalElementView: View {
                     .frame(maxWidth: 220)
 
             case .tape:
-                // 胶带：半透明一条，两头是撕开的毛边
-                Rectangle()
-                    .fill(e.color.opacity(0.62))
-                    .frame(width: 110, height: 26)
-                    .overlay {
-                        // 撕口那两道
-                        HStack {
-                            Rectangle().fill(.white.opacity(0.25)).frame(width: 3)
-                            Spacer()
-                            Rectangle().fill(.white.opacity(0.25)).frame(width: 3)
-                        }
-                    }
+                // 胶带：半透明一条，两头是撕开的毛边，花纹画在上面
+                JournalTapeView(color: e.color, pattern: e.pattern)
 
             case .sticker:
-                Text(e.emoji).font(.app(34))
+                // 两种贴纸：她挑了形状就画那个（跟着颜色走），
+                // 没挑就还是一个 emoji（老页面全是这一种）
+                if !e.pattern.isEmpty {
+                    JournalStickerView(shape: e.pattern,
+                                       color: e.color,
+                                       side: 42)
+                } else {
+                    Text(e.emoji).font(.app(34))
+                }
+
+            case .cutout:
+                // 她自己找的那张 PNG。**不裁不套框**——
+                // 裁了透明底那圈就没了，看着就不是贴纸了
+                if let img = ImageStore.load(e.imageName) {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 92, height: 92)
+                        .shadow(color: .black.opacity(0.16), radius: 2, y: 1)
+                } else {
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color(hexString: "B8B2A6") ?? .gray,
+                                      style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                        .frame(width: 92, height: 92)
+                        .overlay {
+                            Text("挑一张")
+                                .font(.app(10))
+                                .foregroundStyle(Color(hexString: "8A8378") ?? .gray)
+                        }
+                }
 
             case .stamp:
                 // 邮票：锯齿边靠一圈白点做出来
@@ -161,8 +180,7 @@ struct JournalCanvas: View {
 
     var body: some View {
         ZStack {
-            (Color(hexString: page.paperHex) ?? Color(hexString: "F3E9D8")!)
-                .overlay { GrainOverlay(opacity: 0.05) }
+            JournalPaperView(hex: page.paperHex, pattern: page.paperPattern)
 
             ForEach(page.elements.sorted { $0.z < $1.z }) { e in
                 JournalElementView(e)
@@ -232,11 +250,22 @@ enum JournalSnapshot {
             case .photo:
                 lines.append("· 一张照片")
             case .sticker:
-                lines.append("· 贴了 " + e.emoji)
+                // 画出来的那种没有 emoji，得报个名字，
+                // 不然这一行会是「· 贴了 」，后面空着
+                if !e.pattern.isEmpty {
+                    let name = JournalKit.stickerShapes
+                        .first { $0.1 == e.pattern }?.0 ?? "一张贴纸"
+                    lines.append("· 贴了一张「" + name + "」")
+                } else {
+                    lines.append("· 贴了 " + e.emoji)
+                }
+            case .cutout:
+                lines.append("· 贴了一张剪下来的贴纸")
             case .stamp:
                 lines.append("· 一张邮票 " + e.emoji)
             case .tape:
-                lines.append("· 一道胶带")
+                let p = JournalKit.tapePatterns.first { $0.1 == e.pattern }?.0 ?? ""
+                lines.append("· 一道胶带" + (p.isEmpty || p == "素" ? "" : "（" + p + "）"))
             case .clip:
                 lines.append("· 一个夹子")
             }

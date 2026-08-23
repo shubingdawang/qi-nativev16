@@ -7,43 +7,28 @@ enum Theme {
 
     // MARK: 卡片
 
-    /// 卡片底色。浅色下是 42% 的白，深色下是一层很淡的白，
-    /// 配合毛玻璃就是网页版那种"磨砂纸片"的感觉。
+    /// 现在这一档的整份色板。
+    ///
+    /// ⚠️ **下面这些函数一律从这儿取色，别再写 `if preset == .home`。**
+    /// 那种写法以前在工程里散了十八处，加一套主题要一处处补，
+    /// 补漏一个就出现「一块纯白摁在暖纸上」这种补丁。
+    /// 加主题＝在 `ThemeSkin` 那儿多一份色板，这边一个字都不用动。
+    static var skin: ThemeSkin { preset.skin }
+
+    /// 卡片底色。原来那套是半透明的白（压在壁纸上），
+    /// 「家」和「兔牙」是实的纸色。
     static func cardFill(_ scheme: ColorScheme) -> Color {
-        if preset == .home {
-            // 亚麻面板：气泡、卡片、面板都用它，白得有点糙才像纸
-            return scheme == .dark
-                ? HomePalette.panelDark.opacity(0.9)
-                : HomePalette.panel.opacity(0.92)
-        }
-        return scheme == .dark
-        ? Color.white.opacity(0.07)
-        : Color.white.opacity(0.42)
+        skin.cardFill.c(scheme)
     }
 
-    /// 卡片描边，浅色下是接近白的高光边
+    /// 卡片描边
     static func cardStroke(_ scheme: ColorScheme) -> Color {
-        if preset == .home {
-            // 家那套里边缘更收，靠面板本身的色差分层，不靠亮边
-            return scheme == .dark
-                ? Color.white.opacity(0.08)
-                : Color(hexString: "D9D3C4")!.opacity(0.7)
-        }
-        return scheme == .dark
-        ? Color.white.opacity(0.10)
-        : Color.white.opacity(0.45)
+        skin.cardStroke.c(scheme)
     }
 
-    /// 底部导航条比卡片再白一点，浮起来更明显
+    /// 底部导航条比卡片再亮一点，浮起来更明显
     static func barFill(_ scheme: ColorScheme) -> Color {
-        if preset == .home {
-            return scheme == .dark
-                ? HomePalette.panelDark.opacity(0.96)
-                : Color.white.opacity(0.82)
-        }
-        return scheme == .dark
-        ? Color.white.opacity(0.09)
-        : Color.white.opacity(0.55)
+        skin.barFill.c(scheme)
     }
 
     // MARK: 文字
@@ -72,39 +57,23 @@ enum Theme {
     /// 基准 16（滑块的默认值），拉到 22 就是 1.375 倍，整个 App 一起变大。
     nonisolated(unsafe) static var fontScale: Double = 1.0
 
-    static func textMain(_ scheme: ColorScheme) -> Color {
+    /// 她自己调过字色的话，那个说了算——比主题优先。
+    private static func custom(_ scheme: ColorScheme) -> Color? {
         let hex = scheme == .dark ? customTextHexDark : customTextHex
-        if !hex.isEmpty, let c = Color(hexString: hex) { return c }
-        if preset == .home {
-            return scheme == .dark ? HomePalette.inkDark : HomePalette.ink
-        }
-        return scheme == .dark
-        ? Color(red: 0.906, green: 0.914, blue: 0.925)   // #e7e9ec
-        : Color(red: 0.290, green: 0.239, blue: 0.184)   // #4a3d2f
+        guard !hex.isEmpty else { return nil }
+        return Color(hexString: hex)
+    }
+
+    static func textMain(_ scheme: ColorScheme) -> Color {
+        custom(scheme) ?? skin.textMain.c(scheme)
     }
 
     static func textSoft(_ scheme: ColorScheme) -> Color {
-        let hex = scheme == .dark ? customTextHexDark : customTextHex
-        if !hex.isEmpty, let c = Color(hexString: hex) { return c.opacity(0.78) }
-        if preset == .home {
-            return scheme == .dark
-                ? HomePalette.inkDark.opacity(0.8)
-                : HomePalette.ink.opacity(0.82)
-        }
-        return scheme == .dark
-        ? Color(red: 0.725, green: 0.745, blue: 0.776)   // #b9bec6
-        : Color(red: 0.427, green: 0.361, blue: 0.282)   // #6d5c48
+        custom(scheme)?.opacity(0.78) ?? skin.textSoft.c(scheme)
     }
 
     static func textMuted(_ scheme: ColorScheme) -> Color {
-        let hex = scheme == .dark ? customTextHexDark : customTextHex
-        if !hex.isEmpty, let c = Color(hexString: hex) { return c.opacity(0.52) }
-        if preset == .home {
-            return scheme == .dark ? HomePalette.inkSoftDark : HomePalette.inkSoft
-        }
-        return scheme == .dark
-        ? Color(red: 0.545, green: 0.565, blue: 0.600)   // #8b9099
-        : Color(red: 0.659, green: 0.573, blue: 0.478)   // #a8927a
+        custom(scheme)?.opacity(0.52) ?? skin.textMuted.c(scheme)
     }
 
     /// 浮在壁纸上的**圆按钮／小胶囊**的底色。
@@ -117,30 +86,17 @@ enum Theme {
     /// 一块纯白摁在暖纸上就是一块补丁。以后再加主题只会再补丁一次。
     /// 所以统一从这儿出，加主题的时候只改这一个函数。
     static func controlFill(_ scheme: ColorScheme) -> Color {
-        if preset == .home {
-            return scheme == .dark
-                ? HomePalette.paperDark.opacity(0.55)
-                : HomePalette.paper.opacity(0.92)
-        }
-        return scheme == .dark
-            ? Color.white.opacity(0.16)
-            : Color.white.opacity(0.85)
+        skin.controlFill.c(scheme)
     }
 
     /// 上面那种按钮**按下去／关掉**的时候的底色
     static func controlFillMuted(_ scheme: ColorScheme) -> Color {
-        if preset == .home { return HomePalette.inkSoft.opacity(0.75) }
-        return Color(hexString: "8A8378") ?? .gray
+        skin.controlMuted.c(scheme)
     }
 
     /// 没设壁纸时的底色
     static func pageBackground(_ scheme: ColorScheme) -> Color {
-        if preset == .home {
-            return scheme == .dark ? HomePalette.paperDark : HomePalette.paper
-        }
-        return scheme == .dark
-        ? Color(red: 0.102, green: 0.110, blue: 0.122)   // #1a1c1f
-        : Color(red: 0.969, green: 0.929, blue: 0.878)   // #f7ede0
+        skin.page.c(scheme)
     }
 
     static func shadow(_ scheme: ColorScheme) -> Color {
@@ -211,17 +167,14 @@ extension Theme {
     })
 
     /// 再淡一点的一层，用于嵌套在卡片里的小块。
-    /// 「家」那套里这层不是白，是亚麻——白叠白会糊在一起分不出层。
+    /// 「家」那套里这层不是白是亚麻，「兔牙」那套是浅粉——
+    /// **白叠白会糊在一起分不出层**，所以它跟着色板走。
+    ///
+    /// ⚠️ 这是个动态色（`UIColor { trait in }`），每次取值都会重算——
+    /// 所以她在设置里换一档主题，这一层会跟着变，不用重启。
     static let softFillDeep = Color(UIColor { trait in
-        let dark = trait.userInterfaceStyle == .dark
-        if preset == .home {
-            return dark
-                ? UIColor(white: 1.0, alpha: 0.055)
-                : UIColor(red: 0.906, green: 0.886, blue: 0.839, alpha: 0.85)  // 亚麻
-        }
-        return dark
-        ? UIColor(white: 1.0, alpha: 0.05)
-        : UIColor(white: 1.0, alpha: 0.30)
+        let scheme: ColorScheme = trait.userInterfaceStyle == .dark ? .dark : .light
+        return UIColor(skin.softFillDeep.c(scheme))
     })
 
     static let softStroke = Color(UIColor { trait in

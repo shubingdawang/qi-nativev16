@@ -128,57 +128,9 @@ struct DiaryStackView: View {
                     .padding(.top, 40)
             }
         }
-        .sheet(item: $opened) { entry in
-            NavigationStack {
-                ZStack {
-                    WallpaperBackground()
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack(spacing: 8) {
-                                if !entry.author.isEmpty {
-                                    Text(entry.author)
-                                        .font(.app(12, weight: .semibold))
-                                        .foregroundStyle(app.settings.accentColor)
-                                }
-                                Text(entry.dateText)
-                                    .font(.app(11))
-                                    .foregroundStyle(Theme.textMuted(scheme))
-                            }
-                            if !entry.title.isEmpty {
-                                Text(entry.title)
-                                    .font(.app(18, weight: .medium))
-                                    .foregroundStyle(Theme.textMain(scheme))
-                            }
-                            Text(entry.body)
-                                .font(.app(15))
-                                .lineSpacing(7)
-                                .foregroundStyle(Theme.textSoft(scheme))
-                                .textSelection(.enabled)
-                            if !entry.tags.isEmpty {
-                                HStack(spacing: 5) {
-                                    ForEach(entry.tags, id: \.self) { t in
-                                        Text(t)
-                                            .font(.app(10))
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 3)
-                                            .background(Capsule()
-                                                .fill(app.settings.accentColor.opacity(0.16)))
-                                            .foregroundStyle(Theme.textSoft(scheme))
-                                    }
-                                }
-                            }
-                        }
-                        .padding(18)
-                    }
-                }
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button("关上") { opened = nil }
-                    }
-                }
-            }
-        }
+        // 点开看全文那张挪到 DiaryCalendarView.swift 里了（DiaryEntrySheet），
+        // 日历那种看法也要用同一张——抄两份的话改一处另一处就长歪。
+        .sheet(item: $opened) { DiaryEntrySheet(entry: $0) }
     }
 
     /// 这一叠要多高。两列一行，一行 118 点，上下再留点富余。

@@ -94,6 +94,12 @@ struct MonopolyView: View {
 
     private var intro: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // 还没开局的时候，这一页以前从上到下全是字。
+            // 摆一圈空棋盘在最上面——她一眼就知道这是个什么东西。
+            MonopolyRingPreview()
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 6)
+
             Text("两个人轮流掷骰，绕 20 格走，踩到哪儿做哪儿的事。")
                 .font(.app(13))
                 .foregroundStyle(Theme.textMain(scheme))
@@ -121,27 +127,22 @@ struct MonopolyView: View {
     // MARK: 开着局的时候
 
     private var liveBoard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(game.boardArt())
-                .font(.app(12, design: .monospaced))
-                .foregroundStyle(Theme.textMain(scheme))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
+        VStack(alignment: .leading, spacing: 12) {
 
-            Text("该 \(game.s.turn) 掷了")
-                .font(.app(12, weight: .medium))
-                .foregroundStyle(app.settings.accentColor)
+            // 画出来的那一圈。回合、该谁、两个人的家当都在棋盘中间那块里，
+            // 所以上面那行「该谁掷了」不用再单写一遍。
+            MonopolyBoard(game: game)
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 8)], spacing: 8) {
-                chip("掷骰") { output = game.roll() }
-                chip("做完了") { output = game.done() }
-                chip("跳过") { output = game.skip() }
-                chip("交过路费") { output = game.settleToll(mode: "pay") }
-                chip("听凭差遣") { output = game.settleToll(mode: "serve") }
-                chip("买断") { output = game.buyout() }
-                chip("摸张卡") { output = game.buyCard() }
-                chip("看棋盘") { output = game.status() }
-                chip("算账") { output = game.finalResult() }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 8)], spacing: 8) {
+                chip("掷骰", "dice") { output = game.roll() }
+                chip("做完了", "checkmark") { output = game.done() }
+                chip("跳过", "forward") { output = game.skip() }
+                chip("交过路费", "creditcard") { output = game.settleToll(mode: "pay") }
+                chip("听凭差遣", "hand.raised") { output = game.settleToll(mode: "serve") }
+                chip("买断", "banknote") { output = game.buyout() }
+                chip("摸张卡", "rectangle.on.rectangle") { output = game.buyCard() }
+                chip("这局的账", "list.bullet.rectangle") { output = game.status() }
+                chip("结算", "flag.checkered") { output = game.finalResult() }
             }
 
             // 安全词。**放在最显眼那一处，不藏在二级菜单里。**
@@ -162,10 +163,12 @@ struct MonopolyView: View {
         .glassCard()
     }
 
-    private func chip(_ title: String, _ tap: @escaping () -> Void) -> some View {
+    private func chip(_ title: String, _ icon: String,
+                      _ tap: @escaping () -> Void) -> some View {
         Button(action: tap) {
-            Text(title)
+            Label(title, systemImage: icon)
                 .font(.app(12))
+                .lineLimit(1)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
                 .background(RoundedRectangle(cornerRadius: 11, style: .continuous)

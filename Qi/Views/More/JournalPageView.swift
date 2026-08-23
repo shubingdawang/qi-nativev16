@@ -86,13 +86,10 @@ struct JournalPageView: View {
     private var canvas: some View {
         GeometryReader { geo in
             ZStack {
-                // 纸
-                (Color(hexString: page.paperHex) ?? Color(hexString: "F3E9D8")!)
-                    .overlay {
-                        // 纸的纹理。很淡，凑近才看得见——
-                        // 没有它那就是一块塑料色板，不像纸。
-                        GrainOverlay(opacity: 0.05)
-                    }
+                // 纸。**跟快照共用同一份** `JournalPaperView`——
+                // 纸纹在这儿画一套、那儿画一套的话，
+                // 他看到的那张迟早跟她屏幕上的对不上
+                JournalPaperView(hex: page.paperHex, pattern: page.paperPattern)
                     .onTapGesture { picked = nil }
 
                 ForEach(page.elements.sorted { $0.z < $1.z }) { e in
@@ -282,6 +279,36 @@ struct JournalPageView: View {
                     }
                     .padding(.horizontal, 14)
                 }
+
+                // 纸上的纹路。**每一格就是那张纸本身的小样**——
+                // 写「格纹」两个字她还得先点一次才知道长什么样
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 7) {
+                        ForEach(JournalKit.paperPatterns, id: \.1) { name, key in
+                            Button {
+                                page.paperPattern = key
+                                store.save(page)
+                            } label: {
+                                JournalPaperView(hex: page.paperHex, pattern: key)
+                                    .frame(width: 42, height: 30)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .strokeBorder(app.settings.accentColor,
+                                                          lineWidth: page.paperPattern == key ? 2 : 0)
+                                    }
+                                    .overlay(alignment: .bottom) {
+                                        Text(name)
+                                            .font(.app(8))
+                                            .foregroundStyle(Theme.textMuted(scheme))
+                                            .padding(.bottom, 1)
+                                    }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                }
             }
         }
         .padding(.vertical, 10)
@@ -308,10 +335,56 @@ struct JournalPageView: View {
                     .buttonStyle(.plain)
                 }
 
+                // 胶带的花纹。画出来的，所以换个颜色就是另一卷。
+                if e.kind == .tape {
+                    ForEach(JournalKit.tapePatterns, id: \.1) { name, key in
+                        Button {
+                            commit(e.id) { $0.pattern = key }
+                        } label: {
+                            JournalTapeView(color: e.color, pattern: key,
+                                            width: 34, height: 18)
+                                .overlay {
+                                    if e.pattern == key {
+                                        Rectangle()
+                                            .strokeBorder(app.settings.accentColor,
+                                                          lineWidth: 1.5)
+                                    }
+                                }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(name)
+                    }
+                }
+
                 if e.kind == .sticker || e.kind == .stamp {
+                    // 画出来的那几张。**摆在 emoji 前面**——
+                    // 这一排才是新东西，摆后面她翻不到
+                    if e.kind == .sticker {
+                        ForEach(JournalKit.stickerShapes, id: \.1) { name, key in
+                            Button {
+                                commit(e.id) {
+                                    $0.pattern = key
+                                    // 从 emoji 换过来的时候还没有颜色，给一个
+                                    if $0.colorHex.isEmpty || $0.colorHex == "FFFFFF" {
+                                        $0.colorHex = JournalKit.stickerInks.first?.1 ?? "8FAE84"
+                                    }
+                                }
+                            } label: {
+                                JournalStickerView(
+                                    shape: key,
+                                    color: e.pattern == key
+                                        ? e.color
+                                        : (Color(hexString: "A8A296") ?? .gray),
+                                    side: 20)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(name)
+                        }
+                    }
                     ForEach(JournalKit.stickers.prefix(12), id: \.self) { s in
                         Button {
-                            commit(e.id) { $0.emoji = s }
+                            // 挑了 emoji 就是不要画的那张了
+                            commit(e.id) { $0.emoji = s; $0.pattern = "" }
                         } label: {
                             Text(s).font(.app(20))
                         }
@@ -319,7 +392,7 @@ struct JournalPageView: View {
                     }
                 }
 
-                if e.kind == .photo || e.kind == .frame {
+                if e.kind == .photo || e.kind == .frame || e.kind == .cutout {
                     small("贴图") { showingPhotoPicker = true }
                 }
 
@@ -353,6 +426,8 @@ struct JournalPageView: View {
         case .tape:          return JournalKit.tapes
         case .note:          return JournalKit.notes
         case .text, .quote:  return JournalKit.inks
+        // 画出来的贴纸跟着颜色走，所以这一排给的是贴纸色不是墨水色
+        case .sticker:       return JournalKit.stickerInks
         default:             return JournalKit.inks
         }
     }
@@ -373,7 +448,9 @@ struct JournalPageView: View {
         page.elements.append(e)
         picked = e.id
         store.save(page)
-        if kind == .photo || kind == .frame { showingPhotoPicker = true }
+        if kind == .photo || kind == .frame || kind == .cutout {
+            showingPhotoPicker = true
+        }
         if app.settings.haptics {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
@@ -381,10 +458,22 @@ struct JournalPageView: View {
 
     private func loadPhoto(_ item: PhotosPickerItem?) {
         guard let item, let id = picked else { return }
+        // 是不是「剪贴」那一样。**这决定了怎么存**：
+        // 剪贴那种是透明底的 PNG，走 `save(_ image:)` 会被重编码成 jpg，
+        // 透明的地方全变成白块——那张贴纸就废了。
+        let cut = page.elements.first { $0.id == id }?.kind == .cutout
         Task {
-            guard let data = try? await item.loadTransferable(type: Data.self),
-                  let image = UIImage(data: data),
-                  let name = ImageStore.save(image) else { return }
+            guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+            let name: String?
+            if cut {
+                // 原样落盘，一个字节都不重编码
+                name = ImageStore.saveOriginal(data)
+            } else if let image = UIImage(data: data) {
+                name = ImageStore.save(image)
+            } else {
+                name = nil
+            }
+            guard let name else { return }
             await MainActor.run {
                 commit(id) {
                     if !$0.imageName.isEmpty { ImageStore.delete($0.imageName) }

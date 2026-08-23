@@ -107,7 +107,11 @@ enum ClawdSprites {
         "k": Color(hexString: "000000")!,   // 眼睛，图纸上是纯黑
         "y": Color(hexString: "F0C040")!,   // 头顶那点小闪光
         "w": Color(hexString: "FFFFFF")!,   // 气泡
-        "b": Color(hexString: "4A90D9")!    // 气泡里那个蓝点
+        "b": Color(hexString: "4A90D9")!,   // 气泡里那个蓝点
+        "c": Color(hexString: "8EC5FF")!,   // 眼泪
+        "n": Color(hexString: "8B5E34")!,   // 扫把杆
+        "t": Color(hexString: "C9A227")!,   // 扫把那撮稻草
+        "r": Color(hexString: "FF9AA0")!    // 腮红
     ]
 
     /// 睁着眼站着。这就是图纸原样，两只手各往外长了一格。
@@ -122,6 +126,141 @@ enum ClawdSprites {
         "pppppppkkkppppppppppppkkkppppppp",
         "pppppppppppppppppppppppppppppppp",
         "pppppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppppp",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp...."
+    ], palette)
+
+    /// 哭：眼睛闭成一条，泪刚涌出来
+    static let cry1 = PixelSprite([
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "pppppppkkkppppppppppppkkkppppppp",
+        "pppppppppppppppppppppppppppppppp",
+        "ppppppppcppppppppppppppcpppppppp",
+        "ppppppppcppppppppppppppcpppppppp",
+        "pppppppppppppppppppppppppppppppp",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp...."
+    ], palette)
+
+    /// 哭：那滴泪往下掉了两格
+    static let cry2 = PixelSprite([
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "pppppppkkkppppppppppppkkkppppppp",
+        "pppppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppppp",
+        "ppppppppcppppppppppppppcpppppppp",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp...."
+    ], palette)
+
+    /// 扫地：扫头在左边
+    static let sweep1 = PixelSprite([
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp..n.",
+        "....pppppppppppppppppppppppp..n.",
+        "....pppkkkppppppppppppkkkppp..n.",
+        "pppppppkkkppppppppppppkkkpppppnp",
+        "pppppppkkkppppppppppppkkkpppppnp",
+        "ppppppppppppppppppppppppppppppnp",
+        "ppppppppppppppppppppppppppppppnp",
+        "ppppppppppppppppppppppppppppppnp",
+        "....pppppppppppppppppppppppp..n.",
+        "....pppppppppppppppppppppppp..n.",
+        "....pppppppppppppppppppppppp..n.",
+        "....pppppppppppppppppppppppptttt",
+        "....pppppppppppppppppppppppptttt",
+        "....pppppppppppppppppppppppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp...."
+    ], palette)
+
+    /// 扫地：扫头摆到右边
+    static let sweep2 = PixelSprite([
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp..n.",
+        "....pppppppppppppppppppppppp..n.",
+        "....pppkkkppppppppppppkkkppp..n.",
+        "pppppppkkkppppppppppppkkkpppppnp",
+        "pppppppkkkppppppppppppkkkpppppnp",
+        "ppppppppppppppppppppppppppppppnp",
+        "ppppppppppppppppppppppppppppppnp",
+        "ppppppppppppppppppppppppppppppnp",
+        "....pppppppppppppppppppppppp..n.",
+        "....pppppppppppppppppppppppp..n.",
+        "....pppppppppppppppppppppppp..n.",
+        "....pppppppppppppppppppppppp.ttt",
+        "....pppppppppppppppppppppppp.ttt",
+        "....pppppppppppppppppppppppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp....",
+        "....ppp..ppp........ppp..ppp...."
+    ], palette)
+
+    /// 甜：眯着眼笑，腮红。爱心是界面上飘的，不画进图纸
+    static let sweet = PixelSprite([
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "pppppppdddppppppppppppdddppppppp",
+        "pppppppppppppppppppppppppppppppp",
+        "ppppprrpppppppppppppppppprrppppp",
+        "ppppprrpppppppppppppppppprrppppp",
         "pppppppppppppppppppppppppppppppp",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
@@ -610,6 +749,35 @@ enum ClawdMood: String, Codable {
     case walking    // 正在走路（迈步，不是瞬移）
     case carrying   // 手上抱着东西站着
     case hauling    // 抱着东西在走
+    /// 这一轮出错了，垮一下。
+    /// 出处：clawd-on-desk 的 12 个状态里那个 error——
+    /// **他那边出事，屋里这只不该还在傻笑。**
+    case upset
+    /// 被连着戳了好几下，甩手抗议
+    case flail
+
+    /// 犯困到睡着之间那一段。clawd-on-desk 的睡眠序列是
+    /// 打哈欠 → 打盹 → 瘫 → 睡；我们的帧没那么多，
+    /// 走「困」这一档（慢慢眨、越眨越久）再进 sleeping。
+    case drowsy
+
+    // MARK: 跟着阿晏的那三档
+    //
+    // 她说的：「当阿晏跟我在聊天时，他可以表达阿晏所表达的——
+    // 阿晏伤心他就在哭，阿晏在做游戏或者处理文件他就在打电脑，
+    // 阿晏只是正常聊天他就做自己的事，阿晏开心他也开心，
+    // 阿晏感觉到甜蜜他就冒爱心。」
+    //
+    // 数据是现成的：`EmotionEngine` 那两个数（valence 舒不舒服、
+    // arousal 有多激动）本来就在算，这儿只是**把它画出来**。
+
+    /// 他难过。眼睛闭成一条，泪一滴一滴掉
+    case crying
+    /// 他甜。眯着眼笑、腮红，头顶飘爱心
+    case loving
+    /// 扫地。**「做自己的事」里的一种**——
+    /// 她指名要的那只扫地的 clawd 就是这个
+    case sweeping
 
     /// 这个状态下轮播哪几帧、每帧停多久
     var frames: [(PixelSprite, Double)] {
@@ -648,6 +816,24 @@ enum ClawdMood: String, Codable {
             return [(ClawdSprites.working, 0.22), (ClawdSprites.working2, 0.22)]
         case .talking:
             return [(ClawdSprites.smile, 0.5), (ClawdSprites.idle, 0.4)]
+        case .upset:
+            // 垮着。眨眼那帧当「闭眼低头」用，停久一点
+            return [(ClawdSprites.blink, 1.2), (ClawdSprites.idle, 0.5)]
+        case .flail:
+            // 抓狂：两只手甩得飞快。借走路那两帧，把时间压到最短
+            return [(ClawdSprites.walk1, 0.07), (ClawdSprites.walk2, 0.07)]
+        case .drowsy:
+            // 越眨越久，最后就睡过去了
+            return [(ClawdSprites.idle, 1.0), (ClawdSprites.blink, 0.55),
+                    (ClawdSprites.breathe, 1.6), (ClawdSprites.blink, 0.9)]
+        case .crying:
+            // 一滴泪涌出来、往下掉，再一滴。**慢**——
+            // 哭得太快看着像抽搐，不像难过
+            return [(ClawdSprites.cry1, 0.8), (ClawdSprites.cry2, 0.7)]
+        case .loving:
+            return [(ClawdSprites.sweet, 1.1), (ClawdSprites.happy, 0.5)]
+        case .sweeping:
+            return [(ClawdSprites.sweep1, 0.4), (ClawdSprites.sweep2, 0.4)]
         }
     }
 }
@@ -663,6 +849,8 @@ struct ClawdView: View {
 
     @State private var frame = 0
     @State private var ticker: Task<Void, Never>?
+    /// 爱心飘起来没有
+    @State private var hearts = false
 
     private var sprites: [(PixelSprite, Double)] { mood.frames }
 
@@ -686,6 +874,32 @@ struct ClawdView: View {
             }
 
             PixelSpriteView(sprite: sprites[min(frame, sprites.count - 1)].0, scale: scale)
+
+            // 甜的时候头顶飘爱心。
+            //
+            // **不画进图纸**：图纸只有 32×23，身子占满了，
+            // 心画进去只能替掉身上的豆子，看着像破了个洞。
+            // 飘在外面才是「冒出来的」。
+            if mood == .loving {
+                ZStack {
+                    ForEach(0..<3, id: \.self) { i in
+                        JournalStickerShape(kind: "heart")
+                            .fill(Color(hexString: "FF6B81") ?? .pink)
+                            .frame(width: scale * 3.5, height: scale * 3.5)
+                            .offset(x: CGFloat(i - 1) * scale * 5,
+                                    y: hearts ? -scale * 11 : -scale * 5)
+                            .opacity(hearts ? 0 : 0.9)
+                            .animation(
+                                .easeOut(duration: 1.6)
+                                    .repeatForever(autoreverses: false)
+                                    .delay(Double(i) * 0.5),
+                                value: hearts)
+                    }
+                }
+                .allowsHitTesting(false)
+                .onAppear { hearts = true }
+                .onDisappear { hearts = false }
+            }
         }
             .onAppear { start() }
             .onDisappear { ticker?.cancel() }

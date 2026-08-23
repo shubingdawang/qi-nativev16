@@ -21,13 +21,17 @@ import Foundation
 /// 而「比平时轻、停顿比平时多」这种话已经很有用了。
 /// 先把八成的价值拿到手。
 ///
-/// ## 加音高的时候记得
+/// ## 音高后来加上了（v130），照上面那条规矩加的
 ///
 /// 现在这些全是纯算术，几百个浮点数跑一遍是微秒级，**没有超时的必要**。
 /// 但 cove 那份 PDF 的坑 8 写得很清楚：他们把语气分析放在关键路径上，
 /// ASR 只花 0.9 秒，语气分析同步等了八秒，用户看到的是「识别很慢」。
 /// **以后谁往这儿加 FFT 或者加模型调用，必须先套一个 250–350ms 的硬预算，
 /// 超时就省略，绝不允许挡住正式回答。**
+///
+/// 音高走 `VoiceTimbre`（自相关，不是 FFT），**套的就是 300ms 那个预算**：
+/// 超时就当没这一项，`pitch` 留 0，基线那边会自动跳过它。
+/// 少一条线索没人会死，卡住她的回复会。
 
 // MARK: - 一句话的声学特征
 
@@ -40,8 +44,26 @@ struct ProsodyFeatures: Codable, Hashable {
     var pauseRatio: Double = 0
     /// 语速：字 / 秒
     var tempo: Double = 0
+    /// 基频中位数（Hz）。**0 = 这一条没算出来**（超预算，或者气声太多），
+    /// 基线那边碰到 0 会跳过，不会把它当成「音高很低」。
+    var pitch: Double = 0
 
     var usable: Bool { speechSeconds >= 0.6 }
+}
+
+/// ⚠️ 容错解码器。这一串存在 `voice-baseline.json` 里、
+/// 用 `Storage.load([ProsodyFeatures].self)` 接住——
+/// 加一个字段不补这儿，**她攒了几十条的基线会一次全没**，
+/// 而且下次保存就把空的写回去，他从此再也说不出「比平时轻」。
+extension ProsodyFeatures {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        speechSeconds = (try? c.decodeIfPresent(Double.self, forKey: .speechSeconds)) ?? 0
+        energy = (try? c.decodeIfPresent(Double.self, forKey: .energy)) ?? 0
+        pauseRatio = (try? c.decodeIfPresent(Double.self, forKey: .pauseRatio)) ?? 0
+        tempo = (try? c.decodeIfPresent(Double.self, forKey: .tempo)) ?? 0
+        pitch = (try? c.decodeIfPresent(Double.self, forKey: .pitch)) ?? 0
+    }
 }
 
 enum VoiceProsody {
@@ -145,6 +167,15 @@ final class VoiceBaseline: ObservableObject {
         }
         if f.tempo > 0, let z = z(f.tempo, history.map(\.tempo), allowZero: false) {
             cues.append((abs(z), phrase(z, high: "语速比平时快", low: "说得比平时慢")))
+        }
+        // 音高。**只跟她自己比**——绝对值没有意义（每个人天生高低不同），
+        // 而「今天比平时低」可能是累了、感冒了、刚醒。
+        // 算不出来的那些（pitch == 0）直接不参与，别把「没测出来」当成「很低」。
+        let pitches = history.map(\.pitch).filter { $0 > 0 }
+        if f.pitch > 0, pitches.count >= minimum,
+           let z = z(f.pitch, pitches, allowZero: false) {
+            cues.append((abs(z), phrase(z, high: "声音比平时高一点",
+                                        low: "声音比平时低一点")))
         }
 
         let picked = cues.filter { !$0.text.isEmpty }

@@ -218,7 +218,7 @@ struct ThoughtPoolView: View {
             Button {
                 pool.stir(t.text)     // 再想一次，等于又戳一下
             } label: {
-                Label("又想到了", systemImage: "arrow.clockwise")
+                Label("再想一个", systemImage: "arrow.clockwise")
             }
             Button {
                 pool.resolve(t.id)

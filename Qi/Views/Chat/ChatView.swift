@@ -284,7 +284,12 @@ struct ChatView: View {
             // 又不能挡住底下的气泡——它自己那一小块接触摸，别处一律放过去。
             if space == .chat, let conv = activeConversation {
                 let state = app.presence(in: conv.id)
-                ClawdRoamer(busy: state.busy, activity: state.text)
+                ClawdRoamer(busy: state.busy,
+                            activity: state.text,
+                            // 这一轮出错了没有：最后一条挂着错就是出了
+                            upset: conv.messages.last?.errorText != nil,
+                            // 她上次说话是什么时候——那只困不困看这个
+                            lastHerAt: conv.messages.last(where: { $0.role == .user })?.createdAt)
                     .allowsHitTesting(menuOpenID == nil && !selecting)
             }
 
@@ -657,7 +662,9 @@ struct ChatView: View {
                     Image(systemName: "hourglass")
                         .font(.app(11))
                         .foregroundStyle(app.settings.accentColor)
-                    Text("攒着呢，你不说了 \(Int(app.settings.segmentUserDelay)) 秒之后一起发。长按发送键马上发。")
+                    Text("攒着呢——文字、图、语音都在等你。"
+                         + "你不说了 \(Int(app.settings.segmentUserDelay)) 秒之后一起发，"
+                         + "长按发送键马上发。")
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                     Spacer(minLength: 0)
@@ -1073,7 +1080,7 @@ struct ChatView: View {
             }
             // 她**是怎么说的**。本机算，不花钱，不联网。
             // 认不出字也照样算——语气跟识别成不成功是两回事。
-            noteTone(shape: shape, step: step, text: text)
+            await noteTone(shape: shape, step: step, text: text, audio: url)
         default:
             do {
                 let t: Transcript
@@ -1089,7 +1096,7 @@ struct ChatView: View {
                 }
                 let line = t.briefForModel
                 draft = draft.isEmpty ? line : draft + " " + line
-                noteTone(shape: shape, step: step, text: t.text)
+                await noteTone(shape: shape, step: step, text: t.text, audio: url)
             } catch {
                 notice = error.localizedDescription
             }
@@ -1101,9 +1108,23 @@ struct ChatView: View {
     /// 全是本机的纯算术，一分钱不花、一个字节不上传。
     /// 攒够 8 条之前 `note` 一律返回空——那会儿它还不知道什么叫「她的平时」，
     /// **宁可不说也不要说错**。
-    private func noteTone(shape: [Double], step: Double, text: String) {
-        let f = VoiceProsody.features(samples: shape, interval: step, text: text)
+    private func noteTone(shape: [Double], step: Double, text: String,
+                          audio: URL? = nil) async {
+        var f = VoiceProsody.features(samples: shape, interval: step, text: text)
         guard f.usable else { return }
+        // 音高：从录音本体里算（振幅序列里没有音高这件事）。
+        // **套 300ms 硬预算**——`VoiceProsody` 顶上那段留的规矩：
+        // 超时就当没这一项，绝不允许挡住她把话发出去。
+        if let audio, let t = await VoiceTimbre.analyzeWithBudget(audio) {
+            f.pitch = t.pitch
+            // 顺手记一句「她的声音什么样」。
+            //
+            // 描述是分档的（偏低／起伏不大／温厚…），所以同一个人录十条
+            // 出来的多半是同一句话——**写回去不会把缓存前缀搞脏**。
+            let me = app.settings.userName.isEmpty ? "她" : app.settings.userName
+            let line = VoiceTimbre.describe(t, who: me)
+            if line != app.settings.herVoiceNote { app.settings.herVoiceNote = line }
+        }
         pendingTone = VoiceBaseline.shared.note(for: f)
         // 只有正常走完这一轮才记进基线。半截的、太短的都不算，
         // 不然基线会被污染。
@@ -1124,16 +1145,37 @@ struct ChatView: View {
     }
 
     private func sendCurrent(_ conv: Conversation) {
-        // 只打了字、没带别的东西，而且开了「我分段发」——
-        // 那这一句先攒着，等她真的不说了再一起交给他
-        if app.settings.segmentUser
-            && pendingImages.isEmpty && pendingGIFs.isEmpty && pendingFiles.isEmpty
-            && pendingSticker == nil && pendingVoice == nil && quoting == nil {
+        // 开了「我分段发」的话，**什么都先攒着**——
+        // 文字、图、文件、语音、表情、引用，一样都不例外。
+        //
+        // 她说的：「我有时候给他发语音想跟他先说下话，
+        // 不然只有一个语音他可能不能很好地理解。」
+        // 以前一带附件就绕过这条路直接发，于是「先说一句再发语音」
+        // 得赶在六秒之内，「先发语音再补一句」根本做不到。
+        if app.settings.segmentUser {
             let line = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !line.isEmpty else { return }
+            let hasStuff = !pendingImages.isEmpty || !pendingGIFs.isEmpty
+                || !pendingFiles.isEmpty || pendingSticker != nil || pendingVoice != nil
+            guard !line.isEmpty || hasStuff else { return }
+            app.queueSend(text: line,
+                          images: pendingImages,
+                          imageNames: pendingGIFs,
+                          files: pendingFiles,
+                          sticker: pendingSticker,
+                          quoting: quoting,
+                          voiceName: pendingVoice ?? "",
+                          voiceTone: pendingTone,
+                          in: conv.id)
             draft = ""
             mentioning = false
-            app.queueSend(text: line, in: conv.id)
+            pendingVoice = nil
+            pendingTone = ""
+            pendingImages = []
+            pendingGIFs = []
+            pendingFiles = []
+            pickedItems = []
+            pendingSticker = nil
+            quoting = nil
             return
         }
 

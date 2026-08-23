@@ -187,7 +187,7 @@ struct AppearanceView: View {
     // MARK: 字
 
     private var fontCard: some View {
-        SettingsCard(title: "字") {
+        SettingsCard(title: "字体") {
             HStack(spacing: 10) {
                 ForEach(AppSettings.fontDesigns, id: \.0) { key, title in
                     Button {
@@ -307,11 +307,11 @@ struct AppearanceView: View {
                                 .multilineTextAlignment(.leading)
                         }
                         Spacer(minLength: 0)
-                        if p == .home {
+                        // 每一档自己报几个色（`ThemePreset.swatches`），
+                        // 加一档主题不用回来改这儿
+                        if !p.swatches.isEmpty {
                             HStack(spacing: 3) {
-                                ForEach([HomePalette.sage, HomePalette.amber,
-                                         HomePalette.bodyPink, HomePalette.orange],
-                                        id: \.self) { c in
+                                ForEach(p.swatches, id: \.self) { c in
                                     Circle().fill(c).frame(width: 9, height: 9)
                                 }
                             }
@@ -369,10 +369,10 @@ struct AppearanceView: View {
 
             if app.settings.preset.ownsBackground {
                 SettingsDivider()
-                SettingsNote(app.settings.preset == .home
-                    ? "这一档是整套的：底是 claude.ai 那张暖纸，你自己那张壁纸先让位（换回「原来的」就回来了）。气泡也跟着换——你说的话是一块浅面板，他说的话不套气泡，直接印在纸上，跟 claude.ai 一样。"
-                    : "这一档整屏是一层渐变，两头的颜色和方向就在上面调。气泡还是玻璃。",
-                    title: "这一档会动哪些地方")
+                // 每一档自己带着这句话（`ThemePreset.detail`）——
+                // 摆在这儿写 if-else 的话，加一档就得回来补一次
+                SettingsNote(app.settings.preset.detail,
+                             title: "这一档会改动什么")
             }
 
             SettingsNote("「家」那套里橘是限量的——一屏最多一处，留给发送键或者唯一的主按钮。列表、图标、标题一律不用橘，要强调靠字重和面板色。")

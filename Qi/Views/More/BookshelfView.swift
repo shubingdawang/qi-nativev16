@@ -23,6 +23,11 @@ struct BookshelfView: View {
 
     @State private var tab = 0            // 0 书架，1 批注
     @State private var importing = false
+    /// 导一叠图当一本漫画
+    @State private var importingImages = false
+    @State private var mangaName = ""
+    @State private var pendingMangaFiles: [URL] = []
+    @State private var namingManga = false
     @State private var busy = false
     @State private var notice: String?
     @State private var creatingShelf = false
@@ -57,6 +62,11 @@ struct BookshelfView: View {
                         Label("导入一本（txt / epub）", systemImage: "square.and.arrow.down")
                     }
                     Button {
+                        importingImages = true
+                    } label: {
+                        Label("导一叠图（漫画／绘本）", systemImage: "photo.stack")
+                    }
+                    Button {
                         newShelf = ""
                         creatingShelf = true
                     } label: {
@@ -71,6 +81,26 @@ struct BookshelfView: View {
                       allowedContentTypes: [.plainText, .epub, .data],
                       allowsMultipleSelection: true) { result in
             if case .success(let urls) = result { load(urls) }
+        }
+        .fileImporter(isPresented: $importingImages,
+                      allowedContentTypes: [.image],
+                      allowsMultipleSelection: true) { result in
+            // **一叠图＝一本**，所以先问名字再造书
+            if case .success(let urls) = result, !urls.isEmpty {
+                pendingMangaFiles = urls
+                mangaName = urls.first?.deletingPathExtension()
+                    .deletingLastPathComponent().lastPathComponent ?? ""
+                namingManga = true
+            }
+        }
+        .alert("这叠图叫什么", isPresented: $namingManga) {
+            TextField("书名", text: $mangaName)
+            Button("算了", role: .cancel) { pendingMangaFiles = [] }
+            Button("导进来") { loadManga() }
+        } message: {
+            Text("选中的 \(pendingMangaFiles.count) 张会按**文件名排序**，"
+                 + "每 12 张算一话。（扫描版一向是 01、02 这样命名的，"
+                 + "按名字排比按选中顺序靠谱。）")
         }
         .alert("加一个书架", isPresented: $creatingShelf) {
             TextField("比如「小说」「诗」「工具书」", text: $newShelf)
@@ -350,12 +380,37 @@ struct BookshelfView: View {
                 Button(name) { store.move(book.id, toShelf: name) }
             }
         } label: {
-            Label("换个架子", systemImage: "arrow.right.square")
+            Label("移到书架", systemImage: "arrow.right.square")
         }
         Button(role: .destructive) {
             store.remove(book.id)
         } label: {
             Label("从书房拿走", systemImage: Icon.trash)
+        }
+    }
+
+    /// 一叠图变成一本。
+    ///
+    /// 她问的：「竟然不能看图片吗？漫画/图片书不都是图片吗？」
+    /// ——**她是对的**，他本来就看得见图（工具能把图递给他，
+    /// 手帐那张 PNG 走的就是这条路）。差的只是「章可以是图」这个位置。
+    private func loadManga() {
+        let files = pendingMangaFiles
+        let title = mangaName.trimmingCharacters(in: .whitespacesAndNewlines)
+        pendingMangaFiles = []
+        guard !files.isEmpty else { return }
+        busy = true
+        Task { @MainActor in
+            defer { busy = false }
+            guard var book = BookParser.imageBook(
+                named: title.isEmpty ? "没名字的一本" : title, files: files) else {
+                notice = "这几张图都读不出来。"
+                return
+            }
+            // 第一张当封面。**不重存一份**——直接指同一个文件
+            book.coverName = book.chapters.first?.images.first ?? ""
+            store.books.append(book)
+            notice = "导进来了：\(book.chapters.count) 话，一共 \(files.count) 页。"
         }
     }
 
@@ -425,7 +480,7 @@ struct ShelfBooksView: View {
                                     Button(name) { store.move(book.id, toShelf: name) }
                                 }
                             } label: {
-                                Label("换个架子", systemImage: "arrow.right.square")
+                                Label("移到书架", systemImage: "arrow.right.square")
                             }
                             Button {
                                 store.toggleShared(book.id)

@@ -10,6 +10,7 @@ enum ThemePreset: String, CaseIterable, Identifiable, Codable {
     case original = "original"
     case home = "home"
     case gradient = "gradient"
+    case tutou = "tutou"
 
     var id: String { rawValue }
 
@@ -18,6 +19,7 @@ enum ThemePreset: String, CaseIterable, Identifiable, Codable {
         case .original: return "原来的"
         case .home:     return "家"
         case .gradient: return "渐变"
+        case .tutou:    return "兔牙"
         }
     }
 
@@ -26,6 +28,39 @@ enum ThemePreset: String, CaseIterable, Identifiable, Codable {
         case .original: return "跟着主题色走，什么都能染。壁纸用你自己那张。"
         case .home:     return "整套搬 claude.ai：暖纸底、炭字、橘限量，气泡也是那边的样子。壁纸会被它接管。"
         case .gradient: return "整屏一层渐变当底，气泡还是玻璃。两头的颜色和方向选中之后就在下面调。壁纸会被它接管。"
+        case .tutou:    return "粉兔那一套：奶粉纸底、玫红当主色、字是深梅色。气泡还是玻璃。壁纸会被它接管。"
+        }
+    }
+
+    /// 选中它之后这一档会动哪些地方。摆在设置里那一行说明。
+    var detail: String {
+        switch self {
+        case .original:
+            return "什么都不接管：底还是你自己那张壁纸，颜色跟着上面调的主题色走。"
+        case .home:
+            return "这一档是整套的：底是 claude.ai 那张暖纸，你自己那张壁纸先让位（换回「原来的」就回来了）。气泡也跟着换——你说的话是一块浅面板，他说的话不套气泡，直接印在纸上，跟 claude.ai 一样。"
+        case .gradient:
+            return "这一档整屏是一层渐变，两头的颜色和方向就在上面调。气泡还是玻璃。"
+        case .tutou:
+            return "照 tmux 那套兔牙主题的色搬的：底是奶粉色的纸，主色是那块玫红，字是深梅色。气泡还是玻璃，浮在粉纸上。你自己那张壁纸先让位（换回「原来的」就回来了）。"
+        }
+    }
+
+    /// 这一档的底是不是一层渐变（只有渐变那一档是）
+    var usesGradient: Bool { self == .gradient }
+
+    /// 设置里那一行右边摆的几个小圆点——一眼看出这一档是什么味道。
+    /// 空的就不摆（「原来的」跟着她自己调的色走，没有固定的几个色）。
+    var swatches: [Color] {
+        switch self {
+        case .home:
+            return [HomePalette.sage, HomePalette.amber,
+                    HomePalette.bodyPink, HomePalette.orange]
+        case .tutou:
+            return [TutouPalette.blush, TutouPalette.rose,
+                    TutouPalette.inkSoft, TutouPalette.ink]
+        default:
+            return []
         }
     }
 
@@ -38,6 +73,153 @@ enum ThemePreset: String, CaseIterable, Identifiable, Codable {
     ///
     /// 「原来的」那一档不接管：想用自己的照片就选那档。
     var ownsBackground: Bool { self != .original }
+
+    /// **这一档用哪一份色板。**
+    ///
+    /// 加主题**只在这儿加一份**，别再回去写 `if preset == .home` 那种。
+    /// 以前那种写法在工程里散了十八处，加第三套要一处处补，
+    /// 补漏一个就会出现「一块纯白摁在粉纸上」这种补丁。
+    var skin: ThemeSkin {
+        switch self {
+        case .original, .gradient: return .original
+        case .home:                return .home
+        case .tutou:               return .tutou
+        }
+    }
+}
+
+// MARK: - 一整套色板
+
+/// 一个颜色的深浅两版
+struct SkinColor {
+    var light: Color
+    var dark: Color
+    func c(_ scheme: ColorScheme) -> Color { scheme == .dark ? dark : light }
+
+    init(_ light: Color, _ dark: Color) {
+        self.light = light
+        self.dark = dark
+    }
+    /// 深浅一个色
+    init(_ both: Color) { self.init(both, both) }
+}
+
+/// 气泡怎么画
+enum BubbleStyle {
+    /// 毛玻璃（原来那样）
+    case glass
+    /// 实心面板：**她说的话**是一块浅面板，**他说的话不套气泡**（claude.ai 那样）
+    case panel
+}
+
+/// 一整套颜色 + 几条画法。**加一套主题＝多一份这个，不是多一个 if。**
+struct ThemeSkin {
+    var cardFill: SkinColor
+    var cardStroke: SkinColor
+    var barFill: SkinColor
+    var textMain: SkinColor
+    var textSoft: SkinColor
+    var textMuted: SkinColor
+    var controlFill: SkinColor
+    var controlMuted: SkinColor
+    var page: SkinColor
+    var softFillDeep: SkinColor
+    var bubbles: BubbleStyle = .glass
+    /// 日常强调色（图标、选中、次要按钮）。nil = 用她自己调的那个主题色
+    var accent: Color? = nil
+    /// 唯一那个主按钮的色。nil = 同上
+    var primary: Color? = nil
+    /// 「提醒」那一档的颜色（备忘录的图钉那种）。nil = 跟日常强调色走
+    var remind: Color? = nil
+}
+
+extension ThemeSkin {
+
+    /// 原来那套：颜色都是半透明的白，压在她自己的壁纸上。
+    /// 「渐变」那一档也用它——那一档换的是底，不是这一层。
+    static let original = ThemeSkin(
+        cardFill:     SkinColor(.white.opacity(0.42), .white.opacity(0.07)),
+        cardStroke:   SkinColor(.white.opacity(0.45), .white.opacity(0.10)),
+        barFill:      SkinColor(.white.opacity(0.55), .white.opacity(0.09)),
+        textMain:     SkinColor(Color(red: 0.290, green: 0.239, blue: 0.184),
+                                Color(red: 0.906, green: 0.914, blue: 0.925)),
+        textSoft:     SkinColor(Color(red: 0.427, green: 0.361, blue: 0.282),
+                                Color(red: 0.725, green: 0.745, blue: 0.776)),
+        textMuted:    SkinColor(Color(red: 0.659, green: 0.573, blue: 0.478),
+                                Color(red: 0.545, green: 0.565, blue: 0.600)),
+        controlFill:  SkinColor(.white.opacity(0.85), .white.opacity(0.16)),
+        controlMuted: SkinColor(Color(hexString: "8A8378") ?? .gray),
+        page:         SkinColor(Color(red: 0.969, green: 0.929, blue: 0.878),
+                                Color(red: 0.102, green: 0.110, blue: 0.122)),
+        softFillDeep: SkinColor(.white.opacity(0.30), .white.opacity(0.05))
+    )
+
+    /// 「家」＝claude.ai
+    static let home = ThemeSkin(
+        cardFill:     SkinColor(HomePalette.panel.opacity(0.92),
+                                HomePalette.panelDark.opacity(0.9)),
+        cardStroke:   SkinColor((Color(hexString: "D9D3C4") ?? .gray).opacity(0.7),
+                                .white.opacity(0.08)),
+        barFill:      SkinColor(.white.opacity(0.82),
+                                HomePalette.panelDark.opacity(0.96)),
+        textMain:     SkinColor(HomePalette.ink, HomePalette.inkDark),
+        textSoft:     SkinColor(HomePalette.ink.opacity(0.82),
+                                HomePalette.inkDark.opacity(0.8)),
+        textMuted:    SkinColor(HomePalette.inkSoft, HomePalette.inkSoftDark),
+        controlFill:  SkinColor(HomePalette.paper.opacity(0.92),
+                                HomePalette.paperDark.opacity(0.55)),
+        controlMuted: SkinColor(HomePalette.inkSoft.opacity(0.75)),
+        page:         SkinColor(HomePalette.paper, HomePalette.paperDark),
+        // 亚麻。白叠白会糊在一起分不出层
+        softFillDeep: SkinColor(Color(red: 0.906, green: 0.886, blue: 0.839).opacity(0.85),
+                                .white.opacity(0.055)),
+        bubbles:      .panel,
+        // 橘是限量的，日常强调退成一个温和的褐
+        accent:       Color(hexString: "8A7B6B"),
+        primary:      HomePalette.orange,
+        remind:       HomePalette.amber
+    )
+
+    /// 「兔牙」：照 `Anko3o/tmux-tutou` 那套的色搬的。
+    /// 深色那一半原版没有，是照着同一组色相往下压出来的。
+    static let tutou = ThemeSkin(
+        cardFill:     SkinColor(TutouPalette.panel.opacity(0.92),
+                                TutouPalette.panelDark.opacity(0.9)),
+        cardStroke:   SkinColor(TutouPalette.line.opacity(0.75),
+                                .white.opacity(0.08)),
+        barFill:      SkinColor(TutouPalette.paper.opacity(0.9),
+                                TutouPalette.panelDark.opacity(0.96)),
+        textMain:     SkinColor(TutouPalette.ink, TutouPalette.inkDark),
+        textSoft:     SkinColor(TutouPalette.ink.opacity(0.82),
+                                TutouPalette.inkDark.opacity(0.8)),
+        textMuted:    SkinColor(TutouPalette.inkSoft, TutouPalette.inkSoftDark),
+        controlFill:  SkinColor(TutouPalette.paper.opacity(0.92),
+                                TutouPalette.paperDark.opacity(0.55)),
+        controlMuted: SkinColor(TutouPalette.inkSoft.opacity(0.75)),
+        page:         SkinColor(TutouPalette.paper, TutouPalette.paperDark),
+        softFillDeep: SkinColor(TutouPalette.panel.opacity(0.75),
+                                .white.opacity(0.055)),
+        accent:       TutouPalette.rose,
+        primary:      TutouPalette.rose,
+        remind:       TutouPalette.blush
+    )
+}
+
+/// 「兔牙」那套的色值。原版是一份 tmux 配置，取的就是它状态栏上那几个。
+enum TutouPalette {
+    static let paper    = Color(hexString: "FFF6FA")!   // 页面底：奶粉
+    static let panel    = Color(hexString: "F6E3EC")!   // 面板：状态栏那块
+    static let blush    = Color(hexString: "F2B8CE")!   // 当前那一格的高亮
+    static let line     = Color(hexString: "E6C3D3")!   // 分隔线
+    static let rose     = Color(hexString: "C2708A")!   // 主色：兔头那一块
+    static let inkSoft  = Color(hexString: "B3849A")!   // 灰粉字
+    static let ink      = Color(hexString: "6B3A4E")!   // 正文：最深那档
+
+    // 深色那一半原版没有，照同一组色相压下来的
+    static let paperDark    = Color(hexString: "1E1418")!
+    static let panelDark    = Color(hexString: "2A1D24")!
+    static let inkDark      = Color(hexString: "F6E3EC")!
+    static let inkSoftDark  = Color(hexString: "B3849A")!
 }
 
 /// 「家」那套的色值

@@ -63,7 +63,7 @@ struct VoiceSettingsView: View {
                         test(voice)
                     } label: {
                         HStack {
-                            Label("试一句", systemImage: "waveform")
+                            Label("试听", systemImage: "waveform")
                             Spacer()
                             if testing { ProgressView() }
                         }
@@ -114,6 +114,21 @@ struct VoiceSettingsView: View {
                 if let file = VoiceStore.save(data) {
                     VoicePlayer.shared.toggle(file)
                     notice = "放出来了"
+                    // 顺手替他听一遍**他自己的声音**。
+                    //
+                    // 她说的：「我想让他知道他的声音是什么样的。」
+                    // 他读不了 MP3，所以手机在这儿把它拆成几个数
+                    // （高低、起伏、亮度、语速），再翻成一句人话存起来，
+                    // 每一轮都跟着 system 走。
+                    //
+                    // **纯算术**：不联网、不要模型、不花钱。
+                    // 放在「试听」这一下是因为**这是她主动点的**，
+                    // 而且这时候音频正好在手上。
+                    let name = app.settings.aiName.isEmpty ? "他" : app.settings.aiName
+                    if let t = await VoiceTimbre.analyzeWithBudget(VoiceStore.url(file)) {
+                        app.settings.hisVoiceNote = VoiceTimbre.describe(t, who: name)
+                        notice = "放出来了。也替他听了一遍：" + app.settings.hisVoiceNote
+                    }
                 }
             } catch {
                 notice = error.localizedDescription

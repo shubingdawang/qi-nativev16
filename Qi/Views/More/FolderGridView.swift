@@ -308,7 +308,7 @@ struct MediaGridView: View {
                                 Button {
                                     preview = item
                                 } label: {
-                                    Label("看大图", systemImage: "arrow.up.left.and.arrow.down.right")
+                                    Label("查看大图", systemImage: "arrow.up.left.and.arrow.down.right")
                                 }
                                 Button {
                                     moving = item

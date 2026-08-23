@@ -963,7 +963,16 @@ final class MemoryStore: ObservableObject {
                     saveTranscript(t)
                     report.lines.append("存档「\(t.title)」\(t.msgs.count) 条")
                 } else {
-                    report.failed.append(u.lastPathComponent)
+                    // 认不出来再试一次 claude.ai 导出的那个格式
+                    // （conversations.json，一个数组，正文在 chat_messages 里）
+                    let convs = ClaudeExport.parse(data)
+                    if convs.isEmpty {
+                        report.failed.append(u.lastPathComponent)
+                    } else {
+                        for t in convs { saveTranscript(t) }
+                        let total = convs.reduce(0) { $0 + $1.msgs.count }
+                        report.lines.append("claude.ai \(convs.count) 段对话、\(total) 条")
+                    }
                 }
             }
         }

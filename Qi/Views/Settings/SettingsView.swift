@@ -12,6 +12,11 @@ struct SettingsView: View {
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
     @State private var showingImporter = false
+    /// 占了多少地方。**进这一页才算**——要走几百个文件，
+    /// 每次刷设置都算一遍太亏
+    @State private var usage: StorageUsage.Report?
+    @State private var measuring = false
+
     /// 选好了、还没决定怎么放的那份备份
     @State private var pendingBackup: Data?
     @State private var exportURL: URL?
@@ -414,6 +419,24 @@ struct SettingsView: View {
             SettingsDivider()
 
             Group {
+            Toggle(isOn: $app.settings.toolConfirm) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("动手之前问一句")
+                        .font(.app(15))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    Text("他要删东西、装卸小屋、真打电话之前，先弹一下问你")
+                        .font(.app(11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+            }
+            .tint(app.settings.accentColor)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            SettingsNote("只拦这几件**做了不好收拾**的。存图、写记忆、做标记一律不问——"
+                         + "写错了你看得见，也改得回来。每件都问的话，问到最后你只会闭着眼睛按「好」。"
+                         + "\n\n90 秒没人点就当这次不做：免得你把手机扣下走了，他那边一直吊着。")
+            SettingsDivider()
+
             Toggle(isOn: $app.settings.segmentAssistant) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("他分段发")
@@ -435,7 +458,9 @@ struct SettingsView: View {
                     Text("我分段发")
                         .font(.app(15))
                         .foregroundStyle(Theme.textMain(scheme))
-                    Text("打完先攒着，等你不说了再一起发出去")
+                    Text("打完先攒着，等你不说了再一起发出去。"
+                         + "图、文件、语音、表情**都会一起等**——"
+                         + "所以「先说一句再发语音」和「先发语音再补一句」都行")
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
@@ -489,7 +514,7 @@ struct SettingsView: View {
             // 说明**贴着它自己那一项**，不堆到卡片最底下（她提的）。
             // 隔着五六行才讲的那句话，读到的时候已经忘了在讲哪一项。
             SettingsNote("历史带得越多，对方越记得住前面说过什么，但每次请求也更费钱。",
-                         title: "带多少合适")
+                         title: "说明")
 
             SettingsDivider()
 
@@ -526,7 +551,7 @@ struct SettingsView: View {
             气泡里会留一行「换了个模型接着说」——**你得知道这段是谁说的**，不然回头看会以为他忽然变了个人。
 
             只认额度和限流那几种错。网络断了、地址填错了不会换——那种换谁都一样。
-            """, title: "这一项是干嘛的")
+            """, title: "说明")
 
             SettingsDivider()
 
@@ -561,7 +586,7 @@ struct SettingsView: View {
             以前一律「挑第一个能用的供应商」——可能挑到一个不会看图的，也可能挑到最贵的那个。在这儿指一个便宜又能看图的（比如 Gemini），杂活走它，聊天还是走你在输入框上面选的那个。
 
             选「自动挑」就是回到老样子。
-            """, title: "什么算杂活")
+            """, title: "说明")
 
             SettingsDivider()
 
@@ -592,7 +617,7 @@ struct SettingsView: View {
             ⚠️ **每压一次多发一次请求。** 按每 60 条算，大约三十个回合多花一次。只在你发消息那一轮里顺带压，不会自己在后台跑。
 
             某一窗压成了什么、想立刻压一次，在那一窗的「对话设定」里看。
-            """, title: "滚雪球压缩是干嘛的")
+            """, title: "说明")
 
             SettingsDivider()
 
@@ -606,7 +631,7 @@ struct SettingsView: View {
             .padding(.vertical, 11)
 
             SettingsNote("默认不是——**换行就是换行**。想一按就发再打开它。",
-                         title: "回车这一项")
+                         title: "说明")
             }
         }
     }
@@ -660,7 +685,7 @@ struct SettingsView: View {
                 SettingsDivider()
 
                 NavigationLink { WakeSettingsView() } label: {
-                    SettingsRowLabel(title: "自己醒来",
+                    SettingsRowLabel(title: "自动唤醒",
                                      value: app.settings.wake.enabled ? "开着" : "关着",
                                      chevron: true)
                 }
@@ -719,6 +744,10 @@ struct SettingsView: View {
 
             SettingsDivider()
 
+            storageRow
+
+            SettingsDivider()
+
             Button { exportBackup() } label: {
                 SettingsRowLabel(title: "导出备份", icon: "square.and.arrow.up")
             }
@@ -767,15 +796,16 @@ struct SettingsView: View {
 
     private var aboutCard: some View {
         SettingsCard {
-            SettingsRowLabel(title: "版本", value: appVersion)
-            SettingsDivider()
+            // 版本号那一行删掉了（她说的）：它写死在工程里永远是 1.0，
+            // 跟下面那个打包时间**说的是同一件事，而且说得更差**——
+            // 摆两行只会让人以为它们不一样。
             SettingsRowLabel(title: "这一版打包于", value: buildDate)
             SettingsDivider()
             SettingsRowLabel(title: "絮语窗口", value: "\(chatCount)")
             SettingsDivider()
             SettingsRowLabel(title: "消息总数", value: "\(messageCount)")
 
-            SettingsNote("版本号是写死在工程里的（MARKETING_VERSION），不改它就一直是 1.0——所以真正能认出「我装的是不是最新那版」的是上面那个打包时间。\n\n清空全部对话之后「絮语窗口」会是 1 而不是 0：群聊是常驻的、工坊有一个固定窗口，再加一个新开的空窗口，清干净了也还剩这三个壳子。看「消息总数」才知道内容有没有真的清掉。")
+            SettingsNote("认「我装的是不是最新那版」就看上面那个打包时间。\n\n清空全部对话之后「絮语窗口」会是 1 而不是 0：群聊是常驻的、工坊有一个固定窗口，再加一个新开的空窗口，清干净了也还剩这三个壳子。看「消息总数」才知道内容有没有真的清掉。")
         }
     }
 
@@ -813,12 +843,6 @@ struct SettingsView: View {
         return "\(on.count) 个 · \(tools) 工具"
     }
 
-    private var appVersion: String {
-        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-        let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-        return "\(v) (\(b))"
-    }
-
     // MARK: 壁纸
 
     private func loadWallpaper(_ item: PhotosPickerItem?) {
@@ -838,6 +862,81 @@ struct SettingsView: View {
                 app.settings.wallpaperHistory.removeAll { $0 == name }
                 wallpaperItem = nil
             }
+        }
+    }
+
+    // MARK: 占了多少地方
+
+    /// 分门别类摆出来。**不给「一键清理」**——
+    /// 该删哪张图只有她知道，一个按钮替她决定，删掉的就回不来了。
+    /// 这儿只负责让她看见，删还是去相册、回收站那些地方各自删。
+    @ViewBuilder
+    private var storageRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "internaldrive")
+                    .font(.app(13))
+                    .foregroundStyle(app.settings.accentColor)
+                Text("占了多少地方")
+                    .font(.app(14))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Spacer(minLength: 0)
+                if let u = usage {
+                    Text(StorageUsage.human(u.total))
+                        .font(.app(13, weight: .medium))
+                        .foregroundStyle(Theme.textMain(scheme))
+                } else if measuring {
+                    ProgressView().scaleEffect(0.7)
+                } else {
+                    Button("算一下") { measureStorage() }
+                        .font(.app(12))
+                        .buttonStyle(.plain)
+                        .foregroundStyle(app.settings.accentColor)
+                }
+            }
+
+            if let u = usage {
+                ForEach(u.items) { item in
+                    HStack(alignment: .top, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(item.name)
+                                .font(.app(12))
+                                .foregroundStyle(Theme.textMain(scheme))
+                            Text(item.note)
+                                .font(.app(10))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                        }
+                        Spacer(minLength: 0)
+                        Text(StorageUsage.human(item.bytes))
+                            .font(.app(12))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
+                }
+                if u.freeOnDevice > 0 {
+                    Text("这台手机还剩 " + StorageUsage.human(u.freeOnDevice))
+                        .font(.app(10.5))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+                Text("图片是最能长的那一摊。回收站里那些三十天后自己清；"
+                     + "想早点腾出来，去「相册 → 回收站」里清。")
+                    .font(.app(10.5))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private func measureStorage() {
+        guard !measuring else { return }
+        measuring = true
+        Task {
+            // 走几百个文件，别卡着界面
+            let r = await Task.detached(priority: .utility) {
+                StorageUsage.measure()
+            }.value
+            usage = r
+            measuring = false
         }
     }
 

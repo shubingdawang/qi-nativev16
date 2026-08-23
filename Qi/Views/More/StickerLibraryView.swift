@@ -240,7 +240,7 @@ struct StickerLibraryView: View {
                             Button {
                                 editing = sticker
                             } label: {
-                                Label("改描述", systemImage: "pencil")
+                                Label("修改描述", systemImage: "pencil")
                             }
                             Button {
                                 var s = sticker

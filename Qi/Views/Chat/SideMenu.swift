@@ -342,6 +342,8 @@ struct SideMenuItem: Identifiable, Hashable {
         .init(id: "sticker",   title: "相册", icon: Icon.gallery),
         .init(id: "favorite",  title: "收藏", icon: Icon.star),
         .init(id: "games",     title: "游戏", icon: Icon.games),
+        .init(id: "moments",   title: "动态", icon: "square.stack"),
+        .init(id: "quests",    title: "小事", icon: "checklist"),
         .init(id: "thoughts",  title: "念头池", icon: "drop"),
         .init(id: "call",      title: "通话", icon: "phone"),
         .init(id: "fortune",   title: "占卜", icon: "sparkles"),

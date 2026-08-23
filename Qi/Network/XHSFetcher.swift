@@ -1,8 +1,13 @@
 import Foundation
 import UIKit
 
-/// 一条小红书笔记。
+/// 一条读回来的链接：小红书笔记、B 站视频、抖音视频。
+///
+/// 名字还叫 XHSNote 是因为它已经存在她手机里的聊天记录里了——
+/// 改名等于把以前那些卡片全弄丢。**存下来的类型不能随便改名。**
 struct XHSNote: Codable, Hashable {
+    /// 哪家的。老数据里没这个字段，读出来算小红书（那时候只有小红书）。
+    var source: LinkSource = .xhs
     var url: String = ""
     var title: String = ""
     var author: String = ""
@@ -11,23 +16,44 @@ struct XHSNote: Codable, Hashable {
     var likedCount: String = ""
     var commentCount: String = ""
     var collectedCount: String = ""
+    /// 视频才有的两样
+    var playCount: String = ""
+    var duration: String = ""
     var comments: [XHSComment] = []
     /// 下载下来的图，存本地
     var localImages: [String] = []
 
     var imageCount: Int { imageURLs.count }
 
-    /// 给模型看的那段文字
+    /// 给模型看的那段文字。
+    ///
+    /// 视频那两家**必须写明他看不了视频**——卡片里只有封面和简介，
+    /// 不说清楚他会当成自己看过，然后开始编里面的情节。
     var briefForModel: String {
-        var s = "【小红书笔记】\n标题：\(title)"
-        if !author.isEmpty { s += "\n作者：\(author)" }
-        if !desc.isEmpty { s += "\n正文：\(desc)" }
+        let head: String
+        switch source {
+        case .xhs:      head = "【小红书笔记】"
+        case .bilibili: head = "【B 站视频】"
+        case .douyin:   head = "【抖音视频】"
+        }
+        var s = head + "\n标题：\(title)"
+        if !author.isEmpty {
+            s += "\n" + (source == .xhs ? "作者" : "up 主") + "：\(author)"
+        }
+        if !desc.isEmpty { s += "\n简介：\(desc)" }
+        if !duration.isEmpty { s += "\n时长：\(duration)" }
+        if !playCount.isEmpty { s += "\n播放：\(playCount)" }
         if !likedCount.isEmpty {
             s += "\n互动：赞 \(likedCount)"
             if !commentCount.isEmpty { s += " · 评论 \(commentCount)" }
             if !collectedCount.isEmpty { s += " · 收藏 \(collectedCount)" }
         }
-        if imageCount > 0 { s += "\n配图 \(imageCount) 张（图片本身也一并给你了）" }
+        if source != .xhs {
+            s += "\n（视频本身你看不了，这里只有封面和简介——别装作看过。"
+            s += "想知道里面讲了什么，问她。）"
+        } else if imageCount > 0 {
+            s += "\n配图 \(imageCount) 张（图片本身也一并给你了）"
+        }
         if !comments.isEmpty {
             s += "\n\n评论区："
             for c in comments.prefix(8) {
@@ -61,15 +87,8 @@ enum XHSFetcher {
         }
     }
 
-    /// 一段文字里有没有小红书链接
-    static func extractLink(_ text: String) -> URL? {
-        let pattern = #"https?://(www\.)?(xiaohongshu\.com|xhslink\.com)/\S+"#
-        guard let r = text.range(of: pattern, options: .regularExpression) else { return nil }
-        var raw = String(text[r])
-        // 中文标点常常被粘在链接尾巴上
-        while let last = raw.last, "，。、）】」,.)]".contains(last) { raw.removeLast() }
-        return URL(string: raw)
-    }
+    // 「一段文字里有没有链接」挪到 LinkCards.detect 了——
+    // 三家的正则得摆在一块儿比先后，分散在各家里就没法比。
 
     /// 抓一条笔记。
     ///
@@ -91,7 +110,9 @@ enum XHSFetcher {
         }
         guard let html = String(data: data, encoding: .utf8) else { throw FetchError.noData }
 
-        guard let json = initialState(from: html) else { throw FetchError.noData }
+        guard let json = jsonBlob(from: html, after: "__INITIAL_STATE__") else {
+            throw FetchError.noData
+        }
         var note = parse(json)
         note.url = (response.url ?? url).absoluteString
         guard !note.title.isEmpty || !note.desc.isEmpty || !note.imageURLs.isEmpty else {
@@ -100,9 +121,12 @@ enum XHSFetcher {
         return note
     }
 
-    /// 从 HTML 里把 __INITIAL_STATE__ 那段 JSON 抠出来
-    private static func initialState(from html: String) -> [String: Any]? {
-        guard let start = html.range(of: "__INITIAL_STATE__") else { return nil }
+    /// 从 HTML 里把某个标记后面那段 JSON 抠出来。
+    ///
+    /// 小红书用 `__INITIAL_STATE__`，抖音用 `_ROUTER_DATA`——同一套数括号的办法，
+    /// 所以不是 private，抖音那边直接借这一份用。
+    static func jsonBlob(from html: String, after marker: String) -> [String: Any]? {
+        guard let start = html.range(of: marker) else { return nil }
         guard let braceStart = html[start.upperBound...].firstIndex(of: "{") else { return nil }
 
         // 数括号找到这段 JSON 的结尾，字符串里的括号不算
@@ -218,7 +242,8 @@ enum XHSFetcher {
     }
 
     /// 把配图下载下来存本地。
-    /// 图床有防盗链，得带上 Referer，不然会被挡。
+    /// 图床有防盗链，得带上 Referer——**而且得是对应那家的**，
+    /// 拿小红书的 Referer 去要 B 站的封面，回来的是 403。
     static func downloadImages(_ note: XHSNote,
                                progress: @MainActor @escaping (Int, Int) -> Void)
     async -> [String] {
@@ -229,7 +254,7 @@ enum XHSFetcher {
             guard let url = URL(string: link) else { continue }
             var req = URLRequest(url: url)
             req.timeoutInterval = 20
-            req.setValue("https://www.xiaohongshu.com/", forHTTPHeaderField: "Referer")
+            req.setValue(note.source.referer, forHTTPHeaderField: "Referer")
             req.setValue(
                 "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 "
                 + "(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
@@ -241,5 +266,32 @@ enum XHSFetcher {
             saved.append(name)
         }
         return saved
+    }
+}
+
+
+/// ⚠️ 手写的解码器，不能删。
+///
+/// `XHSNote` 是拿 `try?` 解出来的（`ChatMessage` 里那句
+/// `note = try? c.decodeIfPresent(XHSNote.self, ...)`）。
+/// 合成的解码器少一个 key 就整条 throw，被 `try?` 一吞就变成 nil——
+/// 也就是说**加个字段，她以前收到的卡片会一张不剩地消失**，而且不报错。
+/// 这次加 `source` / `playCount` / `duration` 就是这种情况。
+extension XHSNote {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        source = (try? c.decodeIfPresent(LinkSource.self, forKey: .source)) ?? .xhs
+        url = (try? c.decodeIfPresent(String.self, forKey: .url)) ?? ""
+        title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
+        author = (try? c.decodeIfPresent(String.self, forKey: .author)) ?? ""
+        desc = (try? c.decodeIfPresent(String.self, forKey: .desc)) ?? ""
+        imageURLs = (try? c.decodeIfPresent([String].self, forKey: .imageURLs)) ?? []
+        likedCount = (try? c.decodeIfPresent(String.self, forKey: .likedCount)) ?? ""
+        commentCount = (try? c.decodeIfPresent(String.self, forKey: .commentCount)) ?? ""
+        collectedCount = (try? c.decodeIfPresent(String.self, forKey: .collectedCount)) ?? ""
+        playCount = (try? c.decodeIfPresent(String.self, forKey: .playCount)) ?? ""
+        duration = (try? c.decodeIfPresent(String.self, forKey: .duration)) ?? ""
+        comments = (try? c.decodeIfPresent([XHSComment].self, forKey: .comments)) ?? []
+        localImages = (try? c.decodeIfPresent([String].self, forKey: .localImages)) ?? []
     }
 }

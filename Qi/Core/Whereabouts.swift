@@ -147,9 +147,19 @@ final class WhereaboutsService: NSObject, ObservableObject, CLLocationManagerDel
 
     // MARK: 把经纬度翻成地名
 
-    /// 用系统自带的反地理编码，**不用密钥、不用第三方**。
-    /// 「只到城市」那一档故意把街道扔掉——她自己定的那条线。
+    /// 把经纬度翻成地名。
+    ///
+    /// 默认走系统自带的反地理编码，**不用密钥、不用第三方**。
+    /// 她要是在设置里填了高德的 key，就先问高德——它在国内更细，
+    /// 能给到街道和**周边有什么**（`CLGeocoder` 只到省市区）。
+    ///
+    /// **精度那条线不变**：她设的是「只到城市」的话，
+    /// 高德查回来的街道照样不给他。那条线是她的，不是接口的。
     func placeName(of loc: CLLocation) async -> (place: String?, street: String?) {
+        let key = UserDefaults.standard.string(forKey: "amapKey") ?? ""
+        if !key.isEmpty, let amap = await amapPlace(of: loc, key: key) {
+            return amap
+        }
         guard let marks = try? await CLGeocoder().reverseGeocodeLocation(loc),
               let m = marks.first else { return (nil, nil) }
         let coarse = [m.country, m.administrativeArea, m.locality, m.subLocality]
@@ -162,6 +172,61 @@ final class WhereaboutsService: NSObject, ObservableObject, CLLocationManagerDel
             .joined(separator: " ")
         return (coarse.isEmpty ? nil : coarse,
                 precision == .exact && !fine.isEmpty ? fine : nil)
+    }
+
+    /// 问一次高德的逆地理编码。
+    ///
+    /// 走的是 **Web 服务**那套（纯 HTTPS，不是 iOS SDK——SDK 要绑 Bundle ID，
+    /// 还得往包里塞一个几兆的库）。只发经纬度，不发她是谁。
+    ///
+    /// 出错就返回 nil，调用方自己退回系统那条路——
+    /// **她的位置不该因为一个第三方接口抽风就查不出来**。
+    private func amapPlace(of loc: CLLocation, key: String)
+        async -> (place: String?, street: String?)? {
+        let lat = loc.coordinate.latitude, lon = loc.coordinate.longitude
+        guard let url = URL(string:
+            "https://restapi.amap.com/v3/geocode/regeo?key=\(key)"
+            + "&location=\(String(format: "%.6f,%.6f", lon, lat))"
+            + "&extensions=\(precision == .exact ? "all" : "base")&radius=200")
+        else { return nil }
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 8
+        guard let (data, _) = try? await URLSession.shared.data(for: req),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              (json["status"] as? String) == "1",
+              let re = json["regeocode"] as? [String: Any],
+              let comp = re["addressComponent"] as? [String: Any]
+        else { return nil }
+
+        // 省市区那一档：直辖市的 city 是空的，退回省
+        let province = comp["province"] as? String
+        let cityRaw = comp["city"]
+        let city = (cityRaw as? String) ?? ""
+        let district = comp["district"] as? String
+        let coarse = [province, city.isEmpty ? nil : city, district]
+            .compactMap { $0 }
+            .reduce(into: [String]()) { acc, x in if !acc.contains(x) { acc.append(x) } }
+            .joined(separator: " ")
+
+        guard precision == .exact else {
+            return (coarse.isEmpty ? nil : coarse, nil)
+        }
+
+        // 精确那一档才给街道和周边。**这是她自己开的**
+        var fine: [String] = []
+        if let sn = comp["township"] as? String, !sn.isEmpty { fine.append(sn) }
+        if let street = comp["streetNumber"] as? [String: Any] {
+            let s = (street["street"] as? String) ?? ""
+            let n = (street["number"] as? String) ?? ""
+            if !s.isEmpty { fine.append(s + n) }
+        }
+        // 周边最近的那个点。「你家楼下那家便利店」就是它
+        if let pois = re["pois"] as? [[String: Any]],
+           let near = pois.first, let name = near["name"] as? String, !name.isEmpty {
+            fine.append("靠近" + name)
+        }
+        let street = fine.joined(separator: " ")
+        return (coarse.isEmpty ? nil : coarse, street.isEmpty ? nil : street)
     }
 
     // MARK: 天气

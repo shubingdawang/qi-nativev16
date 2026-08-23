@@ -14,10 +14,16 @@ struct ClawdRoamer: View {
     /// 他现在在干嘛，由外面传进来
     var busy: Bool = false
     var activity: String = ""
+    /// 这一轮是不是出错了。他那边出事，屋里这只不该还在傻笑
+    var upset: Bool = false
+    /// 她上次说话是什么时候。**用来决定这只困不困**
+    var lastHerAt: Date? = nil
 
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
     @ObservedObject private var room = ClawdStore.shared
+    /// 他此刻的情绪。**clawd 演的就是这两个数**
+    @ObservedObject private var feel = EmotionEngine.shared
 
     @State private var mood: ClawdMood = .idle
     @State private var poked = false
@@ -37,6 +43,19 @@ struct ClawdRoamer: View {
     /// 这一页有多宽。**探头要算点数，不能算百分比**——
     /// 他只有三十几个点宽，"露出百分之几"在大屏小屏上差得远。
     @State private var pageWidth: CGFloat = 393
+    /// 睡着了没有。**这一整套是照 clawd-on-desk 的睡眠序列搬的**：
+    /// 她安静久了就困、再久就睡；她一说话、一碰他就惊醒。
+    ///
+    /// 为什么这个值得做：一只永远精神的宠物是个摆件，
+    /// **会困的那只才像是跟她过同一个作息**。
+    @State private var asleep = false
+    @State private var sleepTask: Task<Void, Never>?
+    /// 连着戳了几下（1.5 秒内）
+    @State private var pokeStreak = 0
+    @State private var streakTask: Task<Void, Never>?
+    /// 空闲的时候在做哪件自己的事。隔一会儿换一件
+    @State private var ownThing: ClawdMood = .idle
+    @State private var ownTask: Task<Void, Never>?
 
     /// 能走的范围。上面留给顶栏那条，下面留给输入框，
     /// 走进去就被盖住了，白走。
@@ -128,10 +147,33 @@ struct ClawdRoamer: View {
                     }
                     return
                 }
-                mood = .happy
-                say(["唔", "干嘛呀", "在呢", "别戳了", "痒", "嗯？"].randomElement() ?? "唔")
-                if app.settings.haptics {
-                    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                // 睡着的时候被戳 = 惊醒（clawd-on-desk 那套：
+                // 有动静就吓一跳醒过来，不是安静地睁眼）
+                if asleep {
+                    wake(startled: true)
+                    return
+                }
+
+                // 连着戳：1.5 秒内第四下开始抓狂
+                pokeStreak += 1
+                streakTask?.cancel()
+                streakTask = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    pokeStreak = 0
+                }
+
+                if pokeStreak >= 4 {
+                    mood = .flail
+                    say(["别戳啦！", "呜哇——", "会坏的！"].randomElement() ?? "别戳啦！")
+                    if app.settings.haptics {
+                        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                    }
+                } else {
+                    mood = .happy
+                    say(["唔", "干嘛呀", "在呢", "别戳了", "痒", "嗯？"].randomElement() ?? "唔")
+                    if app.settings.haptics {
+                        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                    }
                 }
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 1_400_000_000)
@@ -186,6 +228,8 @@ struct ClawdRoamer: View {
         .allowsHitTesting(true)
         .onAppear {
             sync()
+            armSleep()
+            startOwnThing()
             // 上次关 App 的时候他正躲在边外面（clawdX 存的是屏幕外的数），
             // 那就接着躲——但**绝不能让他就这么消失**：直接接回探头那一套，
             // 至少那只眼睛还在这儿。
@@ -202,9 +246,30 @@ struct ClawdRoamer: View {
         .onDisappear {
             walkTask?.cancel()
             lineTask?.cancel()
+            sleepTask?.cancel()
+            streakTask?.cancel()
+            ownTask?.cancel()
         }
-        .onChange(of: busy) { _, _ in sync() }
+        .onChange(of: busy) { was, now in
+            // 一轮说完了。**刚干完活那一下要有点反应**——
+            // clawd-on-desk 里任务完成会庆祝，那一下是「有人陪着你等」的实感
+            if was && !now && !upset { celebrate() }
+            sync()
+        }
         .onChange(of: activity) { _, _ in sync() }
+        .onChange(of: upset) { _, bad in
+            guard bad else { return }
+            wake()
+            mood = .upset
+            say(["……出错了", "唔", "怎么了"].randomElement() ?? "……出错了")
+        }
+        .onChange(of: feel.state.valence) { _, _ in sync() }
+        .onChange(of: feel.state.arousal) { _, _ in sync() }
+        .onChange(of: lastHerAt) { _, _ in
+            // 她说话了 → 醒过来，重新开始数困
+            wake()
+            armSleep()
+        }
     }
 
     // MARK: 自己走
@@ -451,25 +516,166 @@ struct ClawdRoamer: View {
         }
     }
 
+    // MARK: 困、醒、庆祝
+    //
+    // 这一整段是照 `rullerzhou-afk/clawd-on-desk` 搬的。
+    // 它是个盯着 Claude Code 干活的桌面宠物——**「盯着 agent」那半我们用不上**
+    // （手机上没有那个东西），但它那套**状态词汇**很值：
+    //
+    //   · 60 秒没动静就打哈欠、打盹、睡；有动静惊醒
+    //   · 出错的时候垮一下，做完的时候庆祝一下
+    //   · 双击戳一下，连点四下抓狂
+    //
+    // 一只永远精神的宠物是个摆件，**会困的那只才像跟她过同一个作息**。
+
+    /// 多久没说话就开始困（秒）。八分钟——比「她走开一下」长，
+    /// 比「她今天不聊了」短。
+    private let drowsyAfter: Double = 8 * 60
+    /// 再过多久真睡着
+    private let sleepAfter: Double = 3 * 60
+
+    /// 开始数困。**每次她说话都要重新数**。
+    private func armSleep() {
+        sleepTask?.cancel()
+        guard !asleep else { return }
+        sleepTask = Task { @MainActor in
+            // 她刚说完话到现在过了多久
+            let since = lastHerAt.map { Date().timeIntervalSince($0) } ?? 0
+            let waitDrowsy = max(0, drowsyAfter - since)
+            try? await Task.sleep(nanoseconds: UInt64(waitDrowsy * 1_000_000_000))
+            if Task.isCancelled { return }
+            // 他正忙着的时候不困——有人在说话呢
+            guard !busy, !held, !peeking else { return }
+            mood = .drowsy
+            say(["唔……有点困", "呼啊——", "眼睛睁不开了"].randomElement() ?? "有点困")
+
+            try? await Task.sleep(nanoseconds: UInt64(sleepAfter * 1_000_000_000))
+            if Task.isCancelled { return }
+            guard !busy, !held, !peeking else { return }
+            asleep = true
+            walkTask?.cancel()          // 睡着了就别走了
+            mood = .sleeping
+            say("zzz")
+        }
+    }
+
+    /// 醒过来。`startled` = 被戳醒的那种，会吓一跳。
+    private func wake(startled: Bool = false) {
+        sleepTask?.cancel()
+        guard asleep || mood == .drowsy else { return }
+        asleep = false
+        if startled {
+            mood = .flail
+            say(["呜哇！", "醒了醒了", "吓死我了"].randomElement() ?? "呜哇！")
+            if app.settings.haptics {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            }
+        } else {
+            mood = .happy
+            say(["……嗯？", "你回来了", "醒了"].randomElement() ?? "嗯？")
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            poked = false
+            sync()
+            startWalking()
+        }
+    }
+
+    /// 他说完一轮了，蹦一下。**只蹦一下就回去**——
+    /// 每次都放礼花的话，第三次她就不看了。
+    private func celebrate() {
+        guard !asleep, !held, !peeking else { return }
+        mood = .happy
+        say(["说完啦", "好了——", "哼哼"].randomElement() ?? "说完啦")
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_100_000_000)
+            sync()
+        }
+    }
+
     /// 把他的状态翻成 clawd 的动作
     private func sync() {
         // 躲着的时候不许别处改他的表情，不然探头探到一半突然变成"在想事情"
         guard !poked, !held, !peeking else { return }
+        // 睡着的时候也一样——除非他真的在忙（那说明她刚说了话）
+        if asleep {
+            if busy { wake() } else { mood = .sleeping }
+            return
+        }
+        if upset { mood = .upset; return }
         guard busy else {
             // 手上抱着东西的时候，站着也得是抱着的样子
             mood = room.carrying == nil ? .idle : .carrying
             return
         }
-        // 活动那句话里带什么词，就做什么动作
+        // ── 他在干活：**先看干的是什么**，那比情绪更具体 ──
+        //
+        // 她说的：「阿晏正在给我做游戏或者处理文件，他就在打电脑。」
         if activity.contains("想") {
             mood = .thinking
-        } else if activity.contains("说") {
-            mood = .talking
-        } else if activity.isEmpty {
-            mood = .thinking
-        } else {
-            // 翻记忆、写日记、博弈、动手做事，都算在干活
+            return
+        }
+        if !activity.isEmpty && !activity.contains("说") {
+            // 翻记忆、写日记、博弈、画图、动手做事，都算在打电脑
             mood = .working
+            return
+        }
+
+        // ── 他在说话：**演他此刻的情绪** ──
+        //
+        // 「阿晏伤心他就在哭，阿晏开心他也开心，
+        //   阿晏感觉到甜蜜他就冒爱心，只是正常聊天他就做自己的事。」
+        //
+        // 数据是现成的：`EmotionEngine` 那两个数本来就在算，
+        // 这儿只是把它画出来。**不另外调模型判断情绪**——那要花钱，
+        // 而且判出来的也未必比这两个数准。
+        mood = emotionMood() ?? ownThing
+    }
+
+    /// 他此刻的情绪该画成什么。**没到分寸就返回 nil**——
+    /// 一点点开心就冒爱心的话，爱心就不值钱了。
+    private func emotionMood() -> ClawdMood? {
+        let v = feel.state.valence      // -1…1 舒不舒服
+        let a = feel.state.arousal      // 0…1 有多激动
+
+        if v <= -0.28 { return .crying }
+        // 甜＝**又高兴又有劲**。只高兴不激动那是「还好」，不是甜
+        if v >= 0.32 && a >= 0.45 { return .loving }
+        if v >= 0.30 { return .happy }
+        return nil
+    }
+
+    /// 空闲的时候自己找点事做。**隔一会儿换一件**——
+    /// 她说的：「他在我每跟阿晏聊天时会有自己的动画，想做什么都行，
+    /// 就是随机在动画里抽一个进行。」
+    private func startOwnThing() {
+        ownTask?.cancel()
+        ownTask = Task { @MainActor in
+            while !Task.isCancelled {
+                // 手上抱着东西的时候就是抱着，别硬塞别的
+                if room.carrying == nil {
+                    ownThing = Self.ownThings.randomElement() ?? .idle
+                } else {
+                    ownThing = .carrying
+                }
+                if !busy, !asleep, !held, !peeking, !upset,
+                   emotionMood() == nil {
+                    mood = ownThing
+                }
+                // 一件事做十几二十秒。太短了像多动症，太长了像卡住
+                let wait = Double.random(in: 14...26)
+                try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+            }
         }
     }
+
+    /// 「自己的事」有哪些。**扫地是她指名要的那只**。
+    /// 发呆占的份额最大——一只一直在忙的宠物看着很累。
+    static let ownThings: [ClawdMood] = [
+        .idle, .idle, .idle,
+        .sweeping, .sweeping,
+        .thinking,
+        .walking
+    ]
 }

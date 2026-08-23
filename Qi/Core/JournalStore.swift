@@ -26,6 +26,10 @@ enum JournalKind: String, Codable, CaseIterable {
     case photo    = "照片"
     case frame    = "相框"
     case quote    = "摘句"
+    /// 她自己从网上找的那种贴纸：一张透明底的 PNG，原样贴上去。
+    /// 跟「照片」的区别是**不裁成方块、不套框**——
+    /// 裁了的话透明底那圈就没了，看着就不是贴纸。
+    case cutout   = "剪贴"
 
     var icon: String {
         switch self {
@@ -38,6 +42,7 @@ enum JournalKind: String, Codable, CaseIterable {
         case .photo:   return "photo"
         case .frame:   return "rectangle.inset.filled"
         case .quote:   return "quote.opening"
+        case .cutout:  return "scissors"
         }
     }
 }
@@ -63,10 +68,41 @@ struct JournalElement: Codable, Identifiable, Hashable {
     var colorHex: String = ""
     /// 贴纸就是一个 emoji
     var emoji: String = ""
+    /// 花样。**两样东西共用这一个字段**：
+    /// 胶带用它记花纹（stripe / check / dot / wave / dash），
+    /// 贴纸用它记画的是哪个形状（leaf / flower / star …，空的就还是 emoji）。
+    /// 合成一个是因为它俩本来就不会同时出现在一个元素上。
+    var pattern: String = ""
     /// 照片存在 Images 里的文件名
     var imageName: String = ""
 
     var color: Color { Color(hexString: colorHex) ?? .gray }
+}
+
+/// ⚠️ **容错解码器。写在 extension 里是为了留住那个逐字段的 memberwise init**
+/// （`JournalElement(kind:)` 全靠它）。
+///
+/// 为什么非有不可：这一串是挂在 `JournalPage.elements` 上、
+/// 用 `try? … ?? []` 接住的。加一个字段而不补这儿，
+/// 合成的解码器碰到老数据里缺的那个键会直接抛——
+/// **她每一页手帐上贴的所有东西会一起消失**，而且下一次保存就把空的写回去。
+extension JournalElement {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
+        kind = (try? c.decodeIfPresent(JournalKind.self, forKey: .kind)) ?? .text
+        x = (try? c.decodeIfPresent(Double.self, forKey: .x)) ?? 0.5
+        y = (try? c.decodeIfPresent(Double.self, forKey: .y)) ?? 0.4
+        angle = (try? c.decodeIfPresent(Double.self, forKey: .angle)) ?? 0
+        scale = (try? c.decodeIfPresent(Double.self, forKey: .scale)) ?? 1
+        z = (try? c.decodeIfPresent(Int.self, forKey: .z)) ?? 0
+        text = (try? c.decodeIfPresent(String.self, forKey: .text)) ?? ""
+        who = (try? c.decodeIfPresent(String.self, forKey: .who)) ?? ""
+        colorHex = (try? c.decodeIfPresent(String.self, forKey: .colorHex)) ?? ""
+        emoji = (try? c.decodeIfPresent(String.self, forKey: .emoji)) ?? ""
+        pattern = (try? c.decodeIfPresent(String.self, forKey: .pattern)) ?? ""
+        imageName = (try? c.decodeIfPresent(String.self, forKey: .imageName)) ?? ""
+    }
 }
 
 // MARK: - 一页
@@ -78,6 +114,8 @@ struct JournalPage: Codable, Identifiable, Hashable {
     var title: String = ""
     /// 纸底的色号
     var paperHex: String = "F3E9D8"
+    /// 纸上的纹路：plain / grid / ruled / dot / graph / stripe
+    var paperPattern: String = "plain"
     var elements: [JournalElement] = []
     var updatedAt: Date = Date()
 
@@ -94,16 +132,19 @@ struct JournalPage: Codable, Identifiable, Hashable {
         day = (try? c.decodeIfPresent(Date.self, forKey: .day)) ?? Date()
         title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
         paperHex = (try? c.decodeIfPresent(String.self, forKey: .paperHex)) ?? "F3E9D8"
+        paperPattern = (try? c.decodeIfPresent(String.self, forKey: .paperPattern)) ?? "plain"
         elements = (try? c.decodeIfPresent([JournalElement].self, forKey: .elements)) ?? []
         updatedAt = (try? c.decodeIfPresent(Date.self, forKey: .updatedAt)) ?? Date()
         shared = (try? c.decodeIfPresent(Bool.self, forKey: .shared)) ?? false
     }
 
     init(id: UUID = UUID(), day: Date = Date(), title: String = "",
-         paperHex: String = "F3E9D8", elements: [JournalElement] = [],
+         paperHex: String = "F3E9D8", paperPattern: String = "plain",
+         elements: [JournalElement] = [],
          updatedAt: Date = Date(), shared: Bool = false) {
         self.id = id; self.day = day; self.title = title
-        self.paperHex = paperHex; self.elements = elements
+        self.paperHex = paperHex; self.paperPattern = paperPattern
+        self.elements = elements
         self.updatedAt = updatedAt; self.shared = shared
     }
 
@@ -153,6 +194,31 @@ enum JournalKit {
         "🍋", "🎧", "📮", "🧸", "🌊", "🔖", "🪴", "🍞", "🎈", "💌"
     ]
 
+    /// 纸上的纹路。**画出来的**，不是贴图。
+    static let paperPatterns: [(String, String)] = [
+        ("素", "plain"), ("格纹", "grid"), ("横线", "ruled"),
+        ("点阵", "dot"), ("方格", "graph"), ("竖条", "stripe")
+    ]
+
+    /// 胶带的花纹。同样是画出来的，所以换个颜色就是另一卷。
+    static let tapePatterns: [(String, String)] = [
+        ("素", "plain"), ("斜条", "stripe"), ("格子", "check"),
+        ("圆点", "dot"), ("波浪", "wave"), ("虚线", "dash")
+    ]
+
+    /// 画出来的贴纸。跟 emoji 那排的区别是**它跟着颜色走**——
+    /// 同一片叶子换个色就是另一张，不用再找一套素材。
+    static let stickerShapes: [(String, String)] = [
+        ("叶", "leaf"), ("花", "flower"), ("星", "star"), ("心", "heart"),
+        ("云", "cloud"), ("月", "moon"), ("蝴蝶结", "bow"), ("票根", "ticket")
+    ]
+
+    /// 画出来的贴纸默认用什么颜色。低饱和，贴在纸上不抢戏。
+    static let stickerInks: [(String, String)] = [
+        ("绿", "8FAE84"), ("粉", "E3A0AE"), ("黄", "E8C86A"), ("蓝", "8FAAC6"),
+        ("橘", "E0A070"), ("紫", "AE9BC6"), ("红", "C97A6D"), ("墨", "5A5348")
+    ]
+
     /// 便签的颜色
     static let notes: [(String, String)] = [
         ("黄", "F7E9A0"), ("粉", "F7D4D8"), ("蓝", "CFE0F0"),
@@ -177,6 +243,9 @@ enum JournalKit {
         case .tape:
             e.colorHex = tapes.randomElement()?.1 ?? "E8DCC0"
             e.angle = Double.random(in: -25...25)
+            // 随手给一种花纹。素的那卷她自己点得回去，
+            // 但一上来全是素的话，「胶带有花纹」这件事她根本不会发现
+            e.pattern = tapePatterns.randomElement()?.1 ?? "plain"
         case .sticker:
             e.emoji = stickers.randomElement() ?? "🌿"
         case .stamp:
@@ -188,7 +257,7 @@ enum JournalKit {
         case .note:
             e.text = "便签"
             e.colorHex = notes.randomElement()?.1 ?? "F7E9A0"
-        case .photo, .frame:
+        case .photo, .frame, .cutout:
             e.colorHex = "FFFFFF"
         case .quote:
             e.colorHex = "3A362E"

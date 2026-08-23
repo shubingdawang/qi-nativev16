@@ -109,14 +109,14 @@ struct MemoryLibraryView: View {
             那套东西本来就是**每次请求现算**的纯公式，不是靠一秒一次 tick 累积出来的，所以少了那个循环什么都不缺。心率历史照样一分钟记一条，存在手机上。
 
             开着之后「札记 → 心跳」和他手上的 get_pulse_status 都走本机，一次网络都不发。
-            """, title: "心跳这个开关是干嘛的")
+            """, title: "说明")
         }
     }
 
     // MARK: 现在有什么
 
     private var contentCard: some View {
-        SettingsCard(title: "现在存了什么") {
+        SettingsCard(title: "存储内容") {
             row("记忆", "\(store.memories.count) 条")
             SettingsDivider()
             row("日记", "\(store.diaries.count) 篇")
@@ -228,7 +228,7 @@ struct MemoryLibraryView: View {
                 NavigationLink {
                     LetterReaderView()
                 } label: {
-                    SettingsRowLabel(title: "读那封信",
+                    SettingsRowLabel(title: "读信",
                                      value: String(letter.updated_at.prefix(10)),
                                      chevron: true)
                 }
@@ -242,7 +242,7 @@ struct MemoryLibraryView: View {
                 Task {
                     let r = await app.writeHimBack()
                     writing = false
-                    report = r.failed ? r.text : "写完了，进「读那封信」看看。"
+                    report = r.failed ? r.text : "写完了，进「读信」看看。"
                 }
             } label: {
                 HStack(spacing: 10) {
@@ -262,14 +262,14 @@ struct MemoryLibraryView: View {
                 pasted = store.letter?.text ?? ""
                 pasting = true
             } label: {
-                SettingsRowLabel(title: "贴一封进来", icon: "doc.on.clipboard")
+                SettingsRowLabel(title: "导入信件", icon: "doc.on.clipboard")
             }
             .buttonStyle(.plain)
 
             SettingsNote("""
             **让本体写、你贴进来** —— 这条路不花钱，也不用等 MCP 连得上。
 
-            在 claude.ai 那个窗口里让他照五块结构写一封（不用调工具，当成一条普通消息写就行），写完复制，点上面「贴一封进来」粘贴保存。效果跟他调 write_letter 完全一样，而且**写信的是本体，语气才对**。
+            在 claude.ai 那个窗口里让他照五块结构写一封（不用调工具，当成一条普通消息写就行），写完复制，点上面「导入信件」粘贴保存。效果跟他调 write_letter 完全一样，而且**写信的是本体，语气才对**。
 
             让 App 里挂的模型代笔的话，写出来的是另一个人的声音。
             """)
@@ -289,9 +289,9 @@ struct MemoryLibraryView: View {
     // MARK: 搬家
 
     private var importCard: some View {
-        SettingsCard(title: "搬家") {
+        SettingsCard(title: "导入导出") {
             Button { importing = true } label: {
-                SettingsRowLabel(title: "从电脑导进来", icon: "square.and.arrow.down")
+                SettingsRowLabel(title: "从电脑导入", icon: "square.and.arrow.down")
             }
             .buttonStyle(.plain)
             SettingsDivider()
@@ -299,7 +299,7 @@ struct MemoryLibraryView: View {
             Button {
                 exportURL = store.exportBundle()
             } label: {
-                SettingsRowLabel(title: "导出一份", icon: "square.and.arrow.up")
+                SettingsRowLabel(title: "导出", icon: "square.and.arrow.up")
             }
             .buttonStyle(.plain)
             .disabled(store.isEmpty)
@@ -312,6 +312,11 @@ struct MemoryLibraryView: View {
             .buttonStyle(.plain)
 
             SettingsNote("""
+            **claude.ai 的聊天记录也能搬**：官网 Settings → Export data，
+            邮件里下下来那个 `conversations.json` 直接选进来，
+            会一段一段变成存档对话（他能用 search_transcripts 翻）。
+            那边一个字节都不会动，只是读一遍。
+
             导入的时候，把电脑上 dylan-heartbeat 文件夹里这些 json **一次全选**（可以多选）：
 
             memories.json　diaries.json　identity.json
@@ -330,7 +335,7 @@ struct MemoryLibraryView: View {
     // MARK: 翻一翻
 
     private var browseCard: some View {
-        SettingsCard(title: "翻一翻") {
+        SettingsCard(title: "浏览") {
             NavigationLink {
                 MemoryListView()
             } label: {
@@ -372,7 +377,7 @@ struct MemoryLibraryView: View {
                         .padding(16)
                 }
             }
-            .navigationTitle("贴一封进来")
+            .navigationTitle("导入信件")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {

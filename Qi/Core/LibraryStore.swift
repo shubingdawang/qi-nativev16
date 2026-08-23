@@ -12,6 +12,11 @@ final class LibraryStore: ObservableObject {
     @Published var annotations: [Annotation] = [] {
         didSet { if loaded { Storage.save(annotations, to: "annotations.json") } }
     }
+    /// 生词本。**跟批注分开存**——批注是「这句我有话说」，
+    /// 生词是「这个词我不认识」，两件事。
+    @Published var vocab: [VocabItem] = [] {
+        didSet { if loaded { Storage.save(vocab, to: "vocab.json") } }
+    }
     /// 正在读哪本。他要能知道"现在读到哪儿"，就靠这个。
     @Published var readingID: UUID?
 
@@ -20,6 +25,7 @@ final class LibraryStore: ObservableObject {
     init() {
         books = Storage.load([Book].self, from: "books.json") ?? []
         annotations = Storage.load([Annotation].self, from: "annotations.json") ?? []
+        vocab = Storage.load([VocabItem].self, from: "vocab.json") ?? []
         shelfNames = Storage.load([String].self, from: "book-shelves.json") ?? []
         loaded = true
     }
@@ -48,6 +54,56 @@ final class LibraryStore: ObservableObject {
     func remove(_ id: UUID) {
         books.removeAll { $0.id == id }
         annotations.removeAll { $0.bookID == id }
+        vocab.removeAll { $0.bookID == id }
+    }
+
+    // MARK: 生词本
+
+    func vocab(for bookID: UUID) -> [VocabItem] {
+        vocab.filter { $0.bookID == bookID }.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// 记一个词。**同一本书里同一个词只记一次**——
+    /// 她翻回去又看到一次就再存一条的话，本子会越翻越脏。
+    @discardableResult
+    func addVocab(bookID: UUID, chapter: Int, word: String, context: String) -> Bool {
+        let w = word.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !w.isEmpty else { return false }
+        guard !vocab.contains(where: { $0.bookID == bookID && $0.word == w }) else {
+            return false
+        }
+        vocab.append(VocabItem(bookID: bookID, chapterIndex: chapter,
+                               word: w, context: context))
+        return true
+    }
+
+    func removeVocab(_ id: UUID) {
+        vocab.removeAll { $0.id == id }
+    }
+
+    /// 他给某个词写注解。认 id 前几位，也认词本身。
+    @discardableResult
+    func annotateVocab(_ key: String, note: String) -> VocabItem? {
+        let k = key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !k.isEmpty,
+              let i = vocab.firstIndex(where: {
+                  $0.id.uuidString.lowercased().hasPrefix(k) || $0.word.lowercased() == k
+              }) else { return nil }
+        vocab[i].note = note
+        return vocab[i]
+    }
+
+    /// 这本书的生词本说给他听。没有词就一个字都不说。
+    func vocabBrief(for bookID: UUID) -> String? {
+        let list = vocab(for: bookID)
+        guard !list.isEmpty else { return nil }
+        let blank = list.filter { $0.note.isEmpty }.count
+        var s = "【生词本】这本记了 \(list.count) 个"
+        if blank > 0 {
+            s += "，其中 \(blank) 个你还没写注解（`read_vocab` 看，"
+                + "`annotate_vocab` 写）"
+        }
+        return s + "。"
     }
 
     /// 记一下读到哪儿了
@@ -55,6 +111,32 @@ final class LibraryStore: ObservableObject {
         guard let i = books.firstIndex(where: { $0.id == id }) else { return }
         books[i].chapterIndex = chapter
         books[i].offset = offset
+    }
+
+    /// 这一章的脉络写回去
+    func setDigest(_ id: UUID, chapter: Int, text: String) {
+        guard let i = books.firstIndex(where: { $0.id == id }),
+              books[i].chapters.indices.contains(chapter) else { return }
+        books[i].chapters[chapter].digest = text
+    }
+
+    /// 又聊了一次这本书。**先读旧的再盖新的**——
+    /// 那句「距上次多久」要的是旧的那个时间。
+    @discardableResult
+    func touchTalked(_ id: UUID) -> Date? {
+        guard let i = books.firstIndex(where: { $0.id == id }) else { return nil }
+        let was = books[i].lastTalkedAt
+        books[i].lastTalkedAt = Date()
+        return was
+    }
+
+    /// 又读了一分钟。**按天记**，跨零点自然落到新的一天。
+    func addReading(_ id: UUID, seconds: Int) {
+        guard seconds > 0, let i = books.firstIndex(where: { $0.id == id }) else { return }
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        let key = f.string(from: Date())
+        books[i].readSeconds[key, default: 0] += seconds
     }
 
     // MARK: 给他看的

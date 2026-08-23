@@ -56,6 +56,20 @@ struct RootView: View {
         // 这正是 `.fontDesign()` 跟「换一个字体文件」的区别：
         // 换字库的话 `.system` 不会跟着走，得一处处改。
         .fontDesign(app.settings.fontDesignValue)
+        // 他要删东西／装卸小屋／真打一通电话之前，问一句。
+        // 挂在这一层是因为**这一下可能发生在任何一页**——
+        // 她正翻着札记，他那边照样在跑。
+        .alert("要让他做这一下吗", isPresented: Binding(
+            get: { app.toolAsk != nil },
+            set: { if !$0 { app.answerToolConfirm(false) } }
+        ), presenting: app.toolAsk) { _ in
+            Button("让他做") { app.answerToolConfirm(true) }
+            Button("这次别", role: .cancel) { app.answerToolConfirm(false) }
+        } message: { ask in
+            Text("他要用「\(ask.name)」。\n\(ask.args)"
+                 + "\n\n这几件做了不好收拾，所以问一句。"
+                 + "不想每次都问，去「设置 → 通用」关掉。")
+        }
         .fullScreenCover(isPresented: Binding(
             get: { calls.active != nil },
             set: { if !$0 && calls.active != nil { calls.hangUp(by: "me") } }
@@ -384,11 +398,11 @@ struct WallpaperBackground: View {
                 // 「家」和「渐变」是**整套主题**，底归它们管——
                 // 不然选了「家」，屏幕上还是那张照片，字色和底各说各的。
                 // 想用自己那张照片就选「原来的」。
-                if app.settings.preset == .home {
-                    // claude.ai 那张纸。深浅两套都在 HomePalette 里。
-                    (scheme == .dark ? HomePalette.paperDark : HomePalette.paper)
-                } else if app.settings.preset == .gradient {
+                if app.settings.preset.usesGradient {
                     gradient
+                } else if app.settings.preset.ownsBackground {
+                    // 整套主题自带的那张纸，深浅两版都在它自己的色板里
+                    app.settings.preset.skin.page.c(scheme)
                 } else {
                     switch app.settings.wallpaperMode {
                     case "gradient":
@@ -428,9 +442,10 @@ struct WallpaperBackground: View {
     /// 她自己铺了底没有。铺了才需要压暗，
     /// 什么都没铺的时候压的是 pageBackground，那层本来就调好了。
     private var hasOwnBackground: Bool {
-        // 「家」那张暖纸本来就是调好的，再压一道就成了脏灰
-        if app.settings.preset == .home { return false }
-        if app.settings.preset == .gradient { return true }
+        // 整套主题那张纸本来就是调好的，再压一道就成了脏灰；
+        // 渐变那一档相反——它是真的一层底，要压
+        if app.settings.preset.usesGradient { return true }
+        if app.settings.preset.ownsBackground { return false }
         switch app.settings.wallpaperMode {
         case "gradient": return true
         case "solid":    return Color(hexString: app.settings.solidHex) != nil

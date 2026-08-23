@@ -262,11 +262,13 @@ final class StickerStore: ObservableObject {
     /// meme_manager 那边用的是**本地向量模型**（打包一个 embedding 进 App）。
     /// 我们不装——那要多几十兆的模型文件，而且首次加载很慢。
     ///
-    /// 换成 `MemoryRecall.similarity` 那把尺子（字的二元组、纯算术）。
-    /// **说清楚它的斤两**：这不是真的语义检索，它认的是字面的近似——
-    /// 「无奈」找得到「很无奈」「一脸无奈」，但找不到「叹气」。
-    /// 所以除了比字，还比**标签**和**名字**，三样各占一份，
-    /// 比只做一次精确匹配强得多，也别指望它懂近义词。
+    /// 底子是 `MemoryRecall.similarity`（字的二元组、纯算术），
+    /// 除了比字，还比**标签**和**名字**，三样各占一份。
+    ///
+    /// **再拌一层意思**（`Semantics`）：以前这儿的斤两是
+    /// 「『无奈』找得到『很无奈』，但找不到『叹气』」——
+    /// 那一句现在不成立了，系统自带的那套认得出这两个词是一回事。
+    /// 认不出来的时候它不吭声，还是字面那把尺子说了算。
     func search(_ mood: String, owner: String = "assistant", limit: Int = 5)
         -> [(sticker: Sticker, score: Double)] {
         let q = mood.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -276,12 +278,14 @@ final class StickerStore: ObservableObject {
         return pool.map { s -> (Sticker, Double) in
             // 三样各算一次，取最高的那个当分——
             // 一张表情只要有**一处**对上就该被找出来，不该被另外两处拉低。
-            var best = MemoryRecall.similarity(q, s.description)
+            var best = Semantics.blended(
+                MemoryRecall.similarity(q, s.description), q, s.description)
             best = max(best, MemoryRecall.similarity(q, s.name))
             for t in s.tags {
                 // 标签短，整个命中才算数；命中就给一个高分
                 if q.contains(t) || t.contains(q) { best = max(best, 0.85) }
-                best = max(best, MemoryRecall.similarity(q, t) * 0.9)
+                best = max(best, Semantics.blended(
+                    MemoryRecall.similarity(q, t), q, t) * 0.9)
             }
             return (s, best)
         }

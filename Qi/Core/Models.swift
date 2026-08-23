@@ -477,6 +477,40 @@ struct AppSettings: Codable {
     /// 他分段发：让他自己决定在哪儿断句，断开的每一段单独一个气泡。
     /// 一整段说完才算一句话，头像只挂一次。
     var segmentAssistant: Bool = false
+    /// **他自己的声音听起来是什么样的**，一句人话。
+    ///
+    /// 她说的：「我想让他知道他的声音是什么样的。」
+    /// 他读不了 MP3——所以在她点「试听」的时候，手机替他听一遍
+    /// （`VoiceTimbre`，纯算术、不联网、不要模型），把结果写成这一句。
+    ///
+    /// **这一句进 system 的稳定那一半**：它几乎不变，
+    /// 进了缓存前缀等于不额外花钱，而他每一轮都知道自己听起来什么样。
+    var hisVoiceNote: String = ""
+
+    /// 高德开放平台的 **Web 服务** key。
+    ///
+    /// ⚠️ **只存在她手机里，一个字都不进仓库**——
+    /// 这个仓库是公开的，密钥写进代码等于贴在墙上
+    /// （`VoiceService.defaults` 那儿也是这么处理的）。
+    ///
+    /// 干什么用：系统自带的 `CLGeocoder` 只到「省市区」这一档；
+    /// 高德能到街道、门牌、**周边有什么**——「你家楼下那家便利店」
+    /// 这种话要它才说得出来。没填就还走 `CLGeocoder`，功能不缺，只是粗一点。
+    ///
+    /// **它不改变精度那条线**：她设的还是「只到城市」的话，
+    /// 高德查回来的街道照样不会给他。
+    var amapKey: String = ""
+
+    /// **她的声音听起来是什么样的**，一句人话。来源是她最近一条语音。
+    ///
+    /// 跟 `voiceTone`（挂在每条消息上的「跟她平时比」）**不是一回事**：
+    /// 那个是「这一句她怎么说的」，这个是「她这个人的声音什么样」。
+    /// 前者每条都变，后者几乎不变——所以这一句也进 system 的稳定那一半。
+    var herVoiceNote: String = ""
+
+    /// 他要删东西、装卸小屋、或者真打一通电话之前，先问她一句。
+    /// **默认开着**——这几件做了不好收拾，多点一下比事后后悔便宜。
+    var toolConfirm: Bool = true
     /// 我分段发：我打完一句先攒着，隔了下面这么多秒还没有下一句才真的发出去。
     /// 中途又发了一条就重新开始数。
     var segmentUser: Bool = false
@@ -567,16 +601,15 @@ struct AppSettings: Codable {
     /// 到处刷橘会把整屏搞花，所以日常强调退成一个温和的褐，
     /// 真正的重点靠字重和面板色去顶。
     var accentColor: Color {
-        if preset == .home {
-            return Color(hexString: "8A7B6B") ?? Color.accentColor
-        }
+        // 这一档自己定了强调色就用它的，没定才用她调的那个
+        if let own = preset.skin.accent { return own }
         return Color(hexString: accentHex) ?? Color.accentColor
     }
 
     /// 唯一那个主按钮用的色。一屏最多出现一处——
     /// 发送键、当前选中、或者唯一的确认按钮，三选一。
     var primaryColor: Color {
-        if preset == .home { return HomePalette.orange }
+        if let own = preset.skin.primary { return own }
         return Color(hexString: accentHex) ?? Color.accentColor
     }
 
@@ -689,6 +722,10 @@ extension AppSettings {
         localPulse = (try? c.decodeIfPresent(Bool.self, forKey: .localPulse)) ?? true
         disabledNativeTools = (try? c.decodeIfPresent([String].self, forKey: .disabledNativeTools)) ?? []
         segmentAssistant = (try? c.decodeIfPresent(Bool.self, forKey: .segmentAssistant)) ?? false
+        toolConfirm = (try? c.decodeIfPresent(Bool.self, forKey: .toolConfirm)) ?? true
+        hisVoiceNote = (try? c.decodeIfPresent(String.self, forKey: .hisVoiceNote)) ?? ""
+        herVoiceNote = (try? c.decodeIfPresent(String.self, forKey: .herVoiceNote)) ?? ""
+        amapKey = (try? c.decodeIfPresent(String.self, forKey: .amapKey)) ?? ""
         segmentUser = (try? c.decodeIfPresent(Bool.self, forKey: .segmentUser)) ?? false
         segmentUserDelay = (try? c.decodeIfPresent(Double.self, forKey: .segmentUserDelay)) ?? 6
         bubbleTint = (try? c.decodeIfPresent(Double.self, forKey: .bubbleTint)) ?? 0

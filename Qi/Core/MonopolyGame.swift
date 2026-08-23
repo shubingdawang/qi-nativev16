@@ -131,7 +131,8 @@ final class MonopolyGame: ObservableObject {
     private var floor: Int { Mono.curves[s.flavor]?.0 ?? 2 }
     private var ceil: Int { Mono.curves[s.flavor]?.1 ?? 5 }
     private var specialMap: [Int: String] { s.totalRounds <= 12 ? Mono.specialDense : Mono.special }
-    private func tileKind(_ i: Int) -> String { i == 0 ? "start" : (specialMap[i] ?? "task") }
+    /// 第 i 格是什么。画棋盘那边也要问，所以不是 private。
+    func tileKind(_ i: Int) -> String { i == 0 ? "start" : (specialMap[i] ?? "task") }
 
     func player(_ name: String) -> Player {
         s.p1.name == name ? s.p1 : s.p2

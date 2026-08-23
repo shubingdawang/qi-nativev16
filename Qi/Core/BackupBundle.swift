@@ -42,7 +42,7 @@ enum BackupBundle {
     static let defaultKeys = [
         "clawdCarrying", "clawdCheckIn", "clawdCoins", "clawdLinked",
         "dnd", "dndUntil", "memoStyle", "phoneActivityBookmark",
-        "diaryStacked", "memoDockLeft", "memoDockY", "pixelModel",
+        "diaryViewMode", "memoDockLeft", "memoDockY", "pixelModel",
         "lastBackupAt"
     ]
 
