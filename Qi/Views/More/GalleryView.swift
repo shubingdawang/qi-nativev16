@@ -166,6 +166,10 @@ struct ImagePreviewView: View {
     /// 从第几张开始看
     @State var index: Int
     @ObservedObject var store: MediaStore
+    /// 能不能在这儿删。**聊天里点开的图不能删**——
+    /// 那几张不在相册库里，按下去删的会是别人（同名的库存图），
+    /// 或者什么都不发生。
+    var canDelete: Bool = true
     @Environment(\.dismiss) private var dismiss
 
     /// 放大倍数和位移。**每翻一页都要归零**，
@@ -222,14 +226,16 @@ struct ImagePreviewView: View {
                         } label: {
                             Label("存到系统相册", systemImage: "square.and.arrow.down")
                         }
-                        Button(role: .destructive) {
-                            guard let c = current else { return }
-                            store.remove(c)
-                            // 删完还有别的就留在这一页，没有了才退出去
-                            if items.count <= 1 { dismiss() }
-                            else { index = min(index, items.count - 2) }
-                        } label: {
-                            Label("删除", systemImage: "trash")
+                        if canDelete {
+                            Button(role: .destructive) {
+                                guard let c = current else { return }
+                                store.remove(c)
+                                // 删完还有别的就留在这一页，没有了才退出去
+                                if items.count <= 1 { dismiss() }
+                                else { index = min(index, items.count - 2) }
+                            } label: {
+                                Label("删除", systemImage: "trash")
+                            }
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle").tint(.white)
@@ -290,3 +296,13 @@ struct ImagePreviewView: View {
     }
 }
 
+extension ImagePreviewView {
+    /// 聊天里点开的图：给一串文件名就行，只看不删。
+    @MainActor
+    init(names: [String], index: Int) {
+        self.init(items: names.map { MediaItem(fileName: $0) },
+                  index: index,
+                  store: MediaStore.shared,
+                  canDelete: false)
+    }
+}

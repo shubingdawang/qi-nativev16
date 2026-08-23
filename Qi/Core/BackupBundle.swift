@@ -46,6 +46,19 @@ enum BackupBundle {
         "lastBackupAt"
     ]
 
+    /// 不进备份的那些。
+    ///
+    /// 现在只有回收站：`trash.json` 和 `Trash/` 那个目录。
+    /// 她删掉的东西留在这台手机上三十天给她反悔，
+    /// **但不该跟着备份走到下一台手机上去**。
+    static func skipFromBackup(_ url: URL, root: URL) -> Bool {
+        let rel = url.path.hasPrefix(root.path)
+            ? String(url.path.dropFirst(root.path.count))
+                .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            : url.lastPathComponent
+        return rel == "trash.json" || rel.hasPrefix("Trash/")
+    }
+
     // MARK: 打包
 
     static func make() -> Data? {
@@ -61,6 +74,12 @@ enum BackupBundle {
             guard url.pathExtension == "json" else { continue }
             // 被挪到一边的坏文件不用带走
             guard !url.lastPathComponent.contains(".坏了-") else { continue }
+            // **回收站不进备份。** 她定的：
+            // 「备份数据的时候回收站就直接不用备份，这样下次导入新的 app
+            //   就是真的删除了。」
+            // 对——不然导进新手机又冒出一堆她早就删掉的东西，
+            // 那不叫还原，那叫翻旧账。
+            guard !skipFromBackup(url, root: root) else { continue }
             guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
             // 键用相对路径，还原的时候照原样放回去
             let key = url.path.hasPrefix(root.path)
@@ -82,6 +101,7 @@ enum BackupBundle {
             guard url.pathExtension != "json" else { continue }
             guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?
                     .isRegularFile == true else { continue }
+            guard !skipFromBackup(url, root: root) else { continue }
             let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
             let key = url.path.hasPrefix(root.path)
                 ? String(url.path.dropFirst(root.path.count)).trimmingCharacters(

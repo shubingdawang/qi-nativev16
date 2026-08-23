@@ -259,7 +259,7 @@ enum NativeTools {
             required: [])
 
         add("delete_photo_from_folder",
-            "触发：存错了，或者那张不该留。动机：相册是她也会翻的地方，别堆垃圾。行动：按文件夹名 + 关键词找到那张删掉。\n注意：**删了找不回来**。不确定是哪张就先 list_saved_photos 看清楚，别凭印象删。",
+            "触发：存错了，或者那张不该留。动机：相册是她也会翻的地方，别堆垃圾。行动：按文件夹名 + 关键词找到那张删掉。\n注意：删掉的东西会在聊天里出现一张卡，**她能一眼看见、也能撤回来**（回收站留三十天）。但别拿这个当免死金牌——不确定是哪张就先 list_saved_photos 看清楚，别凭印象删。",
             [
                 "folder": ["type": "string", "description": "照片在哪个文件夹"],
                 "query": ["type": "string", "description": "当初存的说明里的关键词，按这个找"]
@@ -267,7 +267,7 @@ enum NativeTools {
             required: ["folder", "query"])
 
         add("delete_folder",
-            "触发：整个文件夹都不要了。行动：连里面的照片一起删。\n注意：**这是最狠的一个，删了找不回来。** 除非她明说要删，否则先问一句再动手；只是想清理某几张就用 delete_photo_from_folder。",
+            "触发：整个文件夹都不要了。行动：连里面的照片一起删。\n注意：**这是最狠的一个。** 里面的照片会一起进回收站（留三十天，她能撤），但一整个文件夹没了她多半当场就懵了——除非她明说要删，否则先问一句再动手；只是想清理某几张就用 delete_photo_from_folder。",
             [
                 "folder": ["type": "string", "description": "要删掉的文件夹名"],
                 "keep_photos": ["type": "boolean", "description": "只删文件夹这个壳、照片退回未归类。默认 false（照片一起删）"]

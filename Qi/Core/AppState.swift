@@ -1086,6 +1086,8 @@ final class AppState: ObservableObject {
                 run.cardThumb = card.thumb
                 run.cardPlace = card.place
                 run.cardThought = card.thought
+                run.cardDeleted = card.deleted
+                run.cardTrashID = card.trashID
                 pendingCard = nil
             }
             run.finished = true
@@ -2843,7 +2845,8 @@ final class AppState: ObservableObject {
     }
 
     /// 本地工具如果存了图，把卡片信息塞在这儿，execute 拿走
-    private var pendingCard: (thumb: String, place: String, thought: String)?
+    private var pendingCard: (thumb: String, place: String, thought: String,
+                             deleted: Bool, trashID: String)?
     /// 工具想**顺带递一张图**给他看（查岗那张截图）。
     ///
     /// 工具的返回值只能是文字（接口就长这样），图塞不进去。
@@ -3373,13 +3376,13 @@ final class AppState: ObservableObject {
                     made.name = caption
                     made.description = "网上搜来的：\(query)"
                     store.update(made)
-                    pendingCard = (made.fileName, "表情包", (args["thought"] as? String) ?? "")
+                    pendingCard = (made.fileName, "表情包", (args["thought"] as? String) ?? "", false, "")
                     return ("搜到「\(query)」了，存进你的表情包，叫「\(caption)」。", false)
                 } else {
                     MediaStore.shared.add(image, kind: "photo", folder: saveTo)
                     if let last = MediaStore.shared.items.last {
                         MediaStore.shared.setNote(caption, for: last)
-                        pendingCard = (last.fileName, saveTo, (args["thought"] as? String) ?? "")
+                        pendingCard = (last.fileName, saveTo, (args["thought"] as? String) ?? "", false, "")
                     }
                     return ("搜到「\(query)」了，存进「\(saveTo)」文件夹。", false)
                 }
@@ -3939,7 +3942,7 @@ final class AppState: ObservableObject {
             }
             store.update(made)
             pendingCard = (made.fileName, raw.ext == "gif" ? "动图" : "表情包",
-                           (args["thought"] as? String) ?? "")
+                           (args["thought"] as? String) ?? "", false, "")
             return ("存进你的表情包了：\(made.name)"
                     + (raw.ext == "gif" ? "（会动的，存的是原图，没压成静图）" : ""), false)
 
@@ -3955,7 +3958,7 @@ final class AppState: ObservableObject {
                 if let cap = args["caption"] as? String, !cap.isEmpty {
                     MediaStore.shared.setNote(cap, for: last)
                 }
-                pendingCard = (last.fileName, folder, (args["thought"] as? String) ?? "")
+                pendingCard = (last.fileName, folder, (args["thought"] as? String) ?? "", false, "")
             }
             return ("存进「\(folder)」了。", false)
 
@@ -4046,8 +4049,11 @@ final class AppState: ObservableObject {
                         + "不敢替你挑。换个更准的词再来——删了找不回来。", true)
             }
             let gone = hit.note.isEmpty ? "那张没写说明的" : hit.note
+            let kept2 = TrashStore.shared.keep(photo: hit)
+            deleteCard(fileURL: ImageStore.url(for: hit.fileName), place: folder,
+                       thought: "", trashID: kept2.id)
             MediaStore.shared.remove(hit)
-            return ("删掉了：\(gone)", false)
+            return ("删掉了：\(gone)。（她那边能看见，也能撤回来）", false)
 
         case "delete_folder":
             let folder = (args["folder"] as? String) ?? ""
@@ -4057,7 +4063,17 @@ final class AppState: ObservableObject {
                         + MediaStore.shared.folders("photo").joined(separator: "、"), true)
             }
             let keep = (args["keep_photos"] as? Bool) ?? false
-            let n = MediaStore.shared.list("photo", folder: folder).count
+            let inside = MediaStore.shared.list("photo", folder: folder)
+            let n = inside.count
+            // 连照片一起删才需要回收站；只删壳子的话照片还在，没什么可撤的
+            if !keep, !inside.isEmpty {
+                let kept3 = TrashStore.shared.keep(folder: folder, photos: inside)
+                if let first = inside.first {
+                    deleteCard(fileURL: ImageStore.url(for: first.fileName),
+                               place: folder + "（整个文件夹）",
+                               thought: "", trashID: kept3.id)
+                }
+            }
             MediaStore.shared.deleteFolder("photo", name: folder, keepImages: keep)
             return (keep ? "「\(folder)」这个壳删了，里面 \(n) 张退回未归类。"
                          : "「\(folder)」连里面 \(n) 张照片一起删掉了。", false)
@@ -4066,9 +4082,14 @@ final class AppState: ObservableObject {
             let query = (args["query"] as? String) ?? ""
             let found = store.list(owner: "assistant", keyword: query)
             guard let pick = found.first else { return ("没找到「\(query)」。", false) }
-            let n = pick.name
+            let n = pick.name.isEmpty ? "没起名的那张" : pick.name
+            // **先抄进回收站再删。** 删除比保存要紧得多——
+            // 存错了无所谓，删错了东西就没了。她在聊天里能看见那张卡、能撤。
+            let kept = TrashStore.shared.keep(sticker: pick)
+            deleteCard(fileURL: store.url(of: pick), place: "表情包",
+                       thought: (args["thought"] as? String) ?? "", trashID: kept.id)
             store.remove(pick)
-            return ("删掉了：\(n)", false)
+            return ("删掉了：\(n)。（她那边能看见，也能撤回来）", false)
 
         case "ask_choice":
             let question = (args["question"] as? String) ?? ""
@@ -4156,6 +4177,20 @@ final class AppState: ObservableObject {
         }
         guard let data = try? Data(contentsOf: url) else { return nil }
         return (data, ImageStore.sniffExt(data))
+    }
+
+    /// 删东西那张卡。
+    ///
+    /// ⚠️ 缩略图要**存进 Images**，不能直接指回收站里那份——
+    /// `saveCard` 读的是 `ImageStore`，指过去它一张也找不到，卡片就是空的。
+    private func deleteCard(fileURL: URL, place: String,
+                            thought: String, trashID: String) {
+        var thumb = ""
+        if let data = try? Data(contentsOf: fileURL),
+           let name = ImageStore.save(data: data, ext: ImageStore.sniffExt(data)) {
+            thumb = name
+        }
+        pendingCard = (thumb, place, thought, true, trashID)
     }
 
     /// 一条歌词划线写成一行

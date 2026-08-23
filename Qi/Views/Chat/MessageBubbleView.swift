@@ -36,6 +36,9 @@ struct MessageBubbleView: View {
     @State private var showReasoning = false
     @State private var showTools = false
     @State private var pulse = false
+    /// 点开的是第几张图
+    @State private var previewing = false
+    @State private var previewIndex = 0
     @Environment(\.openURL) private var openURL
 
     private var isUser: Bool { message.role == .user }
@@ -244,10 +247,16 @@ struct MessageBubbleView: View {
                 ForEach(message.toolRuns.filter { $0.hasCard }) { run in
                     // 点一下直接进相册那一页（她要的）。
                     // 存完只给一张看不了的小卡，等于告诉她「存好了，自己去找」。
-                    Button { onOpenLibrary(run.cardPlace) } label: {
+                    // 存的那张点进去看；**删的那张不点**——
+                    // 东西已经不在那儿了，跳过去只会让她扑个空
+                    if run.cardDeleted {
                         saveCard(run)
+                    } else {
+                        Button { onOpenLibrary(run.cardPlace) } label: {
+                            saveCard(run)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
 
                 if !message.toolRuns.isEmpty {
@@ -424,10 +433,15 @@ struct MessageBubbleView: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName) 存图了")
+                let him = app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName
+                Text(run.cardDeleted ? "\(him) 删掉了" : "\(him) 存图了")
                     .font(.app(12, weight: .semibold))
-                    .foregroundStyle(app.settings.accentColor)
-                Text("往「\(run.cardPlace)」里存了一张图")
+                    // 删的用暖橘，存的用主题色。**一眼分得开**——
+                    // 存和删长成一个样子，她扫过去只会当成又存了一张。
+                    .foregroundStyle(run.cardDeleted ? .orange : app.settings.accentColor)
+                Text(run.cardDeleted
+                     ? "从「\(run.cardPlace)」里删掉了"
+                     : "往「\(run.cardPlace)」里存了一张图")
                     .font(.app(13))
                     .foregroundStyle(Theme.textMain(scheme))
                     .lineLimit(1)
@@ -436,6 +450,28 @@ struct MessageBubbleView: View {
                         .font(.app(12))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .lineLimit(2)
+                }
+                // **撤销。** 只报个丧不给回头路，那张卡就只是讣告。
+                // 回收站里没有了（三十天到期清掉）就不再显示这个按钮，
+                // 免得她按下去什么也没发生。
+                if run.cardDeleted, TrashStore.shared.has(run.cardTrashID) {
+                    Button {
+                        if TrashStore.shared.restore(run.cardTrashID) {
+                            if app.settings.haptics {
+                                UINotificationFeedbackGenerator()
+                                    .notificationOccurred(.success)
+                            }
+                        }
+                    } label: {
+                        Text("撤销")
+                            .font(.app(12, weight: .medium))
+                            .foregroundStyle(.orange)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(Color.orange.opacity(0.16)))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 3)
                 }
             }
             Spacer(minLength: 0)
@@ -839,21 +875,50 @@ struct MessageBubbleView: View {
 
     private var imageRow: some View {
         VStack(alignment: isUser ? .trailing : .leading, spacing: 6) {
-            ForEach(message.imageNames, id: \.self) { name in
+            // 一次发好几张的话，摞成一张能翻的卡——
+            // 竖着排下来的话，九张图能把整屏聊天记录顶掉。
+            if message.imageNames.count > 1 {
+                PhotoStackView(names: message.imageNames) { i in
+                    previewIndex = i
+                    previewing = true
+                }
+                // 探边那两张会露到卡片外面去，两边留出地方
+                .padding(.horizontal, 30)
+                .padding(.vertical, 4)
+            } else {
+                singleImages
+            }
+        }
+        .fullScreenCover(isPresented: $previewing) {
+            ImagePreviewView(names: message.imageNames, index: previewIndex)
+        }
+    }
+
+    private var singleImages: some View {
+        VStack(alignment: isUser ? .trailing : .leading, spacing: 6) {
+            ForEach(Array(message.imageNames.enumerated()), id: \.offset) { idx, name in
                 // 会动的走 AnimatedImageView 逐帧播。
                 // `Image(uiImage:)` 只画第一帧——她发进来的 gif 在聊天里
                 // 会变成一张静图（第 8 条的另一半）。
-                if name.lowercased().hasSuffix(".gif") {
-                    AnimatedImageView(url: ImageStore.url(for: name))
-                        .frame(maxWidth: 220)
-                        .frame(height: 200)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                } else if let image = ImageStore.load(name) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: 220, maxHeight: 260)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                Group {
+                    if name.lowercased().hasSuffix(".gif") {
+                        AnimatedImageView(url: ImageStore.url(for: name))
+                            .frame(maxWidth: 220)
+                            .frame(height: 200)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    } else if let image = ImageStore.load(name) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: 220, maxHeight: 260)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                }
+                // 点开看大图：能放大、能看细节。以前聊天里的图点了没反应，
+                // 想看清楚只能去相册里找同一张。
+                .onTapGesture {
+                    previewIndex = idx
+                    previewing = true
                 }
             }
         }

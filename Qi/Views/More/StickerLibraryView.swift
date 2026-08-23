@@ -181,6 +181,16 @@ struct StickerLibraryView: View {
                         }
                         .buttonStyle(.plain)
                     }
+                    // 回收站。**有东西才出现**——空的时候摆一个入口是噪音
+                    if !TrashStore.shared.items.isEmpty {
+                        NavigationLink { TrashView() } label: {
+                            Image(systemName: "trash")
+                                .font(.app(14))
+                                .foregroundStyle(Theme.textSoft(scheme))
+                                .frame(width: 28, height: 32)
+                        }
+                        .buttonStyle(.plain)
+                    }
                     let tint = app.settings.accentColor
                     PhotosPicker(selection: $picking, maxSelectionCount: 20, matching: .images) {
                         Image(systemName: Icon.add)

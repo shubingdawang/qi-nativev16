@@ -74,8 +74,39 @@ struct ToolRun: Codable, Hashable, Identifiable {
     var cardThumb: String = ""
     var cardPlace: String = ""
     var cardThought: String = ""
+    /// 这张卡是**删掉**了什么，不是存下了什么。
+    ///
+    /// 她问的：「我不确定删除有没有 ui，因为阿晏目前还没删过什么东西」——
+    /// **没有。** 删掉只在工具日志里留一行小字，她多半不会点开看。
+    /// 而删除比保存要紧得多：存错了无所谓，**删错了东西就没了**。
+    var cardDeleted: Bool = false
+    /// 删掉的那件在回收站里的编号。有它才撤得回来。
+    var cardTrashID: String = ""
 
     var hasCard: Bool { !cardThumb.isEmpty }
+}
+
+/// 容错解码。
+///
+/// ⚠️ `toolRuns` 在 ChatMessage 里是 `try? … ?? []` 接住的——
+/// 合成的解码器只要碰上一个缺失的键就抛，**她所有老消息里的工具记录会整片消失**。
+/// 这一版加了 `cardDeleted` / `cardTrashID`，不补这个就会。
+extension ToolRun {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
+        serverName = (try? c.decodeIfPresent(String.self, forKey: .serverName)) ?? ""
+        toolName = (try? c.decodeIfPresent(String.self, forKey: .toolName)) ?? ""
+        arguments = (try? c.decodeIfPresent(String.self, forKey: .arguments)) ?? ""
+        result = (try? c.decodeIfPresent(String.self, forKey: .result)) ?? ""
+        failed = (try? c.decodeIfPresent(Bool.self, forKey: .failed)) ?? false
+        finished = (try? c.decodeIfPresent(Bool.self, forKey: .finished)) ?? false
+        cardThumb = (try? c.decodeIfPresent(String.self, forKey: .cardThumb)) ?? ""
+        cardPlace = (try? c.decodeIfPresent(String.self, forKey: .cardPlace)) ?? ""
+        cardThought = (try? c.decodeIfPresent(String.self, forKey: .cardThought)) ?? ""
+        cardDeleted = (try? c.decodeIfPresent(Bool.self, forKey: .cardDeleted)) ?? false
+        cardTrashID = (try? c.decodeIfPresent(String.self, forKey: .cardTrashID)) ?? ""
+    }
 }
 
 struct ChatMessage: Identifiable, Codable, Hashable {
