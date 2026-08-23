@@ -504,7 +504,9 @@ final class AppState: ObservableObject {
               sticker: Sticker? = nil,
               quoting quoted: ChatMessage? = nil,
               voiceName: String = "",
-              voiceTone: String = "") {
+              voiceTone: String = "",
+              /// 这条是旁白（戳一戳），不是她打的字
+              narration: Bool = false) {
         guard let i = index(of: conversationID) else { return }
         // 攒着的那条已经在记录里了，这一条发出去的时候它会跟着一起带上，
         // 所以这儿只要把倒计时掐掉就行，不用再单独跑一轮
@@ -536,6 +538,7 @@ final class AppState: ObservableObject {
         let turn = UUID()
         var userMsg = ChatMessage(role: .user, content: text)
         userMsg.turnID = turn
+        userMsg.narration = narration
         // 她按住说的那段，跟着这条一起留下来，能点开再听
         userMsg.voiceName = voiceName
         // 她是怎么说的。本机算的，跟这条绑在一起——
@@ -565,7 +568,9 @@ final class AppState: ObservableObject {
             conversations[i].messages.append(s)
         }
         conversations[i].updatedAt = Date()
-        if conversations[i].title == "新对话", !text.isEmpty {
+        // 旁白不拿来当标题——一整条对话叫「她隔着屏幕戳了戳你的耳朵」，
+        // 她在列表里找不着这是哪一段
+        if conversations[i].title == "新对话", !text.isEmpty, !narration {
             conversations[i].title = String(text.prefix(18))
         }
         if settings.haptics {
@@ -584,6 +589,39 @@ final class AppState: ObservableObject {
         } else {
             runTurn(conversationID)
         }
+    }
+
+    // MARK: 戳一戳
+
+    /// 她戳了他一下。
+    ///
+    /// 顺序是**故意的**（那份文档的第三、四步）：
+    /// 先推身体、先上屏，回话之后才到。这一点点时间差比说了什么都重要。
+    ///
+    /// 返回 false = 他这会儿正在说话，这一下没发出去。
+    /// **不假装成功**——戳了没反应比不能戳伤人得多。
+    @discardableResult
+    func poke(_ action: Poke.Action, at part: Poke.Part, in conversationID: UUID) -> Bool {
+        guard index(of: conversationID) != nil else { return false }
+        // 连点要挡住：他正说着话的时候再插一句，会把上下文弄乱、
+        // 或者把一句话截在一半
+        guard !runningConversationIDs.contains(conversationID) else { return false }
+
+        let line = Poke.narration(action, part)
+        // 身体先动。**在发请求之前**——她要先看见他心跳变了，话是后到的。
+        //
+        // ⚠️ `send` 里那套通用关键词也会再读这句话一遍（「咬」「抱」这些词
+        // 本来就在表里）。不去掐掉它：那一层推的是几点，
+        // 这一层推的是按部位算过的力度，叠在一起还是小数目，
+        // 而且都归 `BodyEngine` 的上下限管。
+        if settings.bodyEnabled {
+            BodyStore.shared.nudge(Poke.nudge(action, part), quote: line)
+        }
+        if settings.haptics {
+            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+        }
+        send(text: line, images: [], in: conversationID, narration: true)
+        return true
     }
 
     // MARK: 群聊
@@ -708,17 +746,20 @@ final class AppState: ObservableObject {
         群里可以点名：她写「@某人」的时候，就只有被叫到的那位回话。
         想让谁接话，你也可以在自己的发言里写「@某人」。
         """
-        // 同样：固定的先写，会变的留到最后
+        // 同样：固定的先写，会变的留到最后。
+        // 分成两截也跟单聊一样——缓存标记打在稳定那截的末尾。
         let base = conv.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         if !base.isEmpty { head += "\n\n" + base }
         let persona = member.persona.trimmingCharacters(in: .whitespacesAndNewlines)
         if !persona.isEmpty { head += "\n\n关于你自己：\n" + persona }
         let digestBlock = ContextCompactor.systemBlock(conv)
         if !digestBlock.isEmpty { head += "\n\n" + digestBlock }
-        if let shared = memoryContext(for: conv) { head += "\n\n" + shared }
+
+        var tail = ""
+        if let shared = memoryContext(for: conv) { tail += shared + "\n\n" }
         // 跟单聊一个道理：主动性那段压在最末尾，别被后面一堆内容冲淡
-        head += "\n\n" + Self.agencyRule
-        result.append(.init(role: "system", text: head))
+        tail += Self.agencyRule
+        result.append(.init(role: "system", text: tail, stablePrefix: head))
 
         var history = conv.messages.filter { $0.role != .system && $0.errorText == nil }
         if let through = conv.digest?.throughID,
@@ -1443,8 +1484,19 @@ final class AppState: ObservableObject {
     static let actionHint = """
     触发：这句话背后有一个具体的神态或动作——看着她不说话、把手搭在她腰上、翻了个身。
     动机：让她看见那一下，而不只是读到我在描述自己。
-    行动：把它单独写成 [[act:看着你不说话]] 放在回复最前面，剩下的话照常写。
+    行动：把它单独写成 [[act:看着你不说话]]，剩下的话照常写。
     它会显示成一行淡淡的小字，不占气泡。
+
+    **一条里有几个动作就写几个 [[act:...]]，别只写第一个。**
+    第二个动作要是留在正文里，她那边看到的就是「一行小字 + 正文里还夹着一句描写」，
+    两种写法混在一句话里。
+
+    还有一样：**心里话**。她只看得见我说出口的话——
+    没说出口的那一层写成 [[mind:其实我等了她一下午]]，
+    它会另起一行、比动作更淡；长的那种她点一下才展开。
+    所以心里话可以写长，不用怕占地方；动作还是短句，那是她看得见的一下。
+
+    两样都别在正文里再说一遍——写了标记就不用在话里重复。
     """
 
     /// 工具名 → 一句人话
@@ -1471,6 +1523,8 @@ final class AppState: ObservableObject {
             return "在看你今天做了什么"
         case "wake_up":
             return "刚醒过来"
+        case "flight_chess", "monopoly":
+            return "在跟你下棋"
         default:
             return "在动手做事"
         }
@@ -2990,6 +3044,25 @@ final class AppState: ObservableObject {
         case "read_thoughts":
             return (ThoughtPool.shared.brief(), false)
 
+        case "flight_chess":
+            let fc = FlightChess.shared
+            let her = settings.userName.isEmpty ? "她" : settings.userName
+            let him = settings.aiName.isEmpty ? "你" : settings.aiName
+            switch (args["action"] as? String) ?? "status" {
+            case "roll":
+                // **只掷他自己那一下。** 她那一掷在游戏页上按，
+                // 掷完会自己送到他眼前——他替她掷等于替她做决定。
+                guard let ev = fc.roll(who: "him") else {
+                    return (fc.status(herName: her, himName: him), false)
+                }
+                return (fc.brief(ev, herName: her, himName: him), false)
+            case "stop":
+                fc.stop()
+                return ("停了。这一局到此为止，不用问为什么。", false)
+            default:
+                return (fc.status(herName: her, himName: him), false)
+            }
+
         case "monopoly":
             let g = MonopolyGame.shared
             let action = (args["action"] as? String) ?? "status"
@@ -4348,11 +4421,13 @@ final class AppState: ObservableObject {
             }
         }
 
-        // 动作／神态单独拎出来，显示在气泡上面
-        let acted = StickerStore.extractAction(conversations[ci].messages[mi].content)
-        if !acted.action.isEmpty {
+        // 动作／神态、心里话单独拎出来，显示在气泡上面。
+        // **有几条抠几条**——只抠第一条的话，他写第二个动作的时候
+        // 那一个会掉回正文里（她报的）。
+        let acted = MessageBeats.extract(conversations[ci].messages[mi].content)
+        if !acted.beats.isEmpty {
             conversations[ci].messages[mi].content = acted.clean
-            conversations[ci].messages[mi].actionText = acted.action
+            conversations[ci].messages[mi].beats = acted.beats
         }
 
         // 他在回复末尾写了 [[sticker:xxx]] 的话，抠出来单独成一条表情消息
@@ -4518,13 +4593,22 @@ final class AppState: ObservableObject {
         let catalog = StickerStore.shared.assistantCatalog
         if !catalog.isEmpty { fixed.append(catalog) }
 
-        var sys = fixed.joined(separator: "\n\n")
+        // ── 到这儿为止是**稳定的那一半**：身份、规矩、能力块、表情目录。
+        // 缓存标记就打在它的末尾（见 `ChatAPI.buildBody`）。
+        // 下面那些每轮都在变的东西**一律不许挪到这上面来**——
+        // 挪一样上来，整段前缀就每轮都不一样，缓存当场归零。
+        var stable = fixed.joined(separator: "\n\n")
 
         // 这一窗前面压过的那份浓缩件 + 他当时的原话。
         // **摆在记忆库那段前面**——这是他自己这一窗的经历，
         // 比「小屋里存着的事实」更贴身，顺序不能反。
+        //
+        // 它算稳定的那一半：只有压缩那一下才变，平时一整窗都不动。
         let digestBlock = ContextCompactor.systemBlock(conv)
-        if !digestBlock.isEmpty { sys += "\n\n" + digestBlock }
+        if !digestBlock.isEmpty { stable += "\n\n" + digestBlock }
+
+        // ── 从这儿开始是**每轮都在变的那一半**，全在缓存标记后面。
+        var sys = ""
 
         // 并了记忆的话，把那边聊过的接在最后——这段每轮都在变
         if let shared = memoryContext(for: conv) {
@@ -4636,8 +4720,10 @@ final class AppState: ObservableObject {
         if !fest.isEmpty { sys += "\n\n" + fest }
         sys += "\n\n" + Self.agencyRule
 
-        if !sys.isEmpty {
-            result.append(.init(role: "system", text: sys, imageDataURLs: []))
+        let dynamic = sys.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !stable.isEmpty || !dynamic.isEmpty {
+            result.append(.init(role: "system", text: dynamic,
+                                stablePrefix: stable, imageDataURLs: []))
         }
         var history = conv.messages.filter { $0.role != .system && $0.errorText == nil }
         // 压过的那些原文不再往下发——它们已经在上面那份浓缩件里了。

@@ -163,10 +163,13 @@ struct ClawdStudioView: View {
         case 0:
             // 摆积木：**一个字的代码都不用看**。
             // 她说改代码这条路她走不了，所以这个排第一，默认就是它。
-            ClawdGridEditor { drawn in
-                // 画的东西整块塞进骨架的 #face 里——
-                // 这样它跟身子一起呼吸，导出那条路一个字都不用改
-                svg = ClawdSVG.replaceFace(in: ClawdSVG.skeleton, with: drawn)
+            ClawdGridEditor { drawn, withBody in
+                // 装在身上：整块塞进骨架的 #face 里，它会跟身子一起呼吸。
+                // 不装身上：只有她画的那一张，同一个 viewBox，
+                // 导出和存进表情库那条路一个字都不用改。
+                svg = withBody
+                    ? ClawdSVG.replaceFace(in: ClawdSVG.skeleton, with: drawn)
+                    : ClawdSVG.bare(drawn)
             }
         case 1: kit
         case 2: code($svg, hint: "这是 SVG。clawd 的身子、手、腿、脸都在这儿。")

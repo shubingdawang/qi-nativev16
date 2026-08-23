@@ -291,36 +291,6 @@ final class StickerStore: ObservableObject {
         .map { $0 }
     }
 
-    /// 从回复里把动作抠出来。
-    /// 认两种写法：[[act:看着你不说话]]，或者单独一行的 *看着你不说话*。
-    static func extractAction(_ text: String) -> (clean: String, action: String) {
-        // 先找明确的标记
-        if let r = text.range(of: #"\[\[act:\s*([^\]]{1,60})\s*\]\]"#,
-                              options: .regularExpression) {
-            let raw = String(text[r])
-                .replacingOccurrences(of: "[[act:", with: "")
-                .replacingOccurrences(of: "]]", with: "")
-                .trimmingCharacters(in: .whitespaces)
-            var clean = text
-            clean.removeSubrange(r)
-            return (clean.trimmingCharacters(in: .whitespacesAndNewlines), raw)
-        }
-
-        // 再看开头是不是单独一行的 *动作*
-        let lines = text.components(separatedBy: "\n")
-        if let first = lines.first {
-            let t = first.trimmingCharacters(in: .whitespaces)
-            if t.count >= 3, t.count <= 60,
-               t.hasPrefix("*"), t.hasSuffix("*"), !t.hasPrefix("**") {
-                let action = String(t.dropFirst().dropLast()).trimmingCharacters(in: .whitespaces)
-                let rest = lines.dropFirst().joined(separator: "\n")
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                if !action.isEmpty { return (rest, action) }
-            }
-        }
-        return (text, "")
-    }
-
     /// 从回复里把 [[sticker:xxx]] 抠出来
     static func extractStickerTag(_ text: String) -> (clean: String, id: String?) {
         guard let r = text.range(of: #"\[\[sticker:\s*([A-Za-z0-9\-]+)\s*\]\]"#,

@@ -129,7 +129,7 @@ enum AttentionSet {
         // 只取两条，而且**先给还悬着的**。这里是候选集不是记忆库导出，
         // 倒一堆进来等于什么都没给（那份文档的原话：看不完的等于没看）。
         let mem = MemoryStore.shared
-        let openOnes = mem.memories.filter { $0.resolved == false && $0.isLive }
+        let openOnes = mem.memories.filter { $0.resolved == false }
         for one in openOnes.prefix(2) {
             out.append(.init(weight: 78, text: "还悬着没了结：\(one.content)"))
         }

@@ -3,8 +3,10 @@ import Foundation
 // MARK: - 记忆的「浮沉」与「找得到」
 //
 // 这个文件是第 9 条那一轮的第二半。第一半（v96）搬的是她点名的
-// getzep/graphiti——**旧事实不删只作废**。这一半从另外几个仓库里挑，
-// 挑的标准只有一条：**不能多调一次模型**。
+// getzep/graphiti——旧事实不删，只在后面接一条新的。
+// （graphiti 原本还有「标成作废」那一半，**她后来整个撤了**：
+//  「不算数的记忆全部恢复，不要不算数。」见 MemoryStore.swift 顶上那段。）
+// 这一半从另外几个仓库里挑，挑的标准只有一条：**不能多调一次模型**。
 //
 // 挑中的和它们的出处：
 //
@@ -86,12 +88,15 @@ enum MemoryRecall {
     /// 一条记忆「现在有多该被看见」。
     ///
     /// 重要度打底，乘上还剩多少新鲜度，未了结的再抬一档。
-    /// 已经不成立的（被顶掉的）直接压到很低——它还在，但不该主动浮上来。
+    ///
+    /// ⚠️ 以前「被顶掉的」会被压到 0.15，等于不再浮上来；
+    /// 中间改成过 0.6。**现在一分都不打折**——
+    /// 她说的：「不算数的记忆全部恢复，不要不算数。」
+    /// 同一件事的新旧两条一样重，各自带着日期，谁是现在的自己看。
     static func surfaceWeight(_ item: MemoryItem, now: Date = Date()) -> Double {
         var w = Double(max(1, min(5, item.level))) / 5.0
         if item.pinned == true { w *= 2.0 }        // 钉住的永远在最前面
         if item.resolved == false { w *= unresolvedBoost }
-        if !item.isLive { w *= 0.15 }              // 已经不成立的不主动浮上来
         return w
     }
 
@@ -216,7 +221,7 @@ enum MemoryRecall {
     static func nearDuplicate(_ text: String, in items: [MemoryItem])
         -> (item: MemoryItem, score: Double)? {
         var best: (MemoryItem, Double)?
-        for it in items where it.isLive {
+        for it in items {
             let s = similarity(text, it.content)
             if s > (best?.1 ?? 0) { best = (it, s) }
         }

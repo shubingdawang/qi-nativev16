@@ -147,7 +147,17 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     var quotedName: String = ""
     var quotedText: String = ""
     /// 动作／神态。显示在气泡上方，小小一行，不带气泡。
+    ///
+    /// ⚠️ **老字段，只留着读老消息。** 新的一律进 `beats`——
+    /// 一条消息里本来就可以有好几个动作，只留一个的话
+    /// 第二个会掉回正文里（她报的：「描写第二次动作的时候就又会出现在正文中」）。
     var actionText: String = ""
+    /// 幕外的那几行：动作／神态，和心里话。按他写的先后排。
+    var beats: [MessageBeat] = []
+    /// 这条是**旁白**，不是她打的字（现在只有「戳一戳」会造）。
+    /// 发给他的时候跟普通一句话没区别（那份文档要的就是这个），
+    /// 但屏幕上不套气泡——她没说这句话，是这件事发生了。
+    var narration: Bool = false
     /// 这条如果是语音，指向本地那个 mp3
     var voiceName: String = ""
     /// 这条语音**是怎么说的**——「有点比平时轻，停顿比平时多」这种。
@@ -178,6 +188,14 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     /// 挂件的状态**不存在消息里**——存在各自那个 store 里，
     /// 所以往回翻聊天记录看到的是它现在的样子，不是当时的截图。
     var widget: String = ""
+
+    /// 显示用的那几行。老消息里只有 `actionText`，当成第一条动作——
+    /// **不迁移数据**，往回翻聊天记录时它照样在原来的位置上。
+    var displayBeats: [MessageBeat] {
+        if !beats.isEmpty { return beats }
+        if !actionText.isEmpty { return [MessageBeat(kind: "act", text: actionText)] }
+        return []
+    }
 
     var isEmptyContent: Bool {
         content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -774,6 +792,8 @@ extension ChatMessage {
         quotedName = (try? c.decodeIfPresent(String.self, forKey: .quotedName)) ?? ""
         quotedText = (try? c.decodeIfPresent(String.self, forKey: .quotedText)) ?? ""
         actionText = (try? c.decodeIfPresent(String.self, forKey: .actionText)) ?? ""
+        beats = (try? c.decodeIfPresent([MessageBeat].self, forKey: .beats)) ?? []
+        narration = (try? c.decodeIfPresent(Bool.self, forKey: .narration)) ?? false
         voiceName = (try? c.decodeIfPresent(String.self, forKey: .voiceName)) ?? ""
         voiceTone = (try? c.decodeIfPresent(String.self, forKey: .voiceTone)) ?? ""
         track = try? c.decodeIfPresent(Track.self, forKey: .track)

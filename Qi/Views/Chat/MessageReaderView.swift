@@ -57,11 +57,21 @@ struct MessageReaderView: View {
                             Spacer()
                         }
 
-                        if !message.actionText.isEmpty {
-                            Text(message.actionText)
-                                .font(.app(14))
-                                .italic()
-                                .foregroundStyle(Theme.textMuted(scheme))
+                        // 幕外那几行。**全屏这一页里心里话是摊开的**——
+                        // 她特地点进来看这一条，就没有再让她多点一次的道理
+                        ForEach(message.displayBeats) { beat in
+                            HStack(alignment: .top, spacing: 6) {
+                                if beat.isMind {
+                                    Capsule()
+                                        .fill(Theme.textMuted(scheme).opacity(0.28))
+                                        .frame(width: 2)
+                                }
+                                Text(beat.text)
+                                    .font(.app(14))
+                                    .italic(!beat.isMind)
+                                    .foregroundStyle(Theme.textMuted(scheme))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
 
                         if picking {

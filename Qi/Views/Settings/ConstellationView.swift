@@ -269,17 +269,17 @@ struct StarSheet: View {
                                 Text(String(m.created_at.prefix(10)))
                                     .font(.app(9))
                                     .foregroundStyle(Theme.textMuted(scheme))
-                                if !m.isLive {
-                                    Text("那会儿是真的")
+                                // 后面接着一条新的，标一句**它是哪个时候的**。
+                                // 不写「不算数」——她说过，此前的记忆全都算数。
+                                if m.superseded_by != nil {
+                                    Text("后来还有一条")
                                         .font(.app(9))
-                                        .foregroundStyle(.orange.opacity(0.85))
+                                        .foregroundStyle(Theme.textMuted(scheme))
                                 }
                             }
                             // 改过的那条要画出删除线，所以走 MarkdownText
                             MarkdownText(text: m.display, fontSize: 13)
-                                .foregroundStyle(m.isLive
-                                                 ? Theme.textMain(scheme)
-                                                 : Theme.textMuted(scheme))
+                                .foregroundStyle(Theme.textMain(scheme))
                         }
                     }
                     if line.isEmpty {

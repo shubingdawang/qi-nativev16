@@ -43,6 +43,7 @@ struct ChatView: View {
     @State private var jumpTo: UUID?
     @State private var pickedItems: [PhotosPickerItem] = []
     @State private var showingPlus = false
+    @State private var showingPoke = false
     @State private var pendingImages: [UIImage] = []
     /// 已经原样存好的动图（gif）。**不走 pendingImages**——
     /// 那条路要过一遍 UIImage，动画会被压成第一帧。
@@ -332,6 +333,11 @@ struct ChatView: View {
         .sheet(isPresented: $showingModelPicker) { ModelPickerView(space: space) }
         .sheet(isPresented: $showingSystemPrompt) { SystemPromptView(space: space) }
         .sheet(isPresented: $showingTools) { ToolToggleView() }
+        .sheet(isPresented: $showingPoke) {
+            if let id = app.activeID(for: space) {
+                PokeSheet(conversationID: id)
+            }
+        }
         .sheet(isPresented: $showingMemoryLink) {
             if let id = app.activeID(for: space) {
                 MemoryLinkView(space: space, conversationID: id)
@@ -753,6 +759,8 @@ struct ChatView: View {
                                     titleVisibility: .hidden) {
                     Button("照片") { showingPhotos = true }
                     Button("文件") { importingFile = true }
+                    // 戳一戳也是「发点什么」——发过去的是一件事，不是一句话
+                    Button("戳他一下") { showingPoke = true }
                     Button("取消", role: .cancel) {}
                 }
 

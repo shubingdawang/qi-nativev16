@@ -22,8 +22,9 @@ import SwiftUI
 /// 存进表情库那一整条路一个字都不用改。
 struct ClawdGridEditor: View {
 
-    /// 画完之后把 SVG 交出去（工坊那边拿它去渲染和保存）
-    var onChange: (String) -> Void
+    /// 画完之后把 SVG 交出去（工坊那边拿它去渲染和保存）。
+    /// 第二个参数是「要不要装在 clawd 身上」——她说预览不该老是那个身子。
+    var onChange: (String, Bool) -> Void
 
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
@@ -39,6 +40,24 @@ struct ClawdGridEditor: View {
     @AppStorage("clawdPalette") private var paletteRaw = ClawdDoodle.defaultPaletteRaw
     @State private var stampKind: ClawdStamp.Kind = .eye
     @State private var selected: UUID?
+    /// 这一笔已经画过哪几格（同一格一笔之内只动一次）
+    @State private var strokeCells: Set<String> = []
+    /// 这一笔是在擦（落笔那一格决定的）
+    @State private var strokeErasing = false
+    /// 正拖着哪个零件；`movedStamp` 用来分辨「拖了」还是「只是点了一下」
+    @State private var dragging: UUID?
+    @State private var movedStamp = false
+    /// 画布放大到几倍。她说「画布能缩放」——格子细了之后不放大根本点不准
+    @State private var zoom: CGFloat = 1
+    /// 放大之后画布挪到哪儿了
+    @State private var pan: CGSize = .zero
+    @State private var panStart: CGSize?
+    /// 现在这一拖是「挪画布」还是「画画」
+    @State private var panning = false
+    /// 预览里要不要装上 clawd 的身子。
+    /// 她说「顶上预览不该老是 clawd 的身子」——画一朵花的时候，
+    /// 那个身子只会碍事。
+    @State private var withBody = true
 
     enum Mode: String, CaseIterable {
         case paint = "画格子"
@@ -63,11 +82,18 @@ struct ClawdGridEditor: View {
                                enabled: !history.isEmpty) { undo() }
                     toolButton("清空", icon: "trash",
                                enabled: !doc.isEmpty) {
-                        push(); doc = ClawdDoodle(); selected = nil; emit()
+                        push()
+                        // 清掉画的东西，**格子粗细留着**——
+                        // 她挑好了细格子，清一次又跳回粗的，得重挑
+                        var blank = ClawdDoodle()
+                        blank.grid = doc.grid
+                        doc = blank
+                        selected = nil
+                        emit()
                     }
                     Spacer()
-                    Text(mode == .paint ? "点格子上色，再点一下擦掉"
-                                        : "点画布摆一个，点已有的选中它")
+                    Text(mode == .paint ? "拖着画，再拖一遍擦掉"
+                                        : "点空地摆一个，摁住已有的能拖着挪")
                         .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
@@ -76,6 +102,8 @@ struct ClawdGridEditor: View {
                     ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
+
+                canvasBar
 
                 if mode == .paint { paintTools } else { stampTools }
             }
@@ -89,14 +117,23 @@ struct ClawdGridEditor: View {
 
     private var board: some View {
         GeometryReader { geo in
-            let side = geo.size.width
-            let cell = side / CGFloat(ClawdDoodle.cols)
-            let rows = CGFloat(ClawdDoodle.rows)
+            // 视窗永远是这么大；放大的是**里面那张画布**，
+            // 大出去的部分靠 pan 挪着看（不用 ScrollView：
+            // 滚动和画画抢的是同一根手指，摆在一起必然打架）。
+            let viewW = geo.size.width
+            let viewH = viewW * CGFloat(ClawdDoodle.baseRows) / CGFloat(ClawdDoodle.baseCols)
+            let side = viewW * zoom
+            let cell = side / CGFloat(doc.cols)
+            let boardH = cell * CGFloat(doc.rows)
 
             ZStack(alignment: .topLeading) {
-                // 底：clawd 的轮廓，淡淡的，好让她知道脸该画在哪儿
-                ClawdSilhouette()
-                    .fill(Color(hexString: ClawdSVG.bodyColor)!.opacity(0.16))
+                // 底：clawd 的轮廓，淡淡的，好让她知道脸该画在哪儿。
+                // **不装身子的时候不画它**——画一朵花的时候，
+                // 底下压着个 clawd 只会让人对不准位置
+                if withBody {
+                    ClawdSilhouette()
+                        .fill(Color(hexString: ClawdSVG.bodyColor)!.opacity(0.16))
+                }
 
                 // 上了色的格子
                 ForEach(doc.paintedCells, id: \.key) { item in
@@ -108,7 +145,7 @@ struct ClawdGridEditor: View {
 
                 // 摆上去的零件
                 ForEach(doc.stamps) { s in
-                    // **顺序有讲究**：先定尺寸、再套选中框、再翻转，
+                    // **顺序有讲究**：先定尺寸、再套选中框、再翻转和转角度，
                     // **最后**才 position。position 会让这个 view 占满整块画布，
                     // 写在它后面的 overlay 会盖住整张画布而不是这个零件。
                     ClawdStampShape(kind: s.kind)
@@ -122,45 +159,205 @@ struct ClawdGridEditor: View {
                             }
                         }
                         .scaleEffect(x: s.flipH ? -1 : 1, y: s.flipV ? -1 : 1)
+                        .rotationEffect(.degrees(s.rotation))
                         .position(x: CGFloat(s.x) * cell, y: CGFloat(s.y) * cell)
                 }
 
-                // 网格线
-                GridLines(cols: ClawdDoodle.cols, rows: ClawdDoodle.rows)
-                    .stroke(Theme.textMuted(scheme).opacity(0.16), lineWidth: 0.5)
+                // 网格线。格子细的时候线密到糊成一片，淡一点
+                GridLines(cols: doc.cols, rows: doc.rows)
+                    .stroke(Theme.textMuted(scheme).opacity(doc.grid > 1 ? 0.09 : 0.16),
+                            lineWidth: 0.5)
             }
-            .frame(width: side, height: cell * rows)
+            .frame(width: side, height: boardH)
+            .offset(x: pan.width, y: pan.height)
+            .frame(width: viewW, height: viewH, alignment: .topLeading)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
-                    .onEnded { v in tap(at: v.location, cell: cell) }
+                    .onChanged { v in
+                        if panning {
+                            // 挪画布：跟着手指走，别挪出边儿
+                            let base = panStart ?? pan
+                            if panStart == nil { panStart = pan }
+                            pan = clampPan(CGSize(width: base.width + v.translation.width,
+                                                  height: base.height + v.translation.height),
+                                           viewW: viewW, viewH: viewH,
+                                           side: side, boardH: boardH)
+                            return
+                        }
+                        // **拖着一路画过去**（她说的：不是一格格点）。
+                        // 一笔之内同一格只动一次——不然手指在一格里抖两下，
+                        // 画上去的又被自己擦掉了。
+                        stroke(at: CGPoint(x: v.location.x - pan.width,
+                                           y: v.location.y - pan.height),
+                               cell: cell, start: v.translation == .zero)
+                    }
+                    .onEnded { v in
+                        if panning { panStart = nil; return }
+                        endStroke(at: CGPoint(x: v.location.x - pan.width,
+                                              y: v.location.y - pan.height),
+                                  cell: cell)
+                    }
             )
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Theme.softFillDeep))
         }
-        // 20 列 × 15 行，按比例把高度定死，不然 GeometryReader 撑不起来
-        .aspectRatio(CGFloat(ClawdDoodle.cols) / CGFloat(ClawdDoodle.rows),
+        // 按比例把高度定死，不然 GeometryReader 撑不起来
+        .aspectRatio(CGFloat(ClawdDoodle.baseCols) / CGFloat(ClawdDoodle.baseRows),
                      contentMode: .fit)
     }
 
-    private func tap(at p: CGPoint, cell: CGFloat) {
+    /// 画布那一排：放大、挪、格子粗细、要不要身子
+    private var canvasBar: some View {
+        VStack(spacing: 9) {
+            HStack(spacing: 8) {
+                Text("放大")
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                Slider(value: $zoom, in: 1...4, step: 0.5)
+                    .onChange(of: zoom) { _, _ in
+                        // 缩回去的时候顺手把画布拉回原位，
+                        // 不然会停在一个「明明没放大却缺一块」的位置上
+                        if zoom <= 1 { pan = .zero; panning = false }
+                    }
+                Text(String(format: "%.1f×", zoom))
+                    .font(.app(10))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                    .frame(width: 32, alignment: .trailing)
+
+                // 放大了才需要挪。没放大的时候摆个按钮在那儿只会让人误按
+                if zoom > 1 {
+                    Button {
+                        panning.toggle()
+                    } label: {
+                        Image(systemName: panning ? "hand.draw.fill" : "hand.draw")
+                            .font(.app(13))
+                            .foregroundStyle(panning ? app.settings.accentColor
+                                                     : Theme.textSoft(scheme))
+                            .frame(width: 34, height: 30)
+                            .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(panning ? app.settings.accentColor.opacity(0.16)
+                                              : Theme.softFillDeep))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            HStack(spacing: 8) {
+                Text("格子")
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                Picker("", selection: Binding(
+                    get: { doc.grid },
+                    set: { g in
+                        push()
+                        doc.setGrid(g)
+                        selected = nil
+                        emit()
+                    }
+                )) {
+                    Text("粗").tag(1)
+                    Text("中").tag(2)
+                    Text("细").tag(3)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 150)
+
+                Spacer(minLength: 0)
+
+                Text("装在身上")
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                Toggle("", isOn: Binding(get: { withBody },
+                                         set: { withBody = $0; emit() }))
+                    .labelsHidden()
+            }
+
+            Text(panning
+                 ? "现在是挪画布：拖一下换个地方看。要接着画就再点一下那只手。"
+                 : "「细」格子小一倍，适合画细节；换粗细的时候画好的会跟着换算，"
+                   + "由细变粗会丢一点。关掉「装在身上」，预览里就只有你画的这一张。")
+                .font(.app(10))
+                .foregroundStyle(Theme.textMuted(scheme))
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .glassCard()
+    }
+
+    /// 别把画布挪出视窗外面去（挪没了就找不回来了）
+    private func clampPan(_ p: CGSize, viewW: CGFloat, viewH: CGFloat,
+                          side: CGFloat, boardH: CGFloat) -> CGSize {
+        CGSize(width: min(0, max(viewW - side, p.width)),
+               height: min(0, max(viewH - boardH, p.height)))
+    }
+
+
+    /// 手指落下、以及一路拖过去的每一帧
+    private func stroke(at p: CGPoint, cell: CGFloat, start: Bool) {
         let x = Int(p.x / cell), y = Int(p.y / cell)
-        guard x >= 0, x < ClawdDoodle.cols, y >= 0, y < ClawdDoodle.rows else { return }
+        guard x >= 0, x < doc.cols, y >= 0, y < doc.rows else { return }
 
         if mode == .paint {
-            push()
-            doc.toggle(x: x, y: y, hex: brushHex)
+            // 一笔只压一次撤销栈——每格压一次的话，
+            // 她画一条线要按二十次撤销才退得回去
+            if start {
+                push()
+                strokeCells.removeAll()
+                // **落笔那一格决定这一笔是画还是擦**（画图软件都是这样）。
+                // 不这么定的话，一条线拖过自己刚画的地方会把它擦掉——
+                // 点着画的时候「再点一下擦掉」是对的，拖着画就不是了。
+                strokeErasing = brushHex == ClawdDoodle.eraserHex
+                    || doc.cells["\(x),\(y)"] == brushHex
+            }
+            let key = "\(x),\(y)"
+            guard !strokeCells.contains(key) else { return }
+            strokeCells.insert(key)
+            if strokeErasing { doc.cells.removeValue(forKey: key) }
+            else { doc.cells[key] = brushHex }
             emit()
             return
         }
-        // 摆零件：先看点没点在已有的那些上面
-        if let hit = doc.stamps.last(where: {
-            abs($0.x - x) <= 2 && abs($0.y - y) <= 2
-        }) {
-            selected = (selected == hit.id) ? nil : hit.id
+
+        // 摆零件那边：手指落下时抓住脚下那一个，之后拖着它走
+        if start {
+            let reach = max(1, 2 / max(1, doc.grid))
+            if let hit = doc.stamps.last(where: {
+                abs($0.x - x) <= reach && abs($0.y - y) <= reach
+            }) {
+                dragging = hit.id
+                selected = hit.id
+                movedStamp = false
+                return
+            }
+            dragging = nil
             return
         }
+        // 拖着已经选中的那个走
+        if let id = dragging,
+           let i = doc.stamps.firstIndex(where: { $0.id == id }) {
+            guard doc.stamps[i].x != x || doc.stamps[i].y != y else { return }
+            if !movedStamp { push(); movedStamp = true }
+            doc.stamps[i].x = x
+            doc.stamps[i].y = y
+            emit()
+        }
+    }
+
+    /// 手指抬起来
+    private func endStroke(at p: CGPoint, cell: CGFloat) {
+        defer { strokeCells.removeAll(); dragging = nil }
+        guard mode == .stamp else { return }
+
+        let x = Int(p.x / cell), y = Int(p.y / cell)
+        guard x >= 0, x < doc.cols, y >= 0, y < doc.rows else { return }
+
+        // 抓着某个零件但一步都没挪 → 那就是点了它一下：选中／取消选中
+        if let id = dragging {
+            if !movedStamp { selected = (selected == id) ? nil : id }
+            return
+        }
+        // 点在空地上 → 摆一个新的
         push()
         let s = ClawdStamp(kind: stampKind, x: x, y: y)
         doc.stamps.append(s)
@@ -290,6 +487,37 @@ struct ClawdGridEditor: View {
                         change { $0.scale = max(0.5, $0.scale - 0.25) }
                     }
                 }
+                // 任意角度。左右翻上下翻只是两个固定角度，
+                // 摆不出斜着的扫把、歪着的蝴蝶结——她要的就是这个。
+                HStack(spacing: 8) {
+                    toolButton("左转", icon: "rotate.left") {
+                        change { $0.rotation = snap($0.rotation - 15) }
+                    }
+                    toolButton("右转", icon: "rotate.right") {
+                        change { $0.rotation = snap($0.rotation + 15) }
+                    }
+                    toolButton("转正", icon: "arrow.counterclockwise") {
+                        change { $0.rotation = 0 }
+                    }
+                }
+                HStack(spacing: 8) {
+                    Text("角度")
+                        .font(.app(11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                    // 拖着调**不压撤销栈**——拖一次要压几十份，
+                    // 撤销就退不回画之前了。松手那一下才记一笔。
+                    Slider(value: Binding(
+                        get: { selectedStamp?.rotation ?? 0 },
+                        set: { v in setRotation(v) }
+                    ), in: -180...180, step: 1) { editing in
+                        if editing { push() }
+                    }
+                    Text("\(Int(selectedStamp?.rotation ?? 0))°")
+                        .font(.app(10))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                        .frame(width: 42, alignment: .trailing)
+                }
+
                 toolButton("删掉这个", icon: "trash", wide: true) {
                     guard let id = selected else { return }
                     push()
@@ -310,9 +538,12 @@ struct ClawdGridEditor: View {
     // MARK: 手脚
 
     private func move(dx: Int, dy: Int) {
+        // 边界先读出来：在 `change` 的闭包里再去读 doc，
+        // 读到的是还没改之前那一份，看着对、其实绕
+        let mx = doc.cols - 1, my = doc.rows - 1
         change {
-            $0.x = max(0, min(ClawdDoodle.cols - 1, $0.x + dx))
-            $0.y = max(0, min(ClawdDoodle.rows - 1, $0.y + dy))
+            $0.x = max(0, min(mx, $0.x + dx))
+            $0.y = max(0, min(my, $0.y + dy))
         }
     }
 
@@ -321,6 +552,28 @@ struct ClawdGridEditor: View {
               let i = doc.stamps.firstIndex(where: { $0.id == id }) else { return }
         push()
         edit(&doc.stamps[i])
+        emit()
+    }
+
+    private var selectedStamp: ClawdStamp? {
+        guard let id = selected else { return nil }
+        return doc.stamps.first { $0.id == id }
+    }
+
+    /// 转到 -180…180 之间，顺手把 0/90/180 附近吸过去（差几度看着就是歪的）
+    private func snap(_ deg: Double) -> Double {
+        var d = deg
+        while d > 180 { d -= 360 }
+        while d < -180 { d += 360 }
+        for anchor in [-180.0, -90, 0, 90, 180] where abs(d - anchor) < 3 { return anchor }
+        return d
+    }
+
+    /// 拖角度：**不走 `change`**，那个每次都会压一份撤销栈
+    private func setRotation(_ v: Double) {
+        guard let id = selected,
+              let i = doc.stamps.firstIndex(where: { $0.id == id }) else { return }
+        doc.stamps[i].rotation = snap(v)
         emit()
     }
 
@@ -340,7 +593,7 @@ struct ClawdGridEditor: View {
         }
     }
 
-    private func emit() { onChange(doc.svg()) }
+    private func emit() { onChange(doc.svg(), withBody) }
 
     private func toolButton(_ title: String, icon: String,
                             enabled: Bool = true, wide: Bool = false,
@@ -371,10 +624,58 @@ struct ClawdDoodle: Codable, Equatable {
 
     /// 画布多少格。clawd 的 viewBox 是 320×230，
     /// 20×15 格正好一格 16×15.33，方块感跟它原来的样子对得上。
-    static let cols = 20
-    static let rows = 15
-    static var cellW: Double { 320.0 / Double(cols) }
-    static var cellH: Double { 230.0 / Double(rows) }
+    ///
+    /// **格子粗细可以换**（她说「更小的格子」）：`grid` 是倍数，
+    /// 1 = 20×15（粗，跟 clawd 本身一个颗粒度），2 = 40×30，3 = 60×45。
+    /// 换的时候画好的东西会跟着换算，不会白画（见 `setGrid`）。
+    static let baseCols = 20
+    static let baseRows = 15
+
+    /// 格子倍数。1 / 2 / 3
+    var grid: Int = 1
+
+    var cols: Int { ClawdDoodle.baseCols * max(1, grid) }
+    var rows: Int { ClawdDoodle.baseRows * max(1, grid) }
+    var cellW: Double { 320.0 / Double(cols) }
+    var cellH: Double { 230.0 / Double(rows) }
+
+    /// 换格子粗细。**画好的东西按比例跟着换算**——
+    /// 直接清空的话，她画到一半想换个细的就得从头再来一遍。
+    ///
+    /// 变细：一格摊成 n×n 格；变粗：几格并一格，取左上角那一格的颜色
+    /// （并起来必然要丢一点，这是没办法的事，所以界面上写明了）。
+    mutating func setGrid(_ g: Int) {
+        let from = max(1, grid), to = max(1, min(4, g))
+        guard to != from else { return }
+        var next: [String: String] = [:]
+        for c in paintedCells {
+            if to > from {
+                let f = to / from
+                let rem = to % from
+                // 整数倍才摊得开；不是整数倍就按比例换算落点
+                let nx = rem == 0 ? c.x * f : Int(Double(c.x) * Double(to) / Double(from))
+                let ny = rem == 0 ? c.y * f : Int(Double(c.y) * Double(to) / Double(from))
+                let span = rem == 0 ? f : 1
+                for dx in 0..<span {
+                    for dy in 0..<span {
+                        next["\(nx + dx),\(ny + dy)"] = c.hex
+                    }
+                }
+            } else {
+                let nx = Int(Double(c.x) * Double(to) / Double(from))
+                let ny = Int(Double(c.y) * Double(to) / Double(from))
+                let key = "\(nx),\(ny)"
+                if next[key] == nil { next[key] = c.hex }
+            }
+        }
+        // 零件也跟着挪，落点保持在同一个位置上
+        for i in stamps.indices {
+            stamps[i].x = Int(Double(stamps[i].x) * Double(to) / Double(from))
+            stamps[i].y = Int(Double(stamps[i].y) * Double(to) / Double(from))
+        }
+        cells = next
+        grid = to
+    }
 
     /// 橡皮。用一个不可能画出来的值当记号。
     static let eraserHex = "#ERASE"
@@ -416,27 +717,17 @@ struct ClawdDoodle: Codable, Equatable {
         .sorted { $0.key < $1.key }
     }
 
-    mutating func toggle(x: Int, y: Int, hex: String) {
-        let key = "\(x),\(y)"
-        // 橡皮 = 擦掉；同一个颜色再点一次也是擦掉（她说的「再点一下删减」）
-        if hex == ClawdDoodle.eraserHex || cells[key] == hex {
-            cells.removeValue(forKey: key)
-        } else {
-            cells[key] = hex
-        }
-    }
-
     /// 翻译成 SVG。**加在骨架的脸那一块里**，所以画的东西会跟身子一起呼吸。
     func svg() -> String {
         var out = ""
         for c in paintedCells {
-            let x = Double(c.x) * ClawdDoodle.cellW
-            let y = Double(c.y) * ClawdDoodle.cellH
+            let x = Double(c.x) * cellW
+            let y = Double(c.y) * cellH
             out += String(format:
                 "<rect x=\"%.2f\" y=\"%.2f\" width=\"%.2f\" height=\"%.2f\" fill=\"%@\"/>\n",
-                x, y, ClawdDoodle.cellW + 0.5, ClawdDoodle.cellH + 0.5, c.hex)
+                x, y, cellW + 0.5, cellH + 0.5, c.hex)
         }
-        for s in stamps { out += s.svg() + "\n" }
+        for s in stamps { out += s.svg(cellW: cellW, cellH: cellH) + "\n" }
         return out
     }
 }
@@ -475,16 +766,22 @@ struct ClawdStamp: Identifiable, Codable, Equatable {
     var scale: Double = 1
     var flipH = false
     var flipV = false
+    /// 转多少度。她要的「任意角度」——
+    /// 以前只有左右翻和上下翻，那是两个固定角度，摆不出斜着的扫把。
+    var rotation: Double = 0
 
-    /// 零件本身画在 48×48 的小方框里，摆的时候整体缩放平移
-    func svg() -> String {
-        let cx = Double(x) * ClawdDoodle.cellW
-        let cy = Double(y) * ClawdDoodle.cellH
-        let s = scale * (ClawdDoodle.cellW * 3 / 48)
+    /// 零件本身画在 48×48 的小方框里，摆的时候整体缩放平移。
+    ///
+    /// 变换的顺序：**先转再缩放**（写在 transform 里是从右往左读的），
+    /// 反过来的话，翻转过的零件转起来方向是反的。
+    func svg(cellW: Double, cellH: Double) -> String {
+        let cx = Double(x) * cellW
+        let cy = Double(y) * cellH
+        let s = scale * (cellW * 3 / 48)
         let sx = (flipH ? -s : s), sy = (flipV ? -s : s)
         return String(format:
-            "<g transform=\"translate(%.2f,%.2f) scale(%.3f,%.3f) translate(-24,-24)\">%@</g>",
-            cx, cy, sx, sy, ClawdStamp.shape(kind))
+            "<g transform=\"translate(%.2f,%.2f) rotate(%.1f) scale(%.3f,%.3f) translate(-24,-24)\">%@</g>",
+            cx, cy, rotation, sx, sy, ClawdStamp.shape(kind))
     }
 
     /// 每个零件的形状。**全用矩形**——clawd 是方的，圆的反而不像它。

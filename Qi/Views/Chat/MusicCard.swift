@@ -32,7 +32,7 @@ struct MusicCard: View {
                     .foregroundStyle(labelColor.opacity(0.7))
 
                     Text(shown.title)
-                        .font(.app(16, weight: .semibold, design: .serif))
+                        .font(.app(18, weight: .semibold, design: .serif))
                         .foregroundStyle(labelColor)
                         .lineLimit(1)
 
@@ -55,14 +55,14 @@ struct MusicCard: View {
                     player.toggle(shown)
                 } label: {
                     Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                        .font(.app(13))
+                        .font(.app(14))
                         .foregroundStyle(labelColor)
-                        .frame(width: 36, height: 36)
+                        .frame(width: 40, height: 40)
                         .background(Circle().fill(labelColor.opacity(0.16)))
                 }
                 .buttonStyle(.plain)
             }
-            .padding(13)
+            .padding(14)
 
             // 放着的时候才出进度条，平时不占地方
             if isCurrent, player.duration > 0 {
@@ -100,7 +100,10 @@ struct MusicCard: View {
                 .padding(.bottom, 11)
             }
         }
-        .frame(width: 275)
+        // 参考图里那张是**铺开的**：卡片占满气泡这一栏，封面和播放键都大。
+        // 以前钉死 275，摆在一屏里像张小票；340 是给它一个上限，
+        // 小屏上会自己缩到那一栏放得下的宽度。
+        .frame(maxWidth: 340)
         .background(cardBackground)
     }
 
@@ -119,7 +122,7 @@ struct MusicCard: View {
     }
 
     private var artwork: some View {
-        TrackArtwork(track: shown, side: 46)
+        TrackArtwork(track: shown, side: 56)
             .clipShape(Circle())
     }
 

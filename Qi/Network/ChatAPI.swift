@@ -16,6 +16,11 @@ enum ChatAPI {
     struct OutgoingMessage {
         var role: String
         var text: String
+        /// **这条消息里稳定不变的那一截**，摆在 `text` 前面。
+        ///
+        /// 只有系统提示会用到它。给它单独立一块，是为了把缓存标记
+        /// 打在**它的末尾**而不是整条的末尾——理由见 `buildBody`。
+        var stablePrefix: String = ""
         var imageDataURLs: [String] = []
         /// assistant 这轮发起的工具调用
         var toolCalls: [ToolCallPayload] = []
@@ -153,17 +158,28 @@ enum ChatAPI {
     ) throws -> Data {
 
         var payload: [[String: Any]] = []
-        // 缓存标记打在哪一条上。
+        // 缓存标记打在哪儿。
         //
         // 她报的第 7 条：「apikey 打开了缓存，但缓存命中/写入/命中率都是 0」。
         // 供应商那边打开只是**允许**缓存，Anthropic 那套是**显式**的——
-        // 请求里不带 `cache_control`，一次都不会缓。我们从来没带过，
-        // 所以那三个数永远是 0，一分钱也没省下来。
+        // 请求里不带 `cache_control`，一次都不会缓。
         //
-        // 打在**系统提示那一条的末尾**：它是整份请求里最长、最不变的一块
-        // （身份、规矩、能力块、浓缩件），缓住它省得最多。
-        // 后面的历史每轮都在变，标了也命中不了。
-        let cacheAt = messages.lastIndex { $0.role == "system" }
+        // ⚠️ **但只打上标记还不够，位置得对。**
+        //
+        // 缓存缓的是**标记之前的整段前缀**：前缀只要跟上一轮一模一样才能复用，
+        // 差一个字就全作废。以前这个标记打在系统提示**整条的末尾**——
+        // 而那条的末尾住着身体、心跳、好感、她正在听的那句歌词、今天是什么日子……
+        // **每一轮都在变**。于是前缀每轮都不一样，标了也照样零命中，
+        // 那三个数还是 0。
+        //
+        // 现在系统提示自己分成两块：`stablePrefix`（身份、规矩、能力块、浓缩件）
+        // 和 `text`（每轮在变的那些）。标记打在**稳定那块的末尾**，
+        // 变的东西全在标记后面——它们照样发过去，只是不进缓存。
+        //
+        // 出处：她给的《LLM 缓存与上下文策略》第 1、2 节：
+        // 「稳定内容放前面，动态内容放后面」「缓存的是前缀」。
+        let explicitCache = messages.contains { !$0.stablePrefix.isEmpty }
+        let cacheAt = explicitCache ? nil : messages.lastIndex { $0.role == "system" }
 
         for (i, m) in messages.enumerated() {
             var item: [String: Any] = ["role": m.role]
@@ -184,6 +200,18 @@ enum ChatAPI {
                         "function": ["name": call.name, "arguments": call.arguments]
                     ] as [String: Any]
                 }
+                payload.append(item)
+                continue
+            }
+
+            // 这条自己带了稳定前缀：摊成两块，标记打在第一块末尾。
+            // 后面那块（每轮在变的）照样发，只是不进缓存。
+            if !m.stablePrefix.isEmpty {
+                item["content"] = [
+                    ["type": "text", "text": m.stablePrefix,
+                     "cache_control": ["type": "ephemeral"]] as [String: Any],
+                    ["type": "text", "text": m.text] as [String: Any]
+                ]
                 payload.append(item)
                 continue
             }

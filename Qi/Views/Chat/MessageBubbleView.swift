@@ -44,11 +44,24 @@ struct MessageBubbleView: View {
     private var isUser: Bool { message.role == .user }
 
     var body: some View {
-        VStack(alignment: isUser ? .trailing : .leading, spacing: 5) {
-            if showsHeader { header }
-            content
+        // 旁白（她戳他那一下）不套气泡、不挂头像：
+        // **那句话不是她说的，是那件事发生了**。
+        // 摆在整行正中，跟两边的对话分开。
+        if message.narration {
+            Text(message.content)
+                .font(.app(12))
+                .italic()
+                .foregroundStyle(Theme.textMuted(scheme))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 2)
+        } else {
+            VStack(alignment: isUser ? .trailing : .leading, spacing: 5) {
+                if showsHeader { header }
+                content
+            }
+            .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
         }
-        .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
     }
 
     // MARK: 头上那一行
@@ -208,16 +221,13 @@ struct MessageBubbleView: View {
             // 这样整屏看下来所有气泡的缝都是一样宽的，不会有的挤有的松
             VStack(alignment: isUser ? .trailing : .leading, spacing: 10) {
 
-                // 动作／神态：气泡上方淡淡一行，不带气泡也不带底
-                if !message.actionText.isEmpty {
-                    HStack(spacing: 5) {
-                        Image(systemName: "chevron.right")
-                            .font(.app(8, weight: .semibold))
-                            .foregroundStyle(Theme.textMuted(scheme).opacity(0.7))
-                        Text(message.actionText)
-                            .font(.app(12))
-                            .italic()
-                            .foregroundStyle(Theme.textMuted(scheme))
+                // 幕外那几行：动作／神态 + 心里话。气泡上方淡淡地摞着，
+                // 不带气泡也不带底。**有几条摆几条**，按他写的先后。
+                if !message.displayBeats.isEmpty {
+                    VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
+                        ForEach(message.displayBeats) { beat in
+                            BeatLine(beat: beat, isUser: isUser)
+                        }
                     }
                     .padding(.leading, 2)
                     .padding(.bottom, 1)

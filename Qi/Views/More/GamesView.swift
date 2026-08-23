@@ -17,6 +17,7 @@ struct GamesView: View {
     @Environment(\.colorScheme) private var scheme
     @ObservedObject private var store = GameStore.shared
     @ObservedObject private var mono = MonopolyGame.shared
+    @ObservedObject private var flight = FlightChess.shared
 
     @State private var tab = 0            // 0 网页，1 对话
     @State private var importing = false
@@ -137,6 +138,17 @@ struct GamesView: View {
                     sub: mono.s.live
                          ? "开着局 · 回合 \(mono.s.turnCount)/\(mono.s.totalRounds) · 该 \(mono.s.turn) 掷"
                          : "两个人的棋盘 · 引擎在手机里，不用开电脑",
+                    icon: "dice")
+            }
+            .buttonStyle(.plain)
+
+            NavigationLink {
+                FlightChessView()
+            } label: {
+                row(title: "飞行棋",
+                    sub: flight.hasBoards
+                         ? (flight.board?.name ?? "") + " · 你第 \(flight.state.herPos + 1) 格"
+                         : "走法在手机里，格子上写什么你自己导一副",
                     icon: "dice")
             }
             .buttonStyle(.plain)

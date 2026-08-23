@@ -242,6 +242,19 @@ enum ClawdSVG {
         return head + "\n" + face + "\n      " + tail
     }
 
+    /// **只有画的那一张，不带身子。**
+    ///
+    /// 她说「顶上预览不该老是 clawd 的身子」——
+    /// 她想画的不一定是 clawd：一朵花、一杯奶茶、一句话，
+    /// 底下压着那个身子的话，那些东西永远只是「贴在 clawd 上的贴纸」。
+    /// 尺寸还是同一个 viewBox，导出、存进表情库那条路一个字都不用改。
+    static func bare(_ inner: String) -> String {
+        "<svg viewBox=\"0 0 320 230\" xmlns=\"http://www.w3.org/2000/svg\">\n"
+            + "  <g id=\"clawd\">\n    <g id=\"face\">\n"
+            + inner
+            + "\n    </g>\n  </g>\n</svg>"
+    }
+
     /// 在最后一个 `</g>` 之前塞一块进去。
     /// 塞在 clawd 这一组里面，它才会跟着整只一起动。
     static func insert(_ part: String, into svg: String) -> String {

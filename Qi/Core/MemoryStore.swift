@@ -40,16 +40,27 @@ struct MemoryItem: Codable, Identifiable, Hashable {
     //
     //   · 「她在苍南」和「她在日本」不是矛盾，是**先后**
     //   · 删掉旧的那条，就等于他从来不知道她曾经在苍南
-    //   · 所以旧的留着，只标上「从什么时候起不成立了」，
-    //     再指一下是被哪条顶掉的
+    //   · 所以旧的留着，只指一下后面接了哪条
     //
-    // 搜的时候默认只给**现在还成立的**，问「以前呢」才把作废的翻出来。
+    // ⚠️ **「作废」这一半整个撤掉了**（她定的，v123）：
+    // 「此前的记忆都算的，不要告诉他从现在起不算数了，
+    //  只是存进了新的记忆，不需要否定前面的记忆。」
+    // 后来又说了一次：「不算数的记忆全部恢复，不要不算数。」
+    //
+    // 所以现在：
+    //   · `add_memory` 只写 `superseded_by`（一条线，不是一次否定）
+    //   · **`invalid_at` 一个字都不再写**，老数据里写过的**在启动时清干净**
+    //     （见 `reload` 里那段迁移）
+    //   · 搜索、浮现、图、清单——**没有任何一处再按「算不算数」筛过**
+    //
+    // `invalid_at` 这个字段只剩一个用处：**读得懂老文件**，不至于解不出来。
 
     /// 这条事实**从什么时候起**成立。不填就是记下来那天。
     var valid_from: String?
-    /// 什么时候不成立了。**空的就是现在还算数。**
+    /// ⚠️ **已经废弃的字段。** 老文件里可能有值，读进来之后会被清掉，
+    /// 新的一个字都不写。留着它只是为了别让老文件解不出来。
     var invalid_at: String?
-    /// 被哪一条顶掉的（新那条的 id）
+    /// 后面接着哪一条（新那条的 id）。**这不是「作废」，是「后来还有一条」**
     var superseded_by: String?
     /// 这条里提到的人和东西。顺着它能把散落各处的记忆串起来——
     /// 这是 graphiti 那个「图」在本机的轻量版：不建真图，
@@ -58,21 +69,22 @@ struct MemoryItem: Codable, Identifiable, Hashable {
 
     // MARK: 浮沉那几样（照 P0luz/Ombre-Brain 搬的，算法在 MemoryRecall.swift）
     //
-    // graphiti 管的是「这条还算不算数」，Ombre 管的是另一件事：
-    // **算数的这些里面，现在最该被看见的是哪几条。**
-    // 两套不打架——前者是真假，后者是轻重。
+    // graphiti 那半管的是「这条后面接着哪一条」，Ombre 管的是另一件事：
+    // **这些里面，现在最该被看见的是哪几条。**
+    // 两套不打架——前者是先后，后者是轻重。
+    // （「算不算数」那一档已经没有了：全都算数。）
 
     /// 改之前那一版正文。**只在「记错了、改对」的时候留**，
     /// 显示成 ~~旧的~~ 新的。
     ///
-    /// ⚠️ 这跟 `invalid_at` 那套是**两件事**，她这次正好撞上了：
+    /// ⚠️ 这跟 supersedes 那套是**两件事**，她当初正好撞上过：
     /// 他把七夕记成 2025 年，她让他改成 2026——这是**记错了**，
-    /// 该直接改掉、把错的划掉；他却当成「事实变了」去作废，
-    /// 于是屏幕上还挂着 2025 那行加一句「2026/8/19 起不算数了」。
+    /// 该直接改掉、把错的划掉；他却当成「事实变了」，
+    /// 于是屏幕上还挂着 2025 那行。
     ///
     ///   · **记错了** → update_memory 改掉，旧的留成删除线
     ///   · **事情变了**（她从苍南搬到日本）→ add_memory + supersedes，
-    ///     旧的整条留着标作废——那条**当时是真的**
+    ///     两条接成一条线，**都留着、都算数**
     var previous: String?
 
     /// 钉住的核心信念。钉住的**不衰减**，永远浮在最上面。
@@ -88,9 +100,6 @@ struct MemoryItem: Codable, Identifiable, Hashable {
         guard let old = previous, !old.isEmpty, old != content else { return content }
         return "~~" + old + "~~ " + content
     }
-
-    /// 现在还算不算数
-    var isLive: Bool { (invalid_at ?? "").isEmpty }
 
     /// 工具里认的是 ID 前八位，跟原来那套一致
     var shortID: String { String(id.prefix(8)) }
@@ -552,6 +561,13 @@ final class MemoryStore: ObservableObject {
 
     func reload() {
         memories = read([MemoryItem].self, "memories.json") ?? []
+        // 老文件里被标成「从某天起不算数」的那些，**全部恢复**。
+        // 她的原话：「不算数的记忆全部恢复，不要不算数。」
+        // 清一次就落盘，下次启动这儿就什么都不用做了。
+        if memories.contains(where: { !($0.invalid_at ?? "").isEmpty }) {
+            for i in memories.indices { memories[i].invalid_at = nil }
+            write(memories, "memories.json")
+        }
         diaries = read([DiaryItem].self, "diaries.json") ?? []
         identity = (try? String(contentsOf: url("identity.txt"), encoding: .utf8)) ?? ""
         currentState = read(StateNote.self, "current_state.json") ?? StateNote()
@@ -743,7 +759,7 @@ final class MemoryStore: ObservableObject {
     /// 排序 = 重要度 ×（钉住的翻倍）×（还悬着的抬一档），同分的新的在前。
     /// **不按时间打折**——她不要遗忘曲线，理由写在 MemoryRecall.swift 里。
     func surfaced(_ limit: Int = 6) -> [MemoryItem] {
-        memories.filter(\.isLive)
+        memories
             .sorted(by: MemoryRecall.surfaceOrder)
             .prefix(limit).map { $0 }
     }

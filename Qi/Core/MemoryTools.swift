@@ -114,30 +114,30 @@ enum MemoryTools {
             """
             添加一条新记忆到记忆库，记录关于饼饼或阿晏的重要信息。
 
-            **事实会过期，但过期的事实不删。** 她从苍南搬到日本，\
-            「她在苍南」不是错的，是**那会儿是真的**。\
-            所以新记忆顶掉旧记忆的时候填 supersedes（旧那条的 id 前 8 位）——\
-            旧的会留着、标上「从现在起不算数」，而不是被删掉。\
-            不填也行，我会把可能过时的那几条列给你，你再决定。
+            **事情变了的时候，是多记一条，不是把旧的推翻。** 她从苍南搬到日本，\
+            「她在苍南」不是错的，是**那会儿是真的**——它一直算数。\
+            新的这条跟哪条是同一件事，就填 supersedes（旧那条的 id 前 8 位）：\
+            那只是把两条**接成一条线**，好让人连着读；\
+            旧的既不删也不作废，照样搜得到、照样算数。\
+            不填也行，我会把相关的那几条列给你，你再决定。
             """,
             ["content": str, "tags": strs,
              "level": ["type": "number", "description": "重要程度 1-5，5 最重要，默认 3"],
              "author": ["type": "string", "description": "记录者：阿晏 或 饼饼，默认阿晏"],
-             "supersedes": ["type": "string", "description": "这条顶掉了哪条旧记忆，填那条的 id 前 8 位。旧的不会被删，只标成「那会儿是真的」"],
+             "supersedes": ["type": "string", "description": "这条接的是哪条旧记忆，填那条的 id 前 8 位。只是把两条接起来，旧的照样算数"],
              "since": ["type": "string", "description": "这件事**从什么时候起**成立。跟「什么时候记下来的」不是一回事，比如「她 6 月就搬去日本了，我今天才知道」"]],
             required: ["content"])
 
         add("search_memories",
-            "搜索记忆库，支持关键词、标签、重要程度过滤。**默认只给现在还成立的**——已经被顶掉的旧事实不会混进来。想翻旧账（「她以前住哪儿」这种）就把 include_past 打开。",
-            ["query": str, "tags": strs, "level": num, "limit": num,
-             "include_past": ["type": "boolean", "description": "连已经不成立的旧事实一起给，默认 false"]])
+            "搜索记忆库，支持关键词、标签、重要程度过滤。**记下来的都算数**——一件事后来变了，新旧两条会一起给你，各自带着日期，自己看哪条是现在的。",
+            ["query": str, "tags": strs, "level": num, "limit": num])
 
         add("recall_entity",
             """
             顺着一个人、一样东西、一个地方，把散在各处的记忆**串成一条线**，按时间排。
 
             跟 search_memories 的区别：搜索给的是「哪几条提到了这个词」，\
-            这个给的是「这件事是怎么一路变过来的」——**已经作废的那些也会列出来**，\
+            这个给的是「这件事是怎么一路变过来的」——**早先那几条也会列出来**，\
             因为一件事怎么变的，得连着看才知道。\
             末尾还会告诉你这条线上还牵着谁，可以接着往下走。
             """,
@@ -214,11 +214,11 @@ enum MemoryTools {
               那条记忆从来就不该是那样，用这个改掉。旧的会**划掉留在原地**
               （屏幕上显示成 ~~2025年~~ 2026年），一眼看得出改过什么。
             · **事情变了** —— 她从苍南搬到日本。旧的那条**当时是真的**，
-              那就别改它，用 add_memory 填 supersedes，
-              让它留着并标上「从什么时候起不算数」。
+              那就别改它，用 add_memory 记一条新的、填上 supersedes，
+              两条接成一条线，都留着。
 
-            把「记错了」当成「事情变了」去作废，屏幕上就会挂着一条错的
-            再加一句「某天起不算数」——那是两个都不对。
+            把「记错了」当成「事情变了」，屏幕上就会一直挂着一条错的——
+            记错了就直接改掉。
             """,
             ["id": str, "content": str, "tags": strs, "level": num], required: ["id"])
 
@@ -352,7 +352,8 @@ enum MemoryTools {
                     return ("跟已经有的这条太像（\(Int(dup.score * 100))%），没重复记：\n"
                             + "[\(dup.item.shortID)] \(dup.item.content)\n"
                             + "要是想改那条，用 update_memory；"
-                            + "要是那条已经不成立了，用 add_memory 填上 supersedes。", false)
+                            + "要是那件事后来变了，用 add_memory 填上 supersedes"
+                            + "（旧那条照样算数）。", false)
                 }
                 // 像，但没像到该跳过——很可能是「这件事变了」，提醒一下
                 if s("supersedes").isEmpty {
@@ -360,7 +361,8 @@ enum MemoryTools {
                             + "[\(dup.item.shortID)] \(dup.item.content)\n\n"
                             + "· 要是这是**同一件事的新说法**：用 update_memory 改那条。\n"
                             + "· 要是这是**那件事变了**：再调一次 add_memory，"
-                            + "supersedes 填 \(dup.item.shortID)（旧的不删，只标成「那会儿是真的」）。\n"
+                            + "supersedes 填 \(dup.item.shortID)（旧的不删也不作废，"
+                            + "只是记一下后面接了这条）。\n"
                             + "· 要是这真是**另一件事**：再调一次，supersedes 填 `-`。", true)
                 }
             }
@@ -376,14 +378,18 @@ enum MemoryTools {
             item.valid_from = s("since").isEmpty ? MemoryStore.now : s("since")
             item.entities = ents.isEmpty ? nil : ents
 
-            // 他明说了这条顶掉哪条旧的 → 旧的**不删**，只标作废
+            // 他说了这条接的是哪条旧的 → **只记一条线，不否定那条旧的**。
+            //
+            // 她定的：「此前的记忆都算的，不要告诉他从现在起不算数了，
+            // 只是存进了新的记忆，不需要否定前面的记忆。」
+            // 所以这儿**不再动 `invalid_at`**——旧那条照样是活的、照样搜得到、
+            // 照样浮得上来；只标一下后面接了哪条，看的时候能连着读。
             var supersedeNote = ""
             // `-` 是上面那条提示里给他的「这真是另一件事」的出口
             if s("supersedes") != "-", let old = m.memoryIndex(s("supersedes")) {
-                m.memories[old].invalid_at = MemoryStore.now
                 m.memories[old].superseded_by = item.id
-                supersedeNote = "\n旧的那条没删，只标了「从现在起不算数」：\(m.memories[old].content.prefix(24))…"
-                m.note("作废", by: item.author, memID: m.memories[old].id,
+                supersedeNote = "\n跟这条接上了（那条照样算数）：\(m.memories[old].content.prefix(24))…"
+                m.note("接上", by: item.author, memID: m.memories[old].id,
                        before: m.memories[old].content, after: content)
             }
             m.memories.insert(item, at: 0)
@@ -395,14 +401,13 @@ enum MemoryTools {
             var hint = ""
             if s("supersedes").isEmpty || s("supersedes") == "-", !ents.isEmpty {
                 let overlap = m.memories.dropFirst().filter { old in
-                    old.isLive
-                    && !Set(old.entities ?? []).isDisjoint(with: Set(ents))
+                    !Set(old.entities ?? []).isDisjoint(with: Set(ents))
                 }.prefix(3)
                 if !overlap.isEmpty {
                     hint = "\n\n提到同样这些（\(ents.prefix(3).joined(separator: "、"))）的还有："
                     for o in overlap { hint += "\n· [\(o.shortID)] \(o.content.prefix(30))" }
-                    hint += "\n要是其中哪条**已经不成立了**，再调一次 add_memory 时把 supersedes 填上那个 id——"
-                    hint += "旧的不会被删，只会标成「那会儿是真的」。"
+                    hint += "\n要是其中哪条**后来变了**，再调一次 add_memory 时把 supersedes 填上那个 id——"
+                    hint += "那只是把两条接起来，旧的照样算数，不用去否定它。"
                 }
             }
             return ("记住了。现在一共 \(m.memories.count) 条。"
@@ -413,15 +418,13 @@ enum MemoryTools {
             let want = tags("tags")
             let minLevel = i("level", 0)
             let limit = i("limit", 20)
-            // **默认只给现在还成立的**（graphiti 那套的核心）。
-            // 「她在苍南」和「她在日本」不是矛盾是先后，
-            // 搜的时候给他现在这条就够了；要翻旧账再把 include_past 打开。
-            let includePast = (args["include_past"] as? Bool) ?? false
-            // 先按标签/星级/还成不成立筛一遍，再排序
+            // **不按「还算不算数」筛**——她定的：记下来的全都算数。
+            // 「她在苍南」和「她在日本」不是矛盾是先后，两条一起给他，
+            // 各自带着日期，哪条是现在的他自己看得出来。
+            // 先按标签和星级筛一遍，再排序。
             let pool = m.memories.filter { mem in
                 (want.isEmpty || !Set(mem.tags).isDisjoint(with: Set(want)))
                 && mem.level >= minLevel
-                && (includePast || mem.isLive)
             }
             var hits: [MemoryItem]
             if q.isEmpty {
@@ -447,7 +450,7 @@ enum MemoryTools {
             if picked.isEmpty { return ("记忆库还是空的。", false) }
             var out = "现在浮在最上面的（按 重要程度 × 钉住没钉住 × 还悬着没悬着 排的，同分的新的在前）：\n"
             out += picked.map(line).joined(separator: "\n")
-            let stillOpen = m.memories.filter { $0.resolved == false && $0.isLive }.count
+            let stillOpen = m.memories.filter { $0.resolved == false }.count
             if stillOpen > 0 { out += "\n\n还悬着没了结的一共 \(stillOpen) 件。" }
             return (out, false)
 
@@ -542,12 +545,12 @@ enum MemoryTools {
             guard !related.isEmpty else {
                 return ("没有跟「\(who)」有关的记忆。", false)
             }
-            let live = related.filter(\.isLive)
+            let chained = related.filter { $0.superseded_by != nil }
             var out = "跟「\(who)」有关的，一共 \(related.count) 条"
-            out += related.count > live.count
-                ? "（其中 \(related.count - live.count) 条已经不算数了，也列出来——"
-                  + "一件事是怎么变的，得连着看）：\n"
-                : "：\n"
+            out += chained.isEmpty
+                ? "：\n"
+                : "（其中 \(chained.count) 条后面接着更新的一条；"
+                  + "**都算数**，一件事是怎么变的得连着看）：\n"
             out += related.map(line).joined(separator: "\n")
             // 顺带把这条线上还牵着谁列出来，他可以接着往下走
             let neighbours = Set(related.flatMap { $0.entities ?? [] })
@@ -949,9 +952,10 @@ enum MemoryTools {
         // 前面那个 [id][作者][标签] 的壳一个字都不能动，札记页靠它切条。
         if mem.pinned == true { s += "　📌" }
         if mem.resolved == false { s += "　⟨还悬着⟩" }
-        // 已经不成立的要**明着标出来**。不标的话他会拿一件过去的事当现在。
-        if !mem.isLive {
-            s += "　⟨那会儿是真的，\(day(mem.invalid_at ?? ""))起不算数了⟩"
+        // 后面接着新的那条，标一下**这是当时记下的**——
+        // 不写「不算数了」：她说过，此前的记忆都算数，只是后来又记了一条。
+        if mem.superseded_by != nil {
+            s += "　⟨这是当时记下的，后面还接着一条新的⟩"
         }
         if let anns = mem.annotations, !anns.isEmpty {
             for a in anns {
@@ -1109,7 +1113,7 @@ enum MemoryTools {
 
         // 还悬着没了结的（Ombre-Brain 那套里最有用的一条：
         // 未了结的事本来就该反复浮上来，直到真的收口）
-        let unresolved = m.memories.filter { $0.resolved == false && $0.isLive }
+        let unresolved = m.memories.filter { $0.resolved == false }
         if !unresolved.isEmpty {
             parts.append("【还悬着没了结的】\n"
                          + unresolved.prefix(8).map(line).joined(separator: "\n"))

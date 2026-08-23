@@ -65,9 +65,10 @@ enum MemoryMap {
     static let minWeight = 2
 
     static func build(_ memories: [MemoryItem]) -> MemoryGraph {
-        // 只看现在还成立的。作废的那些是「那会儿是真的」，
-        // 摆在图上会让她以为现在还是那样。
-        let live = memories.filter { $0.isLive }
+        // **全都算数**，一条都不筛（她定的）。
+        // 同一件事变过好几次的，图上就会连出好几条——那是对的，
+        // 一件事是怎么变过来的，本来就该连着看。
+        let live = memories
 
         // ① 每个实体出现在几条记忆里 + 它常跟哪个 tag 一起出现
         var weight: [String: Int] = [:]

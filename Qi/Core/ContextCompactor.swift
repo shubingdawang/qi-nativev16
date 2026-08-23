@@ -155,6 +155,9 @@ enum ContextCompactor {
         payload += "【这一段新对话】\n" + transcript
 
         var out = ""
+        // 这一份是**怎么结束的**。写满了被掐断（length / max_tokens）
+        // 跟正常说完是两回事，下面要用它决定敢不敢提交。
+        var stopReason = ""
         do {
             let stream = ChatAPI.stream(
                 endpoint: endpoint, apiKey: p.apiKey, model: model,
@@ -163,12 +166,27 @@ enum ContextCompactor {
             for try await event in stream {
                 if case .content(let piece) = event { out += piece }
                 if case .usage(let u) = event { UsageStore.shared.record(u, source: .chat) }
+                if case .finish(let why) = event, let why { stopReason = why }
             }
         } catch {
             return false
         }
         let summary = out.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !summary.isEmpty else { return false }
+
+        // **被掐断的浓缩件绝对不能提交。**
+        //
+        // 这是这一整套里最危险的一个错：提交了，原文就不再往下发了
+        // （`buildAPIMessages` 会从 `throughID` 之后开始切），
+        // 而顶上那份浓缩件是半截的——**中间那一段就凭空消失了**。
+        // 原文还在数据库里，但他再也看不到，也没人会发现。
+        //
+        // 失败就什么都不动：这一窗照旧带着全部原文往下发，
+        // 长一点、贵一点，但一个字都没丢。下一轮再压一次。
+        let cut = ["length", "max_tokens", "MAX_TOKENS", "truncated", "incomplete"]
+        if cut.contains(where: { stopReason.localizedCaseInsensitiveContains($0) }) {
+            return false
+        }
 
         // 原话样本：**不调模型**，从要收起来的那段里机械地挑他说过的话，一字不改。
         var voice = conv.digest?.voice ?? []
