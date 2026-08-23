@@ -37,6 +37,18 @@ enum BackupBundle {
     /// 单个文件超过这个就不装了，避免一份备份大到导不出来
     static let blobLimit = 20 * 1024 * 1024
 
+    /// 这份数据是不是一整包备份。
+    ///
+    /// 她拿记忆库里那些单个 json（`partner_message.json` 这种）
+    /// 走「导入备份」那个口，得到一句「没有 files 也没有 conversations」——
+    /// **那句话没错，但它没告诉她该去哪儿。**
+    /// 现在先认一认：不是整包的，界面那边会自动改走记忆库那条路。
+    static func looksLikeBundle(_ data: Data) -> Bool {
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return false }
+        return obj["files"] != nil || obj["conversations"] != nil || obj["blobs"] != nil
+    }
+
     /// UserDefaults 里我们自己写的那些键。
     /// **新加了键记得来这儿补一个**，不然它不会进备份。
     static let defaultKeys = [

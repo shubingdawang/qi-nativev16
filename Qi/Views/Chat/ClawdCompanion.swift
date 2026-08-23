@@ -33,8 +33,13 @@ struct ClawdRoamer: View {
     @State private var walkTask: Task<Void, Never>?
     @State private var line: String?
     @State private var lineTask: Task<Void, Never>?
-    /// 喝东西时罐子抬起来多高
-    @State private var sipLift: CGFloat = 0
+    /// 手上那件东西**此刻怎么拿**。空手就是 `.none`
+    @State private var carryPose: CarryPose = .none
+    /// 动作进度 0…1。喝、摇晃这类靠它一帧一帧推
+    @State private var rigBeat: Double = 0
+    /// 推 `rigBeat` 的那根针。**没在做动作的时候它是停的**——
+    /// 不然一整天挂在那儿空转，白烧电
+    @State private var rigTicker: Task<Void, Never>?
     /// 手上这件是不是他自己掏出来的。
     /// 是的话喝完会自己收起来；她塞给他的（在小屋搬起来的）就一直拿着。
     @State private var tookOutMyself = false
@@ -91,31 +96,22 @@ struct ClawdRoamer: View {
                 // 手上那件东西。举在身子旁边，跟着一起走。
                 // 它读的是 ClawdStore.carrying——**小屋和聊天页共用同一个**，
                 // 所以在小屋搬起箱子，切过来这边他手上也抱着。
-                HStack(alignment: .bottom, spacing: 1) {
-                    // 手上有大件的时候**举过头顶**（她画的那张参考图），
-                    // 小东西（喝的吃的）还是端在手边——一罐可乐举过头顶太滑稽。
-                    ClawdView(mood: room.carrying == nil ? mood : .carrying,
-                              scale: 1.1, shadow: true)
-                        .overlay(alignment: .top) {
-                            if let kind = room.carriedKind, room.overhead(kind) {
-                                // 她报的第 10 条：道具太小了。
-                                // 他自己是 1.1 倍，道具原来 0.8——**比他小一半还多**，
-                                // 举过头顶那一下看着像举了个米粒。
-                                PixelSpriteView(sprite: kind.sprite, scale: 1.15)
-                                    .offset(y: -18)
-                                    .transition(.scale(scale: 0.5).combined(with: .opacity))
-                            }
-                        }
-                    if let kind = room.carriedKind, !room.overhead(kind) {
-                        PixelSpriteView(sprite: kind.sprite, scale: 1.3)
-                            // sipLift 是喝的时候把罐子举到嘴边那一下。
-                            // 平时是 0，喝的时候抬起来、往身子里侧靠一点。
-                            .offset(x: sipLift == 0 ? 0 : -7, y: -6 - sipLift)
-                            .rotationEffect(.degrees(sipLift == 0 ? 0 : -22),
-                                            anchor: .bottomLeading)
-                            .transition(.scale(scale: 0.5).combined(with: .opacity))
-                    }
-                }
+                // ⚠️ 这里整段换掉了。
+                //
+                // 以前是：物件缩到 0.8、往他头顶上一放，他的手一动不动——
+                // **他没有在举，他只是头上顶着个东西**（她的原话）。
+                //
+                // 现在走骨架（`ClawdRigView`）：身子和两只手是分开的，
+                // 姿势只描述「手转到哪儿、东西摆在哪儿」。
+                // 举大件就是**双手抬过头顶**、东西压在两手中间，不缩小；
+                // 拿小东西就是一只手伸出去、东西挨着手边；
+                // 喝和摇晃是**真的在动**（`beat` 驱动），不是配一句台词。
+                ClawdRigView(mood: room.carrying == nil ? mood : .carrying,
+                             item: room.carriedKind?.sprite,
+                             pose: carryPose,
+                             scale: 1.1,
+                             beat: rigBeat,
+                             shadow: true)
                     .scaleEffect(held ? 1.2 : 1)
                     .scaleEffect(x: facingLeft ? -1 : 1, y: 1)
                     .shadow(color: .black.opacity(held ? 0.26 : 0), radius: 10, y: 8)
@@ -248,6 +244,8 @@ struct ClawdRoamer: View {
                     }
                     tookOutMyself = true
                     mood = .carrying
+                    // 这件东西该怎么拿：大件双手举，小件一只手端着
+                    carryPose = ClawdRig.poses(for: pick).first ?? .hold
                     say(takeOutLine(pick))
                     try? await Task.sleep(nanoseconds: 1_200_000_000)
 
@@ -259,6 +257,14 @@ struct ClawdRoamer: View {
                                    Double.random(in: top...bottom))
                         if Task.isCancelled { return }
                         guard !held, !poked else { break }
+                        // 能摇的（红酒）先晃两下再喝。
+                        // 她点名要的：「假如是红酒可以喝也可以摇晃酒杯」——
+                        // 摇是个**动作**，不是一句台词。
+                        if ClawdRig.poses(for: pick).contains(.swirl),
+                           Double.random(in: 0...1) < 0.5 {
+                            await swirl()
+                            if Task.isCancelled { return }
+                        }
                         await sip()
                     }
 
@@ -268,6 +274,7 @@ struct ClawdRoamer: View {
                             room.carrying = nil
                         }
                         tookOutMyself = false
+                        carryPose = .none
                         say(finishLine(pick))
                     }
                     sync()
@@ -429,17 +436,49 @@ struct ClawdRoamer: View {
             .randomElement()
     }
 
-    /// 喝一口：罐子抬到嘴边，停一下，放下来。
-    /// 抬起的时候顺手把表情换成眯眼的那帧，看着像在享受。
+    /// 喝一口。
+    ///
+    /// **这是一个真的动作**：手抬到嘴边、杯子跟着仰、喝完放下来。
+    /// 一口 1.6 秒，`beat` 从 0 走到 1，姿势表里那条 `sin` 曲线
+    /// 负责让它先快后慢——匀速抬手看着像机械臂。
     private func sip() async {
         let before = mood
-        withAnimation(.easeOut(duration: 0.35)) { sipLift = 9 }
+        carryPose = .sip
         mood = .happy
-        try? await Task.sleep(nanoseconds: 1_100_000_000)
-        if Task.isCancelled { return }
-        withAnimation(.easeIn(duration: 0.3)) { sipLift = 0 }
+        await runBeat(seconds: 1.6)
+        carryPose = .hold
         mood = before == .happy ? .carrying : before
         try? await Task.sleep(nanoseconds: 400_000_000)
+    }
+
+    /// 晃两下酒杯。
+    ///
+    /// 她点名要的：「假如是红酒可以喝也可以摇晃酒杯」。
+    /// 摇是**手腕小幅往复**，杯子跟着划一个小圈，杯口始终朝上——
+    /// 倾角一大就成了泼酒。
+    private func swirl() async {
+        carryPose = .swirl
+        await runBeat(seconds: 2.4, loops: 2)
+        carryPose = .hold
+    }
+
+    /// 把 `rigBeat` 从 0 推到 1（可以来回几圈）。
+    ///
+    /// 20 帧一秒。再快人眼也看不出，再慢就一顿一顿的。
+    /// **做完就把针停掉**——这一层不该在他站着发呆的时候还在跑。
+    private func runBeat(seconds: Double, loops: Int = 1) async {
+        rigTicker?.cancel()
+        let steps = Int(seconds * 20)
+        guard steps > 0 else { return }
+        for round in 0..<max(1, loops) {
+            _ = round
+            for i in 0...steps {
+                if Task.isCancelled { rigBeat = 0; return }
+                rigBeat = Double(i) / Double(steps)
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+        }
+        rigBeat = 0
     }
 
     private func takeOutLine(_ k: FurnitureKind) -> String {
@@ -546,6 +585,19 @@ struct ClawdRoamer: View {
 
     /// 把他的状态翻成 clawd 的动作
     private func sync() {
+        // 手上那件东西该怎么拿——**每次同步都对一遍**。
+        //
+        // 不这么写的话，她在小屋里直接把床塞给他（那条路不经过这儿的掏东西那段），
+        // 姿势会停在 `.none` 上：东西在手上，手却垂着。
+        // 正在喝／正在摇的时候不动它，不然一口喝到一半手会掉下去。
+        if carryPose != .sip, carryPose != .swirl {
+            if let kind = room.carriedKind {
+                carryPose = ClawdRig.poses(for: kind).first ?? .hold
+            } else {
+                carryPose = .none
+            }
+        }
+
         // 躲着的时候不许别处改他的表情，不然探头探到一半突然变成"在想事情"
         guard !poked, !held, !peeking else { return }
         // 睡着的时候也一样——除非他真的在忙（那说明她刚说了话）
@@ -699,6 +751,8 @@ struct ClawdRoamer: View {
     @MainActor
     private func lift() {
         held = true
+        // 拎着的时候，聊天页那个「从左边缘拉出侧边栏」的手势让路
+        ClawdStore.clawdHeld = true
         walkTask?.cancel()
         mood = .happy
         if app.settings.haptics {
@@ -711,6 +765,7 @@ struct ClawdRoamer: View {
     @MainActor
     private func drop() {
         held = false
+        ClawdStore.clawdHeld = false
         // 把他放到屏幕边上，他就**真的躲到边外面去**，
         // 只留一只眼睛在这儿看着——她要的就是这个。
         // 以前不管放哪儿都是原地站住然后接着乱跑。

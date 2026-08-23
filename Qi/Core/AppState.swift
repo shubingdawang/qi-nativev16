@@ -25,6 +25,8 @@ final class AppState: ObservableObject {
     private func syncTheme() {
         Theme.customTextHex = settings.textHex
         Theme.customTextHexDark = settings.textHexDark
+        // 灰字要跟着主题色的冷暖走，理由见 `Theme.textSoft` 那段
+        Theme.accentMirror = settings.accentColor
         Theme.preset = settings.preset
         Theme.glassStyle = settings.glassStyle
         Theme.glassDim = settings.glassDim

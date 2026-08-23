@@ -1,0 +1,260 @@
+import SwiftUI
+
+// MARK: - 会动手的 clawd
+//
+// 她说的：
+// > clawd 举起东西希望不再是一个缩小的家具在他头上，而是他真正举着
+// >（举重物时双手抬过头顶举着）和拿着（跟扫把一样拿在手上）。
+// > 假如是饮料可以喝，假如是红酒可以喝也可以摇晃酒杯。
+// > **喝和摇晃都是动作，不只是简简单单说一句「我在摇晃酒杯」。**
+//
+// 以前是这么糊弄的：物件缩到 0.8 倍，往他头顶上一放。
+// 他的手一动不动——**他没有在举，他只是头上顶着个东西。**
+//
+// ## 为什么不是「每个动作画一套帧」
+//
+// 一件物品四个动作、几十件物品，那是上千帧手绘。画不完，
+// 而且加一件新家具就得再画四套，这条路从第二件东西开始就断了。
+//
+// 所以走**骨架**这条路：把他拆成「身子 + 两只手」，
+// 手是能单独转、单独挪的。姿势只描述「手转到哪儿、东西放在哪儿」，
+// 于是**一套骨架配上一句「这东西该怎么拿」，就能长出所有动作**，
+// 加新家具不用再画一帧。
+//
+// ⚠️ 拆的时候身子一格没动：手本来就长在身子外面
+// （图纸 32 格里，身子占第 4..27 格，手是 0..3 和 28..31）。
+// 把那两块从身子那张图里抠掉、单独画，剪影跟原来一模一样。
+
+/// 手上那件东西**怎么拿**。
+///
+/// 这是「一件物品」和「一套动作」之间的全部约定——
+/// 新加一件家具只要说清楚它属于哪一档，动作就自己有了。
+enum CarryPose: String, Codable, Sendable {
+    /// 空着手
+    case none
+    /// 拿在手上（扫把、书、一罐可乐）。一只手，东西挨着手边
+    case hold
+    /// 双手抬过头顶举着（床、柜子这类大件）
+    case lift
+    /// 举到嘴边喝
+    case sip
+    /// 摇晃（酒杯）。手腕小幅往复
+    case swirl
+}
+
+/// 一副能动的 clawd。
+///
+/// `beat` 是动作进度（0…1，来回摆）：喝到哪一口、酒杯晃到哪一边，
+/// 全靠它驱动。不传就是静止的姿势。
+struct ClawdRigView: View {
+
+    var mood: ClawdMood = .idle
+    /// 手上那件东西。空着就是没拿
+    var item: PixelSprite?
+    var pose: CarryPose = .none
+    /// 一格画多大
+    var scale: CGFloat = 4
+    /// 动作进度 0…1。喝、摇这类靠它
+    var beat: Double = 0
+    var shadow: Bool = false
+
+    @State private var frame = 0
+    @State private var ticker: Task<Void, Never>?
+
+    private var frames: [(PixelSprite, Double)] { mood.frames }
+    private var body0: PixelSprite {
+        ClawdRig.stripArms(frames[min(frame, frames.count - 1)].0)
+    }
+
+    /// 图纸一共多宽多高（格）
+    private var cols: CGFloat { CGFloat(frames[0].0.width) }
+    private var rows: CGFloat { CGFloat(frames[0].0.height) }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            // 身子（手已经抠掉了）
+            PixelSpriteView(sprite: body0, scale: scale)
+
+            // 两只手
+            arm(.left)
+            arm(.right)
+
+            // 手上那件东西。**不缩小**——她说的就是这个：
+            // 缩小的东西看着是「顶在头上的挂件」，不是「他举着的家具」。
+            if let item {
+                PixelSpriteView(sprite: item, scale: scale)
+                    .rotationEffect(.degrees(plan.itemTilt), anchor: .bottom)
+                    .offset(x: plan.itemAt.x * scale, y: plan.itemAt.y * scale)
+            }
+        }
+        .frame(width: cols * scale, height: rows * scale, alignment: .topLeading)
+        .background(alignment: .bottom) {
+            if shadow {
+                Ellipse()
+                    .fill(RadialGradient(colors: [.black.opacity(0.22), .black.opacity(0)],
+                                         center: .center, startRadius: 0,
+                                         endRadius: cols * scale * 0.5))
+                    .frame(width: cols * scale * 0.9, height: scale * 2.4)
+                    .offset(y: scale * 1.2)
+            }
+        }
+        .onAppear { start() }
+        .onDisappear { ticker?.cancel() }
+        .onChange(of: mood) { _, _ in frame = 0; start() }
+    }
+
+    // MARK: 手
+
+    private enum Side { case left, right }
+
+    private func arm(_ side: Side) -> some View {
+        let a = side == .left ? plan.leftArm : plan.rightArm
+        // 肩膀在图纸上的位置：身子左边缘 / 右边缘那一格，手臂那两行
+        let shoulderX: CGFloat = side == .left
+            ? CGFloat(ClawdRig.bodyLeft)
+            : CGFloat(ClawdRig.bodyRight + 1)
+        return PixelSpriteView(sprite: ClawdRig.arm, scale: scale)
+            // 转的支点在肩膀那一端，不是手臂中间——
+            // 从中间转的话整条手臂会从身子里穿出去
+            .rotationEffect(.degrees(side == .left ? -a : a),
+                            anchor: side == .left ? .trailing : .leading)
+            .offset(x: (side == .left ? shoulderX - CGFloat(ClawdRig.arm.width) : shoulderX) * scale,
+                    y: CGFloat(ClawdRig.armRow) * scale)
+    }
+
+    // MARK: 这一刻该摆成什么样
+
+    private var plan: ClawdRig.Plan {
+        ClawdRig.plan(pose: pose, beat: beat,
+                      itemW: CGFloat(item?.width ?? 0),
+                      itemH: CGFloat(item?.height ?? 0))
+    }
+
+    private func start() {
+        ticker?.cancel()
+        guard frames.count > 1 else { return }
+        ticker = Task { @MainActor in
+            while !Task.isCancelled {
+                let hold = frames[min(frame, frames.count - 1)].1
+                try? await Task.sleep(nanoseconds: UInt64(hold * 1_000_000_000))
+                if Task.isCancelled { return }
+                frame = (frame + 1) % frames.count
+            }
+        }
+    }
+}
+
+enum ClawdRig {
+
+    /// 身子在图纸上占第几格到第几格。手长在这两格外面。
+    static let bodyLeft = 4
+    static let bodyRight = 27
+    /// 手臂在第几行
+    static let armRow = 6
+
+    /// 一只手。就是原来长在身子外面那一小块，抠出来单独画。
+    static let arm = PixelSprite([
+        "pppp",
+        "pppp"
+    ], ClawdSprites.palette)
+
+    /// 把手从身子那张图里抠掉。
+    ///
+    /// **只清身子边界外的列**（0..3 和 28..31），
+    /// 身子本身一格不动——所以换任何一帧都不会歪。
+    static func stripArms(_ s: PixelSprite) -> PixelSprite {
+        let rows = s.rows.map { row -> String in
+            var chars = Array(row)
+            for x in chars.indices where x < bodyLeft || x > bodyRight {
+                chars[x] = "."
+            }
+            return String(chars)
+        }
+        return PixelSprite(rows, s.palette)
+    }
+
+    /// 一个姿势要摆成什么样。
+    struct Plan {
+        /// 手臂抬多少度（0 = 垂着，正数 = 往上抬）
+        var leftArm: Double = 0
+        var rightArm: Double = 0
+        /// 手上那件东西摆在哪儿（图纸格，相对左上角）
+        var itemAt: CGPoint = .zero
+        /// 东西歪多少度
+        var itemTilt: Double = 0
+    }
+
+    /// 姿势表。
+    ///
+    /// 这儿是**这一整套动作的全部数据**——加一个新姿势就在这儿加一档，
+    /// 不用去碰任何一个视图。
+    static func plan(pose: CarryPose, beat: Double,
+                     itemW: CGFloat, itemH: CGFloat) -> Plan {
+        var p = Plan()
+        // 图纸中线，用来把东西摆正
+        let midX = CGFloat(bodyLeft + bodyRight + 1) / 2
+
+        switch pose {
+        case .none:
+            return p
+
+        case .hold:
+            // 一只手往前伸一点，东西挨着手边、**落在地上那条线上**。
+            // 扫把、可乐都是这一档。
+            p.rightArm = 18
+            p.itemAt = CGPoint(x: CGFloat(bodyRight) + 1.5,
+                               y: CGFloat(armRow) + 2 - itemH * 0.55)
+            p.itemTilt = -8
+
+        case .lift:
+            // 双手抬过头顶。**东西压在两只手中间的正上方**，
+            // 不缩小——这是她要的「真正举着」。
+            //
+            // 手抬到 72 度：再高手臂就转到身子里去了，
+            // 再低看着像在推，不像在举。
+            let strain = sin(beat * .pi * 2) * 0.35     // 举久了会抖一下
+            p.leftArm = 72 + strain
+            p.rightArm = 72 + strain
+            p.itemAt = CGPoint(x: midX - itemW / 2,
+                               y: -itemH - 1.2 + strain * 0.15)
+
+        case .sip:
+            // 举到嘴边喝。beat 0→1 是「凑近 → 仰头灌 → 放下」，
+            // 所以用一条先快后慢的曲线，不是匀速——匀速看着像机械臂。
+            let t = sin(beat * .pi)                      // 0→1→0
+            p.rightArm = 40 + 25 * t
+            p.itemAt = CGPoint(x: midX + 1.5 - itemW / 2,
+                               y: CGFloat(armRow) - 1.5 - 2.5 * t)
+            p.itemTilt = -20 - 45 * t
+
+        case .swirl:
+            // 摇酒杯。手腕小幅往复，杯子跟着划一个小圈——
+            // **杯口始终朝上**（倾角很小），不然就是在泼酒了。
+            let a = beat * .pi * 2
+            p.rightArm = 34 + sin(a) * 8
+            p.itemAt = CGPoint(x: CGFloat(bodyRight) + 0.5 + cos(a) * 0.8 - itemW / 2,
+                               y: CGFloat(armRow) - 1 + sin(a) * 0.6 - itemH * 0.3)
+            p.itemTilt = sin(a) * 12
+        }
+        return p
+    }
+
+    /// 一件东西**该怎么拿**。
+    ///
+    /// 这是唯一需要为新家具填的一项：说清楚它是「拿着」还是「举着」、
+    /// 能不能喝、能不能摇。动作本身不用再画。
+    static func poses(for kind: FurnitureKind) -> [CarryPose] {
+        let id = kind.id
+        // 喝的
+        if id.contains("wine") || id.contains("酒") {
+            return [.hold, .sip, .swirl]
+        }
+        if id.contains("cola") || id.contains("coffee") || id.contains("tea")
+            || id.contains("milk") || id.contains("drink") || id.contains("水") {
+            return [.hold, .sip]
+        }
+        // 大件：举得动，但喝不了
+        if kind.sprite.width >= 16 { return [.lift] }
+        return [.hold]
+    }
+}

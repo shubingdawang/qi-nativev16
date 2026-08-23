@@ -11,8 +11,8 @@ struct ClawdHomeView: View {
     @Environment(\.colorScheme) private var scheme
 
     @State private var tab = 0            // 0 房间，1 柜子，2 商店
-    @State private var dragging: UUID?
-    @State private var dragPoint: CGPoint = .zero
+    // 家具的拖拽整个搬进 `IsoRoomView` 了（它自己管落在哪一格），
+    // 这儿那两个状态没人用了
     /// 地板从房间高度的百分之几开始。
     ///
     /// 墙和地板的分界线画在 0.62（见下面 `room` 里那两块 Rectangle）。
@@ -175,120 +175,20 @@ struct ClawdHomeView: View {
     private var room: some View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
-                // 墙和地板
-                VStack(spacing: 0) {
-                    Rectangle()
-                        .fill(scheme == .dark
-                              ? Color(hexString: "2A2622")!
-                              : Color(hexString: "EFE7D9")!)
-                        .frame(height: geo.size.height * 0.62)
-                    Rectangle()
-                        .fill(scheme == .dark
-                              ? Color(hexString: "3A322A")!
-                              : Color(hexString: "D9C9AE")!)
-                }
-
-                // 家具。
+                // ⚠️ 平面的墙和地板、还有那一整段家具摆放，**全换成立体屋了**。
                 //
-                // **画的顺序＝点击的顺序**：SwiftUI 里后画的压在上面，
-                // 触摸也先给它。以前这儿按 `owned` 的原始顺序画，
-                // 于是「后买的地毯」压在「先买的床」上面，
-                // 她点床点到的是地毯（她报的「拖错家具，点床出地毯」）。
+                // 她要的：「小屋不仅仅是一个平面，是一个立体的小屋，
+                // 家具放在上面有立体感……不穿模不卡顿。」
                 //
-                // 现在按 y 从小到大画：**远的先画、近的压在上面**——
-                // 这本来就是一间屋子该有的样子，顺手把点击也理顺了。
-                // y 一样时大件先画（地毯这类摊得大的该垫在底下）。
-                ForEach(store.owned.filter { !$0.hidden && !$0.carried }
-                    .sorted { a, b in
-                        if abs(a.y - b.y) > 0.001 { return a.y < b.y }
-                        let sa = FurnitureCatalog.kind(a.kind)?.sprite.width ?? 0
-                        let sb = FurnitureCatalog.kind(b.kind)?.sprite.width ?? 0
-                        return sa > sb
-                    }) { item in
-                    if let kind = FurnitureCatalog.kind(item.kind) {
-                        // **平时是一件真家具的大小**（scale 6），
-                        // 只有长按拖的时候才缩成迷你——她的原话：
-                        // 「购买了小床，这个小床就会在房间里显现，
-                        //   并且不是这种迷你的效果，是真的一张像素的小床，
-                        //   当我长按拖动小床时，才会变成现在这种迷你的样子。」
-                        PixelSpriteView(sprite: kind.sprite,
-                                        scale: dragging == item.id ? 2.6 : 6)
-                            .position(
-                                x: (dragging == item.id ? dragPoint.x : item.x) * geo.size.width,
-                                y: (dragging == item.id ? dragPoint.y : item.y) * geo.size.height
-                            )
-                            
-                            .shadow(color: .black.opacity(dragging == item.id ? 0.22 : 0),
-                                    radius: 8, y: 4)
-                            .animation(.spring(response: 0.25, dampingFraction: 0.7),
-                                       value: dragging == item.id)
-                            // **长按拖不动的根子在这一行**。
-                            //
-                            // PixelSpriteView 里那块 Canvas 自己写着
-                            // allowsHitTesting(false)，所以它整个不接触摸——
-                            // 外面挂多少手势都落在空气上。clawd 本人早就补过这块，
-                            // 家具一直没补。顺手放大一圈：一件家具才几十个点，
-                            // 手指按不准。
-                            // 命中范围。**大件不再往外放**——
-                            // 一张地毯本来就摊得很大，再往外扩 12 点，
-                            // 她想点旁边那张床都会落在地毯上。
-                            // 小东西才需要那点余量（几十个点，手指按不准）。
-                            // ⚠️ 按**画出来的格子**围形，不是按整个矩形
-                            // （她报的第 9 条：床和小桌叠在一起时只能移动床）。
-                            // 家具图的四角都是空的，按矩形算的话，
-                            // 摆在床空角上的小桌整个被床盖住，点谁都是点床。
-                            .contentShape(SpriteHitShape(sprite: kind.sprite))
-                            // 单击开小菜单。
-                            //
-                            // 这两件事以前挂在 .contextMenu 上——**而 contextMenu
-                            // 本身就是长按触发的**，跟下面这个长按拖拽抢同一个手势，
-                            // 谁也抢不干净。收起来和卖掉挪到单击这边，长按就干干净净
-                            // 只管搬东西。
-                            .onTapGesture { acting = item }
-                            .gesture(
-                                LongPressGesture(minimumDuration: 0.28)
-                                    .onEnded { _ in
-                                        dragging = item.id
-                                        dragPoint = CGPoint(x: item.x, y: item.y)
-                                        if app.settings.haptics {
-                                            UIImpactFeedbackGenerator(style: .medium)
-                                                .impactOccurred()
-                                        }
-                                        say(pickUpLine(kind))
-                                    }
-                                    .sequenced(before: DragGesture())
-                                    .onChanged { value in
-                                        if case .second(_, let drag?) = value {
-                                            dragPoint = CGPoint(
-                                                x: drag.location.x / geo.size.width,
-                                                y: drag.location.y / geo.size.height)
-                                        }
-                                    }
-                                    .onEnded { _ in
-                                        if dragging == item.id {
-                                            // **拖到他身上 = 交给他搬。**
-                                            //
-                                            // 她说「拖动小床给他，他依旧不会搬动小床」——
-                                            // 一半是引擎不让搬（portable 把家具排除了，已经改），
-                                            // 另一半是这儿：拖到哪儿都只是把家具挪过去，
-                                            // 压根没有「递给他」这回事。
-                                            let dx = dragPoint.x - clawdX
-                                            let dy = dragPoint.y - clawdY
-                                            if (dx * dx + dy * dy).squareRoot() < 0.13 {
-                                                store.pickUp(item.kind)
-                                                mood = .carrying
-                                                say(store.overhead(kind)
-                                                    ? "举起来了！这个……有点沉"
-                                                    : "接住了，放哪儿？")
-                                            } else {
-                                                store.move(item.id, to: dragPoint)
-                                            }
-                                        }
-                                        dragging = nil
-                                    }
-                            )
-                    }
-                }
+                // 几何、遮挡、摆放规则都在 `IsoRoom` / `IsoRoomView` 里：
+                // 地板 8×8 格等距，家具按格子摆、占几格由目录说了算，
+                // **谁挡谁由「格X + 格Y」决定**——远的先画、近的压在上面。
+                // 穿模不是修好的，是这个顺序让它不可能发生。
+                IsoRoomView(store: store,
+                            clawdX: clawdX, clawdY: clawdY,
+                            floorTop: ClawdHomeView.floorTop,
+                            floorBottom: ClawdHomeView.floorBottom,
+                            onTapFurniture: { acting = $0 })
 
                 // clawd 本人。长按能拎起来放到任何地方，
                 // 没人管的时候他自己也会在屋里走来走去。

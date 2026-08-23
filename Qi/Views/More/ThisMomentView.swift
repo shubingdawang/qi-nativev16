@@ -32,8 +32,7 @@ struct ThisMomentView: View {
             VStack(alignment: .leading, spacing: Look.gap) {
 
                 PageHero(title: "此刻",
-                         subtitle: "他现在还身处什么现实里",
-                         mark: "此")
+                         subtitle: "他现在还身处什么现实里")
 
                 if living.isEmpty && store.live.isEmpty && store.projections.isEmpty {
                     EmptyNote(icon: "circle.dotted",
@@ -106,7 +105,8 @@ struct ThisMomentView: View {
             .padding(.bottom, Layout.tabBarExpanded + 20)
         }
         .background { WallpaperBackground() }
-        .navigationTitle("此刻")
+        // 空着是故意的，顶上那个 PageHero 就是标题
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("让这段经历过去？",
                             isPresented: Binding(get: { confirmResolve != nil },

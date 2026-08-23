@@ -312,6 +312,8 @@ struct ChatView: View {
             DragGesture(minimumDistance: 12)
                 .onEnded { v in
                     guard showsSideMenu, !sideOpen, !drawerOpen else { return }
+                    // 她正拎着 clawd 往边上挪——那一下不是要开侧边栏
+                    guard !ClawdStore.clawdHeld else { return }
                     // 屏幕左边**三分之一**起手都算。再窄下去就总是滑不出来。
                     guard v.startLocation.x < 140 else { return }
                     guard v.translation.width > 28

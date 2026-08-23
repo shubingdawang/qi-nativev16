@@ -16,35 +16,60 @@ enum ClawdSVG {
     static let bodyColor = "#F2715F"
     static let darkColor = "#C9553F"
 
-    /// 骨架。身子、两只手、四条腿——**除了脸，别的都在这儿了**。
-    /// 她要改表情，改的是下面那个 `face` 区块。
-    static let skeleton = """
-    <svg viewBox="0 0 320 230" xmlns="http://www.w3.org/2000/svg">
-      <g id="clawd">
-        <!-- 两只手 -->
-        <rect class="body" x="0"   y="60" width="40" height="30"/>
-        <rect class="body" x="280" y="60" width="40" height="30"/>
-        <!-- 身子 -->
-        <rect class="body" x="40" y="0" width="240" height="170" rx="6"/>
-        <!-- 四条腿：左边两条、右边两条，中间空一大段。
-             ⚠️ 身子是 x=40..280。**最后一条腿以前写的是 x=270 宽 30**，
-             也就是 270..300 ——整整二十个点戳在身子外面（她报的第 4 条：
-             「表情工坊的 clawd 依旧是一条腿在身体外面的」）。
-             正确的位置照像素版那份图纸换算：图纸 32 格 × 每格 10，
-             腿在第 4-6、9-11、20-22、25-27 格 → 40 / 90 / 200 / 250。
-             这样左右也真的对称了（以前 100 和 210 也是歪的）。 -->
-        <rect class="body" x="40"  y="170" width="30" height="60"/>
-        <rect class="body" x="90"  y="170" width="30" height="60"/>
-        <rect class="body" x="200" y="170" width="30" height="60"/>
-        <rect class="body" x="250" y="170" width="30" height="60"/>
-        <!-- 脸。改这里 -->
-        <g id="face">
-          <rect class="eye" x="70"  y="50" width="30" height="30"/>
-          <rect class="eye" x="220" y="50" width="30" height="30"/>
-        </g>
-      </g>
-    </svg>
-    """
+    /// clawd 的骨架，**只有这一份**。
+    ///
+    /// ⚠️ 她连着两轮报「表情工坊的 clawd 一条腿长在身体外面」，
+    /// 第一轮我改了下面那串 SVG，她说「依然是」——因为**骨架抄了两份**：
+    /// 这儿一份，`ClawdGridEditor` 里的 `ClawdSilhouette` 又照着画了一遍，
+    /// 而工坊画布上她看到的恰恰是后面那一份，它还留着老坐标
+    /// （最后一条腿 x=270 宽 30 → 270..300，身子只到 280，
+    ///  二十个点实实在在戳在外面）。
+    ///
+    /// 所以这次不是再改一遍坐标，是**把两份合成一份**：
+    /// 方块只在这儿列一次，SVG 那串和剪影那个 Shape 都从这儿生成。
+    /// 抄两份的下场就是这样——改对了一份，她看到的偏偏是另一份。
+    ///
+    /// 坐标照像素版那份图纸换算（图纸 32 格 × 每格 10）：
+    /// 身子占第 4..27 格 → 40..280；
+    /// 腿在第 4-6、9-11、20-22、25-27 格 → 40 / 90 / 200 / 250，左右对称。
+    struct Part {
+        var x: Double, y: Double, w: Double, h: Double
+        /// 圆角。只有身子有
+        var rx: Double = 0
+    }
+
+    static let parts: [Part] = [
+        // 两只手
+        Part(x: 0,   y: 60,  w: 40,  h: 30),
+        Part(x: 280, y: 60,  w: 40,  h: 30),
+        // 身子
+        Part(x: 40,  y: 0,   w: 240, h: 170, rx: 6),
+        // 四条腿：左边两条、右边两条，中间空一大段
+        Part(x: 40,  y: 170, w: 30,  h: 60),
+        Part(x: 90,  y: 170, w: 30,  h: 60),
+        Part(x: 200, y: 170, w: 30,  h: 60),
+        Part(x: 250, y: 170, w: 30,  h: 60)
+    ]
+
+    /// 骨架那串 SVG。**从 `parts` 生成**，别再手写一遍。
+    /// 她要改表情，改的是里面那个 `face` 区块。
+    static var skeleton: String {
+        var s = "<svg viewBox=\"0 0 320 230\" xmlns=\"http://www.w3.org/2000/svg\">\n"
+        s += "  <g id=\"clawd\">\n"
+        for p in parts {
+            s += "    <rect class=\"body\""
+            s += " x=\"\(Int(p.x))\" y=\"\(Int(p.y))\""
+            s += " width=\"\(Int(p.w))\" height=\"\(Int(p.h))\""
+            if p.rx > 0 { s += " rx=\"\(Int(p.rx))\"" }
+            s += "/>\n"
+        }
+        s += "    <g id=\"face\">\n"
+        s += "      <rect class=\"eye\" x=\"70\" y=\"50\" width=\"30\" height=\"30\"/>\n"
+        s += "      <rect class=\"eye\" x=\"220\" y=\"50\" width=\"30\" height=\"30\"/>\n"
+        s += "    </g>\n"
+        s += "  </g>\n</svg>"
+        return s
+    }
 
     static let baseCSS = """
     /* 底色一律用变量，改一处全身跟着变 */

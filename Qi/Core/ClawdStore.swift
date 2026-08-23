@@ -7,9 +7,16 @@ struct Furniture: Codable, Identifiable, Hashable {
     var id: UUID = UUID()
     /// 对应 FurnitureCatalog 里的编号
     var kind: String = ""
-    /// 在房间里的位置，用比例存，换手机也不会跑偏
+    /// 在房间里的位置，用比例存，换手机也不会跑偏。
+    ///
+    /// ⚠️ **这两个是老的平面坐标，现在只当迁移用**——
+    /// 立体小屋按格子摆（下面那两个）。老数据里没有格子坐标，
+    /// 第一次读进来的时候由它们换算过去（见 `gridOrMigrate`）。
     var x: Double = 0.5
     var y: Double = 0.5
+    /// 摆在哪一格。`-1` = 还没换算过
+    var gx: Int = -1
+    var gy: Int = -1
     /// 她主动**收起来**的（长按 → 收起来）。收起来的东西还在，只是不摆出来。
     var hidden: Bool = false
     /// **正被他举着**，所以屋里不画它。
@@ -30,11 +37,29 @@ struct Furniture: Codable, Identifiable, Hashable {
         hidden = (try? c.decodeIfPresent(Bool.self, forKey: .hidden)) ?? false
         carried = (try? c.decodeIfPresent(Bool.self, forKey: .carried)) ?? false
         boughtAt = (try? c.decodeIfPresent(Date.self, forKey: .boughtAt)) ?? Date()
+        gx = (try? c.decodeIfPresent(Int.self, forKey: .gx)) ?? -1
+        gy = (try? c.decodeIfPresent(Int.self, forKey: .gy)) ?? -1
+    }
+
+    /// 格子坐标。老数据没有就**由平面坐标换算一次**，
+    /// 换算完写回去，以后就走格子了。
+    ///
+    /// 换算的办法：把老的 x（0…1）铺到一条对角线上，
+    /// y 越大越靠里。**不求还原得一模一样**——
+    /// 平面和立体本来就对不上，能落在屋里、别叠在一起就行。
+    mutating func migrateGrid(size: Int) {
+        guard gx < 0 || gy < 0 else { return }
+        let along = min(size - 1, max(0, Int(x * Double(size))))
+        let deep = min(size - 1, max(0, Int((y - 0.70) / 0.24 * Double(size))))
+        gx = min(size - 1, max(0, (along + deep) / 2))
+        gy = min(size - 1, max(0, (deep + (size - 1 - along)) / 2))
     }
 
     init(id: UUID = UUID(), kind: String = "", x: Double = 0.5, y: Double = 0.5,
+         gx: Int = -1, gy: Int = -1,
          hidden: Bool = false, carried: Bool = false, boughtAt: Date = Date()) {
         self.id = id; self.kind = kind; self.x = x; self.y = y
+        self.gx = gx; self.gy = gy
         self.hidden = hidden; self.carried = carried; self.boughtAt = boughtAt
     }
 }
@@ -541,6 +566,14 @@ final class ClawdStore: ObservableObject {
     // 所以搬到 store 里来，两边读同一份——
     // 以前界面上有一套、store 里 clamp 到 0.05~0.95 又是另一套，
     // 于是「家具能拖到墙上去」（她报的）。
+    /// clawd 这会儿是不是正被她拎在手上。
+    ///
+    /// 聊天页整页挂着一个「从左边缘往右拉 = 拉出侧边栏」的手势。
+    /// 她把 clawd 从左边往外拖的时候，两个手势会同时成立——
+    /// 结果是侧边栏"哗"地弹出来（她报的）。
+    /// 拎着的时候把这面旗子插上，那个手势自己会让路。
+    @MainActor static var clawdHeld = false
+
     static let floorTop: Double = 0.70
     static let floorBottom: Double = 0.94
 
@@ -574,6 +607,16 @@ final class ClawdStore: ObservableObject {
             let p = Self.onFloor(point)
             owned[i].x = p.x
             owned[i].y = p.y
+            // 屋子是按格子摆的，所以放下也得**落到一格上**。
+            // 先按比例换算出一格，再让 `place` 去找最近一处放得下的——
+            // 不然他会把床放进另一张床里。
+            owned[i].gx = -1
+            owned[i].gy = -1
+            owned[i].migrateGrid(size: Self.roomSize)
+            let want = (owned[i].gx, owned[i].gy)
+            owned[i].carried = false
+            place(owned[i].id, at: want.0, want.1)
+            return
         }
         owned[i].carried = false
     }
@@ -625,9 +668,14 @@ final class ClawdStore: ObservableObject {
         guard coins >= kind.price, !has(kind.id) else { return false }
         coins -= kind.price
         var item = Furniture(kind: kind.id)
-        // 随便找个地方放下，别都堆在正中间
+        // 随便找个地方放下，别都堆在正中间。
+        //
+        // ⚠️ **必须落在地板上**（她报的「所有家具买来都在墙上」）。
+        // 以前这儿写的是 `0.35...0.75`，而地板是从 `floorTop`（0.70）才开始的——
+        // 也就是说买十件有九件半落在墙面上。
+        // 挪家具那条早就走 `onFloor` 统一了规矩，**买这条一直漏在外面**。
         item.x = Double.random(in: 0.2...0.8)
-        item.y = Double.random(in: 0.35...0.75)
+        item.y = Double.random(in: Self.floorTop...Self.floorBottom)
         owned.append(item)
         return true
     }
@@ -668,5 +716,114 @@ final class ClawdStore: ObservableObject {
         }
         return "clawd 的房间里现在有：" + visible.joined(separator: "、")
             + "。（这些都是她一件件买来摆的）"
+    }
+}
+
+// MARK: - 每件家具在立体屋里占多大、能干什么
+
+extension FurnitureCatalog {
+
+    /// 立体信息表。
+    ///
+    /// ⚠️ **加一件新家具，只要来这儿填一行。**
+    /// 占几格、多高、贴不贴墙、有没有台面、clawd 能对它做什么——
+    /// 填完了摆放、遮挡、互动全都有了，不用为它写一行代码。
+    ///
+    /// 没填的按小摆件算（一格、能摸一下），**不会因为漏填就崩**。
+    static func shape(of id: String) -> IsoShape {
+        switch id {
+
+        // 床：占两格宽两格深，能躺、能滚、能坐边上
+        case "bed", "bed_berry", "bed_xmas":
+            return IsoShape(w: 2, d: 2, tall: 1.1,
+                            actions: ["躺下", "打滚", "坐边上", "钻被窝"])
+
+        // 沙发：能坐、能瘫、能趴扶手
+        case "sofa":
+            return IsoShape(w: 2, d: 1, tall: 1.0,
+                            actions: ["坐下", "瘫着", "趴扶手"])
+
+        // 桌子：**有台面**——阿晏「把饮料放在哪张桌子上」靠的就是这个
+        case "table":
+            return IsoShape(w: 2, d: 1, tall: 0.9, surface: true,
+                            actions: ["趴桌上", "在桌边站着", "把东西放上去"])
+
+        case "stool":
+            return IsoShape(w: 1, d: 1, tall: 0.7, surface: true,
+                            actions: ["坐下", "踩上去", "把东西放上去"])
+
+        case "shelf":
+            return IsoShape(w: 1, d: 1, tall: 2.0, surface: true,
+                            actions: ["抽一本", "踮脚够", "把东西放上去"])
+
+        case "tv", "console":
+            return IsoShape(w: 1, d: 1, tall: 0.9,
+                            actions: ["打开看", "凑近看", "按两下"])
+
+        case "lamp":
+            return IsoShape(w: 1, d: 1, tall: 1.6, actions: ["开灯", "凑到灯下"])
+
+        // 地毯：**摊在地上，别的东西可以压在上面**，所以高度是 0
+        case "rug":
+            return IsoShape(w: 3, d: 3, tall: 0, actions: ["打滚", "躺一会儿"])
+
+        case "plant", "cactus", "sunflower":
+            return IsoShape(w: 1, d: 1, tall: 1.2, actions: ["浇水", "闻一闻", "戳一下"])
+
+        case "bear":
+            return IsoShape(w: 1, d: 1, tall: 0.9, actions: ["抱一下", "摆正", "说悄悄话"])
+
+        default:
+            // 小摆件：一格、矮、能摸能拿
+            return IsoShape(w: 1, d: 1, tall: 0.6, actions: ["摸一下", "拿起来"])
+        }
+    }
+}
+
+extension ClawdStore {
+
+    /// 屋子几格见方
+    static let roomSize = 8
+
+    /// 老数据搬进格子。**只搬一次**，搬完写回去。
+    /// （写盘不用自己叫：`owned` 的 didSet 会存。）
+    func migrateRoom() {
+        for i in owned.indices where owned[i].gx < 0 {
+            owned[i].migrateGrid(size: Self.roomSize)
+        }
+    }
+
+    /// 现在哪几格被占着。
+    /// `except` 是正在拖的那一件——**算占用的时候得把它自己刨掉**，
+    /// 不然它永远跟自己打架，怎么放都说放不下。
+    func takenCells(except: UUID? = nil) -> Set<String> {
+        var out: Set<String> = []
+        for f in owned where !f.hidden && !f.carried && f.id != except {
+            let s = FurnitureCatalog.shape(of: f.kind)
+            // 地毯不占位：它是摊在地上的，东西该能压在上面
+            guard s.tall > 0 else { continue }
+            for (x, y) in IsoRoom.cells(f.gx, f.gy, s.w, s.d) {
+                out.insert("\(x),\(y)")
+            }
+        }
+        return out
+    }
+
+    /// 把一件家具挪到某一格。
+    ///
+    /// 放不下就**往外找最近一处放得下的**——不能一句「放不下」
+    /// 把东西弹回原位，她拖了半天结果东西跳回去，比放歪还气人。
+    /// 实在没地方了才留在原处。
+    @discardableResult
+    func place(_ id: UUID, at gx: Int, _ gy: Int) -> Bool {
+        guard let i = owned.firstIndex(where: { $0.id == id }) else { return false }
+        let s = FurnitureCatalog.shape(of: owned[i].kind)
+        let room = IsoRoom(size: Self.roomSize)
+        guard let spot = room.nearestFree(gx, gy, w: s.w, d: s.d,
+                                          taken: takenCells(except: id))
+        else { return false }
+        owned[i].gx = spot.0
+        owned[i].gy = spot.1
+        return true
     }
 }

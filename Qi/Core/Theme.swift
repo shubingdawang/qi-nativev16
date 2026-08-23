@@ -68,12 +68,47 @@ enum Theme {
         custom(scheme) ?? skin.textMain.c(scheme)
     }
 
+    /// 她换了主题色，**灰字也得跟着换冷暖**。
+    ///
+    /// 她说的：「浅色的说明字体并没有跟着设置的主题颜色改变；
+    /// 深色的跟着改了但完全看不见。」
+    ///
+    /// 前半句是真的：默认那套灰是**暖棕**（配壁纸那个年代调的），
+    /// 她把主题色换成墨灰之后，一页蓝灰里夹着一行棕字，当然不搭。
+    ///
+    /// 但**正文不能直接用主题色**——那样一屏全是彩字，读着累，
+    /// 而且「这行字是可点的吗」就分不出来了。
+    /// 正确的做法是**往主题色偏一点点**：色相跟过去，饱和度几乎不动。
+    /// 灰还是灰，只是这一屏的灰跟这一屏的颜色是一家人。
+    private static let tintAmount = 0.22
+
     static func textSoft(_ scheme: ColorScheme) -> Color {
-        custom(scheme)?.opacity(0.78) ?? skin.textSoft.c(scheme)
+        if let c = custom(scheme) { return c.opacity(0.78) }
+        return blend(skin.textSoft.c(scheme), toward: accentMirror, tintAmount)
     }
 
     static func textMuted(_ scheme: ColorScheme) -> Color {
-        custom(scheme)?.opacity(0.52) ?? skin.textMuted.c(scheme)
+        if let c = custom(scheme) { return c.opacity(0.52) }
+        return blend(skin.textMuted.c(scheme), toward: accentMirror, tintAmount)
+    }
+
+    /// 主题色的镜子。`Theme` 那些静态方法拿不到 AppState，
+    /// 跟 `customTextHex` 一样由 `syncTheme()` 推进来。
+    nonisolated(unsafe) static var accentMirror: Color = Color(red: 0.4, green: 0.5, blue: 0.62)
+
+    /// 把 a 往 b 挪一点点。
+    /// iOS 18 才有 `Color.mix(with:by:)`，这边要兼容 17，自己算。
+    static func blend(_ a: Color, toward b: Color, _ t: Double) -> Color {
+        var ar: CGFloat = 0, ag: CGFloat = 0, ab: CGFloat = 0, aa: CGFloat = 0
+        var br: CGFloat = 0, bg: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
+        guard UIColor(a).getRed(&ar, green: &ag, blue: &ab, alpha: &aa),
+              UIColor(b).getRed(&br, green: &bg, blue: &bb, alpha: &ba)
+        else { return a }
+        let k = CGFloat(max(0, min(1, t)))
+        return Color(red: Double(ar + (br - ar) * k),
+                     green: Double(ag + (bg - ag) * k),
+                     blue: Double(ab + (bb - ab) * k))
+            .opacity(Double(aa))
     }
 
     /// 浮在壁纸上的**圆按钮／小胶囊**的底色。
@@ -294,29 +329,37 @@ struct GlassSurface: View {
     //   1. 一层很淡的奶白（散射）—— 这层才是"磨砂"的主体
     //   2. 上亮下沉的渐变（光是从上面来的）
     //   3. 极淡的颗粒（表面打毛的痕迹），比上一版又降了一半
+    /// 磨砂。
+    ///
+    /// ⚠️ 她的原话：**「磨砂的玻璃根本不像磨砂的……就是苹果自带的磨砂就行，
+    /// 不用创新。」**
+    ///
+    /// 她说得对，我这儿一直在做多余的事：往上糊白、铺颗粒、描白边、
+    /// 再补一道暗边——四层叠完，它看着是一块**塑料片**，不是毛玻璃。
+    /// 苹果那块 `.regularMaterial` 本身就是磨砂，它自己会随深浅色变、
+    /// 会采样背后的内容、边缘该怎么处理系统都调好了。
+    /// **我加的每一层都只是在把它盖住。**
+    ///
+    /// 现在就是系统那块材质，另加一道极细的描边定个轮廓（不描边的话
+    /// 浅色壁纸上根本看不出卡片边界在哪儿）。别的一律不加。
     private var frosted: some View {
-        base(liquid: false, blur: .extraLight)
+        shape.fill(.regularMaterial)
+            // 她那根「浓度」滑块还得管用：调低就更透。
+            // 只叠一层很薄的白，**不是再糊一层材质**。
             .overlay {
-                shape.fill(
-                    LinearGradient(
-                        colors: [.white.opacity(0.20 + extra * 0.12),
-                                 .white.opacity(0.11 + extra * 0.08)],
-                        startPoint: .top, endPoint: .bottom)
-                )
+                if extra > 0.01 {
+                    shape.fill(.white.opacity(extra * 0.10))
+                }
             }
             .overlay {
-                // 颗粒。0.075 还是看得出一颗一颗，降到 0.035——
-                // 凑近才觉得表面不平，退开只剩一层哑光。
-                GrainOverlay(opacity: 0.035)
-                    .clipShape(shape)
+                shape.strokeBorder(
+                    .white.opacity(scheme == .dark ? 0.10 : 0.30),
+                    lineWidth: 0.7)
             }
             .overlay {
-                shape.strokeBorder(.white.opacity(0.42), lineWidth: 0.8)
-            }
-            // 同上：浅色下白边贴白底等于没有，补一道极淡的暗边
-            .overlay {
+                // 浅色下白边贴白底等于没有，补一道极淡的暗边定轮廓
                 if scheme == .light {
-                    shape.strokeBorder(.black.opacity(0.08), lineWidth: 0.7)
+                    shape.strokeBorder(.black.opacity(0.06), lineWidth: 0.6)
                 }
             }
     }

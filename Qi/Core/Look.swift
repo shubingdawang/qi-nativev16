@@ -345,25 +345,31 @@ struct AuroraLayer: View {
             GeometryReader { geo in
                 let w = geo.size.width, h = geo.size.height
                 ZStack {
-                    blob(app.settings.accentColor, 0.16,
+                    blob(app.settings.accentColor, 0.16 * punch,
                          at: CGPoint(x: w * (drift ? 0.22 : 0.34),
                                      y: h * (drift ? 0.18 : 0.26)),
                          size: w * 1.15)
-                    blob(Self.companion(app.settings.accentColor), 0.13,
+                    blob(Self.companion(app.settings.accentColor), 0.13 * punch,
                          at: CGPoint(x: w * (drift ? 0.86 : 0.74),
                                      y: h * (drift ? 0.42 : 0.34)),
                          size: w * 1.0)
-                    blob(app.settings.accentColor, 0.10,
+                    blob(app.settings.accentColor, 0.10 * punch,
                          at: CGPoint(x: w * (drift ? 0.44 : 0.58),
                                      y: h * (drift ? 0.86 : 0.78)),
                          size: w * 1.3)
                 }
                 .compositingGroup()
-                // 深色下用「滤色」才亮得起来（正常混合在黑底上是三团灰）；
-                // 浅色下**就用正常混合**——试过 plusDarker，
-                // 颜色一叠上去就发脏，像纸受了潮。浅色要的是水彩，不是污渍。
-                .blendMode(scheme == .dark ? .screen : .normal)
-                .opacity(scheme == .dark ? 1 : 0.8)
+                // 混合方式分三种情况：
+                //
+                // · **铺了照片当壁纸** → `.overlay`。她报的「一旦换上背景就看不见」
+                //   就是这一档：正常混合的一层淡色摊在一张有明暗有细节的照片上，
+                //   等于什么都没加。`.overlay` 会**顺着照片本身的明暗走**——
+                //   亮处更亮、暗处更沉，颜色才吃得进去，照片的细节也还在。
+                // · 深色纯底 → 滤色，不然是三团灰。
+                // · 浅色纯底 → 正常混合。试过 plusDarker，一叠上去就发脏，
+                //   像纸受了潮；浅色要的是水彩，不是污渍。
+                .blendMode(overPhoto ? .overlay : (scheme == .dark ? .screen : .normal))
+                .opacity(overPhoto ? 1 : (scheme == .dark ? 1 : 0.8))
                 .animation(.easeInOut(duration: 40).repeatForever(autoreverses: true),
                            value: drift)
                 .onAppear { drift = true }
@@ -373,6 +379,17 @@ struct AuroraLayer: View {
         }
     }
 
+    /// 底下铺的是不是一张照片。
+    /// 照片那一档要用另一种混合，也要浓一点——不然它整个被照片吃掉。
+    private var overPhoto: Bool {
+        guard !app.settings.preset.usesGradient,
+              !app.settings.preset.ownsBackground else { return false }
+        return app.settings.wallpaperMode != "solid" && app.settings.wallpaperName != nil
+    }
+
+    /// 光的浓度。照片上要更浓一点才看得见。
+    private var punch: Double { overPhoto ? 1.7 : 1 }
+
     private func blob(_ color: Color, _ peak: Double,
                       at center: CGPoint, size: CGFloat) -> some View {
         RadialGradient(colors: [color.opacity(peak), color.opacity(0)],
@@ -380,6 +397,11 @@ struct AuroraLayer: View {
             .frame(width: size, height: size)
             .position(center)
     }
+
+    // ⚠️ 说句实话：**照片壁纸上它永远是含蓄的。**
+    // 一张有自己明暗和颜色的照片，任何柔光铺上去都只能是「染一点」，
+    // 想要那种一眼「哇」的光，底得是纯色或者渐变。
+    // 所以这一层的主场是纯色／渐变那两档，照片那档是尽量。
 
     /// 陪衬那一团的颜色：把强调色在色相上挪开一点。
     /// **同一个色相三团 = 一块糊掉的色斑**；挪开之后才有层次。
@@ -428,29 +450,22 @@ struct GlassSheen: View {
 ///
 /// 这是「参考语言，不复制皮肤」的用法：我抄的不是它的米色和紫色，
 /// 是**「用一个巨大的浅色字给页面定锚」**这件事。
+/// ⚠️ 两条她试出来的规矩：
+/// · **右上角那个巨大的浅色字撤了。** 她说「有点多余」——她说得对：
+///   我原来的理由是「它是构图不是内容」，可实际摆上去之后，
+///   它既不承担信息，又让人忍不住去认那是个什么字。
+///   **一个需要解释才成立的装饰，就是多余的装饰。**
+/// · **用了这个的页面，导航栏就别再写标题**，不然一屏两个「设置」。
 struct PageHero: View {
 
     let title: String
     var subtitle: String = ""
-    /// 右上角那个巨大的浅色字。数字、汉字都行，一到两个字最好看
-    var mark: String = ""
 
     @EnvironmentObject private var app: AppState
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            if !mark.isEmpty {
-                Text(mark)
-                    .font(.serif(64, weight: .bold))
-                    // 极浅。**它是构图，不是内容**——
-                    // 一旦浓到能"读"，它就跟标题抢戏了
-                    .foregroundStyle(app.settings.accentColor
-                        .opacity(scheme == .dark ? 0.16 : 0.13))
-                    .offset(y: -14)
-                    .allowsHitTesting(false)
-            }
-
             VStack(alignment: .leading, spacing: 5) {
                 Text(title)
                     .heading(25, weight: .bold)

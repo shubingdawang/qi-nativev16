@@ -37,8 +37,7 @@ struct SettingsView: View {
                 ScrollView {
                     VStack(spacing: Look.gap + 6) {
                         PageHero(title: "设置",
-                                 subtitle: "模型、外观、记忆、备份都在这儿",
-                                 mark: "设")
+                                 subtitle: "模型、外观、记忆、备份都在这儿")
                         appearanceCard
                         generalCard
                         servicesCard
@@ -52,7 +51,9 @@ struct SettingsView: View {
                 }
             }
             .scrollDismissesKeyboard(.interactively)
-            .navigationTitle("设置")
+            // ⚠️ 标题空着是**故意的**：这一页顶上有 `PageHero`，
+            // 导航栏再写一遍就是一屏两个「设置」（她报的）。
+            .navigationTitle("")
             .toolbarBackground(.hidden, for: .navigationBar)
             .onChange(of: wallpaperItem) { _, item in loadWallpaper(item) }
             .onChange(of: userAvatarItem) { _, item in loadAvatar(item, into: \.userAvatarName) }
@@ -61,8 +62,12 @@ struct SettingsView: View {
                 isPresented: $showingImporter,
                 // 只写 .json 的话，从微信/QQ 存下来的那份会是灰的选不中——
                 // 那些文件系统认不出类型，只当成一坨 data。所以两种都收。
-                allowedContentTypes: [.json, .data],
-                allowsMultipleSelection: false
+                // ⚠️ 记忆库那些 txt 也得选得中（`identity.txt`）
+                allowedContentTypes: [.json, .text, .plainText, .data],
+                // **能多选**（她报的）。整包备份本来只有一个文件，
+                // 但她常常是拿着记忆库那一堆 json 过来的——
+                // 多选之后这个口两种都收，见 `importBackup`。
+                allowsMultipleSelection: true
             ) { result in
                 importBackup(result)
             }
@@ -1042,13 +1047,35 @@ struct SettingsView: View {
             alertMessage = "选文件失败：\(error.localizedDescription)"
         case .success(let urls):
             guard let url = urls.first else { return }
-            let needsStop = url.startAccessingSecurityScopedResource()
-            defer { if needsStop { url.stopAccessingSecurityScopedResource() } }
-            guard let data = try? Data(contentsOf: url) else {
-                alertMessage = "这份文件读不出来。"
-                return
+
+            // ① 只选了一个、而且真是整包备份 → 走还原那条路
+            if urls.count == 1 {
+                let needsStop = url.startAccessingSecurityScopedResource()
+                defer { if needsStop { url.stopAccessingSecurityScopedResource() } }
+                guard let data = try? Data(contentsOf: url) else {
+                    alertMessage = "这份文件读不出来。"
+                    return
+                }
+                if BackupBundle.looksLikeBundle(data) {
+                    pendingBackup = data
+                    return
+                }
+                // 不是整包，但也可能是老备份（只有 providers/conversations/settings）
+                if (try? JSONDecoder().decode(Backup.self, from: data)) != nil {
+                    pendingBackup = data
+                    return
+                }
             }
-            pendingBackup = data
+
+            // ② 其余一律**转给记忆库那套**。
+            //
+            // 她拿 `memories.json` / `identity.txt` 这些走到这个口来，
+            // 以前只会得到一句「没有 files 也没有 conversations」——
+            // 那句话没错，但它把她堵在这儿了。
+            // 同一个「导入」按钮，两种都收才对。
+            let report = MemoryStore.shared.importFiles(urls)
+            alertMessage = "这些不是整包备份，当成**记忆库的文件**导了：\n\n"
+                + report.text
         }
     }
 
@@ -1270,7 +1297,11 @@ struct SettingsNote: View {
             if open {
                 Text(rendered)
                     .font(.app(11))
-                    .foregroundStyle(Theme.textMuted(scheme))
+                    // ⚠️ 以前是 `textMuted`。那一档是给「附注、时间戳、
+                    // 一眼扫过去就行」的字用的——**而这段是正文**，
+                    // 她展开它就是为了读。深色下 muted 压得太低，
+                    // 她的原话是「完全看不见」。换成 soft 那一档。
+                    .foregroundStyle(Theme.textSoft(scheme))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
