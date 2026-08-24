@@ -38,6 +38,17 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>他「查岗」的时候会看一眼你在哪儿、那边什么天气。默认只到城市，不给精确地址；也可以在「手机 → 查岗」里整个关掉。</string>
 
+	<!-- 健康和待办。**三样都默认关着**，得在「设置 → 健康和待办」里一条条打开。
+	     提醒事项和日历只要这几句说明就能用；
+	     健康还要在 Xcode 里给 target 勾上 HealthKit 那项能力——
+	     没勾的话读健康会失败，但 App 照样装得上、跑得起来，提醒事项那半不受影响。 -->
+	<key>NSHealthShareUsageDescription</key>
+	<string>你打开之后，他才看得到步数、睡眠、心率、锻炼和经期——为的是「你说累的时候他知道你昨晚只睡了四小时」。只读，不会往健康里写任何东西，也不会送出这台手机。</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>你打开之后，他才看得到你的提醒事项。默认只读；「让他帮你记一笔」是另一个开关，而且只能新建，删不了也改不了。</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>你打开之后，他才看得到接下来几天的日程——知道你三点要开会，就不会两点五十还拉着你说话。只读。</string>
+
 	<!-- 灵动岛／锁屏上那条实时活动。没有这一项，ActivityKit 会直接拒绝。 -->
 	<key>NSSupportsLiveActivities</key>
 	<true/>

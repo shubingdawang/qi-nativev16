@@ -43,7 +43,6 @@ enum SpriteSheet {
     ///
     /// 切不出来（背景不是连通的白、或者整张就是一件）就返回原图那一张，
     /// **不会两手空空**。
-    /// 切一整版。
     ///
     /// `grow` 是「胖一圈」胖多少像素，**不传就自己按图的大小估**。
     /// 传 0 就是纯连通域：**差一个像素没接上的两块也会分家**——
@@ -54,7 +53,7 @@ enum SpriteSheet {
         guard w > 8, h > 8, w * h <= 6_000_000 else { return [image] }
 
         // ① 先把连着外圈的白抹掉
-        guard var px = FurnitureImage.strippedPixels(cg) else { return [image] }
+        guard let px = FurnitureImage.strippedPixels(cg) else { return [image] }
 
         // ② 实心像素的掩码
         var solid = [Bool](repeating: false, count: w * h)
@@ -73,17 +72,28 @@ enum SpriteSheet {
         let r = grow ?? max(1, min(w, h) / 450)
         var fat = solid
         if r > 0 {
+            // ⚠️ **分两趟横竖各胖一次**，别写成里外四层循环。
+            //
+            // 四层的写法是「每个实心像素往周围 (2r+1)² 个格子刷一遍」——
+            // 她那种两千见方的整版图有上百万个实心像素，
+            // 乘出来就是几千万到上亿次写，卡在那儿几十秒不动。
+            // 她说的「一直在弹正在载入中」就是这个。
+            //
+            // 方块形状的膨胀是**可分离**的：先横着摊一遍，再竖着摊一遍，
+            // 结果跟四层循环一模一样，次数从 (2r+1)² 降到 2(2r+1)。
+            var pass = [Bool](repeating: false, count: w * h)
             for y in 0..<h {
-                for x in 0..<w where solid[y * w + x] {
-                    for dy in -r...r {
-                        let ny = y + dy
-                        guard ny >= 0, ny < h else { continue }
-                        for dx in -r...r {
-                            let nx = x + dx
-                            guard nx >= 0, nx < w else { continue }
-                            fat[ny * w + nx] = true
-                        }
-                    }
+                let row = y * w
+                for x in 0..<w where solid[row + x] {
+                    let lo = max(0, x - r), hi = min(w - 1, x + r)
+                    for nx in lo...hi { pass[row + nx] = true }
+                }
+            }
+            for y in 0..<h {
+                let row = y * w
+                for x in 0..<w where pass[row + x] {
+                    let lo = max(0, y - r), hi = min(h - 1, y + r)
+                    for ny in lo...hi { fat[ny * w + x] = true }
                 }
             }
         }
@@ -91,7 +101,11 @@ enum SpriteSheet {
         // ④ 连通域。用自己的栈，**不用递归**——
         //    一张一千见方的图递归下去会把栈撑爆
         var label = [Int32](repeating: -1, count: w * h)
-        var boxes: [(minX: Int, minY: Int, maxX: Int, maxY: Int, area: Int)] = []
+        // ⚠️ `id` 得留着。**裁的时候要用它把别人家的像素抹掉**——
+        // 见下面第 ⑥ 步。以前这儿只留了外接矩形，
+        // 于是「哪些像素是这一件的」这条信息算出来又扔了。
+        var boxes: [(id: Int32, minX: Int, minY: Int,
+                     maxX: Int, maxY: Int, area: Int)] = []
         var stack: [Int] = []
 
         for start in 0..<(w * h) where fat[start] && label[start] < 0 {
@@ -120,7 +134,8 @@ enum SpriteSheet {
                     stack.append(j)
                 }
             }
-            boxes.append(box)
+            boxes.append((id: id, minX: box.minX, minY: box.minY,
+                          maxX: box.maxX, maxY: box.maxY, area: box.area))
         }
 
         // ⑤ 扔掉噪点，按**从上到下、从左到右**排好——
@@ -135,22 +150,53 @@ enum SpriteSheet {
             }
         guard !good.isEmpty else { return [image] }
 
-        // ⑥ 裁出来
-        guard let ctx = CGContext(
-            data: &px, width: w, height: h,
-            bitsPerComponent: 8, bytesPerRow: w * 4,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
-              let whole = ctx.makeImage()
-        else { return [image] }
-
+        // ⑥ 裁出来——**只带走属于这一件的像素**
+        //
+        // ## 她说对了的那件事
+        //
+        // 「家具都是不规则的，你现在按规则切割，除非家具都各自占一格，
+        //   不然不可能切割正确的，总会切割到边上的家具。」
+        //
+        // 对。图片这个东西**必须是矩形**，这没得商量；
+        // 但矩形里装的**内容不必**。以前这儿是 `cropping(to:)` 完事——
+        // 一件等距家具的轮廓是斜的菱形，它的外接矩形四个角必然空着，
+        // 而旁边那件的一角正好探进来，就一起被带走了。
+        // 她那张「床看着像一整个房间」就是这么来的。
+        //
+        // 现在多做一步：裁完之后**把标号不是这一件的像素抹成透明**。
+        // 连通域标号第 ④ 步就算好了，以前算完就扔了。
+        //
+        // 于是每一块交出去的都是「一件家具 + 一圈透明」，
+        // 不管它的轮廓多不规则。
         var out: [UIImage] = []
         for b in good {
-            let rect = CGRect(x: b.minX, y: b.minY,
-                              width: b.maxX - b.minX + 1,
-                              height: b.maxY - b.minY + 1)
-            guard let cut = whole.cropping(to: rect) else { continue }
-            out.append(UIImage(cgImage: cut, scale: image.scale, orientation: .up))
+            let bw = b.maxX - b.minX + 1
+            let bh = b.maxY - b.minY + 1
+            guard bw > 0, bh > 0 else { continue }
+            var cut = [UInt8](repeating: 0, count: bw * bh * 4)
+            for y in 0..<bh {
+                let srcRow = (b.minY + y) * w
+                let dstRow = y * bw
+                for x in 0..<bw {
+                    let s = srcRow + b.minX + x
+                    // **两个条件都要**：得是实心的（不是被抠掉的背景），
+                    // 而且得是这一件的（不是邻居探进来的那一角）
+                    guard solid[s], label[s] == b.id else { continue }
+                    let so = s * 4, dof = (dstRow + x) * 4
+                    cut[dof] = px[so]
+                    cut[dof + 1] = px[so + 1]
+                    cut[dof + 2] = px[so + 2]
+                    cut[dof + 3] = px[so + 3]
+                }
+            }
+            guard let ctx = CGContext(
+                data: &cut, width: bw, height: bh,
+                bitsPerComponent: 8, bytesPerRow: bw * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+                  let made = ctx.makeImage()
+            else { continue }
+            out.append(UIImage(cgImage: made, scale: image.scale, orientation: .up))
         }
         return out.isEmpty ? [image] : out
     }

@@ -1200,6 +1200,12 @@ final class AppState: ObservableObject {
                 native += MemoryTools.definitions(memory: settings.localMemory,
                                                   pulse: settings.localPulse)
             }
+            // 健康和待办。**三个开关都默认关着**，她开了才给。
+            if settings.healthAccess || settings.todoAccess {
+                native += HealthTools.definitions(health: settings.healthAccess,
+                                                  todos: settings.todoAccess,
+                                                  write: settings.todoWrite)
+            }
             out = native.filter { item in
                 guard let fn = item["function"] as? [String: Any],
                       let raw = fn["name"] as? String else { return true }
@@ -2561,7 +2567,20 @@ final class AppState: ObservableObject {
             : parts.joined(separator: "\n\n")
     }
 
-    func wakeUpAndDecide() async -> String? {
+    /// 他醒来那一次的结果。
+    ///
+    /// 比一个 `String?` 多带一样：**他自己想多久之后再醒**。
+    ///
+    /// 出处是她发我的那份「ChatGPT 官端自唤醒」。那份文档里最值钱的一条是
+    /// 「让 AI 在一个区间里自己选下一次什么时候醒」，而不是外面定死一个节奏。
+    /// 这一条**不额外花钱**——就是他这一次说话的输出里多带一个数。
+    struct WakeSay {
+        var text: String
+        /// 他挑的下一次间隔（分钟）。没挑就是 nil，那就还按原来那套随机来。
+        var nextMinutes: Double?
+    }
+
+    func wakeUpAndDecide() async -> WakeSay? {
         // 杂活统一走 helperReach（她可以在设置里指定跑杂活的模型）
         guard let reach = helperReach() else { return nil }
         let p = reach.provider, endpoint = reach.endpoint, model = reach.model
@@ -2601,8 +2620,13 @@ final class AppState: ObservableObject {
 
         想说就说你此刻真的在想的那件事，一两句，别写小作文，别问「在干嘛」这种填空。
 
+        还有一件事你自己定：**下一次隔多久再醒**（`next`，单位分钟）。
+        刚说完一句要紧的、想等她回，就短一点（十几二十分钟）；
+        她在忙、或者你也没什么要说的，就长一点（几个小时）。
+        不确定就不填，我按平时的节奏来。范围 5 到 720 分钟。
+
         只输出 JSON：
-        {"say": true/false, "text": "要说的话，不说就留空"}
+        {"say": true/false, "text": "要说的话，不说就留空", "next": 分钟数或省略}
         """
 
         var raw = ""
@@ -2632,7 +2656,47 @@ final class AppState: ObservableObject {
         else { return nil }
 
         let out = (json["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return out.isEmpty ? nil : out
+        guard !out.isEmpty else { return nil }
+
+        // 他挑的下一次。夹在 5 分钟到 12 小时之间——
+        // **不能让他把自己关掉**（填个 99999 就等于再也不醒），
+        // 也不能让他一分钟一次把她的钱烧了。
+        var next: Double?
+        if let n = json["next"] as? Double, n > 0 {
+            next = min(720, max(5, n))
+        } else if let n = json["next"] as? Int, n > 0 {
+            next = min(720, max(5, Double(n)))
+        }
+        return WakeSay(text: out, nextMinutes: next)
+    }
+
+    /// 她**最后一条真的自己说的话**是什么时候。
+    ///
+    /// ⚠️ 「真的自己说的」这几个字是重点：
+    ///   · 他说的不算
+    ///   · 系统消息不算
+    ///   · 他自己醒来发的那些更不算——**那正是要判的东西**，
+    ///     拿它当基准的话就成了「他上次插嘴之后过了多久」，
+    ///     而不是「她安静了多久」
+    ///
+    /// 所有聊天窗口里取最晚的那一条。她在哪个窗口说话都算她在说话。
+    var lastUserSpokeAt: Date? {
+        var latest: Date?
+        for c in conversations where c.space == ChatSpace.chat.rawValue {
+            for m in c.messages.reversed() where m.role == .user {
+                if latest == nil || m.createdAt > latest! { latest = m.createdAt }
+                break              // 每个窗口只看最后那一条用户消息就够
+            }
+        }
+        return latest
+    }
+
+    /// 她在最近 `minutes` 分钟里说过话吗。
+    ///
+    /// 从来没说过话（全新的 App）返回 false——那种情况不该把他锁死。
+    func spokeRecently(within minutes: Double) -> Bool {
+        guard minutes > 0, let last = lastUserSpokeAt else { return false }
+        return Date().timeIntervalSince(last) < minutes * 60
     }
 
     /// 他主动说的话，落到聊天里。返回落在哪个窗口。
@@ -3239,6 +3303,12 @@ final class AppState: ObservableObject {
 
         // 记忆库那一摊单独放在 MemoryTools 里，不往这个 switch 里堆——
         // 29 个 case 塞进来这个方法就没法看了
+        if HealthTools.handles(name, health: settings.healthAccess,
+                               todos: settings.todoAccess,
+                               write: settings.todoWrite) {
+            return await HealthTools.run(name, args: args)
+        }
+
         if MemoryTools.handles(name, memory: settings.localMemory,
                                pulse: settings.localPulse) {
             // wake_up 要看上一窗最后那十几个回合的原话。

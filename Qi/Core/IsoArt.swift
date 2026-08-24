@@ -248,6 +248,101 @@ enum IsoArt {
         box(&cv, at: (o.0, o.1 - 4), a: 0.9, b: 0.25, hi: 6,
             top: metal.top, left: "K", right: "K")
     }, a: 1, b: 1, hi: 11)
+
+    // MARK: 厨房和浴室
+    //
+    // ⚠️ **画的占地必须跟 `IsoShape` 里写的一模一样**，
+    // 对不上的话每一件都会差半格，看着像整屋家具都没对齐地砖。
+    // 这八件除了浴缸是 2×1，其余全是 1×1。
+
+    /// 冰箱：一根高柜，中间横一道门缝，右边一个把手
+    static let fridge = make({ cv, o in
+        box(&cv, at: o, a: 1, b: 1, hi: 18,
+            top: white.top, left: white.left, right: white.right)
+        // 门缝：在柜身上压一条暗色的薄片
+        box(&cv, at: (o.0, o.1 - 11), a: 1.01, b: 1.01, hi: 0.6,
+            top: metal.right, left: metal.right, right: metal.right)
+        // 把手
+        box(&cv, at: (o.0 + 3.4, o.1 - 13.5), a: 0.12, b: 0.5, hi: 3,
+            top: metal.top, left: metal.left, right: metal.right)
+    }, a: 1, b: 1, hi: 19)
+
+    /// 微波炉：一个矮方盒，正面一块黑玻璃
+    static let microwave = make({ cv, o in
+        box(&cv, at: o, a: 1, b: 1, hi: 6,
+            top: metal.top, left: metal.left, right: metal.right)
+        // 那块玻璃门贴在朝镜头的那一面
+        box(&cv, at: (o.0 - 0.6, o.1 - 5), a: 0.72, b: 0.05, hi: 4,
+            top: "K", left: "K", right: "K")
+    }, a: 1, b: 1, hi: 7)
+
+    /// 面包架：两块木隔板 + 上面几个圆滚滚的面包
+    static let breadrack = make({ cv, o in
+        box(&cv, at: o, a: 1, b: 1, hi: 12,
+            top: wood.top, left: wood.left, right: wood.right)
+        for z in [4.0, 8.0] {
+            box(&cv, at: (o.0, o.1 - z), a: 0.96, b: 0.96, hi: 1,
+                top: "y", left: "y", right: "y")
+        }
+    }, a: 1, b: 1, hi: 13)
+
+    /// 洗衣机：方盒 + 正面一个圆窗（用一小块暗色代圆）
+    static let washer = make({ cv, o in
+        box(&cv, at: o, a: 1, b: 1, hi: 10,
+            top: white.top, left: white.left, right: white.right)
+        box(&cv, at: (o.0 - 0.5, o.1 - 7), a: 0.55, b: 0.05, hi: 3.2,
+            top: "K", left: "K", right: "K")
+    }, a: 1, b: 1, hi: 11)
+
+    /// 马桶：水箱 + 座圈
+    static let toilet = make({ cv, o in
+        // 座圈在前，水箱在后（`b` 小 = 靠里）
+        box(&cv, at: (o.0, o.1 - 0), a: 0.8, b: 0.8, hi: 4,
+            top: white.top, left: white.left, right: white.right)
+        box(&cv, at: (o.0, o.1 - 4), a: 0.7, b: 0.28, hi: 5,
+            top: white.top, left: white.left, right: white.right)
+    }, a: 1, b: 1, hi: 10)
+
+    /// 浴缸：一圈缸壁围着一汪水。
+    ///
+    /// 先画整块缸体，再在顶面上压一块**比缸小一圈**的水——
+    /// 露出来的那一圈就是缸沿。等距画里「凹进去」都是这么骗出来的。
+    static let bathtub = make({ cv, o in
+        box(&cv, at: o, a: 2, b: 1, hi: 5,
+            top: white.top, left: white.left, right: white.right)
+        box(&cv, at: (o.0, o.1 - 5), a: 1.7, b: 0.75, hi: 0.6,
+            top: "b", left: "b", right: "b")
+    }, a: 2, b: 1, hi: 7)
+
+    /// 洗手台：柜子 + 台面 + 一汪水 + 后面立一面镜子
+    static let sink = make({ cv, o in
+        box(&cv, at: o, a: 1, b: 1, hi: 7,
+            top: wood.top, left: wood.left, right: wood.right)
+        box(&cv, at: (o.0, o.1 - 7), a: 1, b: 1, hi: 1.4,
+            top: white.top, left: white.left, right: white.right)
+        // 盆里那一小块水
+        box(&cv, at: (o.0, o.1 - 8.4), a: 0.55, b: 0.55, hi: 0.5,
+            top: "b", left: "b", right: "b")
+        // 镜子贴在里侧，立起来
+        box(&cv, at: (o.0, o.1 - 8.4), a: 0.85, b: 0.08, hi: 6,
+            top: metal.top, left: "b", right: "b")
+    }, a: 1, b: 1, hi: 15)
+
+    /// 自动贩卖机：这批里最高的一件。红机身 + 一整面玻璃 + 三排货
+    static let vending = make({ cv, o in
+        box(&cv, at: o, a: 1, b: 1, hi: 20,
+            top: pink.right, left: pink.right, right: pink.right)
+        // 玻璃：贴在朝镜头那一面，比机身窄一圈
+        box(&cv, at: (o.0 - 0.55, o.1 - 6), a: 0.72, b: 0.05, hi: 12,
+            top: "K", left: "K", right: "K")
+        // 三排货，一排一个颜色
+        let rows: [Character] = ["y", "G", "N"]
+        for (i, c) in rows.enumerated() {
+            box(&cv, at: (o.0 - 0.55, o.1 - 8.0 - Double(i) * 3.4),
+                a: 0.6, b: 0.03, hi: 1.6,
+                top: c, left: c, right: c)
+        }
+    }, a: 1, b: 1, hi: 21)
 }
 
 extension FurnitureCatalog {
@@ -266,6 +361,14 @@ extension FurnitureCatalog {
         case "lamp":   return IsoArt.lamp
         case "rug":    return IsoArt.rug
         case "tv":     return IsoArt.tv
+        case "fridge":     return IsoArt.fridge
+        case "microwave":  return IsoArt.microwave
+        case "breadrack":  return IsoArt.breadrack
+        case "washer":     return IsoArt.washer
+        case "toilet":     return IsoArt.toilet
+        case "bathtub":    return IsoArt.bathtub
+        case "sink":       return IsoArt.sink
+        case "vending":    return IsoArt.vending
         default:       return nil
         }
     }

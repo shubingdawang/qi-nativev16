@@ -72,6 +72,62 @@ struct IsoRoom {
                                        y: top + wallH + tileH / 2))
     }
 
+    // MARK: clawd 能站在哪儿
+    //
+    // 他走路那一套用的是「占容器的百分之几」（0…1），
+    // 跟这儿的格子坐标是两套东西。以前两边各写各的常数，
+    // 结果就是她报的：**「房间虽然整体往上挪了，但是 clawd 的活动区域
+    // 并没有往上挪」**——屋子归 `fit` 算，他归两个写死的数，当然对不齐。
+    //
+    // 下面这两个把地板的形状翻译成他那套 0…1，**只此一份**。
+
+    /// 地板在这块地方里**竖着**占哪一段（0…1）。
+    ///
+    /// 上下各留一点余量：他是「整只居中」摆上去的，
+    /// 贴着最上那个尖站会有半个身子探进墙里。
+    func walkBand(in size: CGSize) -> (top: Double, bottom: Double) {
+        guard size.height > 1 else { return (0.62, 0.9) }
+        let n = Double(self.size)
+        let topY = Double(point(0, 0).y)
+        let botY = Double(point(n - 1, n - 1).y)
+        let h = Double(size.height)
+        let t = min(0.98, max(0.02, topY / h))
+        let b = min(0.98, max(0.02, botY / h))
+        // 上边多让出一点——最上那个角太窄，站上去两边都悬空
+        return (min(t + 0.03, b), b)
+    }
+
+    /// 在竖直位置 `y`（0…1）上，地板**横着**到哪儿（0…1）。
+    ///
+    /// 地板是个菱形，不是矩形：越靠近上下两个尖，能站的地方越窄。
+    /// 以前横着一律 clamp 到 0.12…0.88，所以他在最上和最下那一截
+    /// 会走到地板外面的空气里去。
+    func walkSpan(atY y: Double, in size: CGSize) -> (lo: Double, hi: Double) {
+        guard size.width > 1 else { return (0.12, 0.88) }
+        let (top, bottom) = walkBand(in: size)
+        let span = max(0.0001, bottom - top)
+        // 0 = 最上那个尖，1 = 最下那个尖；中间最宽
+        let t = min(1, max(0, (y - top) / span))
+        let wide = 1 - abs(2 * t - 1)                 // 三角形，中间是 1
+        let n = CGFloat(self.size)
+        // 菱形最宽处的半宽，再往里收一点点，别让他半只挂在边上
+        let halfMax = tileW * n / 2 - tileW * 0.35
+        let half = halfMax * CGFloat(wide)
+        let cx = origin.x
+        let lo = (cx - half) / size.width
+        let hi = (cx + half) / size.width
+        guard hi > lo else { return (0.5, 0.5) }
+        return (Double(lo), Double(hi))
+    }
+
+    /// 把一个点夹回地板里。走路、拖拽都从这儿过。
+    func clampToFloor(_ p: CGPoint, in size: CGSize) -> CGPoint {
+        let (top, bottom) = walkBand(in: size)
+        let y = min(bottom, max(top, Double(p.y)))
+        let (lo, hi) = walkSpan(atY: y, in: size)
+        return CGPoint(x: min(hi, max(lo, Double(p.x))), y: y)
+    }
+
     // MARK: 格子 ↔ 屏幕
 
     /// 一格的**中心**在屏幕上的位置

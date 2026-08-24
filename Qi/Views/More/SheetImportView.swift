@@ -72,7 +72,7 @@ struct SheetImportView: View {
                                           + "你只要点一下「这块是床」。")
                         } else if !pieces.isEmpty {
                             SectionHeader(title: "找到 \(pieces.count) 件") {
-                                Text("点一块配给家具")
+                                Text("点一块，选它是哪件家具")
                                     .font(.app(11))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
@@ -81,10 +81,11 @@ struct SheetImportView: View {
                                     piece(i)
                                 }
                             }
-                            Text(MD.inline("**点一下**配给家具，**长按**把一块拆开"
-                                 + "（两件挨得太近被切成一块的时候用）。\n"
-                                 + "**没配上的不用管**——它们不会进屋，也不占地方。"
-                                 + "配错了点同一块再配一次就行。"))
+                            Text(MD.inline("**点一下**任意一块，选它对应哪件家具。"
+                                 + "同一个菜单里还有「**拆开这一块**」——"
+                                 + "两件挨得太近被切成一块的时候用它。\n"
+                                 + "**没指定的不用管**——它们不会进屋，也不占地方。"
+                                 + "指定错了，点同一块重选一次就行。"))
                                 .font(.app(10.5))
                                 .foregroundStyle(Theme.textMuted(scheme))
                                 .padding(.leading, 4)
@@ -113,13 +114,24 @@ struct SheetImportView: View {
                                 isPresented: Binding(get: { assigning != nil },
                                                      set: { if !$0 { assigning = nil } }),
                                 titleVisibility: .visible) {
-                // 只列**她已经买了的**——没买的配了也摆不出来
+                // 「拆开这一块」放在最上面。
+                //
+                // ⚠️ 以前这一条是挂在缩略图上的 `.onLongPressGesture`——
+                // **没用**：缩略图本身是个 `Button`，Button 自己的手势
+                // 会把长按吃掉。她说「没有你说的长按再切」，就是这个。
+                // 挪进这个菜单里反而更该待在这儿：点一下就看得见有这么一条，
+                // 不用她猜「是不是可以长按」。
+                Button("拆开这一块") {
+                    if let i = assigning { assigning = nil; split(i) }
+                }
+                // 只列**她已经买了的**——没买的指定了也摆不出来
                 ForEach(myKinds, id: \.0) { pair in
                     Button(pair.1) { assign(to: pair.0) }
                 }
                 Button("算了", role: .cancel) { assigning = nil }
             } message: {
-                Text("配给哪件，那件在屋里就用这张图。随时能在屋里长按换回来。")
+                Text("选一件，那件在屋里就用这张图。随时能在屋里长按换回来。\n\n"
+                     + "要是这一块里其实有好几件东西挤在一起，选「拆开这一块」。")
             }
         }
     }
@@ -157,7 +169,7 @@ struct SheetImportView: View {
                                       lineWidth: 1.5)
                 }
 
-                Text(name ?? "还没配")
+                Text(name ?? "未指定")
                     .font(.app(10))
                     .foregroundStyle(name == nil
                                      ? Theme.textMuted(scheme)
@@ -166,12 +178,6 @@ struct SheetImportView: View {
             }
         }
         .buttonStyle(.plain)
-        // 长按 = 「这一块里其实有好几件，拆开」。
-        //
-        // 她说「不是单独切割」——两件挨得近的东西被当成了一件。
-        // 自动分组永远会在「粘住」和「切碎」之间取舍，取不到两全，
-        // **所以最后一下交给她**：哪一块是一件东西，只有她知道。
-        .onLongPressGesture(minimumDuration: 0.35) { split(i) }
     }
 
     /// 把第 `i` 块再拆一次。
@@ -225,9 +231,18 @@ struct SheetImportView: View {
         Task {
             defer { working = false }
             guard let data = try? await item.loadTransferable(type: Data.self),
-                  let img = UIImage(data: data) else { return }
-            // 切图是纯算力活，**别占着主线程**——
-            // 一张两千见方的图能算好几百毫秒，卡在主线程上界面会僵一下
+                  let raw = UIImage(data: data) else { return }
+            // ⚠️ **先缩到两千以内再切。**
+            //
+            // `SpriteSheet.slice` 超过六百万像素就直接原样退回——
+            // 也就是说她要是导了一张全分辨率的截图（四千乘三千 = 一千两百万），
+            // 得到的是「一件」，那一件就是整张图。
+            // 她说「切割依旧不太好」，这是其中一种。
+            //
+            // 而且算力是按像素数走的：缩到一半，快四倍。
+            // 等距家具图缩到 2048 一点不影响认边界。
+            let img = ImageStore.downscale(raw, maxSide: 2048)
+            // 切图是纯算力活，**别占着主线程**
             let cut = await Task.detached(priority: .userInitiated) {
                 SpriteSheet.slice(img)
             }.value

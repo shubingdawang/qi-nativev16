@@ -99,6 +99,74 @@ enum RoomActs {
             return RoomAct(name: name, spot: .beside, mood: .happy, seconds: 3,
                            lines: ["摸摸", "这个是什么来着"])
 
+        // MARK: 三个一直漏着的
+        //
+        // 这三个名字在 `IsoShape.actions` 里用了很久，
+        // **但这张表里从来没有过**——所以他跑过去，站着说一句「……」。
+        // 是加新家具的时候写脚本对了一遍「用到的动作名 vs 表里有的」才发现的。
+        //
+        // ⚠️ 记一句：这种漏**不会报错**，只会让动作变哑。
+        // 加完新家具要对一遍这两张表。
+
+        case "把东西放上去":
+            return RoomAct(name: name, spot: .beside, mood: .working, seconds: 4,
+                           lines: ["放这儿吧", "摆正一点", "好了"])
+        case "在桌边站着":
+            return RoomAct(name: name, spot: .beside, mood: .thinking, seconds: 5,
+                           lines: ["站会儿", "在想事情", "……"])
+        case "戳一下":
+            return RoomAct(name: name, spot: .beside, mood: .happy, seconds: 3,
+                           lines: ["戳戳", "硬的", "会动吗"])
+
+        // MARK: 厨房和浴室那几件
+        //
+        // ⚠️ **新家具的动作名一定要在这儿有一条。**
+        // 漏了不会报错，会掉进最底下那个 default——
+        // 于是他跑过去站着说一句「……」。看着像坏了，其实是没写。
+
+        case "开冰箱":
+            return RoomAct(name: name, spot: .beside, mood: .working, seconds: 5,
+                           lines: ["有什么好吃的", "凉气跑出来了", "……又忘了要拿什么"])
+        case "贴着凉快":
+            return RoomAct(name: name, spot: .beside, mood: .drowsy, seconds: 6,
+                           lines: ["凉的", "贴一会儿", "舒服"])
+        case "盯着转":
+            return RoomAct(name: name, spot: .beside, mood: .thinking, seconds: 6,
+                           lines: ["转啊转", "还没好", "快了快了"])
+        case "坐上面":
+            return RoomAct(name: name, spot: .onTop, mood: .happy, seconds: 6,
+                           lines: ["震得屁股麻", "这儿暖", "坐会儿"])
+
+        case "掀盖子":
+            return RoomAct(name: name, spot: .beside, mood: .working, seconds: 3,
+                           lines: ["啪嗒", "又合上了"])
+        case "冲一下":
+            return RoomAct(name: name, spot: .beside, mood: .happy, seconds: 3,
+                           lines: ["哗——", "好听"])
+
+        case "泡进去":
+            return RoomAct(name: name, spot: .onTop, mood: .drowsy, seconds: 10,
+                           lines: ["泡一会儿", "唔……热的", "快化了"])
+        case "拍水花":
+            return RoomAct(name: name, spot: .onTop, mood: .flail, seconds: 4,
+                           lines: ["啪啪啪", "溅出来了", "嘿嘿"])
+        case "洗把脸":
+            return RoomAct(name: name, spot: .beside, mood: .working, seconds: 4,
+                           lines: ["醒醒神", "水好凉"])
+        case "照镜子":
+            return RoomAct(name: name, spot: .beside, mood: .happy, seconds: 4,
+                           lines: ["还是这么好看", "头顶翘起来了", "整理一下"])
+
+        case "挑一瓶":
+            return RoomAct(name: name, spot: .beside, mood: .thinking, seconds: 6,
+                           lines: ["选哪个呢", "都想要", "……还是这个吧"])
+        case "拍一下":
+            return RoomAct(name: name, spot: .beside, mood: .flail, seconds: 3,
+                           lines: ["卡住了", "出来啊", "咚"])
+        case "隔着玻璃看":
+            return RoomAct(name: name, spot: .beside, mood: .peeking, seconds: 5,
+                           lines: ["贴着看", "亮晶晶的"])
+
         default:
             return RoomAct(name: name, spot: .beside, mood: .idle, seconds: 3,
                            lines: ["……", "看看"])

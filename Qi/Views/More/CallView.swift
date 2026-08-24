@@ -155,6 +155,11 @@ struct CallView: View {
     @State private var draft = ""
     @State private var muted = false
     @State private var listening = false
+    /// 免提：不用按住，**他自己听出来你说完了**。
+    ///
+    /// 她要的那条。开着的时候：他说完 → 自动开始听 →
+    /// 听出你说完 → 自动送出去 → 他再说。中间一下都不用点。
+    @AppStorage("callHandsFree") private var handsFree = false
     @State private var thinking = false
     @State private var elapsed: TimeInterval = 0
     @State private var ticker: Task<Void, Never>?
@@ -352,30 +357,67 @@ struct CallView: View {
                 }
                 .buttonStyle(.plain)
 
-                // 按住说话
+                // 说话。两种模式：
+                //   · 免提关着 → 按住说，松手送出（老样子）
+                //   · 免提开着 → 不用碰它，它自己听、自己断句
                 if !muted {
                     Circle()
                         .fill(listening
-                              ? app.settings.accentColor.opacity(0.4)
+                              ? app.settings.accentColor.opacity(recorder.hearing ? 0.62 : 0.4)
                               : Theme.controlFill(scheme))
                         .frame(width: 54, height: 54)
                         .overlay {
-                            Image(systemName: "waveform")
+                            Image(systemName: handsFree
+                                  ? (listening ? "ear.fill" : "ear")
+                                  : "waveform")
                                 .font(.app(17))
                                 .foregroundStyle(Theme.textMain(scheme))
                         }
                         .scaleEffect(listening ? 1 + recorder.level * 0.3 : 1)
+                        .animation(.easeOut(duration: 0.12), value: recorder.hearing)
                         .gesture(
                             DragGesture(minimumDistance: 0)
                                 .onChanged { _ in
+                                    // 免提的时候这颗不接手势——它自己在听，
+                                    // 手一碰反而会把正在说的那句掐了
+                                    guard !handsFree else { return }
                                     guard !listening, !thinking else { return }
                                     startListening()
                                 }
                                 .onEnded { _ in
+                                    guard !handsFree else { return }
                                     Task { await stopListening() }
                                 }
                         )
                 }
+
+                // 免提开关
+                Button {
+                    handsFree.toggle()
+                    if app.settings.haptics {
+                        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                    }
+                    if handsFree {
+                        notice = "免提开着——说完停一下就送出去，不用按"
+                        resumeListening()
+                    } else {
+                        notice = nil
+                        if listening { Task { await stopListening() } }
+                    }
+                } label: {
+                    Image(systemName: handsFree
+                          ? "hand.raised.slash.fill" : "hand.raised.fill")
+                        .font(.app(15))
+                        .foregroundStyle(handsFree
+                                         ? .white : Theme.textMain(scheme))
+                        .frame(width: 54, height: 54)
+                        .background(
+                            Circle().fill(handsFree
+                                ? app.settings.accentColor.opacity(0.85)
+                                : Theme.controlFill(scheme))
+                        )
+                }
+                .buttonStyle(.plain)
 
                 // 挂断
                 Button {
@@ -407,6 +449,14 @@ struct CallView: View {
     ///   · 录下来的那段还能存进这一句，挂了之后回听
     private func startListening() {
         listening = true
+        // 免提的时候把自动断句挂上。
+        //
+        // ⚠️ **每次开录之前重挂一遍**，别只在 onAppear 挂一次——
+        // `handsFree` 是随时能翻的，而 `recorder` 是同一个对象。
+        recorder.autoStop = handsFree
+        recorder.onAutoStop = handsFree ? {
+            Task { @MainActor in await stopListening() }
+        } : nil
         do {
             try recorder.start()
         } catch {
@@ -419,8 +469,29 @@ struct CallView: View {
         }
     }
 
+    /// 免提模式下把耳朵重新支起来。
+    ///
+    /// 三处会叫它：她刚打开免提、他刚说完、这一句她其实没说话。
+    /// **闭麦、正在想、正在听的时候都不叫**——
+    /// 尤其是「正在想」：他还没说完就开始听，会把他自己的声音录进去。
+    private func resumeListening() {
+        guard handsFree, !muted, !thinking, !listening else { return }
+        guard store.active != nil else { return }
+        startListening()
+    }
+
     private func stopListening() async {
-        defer { listening = false }
+        // 这一句到底有没有送出去。
+        // 免提模式下**没送出去也得把耳朵重新支起来**——
+        // 一次太短的、没听清的空录，不该把免提整个关死。
+        // 送出去了的那条路由 `send` 那边等他说完再接上。
+        var passedOn = false
+        defer {
+            listening = false
+            if !passedOn, handsFree {
+                Task { @MainActor in resumeListening() }
+            }
+        }
 
         // 先把振幅序列拿走，下一次按住说话就重置了
         let shape = recorder.samples
@@ -460,7 +531,24 @@ struct CallView: View {
             tone = VoiceBaseline.shared.note(for: f)
             VoiceBaseline.shared.remember(f)
         }
+        passedOn = true
         await send(text, tone: tone)
+    }
+
+    /// 等他说完。
+    ///
+    /// ⚠️ **免提必须等**：他还在出声就开始录，录进去的是他自己的声音，
+    /// 送出去就成了他跟自己聊天。
+    /// 播完再多给半秒——扬声器的尾音还在空气里。
+    private func waitForVoiceToFinish() async {
+        for _ in 0..<1200 {                       // 最多两分钟，别卡死
+            if VoicePlayer.shared.playingName == nil,
+               !SystemVoice.shared.isSpeaking {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                return
+            }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
     }
 
     private func send(_ text: String, tone: String = "") async {
@@ -514,6 +602,13 @@ struct CallView: View {
         // 换了谁念、退到系统音了，都照实说一声。
         // 悄悄换一个声音而不说，比没声音更让人错乱。
         if !reply.voiceNote.isEmpty { notice = reply.voiceNote }
+
+        // 免提：等他说完，再把耳朵支起来。
+        // 这就是「他说完你说，你说完他说」那个循环合上的地方。
+        if handsFree {
+            await waitForVoiceToFinish()
+            resumeListening()
+        }
 
         // 他说了再见的话，别立刻挂——留十五秒
         if reply.saidGoodbye {

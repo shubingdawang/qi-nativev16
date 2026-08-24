@@ -167,6 +167,9 @@ final class SystemVoice {
         synth.speak(u)
     }
 
+    /// 还在念吗。**免提要用**——他还在出声就开始录，录进去的是他自己。
+    var isSpeaking: Bool { synth.isSpeaking }
+
     func stop() {
         if synth.isSpeaking { synth.stopSpeaking(at: .immediate) }
     }

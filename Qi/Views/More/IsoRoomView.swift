@@ -18,7 +18,7 @@ import SwiftUI
 /// 家具还是现在这批**正面看的**像素图，摆进等距屋里会有点「立牌」感。
 /// 换成真正的等距素材是下一步——但那是**换图**，
 /// 几何、遮挡、摆放这一层不用再动。这正是先做这一层的意义。
-struct IsoRoomView: View {
+struct IsoRoomView<Clawd: View>: View {
 
     @ObservedObject var store: ClawdStore
     /// 现在画的是哪一间。**只画这一间里的家具**
@@ -31,12 +31,23 @@ struct IsoRoomView: View {
     var floorBottom: Double
 
     var onTapFurniture: (Furniture) -> Void
+    /// 他现在在这一间吗。不在就不画，也不进排序。
+    var clawdHere: Bool = false
+    /// clawd 本人。**由调用方给**——他的手势、朝向、走路动画都长在那边，
+    /// 搬过来得连着走路那一整套一起搬，不值。
+    /// 这儿只负责**把他插进正确的位置**。
+    @ViewBuilder var clawd: () -> Clawd
 
     @EnvironmentObject private var app: AppState
     @Environment(\.colorScheme) private var scheme
 
     @State private var dragging: UUID?
     @State private var dragCell: (gx: Int, gy: Int) = (0, 0)
+    /// 正拖着的这一件此刻悬在 clawd 身上
+    @State private var onClawd = false
+    /// 这一块画布多大。判「拖到他身上了没有」要用——
+    /// 手势拿到的是屏幕点，他的位置是 0…1 的比例，得有尺寸才换算得了
+    @State private var boardSize: CGSize?
 
     // MARK: 摆出来
 
@@ -57,14 +68,34 @@ struct IsoRoomView: View {
 
                 // ⚠️ 这一句就是「不穿模」的全部：**按离镜头的远近排好再画**。
                 ForEach(drawables(geoRoom), id: \.key) { d in
-                    piece(d.item, d.kind, geoRoom)
+                    if d.isClawd {
+                        clawd()
+                    } else if let item = d.item, let kind = d.kind {
+                        piece(item, kind, geoRoom)
+                    }
                 }
             }
+            // 拖到他身上的时候，在他脚下点一圈光——
+            // **她得看得见「松手就是给他」**，不能靠猜
+            .overlay(alignment: .topLeading) {
+                if onClawd, let s = boardSize {
+                    Circle()
+                        .fill(app.settings.accentColor.opacity(0.30))
+                        .frame(width: min(s.width, s.height) * 0.26,
+                               height: min(s.width, s.height) * 0.26)
+                        .position(x: clawdX * s.width, y: clawdY * s.height)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: 0.15), value: onClawd)
             .frame(width: geo.size.width, height: geo.size.height)
             .onAppear {
+                boardSize = geo.size
                 store.migrateRoom()
                 store.migrateRooms()
             }
+            .onChange(of: geo.size) { _, v in boardSize = v }
         }
     }
 
@@ -75,13 +106,23 @@ struct IsoRoomView: View {
     // MARK: 地和墙
 
     private func floor(_ geoRoom: IsoRoom) -> some View {
-        ZStack(alignment: .topLeading) {
-            // 一格一格画，**深浅交替**——不这么画的话地板是一整块色，
-            // 立体感全靠两面墙撑着，一眼看过去还是平的
-            ForEach(0..<(geoRoom.size * geoRoom.size), id: \.self) { i in
-                let gx = i / geoRoom.size, gy = i % geoRoom.size
-                geoRoom.tilePath(gx, gy)
-                    .fill((gx + gy) % 2 == 0 ? floorA : floorB)
+        let boards = ImageStore.cached(store.flooring(of: room))
+        return ZStack(alignment: .topLeading) {
+            if let boards {
+                // 她自己那张地板。跟墙纸一个道理：**按菱形裁**，不是贴个方块。
+                Image(uiImage: boards)
+                    .resizable()
+                    .interpolation(.none)
+                    .scaledToFill()
+                    .clipShape(geoRoom.floorPath)
+            } else {
+                // 一格一格画，**深浅交替**——不这么画的话地板是一整块色，
+                // 立体感全靠两面墙撑着，一眼看过去还是平的
+                ForEach(0..<(geoRoom.size * geoRoom.size), id: \.self) { i in
+                    let gx = i / geoRoom.size, gy = i % geoRoom.size
+                    geoRoom.tilePath(gx, gy)
+                        .fill((gx + gy) % 2 == 0 ? floorA : floorB)
+                }
             }
             // 正在拖的那一件，把它要落的几格点亮
             if let id = dragging,
@@ -104,9 +145,34 @@ struct IsoRoomView: View {
     }
 
     private func walls(_ geoRoom: IsoRoom) -> some View {
-        ZStack(alignment: .topLeading) {
-            geoRoom.leftWallPath.fill(wallL)
-            geoRoom.rightWallPath.fill(wallR)
+        let paper = ImageStore.cached(store.wallpaper(of: room))
+        return ZStack(alignment: .topLeading) {
+            // 她自己那张墙纸。**必须按墙的形状裁**——
+            // 直接贴一张矩形上去就是一块补丁盖在屋子上，两面墙全糊住了。
+            //
+            // 所以图铺满，再用 `leftWallPath` / `rightWallPath` 去 `clipShape`。
+            // 两面墙裁的是同一张图的不同部位，接缝天然对得上。
+            //
+            // ⚠️ 右面墙要**压暗一档**。等距屋的立体感八成来自
+            // 「两个面不是同一个亮度」——同一张图原样贴两面，屋子会瞬间变回一张折纸。
+            if let paper {
+                Image(uiImage: paper)
+                    .resizable()
+                    .interpolation(.none)
+                    .scaledToFill()
+                    .clipShape(geoRoom.leftWallPath)
+                Image(uiImage: paper)
+                    .resizable()
+                    .interpolation(.none)
+                    .scaledToFill()
+                    .clipShape(geoRoom.rightWallPath)
+                    .overlay {
+                        geoRoom.rightWallPath.fill(Color.black.opacity(0.16))
+                    }
+            } else {
+                geoRoom.leftWallPath.fill(wallL)
+                geoRoom.rightWallPath.fill(wallR)
+            }
             geoRoom.leftWallPath.stroke(Color.black.opacity(0.08), lineWidth: 1)
             geoRoom.rightWallPath.stroke(Color.black.opacity(0.08), lineWidth: 1)
         }
@@ -133,8 +199,10 @@ struct IsoRoomView: View {
         let key: String
         let depth: Double
         let tall: Double
-        let item: Furniture
-        let kind: FurnitureKind
+        /// clawd 那一条这两样是空的
+        let item: Furniture?
+        let kind: FurnitureKind?
+        var isClawd: Bool { item == nil }
     }
 
     /// 屋里所有会挡人的东西，**按远近排好**。
@@ -158,15 +226,26 @@ struct IsoRoomView: View {
                                 tall: s.tall, item: f, kind: kind))
         }
 
-        // ⚠️ **clawd 这一版还没进这个排序**，他画在所有家具上面。
+        // clawd 也进来。**这就是「他站在床后面就该被床挡住」的全部。**
+        if clawdHere {
+            out.append(Drawable(key: "clawd", depth: clawdDepth(
+                CGPoint(x: clawdX, y: clawdY), geoRoom),
+                                tall: 1, item: nil, kind: nil))
+        }
+
+        // ## clawd 进来了（上一版他永远画在最前面）
         //
-        // 让他也进来是下一小步：他还是按 0…1 的比例走路（那套逻辑一个字没改），
-        // 要进排序就得把他的比例换算成地板进深，
-        // 而他的手势、朝向、走路动画都挂在调用方那边——
-        // 这一刀得连着走路那套一起改，不该跟「屋子立起来」混在一轮里。
+        // 当初推掉的理由是「他按 0…1 走路、家具按格子摆，两套坐标」。
+        // 那个理由**已经不成立了**——修「他的活动区域没跟着屋子挪」的时候，
+        // `IsoRoom.walkBand` 把他的 0…1 和地板对齐了，
+        // 于是 `clawdDepth` 算出来的进深跟家具是同一把尺。
         //
-        // 现在的样子：**家具之间的遮挡是对的**（这是主要的那一半），
-        // 他永远在前面——那不是穿模，是很多像素游戏里主角的常规画法。
+        // 他的手势、朝向、走路动画还留在调用方那边（搬过来不值），
+        // 这儿只是**把他插进正确的位置**：
+        // 站在床里侧就被床挡住，站在床外侧就压在床前面。
+        //
+        // ⚠️ 他的 `tall` 给 1：跟别人同一格的时候，
+        // 他压在地毯上面（tall 0）、被高柜挡住（tall 2）。
 
         return IsoRoom.order(out, depth: { $0.depth }, height: { $0.tall }, tie: { $0.key })
     }
@@ -274,6 +353,9 @@ struct IsoRoomView: View {
             .sequenced(before: DragGesture(minimumDistance: 0))
             .onChanged { value in
                 guard case .second(_, let drag?) = value else { return }
+                // 拖到他身上了没有。**拖的过程里就得知道**——
+                // 不然她一路拖过去，到松手那一刻才知道行不行
+                onClawd = nearClawd(drag.location)
                 let t = geoRoom.tile(at: drag.location)
                 let (gx, gy) = geoRoom.clamp(Int(t.gx.rounded()), Int(t.gy.rounded()))
                 if gx != dragCell.gx || gy != dragCell.gy {
@@ -283,10 +365,43 @@ struct IsoRoomView: View {
                     }
                 }
             }
-            .onEnded { _ in
+            .onEnded { value in
                 guard dragging == item.id else { return }
                 dragging = nil
+                let dropped = onClawd
+                onClawd = false
+
+                // ⚠️ **递给他。**
+                //
+                // 她说「我拖给 clawd 的家具他并没有搬起来，是动画还没画吗」——
+                // 不是。动画一直都在（`.hauling` / `.carrying` 那两档，
+                // 举过头顶的还有 `ClawdRig` 那一套真的举着）。
+                // **是这个手势根本没接过**：`store.pickUp` 在整个小屋里
+                // 一次都没被调用过，只有聊天页那只浮窗宠物在用。
+                // 她拖过去松手，代码做的事跟拖到别处一模一样——摆到格子上。
+                //
+                // 现在松手落在他身上就交给他：他举起来、开始搬，
+                // 走到地方自己放下（`startWalking` 里那一段本来就写好了）。
+                if dropped {
+                    store.pickUp(item.kind)
+                    if app.settings.haptics {
+                        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+                    }
+                    return
+                }
                 store.place(item.id, at: dragCell.gx, dragCell.gy)
             }
+    }
+
+    /// 这个点是不是落在 clawd 身上。
+    ///
+    /// 判定给得**比他本人宽一圈**：她是在拖一件家具，
+    /// 手指被家具挡着看不见落点，卡太死会一直递不上。
+    private func nearClawd(_ p: CGPoint) -> Bool {
+        guard let s = boardSize, s.width > 1, s.height > 1 else { return false }
+        let cx = clawdX * s.width
+        let cy = clawdY * s.height
+        let reach = min(s.width, s.height) * 0.13
+        return abs(p.x - cx) < reach && abs(p.y - cy) < reach
     }
 }

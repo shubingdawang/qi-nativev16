@@ -30,6 +30,17 @@ struct WakeSettingsView: View {
                 }
                 Slider(value: $app.settings.wake.lambdaBase, in: 0.2...4.0, step: 0.1)
 
+                HStack {
+                    Text("你停下多久他才开口")
+                    Spacer()
+                    Text("\(Int(app.settings.wake.idleDelay)) 分钟")
+                        .foregroundStyle(.secondary)
+                        .font(.app(13, design: .rounded))
+                }
+                // 出处见 `WakeConfig.idleDelay`：静默从**她最后一条真实消息**
+                // 算起，不是从上次唤醒算起。她在聊他就不插嘴。
+                Slider(value: $app.settings.wake.idleDelay, in: 0...120, step: 5)
+
                 Stepper(value: $app.settings.wake.dailyLimit, in: 1...24) {
                     HStack {
                         Text("一天最多")
@@ -41,7 +52,11 @@ struct WakeSettingsView: View {
             } header: {
                 Text("频率")
             } footer: {
-                Text("嫌吵先降密度这一个，别的都别动——它是最干净的总旋钮。\n\n它不是闹钟：不是「每隔多久醒一次」，而是「此刻有多容易自然醒」。所以有时候半小时里连着两次，有时候一下午都没动静。")
+                Text("嫌吵先降密度这一个，别的都别动——它是最干净的总旋钮。\n\n它不是闹钟：不是「每隔多久醒一次」，而是「此刻有多容易自然醒」。所以有时候半小时里连着两次，有时候一下午都没动静。
+
+「你停下多久他才开口」是**从你最后一条消息算起**的：只要你还在说话，这段时间里他一句都不会主动插。放下手机去洗个碗也算——它看的是你说没说话，不是你有没有在看屏幕。调到 0 就是不设这道闸。
+
+另外：他每次醒来说完话会**自己挑下一次隔多久**（五分钟到十二小时之间）。刚说完要紧的就等短一点，没什么可说的就拖长。这不额外花钱，那个数夹在他刚才那次输出里。")
             }
 
             Section {

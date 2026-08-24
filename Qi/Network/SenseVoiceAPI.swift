@@ -187,6 +187,55 @@ final class VoiceRecorder: NSObject, ObservableObject {
     /// 而说话中间的停顿恰恰大多是那个量级。
     let sampleInterval: Double = 0.04
 
+    // MARK: 自动断句（VAD）
+    //
+    // 她要的：不用一直按着，**他自己听出来你说完了**。
+    //
+    // ## 为什么写在这儿
+    //
+    // 这个类本来就每 0.04 秒量一次音量（画波形、听语气用的那串 `samples`）。
+    // 也就是说**判断「有没有在说话」需要的数据，这儿已经有了**——
+    // 再单开一套 AVAudioEngine 抢同一个麦克风只会两边都录不干净
+    // （`SpeechRecognizer` 那份注释里记着这个坑）。
+    //
+    // 所以 VAD 就长在这根 ticker 上，一处改，打电话和聊天两边同时有。
+    //
+    // ## 怎么判
+    //
+    // **不能拿一个写死的阈值。** 她可能在安静的卧室，也可能在路上；
+    // 手机的增益还会自己变。所以开头半秒先量一下**本底噪声**，
+    // 阈值定成「比本底高出一截」。
+    //
+    // 然后是个很简单的状态机：
+    //   · 还没开口 → 连着几帧超过阈值才算「开始说了」（防咳嗽、防桌子响一下）
+    //   · 说过了 → 连着 `tailSilence` 秒低于阈值就算「说完了」
+    //
+    // ⚠️ **尾巴不能太短。** 中文里句子中间的停顿常有 0.5 秒，
+    // 卡在 0.6 会把人话拦腰截断。1.1 秒是个不难受的数。
+
+    /// 开着的话，听出说完了就自己停。默认关着——
+    /// 按住说话那条路不需要它。
+    var autoStop = false
+    /// 说完了。**在主线程上叫**，调用方在这儿收尾（停录音、去识别）。
+    var onAutoStop: (@MainActor () -> Void)?
+    /// 说完之后要静多久才算一句话结束
+    var tailSilence: Double = 1.1
+    /// 一直没开口的话，等这么久就放弃
+    var openingPatience: Double = 8
+
+    /// 本底噪声。开头这么久只量不判。
+    private let floorWindow: Double = 0.5
+    private var noiseFloor: Double = 0
+    private var floorCount = 0
+    private var spoke = false
+    private var loudRun = 0
+    private var quietRun = 0
+    private var fired = false
+
+    /// 此刻算不算「在说话」。给界面用——
+    /// 她得看得见它到底有没有听见自己
+    @Published private(set) var hearing = false
+
     private var recorder: AVAudioRecorder?
     private var ticker: Task<Void, Never>?
     private var fileURL: URL?
@@ -215,6 +264,14 @@ final class VoiceRecorder: NSObject, ObservableObject {
         seconds = 0
         samples = []
         startedAt = Date()
+        // VAD 的状态每次录音都从头来
+        noiseFloor = 0
+        floorCount = 0
+        spoke = false
+        loudRun = 0
+        quietRun = 0
+        fired = false
+        hearing = false
 
         ticker = Task { @MainActor in
             while !Task.isCancelled, recording {
@@ -230,7 +287,57 @@ final class VoiceRecorder: NSObject, ObservableObject {
                 let v = max(0, min(1, (db + 55) / 55))
                 level = v
                 samples.append(v)
+                if autoStop { listen(v) }
             }
+        }
+    }
+
+    /// 听一帧，判断她说完了没有。
+    private func listen(_ v: Double) {
+        guard !fired else { return }
+
+        // ── 开头半秒：只量本底，不判 ──────────────────────
+        if Double(floorCount) * sampleInterval < floorWindow {
+            floorCount += 1
+            noiseFloor = max(noiseFloor, v)
+            return
+        }
+
+        // 阈值：比本底高出一截。
+        // 下限 0.12 是防「本底量到了 0」的情况（戴耳机、麦被捂住）——
+        // 那时候阈值会掉到 0，什么都算说话。
+        let gate = max(0.12, noiseFloor + 0.10)
+
+        if v > gate {
+            loudRun += 1
+            quietRun = 0
+            // 连着三帧（约 0.12 秒）才算真开口。
+            // 一帧就算的话，桌子响一下、椅子挪一下都能骗过去
+            if loudRun >= 3, !spoke {
+                spoke = true
+                hearing = true
+            }
+        } else {
+            loudRun = 0
+            quietRun += 1
+        }
+
+        let quietFor = Double(quietRun) * sampleInterval
+
+        // ① 说过话了，尾巴静够了 → 这一句说完了
+        if spoke, quietFor >= tailSilence {
+            fired = true
+            hearing = false
+            onAutoStop?()
+            return
+        }
+
+        // ② 一直没开口 → 别让它一直录下去。
+        //    这一支照样叫 `onAutoStop`，**是否当成空录音由调用方决定**——
+        //    打电话那边会判 `seconds` 和识别结果，空的就不发。
+        if !spoke, seconds >= openingPatience {
+            fired = true
+            onAutoStop?()
         }
     }
 
@@ -243,6 +350,7 @@ final class VoiceRecorder: NSObject, ObservableObject {
         recorder = nil
         recording = false
         level = 0
+        hearing = false
         // samples **故意不清空**：停下来之后正是要拿它去算语气的时候。
         // 下一次 start() 会把它重置。
         startedAt = nil

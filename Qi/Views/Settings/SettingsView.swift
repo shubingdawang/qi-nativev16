@@ -760,8 +760,23 @@ struct SettingsView: View {
                                      chevron: true)
                 }
                 .buttonStyle(.plain)
+                SettingsDivider()
+
+                NavigationLink { HealthAccessView() } label: {
+                    SettingsRowLabel(title: "健康和待办",
+                                     value: healthSummary, chevron: true)
+                }
+                .buttonStyle(.plain)
             }
         }
+    }
+
+    /// 健康和待办现在给了哪几样
+    private var healthSummary: String {
+        var on: [String] = []
+        if app.settings.healthAccess { on.append("健康") }
+        if app.settings.todoAccess { on.append(app.settings.todoWrite ? "待办·可写" : "待办") }
+        return on.isEmpty ? "都关着" : on.joined(separator: "、")
     }
 
     // MARK: 后端

@@ -490,7 +490,102 @@ enum FurnitureCatalog {
             "..bbbb..",
             "...ww...",
             "..wwww.."
-        ], p), category: .decor, reaction: "转一圈找家在哪儿")
+        ], p), category: .decor, reaction: "转一圈找家在哪儿"),
+
+        // MARK: 厨房和浴室
+        //
+        // 这两间以前是**空的**——户型图上开着门，进去什么都没有。
+        // 根子在这儿：目录里压根没有能归进去的东西
+        // （`HomeRooms.home(for:)` 想分也无处可分）。
+        //
+        // 名字**用正式名词**，不用「小冰箱」「小马桶」那种。
+        // 她说过：功能和物件的名称要正式，那是名称，不是聊天。
+        //
+        // 价钱接着现有那条梯度走（25 到 200）：
+        // 越大、越复杂、越是「一间屋子的主角」就越贵。
+        // 自动贩卖机压过游戏机一档——它是这批里最花哨的一件。
+
+        .init(id: "fridge", name: "冰箱", price: 180, sprite: PixelSprite([
+            "cccccccc",
+            "cccccccc",
+            "ccccccsc",
+            "cccccccc",
+            "ssssssss",
+            "cccccccc",
+            "ccccccsc",
+            "cccccccc",
+            "cccccccc",
+            "dd....dd"
+        ], p), category: .gadget, reaction: "拉开门看看有什么"),
+
+        .init(id: "microwave", name: "微波炉", price: 90, sprite: PixelSprite([
+            "sssssssss",
+            "skkkkksss",
+            "skkkkksys",
+            "skkkkksss",
+            "sssssssss"
+        ], p), category: .gadget, reaction: "盯着里面转圈"),
+
+        .init(id: "breadrack", name: "面包架", price: 55, sprite: PixelSprite([
+            "wwwwwwww",
+            "w.yyyy.w",
+            "wwwwwwww",
+            "w.yy.yyw",
+            "wwwwwwww",
+            "d......d"
+        ], p), category: .furniture, reaction: "踮起脚够最上面那个"),
+
+        .init(id: "washer", name: "洗衣机", price: 160, sprite: PixelSprite([
+            "ssssssss",
+            "sccccccs",
+            "sckkkkcs",
+            "sckbbkcs",
+            "sckkkkcs",
+            "sccccccs",
+            "ssssssss",
+            "d......d"
+        ], p), category: .gadget, reaction: "看着衣服一圈圈转"),
+
+        .init(id: "toilet", name: "马桶", price: 70, sprite: PixelSprite([
+            "..cccc..",
+            "..cccc..",
+            "..cccc..",
+            ".cccccc.",
+            "cccccccc",
+            "cccccccc",
+            ".ssssss."
+        ], p), category: .furniture, reaction: "把盖子掀开又合上"),
+
+        .init(id: "bathtub", name: "浴缸", price: 200, sprite: PixelSprite([
+            "cccccccccc",
+            "cbbbbbbbbc",
+            "cbbbbbbbbc",
+            "cbbbbbbbbc",
+            "cccccccccc",
+            ".ss....ss."
+        ], p), category: .furniture, reaction: "伸一只脚进去试水温"),
+
+        .init(id: "sink", name: "洗手台", price: 110, sprite: PixelSprite([
+            "..ssss..",
+            "cccccccc",
+            "cbbbbbbc",
+            "cccccccc",
+            "wwwwwwww",
+            "w.wwww.w",
+            "wwwwwwww"
+        ], p), category: .furniture, reaction: "掬一捧水拍在脸上"),
+
+        .init(id: "vending", name: "自动贩卖机", price: 240, sprite: PixelSprite([
+            "rrrrrrrr",
+            "rccccccr",
+            "rcbybycr",
+            "rcgygycr",
+            "rcnynycr",
+            "rccccccr",
+            "rrkkkkrr",
+            "rrrrrrrr",
+            "rr....rr"
+        ], p), category: .gadget, reaction: "隔着玻璃挑了半天")
     ]
 
     static func kind(_ id: String) -> FurnitureKind? {
@@ -826,6 +921,49 @@ extension FurnitureCatalog {
         case "lamp":
             return IsoShape(w: 1, d: 1, tall: 1.6, actions: ["开灯", "凑到灯下"])
 
+        // MARK: 厨房和浴室
+        //
+        // 她要的「每件家具三到四个互动动作」在这儿定。
+        // ⚠️ 动作名要么用 `RoomActs.act` 里已有的，
+        // 要么去那边补一条——**没补的会掉进 default 那一支**，
+        // 变成一句「……」，看着像坏了。
+
+        // 冰箱：高，能开门、能贴着凉快、顶上能放东西
+        case "fridge":
+            return IsoShape(w: 1, d: 1, tall: 2.2, surface: true,
+                            actions: ["开冰箱", "贴着凉快", "把东西放上去"])
+
+        // 微波炉：矮，一般摆在台面上，所以自己不高
+        case "microwave":
+            return IsoShape(w: 1, d: 1, tall: 0.7, surface: true,
+                            actions: ["按两下", "盯着转", "把东西放上去"])
+
+        case "breadrack":
+            return IsoShape(w: 1, d: 1, tall: 1.5, surface: true,
+                            actions: ["踮脚够", "闻一闻", "把东西放上去"])
+
+        case "washer":
+            return IsoShape(w: 1, d: 1, tall: 1.2, surface: true,
+                            actions: ["按两下", "盯着转", "坐上面"])
+
+        case "toilet":
+            return IsoShape(w: 1, d: 1, tall: 1.0,
+                            actions: ["掀盖子", "坐下", "冲一下"])
+
+        // 浴缸：占两格，能进去泡、能坐边上、能玩水
+        case "bathtub":
+            return IsoShape(w: 2, d: 1, tall: 0.8,
+                            actions: ["泡进去", "坐边上", "拍水花"])
+
+        case "sink":
+            return IsoShape(w: 1, d: 1, tall: 1.1, surface: true,
+                            actions: ["洗把脸", "照镜子", "把东西放上去"])
+
+        // 自动贩卖机：这批里最高的一件
+        case "vending":
+            return IsoShape(w: 1, d: 1, tall: 2.4,
+                            actions: ["挑一瓶", "拍一下", "隔着玻璃看"])
+
         // 地毯：**摊在地上，别的东西可以压在上面**，所以高度是 0
         case "rug":
             return IsoShape(w: 3, d: 3, tall: 0, actions: ["打滚", "躺一会儿"])
@@ -880,6 +1018,69 @@ extension ClawdStore {
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: "clawdRoom")
             objectWillChange.send()
+        }
+    }
+
+    // MARK: 墙纸和地板
+    //
+    // 她那批 AI 图里有壁纸和地板，一直没接进来——
+    // 屋子的墙还是两块纯色、地还是棋盘格。
+    //
+    // ## 为什么存文件名而不是存图
+    //
+    // 图本身走 `ImageStore`（跟家具图、表情、壁纸同一个池子），
+    // 这儿只记一个文件名。三个好处：
+    //   · **备份自动带上**（`BackupBundle` 扫的就是那个目录）
+    //   · 画的时候走 `ImageStore.cached`，一帧一帧不用重新解码
+    //   · 删一间屋的墙纸就是清一个字符串，图还在，别处还能用
+    //
+    // **按房间分开存**：厨房贴瓷砖、卧室铺木地板，这才叫一个家。
+
+    private func decor(_ key: String, _ room: HomeRoom) -> String {
+        UserDefaults.standard.string(forKey: "roomDecor-" + key + "-" + room.rawValue) ?? ""
+    }
+
+    private func setDecor(_ key: String, _ room: HomeRoom, _ name: String) {
+        let k = "roomDecor-" + key + "-" + room.rawValue
+        if name.isEmpty { UserDefaults.standard.removeObject(forKey: k) }
+        else { UserDefaults.standard.set(name, forKey: k) }
+        objectWillChange.send()
+    }
+
+    /// 这一间的墙纸文件名。空 = 用画的那版纯色。
+    func wallpaper(of room: HomeRoom) -> String { decor("wall", room) }
+    /// 这一间的地板文件名。空 = 用画的那版棋盘格。
+    func flooring(of room: HomeRoom) -> String { decor("floor", room) }
+
+    func setWallpaper(_ name: String, for room: HomeRoom) { setDecor("wall", room, name) }
+    func setFlooring(_ name: String, for room: HomeRoom) { setDecor("floor", room, name) }
+
+    /// 换一张墙纸／地板。收拾干净再存（抠背景、裁紧），跟家具图走同一套。
+    @discardableResult
+    func dressRoom(_ room: HomeRoom, wall: UIImage?, floor: UIImage?) -> Bool {
+        var ok = false
+        if let wall, let n = FurnitureImage.save(wall) {
+            // 旧的那张不再被人用了就删掉，别在磁盘上攒垃圾
+            let old = wallpaper(of: room)
+            setWallpaper(n, for: room)
+            if !old.isEmpty { ImageStore.delete(old) }
+            ok = true
+        }
+        if let floor, let n = FurnitureImage.save(floor) {
+            let old = flooring(of: room)
+            setFlooring(n, for: room)
+            if !old.isEmpty { ImageStore.delete(old) }
+            ok = true
+        }
+        return ok
+    }
+
+    /// 换回画的那版
+    func undressRoom(_ room: HomeRoom) {
+        for (key, name) in [("wall", wallpaper(of: room)), ("floor", flooring(of: room))] {
+            guard !name.isEmpty else { continue }
+            setDecor(key, room, "")
+            ImageStore.delete(name)
         }
     }
 

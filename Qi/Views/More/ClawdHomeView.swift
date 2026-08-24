@@ -21,6 +21,9 @@ struct ClawdHomeView: View {
     /// 不然半只身子会插进墙里——她说的「他现在可以走到墙壁的区域」就是这个。
     /// 地板范围。**跟 ClawdStore 那两个是同一件事**——
     /// 以前界面一套、store 里 clamp 又一套，于是家具能拖到墙上去。
+    /// ⚠️ **这两个只是兜底。** 真正管用的是下面的 `band` / `span`——
+    /// 它们从 `IsoRoom.fit` 现算，屋子挪到哪儿他的活动范围就跟到哪儿。
+    /// 只有在还没量出房间多大的那一帧才会退回这两个数。
     static var floorTop: Double { ClawdStore.floorTop }
     static var floorBottom: Double { ClawdStore.floorBottom }
 
@@ -58,6 +61,11 @@ struct ClawdHomeView: View {
 
     /// 「从整版图里取家具」那张纸开着没有
     @State private var importingSheet = false
+    /// 正在换墙纸还是换地板
+    enum DecorTarget { case wall, floor }
+    @State private var decorTarget: DecorTarget = .wall
+    @State private var pickingDecor = false
+    @State private var decorPick: PhotosPickerItem?
     /// 正在给哪一件换图
     @State private var dressing: Furniture?
     @State private var pickingImage = false
@@ -70,6 +78,40 @@ struct ClawdHomeView: View {
     /// 屋子这一页现在画的是哪一间。
     /// `viewing` 还没定下来的时候（刚进来那一帧）就跟着他。
     private var shownRoom: HomeRoom { viewing ?? store.clawdRoom }
+
+    // MARK: 他能站在哪儿
+    //
+    // 她报的：「房间虽然整体往上挪了，但是 clawd 的活动区域并没有往上挪。」
+    //
+    // 根子是**两套坐标各写各的**：屋子归 `IsoRoom.fit` 算，
+    // 他归 `ClawdStore.floorTop/floorBottom` 那两个写死的比例。
+    // 屋子的摆法一改，他就还留在原地。
+    //
+    // 现在都从**同一份几何**里现算。`IsoRoom` 那边只此一份，
+    // 画屋子、摆家具、他走路，三处用的是同一个 `fit` 的结果。
+
+    /// 地板竖着占哪一段
+    private var band: (top: Double, bottom: Double) {
+        guard let s = roomSize, s.height > 1 else {
+            return (ClawdHomeView.floorTop, ClawdHomeView.floorBottom)
+        }
+        return IsoRoom.fit(in: s).walkBand(in: s)
+    }
+
+    /// 在竖直位置 y 上横着到哪儿。**地板是菱形，不是矩形**——
+    /// 越靠上下两个尖越窄，一律 clamp 到 0.12…0.88 的话他会走到空气里。
+    private func span(atY y: Double) -> (lo: Double, hi: Double) {
+        guard let s = roomSize, s.width > 1 else { return (0.12, 0.88) }
+        return IsoRoom.fit(in: s).walkSpan(atY: y, in: s)
+    }
+
+    /// 把一个点夹回地板里
+    private func onFloor(_ x: Double, _ y: Double) -> (x: Double, y: Double) {
+        let b = band
+        let yy = min(b.bottom, max(b.top, y))
+        let s = span(atY: yy)
+        return (min(s.hi, max(s.lo, x)), yy)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -252,6 +294,25 @@ struct ClawdHomeView: View {
 
                 Spacer(minLength: 4)
 
+                // 换这一间的墙纸和地板。
+                //
+                // **按房间分开**：厨房贴瓷砖、卧室铺木地板，这才叫一个家。
+                // 图走的是跟家具图同一套（抠白底、裁紧），她导什么进来都行。
+                Menu {
+                    Button("换这间的墙纸") { decorTarget = .wall; pickingDecor = true }
+                    Button("换这间的地板") { decorTarget = .floor; pickingDecor = true }
+                    if !store.wallpaper(of: r).isEmpty || !store.flooring(of: r).isEmpty {
+                        Button("换回原来那版", role: .destructive) {
+                            store.undressRoom(r)
+                            notice = r.rawValue + "换回原来那版了"
+                        }
+                    }
+                } label: {
+                    Image(systemName: "paintbrush")
+                        .font(.app(12))
+                        .foregroundStyle(app.settings.accentColor)
+                }
+
                 Image(systemName: r.icon)
                     .font(.app(12))
                     .foregroundStyle(Theme.textSoft(scheme))
@@ -261,6 +322,33 @@ struct ClawdHomeView: View {
             }
             .padding(.horizontal, 18)
             .padding(.bottom, 8)
+            // ⚠️ 挂在**这一条**上，不是挂在下面那个 room 上。
+            // 「点了没反应，切到别的档才弹出来」那次的教训：
+            // 弹窗要挂在按钮活着的那个分支上。
+            .photosPicker(isPresented: $pickingDecor, selection: $decorPick,
+                          matching: .images)
+            .onChange(of: decorPick) { _, picked in
+                guard let picked else { return }
+                Task { @MainActor in
+                    defer { decorPick = nil }
+                    guard let data = try? await picked.loadTransferable(type: Data.self),
+                          let raw = UIImage(data: data) else {
+                        notice = "这张图读不出来"
+                        return
+                    }
+                    // 缩一下再收拾。整版原图动辄上千万像素，
+                    // 抠背景那一步是按像素数走的（切整版那儿栽过）
+                    let img = ImageStore.downscale(raw, maxSide: 1600)
+                    let ok = decorTarget == .wall
+                        ? store.dressRoom(r, wall: img, floor: nil)
+                        : store.dressRoom(r, wall: nil, floor: img)
+                    notice = ok
+                        ? (decorTarget == .wall ? "墙纸贴上了" : "地板铺好了")
+                        : "这张图存不下来"
+                    try? await Task.sleep(nanoseconds: 4_000_000_000)
+                    notice = nil
+                }
+            }
 
             room
                 .overlay(alignment: .topLeading) {
@@ -292,134 +380,24 @@ struct ClawdHomeView: View {
                 IsoRoomView(store: store,
                             room: shownRoom,
                             clawdX: clawdX, clawdY: clawdY,
-                            floorTop: ClawdHomeView.floorTop,
-                            floorBottom: ClawdHomeView.floorBottom,
-                            onTapFurniture: { acting = $0 })
-
-                // ⚠️ **他不在这一间就不画他。**
-                //
-                // 她说的：「clawd 在哪个房间，我打开小屋就会呈现哪个房间。」
-                // 反过来也成立——她翻到别的房间的时候，他不该也跟着出现在那儿。
-                // 想知道他在哪儿，看左上角那个头像。
-                if shownRoom == store.clawdRoom {
-                    // clawd 本人。长按能拎起来放到任何地方，
-                    // 没人管的时候他自己也会在屋里走来走去。
-                    VStack(spacing: 4) {
-                        if let bubble {
-                            Text(bubble)
-                                .font(.app(11))
-                                .foregroundStyle(Theme.textMain(scheme))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 7)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 11, style: .continuous)
-                                        .fill(scheme == .dark
-                                              ? Color.white.opacity(0.14)
-                                              : Color.white.opacity(0.92))
-                                )
-                                .fixedSize()
-                                .transition(.scale(scale: 0.9).combined(with: .opacity))
-                        }
-                        HStack(alignment: .bottom, spacing: 2) {
-                            // ⚠️ 从 1.8 收到 1.25。
+                            // 这两个是画他影子／算他深度用的，
+                            // **跟他自己走的那套是同一份几何**了
+                            floorTop: band.top,
+                            floorBottom: band.bottom,
+                            onTapFurniture: { acting = $0 },
+                            // ⚠️ **他不在这一间就不画他。**
                             //
-                            // 她说「clawd 也（太大），如果屋子只有这么大的话，
-                            // clawd 完全不能住」。1.8 倍的他有 58 点宽——
-                            // 比一格（约 40 点）还宽一半，站在床边跟床一样高。
-                            // 收到 1.25 之后他大概占一格，**屋子才像是能住人的**。
-                            ClawdView(mood: mood, scale: 1.25, shadow: true)
-                                // 大件**举过头顶**（她画的那张参考图就是这个动作）。
-                                // 聊天页读的是同一个 store、同一套判断，所以两边一模一样：
-                                // 这边在搬床，切过去那边也在搬床，也是举着的。
-                                .overlay(alignment: .top) {
-                                    if let kind = store.carriedKind, store.overhead(kind) {
-                                        PixelSpriteView(sprite: kind.sprite, scale: 1.3)
-                                            .offset(y: -22)
-                                            .transition(.scale(scale: 0.5).combined(with: .opacity))
-                                    }
-                                }
-                            // 小东西还是端在手边
-                            if let kind = store.carriedKind, !store.overhead(kind) {
-                                PixelSpriteView(sprite: kind.sprite, scale: 1.5)
-                                    .offset(y: -8)
-                                    .transition(.scale(scale: 0.5).combined(with: .opacity))
-                            }
-                        }
-                            // 被拎起来的时候整只抬高一点、影子也跟着散开
-                            .scaleEffect(held ? 1.14 : 1)
-                            .shadow(color: .black.opacity(held ? 0.26 : 0),
-                                    radius: 10, y: 8)
-                            // 走路的时候左右翻个身，朝着要去的方向。
-                            //
-                            // **这一下不能带动画**。外面那几条 `.animation(...)`
-                            // 会把它也接管掉，于是 x 从 1 连续变到 -1——
-                            // 中间要经过 0，看着就是整只被压扁再翻过来，
-                            // 也就是她说的「走路还会转圈」。
-                            // 加一条时长为 0 的动画把它单独摘出来。
-                            .scaleEffect(x: facingLeft ? -1 : 1, y: 1)
-                            .animation(nil, value: facingLeft)
-                            // 精灵那块 Canvas 是不接触摸的，得自己补一块感应区，
-                            // 不然点也点不到、更别说长按拖
-                            .contentShape(Rectangle().inset(by: -10))
-                    }
-                    .position(x: clawdX * geo.size.width, y: clawdY * geo.size.height)
-                    // 拖的时候要跟手，所以不给动画；自己走的时候才慢慢挪过去
-                    .animation(held ? nil : .easeInOut(duration: walkSeconds), value: clawdX)
-                    .animation(held ? nil : .easeInOut(duration: walkSeconds), value: clawdY)
-                    .animation(.spring(response: 0.28, dampingFraction: 0.6), value: held)
-                    .onTapGesture {
-                        // 手上有东西的时候，点他＝**现在就放下**。
-                        //
-                        // 走完一趟他自己会放（见 startWalking），但那要等几秒。
-                        // 她递过去多半是想指个地方，不该逼她干等——
-                        // 点一下就搁在他脚边。
-                        if let kind = store.carriedKind {
-                            store.putDown(at: CGPoint(x: clawdX, y: clawdY))
-                            mood = .idle
-                            say(store.overhead(kind) ? "呼……放下了" : "好，搁这儿")
-                            if app.settings.haptics {
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            }
-                            return
-                        }
-                        mood = .happy
-                        say(tapLine())
-                        if app.settings.haptics {
-                            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                        }
-                        Task { @MainActor in
-                            try? await Task.sleep(nanoseconds: 1_600_000_000)
-                            if mood == .happy { mood = .idle }
-                        }
-                    }
-                    .gesture(
-                        LongPressGesture(minimumDuration: 0.3)
-                            .onEnded { _ in
-                                held = true
-                                walkTask?.cancel()          // 拎着的时候别让他自己乱跑
-                                mood = .happy
-                                if app.settings.haptics {
-                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                }
-                                say(["诶——", "放我下来", "飞起来了", "唔？"].randomElement() ?? "诶")
-                            }
-                            .sequenced(before: DragGesture(minimumDistance: 0))
-                            .onChanged { value in
-                                if case .second(_, let drag?) = value {
-                                    clawdX = min(0.92, max(0.08, drag.location.x / geo.size.width))
-                                    clawdY = min(ClawdHomeView.floorBottom, max(ClawdHomeView.floorTop, drag.location.y / geo.size.height))
-                                }
-                            }
-                            .onEnded { _ in
-                                guard held else { return }
-                                held = false
-                                mood = .idle
-                                say(["就待这儿吧", "好", "这儿也不错"].randomElement() ?? "好")
-                                startWalking()              // 放下之后重新开始自己溜达
-                            }
-                    )
-
+                            // 她说的：「clawd 在哪个房间，我打开小屋就会呈现哪个房间。」
+                            // 反过来也成立——她翻到别的房间的时候，
+                            // 他不该也跟着出现在那儿。想知道他在哪儿，看左上角那个头像。
+                            clawdHere: shownRoom == store.clawdRoom) {
+                    // ⚠️ 他**画在 IsoRoomView 里面**，不再叠在它上面。
+                    // 那样他永远压在所有家具前面；现在他进那个深度排序，
+                    // 站在床里侧就被床挡住。见 `clawdBody`。
+                    clawdBody(geo.size)
                 }
+
+
 
                 // 他说的话。
                 //
@@ -524,6 +502,141 @@ struct ClawdHomeView: View {
                 notice = nil
             }
         }
+    }
+
+    // MARK: clawd 本人
+    //
+    // ⚠️ **这一整块现在是交给 `IsoRoomView` 去摆的**，不再自己叠在屋子上面。
+    //
+    // 以前他画在 `IsoRoomView` 后面 —— 也就是**永远压在所有家具前面**。
+    // 家具之间的遮挡一直是对的，只有他不对：站在床里侧也整只露在床前面。
+    //
+    // 现在他作为一条 `Drawable` 进那个深度排序，跟家具用同一把尺。
+    // 手势、朝向、走路动画还留在这儿（搬过去要连着走路那一整套一起搬，不值），
+    // `IsoRoomView` 只负责**把这块内容插在正确的位置**。
+    @ViewBuilder
+    private func clawdBody(_ size: CGSize) -> some View {
+        // clawd 本人。长按能拎起来放到任何地方，
+        // 没人管的时候他自己也会在屋里走来走去。
+        VStack(spacing: 4) {
+            if let bubble {
+                Text(bubble)
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMain(scheme))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .fill(scheme == .dark
+                                  ? Color.white.opacity(0.14)
+                                  : Color.white.opacity(0.92))
+                    )
+                    .fixedSize()
+                    .transition(.scale(scale: 0.9).combined(with: .opacity))
+            }
+            HStack(alignment: .bottom, spacing: 2) {
+                // ⚠️ 从 1.8 收到 1.25。
+                //
+                // 她说「clawd 也（太大），如果屋子只有这么大的话，
+                // clawd 完全不能住」。1.8 倍的他有 58 点宽——
+                // 比一格（约 40 点）还宽一半，站在床边跟床一样高。
+                // 收到 1.25 之后他大概占一格，**屋子才像是能住人的**。
+                ClawdView(mood: mood, scale: 1.25, shadow: true)
+                    // 大件**举过头顶**（她画的那张参考图就是这个动作）。
+                    // 聊天页读的是同一个 store、同一套判断，所以两边一模一样：
+                    // 这边在搬床，切过去那边也在搬床，也是举着的。
+                    .overlay(alignment: .top) {
+                        if let kind = store.carriedKind, store.overhead(kind) {
+                            PixelSpriteView(sprite: kind.sprite, scale: 1.3)
+                                .offset(y: -22)
+                                .transition(.scale(scale: 0.5).combined(with: .opacity))
+                        }
+                    }
+                // 小东西还是端在手边
+                if let kind = store.carriedKind, !store.overhead(kind) {
+                    PixelSpriteView(sprite: kind.sprite, scale: 1.5)
+                        .offset(y: -8)
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+                }
+            }
+                // 被拎起来的时候整只抬高一点、影子也跟着散开
+                .scaleEffect(held ? 1.14 : 1)
+                .shadow(color: .black.opacity(held ? 0.26 : 0),
+                        radius: 10, y: 8)
+                // 走路的时候左右翻个身，朝着要去的方向。
+                //
+                // **这一下不能带动画**。外面那几条 `.animation(...)`
+                // 会把它也接管掉，于是 x 从 1 连续变到 -1——
+                // 中间要经过 0，看着就是整只被压扁再翻过来，
+                // 也就是她说的「走路还会转圈」。
+                // 加一条时长为 0 的动画把它单独摘出来。
+                .scaleEffect(x: facingLeft ? -1 : 1, y: 1)
+                .animation(nil, value: facingLeft)
+                // 精灵那块 Canvas 是不接触摸的，得自己补一块感应区，
+                // 不然点也点不到、更别说长按拖
+                .contentShape(Rectangle().inset(by: -10))
+        }
+        .position(x: clawdX * size.width, y: clawdY * size.height)
+        // 拖的时候要跟手，所以不给动画；自己走的时候才慢慢挪过去
+        .animation(held ? nil : .easeInOut(duration: walkSeconds), value: clawdX)
+        .animation(held ? nil : .easeInOut(duration: walkSeconds), value: clawdY)
+        .animation(.spring(response: 0.28, dampingFraction: 0.6), value: held)
+        .onTapGesture {
+            // 手上有东西的时候，点他＝**现在就放下**。
+            //
+            // 走完一趟他自己会放（见 startWalking），但那要等几秒。
+            // 她递过去多半是想指个地方，不该逼她干等——
+            // 点一下就搁在他脚边。
+            if let kind = store.carriedKind {
+                store.putDown(at: CGPoint(x: clawdX, y: clawdY))
+                mood = .idle
+                say(store.overhead(kind) ? "呼……放下了" : "好，搁这儿")
+                if app.settings.haptics {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                }
+                return
+            }
+            mood = .happy
+            say(tapLine())
+            if app.settings.haptics {
+                UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            }
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 1_600_000_000)
+                if mood == .happy { mood = .idle }
+            }
+        }
+        .gesture(
+            LongPressGesture(minimumDuration: 0.3)
+                .onEnded { _ in
+                    held = true
+                    walkTask?.cancel()          // 拎着的时候别让他自己乱跑
+                    mood = .happy
+                    if app.settings.haptics {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    }
+                    say(["诶——", "放我下来", "飞起来了", "唔？"].randomElement() ?? "诶")
+                }
+                .sequenced(before: DragGesture(minimumDistance: 0))
+                .onChanged { value in
+                    if case .second(_, let drag?) = value {
+                        // 夹回**地板那个菱形**里，不是夹回一个矩形。
+                        // 她说的「活动区域没往上挪」这儿也算一处。
+                        let p = onFloor(drag.location.x / size.width,
+                                        drag.location.y / size.height)
+                        clawdX = p.x
+                        clawdY = p.y
+                    }
+                }
+                .onEnded { _ in
+                    guard held else { return }
+                    held = false
+                    mood = .idle
+                    say(["就待这儿吧", "好", "这儿也不错"].randomElement() ?? "好")
+                    startWalking()              // 放下之后重新开始自己溜达
+                }
+        )
+
     }
 
     // MARK: 柜子
@@ -699,8 +812,9 @@ struct ClawdHomeView: View {
                         say(["去" + store.clawdRoom.rawValue + "看看",
                              "换个地方待着", "我去那边"].randomElement() ?? "换个地方")
                         // 进新屋从门口开始走
-                        clawdX = 0.5
-                        clawdY = ClawdHomeView.floorTop + 0.02
+                        let entry = onFloor(0.5, band.top + 0.02)
+                        clawdX = entry.x
+                        clawdY = entry.y
                         try? await Task.sleep(nanoseconds: 900_000_000)
                         store.clawdDoing = .walking
                     }
@@ -722,8 +836,9 @@ struct ClawdHomeView: View {
                     let p = RoomActs.spot(of: item, kindID: kind.id,
                                           in: geo, act: chosen)
                     // 屏幕上那个点换回 0…1，走路那套还是老样子
-                    let tx = min(0.95, max(0.05, p.x / size.width))
-                    let ty = min(0.98, max(0.05, p.y / size.height))
+                    let onIt = onFloor(p.x / size.width, p.y / size.height)
+                    let tx = onIt.x
+                    let ty = onIt.y
 
                     facingLeft = tx < clawdX
                     walkSeconds = 1.4
@@ -748,8 +863,14 @@ struct ClawdHomeView: View {
 
                 // **只在地板上走。** 地板是从 0.62 往下那一块，
                 // 以前这儿是 0.22…0.90——0.22 在墙上，所以他会走进墙里去。
-                let targetX = Double.random(in: 0.12...0.88)
-                let targetY = Double.random(in: ClawdHomeView.floorTop...ClawdHomeView.floorBottom)
+                // **只在地板上走**，而且是**菱形**的地板：
+                // 先随便挑一个深度，再按那个深度上地板有多宽挑左右。
+                let b = band
+                let targetY = Double.random(in: b.top...b.bottom)
+                let sp = span(atY: targetY)
+                let targetX = sp.hi > sp.lo
+                    ? Double.random(in: sp.lo...sp.hi)
+                    : sp.lo
                 let dist = ((targetX - clawdX) * (targetX - clawdX)
                             + (targetY - clawdY) * (targetY - clawdY)).squareRoot()
 
@@ -882,8 +1003,9 @@ struct ClawdHomeView: View {
                 guard r != store.clawdRoom else { continue }
                 store.clawdRoom = r
                 store.clawdDoing = .moving
-                clawdX = 0.5
-                clawdY = ClawdHomeView.floorTop + 0.02
+                let spot = onFloor(0.5, band.top + 0.02)
+                clawdX = spot.x
+                clawdY = spot.y
                 done = true
 
             case .move(let name, let to):

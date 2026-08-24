@@ -67,8 +67,14 @@ enum HomeRoom: String, Codable, CaseIterable, Identifiable, Sendable {
             return .study
         case "table", "cake", "donut", "riceball", "coffee", "soda":
             return .dining
-        case "sofa", "tv", "rug", "stool":
+        case "sofa", "tv", "rug", "stool", "vending":
             return .living
+        // 厨房和浴室以前**一件都分不进去**——目录里没有能归它们的东西，
+        // 所以那两间打开永远是空的。现在有了。
+        case "fridge", "microwave", "breadrack":
+            return .kitchen
+        case "washer", "toilet", "bathtub", "sink":
+            return .bath
         default:
             switch kind.category {
             case .food, .drink: return .dining

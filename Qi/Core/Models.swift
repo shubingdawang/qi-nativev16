@@ -474,6 +474,21 @@ struct AppSettings: Codable {
     /// 单独关掉的自带工具（存短名，不带 app__ 前缀）
     var disabledNativeTools: [String] = []
 
+    // MARK: 健康和待办
+    //
+    // **默认全关。** 这是她身上的数据，不是 App 的数据——
+    // 得她自己一条条点开，不能装完就默认给了。
+
+    /// 让他看得到 Apple 健康里的步数、睡眠、心率、锻炼、经期。**只读**。
+    var healthAccess: Bool = false
+    /// 让他看得到提醒事项和日历。**只读**。
+    var todoAccess: Bool = false
+    /// 再往前一步：让他能**新建**一条提醒事项。
+    ///
+    /// 单独一个开关，而且只给「新建」——删和改一律不给。
+    /// 读错了没有后果，写错了有。这条线不能糊。
+    var todoWrite: Bool = false
+
     /// 他分段发：让他自己决定在哪儿断句，断开的每一段单独一个气泡。
     /// 一整段说完才算一句话，头像只挂一次。
     var segmentAssistant: Bool = false
@@ -721,6 +736,12 @@ extension AppSettings {
         localMemory = (try? c.decodeIfPresent(Bool.self, forKey: .localMemory)) ?? true
         localPulse = (try? c.decodeIfPresent(Bool.self, forKey: .localPulse)) ?? true
         disabledNativeTools = (try? c.decodeIfPresent([String].self, forKey: .disabledNativeTools)) ?? []
+        // ⚠️ 这三个的兜底值**必须是 false**。
+        // 老版本存下来的 settings.json 里没有这几个键，
+        // 兜底给 true 的话她升个级就等于默默把健康数据交出去了。
+        healthAccess = (try? c.decodeIfPresent(Bool.self, forKey: .healthAccess)) ?? false
+        todoAccess = (try? c.decodeIfPresent(Bool.self, forKey: .todoAccess)) ?? false
+        todoWrite = (try? c.decodeIfPresent(Bool.self, forKey: .todoWrite)) ?? false
         segmentAssistant = (try? c.decodeIfPresent(Bool.self, forKey: .segmentAssistant)) ?? false
         toolConfirm = (try? c.decodeIfPresent(Bool.self, forKey: .toolConfirm)) ?? true
         hisVoiceNote = (try? c.decodeIfPresent(String.self, forKey: .hisVoiceNote)) ?? ""

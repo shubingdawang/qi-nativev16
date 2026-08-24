@@ -33,6 +33,19 @@ struct WakeConfig: Codable, Hashable {
     var nudges: Bool = true
     /// 提前排多少个小时的量
     var nudgeHorizon: Double = 24
+
+    /// 她**停下多久**之后，他才被允许主动开口（分钟）。
+    ///
+    /// 出处是她发我的那份「ChatGPT 官端自唤醒」，里面有一条我们原来没有：
+    ///
+    /// > 静默时长从「**最近一条真实用户消息**」算起，不是从「上次唤醒」算起。
+    ///
+    /// 这个区别很实在。按「上次唤醒」算，她回来聊了两小时，
+    /// 它照样掐着点插一句；按「最后一条真实消息」算，**她在聊他就不插嘴**。
+    ///
+    /// 原来那道防线只有「App 在前台而且她正看着聊天页」——
+    /// 她切去别的页面、或者放下手机去洗个碗，就拦不住了。
+    var idleDelay: Double = 25
 }
 
 // MARK: - 状态
@@ -130,6 +143,10 @@ final class WakeEngine: ObservableObject {
         guard state.firedToday < config.dailyLimit else { return }
         // 兜底通知那条路也得过勿扰这一关，不然绕过去了
         guard !app.dndOn else { return }
+        // 静默阈值这一关**同样要过**。
+        // 只在 `opportunity` 里加是不够的——兜底通知是另一条进来的路，
+        // 漏一条就等于没加。（「上下游各做一半、中间没接上」那个教训。）
+        guard !app.spokeRecently(within: config.idleDelay) else { return }
 
         running = true
         var s = state
@@ -294,6 +311,12 @@ final class WakeEngine: ObservableObject {
         guard !app.dndOn else { return }
         // 手机正在她手里、她正看着聊天页的时候别插话
         if UIApplication.shared.applicationState == .active, app.isChatVisible { return }
+        // **她刚说过话就别插嘴。** 见 `WakeConfig.idleDelay`。
+        //
+        // 上面那道「她正看着聊天页」只在 App 在前台的时候管用。
+        // 她切去别的页面、放下手机去洗个碗——那时候她还在跟你聊天的节奏里，
+        // 只是手不在屏幕上。这一道才是真正拦住「聊着聊着他自己插一句」的那道。
+        guard !app.spokeRecently(within: config.idleDelay) else { return }
 
         running = true
         var s = state
@@ -324,7 +347,33 @@ final class WakeEngine: ObservableObject {
             state = s
             return
         }
-        deliver(said, app: app, from: "本机")
+        deliver(said.text, app: app, from: "本机")
+
+        // 他自己挑了下一次隔多久。**照他说的办。**
+        //
+        // 出处是她发我的那份「ChatGPT 官端自唤醒」——里面最实在的一条就是
+        // 「让 AI 在区间里自己选下一次」，而不是外面替他定死一个节奏。
+        // 这一条不额外花钱：那个数就夹在他刚才那次输出里。
+        if let m = said.nextMinutes { aimNext(afterMinutes: m) }
+    }
+
+    /// 把下一次醒的时间挪到 `afterMinutes` 分钟之后。
+    ///
+    /// ## 怎么做到的
+    ///
+    /// 这套是「危险度累加到阈值就醒」（hazard / θ）。
+    /// 想让它 90 分钟后醒，不是去设一个闹钟，而是**把阈值调成
+    /// 「按现在这个速度，正好 90 分钟能攒满」**。
+    ///
+    /// 这样他挑的那个数是被整套机制吸收的，不是绕过它——
+    /// 安静时段、每日上限、勿扰、她正看着聊天页，这几道关照样一道不少。
+    private func aimNext(afterMinutes m: Double) {
+        var s = state
+        s.hazard = 0
+        let lambda = max(0.05, lambdaNow)          // 每小时期望醒几次
+        s.theta = max(0.05, lambda * (m / 60.0))
+        state = s
+        Console.log(.wake, "他挑了下一次", "\(Int(m)) 分钟后")
     }
 
     private func deliver(_ text: String, app: AppState, from: String) {
@@ -484,5 +533,6 @@ extension WakeConfig {
         logSilent = (try? c.decodeIfPresent(Bool.self, forKey: .logSilent)) ?? true
         nudges = (try? c.decodeIfPresent(Bool.self, forKey: .nudges)) ?? true
         nudgeHorizon = (try? c.decodeIfPresent(Double.self, forKey: .nudgeHorizon)) ?? 24
+        idleDelay = (try? c.decodeIfPresent(Double.self, forKey: .idleDelay)) ?? 25
     }
 }
