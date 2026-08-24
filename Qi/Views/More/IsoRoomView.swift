@@ -106,7 +106,11 @@ struct IsoRoomView<Clawd: View>: View {
     // MARK: 地和墙
 
     private func floor(_ geoRoom: IsoRoom) -> some View {
-        let boards = ImageStore.cached(store.flooring(of: room))
+        // 这一格字符串里装着两种东西：**她自己那张图的文件名**，
+        // 或者**内置那几档的记号**（`#wood` 这种）。
+        // UUID 里不会出现井号，所以一个字符串就够分，不用加第二个字段。
+        let token = store.flooring(of: room)
+        let boards = RoomFinish.isBuiltIn(token) ? nil : ImageStore.cached(token)
         return ZStack(alignment: .topLeading) {
             if let boards {
                 // 她自己那张地板。跟墙纸一个道理：**按菱形裁**，不是贴个方块。
@@ -116,13 +120,12 @@ struct IsoRoomView<Clawd: View>: View {
                     .scaledToFill()
                     .clipShape(geoRoom.floorPath)
             } else {
-                // 一格一格画，**深浅交替**——不这么画的话地板是一整块色，
-                // 立体感全靠两面墙撑着，一眼看过去还是平的
-                ForEach(0..<(geoRoom.size * geoRoom.size), id: \.self) { i in
-                    let gx = i / geoRoom.size, gy = i % geoRoom.size
-                    geoRoom.tilePath(gx, gy)
-                        .fill((gx + gy) % 2 == 0 ? floorA : floorB)
-                }
+                // ⚠️ 棋盘格那一版**也走这儿**，不再单独写一遍。
+                // `RoomFinish.floor("")` 就是 `.checker`，画出来跟原来一模一样
+                // （连色号都是同两个）。
+                // 同一件事只留一个算法——留两个的话，改了一个另一个就开始撒谎。
+                FloorFinishView(kind: RoomFinish.floor(token),
+                                room: geoRoom, scheme: scheme)
             }
             // 正在拖的那一件，把它要落的几格点亮
             if let id = dragging,
@@ -145,7 +148,10 @@ struct IsoRoomView<Clawd: View>: View {
     }
 
     private func walls(_ geoRoom: IsoRoom) -> some View {
-        let paper = ImageStore.cached(store.wallpaper(of: room))
+        // 跟地板一样：这个字符串要么是她那张图的文件名，要么是内置的记号
+        let token = store.wallpaper(of: room)
+        let paper = RoomFinish.isBuiltIn(token) ? nil : ImageStore.cached(token)
+        let finish = RoomFinish.wall(token)
         return ZStack(alignment: .topLeading) {
             // 她自己那张墙纸。**必须按墙的形状裁**——
             // 直接贴一张矩形上去就是一块补丁盖在屋子上，两面墙全糊住了。
@@ -170,8 +176,18 @@ struct IsoRoomView<Clawd: View>: View {
                         geoRoom.rightWallPath.fill(Color.black.opacity(0.16))
                     }
             } else {
-                geoRoom.leftWallPath.fill(wallL)
-                geoRoom.rightWallPath.fill(wallR)
+                // 内置那几档。`.plain` 就是原来那版纯色——
+                // `WallFinishView` 碰上 `.plain` 只铺底色，什么花纹都不画，
+                // 所以「什么都没选」和「选了纯色」走的是同一条路。
+                //
+                // ⚠️ 右面墙照旧**压暗一档**。等距屋的立体感八成来自
+                // 「两个面不是同一个亮度」——花纹换了，这条不能跟着换掉。
+                WallFinishView(kind: finish, base: geoRoom.leftWallBase,
+                               height: geoRoom.wallH, tone: wallL, seam: seamTone)
+                    .clipShape(geoRoom.leftWallPath)
+                WallFinishView(kind: finish, base: geoRoom.rightWallBase,
+                               height: geoRoom.wallH, tone: wallR, seam: seamTone)
+                    .clipShape(geoRoom.rightWallPath)
             }
             geoRoom.leftWallPath.stroke(Color.black.opacity(0.08), lineWidth: 1)
             geoRoom.rightWallPath.stroke(Color.black.opacity(0.08), lineWidth: 1)
@@ -186,12 +202,17 @@ struct IsoRoomView<Clawd: View>: View {
     private var wallR: Color {
         scheme == .dark ? Color(hexString: "262220")! : Color(hexString: "E3D9C7")!
     }
-    private var floorA: Color {
-        scheme == .dark ? Color(hexString: "3B322A")! : Color(hexString: "D7C6A9")!
+    /// 墙上砖缝／条纹那条线的颜色。
+    /// 比墙深一档就够——深太多就成了黑线框，那是漫画不是墙
+    private var seamTone: Color {
+        Color.black.opacity(scheme == .dark ? 0.30 : 0.14)
     }
-    private var floorB: Color {
-        scheme == .dark ? Color(hexString: "352D26")! : Color(hexString: "CFBD9E")!
-    }
+    // ⚠️ `floorA` / `floorB` **删掉了**，别再加回来。
+    //
+    // 棋盘格那两个色现在只在 `FloorFinishView.tone` 里有一份
+    // （`.checker` 那一档，色号一个没改）。
+    // 这儿留一份「以后说不定用得上」的副本，就是留了两个真相——
+    // 哪天调了一个，另一个开始撒谎，而且谁都不会发现。
 
     // MARK: 谁先画
 

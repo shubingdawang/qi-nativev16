@@ -51,6 +51,13 @@ struct ChatView: View {
     @State private var pendingFiles: [FileAttachment] = []
     @State private var importingFile = false
     @State private var showingPhotos = false
+    // 看一段视频（见 `VideoDigest`）。
+    // 抽帧和转台词都在本机跑，不花钱；
+    // 花钱的只有她自己按那一下发送。
+    @State private var showingVideos = false
+    @State private var pickedVideo: [PhotosPickerItem] = []
+    /// 正在抽帧。要跑好几秒，**界面上得有个在动的东西**
+    @State private var videoBusy: String?
     @State private var stickerPanelOpen = false
     @State private var pendingSticker: Sticker?
     @StateObject private var recorder = VoiceRecorder()
@@ -383,6 +390,11 @@ struct ChatView: View {
         }
         .photosPicker(isPresented: $showingPhotos, selection: $pickedItems,
                       maxSelectionCount: 6, matching: .images)
+        // 一次只收一段。两段视频抽出二十多张图，
+        // 他看到的是一堆分不清哪段是哪段的画面
+        .photosPicker(isPresented: $showingVideos, selection: $pickedVideo,
+                      maxSelectionCount: 1, matching: .videos)
+        .onChange(of: pickedVideo) { _, items in loadVideo(items) }
         .fileImporter(isPresented: $importingFile,
                       allowedContentTypes: [.data],
                       allowsMultipleSelection: true) { result in
@@ -465,6 +477,19 @@ struct ChatView: View {
     @ViewBuilder
     private func inputBar(_ conv: Conversation) -> some View {
         VStack(spacing: 8) {
+
+            // 抽帧要跑好几秒。**不摆一个在动的东西在这儿，
+            // 她只会以为点坏了**——而且会再点一遍。
+            if let videoBusy {
+                HStack(spacing: 7) {
+                    ProgressView().scaleEffect(0.7)
+                    Text(videoBusy)
+                        .font(.app(11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 4)
+            }
 
             if !pendingImages.isEmpty || !pendingGIFs.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -771,6 +796,7 @@ struct ChatView: View {
                 .confirmationDialog("要发点什么", isPresented: $showingPlus,
                                     titleVisibility: .hidden) {
                     Button("照片") { showingPhotos = true }
+                    Button("视频") { showingVideos = true }
                     Button("文件") { importingFile = true }
                     // 戳一戳也是「发点什么」——发过去的是一件事，不是一句话
                     Button("戳一戳") { showingPoke = true }
@@ -1214,6 +1240,62 @@ struct ChatView: View {
                  imageNames: gifs,
                  files: files, sticker: sticker, quoting: quoted,
                  voiceName: voice, voiceTone: tone)
+    }
+
+    /// 看一段视频。
+    ///
+    /// **没碰发送那条路的任何一行。**
+    /// 抽出来的帧往 `pendingImages` 里一放、
+    /// 说明和台词往输入框里一填，剩下的跟她发图一模一样。
+    /// 新功能能接在现成的路上就别另开一条——
+    /// 另开一条就得把“发图”那一整套（存盘、气泡、重试、备份）
+    /// 再走一遍，而那一整套现在是对的。
+    ///
+    /// ⚠️ **不自己发出去。** 抽完就停在这儿，
+    /// 让她看一眼、想说什么再添一句，按发送的是她。
+    private func loadVideo(_ items: [PhotosPickerItem]) {
+        guard let item = items.first else { return }
+        pickedVideo = []
+        videoBusy = "正在读视频…"
+        Task {
+            // 先落成一份临时文件。`AVAsset` 要的是一个 URL，
+            // 而 PhotosPicker 给的是字节。
+            guard let data = try? await item.loadTransferable(type: Data.self) else {
+                await MainActor.run { videoBusy = nil }
+                return
+            }
+            let tmp = FileManager.default.temporaryDirectory
+                .appendingPathComponent("要看的-" + UUID().uuidString + ".mov")
+            try? data.write(to: tmp, options: .atomic)
+            defer { try? FileManager.default.removeItem(at: tmp) }
+
+            // 回调本身就是 `@MainActor` 的（见 `VideoDigest.digest`），
+            // 所以这儿直接改就行，不用再包一层 `Task { @MainActor in }`
+            let r = await VideoDigest.digest(of: tmp) { line in
+                videoBusy = line
+            }
+
+            await MainActor.run {
+                videoBusy = nil
+                // 换行统一走这个常量，别在底下散写。
+                // ⚠️ 反斜杠第十次栽在「heredoc → Python 字符串 → 文件」
+                // 那条路上，就是在这几行。写一次、用三遍，
+                // 下次再有人拿脚本改这一段也少三个机会写错。
+                let br = "\n"
+                guard !r.frames.isEmpty else {
+                    // 一帧都没抽出来。**别闷声**——
+                    // 什么都不发生的话她只会觉得点坏了
+                    draft += (draft.isEmpty ? "" : br) + (r.trouble.isEmpty
+                        ? "〈这段视频读不出来〉" : "〈" + r.trouble + "〉")
+                    return
+                }
+                pendingImages.append(contentsOf: r.frames)
+                var add = r.note
+                if !r.trouble.isEmpty { add += br + "〈" + r.trouble + "〉" }
+                draft += (draft.isEmpty ? "" : br) + add
+                typingTick += 1
+            }
+        }
     }
 
     private func loadPicked(_ items: [PhotosPickerItem]) {

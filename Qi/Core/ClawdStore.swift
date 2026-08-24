@@ -1063,13 +1063,16 @@ extension ClawdStore {
             // 旧的那张不再被人用了就删掉，别在磁盘上攒垃圾
             let old = wallpaper(of: room)
             setWallpaper(n, for: room)
-            if !old.isEmpty { ImageStore.delete(old) }
+            // ⚠️ 旧的那个可能是**内置的记号**（`#brick` 这种），
+            // 不是文件名。拿它去删文件无害但是迷糊的——
+            // 哪天记号换了写法，这行就会去删一个真存在的文件。
+            if !old.isEmpty, !RoomFinish.isBuiltIn(old) { ImageStore.delete(old) }
             ok = true
         }
         if let floor, let n = FurnitureImage.save(floor) {
             let old = flooring(of: room)
             setFlooring(n, for: room)
-            if !old.isEmpty { ImageStore.delete(old) }
+            if !old.isEmpty, !RoomFinish.isBuiltIn(old) { ImageStore.delete(old) }
             ok = true
         }
         return ok
@@ -1080,6 +1083,8 @@ extension ClawdStore {
         for (key, name) in [("wall", wallpaper(of: room)), ("floor", flooring(of: room))] {
             guard !name.isEmpty else { continue }
             setDecor(key, room, "")
+            // 内置的那几档没有文件可删
+            guard !RoomFinish.isBuiltIn(name) else { continue }
             ImageStore.delete(name)
         }
     }

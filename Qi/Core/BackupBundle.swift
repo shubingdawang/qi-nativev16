@@ -72,6 +72,27 @@ enum BackupBundle {
         "lastBackupAt"
     ]
 
+    /// **按前缀收的键**：一间屋一个，数量不定，写不进上面那份死名单。
+    ///
+    /// ⚠️ 这是顺手逮到的一个漏：每间屋的墙纸／地板存的是
+    /// `roomDecor-wall-bedroom` 这种键，**一直没进备份**。
+    /// 图本身在 `Images/` 里跟着走了，可「哪间屋用哪张」没跟着——
+    /// 还原完图都在，屋子却全是素的。
+    /// **带着一张图、丢掉那张图是干嘛用的**，等于没带。
+    static let defaultKeyPrefixes = ["roomDecor-"]
+
+    /// 该进备份的那些 UserDefaults 键（死名单 + 前缀收上来的）
+    static func backedUpDefaultKeys() -> [String] {
+        var keys = defaultKeys
+        // ⚠️ `dictionaryRepresentation()` 装的是**整个 App 的**偏好，
+        // 系统自己那一大堆也在里面。只收我们自己那几个前缀，别整锅端。
+        for k in UserDefaults.standard.dictionaryRepresentation().keys
+        where defaultKeyPrefixes.contains(where: { k.hasPrefix($0) }) {
+            keys.append(k)
+        }
+        return keys
+    }
+
     /// 不进备份的那些。
     ///
     /// 现在只有回收站：`trash.json` 和 `Trash/` 那个目录。
@@ -210,7 +231,7 @@ enum BackupBundle {
         }
 
         var flags: [String: Any] = [:]
-        for k in defaultKeys {
+        for k in backedUpDefaultKeys() {
             guard let v = UserDefaults.standard.object(forKey: k) else { continue }
             // JSON 装不下的（比如直接存成 Date 的）就跳过，
             // 不然整包序列化会失败，因小失大
@@ -492,7 +513,9 @@ enum BackupBundle {
 
         // 那几个小开关（币、勿扰、浮窗位置）合并时不动——它们是「现在的偏好」
         if mode == .overwrite, let flags = root["defaults"] as? [String: Any] {
-            for (k, v) in flags where defaultKeys.contains(k) {
+            for (k, v) in flags
+            where defaultKeys.contains(k)
+                || defaultKeyPrefixes.contains(where: { k.hasPrefix($0) }) {
                 UserDefaults.standard.set(v, forKey: k)
             }
         }

@@ -299,8 +299,28 @@ struct ClawdHomeView: View {
                 // **按房间分开**：厨房贴瓷砖、卧室铺木地板，这才叫一个家。
                 // 图走的是跟家具图同一套（抠白底、裁紧），她导什么进来都行。
                 Menu {
-                    Button("换这间的墙纸") { decorTarget = .wall; pickingDecor = true }
-                    Button("换这间的地板") { decorTarget = .floor; pickingDecor = true }
+                    // 内置的几套。**排在最上面**——
+                    // 她大多数时候只是想让屋子好看点，
+                    // 不是真想去相册里翻一张图。
+                    Menu("内置墙面") {
+                        ForEach(RoomFinish.Wall.allCases) { w in
+                            Button(w.label) {
+                                store.setWallpaper(w.token, for: r)
+                                notice = r.rawValue + "的墙换成了" + w.label
+                            }
+                        }
+                    }
+                    Menu("内置地面") {
+                        ForEach(RoomFinish.Floor.allCases) { f in
+                            Button(f.label) {
+                                store.setFlooring(f.token, for: r)
+                                notice = r.rawValue + "的地换成了" + f.label
+                            }
+                        }
+                    }
+                    Divider()
+                    Button("用我自己的图当墙纸") { decorTarget = .wall; pickingDecor = true }
+                    Button("用我自己的图当地板") { decorTarget = .floor; pickingDecor = true }
                     if !store.wallpaper(of: r).isEmpty || !store.flooring(of: r).isEmpty {
                         Button("换回原来那版", role: .destructive) {
                             store.undressRoom(r)

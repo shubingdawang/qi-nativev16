@@ -192,6 +192,26 @@ struct IsoRoom {
         return p
     }
 
+    /// 两面墙的**底边**：从哪一点到哪一点。
+    ///
+    /// 内置墙面（`RoomFinish`）要拿它算砖缝和条纹的位置。
+    ///
+    /// ⚠️ 画墙上的花纹**不能在屏幕的横竖方向上画**。
+    /// 等距屋的「水平」是斜的（斜率正好 ±½，因为 `tileH = tileW / 2`），
+    /// 拿屏幕的水平线去画砖缝，砖墙会横穿过整间屋，看着像贴了张纸。
+    /// 照着这条底边走，缝天然就是斜的、跟墙一个方向。
+    var leftWallBase: (CGPoint, CGPoint) {
+        let n = Double(size)
+        return (point(0, 0).offsetBy(dy: -tileH / 2),
+                point(0, n - 1).offsetBy(dx: -tileW / 2))
+    }
+
+    var rightWallBase: (CGPoint, CGPoint) {
+        let n = Double(size)
+        return (point(0, 0).offsetBy(dy: -tileH / 2),
+                point(n - 1, 0).offsetBy(dx: tileW / 2))
+    }
+
     /// 右边那面墙（`gx = 0` 那一侧）
     var rightWallPath: Path {
         let n = Double(size)
