@@ -386,6 +386,17 @@ struct AuroraLayer: View {
         }
     }
 
+    /// 底下铺的是不是一张照片。
+    /// 照片那一档要用另一种混合，也要浓一点——不然它整个被照片吃掉。
+    private var overPhoto: Bool {
+        guard !app.settings.preset.usesGradient,
+              !app.settings.preset.ownsBackground else { return false }
+        return app.settings.wallpaperMode != "solid" && app.settings.wallpaperName != nil
+    }
+
+    /// 光的浓度。照片上要更浓一点才看得见。
+    private var punch: Double { overPhoto ? 1.7 : 1 }
+
     private func blob(_ color: Color, _ peak: Double,
                       at center: CGPoint, size: CGFloat) -> some View {
         RadialGradient(colors: [color.opacity(peak), color.opacity(0)],

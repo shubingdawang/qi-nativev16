@@ -42,15 +42,22 @@ struct IsoRoomView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let room = geometry(in: geo.size)
+            // ⚠️ 这个局部变量**不能叫 `room`**。
+            //
+            // 上面那个属性 `room` 是 `HomeRoom`（现在画哪一间），
+            // 这个是 `IsoRoom`（几何）。重名的话属性被遮住，
+            // `store.furniture(in: room)` 会把几何当房间传进去——
+            // 编译器逮住了，但这已经是这一轮里第几次
+            // **同一个名字两个意思**了。所以叫 `geoRoom`。
+            let geoRoom = IsoRoom.fit(in: geo.size)
 
             ZStack(alignment: .topLeading) {
-                walls(room)
-                floor(room)
+                walls(geoRoom)
+                floor(geoRoom)
 
                 // ⚠️ 这一句就是「不穿模」的全部：**按离镜头的远近排好再画**。
-                ForEach(drawables(room), id: \.key) { d in
-                    piece(d.item, d.kind, room)
+                ForEach(drawables(geoRoom), id: \.key) { d in
+                    piece(d.item, d.kind, geoRoom)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
@@ -61,20 +68,19 @@ struct IsoRoomView: View {
         }
     }
 
-    // 屋子摆在哪儿、一格多大：搬到 `IsoRoom.fit(in:)` 去了。
+    // 屋子摆在哪儿、一格多大：在 `IsoRoom.fit(in:)` 里，body 直接叫它。
     // **两边得算的是同一份**——clawd 那边要把「坐到凳子上」
     // 换算成屏幕位置，各算各的必然对不齐。
-    private func geometry(in size: CGSize) -> IsoRoom { IsoRoom.fit(in: size) }
 
     // MARK: 地和墙
 
-    private func floor(_ room: IsoRoom) -> some View {
+    private func floor(_ geoRoom: IsoRoom) -> some View {
         ZStack(alignment: .topLeading) {
             // 一格一格画，**深浅交替**——不这么画的话地板是一整块色，
             // 立体感全靠两面墙撑着，一眼看过去还是平的
-            ForEach(0..<(room.size * room.size), id: \.self) { i in
-                let gx = i / room.size, gy = i % room.size
-                room.tilePath(gx, gy)
+            ForEach(0..<(geoRoom.size * geoRoom.size), id: \.self) { i in
+                let gx = i / geoRoom.size, gy = i % geoRoom.size
+                geoRoom.tilePath(gx, gy)
                     .fill((gx + gy) % 2 == 0 ? floorA : floorB)
             }
             // 正在拖的那一件，把它要落的几格点亮
@@ -86,23 +92,23 @@ struct IsoRoomView: View {
                 ForEach(IsoRoom.cells(dragCell.gx, dragCell.gy, s.w, s.d)
                             .map { "\($0.0),\($0.1)" }, id: \.self) { key in
                     let parts = key.split(separator: ",").compactMap { Int($0) }
-                    if parts.count == 2, room.inside(parts[0], parts[1]) {
-                        room.tilePath(parts[0], parts[1])
+                    if parts.count == 2, geoRoom.inside(parts[0], parts[1]) {
+                        geoRoom.tilePath(parts[0], parts[1])
                             .fill(app.settings.accentColor.opacity(0.28))
                     }
                 }
             }
-            room.floorPath
+            geoRoom.floorPath
                 .stroke(Color.black.opacity(scheme == .dark ? 0.28 : 0.10), lineWidth: 1)
         }
     }
 
-    private func walls(_ room: IsoRoom) -> some View {
+    private func walls(_ geoRoom: IsoRoom) -> some View {
         ZStack(alignment: .topLeading) {
-            room.leftWallPath.fill(wallL)
-            room.rightWallPath.fill(wallR)
-            room.leftWallPath.stroke(Color.black.opacity(0.08), lineWidth: 1)
-            room.rightWallPath.stroke(Color.black.opacity(0.08), lineWidth: 1)
+            geoRoom.leftWallPath.fill(wallL)
+            geoRoom.rightWallPath.fill(wallR)
+            geoRoom.leftWallPath.stroke(Color.black.opacity(0.08), lineWidth: 1)
+            geoRoom.rightWallPath.stroke(Color.black.opacity(0.08), lineWidth: 1)
         }
     }
 
@@ -132,7 +138,7 @@ struct IsoRoomView: View {
     }
 
     /// 屋里所有会挡人的东西，**按远近排好**。
-    private func drawables(_ room: IsoRoom) -> [Drawable] {
+    private func drawables(_ geoRoom: IsoRoom) -> [Drawable] {
         var out: [Drawable] = []
 
         // ⚠️ **只取这一间的**。一整个家的东西全堆进一间屋，
@@ -143,7 +149,11 @@ struct IsoRoomView: View {
             let cell = (f.id == dragging) ? dragCell : (gx: f.gx, gy: f.gy)
             // 一件占好几格的东西，**按它最靠近镜头的那一格算深度**——
             // 按中心算的话，一张床的床尾会被站在床尾旁边的人盖住
-            let depth = Double(cell.gx + s.w - 1 + cell.gy + s.d - 1)
+            // ⚠️ 拆成三步。写成一长串加减混着 `Double(...)`，
+            // 编译器会在这一行上卡到超时。
+            let farX: Int = cell.gx + s.w - 1
+            let farY: Int = cell.gy + s.d - 1
+            let depth = Double(farX + farY)
             out.append(Drawable(key: f.id.uuidString, depth: depth,
                                 tall: s.tall, item: f, kind: kind))
         }
@@ -171,20 +181,20 @@ struct IsoRoomView: View {
     ///
     /// 他还是按 0…1 的比例走路（那套逻辑一个字没改），
     /// 这儿把比例换算成地板上的进深：`floorTop` 是最里边，`floorBottom` 是最外边。
-    private func clawdDepth(_ p: CGPoint, _ room: IsoRoom) -> Double {
+    private func clawdDepth(_ p: CGPoint, _ geoRoom: IsoRoom) -> Double {
         let span = max(0.0001, floorBottom - floorTop)
         let deep = min(1, max(0, (p.y - floorTop) / span))
-        return deep * Double(room.size * 2 - 2)
+        return deep * Double(geoRoom.size * 2 - 2)
     }
 
     // MARK: 一件家具
 
     private func piece(_ item: Furniture, _ kind: FurnitureKind,
-                       _ room: IsoRoom) -> some View {
+                       _ geoRoom: IsoRoom) -> some View {
         let s = FurnitureCatalog.shape(of: kind.id)
         let cell = (item.id == dragging) ? dragCell : (gx: item.gx, gy: item.gy)
         // 落脚点：它盖住那几格的正中间
-        let c = room.point(Double(cell.gx) + Double(s.w - 1) / 2,
+        let c = geoRoom.point(Double(cell.gx) + Double(s.w - 1) / 2,
                            Double(cell.gy) + Double(s.d - 1) / 2)
         // 她自己的图排第一。
         //
@@ -199,7 +209,7 @@ struct IsoRoomView: View {
         if iso != nil {
             // 等距图是按「一格 = 2×unit 像素」画的，所以缩放是个定值，
             // **跟这张图多大无关**——一屋子家具因此严丝合缝对在同一套地砖上。
-            scale = room.tileW / CGFloat(2 * IsoArt.unit)
+            scale = geoRoom.tileW / CGFloat(2 * IsoArt.unit)
             // 图的中心比它**底面**的中心高 hi/2 像素（hi 是这件东西画出来多高）。
             // 不把这一截补回去，家具会整体浮在格子上方半个身位。
             let hiPx = CGFloat(sprite.height - 2)
@@ -211,15 +221,15 @@ struct IsoRoomView: View {
             // 她说「新买的桌子凳子对于这个屋子来说特别大」——
             // 以前这儿乘了 1.15，一件占两格的桌子画出来比两格还宽。
             // 现在**画多宽就是它占多少格**。
-            scale = room.tileW * CGFloat(max(1, s.w)) / CGFloat(max(6, sprite.width))
+            scale = geoRoom.tileW * CGFloat(max(1, s.w)) / CGFloat(max(6, sprite.width))
             // 正面图那批：底边贴着格子（地毯除外，它是摊在地上的）
-            lift = s.tall > 0 ? -CGFloat(sprite.height) * scale / 2 + room.tileH / 2 : 0
+            lift = s.tall > 0 ? -CGFloat(sprite.height) * scale / 2 + geoRoom.tileH / 2 : 0
         }
         let lifted = item.id == dragging
 
         // 她自己那张图占多宽：**按它占几格算**，不看图本身多少像素。
         // 这样她导进来的图不管多大，摆在屋里都是这件家具该有的大小。
-        let mineW = room.tileW * CGFloat(s.w + s.d) / 2
+        let mineW = geoRoom.tileW * CGFloat(s.w + s.d) / 2
 
         return VStack(spacing: 0) {
             if let mine {
@@ -234,7 +244,7 @@ struct IsoRoomView: View {
         }
         // 她的图是**贴边裁过**的（导入时裁的），
         // 所以底边就是这件东西的落脚线：往上抬半张图，再压回格子上
-        .offset(y: mine == nil ? lift : -mineH(mine!, width: mineW) / 2 + room.tileH / 2)
+        .offset(y: mine == nil ? lift : -mineH(mine!, width: mineW) / 2 + geoRoom.tileH / 2)
         .scaleEffect(lifted ? 1.06 : 1)
         .shadow(color: .black.opacity(lifted ? 0.28 : 0.12),
                 radius: lifted ? 10 : 3, y: lifted ? 8 : 2)
@@ -252,7 +262,7 @@ struct IsoRoomView: View {
     }
 
     private func dragGesture(_ item: Furniture, _ s: IsoShape,
-                             _ room: IsoRoom) -> some Gesture {
+                             _ geoRoom: IsoRoom) -> some Gesture {
         LongPressGesture(minimumDuration: 0.28)
             .onEnded { _ in
                 dragging = item.id
@@ -264,8 +274,8 @@ struct IsoRoomView: View {
             .sequenced(before: DragGesture(minimumDistance: 0))
             .onChanged { value in
                 guard case .second(_, let drag?) = value else { return }
-                let t = room.tile(at: drag.location)
-                let (gx, gy) = room.clamp(Int(t.gx.rounded()), Int(t.gy.rounded()))
+                let t = geoRoom.tile(at: drag.location)
+                let (gx, gy) = geoRoom.clamp(Int(t.gx.rounded()), Int(t.gy.rounded()))
                 if gx != dragCell.gx || gy != dragCell.gy {
                     dragCell = (gx, gy)
                     if app.settings.haptics {

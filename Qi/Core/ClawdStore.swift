@@ -846,7 +846,10 @@ extension FurnitureCatalog {
 extension ClawdStore {
 
     /// 屋子几格见方
-    static let roomSize = 8
+    /// ⚠️ `nonisolated`：`IsoRoom.fit(in:)` 是纯几何、不在主线程上，
+    /// 不标的话它读这个常数会报「跨 actor」——Swift 6 里是错误。
+    /// 一个写死的 8，本来也没有线程安全可言。
+    nonisolated static let roomSize = 8
 
     /// 老数据搬进格子。**只搬一次**，搬完写回去。
     /// （写盘不用自己叫：`owned` 的 didSet 会存。）
