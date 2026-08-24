@@ -30,7 +30,11 @@ struct SheetImportView: View {
     private let cols = [GridItem(.adaptive(minimum: 84), spacing: 10)]
 
     var body: some View {
-        NavigationStack {
+        // 先取出来。**别在 PhotosPicker 的 label 闭包里读 `app.settings`**——
+        // 那个闭包被当成 Sendable，跨 actor 读 @MainActor 的属性现在是警告，
+        // 到 Swift 6 就是错误。（大富翁那页栽过同一处。）
+        let accent = app.settings.accentColor
+        return NavigationStack {
             ZStack {
                 WallpaperBackground()
                 ScrollView {
@@ -43,7 +47,7 @@ struct SheetImportView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
                                 .background(RoundedRectangle(cornerRadius: 14)
-                                    .fill(app.settings.accentColor.opacity(0.28)))
+                                    .fill(accent.opacity(0.28)))
                                 .foregroundStyle(Theme.textMain(scheme))
                         }
 

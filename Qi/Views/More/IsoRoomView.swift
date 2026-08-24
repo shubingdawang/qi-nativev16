@@ -258,7 +258,7 @@ struct IsoRoomView: View {
         .position(x: c.x, y: c.y)
         .animation(.spring(response: 0.26, dampingFraction: 0.78), value: lifted)
         .onTapGesture { onTapFurniture(item) }
-        .gesture(dragGesture(item, s, room))
+        .gesture(dragGesture(item, s, geoRoom))
     }
 
     private func dragGesture(_ item: Furniture, _ s: IsoShape,
