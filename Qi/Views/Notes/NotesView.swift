@@ -374,7 +374,12 @@ struct AnnotateSheet: View {
     @State private var picked = ""
     @State private var note = ""
 
-    /// 原文拆成一句一句。按中文的句号问号感叹号和换行断，标点跟着前一句走。
+    /// 整条原文。挑句子那一步在这上面选。
+    private var fullText: String {
+        (entry.title.isEmpty ? "" : entry.title + "\n") + entry.body
+    }
+
+    /// （原来那个「切成一句一句」的还留着：万一以后要按句子做别的用得上。）
     private var sentences: [String] {
         let raw = (entry.title.isEmpty ? "" : entry.title + "\n") + entry.body
         var out: [String] = []
@@ -403,33 +408,36 @@ struct AnnotateSheet: View {
                     VStack(alignment: .leading, spacing: 12) {
 
                         SectionHeader("挑一句（可以不挑）")
-                        VStack(alignment: .leading, spacing: 6) {
-                            ForEach(Array(sentences.enumerated()), id: \.offset) { _, line in
-                                Button {
-                                    picked = (picked == line ? "" : line)
-                                } label: {
-                                    HStack(alignment: .top, spacing: 8) {
-                                        Image(systemName: picked == line
-                                              ? "largecircle.fill.circle" : "circle")
-                                            .font(.app(13))
-                                            .foregroundStyle(picked == line
-                                                             ? app.settings.accentColor
-                                                             : Theme.textMuted(scheme))
-                                        Text(line)
-                                            .font(.app(13))
-                                            .foregroundStyle(Theme.textMain(scheme))
-                                            .multilineTextAlignment(.leading)
-                                            .strikethrough(picked == line, color: .red.opacity(0.6))
-                                        Spacer(minLength: 0)
-                                    }
-                                    .padding(10)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(RoundedRectangle(cornerRadius: 10)
-                                        .fill(picked == line
-                                              ? app.settings.accentColor.opacity(0.12)
-                                              : Theme.softFillDeep))
-                                }
-                                .buttonStyle(.plain)
+                        // ⚠️ 这儿本来是「把原文切成一句一句，点一句选一句」。
+                        // 她说**选错了方式**，要跟双击气泡框那种一样——
+                        // 也就是 `CharacterPicker`：点头一个字、再点末一个字，
+                        // 中间那段就是选中的。
+                        //
+                        // 她是对的：按句切开选，选不了半句、也选不了跨句的一段；
+                        // 而她要批的往往就是「这半句写错了」。
+                        // 这个控件 App 里早就有（读那条消息的时候用的），
+                        // **直接用它，不另造一个**——两套选法迟早长歪。
+                        CharacterPicker(text: fullText) { picked = $0 }
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .glassBackground(radius: 14,
+                                             strength: app.settings.glassOpacity * 0.7)
+
+                        if !picked.isEmpty {
+                            HStack(spacing: 6) {
+                                Text("选中：")
+                                    .font(.app(11))
+                                    .foregroundStyle(Theme.textMuted(scheme))
+                                Text(picked)
+                                    .font(.app(12))
+                                    .foregroundStyle(Theme.textMain(scheme))
+                                    .strikethrough(color: .red.opacity(0.6))
+                                    .lineLimit(2)
+                                Spacer(minLength: 4)
+                                Button("不挑了") { picked = "" }
+                                    .font(.app(11))
+                                    .foregroundStyle(app.settings.accentColor)
+                                    .buttonStyle(.plain)
                             }
                         }
 

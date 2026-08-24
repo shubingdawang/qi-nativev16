@@ -43,6 +43,35 @@ struct IsoRoom {
     /// 地板最上面那个尖在屏幕上的位置
     var origin: CGPoint = .zero
 
+    /// 在这么大的地方里，屋子摆在哪儿、一格多大。
+    ///
+    /// ⚠️ **只此一份。** 画屋子的那边要用，
+    /// 算「clawd 该站在凳子的哪个点上」也要用——
+    /// 各算各的必然对不齐，家具和人就永远差半格。
+    static func fit(in size: CGSize) -> IsoRoom {
+        let n = CGFloat(ClawdStore.roomSize)
+        // ⚠️ 一格多大，**同时受宽和高两头管**。
+        //
+        // 她报的「屋子很小，而且有一部分在屏幕下面」就是只按宽算的下场：
+        // 宽度够、高度不够，地板加两面墙比容器高，屋子被顶下去一截。
+        //
+        // 整间屋子竖着一共占：墙(4.2 格高) + 地板(n 格 × 半格高)。
+        // 两头各算一次取小的，屋子就一定塞得进去。
+        let byWidth = (size.width * 0.94) / n
+        let byHeight = (size.height * 0.92) / (n / 2 + 4.2 + 1)
+        let tileW = min(byWidth, byHeight)
+        let tileH = tileW / 2
+        let wallH = tileH * 4.2
+        // 整块（墙顶到地板最下）的高度，用来把屋子**竖着摆正中**
+        let whole = wallH + tileH * n / 2 + tileH
+        let top = (size.height - whole) / 2
+        return IsoRoom(size: ClawdStore.roomSize,
+                       tileW: tileW, tileH: tileH,
+                       wallH: wallH,
+                       origin: CGPoint(x: size.width / 2,
+                                       y: top + wallH + tileH / 2))
+    }
+
     // MARK: 格子 ↔ 屏幕
 
     /// 一格的**中心**在屏幕上的位置

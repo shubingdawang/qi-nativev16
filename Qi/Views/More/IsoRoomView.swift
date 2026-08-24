@@ -21,6 +21,8 @@ import SwiftUI
 struct IsoRoomView: View {
 
     @ObservedObject var store: ClawdStore
+    /// 现在画的是哪一间。**只画这一间里的家具**
+    var room: HomeRoom
     /// clawd 现在站在哪儿（还是老的 0…1 比例，走路那套逻辑一个字没改）
     var clawdX: Double
     var clawdY: Double
@@ -52,25 +54,17 @@ struct IsoRoomView: View {
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
-            .onAppear { store.migrateRoom() }
+            .onAppear {
+                store.migrateRoom()
+                store.migrateRooms()
+            }
         }
     }
 
-    /// 屋子摆在哪儿、一格多大。
-    ///
-    /// 地板宽度按屋子宽的九成算，**留一点边**——顶到边上的话
-    /// 最外圈那几格永远有一半在屏幕外，她放不进去东西。
-    private func geometry(in size: CGSize) -> IsoRoom {
-        let n = CGFloat(ClawdStore.roomSize)
-        let tileW = (size.width * 0.92) / n
-        let tileH = tileW / 2
-        return IsoRoom(size: ClawdStore.roomSize,
-                       tileW: tileW, tileH: tileH,
-                       wallH: tileH * 4.2,
-                       // 地板最上面那个尖：横着居中，竖着让整块地板落在下半屏
-                       origin: CGPoint(x: size.width / 2,
-                                       y: size.height - tileH * n / 2 - tileH * 1.2))
-    }
+    // 屋子摆在哪儿、一格多大：搬到 `IsoRoom.fit(in:)` 去了。
+    // **两边得算的是同一份**——clawd 那边要把「坐到凳子上」
+    // 换算成屏幕位置，各算各的必然对不齐。
+    private func geometry(in size: CGSize) -> IsoRoom { IsoRoom.fit(in: size) }
 
     // MARK: 地和墙
 
@@ -85,7 +79,7 @@ struct IsoRoomView: View {
             }
             // 正在拖的那一件，把它要落的几格点亮
             if let id = dragging,
-               let f = store.owned.first(where: { $0.id == id }) {
+               let f = store.furniture(in: room).first(where: { $0.id == id }) {
                 let s = FurnitureCatalog.shape(of: f.kind)
                 // 键得是「x,y」这种唯一的串。用 `\.0`（只有 x）的话，
                 // 一件占两行的家具会有两格键一样，SwiftUI 只画得出一格
@@ -141,7 +135,9 @@ struct IsoRoomView: View {
     private func drawables(_ room: IsoRoom) -> [Drawable] {
         var out: [Drawable] = []
 
-        for f in store.owned where !f.hidden && !f.carried {
+        // ⚠️ **只取这一间的**。一整个家的东西全堆进一间屋，
+        // 就是她说的「桌子凳子对这个屋子来说特别大、clawd 完全不能住」。
+        for f in store.furniture(in: room) {
             guard let kind = FurnitureCatalog.kind(f.kind) else { continue }
             let s = FurnitureCatalog.shape(of: f.kind)
             let cell = (f.id == dragging) ? dragCell : (gx: f.gx, gy: f.gy)
@@ -165,6 +161,12 @@ struct IsoRoomView: View {
         return IsoRoom.order(out, depth: { $0.depth }, height: { $0.tall }, tie: { $0.key })
     }
 
+    /// 她那张图按这个宽度画出来会有多高
+    private func mineH(_ img: UIImage, width: CGFloat) -> CGFloat {
+        guard img.size.width > 0 else { return width }
+        return width * img.size.height / img.size.width
+    }
+
     /// clawd 站的那一格有多远。**下一步他进排序的时候要用**，先留着。
     ///
     /// 他还是按 0…1 的比例走路（那套逻辑一个字没改），
@@ -184,20 +186,65 @@ struct IsoRoomView: View {
         // 落脚点：它盖住那几格的正中间
         let c = room.point(Double(cell.gx) + Double(s.w - 1) / 2,
                            Double(cell.gy) + Double(s.d - 1) / 2)
-        let scale = room.tileW / CGFloat(max(6, kind.sprite.width)) * CGFloat(max(1, s.w)) * 1.15
+        // 她自己的图排第一。
+        //
+        // 三档：**她导的图 > 我画的等距版 > 老那张正面图**。
+        // 一件一件换过去，中间任何一天她打开都不会缺东西。
+        let mine = item.imageName.isEmpty ? nil : ImageStore.load(item.imageName)
+        let iso = FurnitureCatalog.isoSprite(of: kind.id)
+        let sprite = iso ?? kind.sprite
+
+        let scale: CGFloat
+        let lift: CGFloat
+        if iso != nil {
+            // 等距图是按「一格 = 2×unit 像素」画的，所以缩放是个定值，
+            // **跟这张图多大无关**——一屋子家具因此严丝合缝对在同一套地砖上。
+            scale = room.tileW / CGFloat(2 * IsoArt.unit)
+            // 图的中心比它**底面**的中心高 hi/2 像素（hi 是这件东西画出来多高）。
+            // 不把这一截补回去，家具会整体浮在格子上方半个身位。
+            let hiPx = CGFloat(sprite.height - 2)
+                - CGFloat(s.w + s.d) * CGFloat(IsoArt.unit) / 2
+            lift = -max(0, hiPx) / 2 * scale
+        } else {
+            // ⚠️ **不再额外放大。**
+            //
+            // 她说「新买的桌子凳子对于这个屋子来说特别大」——
+            // 以前这儿乘了 1.15，一件占两格的桌子画出来比两格还宽。
+            // 现在**画多宽就是它占多少格**。
+            scale = room.tileW * CGFloat(max(1, s.w)) / CGFloat(max(6, sprite.width))
+            // 正面图那批：底边贴着格子（地毯除外，它是摊在地上的）
+            lift = s.tall > 0 ? -CGFloat(sprite.height) * scale / 2 + room.tileH / 2 : 0
+        }
         let lifted = item.id == dragging
 
+        // 她自己那张图占多宽：**按它占几格算**，不看图本身多少像素。
+        // 这样她导进来的图不管多大，摆在屋里都是这件家具该有的大小。
+        let mineW = room.tileW * CGFloat(s.w + s.d) / 2
+
         return VStack(spacing: 0) {
-            PixelSpriteView(sprite: kind.sprite, scale: scale)
+            if let mine {
+                Image(uiImage: mine)
+                    .resizable()
+                    .interpolation(.none)          // 像素图**不许插值**，糊了就不是像素画了
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: mineW)
+            } else {
+                PixelSpriteView(sprite: sprite, scale: scale)
+            }
         }
-        // 地毯这类是**摊在地上**的，别的东西该站在格子上（往上抬半格）
-        .offset(y: s.tall > 0 ? -CGFloat(kind.sprite.height) * scale / 2 + room.tileH / 2 : 0)
+        // 她的图是**贴边裁过**的（导入时裁的），
+        // 所以底边就是这件东西的落脚线：往上抬半张图，再压回格子上
+        .offset(y: mine == nil ? lift : -mineH(mine!, width: mineW) / 2 + room.tileH / 2)
         .scaleEffect(lifted ? 1.06 : 1)
         .shadow(color: .black.opacity(lifted ? 0.28 : 0.12),
                 radius: lifted ? 10 : 3, y: lifted ? 8 : 2)
         // ⚠️ 命中形状必须在 `.position` **前面**：`.position` 会把视图撑满整屋，
         // 挂在它后面的话每件家具的可点范围都是整间屋子
-        .contentShape(SpriteHitShape(sprite: kind.sprite))
+        // 她的图按整块矩形算命中（图里哪儿是空的我们不再逐像素查——
+        // 那得每帧扫一遍位图，不值）；我画的那批还是按格子围形
+        .contentShape(mine == nil
+                      ? AnyShape(SpriteHitShape(sprite: sprite))
+                      : AnyShape(Rectangle()))
         .position(x: c.x, y: c.y)
         .animation(.spring(response: 0.26, dampingFraction: 0.78), value: lifted)
         .onTapGesture { onTapFurniture(item) }

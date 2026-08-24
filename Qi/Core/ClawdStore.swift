@@ -17,6 +17,12 @@ struct Furniture: Codable, Identifiable, Hashable {
     /// 摆在哪一格。`-1` = 还没换算过
     var gx: Int = -1
     var gy: Int = -1
+    /// 在哪一间屋。空 = 还没分过房间，第一次进屋时按种类分一次
+    var room: String = ""
+    /// 她自己导进来的那张图（文件名）。空 = 用画出来的那版。
+    /// **一件一张**，所以存在这一件上，不是存在种类上——
+    /// 同一种买两张床，她可以给它们配不同的图
+    var imageName: String = ""
     /// 她主动**收起来**的（长按 → 收起来）。收起来的东西还在，只是不摆出来。
     var hidden: Bool = false
     /// **正被他举着**，所以屋里不画它。
@@ -39,6 +45,8 @@ struct Furniture: Codable, Identifiable, Hashable {
         boughtAt = (try? c.decodeIfPresent(Date.self, forKey: .boughtAt)) ?? Date()
         gx = (try? c.decodeIfPresent(Int.self, forKey: .gx)) ?? -1
         gy = (try? c.decodeIfPresent(Int.self, forKey: .gy)) ?? -1
+        room = (try? c.decodeIfPresent(String.self, forKey: .room)) ?? ""
+        imageName = (try? c.decodeIfPresent(String.self, forKey: .imageName)) ?? ""
     }
 
     /// 格子坐标。老数据没有就**由平面坐标换算一次**，
@@ -56,10 +64,10 @@ struct Furniture: Codable, Identifiable, Hashable {
     }
 
     init(id: UUID = UUID(), kind: String = "", x: Double = 0.5, y: Double = 0.5,
-         gx: Int = -1, gy: Int = -1,
+         gx: Int = -1, gy: Int = -1, room: String = "", imageName: String = "",
          hidden: Bool = false, carried: Bool = false, boughtAt: Date = Date()) {
         self.id = id; self.kind = kind; self.x = x; self.y = y
-        self.gx = gx; self.gy = gy
+        self.gx = gx; self.gy = gy; self.room = room; self.imageName = imageName
         self.hidden = hidden; self.carried = carried; self.boughtAt = boughtAt
     }
 }
@@ -676,6 +684,9 @@ final class ClawdStore: ObservableObject {
         // 挪家具那条早就走 `onFloor` 统一了规矩，**买这条一直漏在外面**。
         item.x = Double.random(in: 0.2...0.8)
         item.y = Double.random(in: Self.floorTop...Self.floorBottom)
+        // 买来先归到它该在的那间屋（床进卧室、锅进厨房）。
+        // **只是默认**——她想搬哪儿搬哪儿。
+        item.room = HomeRoom.home(for: kind).rawValue
         owned.append(item)
         return true
     }
@@ -716,6 +727,58 @@ final class ClawdStore: ObservableObject {
         }
         return "clawd 的房间里现在有：" + visible.joined(separator: "、")
             + "。（这些都是她一件件买来摆的）"
+    }
+
+    /// 整个家长什么样，说给他听。
+    ///
+    /// **一间一间地报**——只报一个大清单的话，他不知道床在哪屋，
+    /// 也就没法说「把床搬到书房」。
+    /// 顺带告诉他两件他做决定要用的事：**她此刻在看哪一间**、
+    /// **柜子里还收着什么**（那些他能拿出来）。
+    func homeBrief(watching: HomeRoom?) -> String {
+        guard linked else { return "" }
+        var lines: [String] = []
+        for r in HomeRoom.allCases {
+            let names = furniture(in: r)
+                .compactMap { FurnitureCatalog.kind($0.kind)?.name }
+            var one = "· " + r.rawValue + "："
+            one += names.isEmpty ? "空着" : names.joined(separator: "、")
+            if clawdRoom == r { one += "（clawd 和你在这间）" }
+            if let watching, watching == r { one += "（她正看着这间）" }
+            lines.append(one)
+        }
+        var s = "这个家分成六间，现在是这样：\n" + lines.joined(separator: "\n")
+
+        let away = owned.filter { $0.hidden }
+            .compactMap { FurnitureCatalog.kind($0.kind)?.name }
+        if !away.isEmpty {
+            s += "\n\n她收进柜子里的：" + away.joined(separator: "、")
+                + "。**这些你也能拿出来摆**。"
+        }
+        if let watching, watching != clawdRoom {
+            s += "\n\n她此刻在看" + watching.rawValue + "，你在" + clawdRoom.rawValue
+                + "。要不要过去随你。"
+        }
+        return s
+    }
+
+    /// 按名字找一件家具（他只会说名字，不会说 id）
+    func find(named: String) -> Furniture? {
+        let n = named.trimmingCharacters(in: .whitespaces)
+        return owned.first { f in
+            guard let k = FurnitureCatalog.kind(f.kind) else { return false }
+            return k.name == n || n.contains(k.name) || k.name.contains(n)
+        }
+    }
+
+    /// 把收起来的重新摆出来，摆在**他此刻那一间**
+    func takeOut(named: String) -> String? {
+        guard let f = find(named: named),
+              let i = owned.firstIndex(where: { $0.id == f.id }) else { return nil }
+        owned[i].hidden = false
+        owned[i].room = clawdRoom.rawValue
+        place(owned[i].id, at: owned[i].gx, owned[i].gy)
+        return FurnitureCatalog.kind(owned[i].kind)?.name
     }
 }
 
@@ -793,14 +856,91 @@ extension ClawdStore {
         }
     }
 
-    /// 现在哪几格被占着。
-    /// `except` 是正在拖的那一件——**算占用的时候得把它自己刨掉**，
-    /// 不然它永远跟自己打架，怎么放都说放不下。
-    func takenCells(except: UUID? = nil) -> Set<String> {
+    // 「哪几格被占着」和「挪到某一格」都挪到下面那个 extension 里了——
+    // **它们得按房间分开算**，不分屋的话卧室摆了张床，
+    // 厨房同一格也跟着变成「有人了」。
+}
+
+
+// MARK: - 一个家分成好几间
+
+extension ClawdStore {
+
+    /// clawd 此刻在哪一间。
+    ///
+    /// 存 UserDefaults 就够了——一个房间名，不值得单开一个文件。
+    var clawdRoom: HomeRoom {
+        get {
+            HomeRoom(rawValue: UserDefaults.standard.string(forKey: "clawdRoom") ?? "")
+                ?? .living
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: "clawdRoom")
+            objectWillChange.send()
+        }
+    }
+
+    /// 他此刻在干嘛。头像底下那一行读它。
+    ///
+    /// ⚠️ **他做什么就是什么**，不是随机台词——
+    /// 随机台词会说谎：她看到「正在装修」结果屋里什么都没动，
+    /// 这一行就再也不值得看了。
+    var clawdDoing: ClawdDoing {
+        get {
+            ClawdDoing(rawValue: UserDefaults.standard.string(forKey: "clawdDoing") ?? "")
+                ?? .idling
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: "clawdDoing")
+            objectWillChange.send()
+        }
+    }
+
+    /// 老家具分房间。**只分一次**，分完写回去。
+    func migrateRooms() {
+        for i in owned.indices where owned[i].room.isEmpty {
+            guard let kind = FurnitureCatalog.kind(owned[i].kind) else {
+                owned[i].room = HomeRoom.living.rawValue
+                continue
+            }
+            owned[i].room = HomeRoom.home(for: kind).rawValue
+        }
+    }
+
+    /// 某一间屋里摆着的东西
+    func furniture(in room: HomeRoom) -> [Furniture] {
+        owned.filter { !$0.hidden && !$0.carried && $0.room == room.rawValue }
+    }
+
+    /// 某一间屋里有几件（户型图上那个小数字）
+    func count(in room: HomeRoom) -> Int {
+        owned.filter { !$0.hidden && !$0.carried && $0.room == room.rawValue }.count
+    }
+
+    /// 把一件东西搬到另一间屋。
+    ///
+    /// 换屋之后**格子要重挑**——那一间的那一格可能已经有人了。
+    func send(_ id: UUID, to room: HomeRoom) {
+        guard let i = owned.firstIndex(where: { $0.id == id }) else { return }
+        owned[i].room = room.rawValue
+        let s = FurnitureCatalog.shape(of: owned[i].kind)
+        let geo = IsoRoom(size: Self.roomSize)
+        let taken = takenCells(in: room, except: id)
+        if let spot = geo.nearestFree(owned[i].gx, owned[i].gy, w: s.w, d: s.d, taken: taken) {
+            owned[i].gx = spot.0
+            owned[i].gy = spot.1
+        }
+    }
+
+    /// 某一间屋里哪几格被占着。
+    ///
+    /// ⚠️ **必须分屋算**：不分的话，卧室摆了张床，
+    /// 厨房那一格也跟着变成「有人了」——她会以为厨房坏了。
+    func takenCells(in room: HomeRoom, except: UUID? = nil) -> Set<String> {
         var out: Set<String> = []
-        for f in owned where !f.hidden && !f.carried && f.id != except {
+        for f in owned where !f.hidden && !f.carried
+            && f.room == room.rawValue && f.id != except {
             let s = FurnitureCatalog.shape(of: f.kind)
-            // 地毯不占位：它是摊在地上的，东西该能压在上面
             guard s.tall > 0 else { continue }
             for (x, y) in IsoRoom.cells(f.gx, f.gy, s.w, s.d) {
                 out.insert("\(x),\(y)")
@@ -809,21 +949,55 @@ extension ClawdStore {
         return out
     }
 
-    /// 把一件家具挪到某一格。
-    ///
-    /// 放不下就**往外找最近一处放得下的**——不能一句「放不下」
-    /// 把东西弹回原位，她拖了半天结果东西跳回去，比放歪还气人。
-    /// 实在没地方了才留在原处。
+    /// 把一件家具挪到某一格。**在它自己那间屋里算占用**。
     @discardableResult
     func place(_ id: UUID, at gx: Int, _ gy: Int) -> Bool {
         guard let i = owned.firstIndex(where: { $0.id == id }) else { return false }
         let s = FurnitureCatalog.shape(of: owned[i].kind)
-        let room = IsoRoom(size: Self.roomSize)
-        guard let spot = room.nearestFree(gx, gy, w: s.w, d: s.d,
-                                          taken: takenCells(except: id))
+        let room = HomeRoom(rawValue: owned[i].room) ?? .living
+        let geo = IsoRoom(size: Self.roomSize)
+        guard let spot = geo.nearestFree(gx, gy, w: s.w, d: s.d,
+                                         taken: takenCells(in: room, except: id))
         else { return false }
         owned[i].gx = spot.0
         owned[i].gy = spot.1
         return true
+    }
+
+    /// 给某一件换成她自己的图。
+    ///
+    /// 存之前先抠背景、裁紧（见 `FurnitureImage`）——
+    /// 她只要截一件下来，别的不用管。
+    func dressUp(_ id: UUID, with image: UIImage) -> Bool {
+        guard let i = owned.firstIndex(where: { $0.id == id }),
+              let name = FurnitureImage.save(image) else { return false }
+        // 换新图之前把旧的删掉，不然换十次留十张
+        let old = owned[i].imageName
+        owned[i].imageName = name
+        if !old.isEmpty {
+            try? FileManager.default.removeItem(at: ImageStore.url(for: old))
+        }
+        return true
+    }
+
+    /// 换回我画的那版
+    func undress(_ id: UUID) {
+        guard let i = owned.firstIndex(where: { $0.id == id }) else { return }
+        let old = owned[i].imageName
+        owned[i].imageName = ""
+        if !old.isEmpty {
+            try? FileManager.default.removeItem(at: ImageStore.url(for: old))
+        }
+    }
+
+    /// 他自己换一间屋。
+    ///
+    /// **这一步不调模型、不花钱**——纯粹是动画在决定他去哪儿。
+    /// 接上阿晏之后，这个决定才会变成他自己下的（那是下一轮的事）。
+    func wanderToAnotherRoom() {
+        let others = HomeRoom.allCases.filter { $0 != clawdRoom }
+        guard let next = others.randomElement() else { return }
+        clawdRoom = next
+        clawdDoing = .moving
     }
 }

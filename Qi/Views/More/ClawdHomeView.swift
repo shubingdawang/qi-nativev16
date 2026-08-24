@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 /// clawd 的家。
 ///
@@ -45,6 +46,31 @@ struct ClawdHomeView: View {
     /// 正在问她要不要接他进来
     @State private var askingLink = false
 
+    /// 她此刻在看哪一间。**`nil` = 在看户型图**。
+    ///
+    /// 她说的：「clawd 在哪个房间，我打开小屋就会呈现哪个房间，
+    /// 而我可以换房间看其他的。」——所以进来那一下落在他那间，
+    /// 之后她想看哪间看哪间。
+    @State private var viewing: HomeRoom?
+    /// 她是不是**跟着他**。跟着的话他换屋，画面也跟着换；
+    /// 她自己点去别间之后就不跟了——**不能把她的视线拽走**。
+    @State private var following = true
+
+    /// 「从整版图里取家具」那张纸开着没有
+    @State private var importingSheet = false
+    /// 正在给哪一件换图
+    @State private var dressing: Furniture?
+    @State private var pickingImage = false
+    @State private var dressPick: PhotosPickerItem?
+
+    /// 房间那一块有多大。算「他该坐在凳子的哪个点」要用——
+    /// **跟画屋子那边用的是同一个 `IsoRoom.fit`**，各算各的必然对不齐。
+    @State private var roomSize: CGSize?
+
+    /// 屋子这一页现在画的是哪一间。
+    /// `viewing` 还没定下来的时候（刚进来那一帧）就跟着他。
+    private var shownRoom: HomeRoom { viewing ?? store.clawdRoom }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -70,16 +96,43 @@ struct ClawdHomeView: View {
             .padding(.bottom, 10)
 
             switch tab {
-            case 0: room
-            case 1: cabinet
+            case 0:
+                if let viewing {
+                    roomPage(viewing)
+                } else {
+                    ScrollView {
+                        FloorPlanView(store: store) { enter($0) }
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, Layout.tabBarExpanded + 16)
+                    }
+                }
+            case 1:
+                // 柜子那一档顶上挂着「换成我的家具图」——
+                // 她的东西都在这一档，图也归这儿最顺手
+                VStack(spacing: 0) {
+                    sheetEntry
+                    cabinet
+                }
             default: shop
             }
         }
         .navigationTitle("clawd")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
+            // 老家具分屋。**得在这儿分**——户型图上那几个数字要用，
+            // 只在进了某一间之后才分的话，户型图第一眼全是「还空着」
+            store.migrateRoom()
+            store.migrateRooms()
+            // 进来就落在他待着的那一间（她要的）
+            if viewing == nil, following { viewing = store.clawdRoom }
             startWalking()
             startHim()
+        }
+        // 他换屋了：她**跟着他**的时候画面才跟着换。
+        // 她自己点去别间之后就不跟了——半路把她的视线拽走最讨厌。
+        .onChange(of: store.clawdRoom) { _, r in
+            guard following else { return }
+            withAnimation(.easeInOut(duration: 0.28)) { viewing = r }
         }
         .onDisappear {
             walkTask?.cancel()
@@ -170,6 +223,58 @@ struct ClawdHomeView: View {
         .padding(.bottom, 10)
     }
 
+
+    // MARK: 一间屋
+
+    /// 进某一间
+    private func enter(_ r: HomeRoom) {
+        withAnimation(.easeInOut(duration: 0.24)) {
+            viewing = r
+            // 点进的是他那间 = 又跟上了
+            following = (r == store.clawdRoom)
+        }
+    }
+
+    /// 一间屋整页：上面一条（名字 + 回户型图），中间是屋子，
+    /// 左上角挂着他的头像。
+    @ViewBuilder
+    private func roomPage(_ r: HomeRoom) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.24)) { viewing = nil }
+                } label: {
+                    Label("整个家", systemImage: "square.grid.2x2")
+                        .font(.app(11.5))
+                        .foregroundStyle(app.settings.accentColor)
+                }
+                .buttonStyle(.plain)
+
+                Spacer(minLength: 4)
+
+                Image(systemName: r.icon)
+                    .font(.app(12))
+                    .foregroundStyle(Theme.textSoft(scheme))
+                Text(r.rawValue)
+                    .heading(15)
+                    .foregroundStyle(Theme.textMain(scheme))
+            }
+            .padding(.horizontal, 18)
+            .padding(.bottom, 8)
+
+            room
+                .overlay(alignment: .topLeading) {
+                    // 左上角那个头像 + 一行「他在干嘛」（她要的）。
+                    // 点它 = 跳到他那一间。
+                    ClawdBadge(store: store, viewing: r) {
+                        enter(store.clawdRoom)
+                    }
+                    .padding(.leading, 18)
+                    .padding(.top, 4)
+                }
+        }
+    }
+
     // MARK: 房间
 
     private var room: some View {
@@ -185,121 +290,136 @@ struct ClawdHomeView: View {
                 // **谁挡谁由「格X + 格Y」决定**——远的先画、近的压在上面。
                 // 穿模不是修好的，是这个顺序让它不可能发生。
                 IsoRoomView(store: store,
+                            room: shownRoom,
                             clawdX: clawdX, clawdY: clawdY,
                             floorTop: ClawdHomeView.floorTop,
                             floorBottom: ClawdHomeView.floorBottom,
                             onTapFurniture: { acting = $0 })
 
-                // clawd 本人。长按能拎起来放到任何地方，
-                // 没人管的时候他自己也会在屋里走来走去。
-                VStack(spacing: 4) {
-                    if let bubble {
-                        Text(bubble)
-                            .font(.app(11))
-                            .foregroundStyle(Theme.textMain(scheme))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
-                            .background(
-                                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                                    .fill(scheme == .dark
-                                          ? Color.white.opacity(0.14)
-                                          : Color.white.opacity(0.92))
-                            )
-                            .fixedSize()
-                            .transition(.scale(scale: 0.9).combined(with: .opacity))
+                // ⚠️ **他不在这一间就不画他。**
+                //
+                // 她说的：「clawd 在哪个房间，我打开小屋就会呈现哪个房间。」
+                // 反过来也成立——她翻到别的房间的时候，他不该也跟着出现在那儿。
+                // 想知道他在哪儿，看左上角那个头像。
+                if shownRoom == store.clawdRoom {
+                    // clawd 本人。长按能拎起来放到任何地方，
+                    // 没人管的时候他自己也会在屋里走来走去。
+                    VStack(spacing: 4) {
+                        if let bubble {
+                            Text(bubble)
+                                .font(.app(11))
+                                .foregroundStyle(Theme.textMain(scheme))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                                        .fill(scheme == .dark
+                                              ? Color.white.opacity(0.14)
+                                              : Color.white.opacity(0.92))
+                                )
+                                .fixedSize()
+                                .transition(.scale(scale: 0.9).combined(with: .opacity))
+                        }
+                        HStack(alignment: .bottom, spacing: 2) {
+                            // ⚠️ 从 1.8 收到 1.25。
+                            //
+                            // 她说「clawd 也（太大），如果屋子只有这么大的话，
+                            // clawd 完全不能住」。1.8 倍的他有 58 点宽——
+                            // 比一格（约 40 点）还宽一半，站在床边跟床一样高。
+                            // 收到 1.25 之后他大概占一格，**屋子才像是能住人的**。
+                            ClawdView(mood: mood, scale: 1.25, shadow: true)
+                                // 大件**举过头顶**（她画的那张参考图就是这个动作）。
+                                // 聊天页读的是同一个 store、同一套判断，所以两边一模一样：
+                                // 这边在搬床，切过去那边也在搬床，也是举着的。
+                                .overlay(alignment: .top) {
+                                    if let kind = store.carriedKind, store.overhead(kind) {
+                                        PixelSpriteView(sprite: kind.sprite, scale: 1.3)
+                                            .offset(y: -22)
+                                            .transition(.scale(scale: 0.5).combined(with: .opacity))
+                                    }
+                                }
+                            // 小东西还是端在手边
+                            if let kind = store.carriedKind, !store.overhead(kind) {
+                                PixelSpriteView(sprite: kind.sprite, scale: 1.5)
+                                    .offset(y: -8)
+                                    .transition(.scale(scale: 0.5).combined(with: .opacity))
+                            }
+                        }
+                            // 被拎起来的时候整只抬高一点、影子也跟着散开
+                            .scaleEffect(held ? 1.14 : 1)
+                            .shadow(color: .black.opacity(held ? 0.26 : 0),
+                                    radius: 10, y: 8)
+                            // 走路的时候左右翻个身，朝着要去的方向。
+                            //
+                            // **这一下不能带动画**。外面那几条 `.animation(...)`
+                            // 会把它也接管掉，于是 x 从 1 连续变到 -1——
+                            // 中间要经过 0，看着就是整只被压扁再翻过来，
+                            // 也就是她说的「走路还会转圈」。
+                            // 加一条时长为 0 的动画把它单独摘出来。
+                            .scaleEffect(x: facingLeft ? -1 : 1, y: 1)
+                            .animation(nil, value: facingLeft)
+                            // 精灵那块 Canvas 是不接触摸的，得自己补一块感应区，
+                            // 不然点也点不到、更别说长按拖
+                            .contentShape(Rectangle().inset(by: -10))
                     }
-                    HStack(alignment: .bottom, spacing: 2) {
-                        ClawdView(mood: mood, scale: 1.8, shadow: true)
-                            // 大件**举过头顶**（她画的那张参考图就是这个动作）。
-                            // 聊天页读的是同一个 store、同一套判断，所以两边一模一样：
-                            // 这边在搬床，切过去那边也在搬床，也是举着的。
-                            .overlay(alignment: .top) {
-                                if let kind = store.carriedKind, store.overhead(kind) {
-                                    PixelSpriteView(sprite: kind.sprite, scale: 1.3)
-                                        .offset(y: -22)
-                                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+                    .position(x: clawdX * geo.size.width, y: clawdY * geo.size.height)
+                    // 拖的时候要跟手，所以不给动画；自己走的时候才慢慢挪过去
+                    .animation(held ? nil : .easeInOut(duration: walkSeconds), value: clawdX)
+                    .animation(held ? nil : .easeInOut(duration: walkSeconds), value: clawdY)
+                    .animation(.spring(response: 0.28, dampingFraction: 0.6), value: held)
+                    .onTapGesture {
+                        // 手上有东西的时候，点他＝**现在就放下**。
+                        //
+                        // 走完一趟他自己会放（见 startWalking），但那要等几秒。
+                        // 她递过去多半是想指个地方，不该逼她干等——
+                        // 点一下就搁在他脚边。
+                        if let kind = store.carriedKind {
+                            store.putDown(at: CGPoint(x: clawdX, y: clawdY))
+                            mood = .idle
+                            say(store.overhead(kind) ? "呼……放下了" : "好，搁这儿")
+                            if app.settings.haptics {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            }
+                            return
+                        }
+                        mood = .happy
+                        say(tapLine())
+                        if app.settings.haptics {
+                            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                        }
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 1_600_000_000)
+                            if mood == .happy { mood = .idle }
+                        }
+                    }
+                    .gesture(
+                        LongPressGesture(minimumDuration: 0.3)
+                            .onEnded { _ in
+                                held = true
+                                walkTask?.cancel()          // 拎着的时候别让他自己乱跑
+                                mood = .happy
+                                if app.settings.haptics {
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                }
+                                say(["诶——", "放我下来", "飞起来了", "唔？"].randomElement() ?? "诶")
+                            }
+                            .sequenced(before: DragGesture(minimumDistance: 0))
+                            .onChanged { value in
+                                if case .second(_, let drag?) = value {
+                                    clawdX = min(0.92, max(0.08, drag.location.x / geo.size.width))
+                                    clawdY = min(ClawdHomeView.floorBottom, max(ClawdHomeView.floorTop, drag.location.y / geo.size.height))
                                 }
                             }
-                        // 小东西还是端在手边
-                        if let kind = store.carriedKind, !store.overhead(kind) {
-                            PixelSpriteView(sprite: kind.sprite, scale: 1.5)
-                                .offset(y: -8)
-                                .transition(.scale(scale: 0.5).combined(with: .opacity))
-                        }
-                    }
-                        // 被拎起来的时候整只抬高一点、影子也跟着散开
-                        .scaleEffect(held ? 1.14 : 1)
-                        .shadow(color: .black.opacity(held ? 0.26 : 0),
-                                radius: 10, y: 8)
-                        // 走路的时候左右翻个身，朝着要去的方向。
-                        //
-                        // **这一下不能带动画**。外面那几条 `.animation(...)`
-                        // 会把它也接管掉，于是 x 从 1 连续变到 -1——
-                        // 中间要经过 0，看着就是整只被压扁再翻过来，
-                        // 也就是她说的「走路还会转圈」。
-                        // 加一条时长为 0 的动画把它单独摘出来。
-                        .scaleEffect(x: facingLeft ? -1 : 1, y: 1)
-                        .animation(nil, value: facingLeft)
-                        // 精灵那块 Canvas 是不接触摸的，得自己补一块感应区，
-                        // 不然点也点不到、更别说长按拖
-                        .contentShape(Rectangle().inset(by: -10))
-                }
-                .position(x: clawdX * geo.size.width, y: clawdY * geo.size.height)
-                // 拖的时候要跟手，所以不给动画；自己走的时候才慢慢挪过去
-                .animation(held ? nil : .easeInOut(duration: walkSeconds), value: clawdX)
-                .animation(held ? nil : .easeInOut(duration: walkSeconds), value: clawdY)
-                .animation(.spring(response: 0.28, dampingFraction: 0.6), value: held)
-                .onTapGesture {
-                    // 手上有东西的时候，点他＝**现在就放下**。
-                    //
-                    // 走完一趟他自己会放（见 startWalking），但那要等几秒。
-                    // 她递过去多半是想指个地方，不该逼她干等——
-                    // 点一下就搁在他脚边。
-                    if let kind = store.carriedKind {
-                        store.putDown(at: CGPoint(x: clawdX, y: clawdY))
-                        mood = .idle
-                        say(store.overhead(kind) ? "呼……放下了" : "好，搁这儿")
-                        if app.settings.haptics {
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        }
-                        return
-                    }
-                    mood = .happy
-                    say(tapLine())
-                    if app.settings.haptics {
-                        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                    }
-                    Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 1_600_000_000)
-                        if mood == .happy { mood = .idle }
-                    }
-                }
-                .gesture(
-                    LongPressGesture(minimumDuration: 0.3)
-                        .onEnded { _ in
-                            held = true
-                            walkTask?.cancel()          // 拎着的时候别让他自己乱跑
-                            mood = .happy
-                            if app.settings.haptics {
-                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            .onEnded { _ in
+                                guard held else { return }
+                                held = false
+                                mood = .idle
+                                say(["就待这儿吧", "好", "这儿也不错"].randomElement() ?? "好")
+                                startWalking()              // 放下之后重新开始自己溜达
                             }
-                            say(["诶——", "放我下来", "飞起来了", "唔？"].randomElement() ?? "诶")
-                        }
-                        .sequenced(before: DragGesture(minimumDistance: 0))
-                        .onChanged { value in
-                            if case .second(_, let drag?) = value {
-                                clawdX = min(0.92, max(0.08, drag.location.x / geo.size.width))
-                                clawdY = min(ClawdHomeView.floorBottom, max(ClawdHomeView.floorTop, drag.location.y / geo.size.height))
-                            }
-                        }
-                        .onEnded { _ in
-                            guard held else { return }
-                            held = false
-                            mood = .idle
-                            say(["就待这儿吧", "好", "这儿也不错"].randomElement() ?? "好")
-                            startWalking()              // 放下之后重新开始自己溜达
-                        }
-                )
+                    )
+
+                }
 
                 // 他说的话。
                 //
@@ -337,6 +457,11 @@ struct ClawdHomeView: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            // 房间那一块有多大。**在 onAppear／onChange 里记**，
+            // 不在 body 里直接写 @State——那会边画边改状态，SwiftUI 会警告，
+            // 严重的时候还会来回重画停不下来。
+            .onAppear { roomSize = geo.size }
+            .onChange(of: geo.size) { _, v in roomSize = v }
         }
         .padding(.horizontal, 16)
         .padding(.bottom, Layout.tabBarExpanded + 12)
@@ -349,6 +474,16 @@ struct ClawdHomeView: View {
             titleVisibility: .visible
         ) {
             if let item = acting {
+                // 她自己的图。**这是她那批 AI 生成的等距家具进来的口子。**
+                // 导入的时候会自动抠掉白底、裁紧边（见 `FurnitureImage`），
+                // 她只要截一件下来就行。
+                Button(item.imageName.isEmpty ? "换成我的图" : "再换一张图") {
+                    dressing = item
+                    pickingImage = true
+                }
+                if !item.imageName.isEmpty {
+                    Button("换回画的这版") { store.undress(item.id) }
+                }
                 Button("收起来") { store.toggleHidden(item.id) }
                 Button("卖掉，退一半的币", role: .destructive) {
                     store.sell(item.id)
@@ -359,9 +494,62 @@ struct ClawdHomeView: View {
         } message: {
             Text("长按可以把它搬到屋里任何地方")
         }
+        .sheet(isPresented: $importingSheet) {
+            SheetImportView(store: store)
+        }
+        .photosPicker(isPresented: $pickingImage, selection: $dressPick,
+                      matching: .images)
+        .onChange(of: dressPick) { _, picked in
+            guard let picked, let target = dressing else { return }
+            Task { @MainActor in
+                defer { dressPick = nil; dressing = nil }
+                guard let data = try? await picked.loadTransferable(type: Data.self),
+                      let img = UIImage(data: data) else {
+                    notice = "这张图读不出来"
+                    return
+                }
+                if store.dressUp(target.id, with: img) {
+                    let n = FurnitureCatalog.kind(target.kind)?.name ?? "它"
+                    notice = n + "换成你的图了"
+                } else {
+                    notice = "换不上，这张图存不下来"
+                }
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                notice = nil
+            }
+        }
     }
 
     // MARK: 柜子
+
+    /// 「从整版图里取家具」的入口
+    private var sheetEntry: some View {
+        Button {
+            importingSheet = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "scissors")
+                    .font(.app(13))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("换成我的家具图")
+                        .font(.app(13, weight: .medium))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    Text("导一整版进来，我自己把每一件抠出来，你只要点一下这块是什么")
+                        .font(.app(10.5))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(app.settings.accentColor)
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassBackground(radius: 14, strength: app.settings.glassOpacity * 0.8)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 10)
+    }
 
     private var cabinet: some View {
         ScrollView {
@@ -484,6 +672,69 @@ struct ClawdHomeView: View {
                 if Task.isCancelled { return }
                 guard mood != .happy, !held else { continue }
 
+                // 隔一会儿换一间屋。
+                //
+                // 她说的：「clawd 可以决定自己要去哪个房间，
+                // 他凑近房间门口就会进入这个房间。」
+                //
+                // ⚠️ **这一步不调模型、不花钱**——现在是动画在替他决定去哪儿。
+                // 等接上阿晏，这个决定才会变成他自己下的（下一轮）。
+                // 手上抱着东西、正被拎着的时候不换屋，
+                // 那会看着像东西凭空搬走了。
+                if store.carrying == nil, !held, Double.random(in: 0...1) < 0.18 {
+                    let before = store.clawdRoom
+                    store.wanderToAnotherRoom()
+                    if store.clawdRoom != before {
+                        say(["去" + store.clawdRoom.rawValue + "看看",
+                             "换个地方待着", "我去那边"].randomElement() ?? "换个地方")
+                        // 进新屋从门口开始走
+                        clawdX = 0.5
+                        clawdY = ClawdHomeView.floorTop + 0.02
+                        try? await Task.sleep(nanoseconds: 900_000_000)
+                        store.clawdDoing = .walking
+                    }
+                    continue
+                }
+
+                // 找件家具玩一下。**她要的「每件家具三到四个互动」就是这儿。**
+                //
+                // ⚠️ 这一整套**一分钱不花**：挑哪件、做哪个动作、嘀咕哪一句，
+                // 全是本机随机。他自己在屋里过日子，不该跟她的账单挂钩。
+                if store.carrying == nil, !held,
+                   let size = roomSize, size.width > 1,
+                   Double.random(in: 0...1) < 0.42,
+                   let item = store.furniture(in: store.clawdRoom).randomElement(),
+                   let kind = FurnitureCatalog.kind(item.kind),
+                   let chosen = RoomActs.acts(for: kind.id).randomElement() {
+
+                    let geo = IsoRoom.fit(in: size)
+                    let p = RoomActs.spot(of: item, kindID: kind.id,
+                                          in: geo, act: chosen)
+                    // 屏幕上那个点换回 0…1，走路那套还是老样子
+                    let tx = min(0.95, max(0.05, p.x / size.width))
+                    let ty = min(0.98, max(0.05, p.y / size.height))
+
+                    facingLeft = tx < clawdX
+                    walkSeconds = 1.4
+                    mood = .walking
+                    store.clawdDoing = .walking
+                    clawdX = tx
+                    clawdY = ty
+                    try? await Task.sleep(nanoseconds: 1_400_000_000)
+                    if Task.isCancelled { return }
+                    guard !held else { continue }
+
+                    mood = chosen.mood
+                    store.clawdDoing = doing(for: chosen, kind: kind)
+                    say(chosen.lines.randomElement() ?? chosen.name)
+                    try? await Task.sleep(
+                        nanoseconds: UInt64(chosen.seconds * 1_000_000_000))
+                    if Task.isCancelled { return }
+                    mood = .idle
+                    store.clawdDoing = .idling
+                    continue
+                }
+
                 // **只在地板上走。** 地板是从 0.62 往下那一块，
                 // 以前这儿是 0.22…0.90——0.22 在墙上，所以他会走进墙里去。
                 let targetX = Double.random(in: 0.12...0.88)
@@ -495,6 +746,8 @@ struct ClawdHomeView: View {
                 walkSeconds = 1.6 + dist * 3.2
                 // 走的这一路上换成"在忙活"那两帧，腿看着像在倒腾
                 mood = store.carrying == nil ? .walking : .hauling
+                // 头像底下那一行**说的是他真在做的事**
+                store.clawdDoing = store.carrying == nil ? .walking : .arranging
                 clawdX = targetX
                 clawdY = targetY
 
@@ -502,6 +755,7 @@ struct ClawdHomeView: View {
                 if Task.isCancelled { return }
                 if mood == .walking || mood == .hauling {
                     mood = store.carrying == nil ? .idle : .carrying
+                    store.clawdDoing = store.carrying == nil ? .idling : .arranging
                 }
 
                 // **搬到地方就放下。**
@@ -556,12 +810,21 @@ struct ClawdHomeView: View {
                             < abs(b.x - clawdX) + abs(b.y - clawdY)
                     }
                 let nearName = (near.flatMap { FurnitureCatalog.kind($0.kind)?.name }) ?? ""
-                let line = await app.clawdSays(
+                let said = await app.clawdSays(
                     room: store.roomBrief(),
                     near: nearName,
-                    carrying: store.carriedKind?.name ?? "")
+                    carrying: store.carriedKind?.name ?? "",
+                    home: store.homeBrief(watching: viewing),
+                    canArrange: true)
                 if Task.isCancelled { return }
-                if let line {
+
+                // 他在那句话里顺手写的记号：换屋、搬东西、把收起来的拿出来。
+                // **解析出来照做，再把记号剥干净**——她看到的是一句正常的话。
+                // 这一整套跟那句话挤在同一次请求里，一分钱不多花。
+                let line = said.map { applyHisMarkers($0) }?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                if let line, !line.isEmpty {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         himLine = line
                     }
@@ -573,6 +836,66 @@ struct ClawdHomeView: View {
                     nanoseconds: UInt64.random(in: 180...360) * 1_000_000_000)
             }
         }
+    }
+
+    /// 头像底下那一行，按他此刻在做的事写。
+    ///
+    /// ⚠️ **说的是真事**。「正在吃下午茶」得是他真的凑到蛋糕跟前了，
+    /// 不是随机挑一句好听的。
+    private func doing(for act: RoomAct, kind: FurnitureKind) -> ClawdDoing {
+        switch kind.category {
+        case .food:  return .eating
+        case .drink: return .drinking
+        default: break
+        }
+        switch act.name {
+        case "躺下", "钻被窝":     return .sleeping
+        case "抽一本", "踮脚够":   return .reading
+        case "打开看", "按两下", "打滚", "踩上去": return .playing
+        case "浇水", "摆正":       return .arranging
+        default:                  return .idling
+        }
+    }
+
+    /// 他那句话里的记号：照做，然后把记号剥掉。
+    ///
+    /// ⚠️ **一次只让他动一件**。她开着这一页看着呢——
+    /// 东西一件件挪是布置，一口气全挪是家被翻了。
+    @discardableResult
+    private func applyHisMarkers(_ raw: String) -> String {
+        let (clean, acts) = RoomMarker.parse(raw)
+        var done = false
+        for act in acts where !done {
+            switch act {
+            case .go(let r):
+                guard r != store.clawdRoom else { continue }
+                store.clawdRoom = r
+                store.clawdDoing = .moving
+                clawdX = 0.5
+                clawdY = ClawdHomeView.floorTop + 0.02
+                done = true
+
+            case .move(let name, let to):
+                guard let f = store.find(named: name) else { continue }
+                store.send(f.id, to: to)
+                store.clawdDoing = .arranging
+                notice = "他把" + name + "搬去了" + to.rawValue
+                done = true
+
+            case .takeOut(let name):
+                guard let got = store.takeOut(named: name) else { continue }
+                store.clawdDoing = .arranging
+                notice = "他把" + got + "拿出来摆上了"
+                done = true
+            }
+        }
+        if done {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 6_000_000_000)
+                notice = nil
+            }
+        }
+        return clean
     }
 
     private func say(_ text: String) {

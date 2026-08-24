@@ -904,11 +904,12 @@ struct MessageBubbleView: View {
                         .textSelection(.enabled)
                 }
             }
-            ForEach(message.toolRuns) { run in
+            ForEach(Array(message.toolRuns.enumerated()), id: \.element.id) { i, run in
                 step(icon: run.failed ? "xmark" : "wrench.and.screwdriver",
                      tint: run.failed ? .red : app.settings.accentColor,
                      title: run.toolName,
-                     note: run.serverName) {
+                     note: run.serverName,
+                     isLast: i == message.toolRuns.count - 1) {
                     VStack(alignment: .leading, spacing: 3) {
                         if !run.arguments.isEmpty, run.arguments != "{}" {
                             Text(run.arguments)
@@ -934,6 +935,7 @@ struct MessageBubbleView: View {
     /// 时间线上的一步
     @ViewBuilder
     private func step(icon: String, tint: Color, title: String, note: String = "",
+                      isLast: Bool = false,
                       @ViewBuilder body: () -> some View) -> some View {
         HStack(alignment: .top, spacing: 9) {
             // 左边那根线和点。**线要连着**——断开的点看着像几件不相干的事
@@ -966,10 +968,16 @@ struct MessageBubbleView: View {
                 body()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            // 步与步之间留一行的空。她说的「两个动作之间需要换一行以免粘在一起」——
-            // 但整体上下的余量收掉了（原来 12/11，现在 9/8），
-            // 所以是「更紧凑，但分得更清」，不是笼统地变松或变紧。
-            .padding(.bottom, 10)
+            // 步与步之间留一行的空 + **一道淡线**。
+            //
+            // 她说「工具的间隔貌似没改」——上一版我只是把间距从 11 调到 10，
+            // 那点差别她当然看不出来。她要的不是「隔远一点」，
+            // 是**看得出这是两件事**。所以补一道线：
+            // 间距不用再往大调，一道线比十个点的空白管用得多。
+            .padding(.bottom, 9)
+            .overlay(alignment: .bottom) {
+                if !isLast { Hairline().padding(.trailing, 30) }
+            }
         }
     }
 

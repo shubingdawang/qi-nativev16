@@ -343,9 +343,16 @@ struct GlassSurface: View {
     /// 现在就是系统那块材质，另加一道极细的描边定个轮廓（不描边的话
     /// 浅色壁纸上根本看不出卡片边界在哪儿）。别的一律不加。
     private var frosted: some View {
-        shape.fill(.regularMaterial)
-            // 她那根「浓度」滑块还得管用：调低就更透。
-            // 只叠一层很薄的白，**不是再糊一层材质**。
+        shape.fill(tier)
+            // ⚠️ 她报的：「磨砂没有跟着模糊设置动了」。
+            //
+            // 上一版我把四层自制的糊料换成 `.regularMaterial` 是对的，
+            // 但顺手把那根滑块**接丢了**——系统材质没有「糊多少」这个参数。
+            //
+            // 苹果自己的做法是**换档**，不是调数值：
+            // ultraThin → thin → regular → thick，四档由薄到厚。
+            // 滑块现在选的就是这四档（见 `tier`），
+            // 所以它照样管用，而且每一档都还是苹果那块材质。
             .overlay {
                 if extra > 0.01 {
                     shape.fill(.white.opacity(extra * 0.10))
@@ -425,15 +432,18 @@ struct GlassSurface: View {
     //   · 上下一点点明暗差，读出"这是一个面"
     //   · 底下一道极淡的内阴影，把下缘压住
     // 唯独**不给边**——加了边就往「通透」那边靠，三套又分不出来了。
+    /// 模糊。
+    ///
+    /// ⚠️ 她报的：「模糊玻璃也应该是苹果的效果，现在有点怪怪的」。
+    ///
+    /// 怪在哪儿：以前它是老的 `UIBlurEffect(.light)` 再压一层黑渐变。
+    /// 那套是 iOS 7 那代的毛玻璃，**在新系统上跟周围格格不入**——
+    /// 而且压的那层黑让它发灰，像一块脏玻璃。
+    ///
+    /// 现在跟磨砂一样走系统材质，只是**比磨砂厚一档**：
+    /// 「磨砂」偏透、「模糊」偏实，两档差在这儿，不再靠自制的糊料拉开。
     private var blur: some View {
-        base(liquid: false, blur: .light)
-            .overlay {
-                shape.fill(
-                    LinearGradient(
-                        colors: [.black.opacity(0.03), .black.opacity(0.08)],
-                        startPoint: .top, endPoint: .bottom)
-                )
-            }
+        shape.fill(thickerTier)
             .overlay {
                 if extra > 0.01 {
                     shape.fill(.white.opacity(extra * 0.10))
@@ -473,6 +483,28 @@ struct GlassSurface: View {
     /// 以前调的是整层的 opacity，往左只是让这块玻璃越来越淡、
     /// 直到快没了——那不是"玻璃变了"，那是"玻璃不见了"。
     private var blurAmount: Double { min(1, max(0, strength)) }
+
+    /// 「浓度」那根滑块 → 苹果材质的四档。
+    ///
+    /// 系统材质没有连续的「糊多少」，**苹果自己就是换档**。
+    /// 所以滑块在这儿变成挑档：越往右越厚、背后越糊。
+    private var tier: Material {
+        switch blurAmount {
+        case ..<0.30: return .ultraThinMaterial
+        case ..<0.60: return .thinMaterial
+        case ..<0.85: return .regularMaterial
+        default:      return .thickMaterial
+        }
+    }
+
+    /// 「模糊」那一档比磨砂厚一级——两档的区别就在这儿
+    private var thickerTier: Material {
+        switch blurAmount {
+        case ..<0.30: return .thinMaterial
+        case ..<0.60: return .regularMaterial
+        default:      return .thickMaterial
+        }
+    }
 
     @ViewBuilder
     private func base(liquid: Bool, blur style: UIBlurEffect.Style) -> some View {

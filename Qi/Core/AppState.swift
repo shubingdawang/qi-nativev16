@@ -2277,7 +2277,8 @@ final class AppState: ObservableObject {
     /// 只在小屋这一页开着的时候才有，切走就停；一句话最多二十来个字，
     /// 上下文只有"屋里有什么、他刚走到谁旁边"——不带聊天记录，
     /// 一次就那么几十个 token。
-    func clawdSays(room: String, near: String, carrying: String) async -> String? {
+    func clawdSays(room: String, near: String, carrying: String,
+                   home: String = "", canArrange: Bool = false) async -> String? {
         guard let him = activeHim else { return nil }
         let (p, endpoint, model) = him
 
@@ -2296,7 +2297,13 @@ final class AppState: ObservableObject {
         · 没什么可说的时候，说点小的也行：一句嘀咕、一个念头。
         """
 
-        var user = room.isEmpty ? "屋里还空着。" : room
+        // ⚠️ 动手那一套跟这句话**挤在同一次请求里**，
+        // 不额外开第二条——铁律第二条。
+        if canArrange {
+            system += "\n\n" + RoomMarker.contract
+        }
+
+        var user = home.isEmpty ? (room.isEmpty ? "屋里还空着。" : room) : home
         if !near.isEmpty { user += "\nclawd 刚走到\(near)旁边。" }
         if !carrying.isEmpty { user += "\nclawd 手上抱着\(carrying)。" }
 

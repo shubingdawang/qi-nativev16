@@ -14,6 +14,11 @@ struct ChatDrawer: View {
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
     @State private var search = ""
+    /// 正在改名的那一条 + 输入框里的字。
+    /// 她说的：「聊天页的对话框不能长按改标题」——以前长按菜单里
+    /// 只有置顶和删除，标题只能由他自己起，她改不了。
+    @State private var renaming: Conversation?
+    @State private var draftTitle = ""
     @State private var dragX: CGFloat = 0
 
     /// 普通对话。群聊不在这儿——它单独钉在最上面那一格。
@@ -69,6 +74,24 @@ struct ChatDrawer: View {
         // 顶上会留一条跟着壁纸变色的白边，抽屉像是短了一截。
         .ignoresSafeArea()
         .allowsHitTesting(isOpen)
+        .alert("改标题", isPresented: Binding(
+            get: { renaming != nil }, set: { if !$0 { renaming = nil } }
+        )) {
+            TextField("这一窗叫什么", text: $draftTitle)
+            Button("取消", role: .cancel) { renaming = nil }
+            Button("改好了") {
+                let t = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let c = renaming, !t.isEmpty, let i = app.index(of: c.id) {
+                    app.conversations[i].title = t
+                }
+                renaming = nil
+            }
+        } message: {
+            // 自动起标题那套**只在标题还是「新对话」的时候动手**
+            //（见 AppState 里那两处 `title == "新对话"`），
+            // 所以她改过之后不会被盖掉，不用再加一个「锁住」的开关。
+            Text("改过之后就不会再被自动起的标题盖掉了。")
+        }
     }
 
     private func close() {
@@ -362,6 +385,12 @@ struct ChatDrawer: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
+            Button {
+                draftTitle = conv.title
+                renaming = conv
+            } label: {
+                Label("改标题", systemImage: "pencil")
+            }
             Button {
                 if let i = app.index(of: conv.id) {
                     app.conversations[i].pinned.toggle()

@@ -339,26 +339,34 @@ struct AuroraLayer: View {
     @AppStorage("auroraOn") private var on = true
 
     @State private var drift = false
+    /// 系统里开了「减弱动态效果」就整层不画。
+    /// 会飘的背景正是那个开关想关掉的东西。
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        if on {
+        if on && !reduceMotion {
             GeometryReader { geo in
                 let w = geo.size.width, h = geo.size.height
+                // ⚠️ 三团光**位置是死的**，动的是整组的一个 `offset`。
+                //
+                // 她报的「app 有点卡顿」多半就是这儿：上一版每一帧都在改
+                // 三个 `position`，每改一次 SwiftUI 就得重新布局三个渐变；
+                // 外面还套着 `compositingGroup + blendMode`，
+                // 等于**每一帧都离屏合成一次全屏**。
+                //
+                // 现在整组只有一个位移和一个缩放——那是 GPU 上一次变换的事，
+                // 不重新布局、不重新合成。看着一模一样，代价差一个数量级。
                 ZStack {
                     blob(app.settings.accentColor, 0.16 * punch,
-                         at: CGPoint(x: w * (drift ? 0.22 : 0.34),
-                                     y: h * (drift ? 0.18 : 0.26)),
-                         size: w * 1.15)
+                         at: CGPoint(x: w * 0.30, y: h * 0.22), size: w * 1.15)
                     blob(Self.companion(app.settings.accentColor), 0.13 * punch,
-                         at: CGPoint(x: w * (drift ? 0.86 : 0.74),
-                                     y: h * (drift ? 0.42 : 0.34)),
-                         size: w * 1.0)
+                         at: CGPoint(x: w * 0.80, y: h * 0.38), size: w * 1.0)
                     blob(app.settings.accentColor, 0.10 * punch,
-                         at: CGPoint(x: w * (drift ? 0.44 : 0.58),
-                                     y: h * (drift ? 0.86 : 0.78)),
-                         size: w * 1.3)
+                         at: CGPoint(x: w * 0.50, y: h * 0.82), size: w * 1.3)
                 }
-                .compositingGroup()
+                .offset(x: drift ? w * 0.06 : -w * 0.06,
+                        y: drift ? h * 0.04 : -h * 0.04)
+                .scaleEffect(drift ? 1.06 : 1)
                 // 混合方式分三种情况：
                 //
                 // · **铺了照片当壁纸** → `.overlay`。她报的「一旦换上背景就看不见」
@@ -366,8 +374,7 @@ struct AuroraLayer: View {
                 //   等于什么都没加。`.overlay` 会**顺着照片本身的明暗走**——
                 //   亮处更亮、暗处更沉，颜色才吃得进去，照片的细节也还在。
                 // · 深色纯底 → 滤色，不然是三团灰。
-                // · 浅色纯底 → 正常混合。试过 plusDarker，一叠上去就发脏，
-                //   像纸受了潮；浅色要的是水彩，不是污渍。
+                // · 浅色纯底 → 正常混合。试过 plusDarker，一叠上去就发脏。
                 .blendMode(overPhoto ? .overlay : (scheme == .dark ? .screen : .normal))
                 .opacity(overPhoto ? 1 : (scheme == .dark ? 1 : 0.8))
                 .animation(.easeInOut(duration: 40).repeatForever(autoreverses: true),
@@ -378,17 +385,6 @@ struct AuroraLayer: View {
             .ignoresSafeArea()
         }
     }
-
-    /// 底下铺的是不是一张照片。
-    /// 照片那一档要用另一种混合，也要浓一点——不然它整个被照片吃掉。
-    private var overPhoto: Bool {
-        guard !app.settings.preset.usesGradient,
-              !app.settings.preset.ownsBackground else { return false }
-        return app.settings.wallpaperMode != "solid" && app.settings.wallpaperName != nil
-    }
-
-    /// 光的浓度。照片上要更浓一点才看得见。
-    private var punch: Double { overPhoto ? 1.7 : 1 }
 
     private func blob(_ color: Color, _ peak: Double,
                       at center: CGPoint, size: CGFloat) -> some View {
