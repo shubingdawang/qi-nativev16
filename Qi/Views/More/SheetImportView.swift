@@ -26,6 +26,8 @@ struct SheetImportView: View {
     @State private var assigning: Int?
     /// 已经配好的：第几块 → 配给了哪一件
     @State private var done: [Int: String] = [:]
+    /// 底下那一行小字（拆开之后报一句）
+    @State private var note: String?
 
     private let cols = [GridItem(.adaptive(minimum: 84), spacing: 10)]
 
@@ -79,11 +81,21 @@ struct SheetImportView: View {
                                     piece(i)
                                 }
                             }
-                            Text("**没配上的不用管**——它们不会进屋，也不占地方。"
-                                 + "配错了点同一块再配一次就行。")
+                            Text(MD.inline("**点一下**配给家具，**长按**把一块拆开"
+                                 + "（两件挨得太近被切成一块的时候用）。\n"
+                                 + "**没配上的不用管**——它们不会进屋，也不占地方。"
+                                 + "配错了点同一块再配一次就行。"))
                                 .font(.app(10.5))
                                 .foregroundStyle(Theme.textMuted(scheme))
                                 .padding(.leading, 4)
+
+                            if let note {
+                                Text(note)
+                                    .font(.app(11))
+                                    .foregroundStyle(app.settings.accentColor)
+                                    .padding(.leading, 4)
+                                    .transition(.opacity)
+                            }
                         }
                     }
                     .padding(16)
@@ -154,6 +166,40 @@ struct SheetImportView: View {
             }
         }
         .buttonStyle(.plain)
+        // 长按 = 「这一块里其实有好几件，拆开」。
+        //
+        // 她说「不是单独切割」——两件挨得近的东西被当成了一件。
+        // 自动分组永远会在「粘住」和「切碎」之间取舍，取不到两全，
+        // **所以最后一下交给她**：哪一块是一件东西，只有她知道。
+        .onLongPressGesture(minimumDuration: 0.35) { split(i) }
+    }
+
+    /// 把第 `i` 块再拆一次。
+    ///
+    /// 这一次**一点都不胖**（`grow: 0`），也就是纯连通域：
+    /// 只要两块之间断开哪怕一个像素，就分家。
+    private func split(_ i: Int) {
+        guard pieces.indices.contains(i) else { return }
+        let src = pieces[i]
+        let parts = SpriteSheet.slice(src, grow: 0)
+        guard parts.count > 1 else {
+            note = "这一块拆不开了——它本来就是连在一起的一整块"
+            return
+        }
+        pieces.replaceSubrange(i...i, with: parts)
+        // 后面那些块的下标整体后移了，配过的标记要跟着挪，
+        // **不然她配好的名字会挂到别的图上去**
+        var moved: [Int: String] = [:]
+        for (k, v) in done {
+            if k < i { moved[k] = v }
+            else if k > i { moved[k + parts.count - 1] = v }
+            // k == i 那一块已经不在了，它的配对作废
+        }
+        done = moved
+        note = "拆成了 \(parts.count) 块"
+        if app.settings.haptics {
+            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+        }
     }
 
     /// 她买过的那些种类（同一种只列一次）

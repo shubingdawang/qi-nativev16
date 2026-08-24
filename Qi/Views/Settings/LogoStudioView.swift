@@ -55,11 +55,11 @@ struct LogoStudioView: View {
                 .padding(11)
                 .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
 
-            Text("""
+            Text(MD.inline("""
             **用大白话写就行**，别写「极简」「高级感」那种词——那套规则里最要紧的一条就是别用设计术语，写得越像人话，画出来越有它自己的样子。
 
             **一次画一张。** 看一眼，不行再按一次；满意了就停在那儿。每按一次换一个角度和姿势，连着按不会重复。
-            """)
+            """))
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
@@ -81,7 +81,7 @@ struct LogoStudioView: View {
             .buttonStyle(.plain)
             .disabled(busy || subject.trimmingCharacters(in: .whitespaces).isEmpty)
 
-            Text("⚠️ **按一次画一张，花一次钱。** 满意了就停在那儿，别多按。")
+            Text(MD.inline("⚠️ **按一次画一张，花一次钱。** 满意了就停在那儿，别多按。"))
                 .font(.app(10))
                 .foregroundStyle(Theme.textMuted(scheme))
         }
@@ -169,13 +169,13 @@ struct LogoStudioView: View {
                 }
             }
 
-            Text("""
+            Text(MD.inline("""
             ⚠️ **它当不了真正的 App 图标。**
 
             iOS 的备用图标必须在**构建的时候**就打进包里，运行时换不了——这是系统的规矩，不是我没做。
 
             想真的换掉桌面上那个图标：把这张存下来发给我，我放进下一次构建里，它就会出现在「设置 → 外观 → App 图标」那一排里。
-            """)
+            """))
                 .font(.app(10))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)

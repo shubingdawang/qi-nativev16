@@ -220,7 +220,7 @@ struct ImagePreviewView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button {
-                            if let c = current, let image = ImageStore.load(c.fileName) {
+                            if let c = current, let image = ImageStore.cached(c.fileName) {
                                 UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
                             }
                         } label: {
@@ -252,7 +252,7 @@ struct ImagePreviewView: View {
             // 会动的要逐帧播，`Image(uiImage:)` 只画第一帧
             if item.fileName.lowercased().hasSuffix(".gif") {
                 AnimatedImageView(url: ImageStore.url(for: item.fileName))
-            } else if let image = ImageStore.load(item.fileName) {
+            } else if let image = ImageStore.cached(item.fileName) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()

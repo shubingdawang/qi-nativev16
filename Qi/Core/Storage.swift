@@ -125,7 +125,44 @@ enum ImageStore {
         UIImage(contentsOfFile: url(for: name).path)
     }
 
+    // MARK: 缓存
+
+    /// 已经解开的图。**画面里反复要用的那些必须走这儿。**
+    ///
+    /// 她说小屋「特别特别卡」，另一半根子在这儿：
+    /// `load` 每叫一次就**从磁盘读一遍、把 PNG 重新解码一遍**。
+    /// 而 SwiftUI 的 body 是**每一帧都会重新跑**的——
+    /// 屋里摆十件她自己的家具图，clawd 还在走路，
+    /// 于是「每秒钟从磁盘解码六百张 PNG」。
+    ///
+    /// `NSCache` 而不是字典：内存紧张的时候系统会自己把它清掉，
+    /// 不会因为她导了三百张图就把 App 撑爆。
+    private static let memo: NSCache<NSString, UIImage> = {
+        let c = NSCache<NSString, UIImage>()
+        c.countLimit = 240
+        return c
+    }()
+
+    /// 解码一次，之后都从内存里拿。
+    ///
+    /// **凡是画在会动的画面里的图，一律用这个，别用 `load`。**
+    static func cached(_ name: String) -> UIImage? {
+        guard !name.isEmpty else { return nil }
+        let key = name as NSString
+        if let hit = memo.object(forKey: key) { return hit }
+        guard let img = load(name) else { return nil }
+        memo.setObject(img, forKey: key)
+        return img
+    }
+
+    /// 这张图换了内容（同名覆盖）或者被删了，把缓存里那份扔掉
+    static func forget(_ name: String) {
+        guard !name.isEmpty else { return }
+        memo.removeObject(forKey: name as NSString)
+    }
+
     static func delete(_ name: String) {
+        forget(name)
         try? FileManager.default.removeItem(at: url(for: name))
     }
 

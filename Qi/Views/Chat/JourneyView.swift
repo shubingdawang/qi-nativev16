@@ -49,7 +49,7 @@ struct JourneyCard: View {
     @ViewBuilder
     private func bar(_ stop: JourneyStop, focused: Bool) -> some View {
         Group {
-            if let img = ImageStore.load(stop.imageName) {
+            if let img = ImageStore.cached(stop.imageName) {
                 Image(uiImage: img).resizable().scaledToFill()
             } else {
                 Rectangle().fill(Theme.softFillDeep)
@@ -190,7 +190,7 @@ struct JourneyPlayerView: View {
 
             if let stop {
                 // 图本身很缓地推近，看久了不会觉得是张死图
-                if let img = ImageStore.load(stop.imageName) {
+                if let img = ImageStore.cached(stop.imageName) {
                     Image(uiImage: img)
                         .resizable()
                         .scaledToFill()

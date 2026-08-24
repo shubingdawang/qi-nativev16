@@ -131,7 +131,7 @@ struct TriggersDreamsView: View {
                         .padding(10)
                         .background(RoundedRectangle(cornerRadius: 12)
                             .fill(Theme.softFillDeep))
-                    Text("填了他就绕着这个做梦；**留空更好**——他自己想出来的那个才像梦。")
+                    Text(MD.inline("填了他就绕着这个做梦；**留空更好**——他自己想出来的那个才像梦。"))
                         .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
@@ -231,7 +231,7 @@ struct TriggerEditor: View {
                                 .padding(10)
                                 .background(RoundedRectangle(cornerRadius: 12)
                                     .fill(Theme.softFillDeep))
-                            Text("**包含就算**，大小写不敏感。不做分词也不认近义词——你配的是原话里的那个词，猜得越多错得越多。")
+                            Text(MD.inline("**包含就算**，大小写不敏感。不做分词也不认近义词——你配的是原话里的那个词，猜得越多错得越多。"))
                                 .font(.app(10))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
@@ -249,7 +249,7 @@ struct TriggerEditor: View {
                             ForEach(BodyField.allCases, id: \.self) { f in
                                 fieldRow(f)
                             }
-                            Text("一次别调太大。**几点就够了**——推大了就成了「她说什么他就是什么」，那也不是身体。")
+                            Text(MD.inline("一次别调太大。**几点就够了**——推大了就成了「她说什么他就是什么」，那也不是身体。"))
                                 .font(.app(10))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
@@ -264,7 +264,7 @@ struct TriggerEditor: View {
                                 .padding(10)
                                 .background(RoundedRectangle(cornerRadius: 12)
                                     .fill(Theme.softFillDeep))
-                            Text("**只给你自己看**，他看不到这一句。")
+                            Text(MD.inline("**只给你自己看**，他看不到这一句。"))
                                 .font(.app(10))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }

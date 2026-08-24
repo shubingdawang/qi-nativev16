@@ -291,7 +291,7 @@ struct MediaGridView: View {
 
             LazyVGrid(columns: columns, spacing: 8) {
                 ForEach(items) { item in
-                    if let image = ImageStore.load(item.fileName) {
+                    if let image = ImageStore.cached(item.fileName) {
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFill()

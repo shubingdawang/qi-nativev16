@@ -252,7 +252,7 @@ struct TrackArtwork: View {
     var body: some View {
         Group {
             if !track.artworkName.isEmpty,
-               let image = ImageStore.load(track.artworkName) {
+               let image = ImageStore.cached(track.artworkName) {
                 Image(uiImage: image).resizable().scaledToFill()
             } else if let url = URL(string: track.artworkURL), !track.artworkURL.isEmpty {
                 AsyncImage(url: url) { phase in

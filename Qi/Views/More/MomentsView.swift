@@ -74,7 +74,7 @@ struct MomentsView: View {
                 .lineLimit(1...5)
                 .foregroundStyle(Theme.textMain(scheme))
 
-            if !pickedImage.isEmpty, let img = ImageStore.load(pickedImage) {
+            if !pickedImage.isEmpty, let img = ImageStore.cached(pickedImage) {
                 Image(uiImage: img)
                     .resizable()
                     .scaledToFill()
@@ -162,7 +162,7 @@ struct MomentsView: View {
                     .foregroundStyle(Theme.textMuted(scheme))
             }
 
-            if !m.imageName.isEmpty, let img = ImageStore.load(m.imageName) {
+            if !m.imageName.isEmpty, let img = ImageStore.cached(m.imageName) {
                 Image(uiImage: img)
                     .resizable()
                     .scaledToFill()

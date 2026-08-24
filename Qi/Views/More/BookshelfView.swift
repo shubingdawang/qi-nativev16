@@ -558,7 +558,7 @@ struct BookCover: View {
 
     var body: some View {
         ZStack {
-            if !book.coverName.isEmpty, let img = ImageStore.load(book.coverName) {
+            if !book.coverName.isEmpty, let img = ImageStore.cached(book.coverName) {
                 Image(uiImage: img)
                     .resizable()
                     .scaledToFill()

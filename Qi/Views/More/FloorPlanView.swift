@@ -41,7 +41,7 @@ struct FloorPlanView: View {
                 }
             }
 
-            Text("点一间进去看。**他自己会换房间**——你打开小屋，默认落在他待着的那一间。")
+            Text(MD.inline("点一间进去看。**他自己会换房间**——你打开小屋，默认落在他待着的那一间。"))
                 .font(.app(10.5))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .padding(.leading, 4)

@@ -83,7 +83,7 @@ struct VoiceInputSettingsView: View {
             } header: {
                 Text("按住说话时用哪个")
             } footer: {
-                Text("这三个都是**听你说话**用的。他说话给你听是另一回事，那个走「语音」里配的 ElevenLabs，跟这里不冲突。")
+                Text(MD.inline("这三个都是**听你说话**用的。他说话给你听是另一回事，那个走「语音」里配的 ElevenLabs，跟这里不冲突。"))
             }
 
             if app.settings.voiceInput == .elevenLabs {
@@ -96,7 +96,7 @@ struct VoiceInputSettingsView: View {
                 } header: {
                     Text("密钥")
                 } footer: {
-                    Text("它能标出笑声、鼓掌、哭这类动静，但**判断不了情绪**——开心还是难过它不给。想要情绪就选 SenseVoice，那个是专门做这个的。")
+                    Text(MD.inline("它能标出笑声、鼓掌、哭这类动静，但**判断不了情绪**——开心还是难过它不给。想要情绪就选 SenseVoice，那个是专门做这个的。"))
                 }
             }
 

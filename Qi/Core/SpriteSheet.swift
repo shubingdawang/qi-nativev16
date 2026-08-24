@@ -43,7 +43,12 @@ enum SpriteSheet {
     ///
     /// 切不出来（背景不是连通的白、或者整张就是一件）就返回原图那一张，
     /// **不会两手空空**。
-    static func slice(_ image: UIImage) -> [UIImage] {
+    /// 切一整版。
+    ///
+    /// `grow` 是「胖一圈」胖多少像素，**不传就自己按图的大小估**。
+    /// 传 0 就是纯连通域：**差一个像素没接上的两块也会分家**——
+    /// 「拆开这一块」走的就是这一档。
+    static func slice(_ image: UIImage, grow: Int? = nil) -> [UIImage] {
         guard let cg = image.cgImage else { return [image] }
         let w = cg.width, h = cg.height
         guard w > 8, h > 8, w * h <= 6_000_000 else { return [image] }
@@ -56,17 +61,28 @@ enum SpriteSheet {
         for i in 0..<(w * h) where px[i * 4 + 3] > 24 { solid[i] = true }
 
         // ③ 胖一圈**只为了分组**：差一两个像素没接上的两块会粘成一件
-        let r = max(2, min(w, h) / 220)
+        //
+        // ⚠️ **这个数以前太大了。** 原来是 `min(w,h)/220`——
+        // 一张 1500 见方的图会胖 6 个像素，也就是**相隔 12 像素以内
+        // 的两件东西会被当成一件**。她那版整版图里灯和微波炉挨得很近，
+        // 于是被粘成了一块（她说的「不是单独切割」）。
+        //
+        // 现在小一半。宁可切碎一点——切碎了她长按「拆开这一块」的反面
+        // 是「合起来」，而**粘在一起是没法从图上分开的**，
+        // 只能重切一遍。两种错里，切碎是能补救的那一种。
+        let r = grow ?? max(1, min(w, h) / 450)
         var fat = solid
-        for y in 0..<h {
-            for x in 0..<w where solid[y * w + x] {
-                for dy in -r...r {
-                    let ny = y + dy
-                    guard ny >= 0, ny < h else { continue }
-                    for dx in -r...r {
-                        let nx = x + dx
-                        guard nx >= 0, nx < w else { continue }
-                        fat[ny * w + nx] = true
+        if r > 0 {
+            for y in 0..<h {
+                for x in 0..<w where solid[y * w + x] {
+                    for dy in -r...r {
+                        let ny = y + dy
+                        guard ny >= 0, ny < h else { continue }
+                        for dx in -r...r {
+                            let nx = x + dx
+                            guard nx >= 0, nx < w else { continue }
+                            fat[ny * w + nx] = true
+                        }
                     }
                 }
             }

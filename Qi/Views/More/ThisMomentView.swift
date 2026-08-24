@@ -70,7 +70,7 @@ struct ThisMomentView: View {
                             title: f.kind + "：" + f.value,
                             note: "最近一次是 " + Self.clock.string(from: f.at) + " 知道的")
                     }
-                    Text("这两样只有你按「查岗」的时候才会更新——**不会有后台偷偷去刷**。")
+                    Text(MD.inline("这两样只有你按「查岗」的时候才会更新——**不会有后台偷偷去刷**。"))
                         .font(.app(10.5))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .padding(.leading, 4)

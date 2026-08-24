@@ -504,7 +504,7 @@ struct HarvestSheet: View {
                 if name.lowercased().hasSuffix(".gif") {
                     AnimatedImageView(url: ImageStore.url(for: name),
                                       contentMode: .scaleAspectFill)
-                } else if let img = ImageStore.load(name) {
+                } else if let img = ImageStore.cached(name) {
                     Image(uiImage: img).resizable().scaledToFill()
                 } else {
                     Color.gray.opacity(0.2)

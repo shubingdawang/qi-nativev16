@@ -70,7 +70,7 @@ struct PixelStudioView: View {
                             Button {
                                 result = art
                             } label: {
-                                if let img = ImageStore.load(
+                                if let img = ImageStore.cached(
                                     art.cutoutName.isEmpty ? art.fileName : art.cutoutName) {
                                     Image(uiImage: img)
                                         .resizable()
@@ -123,7 +123,7 @@ struct PixelStudioView: View {
         VStack(spacing: 10) {
             ZStack {
                 backdropView
-                if let img = ImageStore.load(
+                if let img = ImageStore.cached(
                     art.cutoutName.isEmpty ? art.fileName : art.cutoutName) {
                     Image(uiImage: img)
                         .resizable()
@@ -339,7 +339,7 @@ struct PixelStudioView: View {
         if let art {
             // 改的时候把上一张当参考，不然改完就不是同一只了
             text = art.prompt + "。这次要改的地方：" + revision
-            ref = ImageStore.load(art.fileName) ?? reference
+            ref = ImageStore.cached(art.fileName) ?? reference
         } else {
             text = prompt
         }
@@ -380,7 +380,7 @@ struct PixelStudioView: View {
 
     private func saveToStickers(_ art: PixelArt) {
         let name = art.cutoutName.isEmpty ? art.fileName : art.cutoutName
-        guard let img = ImageStore.load(name), let data = img.pngData() else { return }
+        guard let img = ImageStore.cached(name), let data = img.pngData() else { return }
         if var made = StickerStore.shared.add(data: data, ext: "png", owner: "user") {
             made.name = art.displayName
             made.description = "像素图：" + art.prompt

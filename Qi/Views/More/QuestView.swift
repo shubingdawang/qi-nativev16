@@ -162,7 +162,7 @@ struct QuestView: View {
                     .font(.app(11.5))
                     .foregroundStyle(Theme.textSoft(scheme))
             }
-            if !q.proofImage.isEmpty, let img = ImageStore.load(q.proofImage) {
+            if !q.proofImage.isEmpty, let img = ImageStore.cached(q.proofImage) {
                 Image(uiImage: img)
                     .resizable()
                     .scaledToFill()
@@ -245,7 +245,7 @@ struct QuestView: View {
                     .glassBackground(radius: 12,
                                      strength: app.settings.glassOpacity * 0.9)
 
-                if !proofImage.isEmpty, let img = ImageStore.load(proofImage) {
+                if !proofImage.isEmpty, let img = ImageStore.cached(proofImage) {
                     Image(uiImage: img)
                         .resizable()
                         .scaledToFill()

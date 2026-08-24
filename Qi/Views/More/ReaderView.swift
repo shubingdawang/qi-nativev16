@@ -223,7 +223,7 @@ struct ReaderView: View {
             // 而且左右翻在这儿会跟放大看细节的手势打架。
             if book.chapters[index].isImages {
                 ForEach(Array(book.chapters[index].images.enumerated()), id: \.offset) { i, name in
-                    if let img = ImageStore.load(name) {
+                    if let img = ImageStore.cached(name) {
                         Image(uiImage: img)
                             .resizable()
                             .scaledToFit()

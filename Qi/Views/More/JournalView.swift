@@ -153,7 +153,7 @@ struct JournalView: View {
             case .note:
                 Rectangle().fill(e.color).frame(width: 30, height: 25)
             case .photo:
-                if let img = ImageStore.load(e.imageName) {
+                if let img = ImageStore.cached(e.imageName) {
                     Image(uiImage: img).resizable().scaledToFill()
                         .frame(width: 33, height: 33).clipped()
                 } else {
@@ -163,7 +163,7 @@ struct JournalView: View {
             case .cutout:
                 // 剪贴是透明底的 PNG，**不裁方块也不套框**——
                 // 裁了透明的那圈就没了，看着就不是贴纸了
-                if let img = ImageStore.load(e.imageName) {
+                if let img = ImageStore.cached(e.imageName) {
                     Image(uiImage: img).resizable().scaledToFit()
                         .frame(width: 30, height: 30)
                 } else {
@@ -173,7 +173,7 @@ struct JournalView: View {
                 }
             case .frame:
                 VStack(spacing: 0) {
-                    if let img = ImageStore.load(e.imageName) {
+                    if let img = ImageStore.cached(e.imageName) {
                         Image(uiImage: img).resizable().scaledToFill()
                             .frame(width: 30, height: 30).clipped()
                     } else {

@@ -414,7 +414,7 @@ struct WallpaperBackground: View {
                         if let c = Color(hexString: app.settings.solidHex) { c }
                     default:
                         if let name = app.settings.wallpaperName,
-                           let image = ImageStore.load(name) {
+                           let image = ImageStore.cached(name) {
                             Image(uiImage: image)
                                 .resizable()
                                 .scaledToFill()

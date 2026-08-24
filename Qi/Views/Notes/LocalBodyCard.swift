@@ -129,7 +129,7 @@ struct LocalBodyCard: View {
                         }
                         .padding(.top, 2)
 
-                        Text("这一层是**关键词读的，读得不准**。它只推身体，**碰不到好感**——好感还是只有他自己能动。读拧了点「撤掉」就回来了，身体本来也会自己往回走。")
+                        Text(MD.inline("这一层是**关键词读的，读得不准**。它只推身体，**碰不到好感**——好感还是只有他自己能动。读拧了点「撤掉」就回来了，身体本来也会自己往回走。"))
                             .font(.app(10))
                             .foregroundStyle(Theme.textMuted(scheme))
                             .fixedSize(horizontal: false, vertical: true)
@@ -178,7 +178,7 @@ struct LocalBodyCard: View {
                 .buttonStyle(.plain)
                 .disabled(settling)
 
-                Text("**推进是自己走的，不花钱**——周期、数值、等你的时候那点压力，都是本机算的纯算术，你关着 App 也在走。\n\n只有「结算」要花钱：把最近二十来句丢给他，让他判断这段互动让身体动了多少。所以做成按钮，不做成自动的。")
+                Text(MD.inline("**推进是自己走的，不花钱**——周期、数值、等你的时候那点压力，都是本机算的纯算术，你关着 App 也在走。\n\n只有「结算」要花钱：把最近二十来句丢给他，让他判断这段互动让身体动了多少。所以做成按钮，不做成自动的。"))
                     .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
 

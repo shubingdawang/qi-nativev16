@@ -200,7 +200,7 @@ struct IsoRoomView: View {
         //
         // 三档：**她导的图 > 我画的等距版 > 老那张正面图**。
         // 一件一件换过去，中间任何一天她打开都不会缺东西。
-        let mine = item.imageName.isEmpty ? nil : ImageStore.load(item.imageName)
+        let mine = ImageStore.cached(item.imageName)
         let iso = FurnitureCatalog.isoSprite(of: kind.id)
         let sprite = iso ?? kind.sprite
 

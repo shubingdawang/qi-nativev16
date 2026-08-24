@@ -136,11 +136,11 @@ struct TrashView: View {
     }
 
     private var note: some View {
-        Text("""
+        Text(MD.inline("""
         删掉的东西在这儿放 **30 天**，到期自动消失，那之后就真的没了。
 
         ⚠️ **回收站不进备份。** 换手机、重装之后，这里面的东西不会跟过去——那时候它们就是真的删掉了。这是故意的：备份该带的是你留下的东西，不是你扔掉的。
-        """)
+        """))
             .font(.app(11))
             .foregroundStyle(Theme.textMuted(scheme))
             .fixedSize(horizontal: false, vertical: true)

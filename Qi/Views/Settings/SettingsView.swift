@@ -2,6 +2,15 @@ import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
 
+/// 打包／还原正在做到哪一步。
+///
+/// 存在的唯一理由是**跨线程**：干活在后台，报进度要落到界面上。
+/// `@MainActor` 的 class 天生是 Sendable 的，所以可以放心传进后台闭包；
+/// 改 `line` 的时候再 `Task { @MainActor in … }` 跳回来。
+@MainActor final class BackupChore: ObservableObject {
+    @Published var line: String?
+}
+
 /// 设置页。
 ///
 /// 以前这里是系统的 Form，白底、灰分组线，跟 App 别处那套壁纸 + 玻璃
@@ -18,7 +27,19 @@ struct SettingsView: View {
     @State private var measuring = false
 
     /// 选好了、还没决定怎么放的那份备份
-    @State private var pendingBackup: Data?
+    /// 选好的那份备份**放在临时目录里的一个副本**，不是整包读进内存。
+    /// 她说「导入备份有点卡」——卡在把几百兆读成一个 Data 上。
+    @State private var pendingBackup: URL?
+    /// 正在打包／还原，界面上压一层，别让她以为死机了。
+    ///
+    /// ⚠️ **这个不能是 `@State`。** 打包跑在后台线程上，
+    /// 它要一路报「正在装第 30 / 400 个」回来——
+    /// 而后台那个闭包是 `@Sendable` 的，里头碰 `@State`（等于碰这个 View）
+    /// 现在是警告、到 Swift 6 就是错误。
+    /// 换成一个 `@MainActor` 的小对象就干净了：
+    /// **标了 `@MainActor` 的 class 本身就是 Sendable 的**，
+    /// 传进后台闭包合法，改它的时候再跳回主线程。
+    @StateObject private var chore = BackupChore()
     @State private var exportURL: URL?
     @State private var alertMessage: String?
     @State private var showingClearConfirm = false
@@ -77,16 +98,40 @@ struct SettingsView: View {
             )) { file in
                 ShareSheet(items: [file.url])
             }
+            // 打包／还原都要跑一会儿（她的图多的时候是几十秒）。
+            // **得让她看得见它在动**，不然跟死机没有区别——
+            // 而且这一层还挡住了误触：这中间点别的地方会把事情搅乱。
+            .overlay {
+                if let busy = chore.line {
+                    ZStack {
+                        Color.black.opacity(0.35).ignoresSafeArea()
+                        VStack(spacing: 12) {
+                            ProgressView()
+                            Text(busy)
+                                .font(.app(13))
+                                .foregroundStyle(Theme.textMain(scheme))
+                                .multilineTextAlignment(.center)
+                            Text("别退出去，弄完自己会消失")
+                                .font(.app(10.5))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                        }
+                        .padding(24)
+                        .glassBackground(radius: 18)
+                    }
+                    .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: chore.line)
             .confirmationDialog("这份备份怎么放？", isPresented: Binding(
                 get: { pendingBackup != nil },
                 set: { if !$0 { pendingBackup = nil } }
             ), titleVisibility: .visible) {
                 Button("只补没有的（推荐）") {
-                    if let d = pendingBackup { applyBackup(d, mode: .merge) }
+                    if let u = pendingBackup { applyBackup(u, mode: .merge) }
                     pendingBackup = nil
                 }
                 Button("整个盖掉", role: .destructive) {
-                    if let d = pendingBackup { applyBackup(d, mode: .overwrite) }
+                    if let u = pendingBackup { applyBackup(u, mode: .overwrite) }
                     pendingBackup = nil
                 }
                 Button("取消", role: .cancel) { pendingBackup = nil }
@@ -102,7 +147,7 @@ struct SettingsView: View {
             )) {
                 Button("好") { alertMessage = nil }
             } message: {
-                Text(alertMessage ?? "")
+                Text(MD.inline(alertMessage ?? ""))
             }
             .confirmationDialog("确定要清空全部对话吗？", isPresented: $showingClearConfirm, titleVisibility: .visible) {
                 Button("清空", role: .destructive) {
@@ -204,7 +249,7 @@ struct SettingsView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(app.settings.wallpaperHistory, id: \.self) { name in
-                                if let img = ImageStore.load(name) {
+                                if let img = ImageStore.cached(name) {
                                     Image(uiImage: img)
                                         .resizable()
                                         .scaledToFill()
@@ -270,7 +315,7 @@ struct SettingsView: View {
 
             PhotosPicker(selection: item, matching: .images) {
                 AvatarView(name: text.wrappedValue.isEmpty ? title : text.wrappedValue,
-                           image: avatar.wrappedValue.flatMap { ImageStore.load($0) },
+                           image: avatar.wrappedValue.flatMap { ImageStore.cached($0) },
                            size: 34)
                     .overlay {
                         Circle().strokeBorder(Theme.softStroke, lineWidth: 1)
@@ -987,27 +1032,57 @@ struct SettingsView: View {
         //
         // 记忆库那边每改一次就自己落盘了，这儿不用再催它。
         app.saveNow()
-        guard let data = BackupBundle.make() else {
-            alertMessage = "导出失败，数据编码出错。"
-            return
-        }
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmm"
         let name = "栖备份-\(formatter.string(from: Date())).json"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
-        do {
-            try data.write(to: url, options: .atomic)
+
+        // **整个打包过程搬到后台。**
+        //
+        // 以前这几行是直接在主线程上跑的：扫一遍目录、把每张图读进来、
+        // 转 base64、再把几百兆序列化成一整块——她按下按钮那一刻界面就冻住了。
+        // 现在后台跑，前台压一层「正在打包」，她看得见它在动。
+        chore.line = "正在打包…"
+        // 引用先取出来。**别在后台闭包里写 `chore.xxx`**——
+        // 那等于把整个 View 捕获进一个 Sendable 闭包里。
+        let prog = chore
+        Task {
+            let report = await Task.detached(priority: .userInitiated) {
+                BackupBundle.write(to: url) { line in
+                    Task { @MainActor in prog.line = line }
+                }
+            }.value
+
+            chore.line = nil
+            guard report.bytes > 0 else {
+                alertMessage = "导出失败，一个字节都没写出来。"
+                return
+            }
             exportURL = url
             BackupClock.markDone()
-            // 现在连图片语音一起打包，包会大很多——报一句实际大小，
-            // 免得她以为卡住了
-            let mb = Double(data.count) / 1024 / 1024
-            if mb >= 20 {
-                alertMessage = String(format: "打好了，%.0f MB（图片语音都在里面）。"
-                    + "存到「文件」里最稳，微信传大文件容易截断。", mb)
+
+            // ⚠️ **图片的数目一定要报给她看。**
+            //
+            // 她说「图片并没有备份，没有备份图片我之前写的关键词全都白瞎了」——
+            // 一个 json 文件从外表看不出里面有没有图，她只能等到还原那天才发现。
+            // 现在导完当场写清楚：几份数据、几个图片语音、多大。
+            // 是 0 就是 0，当场就知道。
+            let mb = Double(report.bytes) / 1024 / 1024
+            // ⚠️ 数字**别走 `String(format:)` 的 `%d`**——那个要的是 32 位，
+            // 喂个 Swift 的 Int 进去在 64 位上是要出岔子的。插值最省事。
+            var msg = String(format: "打好了，%.1f MB。", mb)
+                + "\n\n· \(report.files) 份数据"
+                + "\n· **\(report.blobs) 个图片语音**"
+            if report.blobs == 0 {
+                msg += "\n\n⚠️ **一张图都没装进去。**"
+                    + "要么这台手机上确实还没有图，要么就是出问题了——跟我说一声。"
             }
-        } catch {
-            alertMessage = "导出失败：\(error.localizedDescription)"
+            if !report.skipped.isEmpty {
+                msg += "\n\n有 \(report.skipped.count) 个太大了没装（单个超过 20 MB，"
+                    + "一般是视频）。"
+            }
+            msg += "\n\n存到「文件」里最稳，微信传大文件容易截断。"
+            alertMessage = msg
         }
     }
 
@@ -1052,19 +1127,34 @@ struct SettingsView: View {
             if urls.count == 1 {
                 let needsStop = url.startAccessingSecurityScopedResource()
                 defer { if needsStop { url.stopAccessingSecurityScopedResource() } }
-                guard let data = try? Data(contentsOf: url) else {
+
+                // **先复制到临时目录，不读进内存。**
+                //
+                // 两个理由：
+                //   ① 她选的那个 URL 是有安全作用域的，出了这个闭包就作废了，
+                //      而还原要跑好一会儿——必须先拿到一份自己的
+                //   ② 一份几百兆的备份读成 Data 就是几百兆内存，
+                //      而复制文件是文件系统的事，一个字节都不进内存
+                let copy = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("待还原-" + UUID().uuidString + ".json")
+                try? FileManager.default.removeItem(at: copy)
+                guard (try? FileManager.default.copyItem(at: url, to: copy)) != nil else {
                     alertMessage = "这份文件读不出来。"
                     return
                 }
-                if BackupBundle.looksLikeBundle(data) {
-                    pendingBackup = data
+                // 只看开头那几 KB 就够认出它是不是整包——**不用全读**
+                if BackupBundle.looksLikeBundle(fileAt: copy) {
+                    pendingBackup = copy
                     return
                 }
-                // 不是整包，但也可能是老备份（只有 providers/conversations/settings）
-                if (try? JSONDecoder().decode(Backup.self, from: data)) != nil {
-                    pendingBackup = data
+                // 不是整包，但也可能是老备份（只有 providers/conversations/settings）。
+                // 老备份都很小，读进来无所谓。
+                if let data = try? Data(contentsOf: copy),
+                   (try? JSONDecoder().decode(Backup.self, from: data)) != nil {
+                    pendingBackup = copy
                     return
                 }
+                try? FileManager.default.removeItem(at: copy)
             }
 
             // ② 其余一律**转给记忆库那套**。
@@ -1079,10 +1169,29 @@ struct SettingsView: View {
         }
     }
 
-    /// 真正动手那一下
-    private func applyBackup(_ data: Data, mode: BackupBundle.Mode) {
+    /// 真正动手那一下。
+    ///
+    /// **跑在后台**，前台压一层「正在还原」。以前这一整套（读整包、解析、
+    /// 一个个写回去）都在主线程上，她说的「导入备份有点卡」就是这个。
+    private func applyBackup(_ url: URL, mode: BackupBundle.Mode) {
+        chore.line = "正在还原…"
+        let prog = chore
+        Task {
+            let outcome = await Task.detached(priority: .userInitiated) {
+                BackupBundle.restore(from: url, mode: mode) { line in
+                    Task { @MainActor in prog.line = line }
+                }
+            }.value
+            chore.line = nil
+            finishRestore(outcome, url: url, mode: mode)
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    private func finishRestore(_ outcome: BackupBundle.Restored,
+                               url: URL, mode: BackupBundle.Mode) {
         do {
-            switch BackupBundle.restore(data, mode: mode) {
+            switch outcome {
             case .bundle(let count, let pics):
                 // **还原完立刻把内存也换掉。**
                 //
@@ -1095,7 +1204,12 @@ struct SettingsView: View {
                 // 现在还原完当场重读一遍，聊天记录立刻就在。
                 app.reloadAfterRestore()
                 alertMessage = (mode == .merge ? "补进来了 " : "还原了 ") + "\(count) 份数据"
-                    + (pics > 0 ? "、\(pics) 个图片语音文件。" : "。")
+                    + (pics > 0
+                       ? "、**\(pics) 个图片语音**。"
+                       // 一张图都没回来，说清楚是为什么——
+                       // 别让她再一次以为图在里面
+                       : "。\n\n⚠️ **这份备份里一张图都没有**"
+                         + "（要么它是没带图的旧版备份，要么这些图这边本来就有了）。")
                     + (mode == .merge
                        ? "\n\n**只补了这边没有的**，你现在的聊天记录一条都没动。"
                          + "同一个窗口两边各聊了一段的话，两段会按时间并到一起。"
@@ -1109,6 +1223,11 @@ struct SettingsView: View {
                 guard mode == .overwrite else {
                     alertMessage = "这是很老的那种备份（只有供应商、聊天记录和设置），"
                         + "它没法只挑没有的补——要用它就得选「整个盖掉」。"
+                    return
+                }
+                // 老备份只有三样，都很小，整个读进来无所谓
+                guard let data = try? Data(contentsOf: url) else {
+                    alertMessage = "这份文件读不出来了。"
                     return
                 }
                 let decoder = JSONDecoder()

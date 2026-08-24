@@ -112,16 +112,16 @@ struct MessageBubbleView: View {
     /// 群聊里每位可以有自己的头像，没设就退回全局那两张
     private var avatarImage: UIImage? {
         if isUser {
-            return app.settings.userAvatarName.flatMap { ImageStore.load($0) }
+            return app.settings.userAvatarName.flatMap { ImageStore.cached($0) }
         }
         if !message.senderName.isEmpty,
            let member = app.conversation(conversationID)?.members
             .first(where: { $0.name == message.senderName }),
            let name = member.avatarName,
-           let img = ImageStore.load(name) {
+           let img = ImageStore.cached(name) {
             return img
         }
-        return app.settings.aiAvatarName.flatMap { ImageStore.load($0) }
+        return app.settings.aiAvatarName.flatMap { ImageStore.cached($0) }
     }
 
     static let stamp: DateFormatter = {
@@ -435,7 +435,7 @@ struct MessageBubbleView: View {
     /// 他存图之后的那张小卡
     private func saveCard(_ run: ToolRun) -> some View {
         HStack(spacing: 10) {
-            if let img = ImageStore.load(run.cardThumb) ?? StickerStore.shared.stickers
+            if let img = ImageStore.cached(run.cardThumb) ?? StickerStore.shared.stickers
                 .first(where: { $0.fileName == run.cardThumb })
                 .flatMap({ UIImage(contentsOfFile: StickerStore.shared.url(of: $0).path) }) {
                 Image(uiImage: img)
@@ -542,7 +542,7 @@ struct MessageBubbleView: View {
     /// 链接预览卡（小红书笔记 / B 站视频 / 抖音视频）
     private func noteCard(_ note: XHSNote) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let first = note.localImages.first, let img = ImageStore.load(first) {
+            if let first = note.localImages.first, let img = ImageStore.cached(first) {
                 ZStack(alignment: .topTrailing) {
                     Image(uiImage: img)
                         .resizable()
@@ -1048,7 +1048,7 @@ struct MessageBubbleView: View {
                             .frame(maxWidth: 220)
                             .frame(height: 200)
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    } else if let image = ImageStore.load(name) {
+                    } else if let image = ImageStore.cached(name) {
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFit()

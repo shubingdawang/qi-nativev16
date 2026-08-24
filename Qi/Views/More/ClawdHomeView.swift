@@ -152,7 +152,7 @@ struct ClawdHomeView: View {
             }
             Button("算了", role: .cancel) { }
         } message: {
-            Text("接进来之后，你开着这一页的时候，他会隔几分钟自己冒一句——看看你给他布置的这个家。\n\n这是**真的问他**，所以会花钱，而且不用你点。用量在设置里按「clawd 小屋」单独记着。\n\n关掉就不花了。")
+            Text(MD.inline("接进来之后，你开着这一页的时候，他会隔几分钟自己冒一句——看看你给他布置的这个家。\n\n这是**真的问他**，所以会花钱，而且不用你点。用量在设置里按「clawd 小屋」单独记着。\n\n关掉就不花了。"))
         }
     }
 
@@ -494,9 +494,15 @@ struct ClawdHomeView: View {
         } message: {
             Text("长按可以把它搬到屋里任何地方")
         }
-        .sheet(isPresented: $importingSheet) {
-            SheetImportView(store: store)
-        }
+        // ⚠️ 「从整版图里取家具」那个 sheet **不在这儿**，挂在按钮自己身上
+        // （见 `sheetEntry`）。它以前挂在这一层，而这一层是**房间那一档**——
+        // 她在「柜子」那一档点按钮的时候，这个 `.sheet` 压根不在视图树里，
+        // 所以点了没反应；等她切回房间，视图树里有了，它才补弹出来。
+        // 她说的「点击柜子里的换成我的家具图没反应，点击房间之后才弹出来」
+        // 一字不差就是这个。
+        //
+        // 记一句：**弹窗要挂在「按钮活着的那个分支」上**，
+        // 不能挂在一个 switch 只走其中一路的公共尾巴上。
         .photosPicker(isPresented: $pickingImage, selection: $dressPick,
                       matching: .images)
         .onChange(of: dressPick) { _, picked in
@@ -547,6 +553,11 @@ struct ClawdHomeView: View {
             .glassBackground(radius: 14, strength: app.settings.glassOpacity * 0.8)
         }
         .buttonStyle(.plain)
+        // 弹窗挂在按钮自己身上。**这一档在的时候它才在**，
+        // 不会像以前那样点了没动静、切回房间才冒出来。
+        .sheet(isPresented: $importingSheet) {
+            SheetImportView(store: store)
+        }
         .padding(.horizontal, 16)
         .padding(.bottom, 10)
     }

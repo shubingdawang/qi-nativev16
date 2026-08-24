@@ -79,7 +79,7 @@ struct PhoneActivityView: View {
             Text("还没连上")
                 .font(.app(15, weight: .semibold))
                 .foregroundStyle(Theme.textMain(scheme))
-            Text("让快捷指令把记录写进一个 txt，栖直接读那个文件——**全程不走网络**，不会再报网络错误。")
+            Text(MD.inline("让快捷指令把记录写进一个 txt，栖直接读那个文件——**全程不走网络**，不会再报网络错误。"))
                 .font(.app(12))
                 .foregroundStyle(Theme.textSoft(scheme))
             Button {
@@ -181,7 +181,7 @@ struct PhoneActivityView: View {
                     .tint(app.settings.accentColor)
             }
 
-            Text("打开之后他多一件能做的事：**看一眼你此刻的处境再决定要不要开口**——屏幕上开着什么、人在哪个城市、那边什么天气、今天手机用了多久。\n\n**默认关着。** 这是三样一起给，得你点头。")
+            Text(MD.inline("打开之后他多一件能做的事：**看一眼你此刻的处境再决定要不要开口**——屏幕上开着什么、人在哪个城市、那边什么天气、今天手机用了多久。\n\n**默认关着。** 这是三样一起给，得你点头。"))
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
 
@@ -246,7 +246,7 @@ struct PhoneActivityView: View {
                 .buttonStyle(.plain)
 
                 if showCheckInHow {
-                    Text("""
+                    Text(MD.inline("""
                     **只有他调那个工具的时候才会拿一次**，不是一直跟着你。
 
                     拿的是这几样：
@@ -258,7 +258,7 @@ struct PhoneActivityView: View {
                     参考的那份教程是让 AI **发邮件**触发快捷指令、再**邮件回传**（因为 ChatGPT 那种客户端没法让手机做事，只能借邮件当信号线）。我们就在这台手机上，那一圈全省了——不用两个邮箱、不用授权码、不用 Caddy、不用跟 VPN 节点较劲。
 
                     ⚠️ 截图**永远不是实时的**。iOS 不许任何 App 主动截别的 App 的屏，他看到的是你上次按快捷指令那一刻的画面，返回值里会写着隔了多久。
-                    """)
+                    """))
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
@@ -283,7 +283,7 @@ struct PhoneActivityView: View {
                 }
             }
 
-            Text("挑一个文件夹，让快捷指令把截图存进去。他调「看一眼屏幕」的时候读里面最新那张。\n\n**不实时**：iOS 不许任何 App 主动截别的 App 的屏，他看到的永远是上一次截下来的那张，返回值里会写着是多久前的。")
+            Text(MD.inline("挑一个文件夹，让快捷指令把截图存进去。他调「看一眼屏幕」的时候读里面最新那张。\n\n**不实时**：iOS 不许任何 App 主动截别的 App 的屏，他看到的永远是上一次截下来的那张，返回值里会写着是多久前的。"))
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
 
@@ -299,7 +299,7 @@ struct PhoneActivityView: View {
             .buttonStyle(.plain)
 
             if showPeekHow {
-                Text("""
+                Text(MD.inline("""
                 一共两步，五分钟。
 
                 **第一步 · 在这儿挑个文件夹**
@@ -316,7 +316,7 @@ struct PhoneActivityView: View {
                 想让他看你屏幕的时候，从控制中心或者小组件点一下那个快捷指令就行。截完他下次调「看一眼屏幕」读到的就是这张。
 
                 ⚠️ **必须你自己按一下。** iOS 不许 App 在后台截别的 App 的屏——这是系统的规矩，绕不过去，谁都做不到「他想看就能看」。所以这更像是你**递给他一眼**，不是他自己去看。
-                """)
+                """))
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)

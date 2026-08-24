@@ -278,7 +278,7 @@ struct AppearanceView: View {
                     } label: {
                         ZStack {
                             if let name = app.settings.wallpaperName,
-                               let img = ImageStore.load(name) {
+                               let img = ImageStore.cached(name) {
                                 Image(uiImage: img)
                                     .resizable()
                                     .scaledToFill()
@@ -572,7 +572,7 @@ struct AppearanceView: View {
     /// 纯色底下是糊不出东西的，所以一定要垫点有花纹的。
     @ViewBuilder
     private var sampleGround: some View {
-        if let name = app.settings.wallpaperName, let img = ImageStore.load(name) {
+        if let name = app.settings.wallpaperName, let img = ImageStore.cached(name) {
             Image(uiImage: img)
                 .resizable()
                 .scaledToFill()

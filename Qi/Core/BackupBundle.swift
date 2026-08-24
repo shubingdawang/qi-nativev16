@@ -37,12 +37,25 @@ enum BackupBundle {
     /// 单个文件超过这个就不装了，避免一份备份大到导不出来
     static let blobLimit = 20 * 1024 * 1024
 
-    /// 这份数据是不是一整包备份。
+    /// 这份文件是不是一整包备份。**只看开头那几 KB。**
     ///
     /// 她拿记忆库里那些单个 json（`partner_message.json` 这种）
     /// 走「导入备份」那个口，得到一句「没有 files 也没有 conversations」——
     /// **那句话没错，但它没告诉她该去哪儿。**
     /// 现在先认一认：不是整包的，界面那边会自动改走记忆库那条路。
+    ///
+    /// 认一份备份不需要把它整个读进来——顶层那几个键都在最前面。
+    /// 她那份要是有三百兆，为了「认一下」就读进内存三百兆是荒唐的。
+    static func looksLikeBundle(fileAt url: URL) -> Bool {
+        guard let h = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? h.close() }
+        guard let head = try? h.read(upToCount: 8192) else { return false }
+        // `String(decoding:as:)` 不会因为末尾截断了半个汉字就返回 nil
+        let s = String(decoding: head, as: UTF8.self)
+        return s.contains("\"files\"") || s.contains("\"blobs\"")
+            || s.contains("\"conversations\"")
+    }
+
     static func looksLikeBundle(_ data: Data) -> Bool {
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return false }
@@ -74,9 +87,58 @@ enum BackupBundle {
 
     // MARK: 打包
 
-    static func make() -> Data? {
-        var files: [String: Any] = [:]
+    /// 打完包之后交代一句：装了多少份数据、多少张图、多大、谁没装进去。
+    ///
+    /// **这个必须报出来。** 她说「图片并没有备份，没有备份图片我之前写的
+    /// 关键词全都白瞎了」——她没法从一个 json 文件的外表看出里面有没有图。
+    /// 现在导完当场告诉她「\(blobs) 个图片语音」，
+    /// 是 0 就是 0，一眼看得见，不用等到还原那天才发现。
+    struct Report {
+        var files = 0
+        var blobs = 0
+        var skipped: [String] = []
+        var bytes = 0
+    }
+
+    /// 把一个字符串写成合法的 JSON 字面量（带引号）。
+    ///
+    /// 自己手写 JSON 的时候**键名必须走这儿**——
+    /// 文件名里出现一个引号或者反斜杠，整份备份就成了废文件。
+    private static func quoted(_ s: String) -> String {
+        guard let d = try? JSONSerialization.data(withJSONObject: [s]),
+              let t = String(data: d, encoding: .utf8),
+              t.count >= 2 else { return "\"\"" }
+        // `["…"]` → 去掉外面那对方括号
+        return String(t.dropFirst().dropLast())
+    }
+
+    /// **一边算一边往文件里写**，不在内存里攒出一整份。
+    ///
+    /// ## 为什么非改不可
+    ///
+    /// 上一版是 `make() -> Data?`：把所有图片 base64 塞进一个字典，
+    /// 再交给 `JSONSerialization` 序列化成一整块 `Data`。
+    /// 她的图要是有 200 MB，这条路上的峰值内存是——
+    /// 原始字节 200 MB + base64 267 MB + 序列化出来的 270 MB
+    /// ≈ **七八百兆，全在主线程上**。
+    ///
+    /// 手机给一个 App 的内存没那么宽裕。结果就是两种：
+    /// 要么被系统当场杀掉，要么 `JSONSerialization` 返回 nil，
+    /// 而 nil 那一支只说了句「导出失败」——**她照样以为自己备份过了**。
+    ///
+    /// 现在改成流式：json 那半很小，照旧整块写；
+    /// 图片语音**一次只读一个文件**，转完 base64 立刻写进磁盘、立刻放掉。
+    /// 峰值内存 = 最大的那一个文件，跟她有多少张图无关。
+    ///
+    /// ⚠️ 这个函数**会读一大堆文件、跑很久**，一定要在后台线程上叫。
+    static func write(to dest: URL,
+                      progress: ((String) -> Void)? = nil) -> Report {
+        var report = Report()
         let root = Storage.documentsURL
+
+        // ── 先收 json 那半（小，整块处理没问题）──────────────
+        progress?("正在收拾数据…")
+        var files: [String: Any] = [:]
         // **必须递归**：记忆库那一整摊在 `Documents/Memory/` 子目录里，
         // 只扫顶层的话，漏掉的恰好是最不能丢的那部分。
         let walker = FileManager.default.enumerator(
@@ -102,10 +164,13 @@ enum BackupBundle {
             files[key] = text
         }
 
-        // 图片、语音、像素画、壁纸……**这些才是备份最容易漏的那半**。
-        // 再扫一遍，非 json 的全部 base64 装进 blobs。
-        var blobs: [String: String] = [:]
-        var skipped: [String] = []
+        report.files = files.count
+
+        // ── 图片语音先只**点名**，不读内容 ────────────────────
+        //
+        // 这一步只收路径和大小。真正的字节留到往文件里写的那一刻再读，
+        // 读一个写一个，读完就放掉。
+        var blobURLs: [(url: URL, key: String)] = []
         let walker2 = FileManager.default.enumerator(
             at: root,
             includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
@@ -120,9 +185,8 @@ enum BackupBundle {
                 ? String(url.path.dropFirst(root.path.count)).trimmingCharacters(
                     in: CharacterSet(charactersIn: "/"))
                 : url.lastPathComponent
-            guard size <= blobLimit else { skipped.append(key); continue }
-            guard let data = try? Data(contentsOf: url) else { skipped.append(key); continue }
-            blobs[key] = data.base64EncodedString()
+            guard size <= blobLimit else { report.skipped.append(key); continue }
+            blobURLs.append((url, key))
         }
 
         var flags: [String: Any] = [:]
@@ -137,16 +201,67 @@ enum BackupBundle {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        let bundle: [String: Any] = [
-            "version": version,
-            "createdAt": f.string(from: Date()),
-            "files": files,
-            "blobs": blobs,
-            "skipped": skipped,
-            "defaults": flags
-        ]
-        return try? JSONSerialization.data(withJSONObject: bundle,
-                                           options: [.prettyPrinted, .sortedKeys])
+
+        // ── 开写 ────────────────────────────────────────────
+        try? FileManager.default.removeItem(at: dest)
+        FileManager.default.createFile(atPath: dest.path, contents: nil)
+        guard let handle = try? FileHandle(forWritingTo: dest) else { return report }
+        defer { try? handle.close() }
+
+        func put(_ s: String) {
+            guard let d = s.data(using: .utf8) else { return }
+            try? handle.write(contentsOf: d)
+            report.bytes += d.count
+        }
+
+        // 小的那几块照旧整块序列化——它们加起来也就几兆
+        let filesJSON = (try? JSONSerialization.data(
+            withJSONObject: files, options: [.sortedKeys]))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+        let flagsJSON = (try? JSONSerialization.data(
+            withJSONObject: flags, options: [.sortedKeys]))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+
+        put("{\"version\":\(version),")
+        put("\"createdAt\":\(quoted(f.string(from: Date()))),")
+        put("\"files\":" + filesJSON + ",")
+        put("\"blobs\":{")
+
+        var first = true
+        for (i, item) in blobURLs.enumerated() {
+            if i % 25 == 0 {
+                progress?("正在装第 \(i + 1) / \(blobURLs.count) 个图片语音…")
+            }
+            // ⚠️ `autoreleasepool` 不能省。
+            // 一次循环里生出来的那块 Data 和那个 base64 字符串
+            // 要是攒到整个循环跑完才放，等于什么都没改。
+            var ok = false
+            autoreleasepool {
+                guard let data = try? Data(contentsOf: item.url, options: [.mappedIfSafe])
+                else { return }
+                let b64 = data.base64EncodedString()
+                if !first { put(",") }
+                // 分开写，**别拼成一个字符串**——
+                // b64 可能有二十几兆，拼一次就等于又复制一份
+                put(quoted(item.key))
+                put(":\"")
+                put(b64)
+                put("\"")
+                ok = true
+            }
+            if ok { first = false; report.blobs += 1 }
+            else { report.skipped.append(item.key) }
+        }
+
+        put("},")
+        let skippedJSON = (try? JSONSerialization.data(
+            withJSONObject: report.skipped))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+        put("\"skipped\":" + skippedJSON + ",")
+        put("\"defaults\":" + flagsJSON + "}")
+
+        progress?("写完了")
+        return report
     }
 
     // MARK: 还原
@@ -271,6 +386,227 @@ enum BackupBundle {
             }
         }
         return .bundle(files: written, blobs: blobCount)
+    }
+
+    // MARK: 从文件还原（不把整包读进内存那条路）
+
+    /// 从磁盘上那份备份还原。
+    ///
+    /// ## 跟 `restore(_ data:)` 差在哪
+    ///
+    /// 那一版要求先 `Data(contentsOf:)` 把整包读进内存，
+    /// 再交给 `JSONSerialization` 解析——**两份都在内存里**。
+    /// 一份 300 MB 的备份，这一下就是六七百兆，还全在主线程上。
+    /// 她说的「导入备份有点卡」就是这个。
+    ///
+    /// 这一版：
+    ///   ① 文件**内存映射**进来（`.mappedIfSafe`），不真的占内存
+    ///   ② 先在字节层面找到 `"blobs"` 那一大块的范围，**不解析它**
+    ///   ③ 把那一块挖掉，剩下的（json 那半，很小）才交给 JSONSerialization
+    ///   ④ 图片语音一个一个抠出来、解一个写一个，写完就放掉
+    ///
+    /// 峰值内存 = 最大的那一张图，跟备份多大无关。
+    ///
+    /// ⚠️ 一定要在后台线程上叫。
+    static func restore(from url: URL, mode: Mode = .merge,
+                        progress: ((String) -> Void)? = nil) -> Restored {
+        guard let mapped = try? Data(contentsOf: url, options: [.mappedIfSafe]) else {
+            return .unreadable("这份文件读不出来。")
+        }
+
+        // 找 blobs 那一块在哪儿
+        // 参数类型写全。`withUnsafeBytes` 有两个重载（还有个老的指针版），
+        // 不写清楚的话编译器要在两者之间犹豫。
+        let range: Range<Int>? = mapped.withUnsafeBytes {
+            (raw: UnsafeRawBufferPointer) -> Range<Int>? in
+            blobsRange(raw)
+        }
+
+        guard let blobs = range else {
+            // 没找到就走老路。**老备份、v2 的包、被改过的包都从这儿过**，
+            // 一份都不能因为「新写法认不出来」就被挡在门外。
+            progress?("正在还原…")
+            return restore(mapped, mode: mode)
+        }
+
+        // ── 先把 json 那半还原了 ────────────────────────────
+        //
+        // 把 blobs 那一大块换成一个空对象，剩下的就小得可以随便解析。
+        progress?("正在还原数据…")
+        var rest = Data()
+        rest.append(mapped.subdata(in: 0..<blobs.lowerBound))
+        rest.append(contentsOf: [UInt8(ascii: "{"), UInt8(ascii: "}")])
+        rest.append(mapped.subdata(in: blobs.upperBound..<mapped.count))
+
+        let head = restore(rest, mode: mode)
+        guard case .bundle(let written, _) = head else { return head }
+
+        // ── 再一个一个把图片语音抠出来 ──────────────────────
+        var count = 0
+        let dir = Storage.documentsURL
+        var pairs: [(String, Range<Int>)] = []
+        mapped.withUnsafeBytes { (raw: UnsafeRawBufferPointer) -> Void in
+            pairs = blobPairs(raw, in: blobs)
+        }
+
+        for (i, pair) in pairs.enumerated() {
+            if i % 25 == 0 {
+                progress?("正在放回第 \(i + 1) / \(pairs.count) 个图片语音…")
+            }
+            let name = pair.0
+            guard !name.hasPrefix("/"), !name.contains("..") else { continue }
+            let out = dir.appendingPathComponent(name)
+            // 合并的时候，已经在的图片一个都不碰——
+            // 文件名是 UUID，同名就是同一张，覆盖没有意义只有风险
+            if mode == .merge, FileManager.default.fileExists(atPath: out.path) { continue }
+            autoreleasepool {
+                let b64 = String(decoding: mapped.subdata(in: pair.1), as: UTF8.self)
+                guard let data = Data(base64Encoded: b64) else { return }
+                try? FileManager.default.createDirectory(
+                    at: out.deletingLastPathComponent(), withIntermediateDirectories: true)
+                if (try? data.write(to: out, options: .atomic)) != nil { count += 1 }
+            }
+        }
+
+        return .bundle(files: written, blobs: count)
+    }
+
+    // MARK: 在字节里找东西
+    //
+    // 下面这两个函数是**手写的 JSON 扫描**。平时不该这么干——
+    // 有现成的解析器就用现成的。这儿的理由只有一个：
+    // **不能把那几百兆读进内存。** 而所有现成的解析器都要求先读进来。
+    //
+    // 扫的时候要认得三件事：字符串里的引号不算结构、反斜杠转义、
+    // 大括号方括号的层数。认全了这三件，找一段范围是很稳的。
+
+    /// 找到顶层那个 `"blobs"` 的值（那一整个大括号）在哪儿。
+    private static func blobsRange(_ b: UnsafeRawBufferPointer) -> Range<Int>? {
+        let n = b.count
+        var i = 0, depth = 0
+        var inStr = false, esc = false
+        var keyStart = -1
+        var lastKey = ""
+
+        while i < n {
+            let c = b[i]
+            if inStr {
+                if esc { esc = false }
+                else if c == 0x5C { esc = true }
+                else if c == 0x22 {
+                    inStr = false
+                    // 只有顶层那一层的键才需要认，深处的不管
+                    if depth == 1, i - keyStart <= 16 {
+                        lastKey = String(decoding: UnsafeRawBufferPointer(
+                            rebasing: b[keyStart..<i]), as: UTF8.self)
+                    }
+                }
+                i += 1
+                continue
+            }
+            switch c {
+            case 0x22: inStr = true; keyStart = i + 1
+            case 0x7B:                                  // {
+                if depth == 1, lastKey == "blobs" {
+                    guard let end = matchBrace(b, from: i) else { return nil }
+                    return i..<end
+                }
+                depth += 1
+            case 0x7D: depth -= 1                       // }
+            case 0x5B: depth += 1                       // [
+            case 0x5D: depth -= 1                       // ]
+            default: break
+            }
+            i += 1
+        }
+        return nil
+    }
+
+    /// 从 `from`（那个 `{`）开始，找到配对的 `}`，返回它**后面一位**。
+    private static func matchBrace(_ b: UnsafeRawBufferPointer, from: Int) -> Int? {
+        var i = from, depth = 0
+        var inStr = false, esc = false
+        while i < b.count {
+            let c = b[i]
+            if inStr {
+                if esc { esc = false }
+                else if c == 0x5C { esc = true }
+                else if c == 0x22 { inStr = false }
+                i += 1
+                continue
+            }
+            if c == 0x22 { inStr = true }
+            else if c == 0x7B { depth += 1 }
+            else if c == 0x7D {
+                depth -= 1
+                if depth == 0 { return i + 1 }
+            }
+            i += 1
+        }
+        return nil
+    }
+
+    /// 把 blobs 那一块里的每一对「文件名 → base64」点出来。
+    ///
+    /// **只返回范围，不复制内容**——真正取字节留到写文件那一刻，
+    /// 一次只取一个。
+    private static func blobPairs(_ b: UnsafeRawBufferPointer,
+                                  in range: Range<Int>) -> [(String, Range<Int>)] {
+        var out: [(String, Range<Int>)] = []
+        var i = range.lowerBound + 1                    // 跳过开头那个 {
+        let end = range.upperBound - 1                  // 结尾那个 } 不进来
+
+        /// 从 `at`（一个 `"`）开始，返回收尾那个 `"` 的下标
+        func closeQuote(_ at: Int) -> Int? {
+            var j = at + 1
+            var esc = false
+            while j < end {
+                let c = b[j]
+                if esc { esc = false }
+                else if c == 0x5C { esc = true }
+                else if c == 0x22 { return j }
+                j += 1
+            }
+            return nil
+        }
+
+        func skipBlank() {
+            while i < end {
+                let c = b[i]
+                guard c == 0x20 || c == 0x0A || c == 0x0D || c == 0x09 || c == 0x2C
+                else { return }
+                i += 1
+            }
+        }
+
+        while i < end {
+            skipBlank()
+            guard i < end, b[i] == 0x22, let kEnd = closeQuote(i) else { break }
+            let rawKey = String(decoding: UnsafeRawBufferPointer(
+                rebasing: b[(i + 1)..<kEnd]), as: UTF8.self)
+            i = kEnd + 1
+            skipBlank()
+            guard i < end, b[i] == 0x3A else { break }  // :
+            i += 1
+            skipBlank()
+            guard i < end, b[i] == 0x22, let vEnd = closeQuote(i) else { break }
+            // 键有可能被转义过（路径里的斜杠、罕见的引号），
+            // 走一趟正经解析把它还原成本来的样子
+            let key = unescape(rawKey)
+            out.append((key, (i + 1)..<vEnd))
+            i = vEnd + 1
+        }
+        return out
+    }
+
+    /// 把一段 JSON 字符串字面量的内容还原成原文
+    private static func unescape(_ raw: String) -> String {
+        guard raw.contains("\\") else { return raw }
+        guard let d = ("\"" + raw + "\"").data(using: .utf8),
+              let s = try? JSONSerialization.jsonObject(
+                with: d, options: [.fragmentsAllowed]) as? String
+        else { return raw }
+        return s
     }
 
     // MARK: 合并（「只增加，不覆盖」那条路）

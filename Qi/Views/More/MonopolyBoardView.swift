@@ -83,7 +83,7 @@ struct MonopolyBoard: View {
                 let cell = side / 6
                 ZStack {
                     // 她自己的底图（放过就有）
-                    if !boardImage.isEmpty, let ui = ImageStore.load(boardImage) {
+                    if !boardImage.isEmpty, let ui = ImageStore.cached(boardImage) {
                         Image(uiImage: ui)
                             .resizable()
                             .scaledToFill()

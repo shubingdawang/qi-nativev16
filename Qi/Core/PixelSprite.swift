@@ -19,21 +19,49 @@ struct PixelSprite {
     /// 字符 → 颜色
     let palette: [Character: Color]
 
-    var width: Int { rows.map(\.count).max() ?? 0 }
-    var height: Int { rows.count }
+    // ⚠️ **这三样是「造的时候算一次」，不是「用的时候现算」。**
+    //
+    // 她说「太卡了太卡了」，根子有一半在这儿。上一版 `color(x:y:)` 里
+    // 写的是 `let row = Array(rows[y])`——**查一个像素，就把那一整行
+    // 字符串重新拆成一个数组**。Swift 的 String 不能按下标取字符，
+    // 所以那句话看着无害，实际是一次遍历 + 一次堆分配。
+    //
+    // 一件等距家具一百来列、八十来行，画一帧要查将近一万次；
+    // 屋里摆十件，他还在走路（每一帧都重画）——
+    // **一秒钟几百万次数组分配**，手机不卡才怪。
+    //
+    // 现在开局就把整张图摊成 `[Color?]` 的一维数组，
+    // 之后每次查像素就是一次下标寻址，不分配、不遍历。
+    // 画出来一模一样，代价差了三四个数量级。
+    private let grid: [Color?]
+    private let w: Int
+    private let h: Int
+
+    var width: Int { w }
+    var height: Int { h }
 
     init(_ rows: [String], _ palette: [Character: Color]) {
         self.rows = rows
         self.palette = palette
+        let hh = rows.count
+        let ww = rows.map(\.count).max() ?? 0
+        self.w = ww
+        self.h = hh
+        var g = [Color?](repeating: nil, count: max(0, ww * hh))
+        for (y, row) in rows.enumerated() {
+            // 这一行遍历一次就够了——**整个 App 生命周期里就这一次**
+            for (x, ch) in row.enumerated() {
+                guard x < ww else { break }
+                guard ch != ".", ch != " " else { continue }
+                g[y * ww + x] = palette[ch]
+            }
+        }
+        self.grid = g
     }
 
     func color(x: Int, y: Int) -> Color? {
-        guard y < rows.count else { return nil }
-        let row = Array(rows[y])
-        guard x < row.count else { return nil }
-        let ch = row[x]
-        if ch == "." || ch == " " { return nil }
-        return palette[ch]
+        guard x >= 0, y >= 0, x < w, y < h else { return nil }
+        return grid[y * w + x]
     }
 }
 
