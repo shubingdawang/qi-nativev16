@@ -475,7 +475,9 @@ struct MemoryListView: View {
                             // 走 MarkdownText：改过的那条是 `~~错的~~ 对的`，
                             // 要真画成删除线才看得懂（她说的「记得让 app 支持
                             // markdown 渲染」）。
-                            MarkdownText(text: mem.display,
+                            // 批注也叠在这一份里：她挑的那句画成
+                            // `~~原句~~批注`，红色删除线接着改对的那半。
+                            MarkdownText(text: Annotated.apply(mem.display, mem.annotations),
                                          fontSize: app.settings.fontSize - 2)
                                 .foregroundStyle(Theme.textMain(scheme))
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -484,11 +486,9 @@ struct MemoryListView: View {
                                     .font(.app(10))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
-                            ForEach(mem.annotations ?? [], id: \.self) { a in
-                                Text("⤷ \(a.author)：把「\(a.original)」改成「\(a.correction)」")
-                                    .font(.app(11))
-                                    .foregroundStyle(.red.opacity(0.8))
-                            }
+                            // 批注不再单独摆一行——已经画在正文里了。
+                            // 挑不着原句的那种，`Annotated.apply` 会自己
+                            // 在正文末尾接一行，一样看得见。
                         }
                         .padding(13)
                         .glassBackground(radius: 16, strength: app.settings.glassOpacity)
@@ -558,17 +558,14 @@ struct MemoryDiaryListView: View {
                                     .font(.app(10))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
-                            Text(d.content)
-                                .font(.app(14))
+                            // 日记也走 MarkdownText：她批注过的那句要画成
+                            // 红色删除线 + 改对的那半（`Annotated.apply`）。
+                            // 以前这儿是纯 `Text`，`~~` 原样杵在那儿。
+                            MarkdownText(text: Annotated.apply(d.content, d.annotations),
+                                         fontSize: app.settings.fontSize - 1)
                                 .foregroundStyle(Theme.textMain(scheme))
-                                .fixedSize(horizontal: false, vertical: true)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .textSelection(.enabled)
-                            ForEach(d.annotations ?? [], id: \.self) { a in
-                                Text("⤷ \(a.author)：把「\(a.original)」改成「\(a.correction)」")
-                                    .font(.app(11))
-                                    .foregroundStyle(.red.opacity(0.8))
-                            }
                         }
                         .padding(13)
                         .glassBackground(radius: 16, strength: app.settings.glassOpacity)

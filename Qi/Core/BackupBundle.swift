@@ -93,11 +93,27 @@ enum BackupBundle {
     /// 关键词全都白瞎了」——她没法从一个 json 文件的外表看出里面有没有图。
     /// 现在导完当场告诉她「\(blobs) 个图片语音」，
     /// 是 0 就是 0，一眼看得见，不用等到还原那天才发现。
+    /// ⚠️ **这三个数不是一回事，别再把它们混着报。**
+    ///
+    /// 她第二次说「显示备份了多少张图片，可是相册里一张都没有」。
+    /// 第一次我以为是「没装进去」，加了个计数报给她看。
+    /// **但那个计数数的是「我打算装几张」，不是「真的落到文件里几张」**——
+    /// `try? handle.write(...)` 写失败（最常见的是临时目录满了）
+    /// 一声不吭，计数照加。于是那句「N 个图片语音」是**照样报出来的**，
+    /// 而那份包里可能一张都没有。
+    ///
+    /// 现在 `blobs` 只是打算，`verified` 是**写完之后把成品重新扫一遍数出来的**，
+    /// 界面上报的必须是 `verified`。
     struct Report {
         var files = 0
+        /// 打算装几个
         var blobs = 0
+        /// **写完之后，从成品文件里真的数出来几个。** 报给她看的是这个。
+        var verified = 0
         var skipped: [String] = []
         var bytes = 0
+        /// 中途有过写不进去的时候。有这一条，整份包就不该当成功的算。
+        var writeFailed = false
     }
 
     /// 把一个字符串写成合法的 JSON 字面量（带引号）。
@@ -206,12 +222,22 @@ enum BackupBundle {
         try? FileManager.default.removeItem(at: dest)
         FileManager.default.createFile(atPath: dest.path, contents: nil)
         guard let handle = try? FileHandle(forWritingTo: dest) else { return report }
-        defer { try? handle.close() }
+        // ⚠️ **不用 `defer` 关**：底下写完之后要**把成品重新扫一遍**，
+        // 而扫之前必须先关（不关的话最后那几 KB 可能还在缓冲里）。
+        // 用 defer 的话关的时机在 return 之后，扫到的就是没落全的那份。
 
+        // ⚠️ **写失败必须留下痕迹。**
+        // 以前这儿是 `try? handle.write(...)`，字节数照加——
+        // 磁盘满了、文件被系统收走了，一律当成写成功了。
+        // 那是她那句「显示有图、实际没有」的一半根子。
         func put(_ s: String) {
-            guard let d = s.data(using: .utf8) else { return }
-            try? handle.write(contentsOf: d)
-            report.bytes += d.count
+            guard let d = s.data(using: .utf8) else { report.writeFailed = true; return }
+            do {
+                try handle.write(contentsOf: d)
+                report.bytes += d.count
+            } catch {
+                report.writeFailed = true
+            }
         }
 
         // 小的那几块照旧整块序列化——它们加起来也就几兆
@@ -260,15 +286,68 @@ enum BackupBundle {
         put("\"skipped\":" + skippedJSON + ",")
         put("\"defaults\":" + flagsJSON + "}")
 
+        try? handle.synchronize()
+        try? handle.close()
+
+        // ── 数一遍成品 ──────────────────────────────────────
+        //
+        // **这一步不能省。** 上面那些计数只说明「我打算装这么多」，
+        // 真正要紧的是「这份文件里现在到底有几个」。
+        // 用的是**还原时候那一套扫描**——也就是说，
+        // 这儿数出来几个，还原那天就能放回去几个，
+        // 不是两套算法各说各话。
+        progress?("正在数一遍…")
+        report.verified = countBlobs(in: dest)
+
         progress?("写完了")
         return report
+    }
+
+    /// 一份写好的备份里，**真的能读出来**几个图片语音。
+    ///
+    /// 走的是还原那条路上同一个扫描器（`blobsRange` + `blobPairs`），
+    /// 所以它数出来的就是还原那天放得回去的数目。
+    /// 内存映射着数，不管这份包多大都只占一点点。
+    static func countBlobs(in url: URL) -> Int {
+        guard let mapped = try? Data(contentsOf: url, options: [.mappedIfSafe]) else { return 0 }
+        let range: Range<Int>? = mapped.withUnsafeBytes {
+            (raw: UnsafeRawBufferPointer) -> Range<Int>? in
+            blobsRange(raw)
+        }
+        // 扫描器认不出来（老包、或者被截断了）→ 退回正经解析。
+        // 解不开就是 0，那本来就是实话。
+        //
+        // ⚠️ **大包不走这条路。** `JSONSerialization` 要把整份解进内存，
+        // 一份三百兆的包在这儿能顶出六七百兆——为了「数一个数」
+        // 把 App 撑死是本末倒置。大包认不出来就当 0，
+        // 界面上那句警告照样会让她看见不对劲。
+        guard let blobs = range else {
+            guard mapped.count < 48 * 1024 * 1024,
+                  let obj = try? JSONSerialization.jsonObject(with: mapped) as? [String: Any],
+                  let dict = obj["blobs"] as? [String: String] else { return 0 }
+            return dict.count
+        }
+        var pairs: [(String, Range<Int>)] = []
+        mapped.withUnsafeBytes { (raw: UnsafeRawBufferPointer) -> Void in
+            pairs = blobPairs(raw, in: blobs)
+        }
+        return pairs.count
     }
 
     // MARK: 还原
 
     enum Restored {
-        /// 新版整包
-        case bundle(files: Int, blobs: Int)
+        /// 新版整包。
+        ///
+        /// · `blobs` = 真的写回磁盘的图片语音
+        /// · `already` = 这边本来就有、跳过没动的
+        /// · `failed` = 包里有，但**没能写回去**的（解不开 base64 / 写不进去）
+        ///
+        /// ⚠️ 后面两个不是凑数用的。以前这三种情况全都 `continue` 掉了，
+        /// 报出去只有一个数——「补进来了 0 个图片」既可能是
+        /// 「这边本来就都有」，也可能是「一张都没成」，
+        /// 而她只能从这一个 0 里猜。分开报，猜的余地就没了。
+        case bundle(files: Int, blobs: Int, already: Int, failed: Int)
         /// 老版那三样。**照样认**——她手里可能还留着以前导出的文件。
         case legacy
         case unreadable(String)
@@ -364,18 +443,22 @@ enum BackupBundle {
         }
 
         // 图片语音那半。跟 json 一样按相对路径原样放回去。
-        var blobCount = 0
+        var blobCount = 0, already = 0, failed = 0
         if let blobs = root["blobs"] as? [String: String] {
             for (name, b64) in blobs {
-                guard !name.hasPrefix("/"), !name.contains("..") else { continue }
-                guard let data = Data(base64Encoded: b64) else { continue }
+                guard !name.hasPrefix("/"), !name.contains("..") else { failed += 1; continue }
+                guard let data = Data(base64Encoded: b64) else { failed += 1; continue }
                 let url = dir.appendingPathComponent(name)
                 // 合并的时候，已经在的图片一个都不碰——
                 // 文件名是 UUID，同名就是同一张，覆盖没有意义只有风险
-                if mode == .merge, FileManager.default.fileExists(atPath: url.path) { continue }
+                if mode == .merge, FileManager.default.fileExists(atPath: url.path) {
+                    already += 1
+                    continue
+                }
                 try? FileManager.default.createDirectory(
                     at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
                 if (try? data.write(to: url, options: .atomic)) != nil { blobCount += 1 }
+                else { failed += 1 }
             }
         }
 
@@ -385,7 +468,7 @@ enum BackupBundle {
                 UserDefaults.standard.set(v, forKey: k)
             }
         }
-        return .bundle(files: written, blobs: blobCount)
+        return .bundle(files: written, blobs: blobCount, already: already, failed: failed)
     }
 
     // MARK: 从文件还原（不把整包读进内存那条路）
@@ -439,10 +522,10 @@ enum BackupBundle {
         rest.append(mapped.subdata(in: blobs.upperBound..<mapped.count))
 
         let head = restore(rest, mode: mode)
-        guard case .bundle(let written, _) = head else { return head }
+        guard case .bundle(let written, _, _, _) = head else { return head }
 
         // ── 再一个一个把图片语音抠出来 ──────────────────────
-        var count = 0
+        var count = 0, already = 0, failed = 0
         let dir = Storage.documentsURL
         var pairs: [(String, Range<Int>)] = []
         mapped.withUnsafeBytes { (raw: UnsafeRawBufferPointer) -> Void in
@@ -454,21 +537,28 @@ enum BackupBundle {
                 progress?("正在放回第 \(i + 1) / \(pairs.count) 个图片语音…")
             }
             let name = pair.0
-            guard !name.hasPrefix("/"), !name.contains("..") else { continue }
+            guard !name.hasPrefix("/"), !name.contains("..") else { failed += 1; continue }
             let out = dir.appendingPathComponent(name)
             // 合并的时候，已经在的图片一个都不碰——
             // 文件名是 UUID，同名就是同一张，覆盖没有意义只有风险
-            if mode == .merge, FileManager.default.fileExists(atPath: out.path) { continue }
+            if mode == .merge, FileManager.default.fileExists(atPath: out.path) {
+                already += 1
+                continue
+            }
             autoreleasepool {
                 let b64 = String(decoding: mapped.subdata(in: pair.1), as: UTF8.self)
-                guard let data = Data(base64Encoded: b64) else { return }
+                // ⚠️ 这几个 `failed += 1` 是新加的。以前是光秃秃 `return`：
+                // base64 解不开、目录建不了、写不进去，全都悄没声地过去了，
+                // 最后只报一个「补进来了 N 个」——N 少了多少没人知道。
+                guard let data = Data(base64Encoded: b64) else { failed += 1; return }
                 try? FileManager.default.createDirectory(
                     at: out.deletingLastPathComponent(), withIntermediateDirectories: true)
                 if (try? data.write(to: out, options: .atomic)) != nil { count += 1 }
+                else { failed += 1 }
             }
         }
 
-        return .bundle(files: written, blobs: count)
+        return .bundle(files: written, blobs: count, already: already, failed: failed)
     }
 
     // MARK: 在字节里找东西

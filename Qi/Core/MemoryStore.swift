@@ -23,6 +23,51 @@ struct MemoryAnnotation: Codable, Hashable {
     var created_at: String
 }
 
+/// 把批注叠到正文上。
+///
+/// ## 她要的到底是什么
+///
+/// 她的原话：「假如文字是 binbin 而我要批注为 bingbing，
+/// 我想要的效果是 ~~binbin~~bingbing，划线是红色的。」
+///
+/// 以前不是这样：批注是**另起一行**挂在正文屁股后面，
+/// 写成「⤷ 饼饼批注：把「binbin」改成「bingbing」」。
+/// 那是一句**关于**这条记忆的话，不是这条记忆改好的样子——
+/// 她还得自己在脑子里把那句话套回原文里去。
+///
+/// 现在原地改：在正文里找到那一句，画成 `~~原句~~批注`。
+/// `MD.inline` 认得 `~~`，画出来就是红色删除线接着改对的那半。
+/// **原文一个字都没动**——存的还是原来那份，叠出来的只是显示的样子。
+///
+/// 挑不着的（她一句都没挑、或者原句已经被后来的改动冲掉了）
+/// 照旧在末尾另起一行，不闷声丢掉。
+enum Annotated {
+
+    /// 正文 + 批注 → 显示用的那份文本（带 `~~` 记号）
+    static func apply(_ text: String, _ anns: [MemoryAnnotation]?) -> String {
+        guard let anns, !anns.isEmpty else { return text }
+        var out = text
+        var loose: [String] = []
+        for a in anns {
+            let original = a.original.trimmingCharacters(in: .whitespacesAndNewlines)
+            let correction = a.correction.trimmingCharacters(in: .whitespacesAndNewlines)
+            // 原句还在正文里 → 原地画成 ~~原句~~批注
+            if !original.isEmpty, let r = out.range(of: original) {
+                out.replaceSubrange(r, with: "~~" + original + "~~" + correction)
+                continue
+            }
+            // 没挑句子，或者找不着了 → 挂在末尾，别丢
+            if original.isEmpty {
+                loose.append("⤷ \(a.author)批注：\(correction)")
+            } else {
+                loose.append("⤷ \(a.author)批注：把「\(original)」改成「\(correction)」")
+            }
+        }
+        if !loose.isEmpty { out += "\n" + loose.joined(separator: "\n") }
+        return out
+    }
+}
+
 struct MemoryItem: Codable, Identifiable, Hashable {
     var id: String
     var content: String

@@ -25,6 +25,8 @@ struct SettingsView: View {
     /// 每次刷设置都算一遍太亏
     @State private var usage: StorageUsage.Report?
     @State private var measuring = false
+    /// 正在「查一遍图」（`MediaAudit`）
+    @State private var auditing = false
 
     /// 选好了、还没决定怎么放的那份备份
     /// 选好的那份备份**放在临时目录里的一个副本**，不是整包读进内存。
@@ -838,7 +840,10 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
 
-            SettingsNote("导出的是**整包**：聊天记录、供应商和密钥、记忆库（身份、说好的规矩、那封信、承诺、日记、心情）、备忘、通话记录、经期、念头池、clawd 小屋——所有存成 json 的都在里面。\n\n**图片和录音不在**：壁纸、表情、像素画、语音是单独的文件，装进来备份会从几百 KB 涨到几百 MB。\n\n以前那版只有聊天记录、供应商和设置三样，记忆库整个没在里面。手里要是还留着旧备份，建议重新导一份。")
+            // ⚠️ 这段话**说反过一次**。它一直写着「图片和录音不在」，
+            // 而从 v3 起图片语音就在里面了。她说「图片并没有备份」的时候，
+            // 这段话是站在她那边帮腔的——一份写错的说明比没有说明更坏。
+            SettingsNote("导出的是**整包**：聊天记录、供应商和密钥、记忆库（身份、说好的规矩、那封信、承诺、日记、心情）、备忘、通话记录、经期、念头池、clawd 小屋——所有存成 json 的都在里面。\n\n**图片和录音也在里面**：壁纸、表情、像素画、语音这些单独的文件一起打包，所以包会从几百 KB 涨到几十上百 MB。单个超过 20 MB 的（一般是视频）跳过，导完会列出来。\n\n导完那句「N 个图片语音」是**写完之后重新数出来的**——是 0 就是真的一张都没装进去，不用等到还原那天才发现。\n\n回收站不进备份。")
 
             SettingsDivider()
 
@@ -846,6 +851,25 @@ struct SettingsView: View {
                 SettingsRowLabel(title: "导入备份", icon: "square.and.arrow.down")
             }
             .buttonStyle(.plain)
+
+            SettingsDivider()
+
+            // ⚠️ 她两次说的是同一件事：「显示备份了多少张图片，
+            // 可是相册里看不见，只能看见文字。」
+            //
+            // 之前 App 里**没有任何一处**能回答「文件到底还在不在」——
+            // 记录在、图没了，界面上就是一个名字底下空一块，
+            // 不报错，也不说话。她只能对着一屏空白猜。
+            // 这一行是来结束猜的。
+            Button { auditMedia() } label: {
+                SettingsRowLabel(title: auditing ? "正在查…" : "查一遍图",
+                                 icon: "photo.badge.checkmark")
+            }
+            .buttonStyle(.plain)
+            .disabled(auditing)
+
+            SettingsNote("对一遍「库里记着的图」和「磁盘上还在的图」。相册里只剩文字、表情空着一块，就是这两个数对不上。**只看，不删。**")
+
             SettingsDivider()
 
             Button { showingClearConfirm = true } label: {
@@ -1012,6 +1036,18 @@ struct SettingsView: View {
         .padding(.vertical, 12)
     }
 
+    /// 查一遍图。见 `MediaAudit`——记录和文件对不上的时候，
+    /// 这是唯一一处说得出「丢了几张」的地方。
+    private func auditMedia() {
+        guard !auditing else { return }
+        auditing = true
+        Task {
+            let r = await MediaAudit.run()
+            auditing = false
+            alertMessage = r.text
+        }
+    }
+
     private func measureStorage() {
         guard !measuring else { return }
         measuring = true
@@ -1083,12 +1119,26 @@ struct SettingsView: View {
             // 现在导完当场写清楚：几份数据、几个图片语音、多大。
             // 是 0 就是 0，当场就知道。
             let mb = Double(report.bytes) / 1024 / 1024
+            // ⚠️ 报的是 `verified` 不是 `blobs`。
+            //
+            // `blobs` 是「我打算装几个」，`verified` 是**写完之后
+            // 把成品重新扫一遍数出来的**。她说过两次「显示有图、实际没有」，
+            // 上一版报的恰恰是前者——写不进去的时候它照样报一个漂亮的数。
+            // 从今往后这一行只许说实话。
+            //
             // ⚠️ 数字**别走 `String(format:)` 的 `%d`**——那个要的是 32 位，
             // 喂个 Swift 的 Int 进去在 64 位上是要出岔子的。插值最省事。
             var msg = String(format: "打好了，%.1f MB。", mb)
                 + "\n\n· \(report.files) 份数据"
-                + "\n· **\(report.blobs) 个图片语音**"
-            if report.blobs == 0 {
+                + "\n· **\(report.verified) 个图片语音**（写完数过一遍的）"
+            if report.writeFailed {
+                msg += "\n\n⚠️ **中途有写不进去的地方，这份包不能当数。**"
+                    + "多半是手机没空间了——腾一点出来再导一次，"
+                    + "导完对一下上面那个数。"
+            } else if report.verified < report.blobs {
+                msg += "\n\n⚠️ **本来要装 \(report.blobs) 个，成品里只数出 \(report.verified) 个。**"
+                    + "这份包是残的，别拿它当备份——跟我说一声。"
+            } else if report.verified == 0 {
                 msg += "\n\n⚠️ **一张图都没装进去。**"
                     + "要么这台手机上确实还没有图，要么就是出问题了——跟我说一声。"
             }
@@ -1207,7 +1257,7 @@ struct SettingsView: View {
                                url: URL, mode: BackupBundle.Mode) {
         do {
             switch outcome {
-            case .bundle(let count, let pics):
+            case .bundle(let count, let pics, let already, let failed):
                 // **还原完立刻把内存也换掉。**
                 //
                 // 以前这儿只写盘，然后请她「完全关掉 App 再打开」。
@@ -1218,13 +1268,26 @@ struct SettingsView: View {
                 //
                 // 现在还原完当场重读一遍，聊天记录立刻就在。
                 app.reloadAfterRestore()
+                // ⚠️ 图那一半**分三个数报**：放回去的、本来就有的、没成的。
+                //
+                // 以前只有一个「N 个图片语音」。N 是 0 的时候，
+                // 「这边本来就都有」和「一张都没成」写的是同一句话，
+                // 她只能从一个 0 里猜——而她猜的方向恰好是错的那个。
+                var picNote = ""
+                if pics > 0 { picNote += "、**\(pics) 个图片语音**" }
+                if already > 0 { picNote += "（另有 \(already) 个这边本来就有，没动）" }
+                picNote += "。"
+                if pics == 0 && already == 0 && failed == 0 {
+                    picNote = "。\n\n⚠️ **这份备份里一个图片语音都没有**"
+                        + "（多半是没带图的旧版备份）。"
+                }
+                if failed > 0 {
+                    picNote += "\n\n⚠️ **有 \(failed) 个图片语音没能放回去**"
+                        + "（解不开或者写不进去）。要是相册里空着一片，就是这些。"
+                        + "先看看手机还有没有空间，再导一次。"
+                }
                 alertMessage = (mode == .merge ? "补进来了 " : "还原了 ") + "\(count) 份数据"
-                    + (pics > 0
-                       ? "、**\(pics) 个图片语音**。"
-                       // 一张图都没回来，说清楚是为什么——
-                       // 别让她再一次以为图在里面
-                       : "。\n\n⚠️ **这份备份里一张图都没有**"
-                         + "（要么它是没带图的旧版备份，要么这些图这边本来就有了）。")
+                    + picNote
                     + (mode == .merge
                        ? "\n\n**只补了这边没有的**，你现在的聊天记录一条都没动。"
                          + "同一个窗口两边各聊了一段的话，两段会按时间并到一起。"

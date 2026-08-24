@@ -223,8 +223,19 @@ enum MemoryTools {
             ["id": str, "content": str, "tags": strs, "level": num], required: ["id"])
 
         add("annotate_memory",
-            "给一条记忆添加批注（原文显示删除线，批注显示红色），不改动原文、只叠加观点",
-            ["id": str, "original": str, "correction": str, "author": str],
+            """
+            给一条记忆加批注。原文一个字不动，显示的时候画成 ~~原句~~批注
+            （删除线是红的）。
+
+            `original` 必须**从正文里一字不差地抄一段出来**——
+            对不上的话就锚不到位置，只能退回去在末尾挂一行。
+            要改的只是两个字就只抄那两个字，别抄整句。
+            """,
+            ["id": str,
+             "original": ["type": "string",
+                          "description": "正文里要划掉的那一段，一字不差地抄"],
+             "correction": ["type": "string", "description": "改成什么"],
+             "author": str],
             required: ["id", "original", "correction"])
 
         add("get_memory_log", "查看记忆的修改/删除历史记录（谁在什么时间改了什么）",
@@ -241,8 +252,18 @@ enum MemoryTools {
             ["id": str], required: ["id"])
 
         add("annotate_diary",
-            "给一篇日记添加批注（原文显示删除线，批注显示红色），饼饼常用来修改阿晏的日记",
-            ["id": str, "original": str, "correction": str, "author": str],
+            """
+            给一篇日记加批注，饼饼常用来改阿晏的日记。
+            原文一个字不动，显示成 ~~原句~~批注（删除线是红的）。
+
+            `original` 必须**从日记正文里一字不差地抄一段出来**，
+            否则锚不到位置，只能退回去在末尾挂一行。
+            """,
+            ["id": str,
+             "original": ["type": "string",
+                          "description": "日记里要划掉的那一段，一字不差地抄"],
+             "correction": ["type": "string", "description": "改成什么"],
+             "author": str],
             required: ["id", "original", "correction"])
 
         add("log_period", "记录一次月经（开始/结束日期），饼饼的经期数据",
@@ -639,12 +660,8 @@ enum MemoryTools {
             return (list.map { d in
                 var s = "[\(d.shortID)][\(d.author)]"
                 if let mood = d.mood, !mood.isEmpty { s += "[\(mood)]" }
-                s += " \(day(d.created_at))：\n\(d.content)"
-                if let anns = d.annotations, !anns.isEmpty {
-                    for a in anns {
-                        s += "\n    ⤷ \(a.author)批注：把「\(a.original)」改成「\(a.correction)」"
-                    }
-                }
+                // 批注叠进正文里（`Annotated.apply`），不另起一行
+                s += " \(day(d.created_at))：\n\(Annotated.apply(d.content, d.annotations))"
                 return s
             }.joined(separator: "\n\n"), false)
 
@@ -947,7 +964,9 @@ enum MemoryTools {
         var tags = mem.tags
         tags.insert(String(repeating: "★", count: max(1, min(5, mem.level))), at: 0)
         var s = "[\(mem.shortID)][\(mem.author)][\(tags.joined(separator: "、"))]"
-        s += " \(day(mem.created_at))：\(mem.display)"
+        // 批注**叠在正文里**，不再另起一行写「把 A 改成 B」——
+        // 见 `Annotated.apply`。她要的是 ~~binbin~~bingbing 这个样子。
+        s += " \(day(mem.created_at))：\(Annotated.apply(mem.display, mem.annotations))"
         // 钉住的和还悬着的也标出来。**只加在正文后面**——
         // 前面那个 [id][作者][标签] 的壳一个字都不能动，札记页靠它切条。
         if mem.pinned == true { s += "　📌" }
@@ -956,11 +975,6 @@ enum MemoryTools {
         // 不写「不算数了」：她说过，此前的记忆都算数，只是后来又记了一条。
         if mem.superseded_by != nil {
             s += "　⟨这是当时记下的，后面还接着一条新的⟩"
-        }
-        if let anns = mem.annotations, !anns.isEmpty {
-            for a in anns {
-                s += "\n    ⤷ \(a.author)批注：把「\(a.original)」改成「\(a.correction)」"
-            }
         }
         return s
     }

@@ -109,7 +109,7 @@ struct ClawdRigView: View {
 
     private func arm(_ side: Side) -> some View {
         let a = side == .left ? plan.leftArm : plan.rightArm
-        // 肩膀在图纸上的位置：身子左边缘 / 右边缘那一格，手臂那两行
+        // 肩膀在图纸上的位置：身子左边缘 / 右边缘那一格，手臂那五行
         let shoulderX: CGFloat = side == .left
             ? CGFloat(ClawdRig.bodyLeft)
             : CGFloat(ClawdRig.bodyRight + 1)
@@ -149,11 +149,23 @@ enum ClawdRig {
     /// 身子在图纸上占第几格到第几格。手长在这两格外面。
     static let bodyLeft = 4
     static let bodyRight = 27
-    /// 手臂在第几行
+    /// 手臂从第几行起
     static let armRow = 6
 
     /// 一只手。就是原来长在身子外面那一小块，抠出来单独画。
+    ///
+    /// ⚠️ **必须跟 `ClawdSprites.idle` 里那块一模一样：4 格宽、5 格高、
+    /// 从第 6 行到第 10 行。** 她说「手臂太细而且位置有点靠上」——
+    /// 根子就是这儿只写了两行：身子那张图上的手是 6~10 行整整五格，
+    /// 抠掉之后补上来的却是贴在第 6 行的两格。
+    /// 于是手瘦了六成、整条往上提了一格半。
+    ///
+    /// 改这里之前先跑一遍：把 `idle` 的第 0..3 列和第 28..31 列打出来，
+    /// 是 `p` 的那几行就是手该占的行。**别照着感觉调。**
     static let arm = PixelSprite([
+        "pppp",
+        "pppp",
+        "pppp",
         "pppp",
         "pppp"
     ], ClawdSprites.palette)
@@ -162,11 +174,16 @@ enum ClawdRig {
     ///
     /// **只清身子边界外的列**（0..3 和 28..31），
     /// 身子本身一格不动——所以换任何一帧都不会歪。
+    ///
+    /// ⚠️ **只清身子色那几格**（`p`）。以前是不管什么一律抹成透明，
+    /// 结果把扫地那两帧伸在身子外面的扫把杆（`n`）和稻草（`t`）
+    /// 一起抹没了——他举着空气扫地。
+    /// 抠的是「手」，不是「身子外面的所有东西」。
     static func stripArms(_ s: PixelSprite) -> PixelSprite {
         let rows = s.rows.map { row -> String in
             var chars = Array(row)
             for x in chars.indices where x < bodyLeft || x > bodyRight {
-                chars[x] = "."
+                if chars[x] == "p" { chars[x] = "." }
             }
             return String(chars)
         }
@@ -193,6 +210,13 @@ enum ClawdRig {
         var p = Plan()
         // 图纸中线，用来把东西摆正
         let midX = CGFloat(bodyLeft + bodyRight + 1) / 2
+        // 手转的支点在肩膀那一端的**正中间**，也就是这一行。
+        // 底下那几档「东西摆在哪儿」都是照着手的位置调出来的，
+        // 所以写成「肩膀中线 ± 几格」，而不是「手臂第一行 ± 几格」——
+        // ⚠️ 手臂加高（2 格 → 5 格）那一次，中线跟着往下挪了一格，
+        // 而当时那几行写的是 `armRow`，于是他手上的东西全都悬空了一格。
+        // 认支点，别认上边缘。
+        let handY = CGFloat(armRow) + CGFloat(arm.height - 1) / 2
 
         switch pose {
         case .none:
@@ -203,7 +227,7 @@ enum ClawdRig {
             // 扫把、可乐都是这一档。
             p.rightArm = 18
             p.itemAt = CGPoint(x: CGFloat(bodyRight) + 1.5,
-                               y: CGFloat(armRow) + 2 - itemH * 0.55)
+                               y: handY + 1.5 - itemH * 0.55)
             p.itemTilt = -8
 
         case .lift:
@@ -224,7 +248,7 @@ enum ClawdRig {
             let t = sin(beat * .pi)                      // 0→1→0
             p.rightArm = 40 + 25 * t
             p.itemAt = CGPoint(x: midX + 1.5 - itemW / 2,
-                               y: CGFloat(armRow) - 1.5 - 2.5 * t)
+                               y: handY - 2 - 2.5 * t)
             p.itemTilt = -20 - 45 * t
 
         case .swirl:
@@ -233,7 +257,7 @@ enum ClawdRig {
             let a = beat * .pi * 2
             p.rightArm = 34 + sin(a) * 8
             p.itemAt = CGPoint(x: CGFloat(bodyRight) + 0.5 + cos(a) * 0.8 - itemW / 2,
-                               y: CGFloat(armRow) - 1 + sin(a) * 0.6 - itemH * 0.3)
+                               y: handY - 1.5 + sin(a) * 0.6 - itemH * 0.3)
             p.itemTilt = sin(a) * 12
         }
         return p

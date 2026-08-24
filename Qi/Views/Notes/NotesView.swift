@@ -133,15 +133,20 @@ struct MCPEntryCard: View {
                 }
             }
 
+            // ⚠️ 标题和正文都走 `MD.inline`，不能是光秃秃的 `Text`。
+            // 她批注过的那句现在是 `~~原句~~批注`（见 `Annotated.apply`），
+            // 记忆改过的那条是 `~~记错的~~ 改对的`——
+            // 不解析的话她看到的就是四个波浪号杵在字中间。
+            // 第一行会被 `MCPEntryParser` 切成标题，所以**两处都要**。
             if !entry.title.isEmpty {
-                Text(entry.title)
+                Text(MD.inline(entry.title))
                     .font(.app(15, weight: .medium))
                     .foregroundStyle(Theme.textMain(scheme))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             if !entry.body.isEmpty {
-                Text(entry.body)
+                Text(MD.inline(entry.body))
                     .font(.app(13))
                     .foregroundStyle(Theme.textSoft(scheme))
                     .lineLimit(expanded ? nil : 3)
