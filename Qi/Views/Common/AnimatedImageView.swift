@@ -21,13 +21,13 @@ struct AnimatedImageView: UIViewRepresentable {
         // 不然横图竖图混在一起会把整行撑塌
         view.setContentHuggingPriority(.defaultLow, for: .horizontal)
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        load(into: view)
+        load(into: view, context.coordinator)
         return view
     }
 
     func updateUIView(_ view: UIImageView, context: Context) {
         if context.coordinator.loadedURL != url {
-            load(into: view)
+            load(into: view, context.coordinator)
         }
         view.contentMode = contentMode
     }
@@ -38,12 +38,30 @@ struct AnimatedImageView: UIViewRepresentable {
         var loadedURL: URL?
     }
 
-    private func load(into view: UIImageView) {
-        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return }
+    /// ⚠️ **一定要把 `loadedURL` 记下来。**
+    ///
+    /// 以前这个函数只收一个 `UIImageView`，`coordinator.loadedURL` 从头到尾
+    /// **没有任何一处赋过值**——于是它永远是 nil，
+    /// `updateUIView` 里那句 `loadedURL != url` 永远成立，
+    /// 每刷一帧就把整个 GIF **从磁盘重读、逐帧重解一遍**。
+    /// 那个 if 看着像个缓存，其实一次都没挡住。
+    private func load(into view: UIImageView, _ coordinator: Coordinator) {
+        coordinator.loadedURL = url
+
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else {
+            // 文件不在了。**得把上一张擦掉**——
+            // UIImageView 是复用的，不擦的话这一格显示的是别人的图。
+            view.animationImages = nil
+            view.stopAnimating()
+            view.image = nil
+            return
+        }
         let count = CGImageSourceGetCount(src)
 
         // 单帧就是普通图片，直接显示
         guard count > 1 else {
+            view.animationImages = nil
+            view.stopAnimating()
             view.image = UIImage(contentsOfFile: url.path)
             return
         }

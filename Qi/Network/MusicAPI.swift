@@ -755,6 +755,16 @@ final class MusicLibrary: ObservableObject {
         tracks = Storage.load([Track].self, from: "music.json") ?? []
         plays = Storage.load([String: Int].self, from: "music-plays.json") ?? [:]
         loaded = true
+        refreshMissing()
+    }
+
+    /// 还原完重读一遍。⚠️ `loaded` 先关掉——读的时候不许写盘。
+    func reload() {
+        loaded = false
+        tracks = Storage.load([Track].self, from: "music.json") ?? []
+        plays = Storage.load([String: Int].self, from: "music-plays.json") ?? [:]
+        loaded = true
+        refreshMissing()
     }
 
     func countPlay(_ id: UUID) {
@@ -764,14 +774,17 @@ final class MusicLibrary: ObservableObject {
     func playCount(_ t: Track) -> Int { plays[t.id.uuidString] ?? 0 }
 
     /// 放得最多的那些，给「听得最多」那一页用
+    /// ⚠️ 走 `playable`：音频没了的那些在别处都藏起来了，
+    /// 「听得最多」那一页也不该把它们摆出来。
     var mostPlayed: [(Track, Int)] {
-        tracks.map { ($0, playCount($0)) }
+        playable.map { ($0, playCount($0)) }
             .filter { $0.1 > 0 }
             .sorted { $0.1 > $1.1 }
     }
 
     func add(_ track: Track) {
         tracks.append(track)
+        refreshMissing()
     }
 
     /// 同一首歌，库里有没有更好的一版。
@@ -795,7 +808,10 @@ final class MusicLibrary: ObservableObject {
         }
         guard !same.isEmpty else { return track }
         func rank(_ t: Track) -> Int {
-            if !t.localName.isEmpty { return 3 }
+            // ⚠️ 本地那一版**文件还在**才算最好的。
+            // 不查这一下的话，聊天里那张卡会挑中一个已经没了的文件，
+            // 点下去只弹「文件不在了」——而库里明明还躺着一版能放的网络整首。
+            if !t.localName.isEmpty { return missingIDs.contains(t.id) ? 0 : 3 }
             if t.fullLength { return 2 }
             return 1
         }
@@ -831,6 +847,7 @@ final class MusicLibrary: ObservableObject {
     func remove(_ track: Track) {
         MusicStore.delete(track)
         tracks.removeAll { $0.id == track.id }
+        refreshMissing()
     }
 
     /// 元数据读出来之后补上
@@ -895,10 +912,52 @@ final class MusicLibrary: ObservableObject {
 
     func search(_ keyword: String) -> [Track] {
         let k = keyword.trimmingCharacters(in: .whitespaces)
-        guard !k.isEmpty else { return tracks }
-        return tracks.filter {
+        let pool = playable
+        guard !k.isEmpty else { return pool }
+        return pool.filter {
             $0.title.localizedCaseInsensitiveContains(k)
                 || $0.artist.localizedCaseInsensitiveContains(k)
         }
+    }
+
+    // MARK: 文件还在不在
+
+    /// 音频文件已经不在了的那些歌的 id。
+    ///
+    /// 她的原话：「音乐既然没有备份了，就不要显示歌名了，
+    /// 不然每次还要一个个删掉有点麻烦。」
+    ///
+    /// 她说得对：一个点下去只会弹「文件不在了」的名字，摆在那儿只有添堵的作用。
+    /// **但不从 `music.json` 里删掉**——把音频找回来（重新导一份带音频的备份、
+    /// 或者从「文件」再导一次），播放次数、歌词、封面就都还在。
+    /// 删掉是不可逆的，而藏起来随时能翻回来。
+    ///
+    /// ⚠️ 存成一份名单而不是每次现问文件系统：`body` 每一帧都会重跑，
+    /// 二十几首歌就是每帧二十几次 `fileExists`。
+    @Published private(set) var missingIDs: Set<UUID> = []
+
+    /// 音频还在的那些。**列表一律走这儿。**
+    /// 纯网络那些（`localName` 是空的）不靠本地文件，照样显示。
+    var playable: [Track] { tracks.filter { !missingIDs.contains($0.id) } }
+
+    /// 音频没了的那些。给「清掉」和那句提示用。
+    var orphans: [Track] { tracks.filter { missingIDs.contains($0.id) } }
+
+    /// 重新点一遍名。**导入、还原、删歌之后都要叫一次**——
+    /// 不叫的话她刚导回来的歌还在藏着。
+    func refreshMissing() {
+        missingIDs = Set(tracks.filter {
+            !$0.localName.isEmpty && !MusicStore.exists($0.localName)
+        }.map(\.id))
+    }
+
+    /// 把音频已经不在的那些从库里清掉。她自己点才清。
+    func dropOrphans() -> Int {
+        let gone = orphans
+        guard !gone.isEmpty else { return 0 }
+        let ids = Set(gone.map(\.id))
+        tracks.removeAll { ids.contains($0.id) }
+        refreshMissing()
+        return gone.count
     }
 }

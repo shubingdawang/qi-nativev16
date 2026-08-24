@@ -21,6 +21,52 @@ enum Storage {
         documentsURL.appendingPathComponent(name)
     }
 
+    /// 一个文件在 Documents 底下的**相对路径**（`Images/abc.jpg`、
+    /// `Memory/transcripts/0f61881f.json` 这样）。不在 Documents 底下就返回 nil。
+    ///
+    /// ## ⚠️ 这个函数是从一个很贵的 bug 里长出来的
+    ///
+    /// 备份原来是这么算键的：
+    ///
+    /// ```swift
+    /// let key = url.path.hasPrefix(root.path)
+    ///     ? String(url.path.dropFirst(root.path.count))…
+    ///     : url.lastPathComponent          // ← 一路走的是这一支
+    /// ```
+    ///
+    /// **`hasPrefix` 永远是 false。** 因为这两个路径根本不是同一种写法：
+    ///
+    /// · `FileManager.urls(for: .documentDirectory…)` 给的是
+    ///   `/var/mobile/Containers/Data/Application/…/Documents`
+    /// · `FileManager.enumerator(at:)` 吐出来的是
+    ///   `/private/var/mobile/Containers/…`
+    ///
+    /// iOS 上 `/var` 是指向 `/private/var` 的软链，两条路指的是同一个地方，
+    /// **但字符串不一样**。于是每个文件都掉进了 `lastPathComponent` 那一支，
+    /// 整份备份里的键全成了光秃秃的文件名。
+    ///
+    /// 后果是还原那天才显形，而且是**全线的**：
+    /// `Images/a.jpg` 变成 `a.jpg` → 放回 Documents 根目录 → 相册里一张图都没有；
+    /// `Memory/memories.json` 变成 `memories.json` → 记忆库 0 条、日记 0 篇、存档 0 份；
+    /// `Voices/x.mp3` → 语音条点不响；`Music/x.mp3` → 歌放不出来。
+    /// 她看到的四五个「毛病」是**同一个 bug**。
+    ///
+    /// 而它躲了这么多窗，是因为**导出那头看不出任何异常**：
+    /// 文件数对、图片数对、包的大小也对——**每一个字节都在里面，
+    /// 只是每一个都被贴错了标签。**
+    ///
+    /// ⚠️ 规矩：**比路径不许比字符串。** 两边都 `resolvingSymlinksInPath()`
+    /// 之后按 `pathComponents` 一段一段比，这是唯一稳的比法。
+    static func relativePath(of url: URL, under root: URL? = nil) -> String? {
+        let base = (root ?? documentsURL).resolvingSymlinksInPath()
+            .standardizedFileURL.pathComponents
+        let full = url.resolvingSymlinksInPath()
+            .standardizedFileURL.pathComponents
+        guard full.count > base.count, Array(full.prefix(base.count)) == base
+        else { return nil }
+        return full.dropFirst(base.count).joined(separator: "/")
+    }
+
     /// 解不出来的文件都留在这儿，一份都不丢
     nonisolated(unsafe) private(set) static var salvaged: [String] = []
 
@@ -160,6 +206,10 @@ enum ImageStore {
         guard !name.isEmpty else { return }
         memo.removeObject(forKey: name as NSString)
     }
+
+    /// 整个缓存扔掉。**还原完要叫一次**——
+    /// 刚从备份里放回来一批图，缓存里可能还留着同名的旧那张。
+    static func forgetAll() { memo.removeAllObjects() }
 
     static func delete(_ name: String) {
         forget(name)

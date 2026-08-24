@@ -190,6 +190,17 @@ final class AppState: ObservableObject {
         mcpServers = Storage.load([MCPServer].self, from: "mcp.json") ?? mcpServers
         voices = Storage.load([VoiceService].self, from: "voices.json") ?? voices
         MemoryStore.shared.reload()
+        // ⭐ 这几份也得重读。
+        //
+        // 它们都是「开 App 读一次进内存、以后按内存往回写」的。
+        // 不重读的话，她刚还原完去相册里看，看到的还是还原前那份，
+        // **而且界面上随便动一下就把旧的存回去了**——
+        // 聊天记录那一次就是这么丢的，同一个坑别再踩第二遍。
+        StickerStore.shared.reload()
+        MediaStore.shared.reload()
+        MusicLibrary.shared.reload()
+        // 刚放回来一批图，缓存里可能还留着同名的旧那张
+        ImageStore.forgetAll()
         saveEnabled = true
         syncTheme()
     }

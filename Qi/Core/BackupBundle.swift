@@ -78,10 +78,11 @@ enum BackupBundle {
     /// 她删掉的东西留在这台手机上三十天给她反悔，
     /// **但不该跟着备份走到下一台手机上去**。
     static func skipFromBackup(_ url: URL, root: URL) -> Bool {
-        let rel = url.path.hasPrefix(root.path)
-            ? String(url.path.dropFirst(root.path.count))
-                .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            : url.lastPathComponent
+        // ⚠️ 这儿原来也是 `url.path.hasPrefix(root.path)`，跟算键那处一个毛病
+        // （见 `Storage.relativePath` 里那段）。`hasPrefix` 永远是 false，
+        // 于是 rel 一直是光秃秃的文件名，`rel.hasPrefix("Trash/")` 永远不成立——
+        // **回收站其实一直在跟着备份走**，跟她定的规矩正好相反。
+        let rel = Storage.relativePath(of: url, under: root) ?? url.lastPathComponent
         return rel == "trash.json" || rel.hasPrefix("Trash/")
     }
 
@@ -172,11 +173,14 @@ enum BackupBundle {
             // 那不叫还原，那叫翻旧账。
             guard !skipFromBackup(url, root: root) else { continue }
             guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
-            // 键用相对路径，还原的时候照原样放回去
-            let key = url.path.hasPrefix(root.path)
-                ? String(url.path.dropFirst(root.path.count)).trimmingCharacters(
-                    in: CharacterSet(charactersIn: "/"))
-                : url.lastPathComponent
+            // 键用**相对路径**，还原的时候照原样放回去。
+            // ⚠️ 算不出相对路径就是出事了（这个文件不在 Documents 底下？），
+            // **宁可记一笔也不许悄悄退回文件名**——退回文件名正是
+            // 「记忆库还原完是空的」那个 bug 的全部内容。
+            guard let key = Storage.relativePath(of: url, under: root) else {
+                report.skipped.append("算不出相对路径：" + url.lastPathComponent)
+                continue
+            }
             files[key] = text
         }
 
@@ -197,10 +201,10 @@ enum BackupBundle {
                     .isRegularFile == true else { continue }
             guard !skipFromBackup(url, root: root) else { continue }
             let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
-            let key = url.path.hasPrefix(root.path)
-                ? String(url.path.dropFirst(root.path.count)).trimmingCharacters(
-                    in: CharacterSet(charactersIn: "/"))
-                : url.lastPathComponent
+            guard let key = Storage.relativePath(of: url, under: root) else {
+                report.skipped.append("算不出相对路径：" + url.lastPathComponent)
+                continue
+            }
             guard size <= blobLimit else { report.skipped.append(key); continue }
             blobURLs.append((url, key))
         }
@@ -413,10 +417,28 @@ enum BackupBundle {
         // 里面全是 json 文件名 → 内容，字段对不上的那份自己会退回默认值，
         // 因为每个 store 的解码器都是容错的。
 
+        // ⚠️ **老包修复只对老包开。**
+        //
+        // 判据：整份包里**一个带目录的键都没有**。新包一定有
+        // `Memory/…`、`Images/…` 这种，老包一个都没有。
+        //
+        // 为什么非得加这个开关：她这台机器上，根目录里还堆着上一次
+        // 还原留下的残渣（`memories.json` 那些被放错地方的）。
+        // 修好之后再导出，包里会**同时**有 `Memory/memories.json`
+        // 和根目录那份 `memories.json`——两个都往 `Memory/` 送的话，
+        // 谁后写谁赢，而字典是没有顺序的。
+        // 一份还原的结果不许取决于字典的遍历顺序。
+        let flatBundle = !files.keys.contains { $0.contains("/") }
+
         var written = 0
         let dir = Storage.documentsURL
-        for (name, value) in files {
-            guard name.hasSuffix(".json"), var text = value as? String else { continue }
+        for (rawName, value) in files {
+            guard rawName.hasSuffix(".json"), var text = value as? String else { continue }
+            // ⚠️ 老包（v112 之前）的键是**光秃秃的文件名**，没有目录。
+            // 照原样写回去就是把 `Memory/memories.json` 放进根目录——
+            // 记忆库还原完是空的，就是这么来的。见 `LegacyLayout`。
+            // 新包的键带着目录，这一步一个字都不改它。
+            let name = flatBundle ? LegacyLayout.home(forText: rawName) : rawName
             // 别让备份文件里的路径把东西写到 Documents 外面去。
             // 这份文件是她自己导出的，但一个能往任意路径写文件的口子
             // 不该因为"来源可信"就留着。
@@ -445,7 +467,13 @@ enum BackupBundle {
         // 图片语音那半。跟 json 一样按相对路径原样放回去。
         var blobCount = 0, already = 0, failed = 0
         if let blobs = root["blobs"] as? [String: String] {
-            for (name, b64) in blobs {
+            // 认领用的那几份记录。**必须在 json 那半写完之后才建**——
+            // 它读的就是刚落盘的 stickers.json / music.json / media.json。
+            let records = LegacyLayout.Records(dir: dir)
+            for (rawName, b64) in blobs {
+                let name = flatBundle
+                    ? LegacyLayout.home(forBlob: rawName, records: records)
+                    : rawName
                 guard !name.hasPrefix("/"), !name.contains("..") else { failed += 1; continue }
                 guard let data = Data(base64Encoded: b64) else { failed += 1; continue }
                 let url = dir.appendingPathComponent(name)
@@ -532,11 +560,22 @@ enum BackupBundle {
             pairs = blobPairs(raw, in: blobs)
         }
 
+        // 老包那些没有目录的键要认领回原来的目录（见 `LegacyLayout`）。
+        // **建在这儿**：上面 json 那半已经落盘了，它读得到 stickers.json 那几份。
+        //
+        // ⚠️ 同样只对老包开，判据同上（这条路上手边有的是 blob 的键，
+        // 就拿它们判）。新包里的图一定带着 `Images/`、`Stickers/` 这种前缀；
+        // 一个键都不带目录，才是老包。
+        let records = LegacyLayout.Records(dir: dir)
+        let flatBundle = !pairs.contains { $0.0.contains("/") }
+
         for (i, pair) in pairs.enumerated() {
             if i % 25 == 0 {
                 progress?("正在放回第 \(i + 1) / \(pairs.count) 个图片语音…")
             }
-            let name = pair.0
+            let name = flatBundle
+                ? LegacyLayout.home(forBlob: pair.0, records: records)
+                : pair.0
             guard !name.hasPrefix("/"), !name.contains("..") else { failed += 1; continue }
             let out = dir.appendingPathComponent(name)
             // 合并的时候，已经在的图片一个都不碰——

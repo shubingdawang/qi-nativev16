@@ -63,7 +63,10 @@ struct MusicLibraryView: View {
                         .foregroundStyle(.orange)
                 }
 
-                if library.tracks.isEmpty && webResults.isEmpty {
+                // ⚠️ 判空要用 `playable`。库里躺着二十几条音频已经没了的记录，
+                // `tracks.isEmpty` 是 false——于是「还没有歌」那段提示不出来，
+                // 她看到的是一页什么都没有的空白。
+                if library.playable.isEmpty && webResults.isEmpty {
                     EmptyNote(icon: "music.note.list",
                               title: "还没有歌",
                               hint: "点右上角从「文件」导入 mp3、m4a、flac。\n"
@@ -79,6 +82,34 @@ struct MusicLibraryView: View {
                     ForEach(mine) { track in
                         row(track, local: true)
                     }
+                }
+
+                // 音频没了的那些**不列出来**（她定的：「音乐既然没有备份了，
+                // 就不要显示歌名了，不然每次还要一个个删掉有点麻烦」）。
+                //
+                // 但也不闷声抹掉——那样她会以为歌是自己蒸发的。
+                // 这儿留一句话，要清她自己点；不点就一直藏着，
+                // 哪天音频回来了（重新导一份带音频的备份），歌自己就冒出来了。
+                if !library.orphans.isEmpty {
+                    HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("有 \(library.orphans.count) 首的音频文件不在了")
+                                .font(.app(12))
+                                .foregroundStyle(Theme.textSoft(scheme))
+                            Text("先藏起来了。音频找回来它们自己会回来；不想等就清掉。")
+                                .font(.app(10.5))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                        }
+                        Spacer(minLength: 0)
+                        Button("清掉") {
+                            let n = library.dropOrphans()
+                            notice = "清掉了 \(n) 首没有音频的记录。"
+                        }
+                        .font(.app(12))
+                        .buttonStyle(.plain)
+                        .foregroundStyle(app.settings.accentColor)
+                    }
+                    .padding(.vertical, 8)
                 }
 
                 if searching {
@@ -114,8 +145,9 @@ struct MusicLibraryView: View {
             Button("好") { player.missingFile = nil }
         } message: {
             Text((player.missingFile ?? "") + "\n\n"
-                 + "备份里单个超过 20 MB 的文件是不带的（整包会大到导不出来），"
-                 + "所以还原之后库里那一条还在，音频没了。从「文件」重新导一次就行。")
+                 + "两种可能：一是这首超过 20 MB，备份本来就不带（整包会大到导不出来）；"
+                 + "二是它是被 v112 之前那个备份路径 bug 弄丢的。"
+                 + "从「文件」重新导一次就行。")
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

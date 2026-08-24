@@ -69,6 +69,14 @@ final class MediaStore: ObservableObject {
         }
     }
 
+    /// 还原完重读一遍。⚠️ `loaded` 先关掉——读的时候不许写盘。
+    func reload() {
+        loaded = false
+        items = Storage.load([MediaItem].self, from: "media.json") ?? []
+        folderNames = Storage.load([String: [String]].self, from: "media-folders.json") ?? [:]
+        loaded = true
+    }
+
     func list(_ kind: String) -> [MediaItem] {
         items.filter { $0.kind == kind }.sorted { $0.createdAt > $1.createdAt }
     }

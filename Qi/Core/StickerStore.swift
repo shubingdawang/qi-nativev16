@@ -93,6 +93,19 @@ final class StickerStore: ObservableObject {
         loaded = true
     }
 
+    /// 还原完重读一遍。
+    ///
+    /// ⚠️ `loaded` 要先关掉再赋值：这几个属性的 `didSet` 是要写盘的，
+    /// 不关的话「读进来」这一下会顺手把刚还原的文件**用刚读到的内容再写一遍**——
+    /// 这一次是无害的，但哪天中间多一步转换就不是了。
+    /// **读的时候不许写**，这条对每个 store 都一样。
+    func reload() {
+        loaded = false
+        stickers = Storage.load([Sticker].self, from: "stickers.json") ?? []
+        albumCovers = Storage.load([String: UUID].self, from: "sticker-albums.json") ?? [:]
+        loaded = true
+    }
+
     func url(_ name: String) -> URL { StickerStore.dir.appendingPathComponent(name) }
     func url(of sticker: Sticker) -> URL { url(sticker.fileName) }
     func thumbURL(of sticker: Sticker) -> URL? {

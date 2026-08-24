@@ -862,13 +862,13 @@ struct SettingsView: View {
             // 不报错，也不说话。她只能对着一屏空白猜。
             // 这一行是来结束猜的。
             Button { auditMedia() } label: {
-                SettingsRowLabel(title: auditing ? "正在查…" : "查一遍图",
-                                 icon: "photo.badge.checkmark")
+                SettingsRowLabel(title: auditing ? "正在查…" : "查一遍文件",
+                                 icon: "checklist")
             }
             .buttonStyle(.plain)
             .disabled(auditing)
 
-            SettingsNote("对一遍「库里记着的图」和「磁盘上还在的图」。相册里只剩文字、表情空着一块，就是这两个数对不上。**只看，不删。**")
+            SettingsNote("对一遍「库里记着的」和「磁盘上还在的」：相册、表情、聊天里的语音条、歌的音频，四样一起查。相册只剩文字、语音条点不响、歌放不出来，就是这两个数对不上。**只看，不删。**")
 
             SettingsDivider()
 
@@ -1042,7 +1042,7 @@ struct SettingsView: View {
         guard !auditing else { return }
         auditing = true
         Task {
-            let r = await MediaAudit.run()
+            let r = await MediaAudit.run(app: app)
             auditing = false
             alertMessage = r.text
         }

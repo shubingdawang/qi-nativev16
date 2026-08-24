@@ -9,6 +9,20 @@ struct QiApp: App {
     @StateObject private var app = AppState()
     @Environment(\.scenePhase) private var phase
 
+    /// ⚠️ **这儿只许放一件事：把放错地方的文件挪回去。**
+    ///
+    /// v112 之前的备份把目录算丢了，还原的时候什么都堆进了 Documents 根目录
+    /// （见 `Storage.relativePath`）。东西没丢，是没人去那个位置找它。
+    ///
+    /// 为什么非得在 `init` 里：那些 store 全是「开 App 读一次进内存、
+    /// 以后按内存往回写」的。**先让 `MemoryStore` 读到一份空的，
+    /// 它下一次保存就把刚挪回去的那份盖了**——挪得再对也白挪。
+    /// `App.init()` 是整个进程里最早的那一下，比 `AppState()` 还早
+    /// （`@StateObject` 那个初值是等到第一次画 body 才求的）。
+    init() {
+        LegacyLayout.repairDocumentsRoot()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
