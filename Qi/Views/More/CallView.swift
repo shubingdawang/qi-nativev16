@@ -454,9 +454,21 @@ struct CallView: View {
         // ⚠️ **每次开录之前重挂一遍**，别只在 onAppear 挂一次——
         // `handsFree` 是随时能翻的，而 `recorder` 是同一个对象。
         recorder.autoStop = handsFree
-        recorder.onAutoStop = handsFree ? {
-            Task { @MainActor in await stopListening() }
-        } : nil
+        // ⚠️ **别写成三元表达式，也别在里头标 `@MainActor`。**
+        //
+        // 原来是 `handsFree ? { Task { @MainActor in … } } : nil`，
+        // 报「ambiguous use of init(name:priority:operation:)」——
+        // Xcode 26 的 `Task` 多了一个带 `name:` 的重载，
+        // 而三元的两边（闭包 / nil）让编译器定不下这个闭包是什么类型，
+        // 于是里面那个 `Task` 的两个重载它也挑不出来。
+        //
+        // 拆成 if/else 之后左边有确切的类型（`(@MainActor () -> Void)?`），
+        // 闭包本身就是 MainActor 的，里面的 `Task` 自然继承，不用再标一遍。
+        if handsFree {
+            recorder.onAutoStop = { Task { await stopListening() } }
+        } else {
+            recorder.onAutoStop = nil
+        }
         do {
             try recorder.start()
         } catch {
