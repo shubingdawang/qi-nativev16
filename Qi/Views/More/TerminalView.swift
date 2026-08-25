@@ -30,8 +30,8 @@ struct TerminalView: View {
                 EmptyNote(icon: "terminal",
                           title: console.lines.isEmpty ? "还什么都没发生" : "这一档是空的",
                           hint: console.lines.isEmpty
-                              ? "跟他说句话、或者让他动一下工具，这儿就会有东西。\n只记在这台手机上，不上传，他也看不见这一页。"
-                              : "换一档看看。")
+                              ? "发起一次对话或触发一次工具调用后，此处会记录运行日志。\n日志仅存于本机，不上传，也不进入模型的上下文。"
+                              : "切换其他分类查看。")
                 Spacer()
             } else {
                 ScrollViewReader { proxy in
@@ -83,7 +83,7 @@ struct TerminalView: View {
         .alert("复制好了", isPresented: $copied) {
             Button("好") { copied = false }
         } message: {
-            Text("贴给我看就行。里面没有密钥，也没有整段聊天记录。")
+            Text("可直接复制导出。内容不含密钥，也不含完整聊天记录。")
         }
     }
 

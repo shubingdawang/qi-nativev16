@@ -113,11 +113,28 @@ struct IsoRoomView<Clawd: View>: View {
         let boards = RoomFinish.isBuiltIn(token) ? nil : ImageStore.cached(token)
         return ZStack(alignment: .topLeading) {
             if let boards {
-                // 她自己那张地板。跟墙纸一个道理：**按菱形裁**，不是贴个方块。
-                Image(uiImage: boards)
-                    .resizable()
-                    .interpolation(.none)
-                    .scaledToFill()
+                // 她自己那张地板。跟墙纸一个道理：**按菱形裁**。
+                //
+                // ⚠️ 图必须放在 `Color.clear` 的 **overlay** 里，
+                // 不能直接当 ZStack 的一个孩子摆进去。
+                //
+                // 她报的「随便用一张图做地板，小屋整体往左移了」
+                // 根就在这儿：`.scaledToFill()` 报回来的尺寸是
+                // **盖满提议尺寸的那个尺寸**，它比提议的大。
+                // ZStack 跟着变大，外面那句 `.frame(width:height:)`
+                // 再把变大的内容**居中**——整间屋就歪了。
+                // 而歪了之后，裁形的 Path 还在原坐标上，
+                // 于是看着就像「没切割」——两个症状是同一件事。
+                //
+                // `Color.clear` 是个老实人：提议多大它就多大。
+                // 图在它的 overlay 里溢出去不影响布局，溢的那圈被 clipShape 剪掉。
+                Color.clear
+                    .overlay {
+                        Image(uiImage: boards)
+                            .resizable()
+                            .interpolation(.none)
+                            .scaledToFill()
+                    }
                     .clipShape(geoRoom.floorPath)
             } else {
                 // ⚠️ 棋盘格那一版**也走这儿**，不再单独写一遍。
@@ -162,15 +179,25 @@ struct IsoRoomView<Clawd: View>: View {
             // ⚠️ 右面墙要**压暗一档**。等距屋的立体感八成来自
             // 「两个面不是同一个亮度」——同一张图原样贴两面，屋子会瞬间变回一张折纸。
             if let paper {
-                Image(uiImage: paper)
-                    .resizable()
-                    .interpolation(.none)
-                    .scaledToFill()
+                // ⚠️ 跟地板一样，图要藏在 `Color.clear` 的 overlay 里。
+                // 直接摆进 ZStack 的话，`.scaledToFill()` 会把整个 ZStack 擑大，
+                // 屋子跟着偏一边、裁形也就对不上了。
+                // （她报的「小屋往左移」+「没切割」就是这一件事。）
+                Color.clear
+                    .overlay {
+                        Image(uiImage: paper)
+                            .resizable()
+                            .interpolation(.none)
+                            .scaledToFill()
+                    }
                     .clipShape(geoRoom.leftWallPath)
-                Image(uiImage: paper)
-                    .resizable()
-                    .interpolation(.none)
-                    .scaledToFill()
+                Color.clear
+                    .overlay {
+                        Image(uiImage: paper)
+                            .resizable()
+                            .interpolation(.none)
+                            .scaledToFill()
+                    }
                     .clipShape(geoRoom.rightWallPath)
                     .overlay {
                         geoRoom.rightWallPath.fill(Color.black.opacity(0.16))

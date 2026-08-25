@@ -423,31 +423,18 @@ struct AuroraLayer: View {
 
 /// 玻璃上那道扫过去的光。
 ///
-/// 真玻璃在光下不是均匀亮的：**上缘有一道拉长的高光**，
-/// 越往下越暗。上一版的玻璃有渐变、有边缘高光，但少了这一道，
-/// 所以它看着是「一块半透明的板」，不是「一块玻璃」。
-///
-/// 一个椭圆的白色渐变压在上三分之一，仅此而已——
-/// 成本几乎为零，但每一张卡片都会跟着变得有厚度。
-struct GlassSheen: View {
+// ⚠️ `GlassSheen` 删掉了。
+//
+// 它是一个椭圆白色渐变，中心压在卡片**上方偏左**、
+// 浅色下白到 0.55，盖在三档玻璃上面。
+// 她说「磨砂根本就是一整块……反倒是像顶上有光打下来」——
+// **那句话精确指到了它。**
+//
+// 我当初加它的理由是「真玻璃上缘有高光」，理由没错，
+// 错在**把光打在了面上**。玻璃的厚度是从**边**上读出来的；
+// 打在面上就不是玻璃了，是一盏灯。
+// 现在这一层在 `GlassEdge`（高光 + 描边）加一道很轻的阴影。
 
-    var radius: CGFloat = Theme.cardRadius
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        GeometryReader { geo in
-            EllipticalGradient(
-                colors: [.white.opacity(scheme == .dark ? 0.16 : 0.55),
-                         .white.opacity(0)],
-                center: .init(x: 0.32, y: -0.15),
-                startRadiusFraction: 0,
-                endRadiusFraction: 0.72)
-                .frame(width: geo.size.width, height: geo.size.height)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-        .allowsHitTesting(false)
-    }
-}
 
 /// 一页的主角。
 ///
@@ -513,17 +500,12 @@ extension View {
         modifier(RiseIn(index: index))
     }
 
-    /// 玻璃卡片，带那道扫过去的光。
-    /// 想要更好看的地方用它，普通的地方还用 `glassBackground`。
-    func glassCardShiny(radius: CGFloat = Theme.cardRadius,
-                        strength: Double = 1) -> some View {
-        background {
-            ZStack {
-                GlassSurface(radius: radius, strength: strength)
-                GlassSheen(radius: radius)
-            }
-        }
-    }
+    // ⚠️ `glassCardShiny` **删了**，别加回来。
+    //
+    // 它是 `GlassSurface` + `GlassSheen` 叠一起，而 `GlassSheen`
+    // 就是她说的那盏射灯（「反倒是像顶上有光打下来」）。
+    // 而且它**从来没被调用过**——
+    // 一个没人用、又能把刚改好的东西打回原形的口子，留着只是等着出事。
 }
 
 private struct RiseIn: ViewModifier {

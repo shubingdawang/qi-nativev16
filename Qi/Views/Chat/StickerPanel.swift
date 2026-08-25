@@ -242,7 +242,7 @@ struct StickerEditorView: View {
                                 .lineLimit(3...6)
                                 .padding(10)
                                 .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
-                            Text("这是他理解这张表情的全部依据。写画面里有什么、在做什么动作，不用写好不好看。没有描述的表情，对他来说就是一张看不懂的图。")
+                            Text("模型据此判断该表情的含义。请描述画面内容与动作，无需评价画面质量。未填写描述的表情不会被选用。")
                                 .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
@@ -322,7 +322,7 @@ struct StickerEditorView: View {
                                     .tag("assistant")
                             }
                             .pickerStyle(.segmented)
-                            Text("放进他的库，他才能在聊天里主动发。你只能发自己库里的。")
+                            Text("存入模型的表情库后，模型可在对话中主动发送。手动发送仅限本人库中的表情。")
                                 .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }

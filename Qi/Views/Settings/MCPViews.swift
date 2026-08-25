@@ -15,7 +15,7 @@ struct MCPListView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("还没有连 MCP")
                             .font(.headline)
-                        Text("MCP 是让模型能真正动手的东西——查记忆、写日记、记经期，都靠它。点右上角的 + 填上地址就行。")
+                        Text("MCP 用于向模型提供可调用的工具，如查询记忆、写日记、记录经期。点击右上角的 + 填写服务地址。")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }

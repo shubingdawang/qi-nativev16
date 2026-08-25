@@ -32,7 +32,7 @@ struct MonopolyView: View {
             VStack(alignment: .leading, spacing: 14) {
 
                 if !MonopolyLib.ready {
-                    Text("任务库没读出来。这局开不了——包里少了 monopoly-library.v2.json。")
+                    Text("任务库读取失败，无法开始对局：安装包中缺少 monopoly-library.v2.json。")
                         .font(.app(12))
                         .foregroundStyle(StatusTone.remind.color)
                         .glassCard()

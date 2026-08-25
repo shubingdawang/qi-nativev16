@@ -93,7 +93,7 @@ struct AppIconPickerView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("换完之后系统会弹一下告诉你图标变了，那是 iOS 自己的提示，关不掉。桌面上的图标可能要过几秒才刷新。")
+                    Text("更换后 iOS 会弹出系统提示，该提示无法关闭。桌面图标可能延迟数秒刷新。")
                     if mine.isEmpty {
                         Text("往仓库根目录的 AppIcons 文件夹里丢图片，文件名就是这里显示的名字，推上去重新构建，这儿就会多出来几张。放几张显示几张。\n\niOS 规定备用图标必须打包时就在，不给 App 运行时新增，所以没法直接从相册选。")
                     } else {

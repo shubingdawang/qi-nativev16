@@ -689,7 +689,7 @@ struct ChatView: View {
                     Image(systemName: "hourglass")
                         .font(.app(11))
                         .foregroundStyle(app.settings.accentColor)
-                    Text("攒着呢——文字、图、语音都在等你。"
+                    Text("已暂存，包含文字、图片与语音，待发送。"
                          + "你不说了 \(Int(app.settings.segmentUserDelay)) 秒之后一起发，"
                          + "长按发送键马上发。")
                         .font(.app(11))

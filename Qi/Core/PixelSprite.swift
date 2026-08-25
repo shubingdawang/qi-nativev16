@@ -831,12 +831,19 @@ enum ClawdMood: String, Codable {
         case .sleeping:
             return [(ClawdSprites.sleep, 2.2), (ClawdSprites.breathe, 2.0)]
         case .peeking:
-            // 两帧不一样才叫动画。上一版这里是同一张图播两遍，
-            // 等于钉在那儿不动。
-            // **只有头的那两张。**
-            // 老的 peek1/peek2 是整只（含身子和腿），横着挪进来露出的是
-            // 「从头到脚的一条竖边」——她说了三次的「半个身子」就是那个。
-            return [(ClawdSprites.peekHead1, 1.1), (ClawdSprites.peekHead2, 0.7)]
+            // ⚠️ **换回整只**（`peek1`/`peek2`）。
+            //
+            // 上一版改成了「只有头的那两张」，又把露出来的宽度
+            // 撑到很小，于是她看到的是四格颜色——
+            // 她的原话：「现在的 clawd 在侧边探头只剩下四格了，
+            // 并不是字面意义上的探头。」
+            //
+            // 她还画了一张给我看：**一只完整的 clawd，被屏幕边切掉一截**。
+            // 那才是探头——认得出是他，才叫探头；
+            // 认不出是谁的那四格，只是一条色边。
+            //
+            // 两帧手的位置不同，看着就是扶着墙在挥。
+            return [(ClawdSprites.peek1, 0.9), (ClawdSprites.peek2, 0.7)]
         case .thinking:
             // 头顶那两个小方块交替冒，像在运算
             return [(ClawdSprites.thinking, 0.45), (ClawdSprites.thinking2, 0.45)]

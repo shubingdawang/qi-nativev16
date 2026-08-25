@@ -189,10 +189,36 @@ struct DeletableEntryList: View {
     /// 她说「记忆和日记里我的批注、删除这些功能都没掉了」——
     /// 删有（长按），**批注这一条是真的没有**，从来没接上来过。
     var onAnnotate: ((MCPEntry, String, String) async -> String)?
+    /// 这一条上挂着哪几条批注（摆到菜单里给她选）。
+    /// 不传就没有「删批注」这一项。
+    var annotationsOf: ((MCPEntry) -> [String])?
+    /// 删掉第几条批注。
+    /// 她的原话：「批注删除功能，如果写错了就删不掉了有点麻烦。」
+    /// 一个只能加不能减的功能，用一次就不敢再用第二次。
+    var onDeleteAnnotation: ((MCPEntry, Int) async -> String)?
 
     @State private var pending: MCPEntry?
     @State private var notice: String?
     @State private var annotating: MCPEntry?
+
+    /// 「删掉批注」那一项。挂在长按菜单里，一条一条列出来让她挑。
+    ///
+    /// ⚠️ 列的是**批注内容本身**，不是「批注 1、批注 2」。
+    /// 她要删的是「写错的那条」，得看得见写的是什么才认得出来。
+    @ViewBuilder
+    private func annotationMenu(_ entry: MCPEntry) -> some View {
+        if let list = annotationsOf?(entry), !list.isEmpty, let run = onDeleteAnnotation {
+            Menu("删掉批注") {
+                ForEach(Array(list.enumerated()), id: \.offset) { i, label in
+                    Button(role: .destructive) {
+                        Task { notice = await run(entry, i) }
+                    } label: {
+                        Text(label)
+                    }
+                }
+            }
+        }
+    }
 
     var body: some View {
         let entries = failed ? [] : MCPEntryParser.parse(text)
@@ -228,6 +254,7 @@ struct DeletableEntryList: View {
                                 Label("写批注", systemImage: "text.bubble")
                             }
                         }
+                        annotationMenu(entry)
                         Button(role: .destructive) {
                             pending = entry
                         } label: {
@@ -281,10 +308,36 @@ struct FilteredEntryList: View {
     var onDelete: ((MCPEntry) async -> String)?
     /// 写批注。不传就没有这一项
     var onAnnotate: ((MCPEntry, String, String) async -> String)?
+    /// 这一条上挂着哪几条批注（摆到菜单里给她选）。
+    /// 不传就没有「删批注」这一项。
+    var annotationsOf: ((MCPEntry) -> [String])?
+    /// 删掉第几条批注。
+    /// 她的原话：「批注删除功能，如果写错了就删不掉了有点麻烦。」
+    /// 一个只能加不能减的功能，用一次就不敢再用第二次。
+    var onDeleteAnnotation: ((MCPEntry, Int) async -> String)?
 
     @State private var pending: MCPEntry?
     @State private var annotating: MCPEntry?
     @State private var notice: String?
+
+    /// 「删掉批注」那一项。挂在长按菜单里，一条一条列出来让她挑。
+    ///
+    /// ⚠️ 列的是**批注内容本身**，不是「批注 1、批注 2」。
+    /// 她要删的是「写错的那条」，得看得见写的是什么才认得出来。
+    @ViewBuilder
+    private func annotationMenu(_ entry: MCPEntry) -> some View {
+        if let list = annotationsOf?(entry), !list.isEmpty, let run = onDeleteAnnotation {
+            Menu("删掉批注") {
+                ForEach(Array(list.enumerated()), id: \.offset) { i, label in
+                    Button(role: .destructive) {
+                        Task { notice = await run(entry, i) }
+                    } label: {
+                        Text(label)
+                    }
+                }
+            }
+        }
+    }
 
     var body: some View {
         let all = failed ? [] : MCPEntryParser.parse(text)
@@ -325,6 +378,7 @@ struct FilteredEntryList: View {
                                 Label("写批注", systemImage: "text.bubble")
                             }
                         }
+                        annotationMenu(entry)
                         if onDelete != nil {
                             Button(role: .destructive) { pending = entry } label: {
                                 Label("删掉这条", systemImage: Icon.trash)
@@ -672,6 +726,16 @@ struct DiaryPane: View {
                         await model.run(app, tool: "annotate_diary", args: args)
                         await model.run(app, tool: "get_diaries", args: ["limit": 50])
                         return "写上了。"
+                    },
+                    // 删批注**不走工具**——删自己写错的批注是她的事，
+                    // 不该在他那份工具清单里多一件他永远不该用的东西。
+                    annotationsOf: { entry in
+                        MemoryStore.shared.annotationLabels(diary: entry.id)
+                    },
+                    onDeleteAnnotation: { entry, i in
+                        MemoryStore.shared.removeAnnotation(diary: entry.id, at: i)
+                        await model.run(app, tool: "get_diaries", args: ["limit": 50])
+                        return "删掉了。"
                     })
             }
         }
@@ -783,6 +847,15 @@ struct MemoryPane: View {
                     ])
                     if !r.failed { await refresh() }
                     return r.failed ? r.text : "批注写上了"
+                },
+                annotationsOf: { entry in
+                    MemoryStore.shared.annotationLabels(memory: String(entry.id.prefix(8)))
+                },
+                onDeleteAnnotation: { entry, i in
+                    MemoryStore.shared.removeAnnotation(
+                        memory: String(entry.id.prefix(8)), at: i)
+                    await refresh()
+                    return "删掉了"
                 })
         }
         .task {
@@ -1176,7 +1249,7 @@ struct PeriodPane: View {
 
                         VStack(alignment: .leading, spacing: 8) {
                             Text("写点当天的").font(.app(14, weight: .medium))
-                            TextField("身体状况、心情、他怎么照顾你的…", text: $note, axis: .vertical)
+                            TextField("身体状况、心情、照护记录…", text: $note, axis: .vertical)
                                 .lineLimit(3...6)
                                 .padding(10)
                                 .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
@@ -1245,7 +1318,7 @@ struct PulsePane: View {
             if base.isEmpty && !app.settings.localPulse {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("还没填心跳服务的地址").heading(15)
-                    Text("去「设置 → 后端服务」填上 PulseEngine 的地址，比如 http://你电脑的地址:8000")
+                    Text("在「设置 → 后端服务」中填写 PulseEngine 地址，格式如 http://主机地址:8000")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 .glassCard()

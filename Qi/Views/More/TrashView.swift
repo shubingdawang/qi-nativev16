@@ -126,7 +126,7 @@ struct TrashView: View {
             Text("回收站是空的")
                 .font(.app(13))
                 .foregroundStyle(Theme.textMuted(scheme))
-            Text("他删掉的表情和照片会先放这儿三十天，\n删错了随时能放回去。")
+            Text("删除的表情与照片在此保留三十天，期间可随时还原。")
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme).opacity(0.85))
                 .multilineTextAlignment(.center)

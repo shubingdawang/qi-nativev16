@@ -275,7 +275,7 @@ struct DreamPane: View {
             Text("梦见了什么")
                 .font(.app(14, weight: .semibold))
                 .foregroundStyle(Theme.textMain(scheme))
-            Text(MD.inline("**别整理**，想到哪写到哪。梦里那些不合逻辑的地方往往才是要紧的。"))
+            Text(MD.inline("按回忆顺序记录即可，无需整理。不合逻辑的细节同样具有解读价值。"))
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
 

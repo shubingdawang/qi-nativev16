@@ -38,7 +38,7 @@ struct ToolToggleView: View {
                                 Text("还没连 MCP")
                                     .font(.app(14, weight: .semibold))
                                     .foregroundStyle(Theme.textMain(scheme))
-                                Text("连上之后，模型才能真的去查记忆、写日记、记经期。去「设置 → MCP」加一个。")
+                                Text("连接后可使用查询记忆、写日记、记录经期等工具。在「设置 → MCP」中添加。")
                                     .font(.app(12))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
@@ -339,14 +339,31 @@ struct ToolToggleView: View {
     }
 
     /// 从工具定义里把名字和说明抠出来，光展示用
+    /// 一件工具在这一页上显示的说明。
+    ///
+    /// ⚠️ **优先取 `ToolBlurb` 那份，不是模型描述。**
+    ///
+    /// 这一页原来直接显示 `fn["description"]` 的第一句——而那些是
+    /// **写给模型的提示词**，按「触发 → 动机 → 行动」写的，
+    /// 里面全是「她说『你看我批注的这句』」这种话。
+    /// 于是这一页等于把他的提示词摊给她看。
+    ///
+    /// 那份描述一个字都不能改（改了就是改他的行为），
+    /// 所以只能是两份：模型读那份，她看 `ToolBlurb` 这份。
+    ///
+    /// 表里没有的退回原来那条路——她自己连的 MCP 服务器上的工具
+    /// 是别人写的说明，我们管不着，有总比没有强。
+    private func blurb(_ short: String, modelDesc: String) -> String {
+        if let s = ToolBlurb.of(short) { return s }
+        return modelDesc.split(separator: "。").first.map(String.init) ?? modelDesc
+    }
+
     private var nativeTools: [(name: String, desc: String)] {
         NativeTools.definitions(hasGroup: true, hasVoice: true).compactMap { item in
             guard let fn = item["function"] as? [String: Any],
                   let raw = fn["name"] as? String else { return nil }
-            let desc = (fn["description"] as? String ?? "")
-            // 工具说明是按「触发 → 动机 → 行动」写的，列表里只取第一句
-            let first = desc.split(separator: "。").first.map(String.init) ?? desc
-            return (NativeTools.shortName(raw), first)
+            let short = NativeTools.shortName(raw)
+            return (short, blurb(short, modelDesc: fn["description"] as? String ?? ""))
         }
         .filter { !search.isEmpty ? $0.name.localizedCaseInsensitiveContains(search) : true }
     }
@@ -356,9 +373,8 @@ struct ToolToggleView: View {
                                 pulse: app.settings.localPulse).compactMap { item in
             guard let fn = item["function"] as? [String: Any],
                   let raw = fn["name"] as? String else { return nil }
-            let desc = (fn["description"] as? String ?? "")
-            let first = desc.split(separator: "。").first.map(String.init) ?? desc
-            return (NativeTools.shortName(raw), first)
+            let short = NativeTools.shortName(raw)
+            return (short, blurb(short, modelDesc: fn["description"] as? String ?? ""))
         }
         .filter { !search.isEmpty ? $0.name.localizedCaseInsensitiveContains(search) : true }
     }

@@ -58,7 +58,7 @@ struct AnnotationSheet: View {
                             }
 
                             if fresh.notes.isEmpty {
-                                Text("还没说什么。这句话为什么打动你？")
+                                Text("尚无批注。记录这句话打动你的原因。")
                                     .font(.app(12))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }

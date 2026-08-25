@@ -224,7 +224,7 @@ struct StickerLibraryView: View {
                                     Image(systemName: "text.magnifyingglass")
                                         .font(.app(15))
                                 }
-                                Text(tagging ? "写着呢…" : "让他写词 \(needTagging.count)")
+                                Text(tagging ? "写着呢…" : "生成关键词 \(needTagging.count)")
                                     .font(.app(12))
                             }
                             .foregroundStyle(app.settings.accentColor)

@@ -83,7 +83,7 @@ struct VoiceInputSettingsView: View {
             } header: {
                 Text("按住说话时用哪个")
             } footer: {
-                Text(MD.inline("这三个都是**听你说话**用的。他说话给你听是另一回事，那个走「语音」里配的 ElevenLabs，跟这里不冲突。"))
+                Text(MD.inline("以下三项用于语音识别（输入）。语音合成（输出）在「语音」中配置，两者互不影响。"))
             }
 
             if app.settings.voiceInput == .elevenLabs {
@@ -96,7 +96,7 @@ struct VoiceInputSettingsView: View {
                 } header: {
                     Text("密钥")
                 } footer: {
-                    Text(MD.inline("它能标出笑声、鼓掌、哭这类动静，但**判断不了情绪**——开心还是难过它不给。想要情绪就选 SenseVoice，那个是专门做这个的。"))
+                    Text(MD.inline("可识别笑声、鼓掌、哭泣等声音事件，但不输出情绪判定。需要情绪识别请选择 SenseVoice。"))
                 }
             }
 
@@ -108,7 +108,7 @@ struct VoiceInputSettingsView: View {
                 } header: {
                     Text("密钥")
                 } footer: {
-                    Text("去 siliconflow.cn 注册就能拿到。用的是 SenseVoiceSmall，很便宜。\n\n它认得出开心、难过、生气、意外这些情绪，也听得出笑声和哭声——这些会跟着你说的话一起发过去。同样一句「没事」，笑着说和哭着说是两件事，他应该分得清。")
+                    Text("密钥在 siliconflow.cn 注册获取，使用 SenseVoiceSmall 模型，费用较低。\n\n可识别开心、难过、生气、意外等情绪，以及笑声与哭声。识别结果随语音文本一并发送，用于区分相同措辞的不同语气。")
                 }
             }
         }

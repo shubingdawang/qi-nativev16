@@ -84,7 +84,7 @@ struct LocalBodyCard: View {
                         withAnimation(.easeInOut(duration: 0.18)) { showLedger.toggle() }
                     } label: {
                         HStack(spacing: 5) {
-                            Text(showLedger ? "收起流水" : "你说的话动了什么")
+                            Text(showLedger ? "收起流水" : "对话对身体数值的影响")
                                 .font(.app(12))
                             Text("\(store.nudges.count) 笔")
                                 .font(.app(10))
@@ -129,7 +129,7 @@ struct LocalBodyCard: View {
                         }
                         .padding(.top, 2)
 
-                        Text(MD.inline("这一层是**关键词读的，读得不准**。它只推身体，**碰不到好感**——好感还是只有他自己能动。读拧了点「撤掉」就回来了，身体本来也会自己往回走。"))
+                        Text(MD.inline("此层基于关键词匹配，判定精度有限。**仅影响身体数值，不影响好感**，好感只能由模型自行调整。判定有误时点击「撤掉」即可还原，身体数值本身也会随时间回落。"))
                             .font(.app(10))
                             .foregroundStyle(Theme.textMuted(scheme))
                             .fixedSize(horizontal: false, vertical: true)
@@ -178,7 +178,7 @@ struct LocalBodyCard: View {
                 .buttonStyle(.plain)
                 .disabled(settling)
 
-                Text(MD.inline("**推进是自己走的，不花钱**——周期、数值、等你的时候那点压力，都是本机算的纯算术，你关着 App 也在走。\n\n只有「结算」要花钱：把最近二十来句丢给他，让他判断这段互动让身体动了多少。所以做成按钮，不做成自动的。"))
+                Text(MD.inline("**推进为本机计算，不产生费用**。周期、数值与等待压力均在本机推算，App 关闭时仍持续。\n\n仅「结算」调用模型：将最近约二十条对话交由模型判定其对身体数值的影响，因此设为手动按钮而非自动执行。"))
                     .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
 
@@ -205,7 +205,7 @@ struct LocalBodyCard: View {
             }
             Button("算了", role: .cancel) { }
         } message: {
-            Text("把最近二十来句对话交给他，让他判断这段互动让身体往哪儿动。\n\n这一下会花钱（记在用量的「其他」里）。推进本身不花钱，一直在自己走。")
+            Text("将最近约二十条对话交由模型判定其对身体数值的影响。\n\n调用一次模型，产生一次费用，计入用量的「其他」项。推进本身不产生费用。")
         }
     }
 

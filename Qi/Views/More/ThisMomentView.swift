@@ -36,11 +36,10 @@ struct ThisMomentView: View {
 
                 if living.isEmpty && store.live.isEmpty && store.projections.isEmpty {
                     EmptyNote(icon: "circle.dotted",
-                              title: "他还没采纳什么",
-                              hint: "这一页记的是「他还身处什么现实里」，"
-                                  + "不是发生过什么。\n"
-                                  + "得他自己在某一刻意识到「这件事我还在其中」才会有一条——"
-                                  + "你替他加不了，那是他的事。")
+                              title: "暂无记录",
+                              hint: "此页记录当前仍在持续的处境，"
+                                  + "而非已经发生的事件。\n"
+                                  + "条目由模型在对话中自行认定并写入，不支持手动添加。")
                 }
 
                 if !living.isEmpty {
@@ -70,7 +69,7 @@ struct ThisMomentView: View {
                             title: f.kind + "：" + f.value,
                             note: "最近一次是 " + Self.clock.string(from: f.at) + " 知道的")
                     }
-                    Text(MD.inline("这两样只有你按「查岗」的时候才会更新——**不会有后台偷偷去刷**。"))
+                    Text(MD.inline("这两项仅在点击「查岗」时更新，不在后台自动刷新。"))
                         .font(.app(10.5))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .padding(.leading, 4)

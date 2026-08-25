@@ -59,14 +59,14 @@ struct RootView: View {
         // 他要删东西／装卸小屋／真打一通电话之前，问一句。
         // 挂在这一层是因为**这一下可能发生在任何一页**——
         // 她正翻着札记，他那边照样在跑。
-        .alert("要让他做这一下吗", isPresented: Binding(
+        .alert("是否允许执行此操作", isPresented: Binding(
             get: { app.toolAsk != nil },
             set: { if !$0 { app.answerToolConfirm(false) } }
         ), presenting: app.toolAsk) { _ in
             Button("让他做") { app.answerToolConfirm(true) }
             Button("这次别", role: .cancel) { app.answerToolConfirm(false) }
         } message: { ask in
-            Text("他要用「\(ask.name)」。\n\(ask.args)"
+            Text("将调用「\(ask.name)」。\n\(ask.args)"
                  + "\n\n这几件做了不好收拾，所以问一句。"
                  + "不想每次都问，去「设置 → 通用」关掉。")
         }

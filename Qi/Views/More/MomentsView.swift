@@ -55,7 +55,7 @@ struct MomentsView: View {
             Text("这儿还什么都没有")
                 .font(.app(14, weight: .medium))
                 .foregroundStyle(Theme.textMain(scheme))
-            Text("他说话的时候顺手就能往这儿放一条——听到一句歌词、窗外在下雨、"
+            Text("模型可在对话中直接发布一条：一句歌词、窗外的雨、"
                  + "刚画完一张。你不在的那几个小时，他留下的东西会在这儿等你。"
                  + "\n你也可以先发一条，他下次说话就知道了。")
                 .font(.app(11.5))
@@ -119,7 +119,7 @@ struct MomentsView: View {
                           && pickedImage.isEmpty)
             }
 
-            Text(MD.inline("发在这儿**不会打扰他**——他下次说话的时候才会知道有这么一条。"
+            Text(MD.inline("发布后不触发通知，模型在下一次对话时读取。"
                  + "急事直接去对话里说。"))
                 .font(.app(10))
                 .foregroundStyle(Theme.textMuted(scheme))
@@ -253,7 +253,7 @@ struct MomentsView: View {
                     .glassBackground(radius: 12,
                                      strength: app.settings.glassOpacity * 0.9)
 
-                Text(MD.inline("这一句会**同时发进对话里**——他下一轮就看得见，"
+                Text(MD.inline("该内容会同时发送至对话中，模型在下一轮即可读取，"
                      + "跟你在聊天里说话是同一回事。所以点这一下等于跟他说话。"))
                     .font(.app(10.5))
                     .foregroundStyle(Theme.textMuted(scheme))

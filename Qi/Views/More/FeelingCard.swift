@@ -72,7 +72,7 @@ struct FeelingCard: View {
 
             // 流水账
             if emo.state.ledger.isEmpty {
-                Text(.init("还没有变动。**只有他自己判**了才会动——他被戳到、被哄到，觉得该记一笔的时候才记。"))
+                Text(.init("暂无变动。数值仅由模型在对话中自行判定并写入，不支持手动调整。"))
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
             } else {

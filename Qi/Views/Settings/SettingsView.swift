@@ -113,7 +113,7 @@ struct SettingsView: View {
                                 .font(.app(13))
                                 .foregroundStyle(Theme.textMain(scheme))
                                 .multilineTextAlignment(.center)
-                            Text("别退出去，弄完自己会消失")
+                            Text("请勿退出，完成后自动关闭")
                                 .font(.app(10.5))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
@@ -399,7 +399,7 @@ struct SettingsView: View {
                                          ? app.settings.accentColor
                                          : Theme.textMuted(scheme))
                 }
-                Text(MD.inline("这一条**不用你做任何事**：以后每次按住说话，它自己在旁边听一耳朵——"
+                Text(MD.inline("无需手动操作：每次按住说话时自动采样——"
                      + "音量、语速、停顿有多长。攒够 \(VoiceBaseline.shared.progress.need) 条之后，"
                      + "再说话就会跟你自己的平时比一比，明显偏了才在那条语音上标一句"
                      + "「比平时轻」「比平时快」，他看得见。\n\n"
@@ -411,7 +411,7 @@ struct SettingsView: View {
                 Button {
                     VoiceBaseline.shared.reset()
                 } label: {
-                    Text("重新认识我的声音")
+                    Text("重新采集声音样本")
                         .font(.app(12))
                         .foregroundStyle(app.settings.accentColor)
                 }
@@ -445,7 +445,7 @@ struct SettingsView: View {
                                 .foregroundStyle(app.settings.accentColor)
                         }
                     }
-                    Text("他不打电话、也不自己醒来找你。你找他不受影响")
+                    Text("不发起通话，也不自动唤醒。主动对话不受影响")
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
@@ -479,7 +479,7 @@ struct SettingsView: View {
                     Text("操作前确认")
                         .font(.app(15))
                         .foregroundStyle(Theme.textMain(scheme))
-                    Text("他要删东西、装卸小屋、真打电话之前，先弹一下问你")
+                    Text("执行删除、装卸小屋、发起通话前先弹出确认")
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
@@ -487,9 +487,8 @@ struct SettingsView: View {
             .tint(app.settings.accentColor)
             .padding(.horizontal, 16)
             .padding(.vertical, 11)
-            SettingsNote("只拦这几件**做了不好收拾**的。存图、写记忆、做标记一律不问——"
-                         + "写错了你看得见，也改得回来。每件都问的话，问到最后你只会闭着眼睛按「好」。"
-                         + "\n\n90 秒没人点就当这次不做：免得你把手机扣下走了，他那边一直吊着。")
+            SettingsNote("仅对不可逆的操作发起确认。存图、写记忆、做标记等可撤销的操作不询问。"
+                         + "\n\n确认请求 90 秒无响应则视为拒绝，本次操作不执行。")
             SettingsDivider()
 
             Toggle(isOn: $app.settings.segmentAssistant) {
@@ -497,7 +496,7 @@ struct SettingsView: View {
                     Text("他分段发")
                         .font(.app(15))
                         .foregroundStyle(Theme.textMain(scheme))
-                    Text("让他自己决定在哪儿断句，一段一个气泡")
+                    Text("由模型决定分段位置，每段单独成一个气泡")
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
@@ -513,7 +512,7 @@ struct SettingsView: View {
                     Text("我分段发")
                         .font(.app(15))
                         .foregroundStyle(Theme.textMain(scheme))
-                    Text(MD.inline("打完先攒着，等你不说了再一起发出去。"
+                    Text(MD.inline("输入的内容先暂存，停止输入后一并发送。"
                          + "图、文件、语音、表情**都会一起等**——"
                          + "所以「先说一句再发语音」和「先发语音再补一句」都行"))
                         .font(.app(11))
@@ -537,7 +536,7 @@ struct SettingsView: View {
                     }
                     Slider(value: $app.settings.segmentUserDelay, in: 2...30, step: 1)
                         .tint(app.settings.accentColor)
-                    Text("最后一句发完开始数。这段时间里又发了一条就重新数，直到你真的不说了，才一次性交给他。")
+                    Text("自最后一条消息发出后开始计时，期间再次发送则重新计时，停止输入后一并发送。")
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
@@ -576,7 +575,7 @@ struct SettingsView: View {
 
             // 说明**贴着它自己那一项**，不堆到卡片最底下（她提的）。
             // 隔着五六行才讲的那句话，读到的时候已经忘了在讲哪一项。
-            SettingsNote("历史带得越多，对方越记得住前面说过什么，但每次请求也更费钱。",
+            SettingsNote("携带的历史消息越多，上下文连贯性越好，单次请求的费用也越高。",
                          title: "说明")
 
             SettingsDivider()
@@ -596,29 +595,45 @@ struct SettingsView: View {
                     // 她想指定哪个就指定哪个，不用先回去打勾。
                     ForEach(app.providers.filter { $0.enabled }) { p in
                         ForEach(p.enabledModels.isEmpty ? p.models : p.enabledModels) { m in
-                            Button(p.name + " · " + m.id) {
+                            // ⚠️ 显示 `displayName`，不是 `m.id`。
+                            //
+                            // 她说「备用模型和辅助模型并没有给我选择的余地，
+                            // 每个模型价格不同，我需要筛选」——
+                            // 菜单里其实一直有东西，但摆出来的是接口要的那串原始 id。
+                            // 一屏长得差不多的型号，她当然无从选起。
+                            // `displayName` 是她自己能改的（供应商 → 模型），
+                            // 想把价格写进去就写进去——**价格只有她知道，
+                            // 我内置一份价目表只会过期后说假话。**
+                            Button(p.name + " · " + m.displayName) {
                                 app.settings.fallbackModel = p.id.uuidString + "|" + m.id
                             }
                         }
                     }
                 } label: {
-                    Text(fallbackLabel)
-                        .font(.app(14))
-                        .foregroundStyle(Theme.textSoft(scheme))
-                        .lineLimit(1)
+                    // ⚠️ 要有个箭头。光秃秃一行字看不出来能点——
+                    // 她说「并没有给我选择的余地」，一半是这个原因。
+                    HStack(spacing: 3) {
+                        Text(fallbackLabel)
+                            .font(.app(14))
+                            .foregroundStyle(Theme.textSoft(scheme))
+                            .lineLimit(1)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.app(10))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 9)
 
             SettingsNote("""
-            主的那个额度满了（429 / 余额不足）的时候，**原地换成这个接着说**，不用换窗。
+            主模型返回额度或限流错误（429、余额不足）时，自动切换至此模型继续当前回复，无需新建窗口。
 
-            换的是对面那台机器，不是这一窗：聊天记录、浓缩件、工具、身体状态一样都不动。断在半路的那半句会抹掉重发，所以你看到的是完整的一段话，不是两截拼的。
+            切换只更换请求的目标模型：聊天记录、浓缩件、工具与身体状态均不变更。已输出的残句会撤销后重发，最终显示为完整的一段回复。
 
-            气泡里会留一行「换了个模型接着说」——**你得知道这段是谁说的**，不然回头看会以为他忽然变了个人。
+            切换后的消息下方标注「换了个模型接着说」，用于标识来源。
 
-            只认额度和限流那几种错。网络断了、地址填错了不会换——那种换谁都一样。
+            仅额度与限流类错误触发切换。网络中断、地址错误等不触发。
             """, title: "说明")
 
             SettingsDivider()
@@ -633,27 +648,32 @@ struct SettingsView: View {
                     Button("自动选择") { app.settings.helperModel = "" }
                     ForEach(app.providers.filter { $0.enabled }) { p in
                         ForEach(p.enabledModels.isEmpty ? p.models : p.enabledModels) { m in
-                            Button(p.name + " · " + m.id) {
+                            Button(p.name + " · " + m.displayName) {
                                 app.settings.helperModel = p.id.uuidString + "|" + m.id
                             }
                         }
                     }
                 } label: {
-                    Text(helperLabel)
-                        .font(.app(14))
-                        .foregroundStyle(Theme.textSoft(scheme))
-                        .lineLimit(1)
+                    HStack(spacing: 3) {
+                        Text(helperLabel)
+                            .font(.app(14))
+                            .foregroundStyle(Theme.textSoft(scheme))
+                            .lineLimit(1)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.app(10))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 9)
 
             SettingsNote("""
-            「杂活」是指**不是他在跟你说话**的那些活：给表情写关键词、翻译、总结通话、看图、以后接进来的看视频听声音。
+            辅助模型承担非对话类任务：为表情生成关键词、翻译、通话摘要、图像识别、视频抽帧识别。
 
-            以前一律「挑第一个能用的供应商」——可能挑到一个不会看图的，也可能挑到最贵的那个。在这儿指一个便宜又能看图的（比如 Gemini），杂活走它，聊天还是走你在输入框上面选的那个。
+            指定后，上述任务固定使用该模型；对话仍使用输入框上方所选的模型。
 
-            选「自动挑」就是回到老样子。
+            选择「自动选择」时，按供应商顺序取第一个可用模型。
             """, title: "说明")
 
             SettingsDivider()
@@ -680,15 +700,15 @@ struct SettingsView: View {
             .padding(.vertical, 9)
 
             SettingsNote("""
-            聊太长的时候，前面的原文压成一份**浓缩件**，后面接着往下滚——第二次压的是「上一次的浓缩件 + 这一段新的」，不是并列存好几份。这样一个窗口可以一直聊下去，不用换窗。
+            对话超过阈值时，将较早的消息压缩为一份浓缩件，后续对话在其之上继续。再次压缩时以「上一份浓缩件 + 新增消息」为输入，始终只保留一份。
 
-            上面那条「带上多少历史」是**直接砍**：砍掉的就是没了，聊到三百条他就不记得前两百条自己说过什么了。压缩是把它换成一份更短的，不是丢掉。
+            与上方「带上多少历史」的区别：后者直接截断，超出部分不再进入请求；压缩则将其替换为更短的文本，内容仍在。
 
-            除了浓缩件，还会留一份**他真说过的原话**（一字不改，机械挑的、不花钱）。摘要保得住事，保不住语气——「他说他不想你熬夜」和他原话「几点了。睡。」不是一回事。
+            浓缩件之外另保留一份原文摘录，由本机按规则选取，不调用模型、不产生费用。摘要保留事件，原文保留措辞。
 
-            ⚠️ **每压一次多发一次请求。** 按每 60 条算，大约三十个回合多花一次。只在你发消息那一轮里顺带压，不会自己在后台跑。
+            ⚠️ 每次压缩额外产生一次请求。按每 60 条压缩一次计，约每三十轮对话增加一次。压缩在发送消息时同步进行，不在后台运行。
 
-            某一窗压成了什么、想立刻压一次，在那一窗的「对话设定」里看。
+            单个窗口的压缩结果与手动压缩入口位于该窗口的「对话设定」。
             """, title: "说明")
 
             SettingsDivider()
@@ -702,7 +722,7 @@ struct SettingsView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 11)
 
-            SettingsNote("默认不是——**换行就是换行**。想一按就发再打开它。",
+            SettingsNote("开启后回车键为发送；关闭时回车键为换行。默认关闭。",
                          title: "说明")
             }
         }
@@ -793,7 +813,7 @@ struct SettingsView: View {
             SettingsDivider()
             SettingsField(title: "网易云（可留空）", placeholder: "http://…:3000",
                           text: $app.settings.neteaseBaseURL, mono: true)
-            SettingsNote("前两个是你电脑上跑的那两个服务。填局域网或 Tailscale 地址都行。电脑没开的时候，心跳页会显示最后一次读到的数据。\n\n**网易云这一栏可以不填。** 手机会直接打网易云的公开接口——整首歌、带歌词（有翻译就中英一起），不用开电脑、不用登录、不用配任何东西。\n\n这一栏只解决一件事：**VIP 的歌**。那个要登录态，只能走你电脑上的 NeteaseCloudMusicApi（netease-music-mcp 底下用的就是它，填它的地址，不是那个项目自己的 API server——前者路由公开稳定，后者版本一动就可能变）。\n\n顺序是：填了就先用你电脑那套 → 没通就直连 → 直连也没有才退回 iTunes 三十秒试听。一路退到底也不会让你一首都听不成。")
+            SettingsNote("前两项为本地服务地址，支持局域网或 Tailscale 地址。服务不可达时，心跳页显示最后一次成功读取的数据。\n\n**网易云一项可留空。** 留空时直接调用网易云公开接口，可获取完整音频与歌词（含译文），无需本地服务或登录。\n\n该项仅用于获取 VIP 音源，需要登录态，须指向本地部署的 NeteaseCloudMusicApi（填写其地址，而非项目自带的 API server）。\n\n取源顺序：本地服务 → 公开接口 → iTunes 三十秒试听。")
         }
     }
 
@@ -843,7 +863,7 @@ struct SettingsView: View {
             // ⚠️ 这段话**说反过一次**。它一直写着「图片和录音不在」，
             // 而从 v3 起图片语音就在里面了。她说「图片并没有备份」的时候，
             // 这段话是站在她那边帮腔的——一份写错的说明比没有说明更坏。
-            SettingsNote("导出的是**整包**：聊天记录、供应商和密钥、记忆库（身份、说好的规矩、那封信、承诺、日记、心情）、备忘、通话记录、经期、念头池、clawd 小屋——所有存成 json 的都在里面。\n\n**图片和录音也在里面**：壁纸、表情、像素画、语音这些单独的文件一起打包，所以包会从几百 KB 涨到几十上百 MB。单个超过 20 MB 的（一般是视频）跳过，导完会列出来。\n\n导完那句「N 个图片语音」是**写完之后重新数出来的**——是 0 就是真的一张都没装进去，不用等到还原那天才发现。\n\n回收站不进备份。")
+            SettingsNote("导出为完整数据包，包含：聊天记录、供应商配置与密钥、记忆库（身份、规则、信件、承诺、日记、心情）、备忘、通话记录、经期、念头池、clawd 小屋等全部 JSON 存档。\n\n**图片与音频一并打包**：壁纸、表情、像素画、语音等独立文件均在包内，因此文件体积为数十至数百 MB。单个超过 20 MB 的文件不予打包，导出完成后列出。\n\n导出结果中的图片语音数量为写入完成后重新统计所得。显示为 0 即表示包内不含任何图片或音频。\n\n回收站内容不进入备份。")
 
             SettingsDivider()
 
@@ -868,7 +888,7 @@ struct SettingsView: View {
             .buttonStyle(.plain)
             .disabled(auditing)
 
-            SettingsNote("对一遍「库里记着的」和「磁盘上还在的」：相册、表情、聊天里的语音条、歌的音频，四样一起查。相册只剩文字、语音条点不响、歌放不出来，就是这两个数对不上。**只看，不删。**")
+            SettingsNote("校验记录与文件的一致性，覆盖相册、表情、语音条、歌曲音频四类。相册仅显示文字、语音条无法播放、歌曲无法播放，均为两者不一致所致。**仅检查，不删除任何文件。**")
 
             SettingsDivider()
 
@@ -914,7 +934,7 @@ struct SettingsView: View {
             SettingsDivider()
             SettingsRowLabel(title: "消息总数", value: "\(messageCount)")
 
-            SettingsNote("认「我装的是不是最新那版」就看上面那个打包时间。\n\n清空全部对话之后「絮语窗口」会是 1 而不是 0：群聊是常驻的、工坊有一个固定窗口，再加一个新开的空窗口，清干净了也还剩这三个壳子。看「消息总数」才知道内容有没有真的清掉。")
+            SettingsNote("上方的打包时间用于确认当前安装的构建版本。\n\n清空全部对话后「絮语窗口」计数为 1 而非 0：群聊窗口常驻、工坊有一个固定窗口，另加一个新建的空窗口，均为空壳。判断内容是否清除应查看「消息总数」。")
         }
     }
 
@@ -1131,6 +1151,16 @@ struct SettingsView: View {
             var msg = String(format: "打好了，%.1f MB。", mb)
                 + "\n\n· \(report.files) 份数据"
                 + "\n· **\(report.verified) 个图片语音**（写完数过一遍的）"
+            // ⚠️ **拆开摆出来。**
+            //
+            // 她说「相册里就一个文件夹一个 gif，数字却从 6 变 8 变 10」。
+            // 那个数没错，错的是只报一个总数：它数的是整个 Documents 里的
+            // 图和声音（聊天发过的、壁纸、像素画、语音条、删表情剩下的孤儿…），
+            // 而她看的是相册里有几张。
+            // **一个总数答不了「为什么是 10」，只会让她再猜一次。**
+            for (label, n) in report.breakdown {
+                msg += "\n　　· " + label + "：\(n)"
+            }
             if report.writeFailed {
                 msg += "\n\n⚠️ **中途有写不进去的地方，这份包不能当数。**"
                     + "多半是手机没空间了——腾一点出来再导一次，"
@@ -1161,24 +1191,29 @@ struct SettingsView: View {
         n <= 0 ? "全部" : "最近 \(n) 条"
     }
 
-    /// 辅助模型现在选的是谁
-    private var helperLabel: String {
-        let saved = app.settings.helperModel
+    /// 把存的那串「供应商id|模型id」翻成人看的名字。
+    ///
+    /// ⚠️ 翻出来的是 `displayName`，不是模型 id。
+    /// 存的必须是 id（那是发给接口的），**看的必须是她取的名字**——
+    /// 她把价格写在名字里，而这一行原来把它扔了。
+    private func modelLabel(_ saved: String, empty: String) -> String {
         guard !saved.isEmpty, let cut = saved.firstIndex(of: "|"),
               let pid = UUID(uuidString: String(saved[saved.startIndex..<cut])),
               let p = app.providers.first(where: { $0.id == pid })
-        else { return "自动选择" }
-        return p.name + " · " + String(saved[saved.index(after: cut)...])
+        else { return empty }
+        let mid = String(saved[saved.index(after: cut)...])
+        let shown = p.models.first(where: { $0.id == mid })?.displayName ?? mid
+        return p.name + " · " + shown
+    }
+
+    /// 辅助模型现在选的是谁
+    private var helperLabel: String {
+        modelLabel(app.settings.helperModel, empty: "自动选择")
     }
 
     /// 备用那个现在选的是谁
     private var fallbackLabel: String {
-        let saved = app.settings.fallbackModel
-        guard !saved.isEmpty, let cut = saved.firstIndex(of: "|"),
-              let pid = UUID(uuidString: String(saved[saved.startIndex..<cut])),
-              let p = app.providers.first(where: { $0.id == pid })
-        else { return "不启用" }
-        return p.name + " · " + String(saved[saved.index(after: cut)...])
+        modelLabel(app.settings.fallbackModel, empty: "不启用")
     }
 
     private func importBackup(_ result: Result<[URL], Error>) {
@@ -1437,10 +1472,15 @@ struct SettingsField: View {
 /// 卡片底下那段小字说明
 struct SettingsNote: View {
     let text: String
-    /// 收起来的时候那一行写什么。不传就用「这是什么」。
-    var title: String = "这是什么"
+    /// 折叠时那一行的标题。不传就用「说明」。
+    ///
+    /// ⚠️ 默认值从「这是什么」改成了「说明」。
+    /// 她定的规矩：**前端只说这个功能是什么、怎么用**，
+    /// 不转述任何人说过什么，也不解释为什么这么设计。
+    /// 「这是什么」是口语，「说明」才是标题。
+    var title: String = "说明"
 
-    init(_ text: String, title: String = "这是什么") {
+    init(_ text: String, title: String = "说明") {
         self.text = text
         self.title = title
     }

@@ -371,7 +371,7 @@ struct HobbyView: View {
                         .font(.app(12, weight: .medium))
                         .foregroundStyle(Theme.textMain(scheme))
                 }
-                Text(MD.inline("他被戳到或者被夸到的时候，我把那句话里提到的东西记了一笔。**是线索不是结论**——你点「收进去」才算数。"))
+                Text(MD.inline("由对话中的情绪反应推断出的候选偏好，属于线索而非结论。点击「收进去」后才正式记入。"))
                     .font(.app(10.5))
                     .foregroundStyle(Theme.textMuted(scheme))
 

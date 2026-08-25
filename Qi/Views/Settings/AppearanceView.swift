@@ -222,7 +222,7 @@ struct AppearanceView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 13)
 
-            SettingsNote("**整个 App 一起换**，不只是这一页。\n\niOS 只给了这四种能全局生效的字形——换一整套字库的话，工程里那几百处写死的系统字号不会跟着变，得一处处改，那是另一件事。")
+            SettingsNote("字形设置作用于全 App。\n\n可选项限于 iOS 提供的四种全局字形。")
         }
     }
 
@@ -254,15 +254,13 @@ struct AppearanceView: View {
             .padding(.vertical, 11)
 
             SettingsNote("""
-            她说「想简约一点又想华丽一点」——这一层就是为那句话加的。
+            在壁纸之上、内容之下叠一层缓慢浮动的光晕，共三团，透明度极低。
 
-            **简约是东西少，华丽是每一样都有质感**，这两件事不冲突。所以这儿加的不是内容，是**光**：三团极淡的光晕铺在壁纸上面、内容下面，慢慢飘。单独看几乎注意不到，但整个 App 会从「一张纸」变成「有空气的地方」。
+            作用范围为全 App 背景，不影响卡片、文字与图标的对比度。
 
-            它是全 App **唯一**的主效果，别的地方一律只做细节——同一屏叠三个主效果不叫高级，叫吵。
+            实现方式为径向渐变，非高斯模糊，因此不产生逐帧重算，耗电可忽略。
 
-            省电：用的是径向渐变，不是模糊。模糊每一帧都要重算，挂在全屏背景上等于一直烧电；渐变本身就是软边，几乎没有开销。
-
-            嫌花就关掉，关了一层都不画。
+            关闭后该层完全不绘制。
             """, title: "说明")
         }
     }
@@ -313,7 +311,7 @@ struct AppearanceView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 13)
 
-            SettingsNote("磨砂和模糊糊得一样狠，**区别只有一样：磨砂表面有砂，模糊是平的**。凑近看磨砂那块能看出细颗粒。通透走的是系统的液态玻璃，几乎不挡东西，靠一道边光成形。\n\n整个 App 的卡片、气泡、导航条都跟着变。糊到什么程度由下面那根「模糊程度」定。")
+            SettingsNote("三档的区别在表面质感：**磨砂**表面带细颗粒，**模糊**表面平整，**通透**使用系统液态玻璃，遮挡最少、以边缘光成形。\n\n设置作用于全 App 的卡片、气泡与导航条。模糊强度由下方「模糊程度」控制。")
         }
     }
 
@@ -397,7 +395,7 @@ struct AppearanceView: View {
                 if app.settings.wallpaperMode == "solid" {
                     colorRow("颜色", hex: $app.settings.solidHex)
                 } else {
-                    SettingsNote("图片在「设置 → 外观」里换。想要一块干净的底就选纯色——它是画出来的，不占空间。")
+                    SettingsNote("壁纸图片在「设置 → 外观」中更换。选择纯色时背景为程序绘制，不占用存储空间。")
                 }
             }
 
@@ -406,10 +404,10 @@ struct AppearanceView: View {
                 // 每一档自己带着这句话（`ThemePreset.detail`）——
                 // 摆在这儿写 if-else 的话，加一档就得回来补一次
                 SettingsNote(app.settings.preset.detail,
-                             title: "这一档会改动什么")
+                             title: "此主题的改动范围")
             }
 
-            SettingsNote("「家」那套里橘是限量的——一屏最多一处，留给发送键或者唯一的主按钮。列表、图标、标题一律不用橘，要强调靠字重和面板色。")
+            SettingsNote("「家」主题限制强调色的使用：每屏最多一处，仅用于发送键或主按钮。列表、图标与标题不使用强调色，强调通过字重和面板色实现。")
         }
     }
 
@@ -429,7 +427,7 @@ struct AppearanceView: View {
             }
             .buttonStyle(.plain)
 
-            SettingsNote("填六位色号，比如 4A3D2F。留空就跟着深浅色自动走，晚上那套通常要更淡一些。")
+            SettingsNote("填写六位十六进制色号（如 4A3D2F）。留空则随深浅色自动取值。")
         }
     }
 

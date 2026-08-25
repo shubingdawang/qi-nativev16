@@ -69,9 +69,9 @@ struct MusicLibraryView: View {
                 if library.playable.isEmpty && webResults.isEmpty {
                     EmptyNote(icon: "music.note.list",
                               title: "还没有歌",
-                              hint: "点右上角从「文件」导入 mp3、m4a、flac。\n"
-                                  + "网易云会员下载的歌，先存进「文件」App 再导进来就是整首。\n"
-                                  + "上面直接搜是网上的三十秒试听。")
+                              hint: "点击右上角从「文件」导入 mp3、m4a、flac。\n"
+                                  + "网易云下载的音频需先存入「文件」App 再导入，导入后为完整音频。\n"
+                                  + "上方搜索框检索的是网络试听资源，时长三十秒。")
                         .padding(.top, 20)
                 }
 

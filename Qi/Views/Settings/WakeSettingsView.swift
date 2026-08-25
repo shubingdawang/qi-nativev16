@@ -17,7 +17,7 @@ struct WakeSettingsView: View {
                     Label("让他自己醒来", systemImage: "sunrise")
                 }
             } footer: {
-                Text(MD.inline("打开之后，他会在你没说话的时候自己获得运行机会。\n\n**醒一次就是一次调用、一次钱**——哪怕他看了一眼决定什么都不说，那一眼也已经花掉了。下面三样是给你兜底的：每天上限、安静时段、还有他就在你眼前时不打扰。"))
+                Text(MD.inline("启用后，模型可在无人发言时自行获得运行机会。\n\n⚠️ **每次唤醒即一次调用，产生一次费用。** 即使判定后不发言，该次调用同样计费。下方三项用于限制：每日上限、静默时段、以及前台使用时不打扰。"))
             }
 
             Section {
@@ -31,7 +31,7 @@ struct WakeSettingsView: View {
                 Slider(value: $app.settings.wake.lambdaBase, in: 0.2...4.0, step: 0.1)
 
                 HStack {
-                    Text("你停下多久他才开口")
+                    Text("停止输入多久后触发")
                     Spacer()
                     Text("\(Int(app.settings.wake.idleDelay)) 分钟")
                         .foregroundStyle(.secondary)
@@ -73,7 +73,7 @@ struct WakeSettingsView: View {
             } header: {
                 Text("安静时段")
             } footer: {
-                Text("这段时间里他不会醒。跨零点没关系，比如 23:30 到 08:00。")
+                Text("此时段内不触发唤醒。支持跨零点设置，如 23:30 至 08:00。")
             }
 
             Section {
@@ -119,7 +119,7 @@ struct WakeSettingsView: View {
             } header: {
                 Text("两层")
             } footer: {
-                Text(MD.inline("这一条**现在是可选的了**。开了的话，醒来时先去问一句你电脑上那份服务「他有没有留过话」，有就直接用那句，不再在手机这边调模型。\n\n不开也能跑——上面那两条（后台刷新 + 兜底通知）不需要任何服务器。只有一种情况值得开：你希望 App 被划掉的时候，电脑那边还在替他继续想事情。"))
+                Text(MD.inline("此项为可选。启用后，唤醒时先向本地服务查询是否已有待发内容，若有则直接使用，不在本机调用模型。\n\n不启用亦可正常工作：上方两项（后台刷新与兜底通知）不依赖任何服务。仅当需要在 App 被关闭后仍由本地服务继续处理时才需启用。"))
             }
 
             Section {
@@ -143,7 +143,7 @@ struct WakeSettingsView: View {
             } header: {
                 Text("横幅")
             } footer: {
-                Text("这是本地通知，不是苹果推送。App 还活着、或者刚被系统的后台刷新叫起来过，横幅才弹得出来；从多任务里划掉之后就收不到了——真推送要签过名的证书，自签的包拿不到。")
+                Text("此处使用本地通知，非 Apple 推送服务。仅在 App 处于运行状态或刚被系统后台刷新唤起时才会弹出横幅；从多任务中关闭后无法送达。远程推送需要正式签名证书，自签名安装包不支持。")
             }
 
             Section {
@@ -157,7 +157,7 @@ struct WakeSettingsView: View {
             } header: {
                 Text("现在怎么样")
             } footer: {
-                Text("这几个数看着不花钱。")
+                Text("查看这些数值不产生费用。")
             }
         }
         .transparentList()

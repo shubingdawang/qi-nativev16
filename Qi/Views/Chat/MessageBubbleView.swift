@@ -917,7 +917,7 @@ struct MessageBubbleView: View {
                                 .foregroundStyle(Theme.textMuted(scheme))
                                 .lineLimit(4)
                         }
-                        Text(run.result)
+                        Text(tidy(run.result))
                             .font(.app(11.5))
                             .foregroundStyle(run.failed ? .red : Theme.textSoft(scheme))
                             .lineLimit(12)
@@ -930,6 +930,32 @@ struct MessageBubbleView: View {
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassBackground(radius: 14, strength: app.settings.glassOpacity * 0.7)
+    }
+
+    /// 工具回的那段话，摆出来之前先收拾一下。
+    ///
+    /// 两件事：首尾的空白去掉；**连着两个以上的换行压成一个空行**。
+    ///
+    /// 记忆搜索那类工具回的是一条条拼起来的清单，
+    /// 拼的时候很容易多出几个换行。那几个换行在屏幕上
+    /// 就是一大片空白，看着就像“两个工具之间隔得特别远”。
+    private func tidy(_ s: String) -> String {
+        // ⚠️ 换行走这个常量，不在底下散写 —— 反斜杠已经栽第十一次了。
+        // 写一次用两遍，下次拿脚本改这一段也少两个写错的机会。
+        let br = "\n"
+        var out = ""
+        var blanks = 0
+        for line in s.components(separatedBy: br) {
+            if line.trimmingCharacters(in: .whitespaces).isEmpty {
+                blanks += 1
+                // 最多留一个空行，多出来的一律丢掉
+                if blanks > 1 { continue }
+            } else {
+                blanks = 0
+            }
+            out += (out.isEmpty ? "" : br) + line
+        }
+        return out.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// 时间线上的一步
@@ -974,7 +1000,18 @@ struct MessageBubbleView: View {
             // 那点差别她当然看不出来。她要的不是「隔远一点」，
             // 是**看得出这是两件事**。所以补一道线：
             // 间距不用再往大调，一道线比十个点的空白管用得多。
-            .padding(.bottom, 9)
+            // 她第三次说这个：「使用工具的间隔太大了，
+            // 只留一行的距离就行，或者干脆不留。」
+            //
+            // 前两次我都去调这个 `padding`（11 → 10 → 9），
+            // 调了等于没调——**因为那个大空白根本不是间距。**
+            // 它是工具回的那段文本自己带回来的一串空行，
+            // 而 `lineLimit` 不会替我们收拾它（空行也算行）。
+            // 真正的修法在 `tidy` 那儿；这一行顺带收到一行以内。
+            //
+            // ⚠️ 记一句：**她报「间隔大」的时候，先查内容里有没有空行，
+            // 再去动 padding。** 调错地方的后果是“改了三次都没变”。
+            .padding(.bottom, 4)
             .overlay(alignment: .bottom) {
                 if !isLast { Hairline().padding(.trailing, 30) }
             }

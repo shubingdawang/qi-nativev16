@@ -67,9 +67,9 @@ struct SheetImportView: View {
                         if pieces.isEmpty && !working {
                             EmptyNote(icon: "scissors",
                                       title: "导一整版进来就行",
-                                      hint: "白底的等距家具图，一整版扔进来，"
-                                          + "我把每一件单独抠出来。\n"
-                                          + "你只要点一下「这块是床」。")
+                                      hint: "导入白底的整版等距家具图，"
+                                          + "系统自动将每件分割为独立素材。\n"
+                                          + "你只需为每件标注名称。")
                         } else if !pieces.isEmpty {
                             SectionHeader(title: "找到 \(pieces.count) 件") {
                                 Text("点一块，选它是哪件家具")

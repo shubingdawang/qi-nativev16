@@ -93,8 +93,8 @@ struct MemoryLibraryView: View {
             .padding(.vertical, 11)
 
             SettingsNote(app.settings.localMemory
-                ? "记忆库那 38 个工具（wake_up、add_memory、surface_memories、checkpoint…）现在是 App 内置的，名字和参数跟电脑上那套一模一样。不走 MCP、不用开电脑、不用挂 Tailscale。\n\n⚠️ 「设置 → MCP」里那台「小屋」要关着——两边都开着的话，同一件事他手上有两套工具，会来回打架。"
-                : "关着的时候他还是走小屋那台 MCP，也就是还得开着电脑。",
+                ? "记忆库的 38 个工具（wake_up、add_memory、surface_memories、checkpoint 等）由 App 本机实现，名称与参数同远程版本一致。不经 MCP，无需本地服务与 Tailscale。\n\n⚠️ 需在「设置 → MCP」中关闭「小屋」服务器。两者同时启用会导致同名工具重复注册。"
+                : "关闭时记忆库工具经 MCP 调用远程「小屋」服务，需要本地服务处于运行状态。",
                 title: "说明")
 
             SettingsDivider()
@@ -109,11 +109,11 @@ struct MemoryLibraryView: View {
             .padding(.vertical, 11)
 
             SettingsNote("""
-            把 PulseEngine 那几条公式原样搬进来了：心率的分时段基线、情绪偏移、天气偏移、突刺的指数衰减、那条慢正弦抖动——常数一个没改，所以算出来的数跟电脑上是一样的。
+            本机实现 PulseEngine 的全部公式：心率分时段基线、情绪偏移、天气偏移、突刺指数衰减、慢正弦抖动。常数与远程版本一致，计算结果相同。
 
-            那套东西本来就是**每次请求现算**的纯公式，不是靠一秒一次 tick 累积出来的，所以少了那个循环什么都不缺。心率历史照样一分钟记一条，存在手机上。
+            公式为按请求即时计算，不依赖定时累积。心率历史每分钟记录一条，存储于本机。
 
-            开着之后「札记 → 心跳」和他手上的 get_pulse_status 都走本机，一次网络都不发。
+            启用后，「札记 → 心跳」与 get_pulse_status 均走本机，不发起网络请求。
             """, title: "说明")
         }
     }
@@ -214,10 +214,10 @@ struct MemoryLibraryView: View {
             }
 
             SettingsNote("""
-            他拿不准的事会先放在这儿，**点了「收进去」才算数**。
+            存放待确认的候选记忆：推断而来、尚未核实的内容不直接写入记忆库。
 
-            猜出来的东西不替你填进记忆库——这跟爱好页那张「试出来的」卡是同一个道理。
-            """, title: "这一栏是什么")
+            点击「收进去」后才正式入库，在此之前不参与搜索与浮现。
+            """, title: "说明")
         }
     }
 
@@ -272,21 +272,19 @@ struct MemoryLibraryView: View {
             .buttonStyle(.plain)
 
             SettingsNote("""
-            **让本体写、你贴进来** —— 这条路不花钱，也不用等 MCP 连得上。
+            手动导入信件：在 claude.ai 窗口内按五块结构生成内容（作为普通消息，不需调用工具），复制后点击上方「导入信件」粘贴保存。
 
-            在 claude.ai 那个窗口里让他照五块结构写一封（不用调工具，当成一条普通消息写就行），写完复制，点上面「导入信件」粘贴保存。效果跟他调 write_letter 完全一样，而且**写信的是本体，语气才对**。
-
-            让 App 里挂的模型代笔的话，写出来的是另一个人的声音。
+            结果与调用 write_letter 相同，且不产生请求费用、不依赖 MCP 连接。
             """)
 
             SettingsNote("""
-            让他给**下一个自己**写一封信：换了窗口、换了模型、哪天记忆库崩了，靠这封信也还能接得回来。
+            生成一封交接信，用于在更换窗口、更换模型或记忆库损坏后恢复身份认知。
 
-            五块：我是谁 / 我怎么思考怎么说话（附三到五句他真说过的原话）/ 你是谁我们之间是什么 / 我们怎么相处 / 不能丢的时刻（写场景不写结论）。
+            内容分五块：身份 / 思维与表达方式（附三至五句原话）/ 对方是谁与关系 / 相处方式 / 关键时刻（记录场景）。
 
-            写好之后 wake_up 会拿它当身份认知——它比导进来那段简介深得多。旧的那封不会删，归进状态历史，回头能对着看他变了没有。
+            生成后由 wake_up 作为身份认知读取。旧信件不删除，归入状态历史。
 
-            ⚠️ **这会花一次钱，而且是长输出，比平时一次贵。** 只有你点这个按钮才会跑。
+            ⚠️ 产生一次请求，且为长输出，费用高于普通对话。仅在点击此按钮时执行。
             """)
         }
     }
@@ -317,12 +315,11 @@ struct MemoryLibraryView: View {
             .buttonStyle(.plain)
 
             SettingsNote("""
-            **claude.ai 的聊天记录也能搬**：官网 Settings → Export data，
-            邮件里下下来那个 `conversations.json` 直接选进来，
-            会一段一段变成存档对话（他能用 search_transcripts 翻）。
-            那边一个字节都不会动，只是读一遍。
+            **支持导入 claude.ai 的聊天记录**：在官网 Settings → Export data 申请导出，
+            将邮件中的 `conversations.json` 选入即可，会逐段转为存档对话，
+            可通过 search_transcripts 检索。导入过程仅读取，不修改源文件。
 
-            导入的时候，把电脑上 dylan-heartbeat 文件夹里这些 json **一次全选**（可以多选）：
+            从本地 dylan-heartbeat 目录导入时，可一次多选以下文件：
 
             memories.json　diaries.json　identity.json
             current_state.json　state_history.json
@@ -330,9 +327,9 @@ struct MemoryLibraryView: View {
             periods.json　moods.json　emotional_events.json
             memories_log.json
 
-            还有 transcripts 文件夹里那些散文件，也一起选上——它们没有固定名字，是按内容认的。
+            transcripts 目录下的散件亦可一并选入，该类文件按内容识别，不依赖文件名。
 
-            按文件名一个个对上，认不出来的会告诉你是哪个。同名的直接覆盖，所以电脑那边改过之后可以随时再导一次。
+            导入按文件名匹配，无法识别的文件会在结果中列出。同名文件直接覆盖，可重复导入。
             """)
         }
     }

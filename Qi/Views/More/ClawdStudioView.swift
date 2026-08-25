@@ -318,7 +318,7 @@ struct ClawdStudioView: View {
                 WallpaperBackground()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        Text("存进表情库之后，它跟别的表情一样能发，他也能挑着用。")
+                        Text("存入表情库后可正常发送，模型也可在对话中选用。")
                             .font(.app(12))
                             .foregroundStyle(Theme.textSoft(scheme))
 
@@ -326,7 +326,7 @@ struct ClawdStudioView: View {
                         field("画面写什么", text: $desc,
                               hint: "写画面内容和动作，不是写它好不好看")
 
-                        Text("画面描述是必填的——他看不见图，只能读这段字。写清楚了他才知道什么时候该发它。")
+                        Text("画面描述为必填项。模型不读取图像本身，仅依据该描述判断使用时机。")
                             .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme))
 

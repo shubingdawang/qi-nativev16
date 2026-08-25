@@ -15,7 +15,7 @@ struct ProviderListView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("还没有供应商")
                             .font(.headline)
-                        Text("点右上角的 + 加一个。需要填接口地址和密钥，跟你在网页版里填的一样。")
+                        Text("点击右上角的 + 添加。需填写接口地址与密钥，与网页版所用的一致。")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }

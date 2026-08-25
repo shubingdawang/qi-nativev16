@@ -17,7 +17,7 @@ struct VoiceSettingsView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("还没有语音服务")
                             .font(.headline)
-                        Text("配好之后，长按任意一句能让他念出来；他也能主动给你发语音条。")
+                        Text("配置完成后，长按任意消息可朗读；模型也可主动发送语音消息。")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -171,7 +171,7 @@ struct VoiceFormView: View {
                 } header: {
                     Text("接口")
                 } footer: {
-                    Text("换别家服务的话，只要它也是「基址 + 密钥 + 模型 + 音色」这套，改个基址一般也能用。")
+                    Text("更换服务商时，若同样采用「基址 + 密钥 + 模型 + 音色」的接口形式，通常只需修改基址。")
                 }
             }
             .transparentList()

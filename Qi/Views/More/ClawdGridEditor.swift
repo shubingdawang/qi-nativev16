@@ -422,7 +422,7 @@ struct ClawdGridEditor: View {
                 }
             }
 
-            Text("画衣服、扫把、泡泡这些就在格子上直接画——颜色不够就点右上角那个调色盘，调过的会留在这一排里。")
+            Text("在网格上直接绘制衣物、道具等元素。点击右上角调色盘可添加颜色，已调过的颜色保留在色板中。")
                 .font(.app(10.5))
                 .foregroundStyle(Theme.textMuted(scheme))
         }

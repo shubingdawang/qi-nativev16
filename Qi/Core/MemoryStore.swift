@@ -43,7 +43,24 @@ struct MemoryAnnotation: Codable, Hashable {
 /// 照旧在末尾另起一行，不闷声丢掉。
 enum Annotated {
 
-    /// 正文 + 批注 → 显示用的那份文本（带 `~~` 记号）
+    /// 批注那一段的记号：`⟪原句⟫→批注`。
+    ///
+    /// ⚠️ **是红色下划线，不是删除线。**
+    /// 上一版画成了 `~~原句~~批注`（红色删除线），她说：
+    /// 「我想要的是 binbin 红色下划线右箭头 bingbing，
+    ///   之前说的删除线是口误了。」
+    ///
+    /// 划掉和标注是两件事：**划掉是「这个不算了」，
+    /// 而她做的是「这个念作那个」——原文没有错，只是要在旁边补一句。**
+    /// 下划线加箭头才是那个意思。
+    ///
+    /// 用 `⟪⟫`（U+27EA/27EB）当记号：正文里几乎不可能出现，
+    /// 而且落到模型眼里读作「binbin→bingbing」，意思一点没丢。
+    static let open: String = "⟪"
+    static let close: String = "⟫"
+    static let arrow: String = "→"
+
+    /// 正文 + 批注 → 显示用的那份文本
     static func apply(_ text: String, _ anns: [MemoryAnnotation]?) -> String {
         guard let anns, !anns.isEmpty else { return text }
         var out = text
@@ -51,16 +68,19 @@ enum Annotated {
         for a in anns {
             let original = a.original.trimmingCharacters(in: .whitespacesAndNewlines)
             let correction = a.correction.trimmingCharacters(in: .whitespacesAndNewlines)
-            // 原句还在正文里 → 原地画成 ~~原句~~批注
+            // 原句还在正文里 → 原地画成 ⟪原句⟫→批注
             if !original.isEmpty, let r = out.range(of: original) {
-                out.replaceSubrange(r, with: "~~" + original + "~~" + correction)
+                out.replaceSubrange(r, with: open + original + close + arrow + correction)
                 continue
             }
-            // 没挑句子，或者找不着了 → 挂在末尾，别丢
+            // 没挑句子，或者找不着了 → 挂在末尾，别丢。
+            // ⚠️ 这一支现在也能删了（见 `MemoryStore.removeAnnotation`）——
+            // 她那两条 `⤷ 饼饼批注：bingbing` 就是这么来的：
+            // 写的时候一句都没挑，所以锚不到位置。
             if original.isEmpty {
-                loose.append("⤷ \(a.author)批注：\(correction)")
+                loose.append("⤷ \(a.author)：\(correction)")
             } else {
-                loose.append("⤷ \(a.author)批注：把「\(original)」改成「\(correction)」")
+                loose.append("⤷ \(a.author)：" + open + original + close + arrow + correction)
             }
         }
         if !loose.isEmpty { out += "\n" + loose.joined(separator: "\n") }
@@ -782,6 +802,53 @@ final class MemoryStore: ObservableObject {
 
     func diaryIndex(_ id: String) -> Int? {
         diaries.firstIndex { $0.id == id || $0.id.hasPrefix(id) }
+    }
+
+    // MARK: 批注：写错了要能删
+
+    /// 她的原话：「批注删除功能，如果写错了就删不掉了有点麻烦。」
+    ///
+    /// 对——批注是**叠在原文上的一层**，叠错了就得能揭掉。
+    /// 一个只能加不能减的功能，用一次就不敢再用第二次。
+    ///
+    /// ⚠️ **不走工具那条路。** 删自己写错的批注是她的事，
+    /// 不该在他那份工具清单里多一件他永远不该用的东西。
+    /// 直接改 store、直接落盘。
+
+    /// 这条记忆／这篇日记上挂着哪几条批注（给菜单摆出来用）。
+    /// 返回的是「谁写的：写了什么」。
+    func annotationLabels(memory id: String) -> [String] {
+        guard let i = memoryIndex(id) else { return [] }
+        return (memories[i].annotations ?? []).map { $0.author + "：" + $0.correction }
+    }
+
+    func annotationLabels(diary id: String) -> [String] {
+        guard let i = diaryIndex(id) else { return [] }
+        return (diaries[i].annotations ?? []).map { $0.author + "：" + $0.correction }
+    }
+
+    @discardableResult
+    func removeAnnotation(memory id: String, at index: Int) -> Bool {
+        guard let i = memoryIndex(id),
+              var anns = memories[i].annotations,
+              anns.indices.contains(index) else { return false }
+        anns.remove(at: index)
+        memories[i].annotations = anns.isEmpty ? nil : anns
+        memories[i].updated_at = MemoryStore.now
+        saveMemories()
+        return true
+    }
+
+    @discardableResult
+    func removeAnnotation(diary id: String, at index: Int) -> Bool {
+        guard let i = diaryIndex(id),
+              var anns = diaries[i].annotations,
+              anns.indices.contains(index) else { return false }
+        anns.remove(at: index)
+        diaries[i].annotations = anns.isEmpty ? nil : anns
+        diaries[i].updated_at = MemoryStore.now
+        saveDiaries()
+        return true
     }
 
     func note(_ action: String, by: String, memID: String,

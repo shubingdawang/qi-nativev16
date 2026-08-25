@@ -67,8 +67,8 @@ struct JournalView: View {
     private var empty: some View {
         EmptyNote(icon: "book.closed",
                   title: "还没做过手帐",
-                  hint: "右上角加一页。胶带、贴纸、邮票、夹子都在底下那排，"
-                      + "收藏过的句子能直接贴上去。")
+                  hint: "点击右上角新建一页。胶带、贴纸、邮票、夹子等素材在下方工具栏，"
+                      + "已收藏的句子可直接置入。")
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
     }

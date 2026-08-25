@@ -282,17 +282,25 @@ struct GlassSurface: View {
                 shape.fill(.black.opacity(dim))
             }
         }
-        // 上缘那道拉长的高光。
+        // 边缘那三层：高光、描边、阴影。**缺一不可，而且每一层都要轻。**
         //
-        // 真玻璃在光下不是均匀亮的，上面亮、往下沉。这一版之前有渐变、
-        // 有边缘高光，独独少了这一道，所以它看着是「一块半透明的板」，
-        // 不是「一块玻璃」。加上之后每一张卡都有了厚度。
+        // ⚠️ 这儿原来是 `GlassSheen`——一个椭圆白色渐变，
+        // 中心压在卡片**上方偏左**、浅色下白到 0.55，盖在三档玻璃上面。
+        // 她说「反倒是像顶上有光打下来」，**那句话精确指到了它**：
+        // 那不是玻璃受光，那是一盏射灯。
+        //
+        // 现在按她给的那篇讲毛玻璃的第 4 条来（见 `GlassDetail`）：
+        // 光走**边**不走**面**。玻璃的厚度是从边上读出来的。
         //
         // **只给圆角够大的那些**：胶囊和小标签本来就只有十几个点高，
-        // 再压一道椭圆高光看着像糊了块油。
+        // 描三层边等于把它整个描黑。
         .overlay {
-            if radius >= 12 { GlassSheen(radius: radius) }
+            if radius >= 12 { GlassEdge(radius: radius) }
         }
+        // 第三层：非常轻的阴影，把卡片从背景里托起来。
+        // ⚠️ 文章原话：「阴影一定要轻，不然就会从『玻璃』变成『悬浮塑料片』。」
+        .shadow(color: radius >= 12 ? GlassDetail.shadowColor(scheme) : .clear,
+                radius: GlassDetail.shadowRadius, x: 0, y: GlassDetail.shadowY)
         .environment(\.colorScheme, .light)
     }
 
@@ -358,17 +366,24 @@ struct GlassSurface: View {
                     shape.fill(.white.opacity(extra * 0.10))
                 }
             }
+            // ⚠️ **磨砂真正的表面质感在这一层。**
+            //
+            // 她说「磨砂根本就是一整块，就算换了全黑的背景也看不出磨砂质感」。
+            // 换黑底看不出来，是因为这一档**压根没有任何表面质感**——
+            // 它只是系统那块 material 加两道描边，是一块半透明的板。
+            //
+            // 她这次特意把两张参考分开标了：
+            // **模糊玻璃**是把背后糊掉（苹果那套），
+            // **磨砂玻璃**是表面被打毛、有细密的颗粒。两件事。
+            //
+            // 上上一版做过一次颗粒，她说「像撒了一把沙子」——那次又粗又重。
+            // 这次细到半个点、淡到只剩一层雾面（见 `GlassGrain`）。
             .overlay {
-                shape.strokeBorder(
-                    .white.opacity(scheme == .dark ? 0.10 : 0.30),
-                    lineWidth: 0.7)
+                GlassGrainLayer(radius: radius, strength: strength)
             }
-            .overlay {
-                // 浅色下白边贴白底等于没有，补一道极淡的暗边定轮廓
-                if scheme == .light {
-                    shape.strokeBorder(.black.opacity(0.06), lineWidth: 0.6)
-                }
-            }
+            // 描边挪去 `GlassEdge` 统一做了，这儿不再各描各的。
+            // ⚠️ 留在这儿的话就是**两处描边叠在一起**，边会变脏变重——
+            // 而「边脏」正是那篇文章说的「一眼廉价」的第一个原因。
     }
 
     // MARK: 通透 —— iOS 那块玻璃

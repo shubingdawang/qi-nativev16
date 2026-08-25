@@ -331,7 +331,7 @@ struct ReaderView: View {
                                 .lineLimit(2)
                         }
                         if v.note.isEmpty {
-                            Text("还没注解——问他一句「生词本」他就会写")
+                            Text("暂无注解。在对话中请求「生词本」即可生成")
                                 .font(.app(10.5))
                                 .foregroundStyle(Theme.textMuted(scheme).opacity(0.8))
                         } else {
@@ -399,7 +399,7 @@ struct ReaderView: View {
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
             } else if todo == 0 {
-                Text("到这一章为止都有脉络了——他答得上「前面讲了什么」。")
+                Text("至本章为止的脉络已生成，模型可回答前文内容。")
                     .font(.app(10.5))
                     .foregroundStyle(Theme.textMuted(scheme))
             } else {
@@ -415,7 +415,7 @@ struct ReaderView: View {
                 }
                 .buttonStyle(.plain)
 
-                Text(MD.inline("一章调一次模型，**要花钱**。补完他就答得上前面的事；"
+                Text(MD.inline("每章调用一次模型，**产生费用**。生成后模型即可回答前文内容；"
                      + "而且只补到你读到的这一章，后面的他还是不知道，剧透不了。"))
                     .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))

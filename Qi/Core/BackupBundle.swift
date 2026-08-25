@@ -136,6 +136,43 @@ enum BackupBundle {
         var bytes = 0
         /// 中途有过写不进去的时候。有这一条，整份包就不该当成功的算。
         var writeFailed = false
+
+        /// 那些图各自是哪一档的（目录 → 几个）。
+        ///
+        /// ⚠️ **这个必须拆开报。**
+        ///
+        /// 她说：「相册里只有一个显示 2 但没有图片的文件夹
+        /// 和一个 gif 表情包，数量显示却从 6 变成 8 最后变成 10。」
+        ///
+        /// 那个数没算错，**但它数的东西跟她看的东西不是一回事**：
+        /// 它数的是 Documents 里所有非 json 的文件——
+        /// 聊天里发过的图、墙纸、像素画、语音条、删过表情留下的孤儿文件……
+        /// 而她看的是相册里有几张。
+        ///
+        /// 一个总数答不了「为什么是 10」，只会让她再猜一次。
+        /// **拆开了就不用猜了。**
+        var byFolder: [String: Int] = [:]
+
+        /// 拆开那几行，按个数从多到少
+        var breakdown: [(String, Int)] {
+            byFolder.sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
+                .map { ($0.key, $0.value) }
+        }
+    }
+
+    /// 一个相对路径属于哪一档，摆给她看的名字。
+    static func folderLabel(_ key: String) -> String {
+        guard let slash = key.firstIndex(of: "/") else { return "其他" }
+        switch String(key[key.startIndex..<slash]) {
+        case "Images":   return "图片（相册、聊天里发过的、墙纸…）"
+        case "Stickers": return "表情和 GIF"
+        case "Voices":   return "语音条"
+        case "Music":    return "歌的音频"
+        case "Files":    return "文件"
+        case "Memory":   return "记忆库里的附件"
+        case "Games":    return "小游戏"
+        default:         return "其他"
+        }
     }
 
     /// 把一个字符串写成合法的 JSON 字面量（带引号）。
@@ -300,7 +337,12 @@ enum BackupBundle {
                 put("\"")
                 ok = true
             }
-            if ok { first = false; report.blobs += 1 }
+            if ok {
+                first = false
+                report.blobs += 1
+                let label = folderLabel(item.key)
+                report.byFolder[label, default: 0] += 1
+            }
             else { report.skipped.append(item.key) }
         }
 
@@ -419,11 +461,11 @@ enum BackupBundle {
             let head = String(data: cleaned.prefix(60), encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? "（读不出文字）"
             return .unreadable(
-                "这个文件解不成 JSON。\n\n大小：\(data.count) 字节\n"
-                + "开头是：\(head)\n\n"
-                + "要是开头看着像 { \"createdAt\" … 那就是备份没错，"
-                + "多半是传的时候被截断了（微信里存下来的常有这问题）——"
-                + "换 AirDrop 或者「存到文件」再试一次。")
+                "该文件无法解析为 JSON。\n\n大小：\(data.count) 字节\n"
+                + "开头：\(head)\n\n"
+                + "若开头形如 { \"createdAt\" …，则文件格式正确，"
+                + "多为传输过程中被截断所致。"
+                + "建议改用 AirDrop 或「存储到文件」重新传输后再导入。")
         }
 
         // 老版备份：只有那三样，没有 files

@@ -479,7 +479,7 @@ struct LiuyaoPane: View {
                         .padding(11)
                         .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
 
-                    Text("比如「丢的耳机在哪儿」「这事这个月能不能成」「他今天会不会来」。别问「我该怎么活」那种——那个塔罗更合适。")
+                    Text("适用于具体的、有明确答案的问题，例如物品下落、某事成否、某人是否到来。开放式的人生方向类问题建议使用塔罗。")
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
 
@@ -590,7 +590,7 @@ struct LiuyaoPane: View {
             }
             if let c = record.changed, let p = record.primary, c.name != p.name {
                 hexBlock("变卦", c)
-                Text("有动爻，事情会变——本卦是眼下，变卦是后来。")
+                Text("存在动爻，卦象将发生变化：本卦对应当前，变卦对应之后。")
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
             } else {

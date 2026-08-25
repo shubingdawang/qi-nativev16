@@ -238,10 +238,37 @@ struct MarkdownText: View {
 enum MD {
 
     static func inline(_ raw: String) -> AttributedString {
+        // 批注：`⟪原句⟫→改的` —— 原句**红色下划线**。
+        //
+        // ⚠️ 是下划线不是删除线（她纠正过：「之前说的删除线是口误了」）。
+        // 划掉是「这个不算了」，而批注是「这个念作那个」——
+        // 原文没错，只是旁边补一句。两件事不能用同一个记号。
+        //
+        // 记号本身（`⟪⟫`）不显示出来，只留里面的字 + 箭头 + 改的那半。
+        if raw.contains(Annotated.open) {
+            var out = AttributedString()
+            var rest = Substring(raw)
+            while let a = rest.range(of: Annotated.open),
+                  let b = rest.range(of: Annotated.close,
+                                     range: a.upperBound..<rest.endIndex) {
+                out += inline(String(rest[rest.startIndex..<a.lowerBound]))
+                var marked = AttributedString(String(rest[a.upperBound..<b.lowerBound]))
+                marked.underlineStyle = .single
+                marked.foregroundColor = .red
+                out += marked
+                rest = rest[b.upperBound...]
+            }
+            // 剩下的那截（箭头 + 改的那半 + 后面的正文）照常解析
+            out += inline(String(rest))
+            return out
+        }
         // 系统那套 inline markdown **不认 `~~删除线~~`**，
         // 所以先自己把它挑出来，剩下的再交给系统。
         // 记忆改过之后显示的就是 `~~记错的~~ 改对的`，
         // 画不出删除线的话那行读起来是两句自相矛盾的话。
+        //
+        // ⚠️ 这一档留着，**它跟批注不是一回事**：
+        // 这是「他记错了、后来改对了」，原文真的作废——那才该划掉。
         if raw.contains("~~") {
             var out = AttributedString()
             var rest = Substring(raw)

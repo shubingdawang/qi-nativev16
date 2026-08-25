@@ -30,7 +30,7 @@ struct FavoritesView: View {
                 if items.isEmpty {
                     EmptyNote(icon: Icon.star,
                               title: "还没有收藏",
-                              hint: "在对话里挑中一句，底下点收藏就行")
+                              hint: "在对话中选中一句，点击下方的收藏按钮即可加入")
                         .padding(.top, 50)
                 }
 

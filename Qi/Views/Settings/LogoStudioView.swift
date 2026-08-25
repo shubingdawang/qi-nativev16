@@ -81,7 +81,7 @@ struct LogoStudioView: View {
             .buttonStyle(.plain)
             .disabled(busy || subject.trimmingCharacters(in: .whitespaces).isEmpty)
 
-            Text(MD.inline("⚠️ **按一次画一张，花一次钱。** 满意了就停在那儿，别多按。"))
+            Text(MD.inline("⚠️ 每次点击生成一张，调用一次模型并产生一次费用。"))
                 .font(.app(10))
                 .foregroundStyle(Theme.textMuted(scheme))
         }

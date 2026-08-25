@@ -30,7 +30,7 @@ struct MemoListView: View {
                 if store.onList.isEmpty {
                     EmptyNote(icon: "checklist",
                               title: "还没有记什么",
-                              hint: "点右上角写一条。长按可以置顶，置顶的会挂到聊天页上。")
+                              hint: "点击右上角新建。长按条目可置顶，置顶后会显示在聊天页。")
                         .padding(.top, 30)
                 }
 
@@ -276,7 +276,7 @@ struct MemoEditor: View {
                             TextField("十点前 / 很重要 / 别忘了", text: $memo.badge)
                                 .padding(10)
                                 .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
-                            Text("置顶之后它会缩在聊天页边上，只露出这几个字。一眼扫过去就知道是什么事，不用点开。")
+                            Text("置顶后以短标签形式显示在聊天页边缘，仅显示此处填写的文字。")
                                 .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }

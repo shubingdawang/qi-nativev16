@@ -170,7 +170,7 @@ struct GamesView: View {
             }
             .buttonStyle(.plain)
 
-            Text("点开是全屏的网页。他在对话里玩，你在这儿看——"
+            Text("点击后以全屏网页打开。模型在对话中操作，此处同步显示。"
                  + "有人类显示屏的那些游戏，能看见他这一步走了哪儿。")
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))

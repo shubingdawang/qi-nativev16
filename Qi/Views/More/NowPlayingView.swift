@@ -301,7 +301,7 @@ struct NowPlayingView: View {
             .buttonStyle(.plain)
 
             if player.current?.isPreview == true {
-                Text("这是三十秒的试听。整首得自己把文件导进来——网易云、QQ 音乐下载的歌存在它们自己的沙盒里，别的 App 读不到，这是 iOS 的硬规矩。")
+                Text("当前为三十秒试听。完整音频需手动导入文件。第三方音乐 App 下载的音频存于各自的沙盒中，iOS 不允许跨 App 读取。")
                     .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .multilineTextAlignment(.center)

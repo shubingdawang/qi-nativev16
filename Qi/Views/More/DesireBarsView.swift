@@ -17,7 +17,7 @@ struct DesireBars: View {
         VStack(alignment: .leading, spacing: 12) {
 
             HStack {
-                Text("他这会儿身上这八条")
+                Text("当前的八项意愿强度")
                     .font(.app(14, weight: .semibold))
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer()
@@ -60,7 +60,7 @@ struct DesireBars: View {
             Toggle(isOn: Binding(get: { desire.driven },
                                  set: { desire.driven = $0 })) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("让这个参与他的决定")
+                    Text("将此项纳入决策")
                         .font(.app(13))
                         .foregroundStyle(Theme.textMain(scheme))
                     Text(desire.driven

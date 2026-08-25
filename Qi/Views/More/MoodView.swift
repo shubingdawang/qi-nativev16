@@ -168,7 +168,7 @@ struct MoodView: View {
                     }
                 }
 
-                Text("这些存在小屋的记忆里，他也看得见，也能自己加、自己删。")
+                Text("记录存于记忆库，模型可读取，亦可自行增删。")
                     .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .padding(.top, 2)
@@ -184,7 +184,7 @@ struct MoodView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("留句话").heading(15)
                 .foregroundStyle(Theme.textMain(scheme))
-            Text("他下次醒来第一眼会看到")
+            Text("将在下次唤醒时优先显示")
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
             TextField("想说的话…", text: $message, axis: .vertical)

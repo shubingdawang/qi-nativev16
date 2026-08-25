@@ -284,7 +284,7 @@ struct ReceiptSlip: View {
                     .font(.app(30, weight: .bold, design: .rounded))
                     .foregroundStyle(Slip.accent)
             }
-            Text("※ 按你自己填的单价估的，不是真实账单")
+            Text("※ 按所填单价估算，非实际账单")
                 .font(Slip.mono(8))
                 .foregroundStyle(Slip.inkSoft)
                 .frame(maxWidth: .infinity, alignment: .trailing)
@@ -357,7 +357,7 @@ struct ReceiptSlip: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                Text("还没让他写。小票右上角那个按钮点一下，他会读一遍今天。")
+                Text("尚未生成。点击小票右上角的按钮生成当日总结。")
                     .font(Slip.mono(10))
                     .foregroundStyle(Slip.inkSoft)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -617,7 +617,7 @@ struct ReceiptView: View {
                             .foregroundStyle(Color.secondary)
                     }
 
-                    Text("小票不会自己生成关键词——那要让他读一遍今天，是要花钱的。\n数字部分是本来就记着的，看小票不花钱。")
+                    Text("关键词需手动触发生成，会调用模型并产生费用。\n数字部分为已有记录，查看小票不产生费用。")
                         .font(.caption2)
                         .foregroundStyle(Color.secondary)
                         .multilineTextAlignment(.center)
@@ -658,11 +658,11 @@ struct ReceiptView: View {
             .sheet(item: $shareItem) { item in
                 ShareSheet(items: [item.image])
             }
-            .alert("让他读一遍今天？", isPresented: $askWrite) {
+            .alert("生成当日总结？", isPresented: $askWrite) {
                 Button("算了", role: .cancel) {}
                 Button("好") { write() }
             } message: {
-                Text("他会把今天说过的话读一遍，写三到五个关键词和一句留言。这会调一次模型，花一次的钱。")
+                Text("读取当日对话，生成三到五个关键词与一句留言。调用一次模型，产生一次费用。")
             }
         }
     }

@@ -79,7 +79,7 @@ struct PhoneActivityView: View {
             Text("还没连上")
                 .font(.app(15, weight: .semibold))
                 .foregroundStyle(Theme.textMain(scheme))
-            Text(MD.inline("让快捷指令把记录写进一个 txt，栖直接读那个文件——**全程不走网络**，不会再报网络错误。"))
+            Text(MD.inline("由快捷指令将记录写入 txt 文件，本 App 直接读取该文件。全程不经网络。"))
                 .font(.app(12))
                 .foregroundStyle(Theme.textSoft(scheme))
             Button {
@@ -181,7 +181,7 @@ struct PhoneActivityView: View {
                     .tint(app.settings.accentColor)
             }
 
-            Text(MD.inline("打开之后他多一件能做的事：**看一眼你此刻的处境再决定要不要开口**——屏幕上开着什么、人在哪个城市、那边什么天气、今天手机用了多久。\n\n**默认关着。** 这是三样一起给，得你点头。"))
+            Text(MD.inline("启用后，模型可读取当前处境信息：屏幕上的内容、所在城市、当地天气、今日手机使用时长。\n\n默认关闭。三项数据一并授权。"))
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
 
@@ -226,7 +226,7 @@ struct PhoneActivityView: View {
                             .padding(9)
                             .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
                                 .fill(Theme.softFillDeep))
-                        Text(MD.inline("不填就用系统自带的那套（只到省市区）。填了地名会更细——"
+                        Text(MD.inline("留空时使用系统自带的地理编码，精度至省市区。填写后地名精度更高。"
                              + "**「只到城市」那一档照样只给城市**，这条线是你的，不是接口的。"
                              + "只有选「精确」的时候才会给街道和「靠近哪儿」。"
                              + "\nkey 只存在这台手机上，**一个字都不进仓库**（那个仓库是公开的）。导出备份的时候它会跟供应商密钥一起在包里，所以那份备份别乱发。"))
@@ -283,7 +283,7 @@ struct PhoneActivityView: View {
                 }
             }
 
-            Text(MD.inline("挑一个文件夹，让快捷指令把截图存进去。他调「看一眼屏幕」的时候读里面最新那张。\n\n**不实时**：iOS 不许任何 App 主动截别的 App 的屏，他看到的永远是上一次截下来的那张，返回值里会写着是多久前的。"))
+            Text(MD.inline("指定一个文件夹，由快捷指令将截图存入。模型调用「看一眼屏幕」时读取其中最新的一张。\n\n⚠️ **非实时**：iOS 不允许 App 主动截取其他 App 的画面，读取到的始终是上一次保存的截图，返回结果中标注其时间。"))
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
 

@@ -120,7 +120,7 @@ struct ClawdHomeView: View {
             // 接进来了就一直摆着这一行。铁律第二条：会自己花钱的地方，
             // 得让她看得见它开着。
             if store.linked {
-                Text("他在这屋里，开着这一页的时候会自己隔几分钟说一句 · 花钱")
+                Text("停留在本页时，每隔数分钟生成一句发言 · 产生费用")
                     .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -186,7 +186,7 @@ struct ClawdHomeView: View {
         .onChange(of: store.linked) { _, on in
             if on { startHim() } else { himTask?.cancel() }
         }
-        .confirmationDialog("把他接进这间屋子？", isPresented: $askingLink,
+        .confirmationDialog("在此房间启用自动发言？", isPresented: $askingLink,
                             titleVisibility: .visible) {
             Button("接入") {
                 store.linked = true
@@ -194,7 +194,7 @@ struct ClawdHomeView: View {
             }
             Button("算了", role: .cancel) { }
         } message: {
-            Text(MD.inline("接进来之后，你开着这一页的时候，他会隔几分钟自己冒一句——看看你给他布置的这个家。\n\n这是**真的问他**，所以会花钱，而且不用你点。用量在设置里按「clawd 小屋」单独记着。\n\n关掉就不花了。"))
+            Text(MD.inline("启用后，停留在本页期间每隔数分钟自动生成一句发言，内容与房间的陈设相关。\n\n⚠️ 该功能会自动发起请求，不需要手动触发，因此**持续产生费用**。用量在设置中按「clawd 小屋」单独统计。\n\n关闭后不再发起请求。"))
         }
     }
 
@@ -673,7 +673,7 @@ struct ClawdHomeView: View {
                     Text("换成我的家具图")
                         .font(.app(13, weight: .medium))
                         .foregroundStyle(Theme.textMain(scheme))
-                    Text("导一整版进来，我自己把每一件抠出来，你只要点一下这块是什么")
+                    Text("导入整版素材图，系统自动分割为独立家具，你只需为每件标注名称")
                         .font(.app(10.5))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .multilineTextAlignment(.leading)

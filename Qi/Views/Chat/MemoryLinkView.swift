@@ -55,7 +55,7 @@ struct MemoryLinkView: View {
                                     .foregroundStyle(Theme.textMain(scheme))
                             }
 
-                            Text("小屋的记忆库是全公用的。他每聊三五轮会自动 checkpoint 记一笔进度，下次醒来又会一并读回来——那些内容不分窗口。所以真想让这个窗口独门独户，得把这个也关掉：关了之后他在这儿不存也不查，只靠眼前这段对话。")
+                            Text("记忆库为全局共用：每隔数轮对话自动记录一次进度，下次唤醒时一并读取，内容不区分窗口。若需本窗口完全独立，需同时关闭此项——关闭后本窗口不写入也不检索记忆库，仅依据当前对话。")
                                 .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
@@ -116,7 +116,7 @@ struct MemoryLinkView: View {
                             .glassCard(padding: 0)
                         }
 
-                        Text("并上之后，他在这几个窗口里都记得同一批事；拆开就各自只记得自己那份。这样不想混在一起的话题可以彻底分开。")
+                        Text("合并后，所选窗口共享同一份记忆；拆分后各窗口仅保留自身的记录，可用于隔离不同话题。")
                             .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme))
                             .padding(.horizontal, 4)

@@ -101,7 +101,7 @@ struct QuestView: View {
             Text("他还没派过事")
                 .font(.app(14, weight: .medium))
                 .foregroundStyle(Theme.textMain(scheme))
-            Text(MD.inline("这一页是**他给你**的那点小事——跟备忘（你自己记的）、"
+            Text(MD.inline("此页记录由模型指派的小任务，区别于备忘（自行记录）、"
                  + "承诺（他欠你的）都不是一回事。\n"
                  + "他会在说话的时候顺手派一件，小、具体、今天做得完那种。"
                  + "你做完了在这儿打个卡，他下次说话就知道了。"))
@@ -261,7 +261,7 @@ struct QuestView: View {
                 }
                 .buttonStyle(.plain)
 
-                Text(MD.inline("交上去之后，他下次说话就知道你做了——"
+                Text(MD.inline("提交后，模型在下一次对话中即可读取完成状态。"
                      + "**不会自动跳出一句夸你的话**，那种一眼就看得出是流水线。"))
                     .font(.app(10.5))
                     .foregroundStyle(Theme.textMuted(scheme))
@@ -307,7 +307,7 @@ struct QuestView: View {
             }
 
             if store.rewards.isEmpty {
-                Text("还没有。加几个你们之间说得通的——"
+                Text("暂无，可添加自定义条目。"
                      + "「换他讲一个睡前故事」「换一次通话」那种。他也能加。")
                     .font(.app(10.5))
                     .foregroundStyle(Theme.textMuted(scheme))

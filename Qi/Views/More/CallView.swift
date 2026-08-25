@@ -203,14 +203,14 @@ struct CallView: View {
                 }
 
                 if muted {
-                    Text("闭麦了，打字他一样听得到")
+                    Text("已静音，文字输入仍可正常发送")
                         .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .padding(.bottom, 4)
                 }
 
                 if farewell > 0 {
-                    Text("他说完了。\(farewell) 秒后自动挂断——你现在开口或者打字，都还能接着聊。")
+                    Text("对方已说完，\(farewell) 秒后自动挂断。此期间发言或输入文字可继续通话。")
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .padding(.bottom, 8)
@@ -784,7 +784,7 @@ struct CallHistoryView: View {
         .alert("还没选模型", isPresented: $cantDial) {
             Button("好") { }
         } message: {
-            Text("这通电话是真的要问他的，没挂模型就没人接。去絮语页输入框上那颗胶囊选一个。")
+            Text("通话需要调用模型，请先在絮语页输入框上方选择一个模型。")
         }
     }
 

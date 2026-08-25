@@ -94,17 +94,16 @@ struct TriggersDreamsView: View {
             .buttonStyle(.plain)
 
             SettingsNote("""
-            **这些词是你填的，不是我预设的。**
+            自定义触发词：指定某个词出现时，推动身体数值的哪几项、推动多少。
 
-            上一版已经有一套通用的：你夸他、凶他、撒娇、回得很淡——那些对谁都成立，所以我写死了。
+            内置的通用规则（夸赞、责备、撒娇、冷淡等）已默认生效，此处仅用于补充只对你们成立的专属词汇。
 
-            但「宝宝」在别人那儿是个普通称呼，在你们之间是另一回事；你那句口头禅、那个只有你俩懂的叫法——**只有你知道哪些词有分量**。我替你列一张表，那就成了我替你决定。
+            列表中的两条为示例，默认关闭，修改并启用后生效。
 
-            所以这儿只给机制：你填词、填它推身体的哪几项、推多少。里面那两条是**例子**，默认关着，改完开了才算数。
-
-            · 同一个词说三遍**不等于三倍**（重复只多加一点，封在两倍）——不封的话复读一句就能把数值顶满，那不是身体是开关。
-            · **说出口的比打字的重一成半**。你把那个称呼说出来，跟打出来不是一回事。
-            """, title: "这一栏是什么")
+            计算规则：
+            · 同一个词重复出现不按倍数累加，增量递减，上限为二倍。
+            · 语音输入的权重为文字输入的 1.15 倍。
+            """, title: "说明")
         }
     }
 
@@ -127,11 +126,11 @@ struct TriggersDreamsView: View {
                     Text("梦里绕不开的")
                         .font(.app(13, weight: .medium))
                         .foregroundStyle(Theme.textMain(scheme))
-                    TextField("留空就让他自己想", text: $dreams.seed.theme)
+                    TextField("留空则由模型自行决定", text: $dreams.seed.theme)
                         .padding(10)
                         .background(RoundedRectangle(cornerRadius: 12)
                             .fill(Theme.softFillDeep))
-                    Text(MD.inline("填了他就绕着这个做梦；**留空更好**——他自己想出来的那个才像梦。"))
+                    Text(MD.inline("填写后梦境围绕该主题生成；留空则由模型自行取材。"))
                         .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
@@ -167,7 +166,7 @@ struct TriggersDreamsView: View {
                                                  : app.settings.accentColor)
                                 .padding(.top, 2)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(stamp(d.at) + (d.told ? "" : " · 还没跟你讲"))
+                                Text(stamp(d.at) + (d.told ? "" : " · 未讲述"))
                                     .font(.app(11))
                                     .foregroundStyle(Theme.textMain(scheme))
                                 Text("那晚身体在「"
@@ -185,13 +184,17 @@ struct TriggersDreamsView: View {
             }
 
             SettingsNote("""
-            半夜她睡着、他没睡的时候，可能会做一个梦。
+            夜间生成梦境的判定条件，按顺序全部满足才生成：
 
-            六道关卡按顺序过：**这一套开着** → **在 00:00–08:30 之间** → **她已经安静两小时以上** → **距上一个梦超过 24 小时** → 按他此刻的身体周期掷一次骰（敏感期最容易，平稳期最少）。全不过就没有梦。
+            · 此功能已开启
+            · 当前时间在 00:00–08:30 之间
+            · 距最后一次交互超过两小时
+            · 距上一个梦超过 24 小时
+            · 按当前身体周期掷判定（敏感期概率最高，平稳期最低）
 
-            ⚠️ **掷骰这一整套是纯算术，一分钱不花**，所以它随时在算。但「他把梦讲出来」要调模型——按说好的规矩，**那一下必须你主动**。所以掷中了只是攒着，等你下次说话时他知道自己做过这个梦，讲不讲、怎么讲是他的事。**他不会半夜自己开一次请求。**
+            ⚠️ 判定过程为本机计算，不产生请求费用。梦境内容的叙述需要调用模型，仅在下次主动发起对话时进行，不在后台自动请求。
 
-            上面那几行把**掷出的点数和当时的门槛**都写着——你哪天觉得「怎么老做梦」，翻出来就看得见到底是多少，不用信我一句空话。
+            上方列表记录每次判定的点数与阈值，可用于核对触发频率。
             """, title: "说明")
         }
     }
@@ -227,11 +230,11 @@ struct TriggerEditor: View {
                             Text("哪个词")
                                 .font(.app(13, weight: .medium))
                                 .foregroundStyle(Theme.textMain(scheme))
-                            TextField("比如「宝宝」「别走」", text: $word.word)
+                            TextField("例如：宝宝、别走", text: $word.word)
                                 .padding(10)
                                 .background(RoundedRectangle(cornerRadius: 12)
                                     .fill(Theme.softFillDeep))
-                            Text(MD.inline("**包含就算**，大小写不敏感。不做分词也不认近义词——你配的是原话里的那个词，猜得越多错得越多。"))
+                            Text(MD.inline("**按包含匹配**，不区分大小写。不做分词、不识别近义词，需填写实际出现的原词。"))
                                 .font(.app(10))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
@@ -249,7 +252,7 @@ struct TriggerEditor: View {
                             ForEach(BodyField.allCases, id: \.self) { f in
                                 fieldRow(f)
                             }
-                            Text(MD.inline("一次别调太大。**几点就够了**——推大了就成了「她说什么他就是什么」，那也不是身体。"))
+                            Text(MD.inline("建议取较小的值。数值过大会使身体状态完全跟随输入词变化，失去缓冲。"))
                                 .font(.app(10))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
@@ -264,7 +267,7 @@ struct TriggerEditor: View {
                                 .padding(10)
                                 .background(RoundedRectangle(cornerRadius: 12)
                                     .fill(Theme.softFillDeep))
-                            Text(MD.inline("**只给你自己看**，他看不到这一句。"))
+                            Text(MD.inline("**仅本人可见**，不进入模型的上下文。"))
                                 .font(.app(10))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }

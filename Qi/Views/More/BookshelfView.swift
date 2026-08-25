@@ -269,7 +269,7 @@ struct BookshelfView: View {
                 if all.isEmpty {
                     EmptyNote(icon: "highlighter",
                               title: "还没划过句子",
-                              hint: "读书的时候点右上角「选句子」，\n点中的那句就会被马克笔画起来。")
+                              hint: "阅读时点击右上角「选句子」进入选句模式，\n点中的句子会标为划线。")
                         .padding(.top, 40)
                 }
 
@@ -348,7 +348,7 @@ struct BookshelfView: View {
             Text("书房还空着")
                 .font(.app(13))
                 .foregroundStyle(Theme.textMuted(scheme))
-            Text("右上角导入 txt 或 epub，再建几个书架把它们归进去。\n每本书可以单独决定要不要叫他一起读。")
+            Text("点击右上角导入 txt 或 epub，可建立书架分类。\n每本书可单独设置是否加入共读。")
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme).opacity(0.85))
                 .multilineTextAlignment(.center)
