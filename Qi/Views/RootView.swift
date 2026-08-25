@@ -364,8 +364,8 @@ struct NavDrawerBar: View {
                 GlassSurface(radius: 30, strength: app.settings.glassOpacity, extra: 0.2)
             }
         }
-        .shadow(color: .black.opacity(scheme == .dark ? 0.34 : 0.10),
-                radius: 14, x: 0, y: 5)
+        // ⚠️ 同 `Theme.GlassCard`：玻璃上面不能套 `.shadow`。
+        // 标签栏是全 App 最显眼的一块玻璃，压成纯色最容易被看出来。
     }
 }
 

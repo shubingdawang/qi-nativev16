@@ -215,7 +215,7 @@ struct MusicFloatingView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .glassBackground(radius: 20, strength: app.settings.glassOpacity, extra: 0.2)
-        .shadow(color: .black.opacity(scheme == .dark ? 0.30 : 0.12), radius: 12, y: 5)
+        // ⚠️ 同 `Theme.GlassCard`：玻璃上面不能套 `.shadow`，会压成纯色。
         // 往边上划就收回去。贴右边往右划，贴左边往左划。
         .highPriorityGesture(
             DragGesture(minimumDistance: 26)

@@ -163,7 +163,17 @@ struct GlassCard: ViewModifier {
             .background(
                 GlassSurface(radius: radius, strength: app.settings.glassOpacity)
             )
-            .shadow(color: Theme.shadow(scheme), radius: 14, x: 0, y: 8)
+        // ⚠️ **这儿原来有一句 `.shadow`，删了，别加回来。**
+        //
+        // 它套在「内容 + GlassSurface 背景」整体上，于是**每一张
+        // `.glassCard()` 都被强制离屏渲染** —— 而离屏那一下就把
+        // `Material` 的背景采样打断了，玻璃退化成一块近似的纯色。
+        //
+        // 这是个**老问题**，不是这两窗才有的：她截图里札记那些卡片
+        // 一直是纯白板、而底下标签栏是真玻璃，差别就在这一句上。
+        //
+        // 卡片跟背景分开靠 `GlassEdge`（内高光 + 极细描边）来做，
+        // 那两层画在玻璃**上面**，不触发离屏。
     }
 }
 
@@ -297,10 +307,30 @@ struct GlassSurface: View {
         .overlay {
             if radius >= 12 { GlassEdge(radius: radius) }
         }
-        // 第三层：非常轻的阴影，把卡片从背景里托起来。
-        // ⚠️ 文章原话：「阴影一定要轻，不然就会从『玻璃』变成『悬浮塑料片』。」
-        .shadow(color: radius >= 12 ? GlassDetail.shadowColor(scheme) : .clear,
-                radius: GlassDetail.shadowRadius, x: 0, y: GlassDetail.shadowY)
+        // ⚠️ **这儿不许加 `.shadow`。** 上一版加了，把整个 App 的玻璃搞坏了。
+        //
+        // 她的原话：「玻璃完全不对。」——一屏卡片全成了灰白色的平板，
+        // 壁纸一点都透不上来。
+        //
+        // 原因不是阴影难看，是 **`.shadow` 会把这一层强制离屏渲染**，
+        // 而离屏渲染那一下就把 `Material` 的**背景采样打断了**：
+        // 系统那块玻璃靠的是「实时读它背后的画面再糊」，
+        // 一旦被拍进一张独立的图层，它背后就什么都没有了，
+        // 只好退化成一块近似的纯色。
+        //
+        // 更糟的是我当时写的是
+        // `.shadow(color: radius >= 12 ? … : .clear, …)`——
+        // **修饰符是无条件挂上去的**，`.clear` 只是让阴影看不见，
+        // 离屏那一下照跑。于是连胶囊、小标签在内，全 App 的玻璃一起坏掉。
+        //
+        // ⚠️ 记两条：
+        // · **`Material` 上面不能套 `.shadow` / `.blur` / `.drawingGroup`
+        //   这类会触发离屏的修饰符**，套了它就不再是玻璃。
+        // · **三元里那个 `.clear` 分支不等于「不加这个修饰符」。**
+        //   想不加就得让整个修饰符不存在。
+        //
+        // 那篇文章说的第三层（很轻的阴影）不是不能做，但**得画在玻璃外面**，
+        // 不能套在玻璃这一层上。留到以后单独做，现在保住玻璃本身要紧。
         .environment(\.colorScheme, .light)
     }
 

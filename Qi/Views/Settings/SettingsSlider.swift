@@ -80,7 +80,12 @@ struct SettingsSlider: View {
             .animation(.spring(response: 0.22, dampingFraction: 0.7), value: dragging)
 
             if let note {
-                Text(note)
+                // ⚠️ 走 `MD.inline`，不能是 `Text(note)`。
+                // `note` 是个**变量**——SwiftUI 只对写死的字面量解析 markdown，
+                // 拿变量渲染的时候两对星号是原样显示出来的。
+                // 她说的「没有 markdown 渲染」就是这一处：
+                // 「模糊程度」「深色下压暗」那几段说明底下全是裸露的 `**`。
+                Text(MD.inline(note))
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
             }

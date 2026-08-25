@@ -476,7 +476,7 @@ struct AnnotateSheet: View {
                         // 而她要批的往往就是「这半句写错了」。
                         // 这个控件 App 里早就有（读那条消息的时候用的），
                         // **直接用它，不另造一个**——两套选法迟早长歪。
-                        CharacterPicker(text: fullText) { picked = $0 }
+                        CharacterPicker(text: fullText, onPick: { picked = $0 }, confirmVerb: "确定")
                             .padding(12)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .glassBackground(radius: 14,

@@ -245,7 +245,30 @@ enum MD {
         // 原文没错，只是旁边补一句。两件事不能用同一个记号。
         //
         // 记号本身（`⟪⟫`）不显示出来，只留里面的字 + 箭头 + 改的那半。
-        if raw.contains(Annotated.open) {
+        // 批注本身：`⟬…⟭` → 红字（不带下划线）。
+        // 挑不着原句的那种批注只有这一层，没有下划线可画——
+        // 但**它必须是红的**，不然就是一行普通的黑字，看不出是批注。
+        // ⚠️ 必须**两个记号都在**才进来。
+        // 只写 `contains(redOpen)` 的话，碰上一个没配对的 `⟬`：
+        // while 循环一次都不跑，最后那句 `inline(String(rest))`
+        // 拿着**一模一样的字符串**再进来一次——**无限递归，当场卡死。**
+        // 正文里出现一个孤立的 `⟬` 不是不可能的事。
+        if raw.contains(Annotated.redOpen), raw.contains(Annotated.redClose) {
+            var out = AttributedString()
+            var rest = Substring(raw)
+            while let a = rest.range(of: Annotated.redOpen),
+                  let b = rest.range(of: Annotated.redClose,
+                                     range: a.upperBound..<rest.endIndex) {
+                out += inline(String(rest[rest.startIndex..<a.lowerBound]))
+                var red = AttributedString(String(rest[a.upperBound..<b.lowerBound]))
+                red.foregroundColor = .red
+                out += red
+                rest = rest[b.upperBound...]
+            }
+            out += inline(String(rest))
+            return out
+        }
+        if raw.contains(Annotated.open), raw.contains(Annotated.close) {
             var out = AttributedString()
             var rest = Substring(raw)
             while let a = rest.range(of: Annotated.open),
@@ -269,7 +292,8 @@ enum MD {
         //
         // ⚠️ 这一档留着，**它跟批注不是一回事**：
         // 这是「他记错了、后来改对了」，原文真的作废——那才该划掉。
-        if raw.contains("~~") {
+        // 同理：单独一对波浪号不算，得有两处才成对
+        if raw.components(separatedBy: "~~").count >= 3 {
             var out = AttributedString()
             var rest = Substring(raw)
             while let a = rest.range(of: "~~"),

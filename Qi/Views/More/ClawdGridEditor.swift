@@ -22,14 +22,30 @@ import SwiftUI
 /// 存进表情库那一整条路一个字都不用改。
 struct ClawdGridEditor: View {
 
-    /// 画完之后把 SVG 交出去（工坊那边拿它去渲染和保存）。
-    /// 第二个参数是「要不要装在 clawd 身上」——她说预览不该老是那个身子。
-    var onChange: (String, Bool) -> Void
-
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
 
-    @State private var doc = ClawdDoodle()
+    /// 画布本身。
+    ///
+    /// ⚠️ **它不能是这一层的 `@State`。**
+    ///
+    /// 工坊那三个页签是 `switch tab` 切出来的——
+    /// 切走一次这个 View 就被拆了，`@State` 跟着归零。
+    /// 她的原话：「零件这边跟画那边我自己画的东西不是连接的」——
+    /// 一半就是这个：她去零件那边加一下，再回来，画布是空的。
+    ///
+    /// 现在它住在 `ClawdStudioView`，这儿只拿一个绑定。
+    @Binding var doc: ClawdDoodle
+
+    /// 画完之后把 SVG 交出去（工坊那边拿它去渲染和保存）。
+    /// 第二个参数是「要不要装在 clawd 身上」——她说预览不该老是那个身子。
+    ///
+    /// ⚠️ **它必须声明在 `doc` 后面。**
+    /// 合成的构造器按声明顺序排参数，而尾随闭包填的是
+    /// **最后一个**参数——写反了的话
+    /// `ClawdGridEditor(doc: $doodle) { … }` 压根儿编译不过。
+    var onChange: (String, Bool) -> Void
+
     /// 撤销栈。每动一下压一份进去——**她要的第一件事就是这个**。
     @State private var history: [ClawdDoodle] = []
     @State private var mode: Mode = .paint
@@ -110,7 +126,16 @@ struct ClawdGridEditor: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
-        .onAppear { emit() }
+        // ⚠️ **不能无条件 `emit()`。**
+        //
+        // 上一版这儿是 `.onAppear { emit() }`：每次切回「画」这一档，
+        // 它一出现就把 `svg` 整个覆盖掉——
+        // **她在零件那边加的东西当场就没了。**
+        // 那就是她说的「我画了什么想在这边添加小部件或者动画都不行」。
+        //
+        // 现在只有**画布上真的有东西**的时候才报一次（用来初次对齐预览），
+        // 空画布一律不碰外面那份。
+        .onAppear { if !doc.isEmpty { emit() } }
     }
 
     // MARK: 画布

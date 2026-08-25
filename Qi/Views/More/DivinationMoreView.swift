@@ -401,7 +401,7 @@ struct QuestionBox: View {
                 .lineLimit(1...3)
                 .padding(10)
                 .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
-            Text(hint)
+            Text(MD.inline(hint))
                 .font(.app(10.5))
                 .foregroundStyle(Theme.textMuted(scheme))
         }

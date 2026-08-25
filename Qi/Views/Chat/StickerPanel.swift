@@ -374,7 +374,7 @@ struct StickerEditorView: View {
                 .textFieldStyle(.plain)
                 .padding(10)
                 .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
-            Text(hint)
+            Text(MD.inline(hint))
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
         }

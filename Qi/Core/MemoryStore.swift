@@ -60,6 +60,23 @@ enum Annotated {
     static let close: String = "⟫"
     static let arrow: String = "→"
 
+    /// 批注**本身**的记号：`⟬改成什么⟭` → 红色（不带下划线）。
+    ///
+    /// ⚠️ 为什么要第二个记号：
+    ///
+    /// 她截图给我看「没有红色下划线」，而她那条批注**没挑原句**
+    /// （`original` 是空的），所以走的是「另起一行」那一支。
+    /// 而我把那一支写成了**纯文本**——于是既没有下划线（本来就没有原句可划），
+    /// **红色也一起丢了**。
+    ///
+    /// 上一版这一支在 `MemoryLibraryView` 里是单独一个 `ForEach` 画的、
+    /// 带着 `.red`；我把它并进正文之后，颜色跟着那个 `ForEach` 一起没了。
+    ///
+    /// ⚠️ 记一句：**把一段内容从「单独渲染」并进「正文」的时候，
+    /// 它原来那身样式不会跟着走。** 并之前先问一句「它原来是什么颜色」。
+    static let redOpen: String = "⟬"
+    static let redClose: String = "⟭"
+
     /// 正文 + 批注 → 显示用的那份文本
     static func apply(_ text: String, _ anns: [MemoryAnnotation]?) -> String {
         guard let anns, !anns.isEmpty else { return text }
@@ -69,18 +86,24 @@ enum Annotated {
             let original = a.original.trimmingCharacters(in: .whitespacesAndNewlines)
             let correction = a.correction.trimmingCharacters(in: .whitespacesAndNewlines)
             // 原句还在正文里 → 原地画成 ⟪原句⟫→批注
+            // 原句红色下划线，箭头和批注也红——整段读起来是一处修改，
+            // 不是「一半是原文一半是别人插进来的字」。
             if !original.isEmpty, let r = out.range(of: original) {
-                out.replaceSubrange(r, with: open + original + close + arrow + correction)
+                out.replaceSubrange(
+                    r, with: open + original + close
+                        + redOpen + arrow + correction + redClose)
                 continue
             }
             // 没挑句子，或者找不着了 → 挂在末尾，别丢。
             // ⚠️ 这一支现在也能删了（见 `MemoryStore.removeAnnotation`）——
             // 她那两条 `⤷ 饼饼批注：bingbing` 就是这么来的：
             // 写的时候一句都没挑，所以锚不到位置。
+            // ⚠️ 这两支也要包红。**上一版忘了**，她看到的就是一行黑字。
             if original.isEmpty {
-                loose.append("⤷ \(a.author)：\(correction)")
+                loose.append("⤷ \(a.author)：" + redOpen + correction + redClose)
             } else {
-                loose.append("⤷ \(a.author)：" + open + original + close + arrow + correction)
+                loose.append("⤷ \(a.author)：" + open + original + close
+                             + redOpen + arrow + correction + redClose)
             }
         }
         if !loose.isEmpty { out += "\n" + loose.joined(separator: "\n") }

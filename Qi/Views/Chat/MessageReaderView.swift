@@ -163,6 +163,19 @@ struct CharacterPicker: View {
 
     let text: String
     var onPick: (String) -> Void
+    /// 按钮上那个动词。默认「复制」。
+    ///
+    /// ⚠️ **这个按钮做什么是 `onPick` 说了算的，
+    /// 所以标题也必须由调用方定。**
+    ///
+    /// 上一版把「复制」写死在这儿，而写批注那条路上
+    /// 它实际是「确定」。她的原话：
+    /// 「我挑了原句，只是按钮是复制选中的字，我以为功能是复制…」
+    ///
+    /// 于是她从来没真正挑中过原句，而我花了两窗去查
+    /// 「为什么没有红色下划线」。
+    /// **按钮上的字就是功能本身——写错了等于功能不存在。**
+    var confirmVerb: String = "复制"
 
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
@@ -179,7 +192,7 @@ struct CharacterPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(hint)
+            Text(MD.inline(hint))
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
 
@@ -217,7 +230,7 @@ struct CharacterPicker: View {
                 Button {
                     onPick(String(chars[r]))
                 } label: {
-                    Text("复制选中的 \(r.count) 个字")
+                    Text(confirmVerb + "选中的 \(r.count) 个字")
                         .font(.app(13))
                         .foregroundStyle(Theme.textMain(scheme))
                         .frame(maxWidth: .infinity)

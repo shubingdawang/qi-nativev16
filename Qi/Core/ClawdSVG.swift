@@ -203,18 +203,6 @@ enum ClawdSVG {
                50%      { transform: rotate(5deg); }
              }
              """),
-        Part(name: "一行字",
-             svg: """
-             <text class="say" x="160" y="-34">在呢</text>
-             """,
-             css: """
-             .say {
-               fill: #4A4038;
-               font-size: 34px;
-               font-weight: 600;
-               text-anchor: middle;
-             }
-             """),
         Part(name: "小水滴",
              svg: """
              <rect class="tear" x="86" y="86" width="12" height="22" rx="6"/>
@@ -228,15 +216,44 @@ enum ClawdSVG {
                0%   { transform: translateY(0); opacity: 1; }
                100% { transform: translateY(70px); opacity: 0; }
              }
-             """),
-        Part(name: "抱个东西",
-             svg: """
-             <rect class="hold" x="118" y="120" width="84" height="60" rx="6"/>
-             """,
-             css: """
-             .hold { fill: #E5DCC8; stroke: #C9BFA6; stroke-width: 4; }
              """)
     ]
+
+    // MARK: 能自己填字的那一件
+
+    /// 说一句话。**字是她填的，不是写死的。**
+    ///
+    /// ⚠️ 上一版把这件做成了固定零件，内容写死成「在呢」。
+    /// 她的原话：「加一行字，写死了只有在呢，
+    /// 我需要输入其他东西就不行了。」
+    ///
+    /// **一件只能产出一个结果的「零件」，对她来说等于没有。**
+    /// 同理那件「抱个东西」——它只能抱一个白方块，
+    /// 换不了别的，所以**整件删了**（她定的：
+    /// 「无法 diy 的就不要了」）。
+    static func sayPart(_ words: String) -> Part {
+        Part(name: "一行字",
+             svg: "<text class=\"say\" x=\"160\" y=\"-34\">" + escape(words) + "</text>",
+             css: """
+             .say {
+               fill: #4A4038;
+               font-size: 34px;
+               font-weight: 600;
+               text-anchor: middle;
+             }
+             """)
+    }
+
+    /// 往 SVG 里塞文字之前必须转义。
+    ///
+    /// ⚠️ 她要是打了一个 `<` 或者 `&`，
+    /// **整张 SVG 当场变成废文件**，预览一片空白。
+    /// 能让她自由输入的地方，就得把输入当成不可信的。
+    static func escape(_ s: String) -> String {
+        s.replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+    }
 
     // MARK: 拼成一张能渲染的网页
 
@@ -244,9 +261,23 @@ enum ClawdSVG {
     ///
     /// 背景留透明——表情包贴到聊天里不该带一块白底。
     static func page(svg: String, css: String, scale: Double = 1) -> String {
-        // viewBox 是 320×230，留点余量给头顶的闪光和那行字
-        let width = 380.0 * scale
-        let height = 320.0 * scale
+        // ⚠️ **尺寸不许再写死像素。**
+        //
+        // 上一版是 `width: 380px; height: 320px`，而预览那块 WebView
+        // 只有 260 点高——WKWebView 不会把页面缩下去，它就是**裁掉**。
+        // 于是任何跑到 viewBox 外面的东西（头顶闪光在 y=-26、
+        // 那行字在 y=-34）都被切在屏幕外。
+        //
+        // 她的原话：「我在零件这边点击加一行字，上面的字在屏幕外面，
+        // 我甚至不能缩小看清全部。」——**缩小也没用，因为它不是被缩掉的，
+        // 是被裁掉的。**「头顶闪光」其实一直也是隐形的，只是没人发现。
+        //
+        // 现在按百分比铺：页面永远等于容器那么大，SVG 占八成、
+        // 剩下两成留给溢出的内容（`overflow: visible` 让它画得出来）。
+        // 容器多大都不会裁。
+        //
+        // `scale` 这个参数留着不动——导出那条路要用它决定倍率。
+        _ = scale
         return """
         <!DOCTYPE html>
         <html><head>
@@ -255,11 +286,14 @@ enum ClawdSVG {
         html, body {
           margin: 0; padding: 0;
           background: transparent;
-          width: \(Int(width))px; height: \(Int(height))px;
+          width: 100%; height: 100%;
           display: flex; align-items: center; justify-content: center;
           overflow: hidden;
         }
-        svg { width: \(Int(width * 0.86))px; overflow: visible; }
+        svg {
+          width: 80%; height: 80%;
+          overflow: visible;
+        }
         \(css)
         </style>
         </head><body>
@@ -299,5 +333,125 @@ enum ClawdSVG {
             return svg
         }
         return svg.replacingCharacters(in: mark, with: "  " + part + "\n  </g>")
+    }
+
+    // MARK: 放上去的零件要能挪
+
+    /// 每一件零件的坐标都是**照 clawd 的身子定死的**
+    /// （腮红在 x=50,y=92，因为那儿正好是他的脸颊）。
+    ///
+    /// 她画的不一定是 clawd——画一朵花、一杯奶茶，
+    /// 腮红照样落在「clawd 脸颊」那个位置上，落在哪儿全看运气。
+    ///
+    /// 所以放上去的零件统统包一层 `<g id="pN" data-name="腮红" transform="…">`：
+    /// **位置变成一个能改的属性**，而不是写死在坐标里。
+    ///
+    /// ⚠️ 为什么不另存一份「零件清单」在 Swift 里：
+    /// 「图形」那一页她能直接改 SVG。**存两份就一定会对不上**——
+    /// 她手改了一处，Swift 那份还以为是原来的样子。
+    /// 现在 SVG 本身就是唯一的那份账，要什么就从它身上读。
+    struct Placed: Identifiable {
+        let id: String
+        let name: String
+    }
+
+    /// 包一层，变成能挪的
+    static func placed(_ inner: String, name: String, id: String) -> String {
+        "<g id=\"" + id + "\" data-name=\"" + escape(name) + "\""
+            + " transform=\"translate(0,0) scale(1)\">"
+            + inner
+            + "</g>"
+    }
+
+    /// 下一件该叫什么 id。**扫现有的取最大再加一**——
+    /// 不这么算的话，删掉中间一件再放一件就会撞 id
+    static func nextPlacedID(in svg: String) -> String {
+        var maxN = 0
+        var rest = Substring(svg)
+        while let r = rest.range(of: "id=\"p") {
+            let after = rest[r.upperBound...]
+            let digits = after.prefix { $0.isNumber }
+            if let n = Int(digits) { maxN = max(maxN, n) }
+            rest = after
+        }
+        return "p\(maxN + 1)"
+    }
+
+    /// 现在放着哪几件
+    static func placedList(in svg: String) -> [Placed] {
+        var out: [Placed] = []
+        var rest = Substring(svg)
+        while let open = rest.range(of: "<g id=\"p") {
+            let after = rest[open.upperBound...]
+            let digits = String(after.prefix { $0.isNumber })
+            guard !digits.isEmpty else { rest = after; continue }
+            var name = "零件"
+            if let n = after.range(of: "data-name=\""),
+               let e = after.range(of: "\"", range: n.upperBound..<after.endIndex) {
+                name = unescape(String(after[n.upperBound..<e.lowerBound]))
+            }
+            out.append(Placed(id: "p" + digits, name: name))
+            rest = after
+        }
+        return out
+    }
+
+    /// 读某一件现在挪到哪儿、放大了多少
+    static func transformOf(_ id: String, in svg: String) -> (dx: Double, dy: Double, scale: Double) {
+        guard let g = svg.range(of: "<g id=\"" + id + "\""),
+              let t = svg.range(of: "transform=\"", range: g.upperBound..<svg.endIndex),
+              let e = svg.range(of: "\"", range: t.upperBound..<svg.endIndex)
+        else { return (0, 0, 1) }
+        return parse(String(svg[t.upperBound..<e.lowerBound]))
+    }
+
+    /// `translate(12,-30) scale(1.2)` → 三个数
+    static func parse(_ transform: String) -> (dx: Double, dy: Double, scale: Double) {
+        func number(after key: String) -> [Double] {
+            guard let r = transform.range(of: key + "(") ,
+                  let e = transform.range(of: ")", range: r.upperBound..<transform.endIndex)
+            else { return [] }
+            return transform[r.upperBound..<e.lowerBound]
+                .split(separator: ",")
+                .compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+        }
+        let t = number(after: "translate")
+        let s = number(after: "scale")
+        return (t.count > 0 ? t[0] : 0,
+                t.count > 1 ? t[1] : 0,
+                s.first ?? 1)
+    }
+
+    static func transformText(dx: Double, dy: Double, scale: Double) -> String {
+        String(format: "translate(%.1f,%.1f) scale(%.2f)", dx, dy, scale)
+    }
+
+    /// 把某一件挪到新位置
+    static func move(_ id: String, dx: Double, dy: Double, scale: Double,
+                     in svg: String) -> String {
+        guard let g = svg.range(of: "<g id=\"" + id + "\""),
+              let t = svg.range(of: "transform=\"", range: g.upperBound..<svg.endIndex),
+              let e = svg.range(of: "\"", range: t.upperBound..<svg.endIndex)
+        else { return svg }
+        return svg.replacingCharacters(in: t.upperBound..<e.lowerBound,
+                                       with: transformText(dx: dx, dy: dy, scale: scale))
+    }
+
+    /// 把某一件整个拿掉。
+    ///
+    /// ⚠️ 零件里面不会再有 `<g>`，所以找**紧接着的第一个** `</g>` 就是它的收尾。
+    /// 哪天零件里出现了嵌套的组，这儿要改成数层数。
+    static func removePlaced(_ id: String, from svg: String) -> String {
+        guard let open = svg.range(of: "<g id=\"" + id + "\""),
+              let close = svg.range(of: "</g>", range: open.upperBound..<svg.endIndex)
+        else { return svg }
+        return svg.replacingCharacters(in: open.lowerBound..<close.upperBound, with: "")
+    }
+
+    /// `escape` 的反向。读 `data-name` 的时候用
+    static func unescape(_ s: String) -> String {
+        s.replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&amp;", with: "&")
     }
 }

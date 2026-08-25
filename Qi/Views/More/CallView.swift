@@ -124,7 +124,8 @@ struct IncomingCallView: View {
         .padding(.vertical, 11)
         .glassBackground(radius: 20, strength: app.settings.glassOpacity, extra: 0.25)
         .padding(.horizontal, 12)
-        .shadow(color: .black.opacity(0.18), radius: 16, y: 6)
+        // ⚠️ 这儿的 `.shadow` 删了：它套在 glassBackground 上面，
+        // 会强制离屏渲染，把玻璃压成一块纯色（见 `Theme.GlassCard`）。
         .animation(.easeOut(duration: 0.2), value: writing)
         .onAppear {
             withAnimation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true)) {

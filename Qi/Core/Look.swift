@@ -193,7 +193,8 @@ struct EmptyNote: View {
                 .frame(width: 44)
 
             if !hint.isEmpty {
-                Text(hint)
+                // 同上：`hint` 是变量，得走 `MD.inline` 才认得 `**`
+                Text(MD.inline(hint))
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .multilineTextAlignment(.center)

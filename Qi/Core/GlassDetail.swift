@@ -33,15 +33,19 @@ import UIKit
 /// ⚠️ 关键词是**轻**。这三层每一层都该是「不盯着看就注意不到」的程度——
 /// 上一版那道射灯之所以刺眼，就是因为它是唯一一层，只好使劲。
 /// 三层都在的时候，每一层都可以很淡。
-enum GlassDetail {
-
-    /// 阴影：**非常轻**。重一点点就从玻璃变成悬浮的塑料片。
-    static func shadowColor(_ scheme: ColorScheme) -> Color {
-        .black.opacity(scheme == .dark ? 0.24 : 0.055)
-    }
-    static let shadowRadius: CGFloat = 12
-    static let shadowY: CGFloat = 5
-}
+// ⚠️ **第三层「很轻的阴影」撤了，而且短期内别再试。**
+//
+// 上一版把 `.shadow` 挂在 `GlassSurface` 上，结果她说「玻璃完全不对」——
+// 一屏卡片全成了灰白平板，壁纸一点都透不上来。
+//
+// 原因不是阴影难看：**`.shadow` 会强制离屏渲染，而离屏那一下
+// 把 `Material` 的背景采样打断了**。系统那块玻璃靠的是
+// 「实时读它背后的画面再糊」，一旦被拍进独立图层，它背后什么都没有，
+// 只能退化成一块近似的纯色。
+//
+// 那几个阴影常量也一起删了——**留着就是等着有人再把它加回去**。
+// 真要做这一层，得把阴影画在**玻璃外面**（比如底下垫一个挖空了卡片形状的
+// 模糊黑块），不能套在玻璃这一层上。那是另一件事，以后单独做。
 
 /// 边缘那两层（高光 + 描边）。阴影不在这儿——
 /// 阴影得画在**卡片底下**，而这一层是叠在上面的。
@@ -65,9 +69,9 @@ struct GlassEdge: View {
             shape.strokeBorder(
                 LinearGradient(
                     stops: [
-                        .init(color: .white.opacity(scheme == .dark ? 0.26 : 0.62),
+                        .init(color: .white.opacity(scheme == .dark ? 0.20 : 0.42),
                               location: 0),
-                        .init(color: .white.opacity(scheme == .dark ? 0.06 : 0.16),
+                        .init(color: .white.opacity(scheme == .dark ? 0.05 : 0.11),
                               location: 0.45),
                         .init(color: .white.opacity(scheme == .dark ? 0.02 : 0.06),
                               location: 1)
@@ -119,7 +123,7 @@ enum GlassGrain {
             // 取高位：低位的周期短，直接用会出现肉眼可见的条纹
             let v = Double((seed >> 33) % 256) / 255
             // 预乘 alpha：白色 + 随机透明度 → RGB 三个通道都等于 alpha
-            let a = UInt8(v * 46)
+            let a = UInt8(v * 30)
             bytes[i * 4 + 0] = a
             bytes[i * 4 + 1] = a
             bytes[i * 4 + 2] = a
@@ -154,7 +158,7 @@ struct GlassGrainLayer: View {
         Image(uiImage: GlassGrain.tile)
             .resizable(resizingMode: .tile)
             // 深色下颗粒要更淡：白点打在暗面上本来就比打在亮面上显眼
-            .opacity((scheme == .dark ? 0.5 : 0.85) * min(1, max(0.3, strength)))
+            .opacity((scheme == .dark ? 0.42 : 0.55) * min(1, max(0.3, strength)))
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
             .allowsHitTesting(false)
             // ⚠️ **不加 `blendMode(.overlay)`。**
