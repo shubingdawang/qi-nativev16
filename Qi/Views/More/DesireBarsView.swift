@@ -42,7 +42,7 @@ struct DesireBars: View {
                     .foregroundStyle(app.settings.accentColor)
                     .padding(.top, 1)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(intent.reason)
+                    Text(MD.inline(intent.reason))
                         .font(.app(13))
                         .foregroundStyle(Theme.textMain(scheme))
                     Text("顶上来的是「\(intent.drive.label)」\(String(format: "%.2f", intent.score))")

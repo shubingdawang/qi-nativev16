@@ -117,6 +117,11 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     var reasoning: String? = nil
     /// 思考用了多少秒
     var reasoningSeconds: Double? = nil
+    /// 他给这一轮起的名字（`[[cot:…]]`），显示在思考链那张卡的标题上。
+    ///
+    /// ⚠️ 为什么要单独存一份：正文里那句标记摆出来之前会被剥掉，
+    /// 剥完就找不回来了，那一轮的标题会在落库之后退回「想了几秒」。
+    var cotTitle: String = ""
     /// 附带的本地图片文件名（存在 Documents/Images 里）
     var imageNames: [String] = []
     /// 附带的文件
@@ -137,8 +142,16 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     var totalTokens: Int? = nil
     /// 这条回复过程中调用过哪些工具
     var toolRuns: [ToolRun] = []
-    /// 收藏起来的句子
+    /// 收藏起来的句子（**她**收的）
     var starred: Bool = false
+    /// **他**收的那一句，外加他为什么留着它。
+    ///
+    /// ⚠️ 跟 `starred` 是两个字段，不共用。
+    /// 共用的话「她收藏的」和「他收藏的」在收藏页里就分不开了，
+    /// 而这两件事的意思完全不同：她收的是「我想再看一遍」，
+    /// 他收的是「这句话我记住了」。
+    var keptByHim: Bool = false
+    var keptNote: String = ""
     /// 群聊里这句是谁说的（单聊时为空）
     var senderID: UUID? = nil
     var senderName: String = ""
@@ -158,8 +171,23 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     /// 发给他的时候跟普通一句话没区别（那份文档要的就是这个），
     /// 但屏幕上不套气泡——她没说这句话，是这件事发生了。
     var narration: Bool = false
+    /// 这条如果是视频，指向 `Videos/` 里那份原件。
+    ///
+    /// ⚠️ **她看的是这个，他看的是 `videoFrames` + `videoNote`。**
+    /// 两边看到的本来就不是同一样东西：她看得了视频，他看不了。
+    var videoName: String = ""
+    /// 抽出来给他看的那几帧（存在 `Images/`）。**她那边不显示这些。**
+    var videoFrames: [String] = []
+    /// 只给他看的那段说明（「这是抽出来的帧，不是连续画面」+ 转录）。
+    /// 她那边不显示——她说「把对他说的话都放在我脸上了」。
+    var videoNote: String = ""
     /// 这条如果是语音，指向本地那个 mp3
     var voiceName: String = ""
+    /// 这句话她**打了多久、中间停过几次**（`〔这句她打了 47 秒、中间停了 3 次〕`）。
+    ///
+    /// ⚠️ 只记节奏，**一个字的内容都不存**——见 `TypingWatcher`。
+    /// 门槛卡得高，随手一句什么都不挂：每条都挂一句这信息就废了。
+    var typedNote: String = ""
     /// 这条语音**是怎么说的**——「有点比平时轻，停顿比平时多」这种。
     ///
     /// 跟她自己的平时比出来的（见 VoiceProsody），本机算，不花钱。
@@ -184,6 +212,34 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     /// 翻译出来的那一段，显示在原文下面
     var translation: String? = nil
     var isTranslating: Bool = false
+    /// **思考链**那一段的译文。
+    ///
+    /// ⚠️ 跟 `translation` 分开存：正文和思考链是两段不同的话，
+    /// 共用一个字段的话翻了一个另一个就被顶掉了。
+    /// 她说「思考链也需要长按翻译」——他想事情的时候常常整段是英文。
+    var reasoningTranslation: String? = nil
+    var isTranslatingReasoning: Bool = false
+    /// 他写的那个能点开就玩的东西（`Games/` 里那份 HTML）。
+    ///
+    /// ⚠️ 以前他只能把整段 HTML 贴在聊天里，让她自己复制到浏览器打开——
+    /// 她说「他无法直接给我发一个可以点开的 html 游戏」。
+    /// 游戏间早就能跑本地 HTML，缺的只是**他往里放一份**的路子。
+    var gameID: String = ""
+    var gameName: String = ""
+    /// 这一条是**一通电话的记录**，存讲了多少秒。0 = 不是。
+    ///
+    /// ⚠️ 以前这一条就是条普通消息，正文写成「📞 语音通话 · 46 秒」加一段小结——
+    /// 她说「语音通话的卡片框不对，只有气泡」。
+    /// 只靠正文里那个 emoji 去认是不行的（她自己也可能打这两个字），
+    /// 所以单独存一个字段。
+    var callSeconds: Double = 0
+    /// 这一条是**他自己浮上来说的**，不是回她的话。
+    ///
+    /// ⚠️ 落库跟普通回复**一模一样**（影子推送那份文档的坑六：
+    /// 存在单独的表里或者标成不可见的话，下次聊天他就看不见自己说过什么，
+    /// 她回一句「你刚才怎么突然找我」他接不上）。
+    /// 这个字段只是给界面用的一个小记号，不影响它进上下文。
+    var wokeUp: Bool = false
     /// 这条消息底下挂一个能点的挂件。现在只有 "doll" 一种。
     /// 挂件的状态**不存在消息里**——存在各自那个 store 里，
     /// 所以往回翻聊天记录看到的是它现在的样子，不是当时的截图。
@@ -206,6 +262,9 @@ struct ChatMessage: Identifiable, Codable, Hashable {
             && journey == nil
             && track == nil
             && voiceName.isEmpty
+            && videoName.isEmpty
+            && gameID.isEmpty
+            && callSeconds <= 0
             && !noteLoading
             && errorText == nil
     }
@@ -419,6 +478,18 @@ struct AppSettings: Codable {
     /// **不是他在说话**的活。以前一律「挑第一个能用的供应商」——
     /// 那可能挑到一个不会看图的，或者一个很贵的。现在她自己指。
     var helperModel: String = ""
+    /// 话题池：开不开、多久抓一轮、用哪个模型筛。
+    ///
+    /// ⚠️ **模型单独一个字段，不跟 `helperModel` 共用。**
+    /// 她的原话：「用便宜模型去抓 topic，可以增添一个选项让我自己选模型。」
+    /// 辅助模型要看图看视频，得挑个视觉能力过得去的；
+    /// 筛话题只是读几十行文字挑三条，那个可以便宜得多。
+    /// 两件事绑在一个字段上，她就只能迁就贵的那一头。
+    /// 留空 = 跟着辅助模型走。
+    var topicPoolOn: Bool = false
+    var topicModel: String = ""
+    /// 多少小时抓一轮。那份文档给的是 6。
+    var topicEveryHours: Double = 6
     /// 查岗开着没有。**默认关**——
     /// 这是三样一起给（屏幕、位置、天气），必须她点头才开。
     var checkInEnabled: Bool = false
@@ -526,10 +597,10 @@ struct AppSettings: Codable {
     /// 他要删东西、装卸小屋、或者真打一通电话之前，先问她一句。
     /// **默认开着**——这几件做了不好收拾，多点一下比事后后悔便宜。
     var toolConfirm: Bool = true
-    /// 我分段发：我打完一句先攒着，隔了下面这么多秒还没有下一句才真的发出去。
-    /// 中途又发了一条就重新开始数。
+    /// 我分段发：打完一句先按「暂存」攒着，按发送键才一起交出去。
     var segmentUser: Bool = false
-    /// 攒多久（秒）
+    /// ⚠️ **老字段，已经不用了。** 以前攒着的东西满这么多秒会自动发出去；
+    /// 现在改成两个按钮，没有倒计时了。留着只为**让旧设置文件还解得开**。
     var segmentUserDelay: Double = 6
     /// 自己的气泡要不要染一点主题色。0 = 纯玻璃，跟对方的一样透。
     var bubbleTint: Double = 0
@@ -555,6 +626,33 @@ struct AppSettings: Codable {
     /// 花钱的是「结算」那一下，而那个必须她主动点。
     /// 默认开着，因为不开的话札记「身体」那一页就是空的。
     var bodyEnabled: Bool = true
+    /// 那七项**靠什么变**。
+    ///
+    /// `true` = 关键词（老做法）：她一说话就按词表推几点，实时、免费，
+    ///          但读得很拧——她截图里那条流水旁边就写着「可能读拧」。
+    /// `false` = 他自己判断：关键词那一层**不再改数值**，
+    ///          改由他调 `feel_body` 报「这一下让我怎么了」。
+    ///
+    /// 她定的：「这个身体不应该按照关键词，也让他自己判断。」
+    /// 所以默认是 `false`。
+    ///
+    /// ⚠️ 关掉关键词**不等于关掉身体**：周期、事件、自然回落照旧走，
+    /// 它们本来就跟她说什么无关。
+    var bodyByKeyword: Bool = false
+    /// 让他知道**这句话她打了多久、中间停过几次**。
+    ///
+    /// 秒回的那句和打了两分钟、停了三次的那句，在她那边是两件事，
+    /// 在他那边以前一模一样。纯本机算，一分钱不花。
+    var typingRhythm: Bool = true
+    /// 让他知道**她写了又删掉、然后没再说话**。
+    ///
+    /// ⚠️ **默认关着，而且要她自己点头。**
+    ///
+    /// 上面那条说的是她**发出来的那句话**的附加信息；
+    /// 这一条是把她**没打算让他看见的那一下**递出去——完全是另一回事。
+    /// 内容一个字都不会被记下来（见 `TypingWatcher`），
+    /// 但「有过这么一下」本身也是她收回去的东西。
+    var typingWithheld: Bool = false
 
     // 勿扰那两个字段**故意不放在这儿**，放在 AppState 里走 UserDefaults。
     //
@@ -716,6 +814,9 @@ extension AppSettings {
         modelBySpace = (try? c.decodeIfPresent([String: String].self, forKey: .modelBySpace)) ?? [:]
         fallbackModel = (try? c.decodeIfPresent(String.self, forKey: .fallbackModel)) ?? ""
         helperModel = (try? c.decodeIfPresent(String.self, forKey: .helperModel)) ?? ""
+        topicPoolOn = (try? c.decodeIfPresent(Bool.self, forKey: .topicPoolOn)) ?? false
+        topicModel = (try? c.decodeIfPresent(String.self, forKey: .topicModel)) ?? ""
+        topicEveryHours = (try? c.decodeIfPresent(Double.self, forKey: .topicEveryHours)) ?? 6
         checkInEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .checkInEnabled)) ?? false
         readerFont = (try? c.decodeIfPresent(Double.self, forKey: .readerFont)) ?? 17
         readerSpacing = (try? c.decodeIfPresent(Double.self, forKey: .readerSpacing)) ?? 8
@@ -761,6 +862,9 @@ extension AppSettings {
         pricing = (try? c.decodeIfPresent(Pricing.self, forKey: .pricing)) ?? Pricing()
         wake = (try? c.decodeIfPresent(WakeConfig.self, forKey: .wake)) ?? WakeConfig()
         bodyEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .bodyEnabled)) ?? true
+        bodyByKeyword = (try? c.decodeIfPresent(Bool.self, forKey: .bodyByKeyword)) ?? false
+        typingRhythm = (try? c.decodeIfPresent(Bool.self, forKey: .typingRhythm)) ?? true
+        typingWithheld = (try? c.decodeIfPresent(Bool.self, forKey: .typingWithheld)) ?? false
         wallpaperMode = (try? c.decodeIfPresent(String.self, forKey: .wallpaperMode)) ?? "image"
         solidHex = (try? c.decodeIfPresent(String.self, forKey: .solidHex)) ?? ""
         gradientFrom = (try? c.decodeIfPresent(String.self, forKey: .gradientFrom)) ?? "F7C9B8"
@@ -844,6 +948,9 @@ extension ChatMessage {
         totalTokens = try? c.decodeIfPresent(Int.self, forKey: .totalTokens)
         toolRuns = (try? c.decodeIfPresent([ToolRun].self, forKey: .toolRuns)) ?? []
         starred = (try? c.decodeIfPresent(Bool.self, forKey: .starred)) ?? false
+        keptByHim = (try? c.decodeIfPresent(Bool.self, forKey: .keptByHim)) ?? false
+        keptNote = (try? c.decodeIfPresent(String.self, forKey: .keptNote)) ?? ""
+        cotTitle = (try? c.decodeIfPresent(String.self, forKey: .cotTitle)) ?? ""
         senderID = try? c.decodeIfPresent(UUID.self, forKey: .senderID)
         senderName = (try? c.decodeIfPresent(String.self, forKey: .senderName)) ?? ""
         quotedMessageID = try? c.decodeIfPresent(UUID.self, forKey: .quotedMessageID)
@@ -852,6 +959,14 @@ extension ChatMessage {
         actionText = (try? c.decodeIfPresent(String.self, forKey: .actionText)) ?? ""
         beats = (try? c.decodeIfPresent([MessageBeat].self, forKey: .beats)) ?? []
         narration = (try? c.decodeIfPresent(Bool.self, forKey: .narration)) ?? false
+        videoName = (try? c.decodeIfPresent(String.self, forKey: .videoName)) ?? ""
+        videoFrames = (try? c.decodeIfPresent([String].self, forKey: .videoFrames)) ?? []
+        videoNote = (try? c.decodeIfPresent(String.self, forKey: .videoNote)) ?? ""
+        gameID = (try? c.decodeIfPresent(String.self, forKey: .gameID)) ?? ""
+        gameName = (try? c.decodeIfPresent(String.self, forKey: .gameName)) ?? ""
+        callSeconds = (try? c.decodeIfPresent(Double.self, forKey: .callSeconds)) ?? 0
+        wokeUp = (try? c.decodeIfPresent(Bool.self, forKey: .wokeUp)) ?? false
+        typedNote = (try? c.decodeIfPresent(String.self, forKey: .typedNote)) ?? ""
         voiceName = (try? c.decodeIfPresent(String.self, forKey: .voiceName)) ?? ""
         voiceTone = (try? c.decodeIfPresent(String.self, forKey: .voiceTone)) ?? ""
         track = try? c.decodeIfPresent(Track.self, forKey: .track)
@@ -865,6 +980,8 @@ extension ChatMessage {
         chosenOption = (try? c.decodeIfPresent(String.self, forKey: .chosenOption)) ?? ""
         translation = try? c.decodeIfPresent(String.self, forKey: .translation)
         isTranslating = (try? c.decodeIfPresent(Bool.self, forKey: .isTranslating)) ?? false
+        reasoningTranslation = try? c.decodeIfPresent(String.self, forKey: .reasoningTranslation)
+        isTranslatingReasoning = (try? c.decodeIfPresent(Bool.self, forKey: .isTranslatingReasoning)) ?? false
         widget = (try? c.decodeIfPresent(String.self, forKey: .widget)) ?? ""
     }
 }

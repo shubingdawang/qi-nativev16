@@ -227,10 +227,43 @@ struct CallView: View {
                 controls
             }
         }
+        // 左上角那个返回。**不挂断**，只是把这一页收起来。
+        //
+        // 她定的：「在通话页新增一个返回按钮，在打电话的时候
+        // 让我也能去看看其他页面但不挂断。」
+        //
+        // ⚠️ 图标用向下的箭头，不用向左那个。
+        // 向左是「退回上一页」，向下是「收起来」——
+        // 这一下做的是后者，电话还在。
+        .safeAreaInset(edge: .top, spacing: 0) {
+            HStack {
+                Button {
+                    store.minimized = true
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "chevron.down")
+                            .font(.app(12, weight: .semibold))
+                        Text("收起来")
+                            .font(.app(12))
+                    }
+                    .foregroundStyle(Theme.textSoft(scheme))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Capsule().fill(Theme.softFillDeep))
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                Spacer()
+            }
+            .padding(.leading, 14)
+            .padding(.top, 6)
+        }
         .onAppear { startTicking() }
         .onDisappear {
             ticker?.cancel()
-            recorder.discard()
+            // ⚠️ 只有**真的挂了**才丢录音。
+            // 收起来也会走到这儿，而那时候电话还通着。
+            if store.active == nil { recorder.discard() }
         }
     }
 
@@ -272,7 +305,7 @@ struct CallView: View {
         HStack {
             if line.fromMe { Spacer(minLength: 50) }
             VStack(alignment: line.fromMe ? .trailing : .leading, spacing: 3) {
-                Text(line.text)
+                Text(MD.inline(line.text))
                     .font(.app(15))
                     .foregroundStyle(Theme.textMain(scheme))
                     .padding(.horizontal, 14)
@@ -742,7 +775,7 @@ struct CallHistoryView: View {
                             .foregroundStyle(Theme.textSoft(scheme))
 
                         if !r.summary.isEmpty {
-                            Text(r.summary)
+                            Text(MD.inline(r.summary))
                                 .font(.app(12))
                                 .foregroundStyle(Theme.textSoft(scheme))
                                 .lineLimit(3)

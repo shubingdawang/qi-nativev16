@@ -78,8 +78,26 @@ struct GlassEdge: View {
                     ],
                     startPoint: .top, endPoint: .bottom),
                 lineWidth: 1)
-                // 糊掉半个点，边光才是「渗出来的」不是「描上去的」
-                .blur(radius: 0.6)
+
+            // ⚠️ 这儿以前有一句 `.blur(radius: 0.6)`（「让边光渗出来」）。**删了。**
+            //
+            // 她报的：「边上会有白色的光，但是随着上下滑动一会有一会没有，
+            // 截图出来却是好好的。」
+            //
+            // `.blur` 会逼出**离屏渲染**——跟当初那个 `.shadow` 是同一类毛病。
+            // 底下压着一块 `Material`，气泡又在列表里滚动复用，
+            // 那一趟离屏的活儿系统忙不过来就干脆跳过，边光整片消失；
+            // 松手停住、或者截图（截图是重新满帧画一遍）它又回来了。
+            // **「滑动时没有、截图有」基本就是离屏渲染被跳掉了。**
+            //
+            // 那点柔和改用「再描一道更宽更淡的」补回来：
+            // 两道实描边是一次画完的，不用离屏。
+            shape.strokeBorder(
+                LinearGradient(
+                    colors: [.white.opacity(scheme == .dark ? 0.08 : 0.16),
+                             .white.opacity(0)],
+                    startPoint: .top, endPoint: .bottom),
+                lineWidth: 2.5)
 
             // ② 极细的描边，让边界不散。
             // 浅色下用暗边（白边贴白底等于没有），深色下用白边。

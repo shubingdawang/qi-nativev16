@@ -70,11 +70,52 @@ struct RootView: View {
                  + "\n\n这几件做了不好收拾，所以问一句。"
                  + "不想每次都问，去「设置 → 通用」关掉。")
         }
+        // ⚠️ `!calls.minimized`：收起来的时候不摆全屏，**但电话还通着**。
+        //
+        // 以前这儿的 `set` 写死了「关掉 = 挂断」，
+        // 所以根本没有不挂断退出去的路。
         .fullScreenCover(isPresented: Binding(
-            get: { calls.active != nil },
-            set: { if !$0 && calls.active != nil { calls.hangUp(by: "me") } }
+            get: { calls.active != nil && !calls.minimized },
+            set: { open in
+                // 收起来那一下是我们自己改 `minimized` 触发的，
+                // 那种情况**不能当成挂断**。
+                if !open && calls.active != nil && !calls.minimized {
+                    calls.hangUp(by: "me")
+                }
+            }
         )) {
             CallView()
+        }
+        // 电话通着但界面收起来了——顶上摆一条，点一下回去。
+        //
+        // ⚠️ **这一条是必须的，不是锦上添花。**
+        // 没有它，她收起来之后就困在「电话通着但看不见」里，
+        // 既回不去也挂不断。
+        .overlay(alignment: .top) {
+            if calls.active != nil, calls.minimized {
+                Button {
+                    calls.minimized = false
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "phone.fill")
+                            .font(.app(11))
+                        Text("通话中")
+                            .font(.app(12, weight: .medium))
+                        Spacer(minLength: 4)
+                        Text("点一下回去")
+                            .font(.app(10.5))
+                            .opacity(0.75)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Capsule().fill(Color.green.opacity(0.92)))
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
         // 没接通的那些电话，在聊天里落一句。
         //
@@ -428,7 +469,18 @@ struct WallpaperBackground: View {
                 // 深色模式下统一压一道，再叠她自己拉的那道。
                 // 以前只有图片那一档压，换成渐变就白得晃眼。
                 if hasOwnBackground {
-                    if scheme == .dark { Color.black.opacity(0.30) }
+                    // ⚠️ 深色下压的是**壁纸**，不是玻璃。
+                    //
+                    // 她定的：「不用再做这个深色下压暗了，
+                    // 因为背景暗下来毛玻璃就自然暗下来了……
+                    // 深色模式就改成背景压暗 50% 就行了。」
+                    //
+                    // 她是对的，而且这是个**方向错了**的问题不是数值问题：
+                    // 玻璃本来就是「把背后的画面糊一糊」，
+                    // 背后暗了它自然就暗。另外去压玻璃那一层黑，
+                    // 等于在一块白玻璃上盖黑纱——出来是死灰，
+                    // 不是深色的玻璃。她说「全都变成黑色的，太丑了」就是那一层。
+                    if scheme == .dark { Color.black.opacity(0.50) }
                     if app.settings.wallpaperDim > 0.01 {
                         Color.black.opacity(app.settings.wallpaperDim)
                     }

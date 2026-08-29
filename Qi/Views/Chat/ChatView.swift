@@ -67,6 +67,17 @@ struct ChatView: View {
     @State private var pendingVoice: String?
     /// 刚录那条**是怎么说的**，跟 pendingVoice 一起发出去
     @State private var pendingTone: String = ""
+    /// 待发的那段视频：原件给她，帧和说明给他。三样一起走。
+    @State private var pendingVideo: String?
+    @State private var pendingVideoFrames: [String] = []
+    @State private var pendingVideoNote: String = ""
+    /// 输入栏那一块现在有多高。消息区拿它当底部留白，
+    /// 最后一条才不会永远压在玻璃底下。
+    @State private var composerHeight: CGFloat = 96
+    /// 她自己的动作 / 心里话：现在开着哪一个框（nil = 都没开）
+    @State private var beatKind: String?
+    @State private var beatText = ""
+    @FocusState private var beatFocused: Bool
     /// 光标前面刚打了个 @，正等着挑人
     @State private var mentioning = false
     @State private var notice: String?
@@ -180,6 +191,8 @@ struct ChatView: View {
                         },
                         running: app.runningConversationIDs.contains(conv.id),
                         typingTick: typingTick,
+                        // 输入栏那块玻璃现在压在消息上面，底下留出它那么高
+                        bottomInset: composerHeight + 12,
                         jumpTo: jumpTo,
                         onJumped: { jumpTo = nil }
                     )
@@ -194,13 +207,33 @@ struct ChatView: View {
                             }
                         }
                     })
+                    // ⚠️ 输入栏**不再占一行布局**了。
+                    //
+                    // 以前它跟消息区并排在一个 VStack 里：消息区到它上沿为止，
+                    // 底下那一条是它自己的地盘。于是往下滑的时候
+                    // **消息滑到那儿就被它挡住**——她说「所有消息拖到输入框
+                    // 就会被输入框后面的背景遮住」。
+                    //
+                    // 现在它是**浮在消息上面的一块玻璃**：消息整屏铺到底，
+                    // 从它背后透出来。玻璃本来就是干这个的——
+                    // 底下没东西可透的时候，它跟一块不透明的板子没区别。
+                    //
+                    // 消息区底下留出它那么高的空（`composerHeight`），
+                    // 最后一条才不会永远压在它下面。
+                    EmptyView()
+                } else {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
+            }
+            // 输入栏浮在最底下，压在消息上面。见上面那段。
+            .overlay(alignment: .bottom) {
+                if let conv = activeConversation {
                     if selecting {
                         selectionBar(conv)
                     } else {
-                        VStack(spacing: 0) {
-                            // clawd 不再钉在这儿了——它现在满屏走，
-                            // 挂在整页的最上面一层（见下面那个 ClawdRoamer）
-                            VStack(spacing: 8) {
+                        VStack(spacing: 8) {
                             if stickerPanelOpen {
                                 StickerPanel { sticker in
                                     // 选中只是进"待发送"，不会直接飞出去
@@ -213,13 +246,24 @@ struct ChatView: View {
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                             }
                             inputBar(conv)
-                            }
                         }
+                        // 量一下自己多高，交给消息区当底部留白。
+                        // 写死一个数是不行的——待发的图、暂存那条、
+                        // 引用那条都会把它顶高。
+                        .background(GeometryReader { geo in
+                            Color.clear.onAppear { composerHeight = geo.size.height }
+                                // ⚠️ 高度变化**不带动画**。
+                                //
+                                // 带动画的话，列表底部那段留白会在几帧里
+                                // 慢慢长出来，而滑到底那一下已经滑了——
+                                // 两个动画抢同一个位置，看起来就是气泡在抽。
+                                .onChange(of: geo.size.height) { _, h in
+                                    var t = Transaction()
+                                    t.disablesAnimations = true
+                                    withTransaction(t) { composerHeight = h }
+                                }
+                        })
                     }
-                } else {
-                    Spacer()
-                    ProgressView()
-                    Spacer()
                 }
             }
 
@@ -683,15 +727,44 @@ struct ChatView: View {
                 }
             }
 
+            // 待发的那段视频。**只摆一条，不摆那十二张帧**——
+            // 帧是给他看的，她这边看到的应该是「一段视频」这一件东西。
+            if let v = pendingVideo {
+                HStack(spacing: 8) {
+                    Image(systemName: "film")
+                        .font(.app(12))
+                        .foregroundStyle(app.settings.accentColor)
+                    Text("一段视频")
+                        .font(.app(12))
+                        .foregroundStyle(Theme.textSoft(scheme))
+                    Spacer(minLength: 0)
+                    Button {
+                        VideoStore.delete(v)
+                        for f in pendingVideoFrames { ImageStore.delete(f) }
+                        pendingVideo = nil
+                        pendingVideoFrames = []
+                        pendingVideoNote = ""
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.app(10, weight: .medium))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Theme.softFillDeep))
+            }
+
             // 攒着话的时候得给个说法，不然看着像发出去了他却不理你
             if waiting {
                 HStack(spacing: 7) {
                     Image(systemName: "hourglass")
                         .font(.app(11))
                         .foregroundStyle(app.settings.accentColor)
-                    Text("已暂存，包含文字、图片与语音，待发送。"
-                         + "你不说了 \(Int(app.settings.segmentUserDelay)) 秒之后一起发，"
-                         + "长按发送键马上发。")
+                    Text("已暂存，包含文字、图片与语音。"
+                         + "按发送键一起发出，不会自动发。")
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                     Spacer(minLength: 0)
@@ -702,6 +775,17 @@ struct ChatView: View {
                     .fill(Theme.softFillDeep))
             }
 
+            // 她自己的动作和心里话。
+            //
+            // 她定的：「给我也设置一个动作块心理块，就在我的输入法上方两个选项，
+            // 一个动作一个心理，点击后上方出现一个框，可以输入我的动作和心理，
+            // 跟他发这些是一样的表达方式。」
+            //
+            // ⚠️ 走的就是**他那一套标记**（`[[act:]]` / `[[mind:]]`）：
+            // 摆出来之前会被剥成气泡上方那两行小字（`MessageBeats`），
+            // 而他收到的历史里标记还在——他因此知道她做了什么、没说出口什么。
+            // 单独做一套只会变成两种写法，而且他那边读不懂。
+            beatRow
             if let q = quoting {
                 // ⚠️ `alignment: .top` + `fixedSize`：不这么写的话，
                 // 那道竖线会跟着容器一路拉长，中间全是空的（她报的第 11 条）。
@@ -746,10 +830,14 @@ struct ChatView: View {
                     // 不然看不见他上面发的消息」——键盘弹起来会顶掉最后几条。
                     if on { typingTick += 1 }
                 }
-                .onChange(of: draft) { _, text in
-                    // 她一开始打字，列表就滚到最底下。
-                    // 以前不滚，打字的时候最后那几条被键盘顶上去看不见了。
+                .onChange(of: draft) { old, text in
+                    // 她一开始打字，列表就滑到最底下。
+                    // 以前不滑，打字的时候最后那几条被键盘顶上去看不见了。
                     typingTick += 1
+                    // 打字的节奏。**只递字数，不递内容**——
+                    // 写成字数不是为了省事，是为了那边拿不到内容：
+                    // 拿得到就迟早会有人顺手用上。
+                    TypingWatcher.shared.typed(from: old.count, to: text.count)
                     // 末尾是 @ 或者 @ 后面还没打完名字，就把人列出来
                     guard activeConversation?.isGroup == true else {
                         mentioning = false
@@ -926,9 +1014,40 @@ struct ChatView: View {
                             }
                     )
 
+                // 开了「我分段发」的时候，这儿是**两个键**：
+                // 左边「暂存」把这一条攒进这一轮，右边「直接发送」把攒着的
+                // 连同框里这条一起交出去。
+                //
+                // 以前只有一个键 + 一个倒计时（长按才是马上发）。
+                // 她定的：「有时候我想找一个很久的图片发给他，
+                // 就会超出我设置的时间，这样有点赶。」
+                // ——按钮不会自己走，找多久都行。
+                if app.settings.segmentUser, !isRunning {
+                    Button { sendCurrent(conv) } label: {
+                        ZStack {
+                            Circle()
+                                .fill(Theme.softFillDeep)
+                                .frame(width: 36, height: 36)
+                            Image(systemName: "tray.and.arrow.down.fill")
+                                .font(.app(13.5, weight: .semibold))
+                                .foregroundStyle(canSend
+                                                 ? app.settings.primaryColor
+                                                 : Theme.textMuted(scheme))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canSend)
+                    .accessibilityLabel("暂存")
+                }
+
                 Button {
                     if isRunning {
                         app.cancelStream(for: conv.id)
+                    } else if app.settings.segmentUser {
+                        // 框里还有东西就先攒进去，再一起交出去——
+                        // 不然「打了一句直接按发送」会把这一句漏掉
+                        if canSend { sendCurrent(conv) }
+                        app.flushPending(conv.id)
                     } else {
                         sendCurrent(conv)
                     }
@@ -944,33 +1063,109 @@ struct ChatView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(!canSend && !isRunning)
-                // 攒着的时候长按就是"不等了，现在就发"
-                .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.35).onEnded { _ in
-                        guard waiting else { return }
-                        if app.settings.haptics {
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                        }
-                        app.flushPending(conv.id)
-                    }
-                )
+                .disabled(!canSend && !isRunning && !waiting)
+                .accessibilityLabel(app.settings.segmentUser ? "直接发送" : "发送")
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
-        .glassBackground(radius: 24, strength: app.settings.glassOpacity)
-        // 这道影子以前是 Theme.shadow —— 深色下是 40% 的黑、
-        // 半径 14 往下偏 6，落在底栏上就是**一道边界分明的暗带**，
-        // 玻璃反而像贴上去的一张卡片。她说的"突兀"是这个。
+        // 她定的：**气泡和输入框不要边框**（设置页那些卡片照旧要）。
+        // 卡片需要边——它要从背景里分出来；
+        // 输入框和气泡不需要——它们本来就有形状，
+        // 而且就在手边，描一圈反而把整条变重了。
+        .glassBackground(radius: 24, strength: app.settings.glassOpacity, edge: false)
+        // ⚠️ 这里以前还有一道影子。**删了。**
+        //
+        // 两个理由，都是改成「浮在消息上面」之后才成立的：
+        // ① 它现在压在消息上，一道摔开的暗影就是把整屏横切一道；
+        // ② `.shadow` 盖在 `Material` 上会逼出离屏渲染，
+        //    滑动时被跳掉就闪（跟 `GlassEdge` 那句 `.blur` 同一类毛病）。
         //
         // 玻璃本来就不靠影子跟背景分开，靠的是它自己那圈边光。
-        // 影子只需要托住它一点点：摊得更开、淡到几乎看不见。
-        .shadow(color: .black.opacity(scheme == .dark ? 0.12 : 0.05),
-                radius: 22, x: 0, y: 8)
         .padding(.horizontal, 12)
         // 键盘支起来的时候贴着键盘，收着的时候给底下导航条让出位置
         .padding(.bottom, keyboard.up ? 8 : Layout.tabBarSpace + 26)
+    }
+
+    // MARK: 她自己的动作 / 心里话
+
+    /// 输入框上面那两个小按钮，以及点开之后那个框。
+    @ViewBuilder
+    private var beatRow: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
+                beatChip("动作", "act", "chevron.right")
+                beatChip("心理", "mind", "quote.opening")
+                Spacer(minLength: 0)
+            }
+
+            if let kind = beatKind {
+                HStack(spacing: 8) {
+                    TextField(kind == "act" ? "你做了什么" : "你没说出口的那句",
+                              text: $beatText, axis: .vertical)
+                        .font(.app(13))
+                        .lineLimit(1...3)
+                        .focused($beatFocused)
+                        .onSubmit { commitBeat() }
+                    Button("加上") { commitBeat() }
+                        .font(.app(13, weight: .medium))
+                        .foregroundStyle(beatText.trimmingCharacters(in: .whitespaces).isEmpty
+                                         ? Theme.textMuted(scheme)
+                                         : app.settings.accentColor)
+                        .disabled(beatText.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                .padding(.horizontal, 11)
+                .padding(.vertical, 8)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Theme.softFillDeep))
+            }
+        }
+    }
+
+    private func beatChip(_ title: String, _ kind: String, _ icon: String) -> some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.16)) {
+                if beatKind == kind {
+                    beatKind = nil
+                    beatText = ""
+                } else {
+                    beatKind = kind
+                    beatText = ""
+                }
+            }
+            // 点开就把光标放进去。**少一次点击**——
+            // 这个框本来就是为了「顺手补一句」而存在的。
+            if beatKind != nil { beatFocused = true }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: icon).font(.app(9, weight: .semibold))
+                Text(title).font(.app(11.5))
+            }
+            .foregroundStyle(beatKind == kind
+                             ? app.settings.accentColor : Theme.textMuted(scheme))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(Theme.softFillDeep))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// 把这一条落进草稿。
+    ///
+    /// ⚠️ **摆在草稿最前面。** 动作和心里话是那句话的背景，
+    /// 先发生、后开口；缀在后面读起来是「说完了再补个动作」。
+    private func commitBeat() {
+        let t = beatText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let kind = beatKind, !t.isEmpty else { return }
+        let br = "\n"
+        let mark = "[[" + kind + ":" + t + "]]"
+        draft = draft.isEmpty ? mark : mark + br + draft
+        beatText = ""
+        withAnimation(.easeOut(duration: 0.16)) { beatKind = nil }
+        // 光标回输入框，她接着打那句话
+        inputFocused = true
+        typingTick += 1
     }
 
     // MARK: 挑句子时的那条操作栏
@@ -1019,15 +1214,19 @@ struct ChatView: View {
             }
         }
         .padding(.vertical, 12)
-        .glassBackground(radius: 24, strength: app.settings.glassOpacity)
-        // 这道影子以前是 Theme.shadow —— 深色下是 40% 的黑、
-        // 半径 14 往下偏 6，落在底栏上就是**一道边界分明的暗带**，
-        // 玻璃反而像贴上去的一张卡片。她说的"突兀"是这个。
+        // 她定的：**气泡和输入框不要边框**（设置页那些卡片照旧要）。
+        // 卡片需要边——它要从背景里分出来；
+        // 输入框和气泡不需要——它们本来就有形状，
+        // 而且就在手边，描一圈反而把整条变重了。
+        .glassBackground(radius: 24, strength: app.settings.glassOpacity, edge: false)
+        // ⚠️ 这里以前还有一道影子。**删了。**
+        //
+        // 两个理由，都是改成「浮在消息上面」之后才成立的：
+        // ① 它现在压在消息上，一道摔开的暗影就是把整屏横切一道；
+        // ② `.shadow` 盖在 `Material` 上会逼出离屏渲染，
+        //    滑动时被跳掉就闪（跟 `GlassEdge` 那句 `.blur` 同一类毛病）。
         //
         // 玻璃本来就不靠影子跟背景分开，靠的是它自己那圈边光。
-        // 影子只需要托住它一点点：摊得更开、淡到几乎看不见。
-        .shadow(color: .black.opacity(scheme == .dark ? 0.12 : 0.05),
-                radius: 22, x: 0, y: 8)
         .padding(.horizontal, 12)
         // 键盘支起来的时候贴着键盘，收着的时候给底下导航条让出位置
         .padding(.bottom, keyboard.up ? 8 : Layout.tabBarSpace + 26)
@@ -1061,6 +1260,7 @@ struct ChatView: View {
             || !pendingFiles.isEmpty
             || pendingSticker != nil
             || pendingVoice != nil
+            || pendingVideo != nil
     }
 
     /// 录音那条提示写什么
@@ -1195,6 +1395,7 @@ struct ChatView: View {
             let line = draft.trimmingCharacters(in: .whitespacesAndNewlines)
             let hasStuff = !pendingImages.isEmpty || !pendingGIFs.isEmpty
                 || !pendingFiles.isEmpty || pendingSticker != nil || pendingVoice != nil
+                || pendingVideo != nil
             guard !line.isEmpty || hasStuff else { return }
             app.queueSend(text: line,
                           images: pendingImages,
@@ -1204,6 +1405,9 @@ struct ChatView: View {
                           quoting: quoting,
                           voiceName: pendingVoice ?? "",
                           voiceTone: pendingTone,
+                          videoName: pendingVideo ?? "",
+                          videoFrames: pendingVideoFrames,
+                          videoNote: pendingVideoNote,
                           in: conv.id)
             draft = ""
             mentioning = false
@@ -1214,7 +1418,20 @@ struct ChatView: View {
             pendingFiles = []
             pickedItems = []
             pendingSticker = nil
+            pendingVideo = nil
+            pendingVideoFrames = []
+            pendingVideoNote = ""
             quoting = nil
+            // ⚠️ **暂存完把光标留在输入框里。**
+            //
+            // 攒着的时候那条「已暂存…」会出现／消失在输入框上面，
+            // 输入栏一改结构，SwiftUI 就把 TextField 重建了一遍，
+            // 焦点跟着掉——她说「每发送一句就会关闭输入法，
+            // 要我重新再点开，有点麻烦」。
+            //
+            // 分段发本来就是**一句接一句打**的用法，
+            // 每打一句都要重新点一下输入框，这个功能就白做了。
+            inputFocused = true
             return
         }
 
@@ -1226,6 +1443,9 @@ struct ChatView: View {
         let sticker = pendingSticker
         let voice = pendingVoice ?? ""
         let tone = pendingTone
+        let video = pendingVideo ?? ""
+        let frames = pendingVideoFrames
+        let videoNote = pendingVideoNote
         draft = ""
         pendingVoice = nil
         pendingTone = ""
@@ -1234,19 +1454,26 @@ struct ChatView: View {
         pendingFiles = []
         pickedItems = []
         pendingSticker = nil
+        pendingVideo = nil
+        pendingVideoFrames = []
+        pendingVideoNote = ""
         quoting = nil
         mentioning = false
         app.send(text: text, images: images, in: conv.id,
                  imageNames: gifs,
                  files: files, sticker: sticker, quoting: quoted,
-                 voiceName: voice, voiceTone: tone)
+                 voiceName: voice, voiceTone: tone,
+                 videoName: video, videoFrames: frames, videoNote: videoNote)
     }
 
     /// 看一段视频。
     ///
-    /// **没碰发送那条路的任何一行。**
-    /// 抽出来的帧往 `pendingImages` 里一放、
-    /// 说明和台词往输入框里一填，剩下的跟她发图一模一样。
+    /// **两边看到的不是同一样东西**（这是这个功能的整个要点）：
+    /// · 她那边 —— `Videos/` 里那份原件，一张封面加播放键，点开就放
+    /// · 他那边 —— 均匀抽的十几帧 + 一段说明（「这是静止画面，别当作看过」）
+    ///
+    /// 以前两样都往她那边塞：输入框里摆着十二张缩略图，
+    /// 底下跟着那段本来只说给他听的话。她说「把对他说的话都放在我脸上了」。
     /// 新功能能接在现成的路上就别另开一条——
     /// 另开一条就得把“发图”那一整套（存盘、气泡、重试、备份）
     /// 再走一遍，而那一整套现在是对的。
@@ -1264,6 +1491,10 @@ struct ChatView: View {
                 await MainActor.run { videoBusy = nil }
                 return
             }
+            // ⚠️ 原件**留下来**，别抽完帧就删。
+            // 帧是给他看的，原件是给她看的——她发的是一段视频，
+            // 她那边就该是一段能点开放的视频。
+            let saved = VideoStore.save(data)
             let tmp = FileManager.default.temporaryDirectory
                 .appendingPathComponent("要看的-" + UUID().uuidString + ".mov")
             try? data.write(to: tmp, options: .atomic)
@@ -1282,17 +1513,28 @@ struct ChatView: View {
                 // 那条路上，就是在这几行。写一次、用三遍，
                 // 下次再有人拿脚本改这一段也少三个机会写错。
                 let br = "\n"
-                guard !r.frames.isEmpty else {
+                guard !r.frames.isEmpty, let saved else {
                     // 一帧都没抽出来。**别闷声**——
-                    // 什么都不发生的话她只会觉得点坏了
+                    // 什么都不发生的话她只会觉得点坏了。
+                    // 存下来的那份原件也一起清掉，别留个放不出内容的孤儿。
+                    if let saved { VideoStore.delete(saved) }
                     draft += (draft.isEmpty ? "" : br) + (r.trouble.isEmpty
                         ? "〈这段视频读不出来〉" : "〈" + r.trouble + "〉")
                     return
                 }
-                pendingImages.append(contentsOf: r.frames)
-                var add = r.note
-                if !r.trouble.isEmpty { add += br + "〈" + r.trouble + "〉" }
-                draft += (draft.isEmpty ? "" : br) + add
+                // ⚠️ **帧不进 `pendingImages`，说明不进 `draft`。**
+                //
+                // 以前是两样都往她那边塞：输入框里摆着十二张缩略图，
+                // 底下跟着一段「均匀抽了 12 帧给你看，你看到的是静止画面…」——
+                // 那段话是**说给他听的**，却印在了她的气泡上。
+                // 她的原话：「把对他说的话都放在我脸上了。」
+                //
+                // 现在两边各拿各的：她拿原件（一张封面 + 播放键），
+                // 他拿帧和那段说明。见 `ChatMessage.videoName`。
+                pendingVideo = saved
+                pendingVideoFrames = r.frames.compactMap { ImageStore.save($0) }
+                pendingVideoNote = r.note
+                if !r.trouble.isEmpty { pendingVideoNote += br + "〈" + r.trouble + "〉" }
                 typingTick += 1
             }
         }
@@ -1349,6 +1591,9 @@ struct MessageListView: View {
     /// 她每敲一下这个数就变。变了就滚到底——
     /// 打字的时候最后几条会被键盘顶上去，不滚就看不见自己在回哪一句。
     var typingTick: Int = 0
+    /// 底下要留多高的空。输入栏浮在消息上面，不留的话
+    /// 最后一条会永远压在那块玻璃底下。由 `ChatView` 量出来传进来。
+    var bottomInset: CGFloat = 106
     /// 从聊天记录搜索点进来的那一条：滚过去，别停在最底下
     var jumpTo: UUID? = nil
     var onJumped: () -> Void = {}
@@ -1416,7 +1661,10 @@ struct MessageListView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 100)
-                .padding(.bottom, 10)
+                // 底下留出输入栏那么高的空。
+                // 消息现在会**铺到输入栏背后**（它是浮在上面的一块玻璃），
+                // 不留这一段的话最后一条会永远压在它底下。
+                .padding(.bottom, bottomInset)
             }
             .scrollDismissesKeyboard(.interactively)
             // 正文、思考链、工具调用，只要有一样在往外冒字，就跟着滚
@@ -1428,9 +1676,28 @@ struct MessageListView: View {
                     proxy.scrollTo("__bottom", anchor: .bottom)
                 }
             }
+            // ⚠️ 这一条要**等布局先稳下来**。
+            //
+            // 她报的：「有时候分段发送的时候，会突然所有气泡
+            // 全部上升到屏幕外面，消息发送后恢复。」
+            //
+            // 暂存那一下有两件事**同时**发生：
+            //   ① `typingTick` 变了 → 这儿立刻滑到底
+            //   ② 「已暂存」那条出现 → 输入栏变高 → 列表可用高度跟着变
+            //
+            // 于是 `scrollTo` 拿的是**变化前**那套布局，
+            // 滑到一个马上就失效的位置；而 `withAnimation` 又把这个
+            // 中间态**放大成一段看得见的飞出去**。
+            //
+            // `Task { @MainActor }` 把它挤到下一轮：那时候输入栏已经量完了、
+            // `composerHeight` 也更新完了，滑的才是真的底。
+            //
+            // ⚠️ 记一句：**布局正在变的时候别滑，更别带动画滑。**
             .onChange(of: typingTick) { _, _ in
-                withAnimation(.easeOut(duration: 0.18)) {
-                    proxy.scrollTo("__bottom", anchor: .bottom)
+                Task { @MainActor in
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        proxy.scrollTo("__bottom", anchor: .bottom)
+                    }
                 }
             }
             // 从聊天记录点进来的那一条：滚到屏幕正中，别停在底下。
@@ -1518,7 +1785,17 @@ extension ChatView {
                     menuItem(msg.starred ? "取消收藏" : "收藏", "star") {
                         if let cid { app.toggleStar([msg.id], in: cid) }
                     }
-                    menuItem("删除", "trash") {
+                    // 改过好几版的，删除分两条。
+                    //
+                    // 她定的：「应该只删掉一版，而不是整个都删掉。」
+                    // 一条改过三版的消息，她想拿掉的往往只是写坠了的那一版，
+                    // 而不是这句话本身。
+                    if !msg.edits.isEmpty {
+                        menuItem("删这一版", "trash") {
+                            if let cid { app.deleteEdit(msg.id, in: cid) }
+                        }
+                    }
+                    menuItem(msg.edits.isEmpty ? "删除" : "整条删掉", "trash") {
                         if let cid { app.deleteMessage(msg.id, in: cid) }
                     }
                     menuItem("多选", "checklist") {

@@ -95,6 +95,13 @@ final class TrashStore: ObservableObject {
             try? FileManager.default.removeItem(
                 at: Self.dir.appendingPathComponent(item.fileName))
         }
+        // 聊天那两种的图**留到这一刻才删**。
+        // 删窗口那会儿不能删——删了就算把记录捞回来也是一堆空图。
+        if item.kind == "chat" || item.kind == "message" {
+            for name in (item.payload["images"] ?? "").split(separator: ",") {
+                ImageStore.delete(String(name))
+            }
+        }
         for c in item.children { removeFiles(c) }
     }
 
@@ -149,6 +156,59 @@ final class TrashStore: ObservableObject {
         return t
     }
 
+    /// 删一整个聊天窗口之前先抄一份。
+    ///
+    /// ⚠️ **这一条是补一个真的洞。** 以前 `deleteConversation` 是
+    /// 从数组里 `removeAll` + 顺手 `ImageStore.delete` 图片，
+    /// 而存盘是原子覆盖写、没有旧版本——**删完那一刻就真的没了**。
+    /// 她删掉一个窗口之后问「有还原的机会吗」：没有。
+    ///
+    /// ⚠️ 图**不在这儿删**。以前删窗口顺手就把图删了，
+    /// 那样就算把记录捞回来也是一堆空图。
+    /// 图等这一条在回收站里过期（三十天）被清掉时才删——见 `removeFiles`。
+    @discardableResult
+    func keep(conversation c: Conversation) -> TrashItem {
+        var t = TrashItem(kind: "chat",
+                          name: c.title.isEmpty ? "没起名的窗口" : c.title,
+                          place: "\(c.messages.count) 条")
+        // 整个窗口原样编成 JSON 收着。**不做任何裁剪**——
+        // 裁掉的那部分正是她将来可能要找的。
+        let enc = JSONEncoder()
+        enc.dateEncodingStrategy = .iso8601
+        if let data = try? enc.encode(c) {
+            t.payload = ["json": String(data: data, encoding: .utf8) ?? "",
+                         "images": c.messages.flatMap(\.imageNames).joined(separator: ",")]
+        }
+        items.insert(t, at: 0)
+        return t
+    }
+
+    /// 删一条消息之前先抄一份。
+    @discardableResult
+    func keep(message m: ChatMessage, in conversationID: UUID, title: String) -> TrashItem {
+        let line = m.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        var t = TrashItem(kind: "message",
+                          name: line.isEmpty ? "（没有文字）" : String(line.prefix(40)),
+                          place: title)
+        let enc = JSONEncoder()
+        enc.dateEncodingStrategy = .iso8601
+        if let data = try? enc.encode(m) {
+            t.payload = ["json": String(data: data, encoding: .utf8) ?? "",
+                         "conversation": conversationID.uuidString,
+                         "images": m.imageNames.joined(separator: ",")]
+        }
+        items.insert(t, at: 0)
+        return t
+    }
+
+    /// 把回收站里的一条**拿掉但不删它的文件**。
+    ///
+    /// 给聊天那两种用：放回去这件事由 `AppState` 做，做完了才叫这个。
+    /// ⚠️ 这儿**不能走 `removeFiles`**——那会把刚放回聊天里的图片一起删掉。
+    func drop(_ id: String) {
+        items.removeAll { $0.id == id }
+    }
+
     // MARK: 捞回来
 
     /// 撤销。放回去之后从回收站里拿掉。
@@ -162,6 +222,11 @@ final class TrashStore: ObservableObject {
         case "folder":
             MediaStore.shared.createFolder("photo", name: t.name)
             for c in t.children { restorePhoto(c) }
+        case "chat", "message":
+            // 聊天那两种要动 `AppState`，而这个 store 拿不到它。
+            // 交给外面（`AppState.restoreFromTrash`）去放回去——
+            // **这儿只负责「还在不在」，不负责「放回哪儿」**。
+            return false
         default: return false
         }
         removeFiles(t)

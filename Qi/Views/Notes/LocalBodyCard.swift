@@ -97,6 +97,26 @@ struct LocalBodyCard: View {
                     }
                     .buttonStyle(.plain)
 
+                    // 这七项**靠什么变**。开关就摆在这儿——
+                    // 她正是在这一页看到那行「关键词读的，可能读拧」才提的，
+                    // 埋进设置页的话她下次还得找一遍。
+                    Toggle(isOn: Binding(
+                        get: { app.settings.bodyByKeyword },
+                        set: { app.settings.bodyByKeyword = $0 }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("用关键词判定")
+                                .font(.app(12))
+                                .foregroundStyle(Theme.textMain(scheme))
+                            Text("关闭时由模型自行判定每一轮对身体的影响。两种都不额外计费")
+                                .font(.app(10))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .tint(app.settings.accentColor)
+                    .padding(.top, 2)
+
                     if showLedger {
                         VStack(alignment: .leading, spacing: 9) {
                             ForEach(store.nudges.prefix(12)) { e in
@@ -120,7 +140,7 @@ struct LocalBodyCard: View {
                                         .font(.app(11, design: .rounded))
                                         .foregroundStyle(app.settings.accentColor)
                                     if !e.why.isEmpty {
-                                        Text(e.why)
+                                        Text(MD.inline(e.why))
                                             .font(.app(10))
                                             .foregroundStyle(Theme.textMuted(scheme))
                                     }
@@ -129,7 +149,12 @@ struct LocalBodyCard: View {
                         }
                         .padding(.top, 2)
 
-                        Text(MD.inline("此层基于关键词匹配，判定精度有限。**仅影响身体数值，不影响好感**，好感只能由模型自行调整。判定有误时点击「撤掉」即可还原，身体数值本身也会随时间回落。"))
+                        // 两种来源说两句话。
+                        // **关键词那层现在默认是关的**（她定的），
+                        // 流水里还看得见以前那些，所以这句说明得跟着开关变。
+                        Text(MD.inline(app.settings.bodyByKeyword
+                            ? "此层基于关键词匹配，判定精度有限。**仅影响身体数值，不影响好感**，好感只能由模型自行调整。判定有误时点击「撤掉」即可还原，身体数值本身也会随时间回落。"
+                            : "关键词判定已关闭，现在由**模型自行判定**这一下对身体的影响。上面列出的是历史记录。要换回关键词，在设置里改。"))
                             .font(.app(10))
                             .foregroundStyle(Theme.textMuted(scheme))
                             .fixedSize(horizontal: false, vertical: true)

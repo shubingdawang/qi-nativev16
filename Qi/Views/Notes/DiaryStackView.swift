@@ -158,14 +158,14 @@ struct DiaryStackView: View {
         let paper = papers[DiaryLayout.steadyHash(entry.id) % papers.count]
 
         return VStack(alignment: .leading, spacing: 7) {
-            Text(entry.displayTitle)
+            Text(MD.inline(entry.displayTitle))
                 .font(.app(14, weight: .semibold))
                 .foregroundStyle(Color(hexString: "3A362E")!)
                 .lineLimit(3)
                 .multilineTextAlignment(.leading)
 
             if !entry.body.isEmpty {
-                Text(entry.body)
+                Text(MD.inline(entry.body))
                     .font(.app(11))
                     .foregroundStyle(Color(hexString: "6B655A")!)
                     .lineLimit(2)

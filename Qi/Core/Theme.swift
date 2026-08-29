@@ -42,226 +42,17 @@ enum Theme {
     /// 玻璃用哪一套做法。同上，AppState 同步过来，
     /// 这样 GlassSurface 这种到处都在用的小 View 不必层层传设置。
     nonisolated(unsafe) static var glassStyle: GlassStyle = .frosted
-    /// 深色下压暗多少。三套压同一个量，不然会有的暗有的亮。
-    nonisolated(unsafe) static var glassDim: Double = 0.22
-
-    /// 全局字号倍率。AppState 在设置变化时同步过来。
-    ///
-    /// 她说「设置里的字号调整没有即时显示……调完设置里的字也没跟着变，
-    /// 只有输入框里的字变大了，其他没变」。
-    /// 原因：那根滑块只喂给了聊天气泡和输入框，
-    /// 其余八百多处写的都是**写死的系统字号**（`.font(.system(size:))` 那种）。
-    ///
-    /// 所以全工程改走了 `Font.app(_:)`，它会乘上这个倍率。
-    /// （顺带一提：改的时候是脚本批量替换的，连这段注释里的示例都被换掉过一次。）
-    /// 基准 16（滑块的默认值），拉到 22 就是 1.375 倍，整个 App 一起变大。
-    nonisolated(unsafe) static var fontScale: Double = 1.0
-
-    /// 她自己调过字色的话，那个说了算——比主题优先。
-    private static func custom(_ scheme: ColorScheme) -> Color? {
-        let hex = scheme == .dark ? customTextHexDark : customTextHex
-        guard !hex.isEmpty else { return nil }
-        return Color(hexString: hex)
-    }
-
-    static func textMain(_ scheme: ColorScheme) -> Color {
-        custom(scheme) ?? skin.textMain.c(scheme)
-    }
-
-    /// 她换了主题色，**灰字也得跟着换冷暖**。
-    ///
-    /// 她说的：「浅色的说明字体并没有跟着设置的主题颜色改变；
-    /// 深色的跟着改了但完全看不见。」
-    ///
-    /// 前半句是真的：默认那套灰是**暖棕**（配壁纸那个年代调的），
-    /// 她把主题色换成墨灰之后，一页蓝灰里夹着一行棕字，当然不搭。
-    ///
-    /// 但**正文不能直接用主题色**——那样一屏全是彩字，读着累，
-    /// 而且「这行字是可点的吗」就分不出来了。
-    /// 正确的做法是**往主题色偏一点点**：色相跟过去，饱和度几乎不动。
-    /// 灰还是灰，只是这一屏的灰跟这一屏的颜色是一家人。
-    private static let tintAmount = 0.22
-
-    static func textSoft(_ scheme: ColorScheme) -> Color {
-        if let c = custom(scheme) { return c.opacity(0.78) }
-        return blend(skin.textSoft.c(scheme), toward: accentMirror, tintAmount)
-    }
-
-    static func textMuted(_ scheme: ColorScheme) -> Color {
-        if let c = custom(scheme) { return c.opacity(0.52) }
-        return blend(skin.textMuted.c(scheme), toward: accentMirror, tintAmount)
-    }
-
-    /// 主题色的镜子。`Theme` 那些静态方法拿不到 AppState，
-    /// 跟 `customTextHex` 一样由 `syncTheme()` 推进来。
-    nonisolated(unsafe) static var accentMirror: Color = Color(red: 0.4, green: 0.5, blue: 0.62)
-
-    /// 把 a 往 b 挪一点点。
-    /// iOS 18 才有 `Color.mix(with:by:)`，这边要兼容 17，自己算。
-    static func blend(_ a: Color, toward b: Color, _ t: Double) -> Color {
-        var ar: CGFloat = 0, ag: CGFloat = 0, ab: CGFloat = 0, aa: CGFloat = 0
-        var br: CGFloat = 0, bg: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
-        guard UIColor(a).getRed(&ar, green: &ag, blue: &ab, alpha: &aa),
-              UIColor(b).getRed(&br, green: &bg, blue: &bb, alpha: &ba)
-        else { return a }
-        let k = CGFloat(max(0, min(1, t)))
-        return Color(red: Double(ar + (br - ar) * k),
-                     green: Double(ag + (bg - ag) * k),
-                     blue: Double(ab + (bb - ab) * k))
-            .opacity(Double(aa))
-    }
-
-    /// 浮在壁纸上的**圆按钮／小胶囊**的底色。
-    ///
-    /// 她说的第 3 条：「语音通话 ui 别忘记『家』的主题配色这些 ui 也要适配，
-    /// 后续可能会增加主题配色，所以 ui 适配还挺重要的」。
-    ///
-    /// 她说得对，而且这是**结构问题不是漏改**：通话页那些按钮底色写的是
-    /// `Color.white.opacity(0.85)` 这种死值——「家」那套是暖纸色，
-    /// 一块纯白摁在暖纸上就是一块补丁。以后再加主题只会再补丁一次。
-    /// 所以统一从这儿出，加主题的时候只改这一个函数。
-    static func controlFill(_ scheme: ColorScheme) -> Color {
-        skin.controlFill.c(scheme)
-    }
-
-    /// 上面那种按钮**按下去／关掉**的时候的底色
-    static func controlFillMuted(_ scheme: ColorScheme) -> Color {
-        skin.controlMuted.c(scheme)
-    }
-
-    /// 没设壁纸时的底色
-    static func pageBackground(_ scheme: ColorScheme) -> Color {
-        skin.page.c(scheme)
-    }
-
-    static func shadow(_ scheme: ColorScheme) -> Color {
-        scheme == .dark
-        ? Color.black.opacity(0.40)
-        : Color(red: 0.47, green: 0.35, blue: 0.20).opacity(0.09)
-    }
-
-    static let cardRadius: CGFloat = 18
-    static let barRadius: CGFloat = 26
-}
-
-// MARK: - 毛玻璃卡片
-
-/// 网页版那种半透明磨砂卡片。
-/// `.ultraThinMaterial` 负责模糊，上面再叠一层白，才有那种奶油质感——
-/// 只用 material 会偏灰，只用白色又没有透出壁纸的层次。
-struct GlassCard: ViewModifier {
-    @EnvironmentObject private var app: AppState
-    var radius: CGFloat = Theme.cardRadius
-    /// 默认内边距跟着 `Look.inset` 走（比原来大两点）——
-    /// 「简约」不是把东西缩小，是给它留出地方
-    var padding: CGFloat = Look.inset
-    @Environment(\.colorScheme) private var scheme
-
-    func body(content: Content) -> some View {
-        content
-            .padding(padding)
-            .background(
-                GlassSurface(radius: radius, strength: app.settings.glassOpacity)
-            )
-        // ⚠️ **这儿原来有一句 `.shadow`，删了，别加回来。**
-        //
-        // 它套在「内容 + GlassSurface 背景」整体上，于是**每一张
-        // `.glassCard()` 都被强制离屏渲染** —— 而离屏那一下就把
-        // `Material` 的背景采样打断了，玻璃退化成一块近似的纯色。
-        //
-        // 这是个**老问题**，不是这两窗才有的：她截图里札记那些卡片
-        // 一直是纯白板、而底下标签栏是真玻璃，差别就在这一句上。
-        //
-        // 卡片跟背景分开靠 `GlassEdge`（内高光 + 极细描边）来做，
-        // 那两层画在玻璃**上面**，不触发离屏。
-    }
-}
-
-extension View {
-    func glassCard(radius: CGFloat = Theme.cardRadius,
-                   padding: CGFloat = Look.inset) -> some View {
-        modifier(GlassCard(radius: radius, padding: padding))
-    }
-
-    /// 让 List / Form 的默认灰底消失，好让壁纸透上来。
-    ///
-    /// 光把 scroll 的底设成透明是不够的：List 外面那层
-    /// NavigationStack / sheet 自己还铺着一张不透明的系统底色，
-    /// 壁纸在它下面，照样透不上来——所以这儿得自己再垫一张。
-    func transparentList() -> some View {
-        self
-            .scrollContentBackground(.hidden)
-            .background { WallpaperBackground() }
-    }
-}
-
-/// List 里每一行的磨砂底
-struct GlassRowBackground: View {
-    @EnvironmentObject private var app: AppState
-
-    var body: some View {
-        GlassSurface(radius: 0, strength: app.settings.glassOpacity)
-    }
-}
-
-// MARK: - 不用传 colorScheme 也能用的动态颜色
-
-extension Theme {
-    /// 半透明磨砂底，深浅色自动切换。用来替换系统那些死板的灰色。
-    static let softFill = Color(UIColor { trait in
-        trait.userInterfaceStyle == .dark
-        ? UIColor(white: 1.0, alpha: 0.08)
-        : UIColor(white: 1.0, alpha: 0.42)
-    })
-
-    /// 再淡一点的一层，用于嵌套在卡片里的小块。
-    /// 「家」那套里这层不是白是亚麻，「兔牙」那套是浅粉——
-    /// **白叠白会糊在一起分不出层**，所以它跟着色板走。
-    ///
-    /// ⚠️ 这是个动态色（`UIColor { trait in }`），每次取值都会重算——
-    /// 所以她在设置里换一档主题，这一层会跟着变，不用重启。
-    static let softFillDeep = Color(UIColor { trait in
-        let scheme: ColorScheme = trait.userInterfaceStyle == .dark ? .dark : .light
-        return UIColor(skin.softFillDeep.c(scheme))
-    })
-
-    static let softStroke = Color(UIColor { trait in
-        trait.userInterfaceStyle == .dark
-        ? UIColor(white: 1.0, alpha: 0.10)
-        : UIColor(white: 1.0, alpha: 0.45)
-    })
-}
-
-// MARK: - 玻璃
-
-/// 全 App 统一的那块玻璃。
-///
-/// 真玻璃看起来"是玻璃"，靠的不是把白色调高，而是三件事：
-///   1. 背后的东西被糊掉，但轮廓和颜色还在（系统的 material 负责）
-///   2. 内部从上到下有一道渐变——光是从上面来的，所以上缘亮、下缘沉
-///   3. 边上有一圈细高光，上半圈亮、下半圈几乎看不见
-/// 少了第 2、3 条，就只是一块半透明的塑料片。
-struct GlassSurface: View {
-
-    var radius: CGFloat = Theme.cardRadius
-    /// 浓度，跟设置里的滑块联动。低了更透，高了更实。
-    var strength: Double = 1
-    /// 再多加一点白，用在需要更突出的地方（比如自己的气泡）
-    var extra: Double = 0
-    /// 强行指定一种玻璃。不传就跟着设置走。
-    var style: GlassStyle? = nil
-    /// 深色下压暗多少。
-    ///
-    /// **这个必须是参数，不能只读 `Theme.glassDim` 那个 static。**
-    /// 这就是"拉『深色下压暗』滑块没有即时反馈"的根子：
-    /// static 变了 SwiftUI 不知道，它一比较发现
-    /// `GlassSurface(radius: 20, strength: 0.6)` 跟上一帧一模一样，
-    /// 就直接跳过 body 不重画——那层黑于是一直是旧的，
-    /// 非得别的什么东西也变了才顺带刷出来。
-    /// 跟交接文档第 6 条（只读不订阅 = 界面不刷新）是同一个病。
-    ///
-    /// 默认值在每次构造的时候现取，所以所有调用处一个字都不用改。
-    var dim: Double = Theme.glassDim
+    // ⚠️ `dim` 那个参数**删了，别加回来**。
+    //
+    // 她定的：「不用再做这个深色下压暗了，
+    // 因为背景暗下来毛玻璃就自然暗下来了。」
+    //
+    // 她对。玻璃就是「把背后的画面糊一糊」，
+    // 背后暗了它自然就暗；另外盖一层黑，
+    // 等于在白玻璃上盖黑纱——出来是死灰，
+    // 不是深色的玻璃。她说「全都变成黑色的，太丑了」就是那一层。
+    //
+    // 深色现在改成**压壁纸**（50%，在 `WallpaperBackground` 里）。
 
     @Environment(\.colorScheme) private var scheme
 
@@ -279,33 +70,15 @@ struct GlassSurface: View {
             case .blur:    blur
             }
         }
-        // 深色下统一压一层黑。
+        // ⚠️ 这儿原来有一层「深色下压黑」，**删了**（理由见上面）。
         //
-        // **压的是黑，不是换 material**——所以磨砂还是磨砂、模糊还是模糊，
-        // 只是整体沉下去。而且三套压的是同一个量，这就是"三个同步"：
-        // 之前磨砂用的是非自适应的 extraLight（不跟深色变），
-        // 通透用的是 iOS 26 的液态玻璃（跟着变），
-        // 模糊那档 material 在新系统上也被映射成自适应的了——
-        // 三套各走各的，当然对不齐。现在统统锁死成浅色，再统一压暗。
+        // 跟它一起删的还有那句 `.environment(\.colorScheme, .light)`：
+        // 那句把材质钉死成浅色，再盖一层黑——
+        // 两句是一套，删一句留一句只会更怪。
+        // 现在让系统那块 `Material` 自己跟着深浅色变，
+        // 那本来就是它该干的事。
         .overlay {
-            if scheme == .dark, dim > 0.01 {
-                shape.fill(.black.opacity(dim))
-            }
-        }
-        // 边缘那三层：高光、描边、阴影。**缺一不可，而且每一层都要轻。**
-        //
-        // ⚠️ 这儿原来是 `GlassSheen`——一个椭圆白色渐变，
-        // 中心压在卡片**上方偏左**、浅色下白到 0.55，盖在三档玻璃上面。
-        // 她说「反倒是像顶上有光打下来」，**那句话精确指到了它**：
-        // 那不是玻璃受光，那是一盏射灯。
-        //
-        // 现在按她给的那篇讲毛玻璃的第 4 条来（见 `GlassDetail`）：
-        // 光走**边**不走**面**。玻璃的厚度是从边上读出来的。
-        //
-        // **只给圆角够大的那些**：胶囊和小标签本来就只有十几个点高，
-        // 描三层边等于把它整个描黑。
-        .overlay {
-            if radius >= 12 { GlassEdge(radius: radius) }
+            if edge, radius >= 12 { GlassEdge(radius: radius) }
         }
         // ⚠️ **这儿不许加 `.shadow`。** 上一版加了，把整个 App 的玻璃搞坏了。
         //
@@ -331,7 +104,6 @@ struct GlassSurface: View {
         //
         // 那篇文章说的第三层（很轻的阴影）不是不能做，但**得画在玻璃外面**，
         // 不能套在玻璃这一层上。留到以后单独做，现在保住玻璃本身要紧。
-        .environment(\.colorScheme, .light)
     }
 
     // 三套的区别**主要交给系统的 material**，我们自己只加很薄的一层。
@@ -488,7 +260,17 @@ struct GlassSurface: View {
     /// 现在跟磨砂一样走系统材质，只是**比磨砂厚一档**：
     /// 「磨砂」偏透、「模糊」偏实，两档差在这儿，不再靠自制的糊料拉开。
     private var blur: some View {
-        shape.fill(thickerTier)
+        // ⚠️ 用 `tier`，**不再用 `thickerTier`**。
+        //
+        // 她说「两个都是模糊效果拖到最左的效果，都不够透」——
+        // 模糊这一档以前比磨砂厚一级，所以滑块拉到底
+        // 它也只到 `.thinMaterial`，**到不了最透的那一档**。
+        // 现在两档同一个底，拉到底都是 `.ultraThinMaterial`。
+        //
+        // 那两档靠什么分？**靠表面有没有砂**。
+        // 这正是她自己的说法：「磨砂表面带细颗粒，模糊表面平整」。
+        // 拿材质厚薄去分两种做法，本来就分不出来（她说「不仔细看分辨不出二者的区别」）。
+        shape.fill(tier)
             .overlay {
                 if extra > 0.01 {
                     shape.fill(.white.opacity(extra * 0.10))
@@ -503,11 +285,9 @@ struct GlassSurface: View {
             //
             // 补的是**暗**不是白：真玻璃压在浅色桌面上，接触的那一圈本来就有一道
             // 极细的暗影。这跟「通透」那套的白色高光是两回事，三套还是分得开。
-            .overlay {
-                if scheme == .light {
-                    shape.strokeBorder(.black.opacity(0.10), lineWidth: 0.7)
-                }
-            }
+            // ⚠️ 自己那道描边**删了**。
+            // 边统一由 `GlassEdge` 画，留在这儿就是两道叠在一起，
+            // 边会变脏变重——而那正是「一眼廉价」的第一个原因。
         // 底下那道内阴影去掉了——她说"灰得有点突兀"。
         // 确实：一块玻璃底下压一道灰边，看着像没对齐的两层纸，
         // 不像厚度。上下那点明暗差已经够说明这是一个面了。
@@ -542,14 +322,19 @@ struct GlassSurface: View {
         }
     }
 
-    /// 「模糊」那一档比磨砂厚一级——两档的区别就在这儿
-    private var thickerTier: Material {
-        switch blurAmount {
-        case ..<0.30: return .thinMaterial
-        case ..<0.60: return .regularMaterial
-        default:      return .thickMaterial
-        }
-    }
+    // ⚠️ `thickerTier` **删了，别加回来。**
+    //
+    // 它当初是拿来「把模糊和磨砂拉开距离」的：模糊比磨砂厚一级。
+    // 但那个做法有两个毛病，她两个都撞上了：
+    //
+    // · 模糊那一档**永远到不了最透的那一级**——滑块拉到底也只是
+    //   `.thinMaterial`。她说「都是模糊效果拖到最左的效果，都不够透」。
+    // · 拿材质厚薄去分两种「做法」，本来就分不出来。
+    //   她说「其实不仔细看分辨不出二者的区别」——因为那几档
+    //   `Material` 的差别本来就只有一点点浓淡。
+    //
+    // 现在两档同一个底（`tier`），**靠表面有没有砂来分**——
+    // 这也正是设置里那句说明写的：磨砂表面带细颗粒，模糊表面平整。
 
     @ViewBuilder
     private func base(liquid: Bool, blur style: UIBlurEffect.Style) -> some View {
@@ -729,10 +514,9 @@ extension View {
                          strength: Double = 1,
                          extra: Double = 0,
                          style: GlassStyle? = nil,
-                         dim: Double? = nil) -> some View {
+                         edge: Bool = true) -> some View {
         background(GlassSurface(radius: radius, strength: strength,
-                                extra: extra, style: style,
-                                dim: dim ?? Theme.glassDim))
+                                extra: extra, style: style, edge: edge))
     }
 }
 

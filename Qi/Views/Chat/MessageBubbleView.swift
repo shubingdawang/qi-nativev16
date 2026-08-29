@@ -38,6 +38,9 @@ struct MessageBubbleView: View {
     @State private var pulse = false
     /// 点开的是第几张图
     @State private var previewing = false
+    @State private var playingVideo = false
+    @State private var previewFile: PreviewFile?
+    @State private var openingGame: LocalGame?
     @State private var previewIndex = 0
     @Environment(\.openURL) private var openURL
 
@@ -176,9 +179,39 @@ struct MessageBubbleView: View {
                 if !isUser { Spacer(minLength: 30) }
             }
         }
+        // 一通电话。**单独一张卡，不是气泡**——
+        // 她说「语音通话的卡片框不对，只有气泡」。
+        if message.callSeconds > 0 {
+            HStack {
+                if isUser { Spacer(minLength: 40) }
+                callCard
+                if !isUser { Spacer(minLength: 40) }
+            }
+        }
+        // 他写的那个能玩的东西。点一下就在 App 里跑起来。
+        if !message.gameID.isEmpty {
+            HStack {
+                if isUser { Spacer(minLength: 40) }
+                gameCard
+                if !isUser { Spacer(minLength: 40) }
+            }
+        }
+        // 视频也是单独一条：一张封面 + 播放键，点开就放。
+        //
+        // ⚠️ **这儿不摆那十几帧，也不摆那段说明。**
+        // 帧和说明是发给他的（他读不了视频），
+        // 她这边看到的应该就是「一段视频」这一件东西。
+        // 她的原话：「在我的视角应该就是一个视频带着播放键可以点开查看的。」
+        if !message.videoName.isEmpty {
+            HStack {
+                if isUser { Spacer(minLength: 40) }
+                videoCard
+                if !isUser { Spacer(minLength: 40) }
+            }
+        }
         // 语音是单独一条：一个毛玻璃的条，下面一行小字是他说的原话。
         // 不套气泡——语音本身就已经是一块了，再包一层会显得很闷。
-        if !message.voiceName.isEmpty {
+        else if !message.voiceName.isEmpty {
             VStack(alignment: isUser ? .trailing : .leading, spacing: 5) {
                 voiceBar
                 if !message.content.isEmpty {
@@ -226,9 +259,13 @@ struct MessageBubbleView: View {
 
                 // 幕外那几行：动作／神态 + 心里话。气泡上方淡淡地摞着，
                 // 不带气泡也不带底。**有几条摆几条**，按他写的先后。
-                if !message.displayBeats.isEmpty {
+                if !shownBeats.isEmpty {
                     VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
-                        ForEach(message.displayBeats) { beat in
+                        // ⚠️ 按**位置**认，不按 id 认。
+                        // 现抠出来的那几条每重画一次就是一批新 UUID，
+                        // 按 id 认的话 SwiftUI 会当成「整批换了」，
+                        // 流式的时候这几行会一直闪。
+                        ForEach(Array(shownBeats.enumerated()), id: \.offset) { _, beat in
                             BeatLine(beat: beat, isUser: isUser)
                         }
                     }
@@ -238,6 +275,21 @@ struct MessageBubbleView: View {
 
                 // 说话的人不在这儿标了——上面那行头像已经写着名字，
                 // 再标一次是同一句话说两遍
+
+                // 他自己浮上来的那一条，标一行淡淡的小字。
+                //
+                // ⚠️ 只是个记号——这条**在上下文里跟普通回复一样**。
+                // 她回一句「你刚才怎么突然找我」，他接得上。
+                if message.wokeUp {
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkles")
+                            .font(.app(8))
+                        Text("他自己找来的")
+                            .font(.app(9.5))
+                    }
+                    .foregroundStyle(Theme.textMuted(scheme).opacity(0.75))
+                    .padding(.leading, 2)
+                }
 
                 // 引用了谁的哪句话
                 if !message.quotedText.isEmpty {
@@ -301,6 +353,11 @@ struct MessageBubbleView: View {
                     }
                     .padding(10)
                     .background(RoundedRectangle(cornerRadius: 14).fill(Color.red.opacity(0.85)))
+                } else if message.callSeconds > 0 {
+                    // 通话那条的正文是小结，**已经画在通话卡里面了**。
+                    // 不挡一道的话它会在卡底下再来一个气泡，
+                    // 同一段话出现两遍。
+                    EmptyView()
                 } else if !message.content.isEmpty {
                     // 一段一段分开发，跟原来那样，不是糊成一大坨
                     ForEach(Array(contentSegments.enumerated()), id: \.offset) { _, seg in
@@ -549,8 +606,11 @@ struct MessageBubbleView: View {
                         .scaledToFill()
                         .frame(width: 265, height: 150)
                         .clipped()
-                    // 视频的封面上盖一个播放三角——不然跟一张图片没区别
-                    if note.source != .xhs {
+                    // 视频的封面上盖一个播放三角——不然跟一张图片没区别。
+                    // ⚠️ 小红书的视频笔记也要盖：它跟图文笔记是同一个 source，
+                    // 只有 `isVideo` 分得开（她说「小红书有纯文字帖子、
+                    // 图片帖子、视频帖子」）。
+                    if note.source != .xhs || note.isVideo {
                         Image(systemName: "play.circle.fill")
                             .font(.system(size: 34))
                             .foregroundStyle(.white.opacity(0.9))
@@ -588,7 +648,7 @@ struct MessageBubbleView: View {
                         .multilineTextAlignment(.leading)
                 }
                 if !note.desc.isEmpty {
-                    Text(note.desc)
+                    Text(MD.inline(note.desc))
                         .font(.app(12))
                         .foregroundStyle(Theme.textSoft(scheme))
                         .lineLimit(3)
@@ -622,6 +682,15 @@ struct MessageBubbleView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(width: 265)
+        // ⚠️ **封面要跟着卡片一起圆角。**
+        //
+        // 卡片自己是圆的（`glassBackground(radius: 16)`），可顶上那张封面
+        // 是方的，四个直角就从圆角里**扎出来**——她报的就是这个。
+        // `clipped()` 只把图裁到 265×150 那个方框，裁不出圆角。
+        //
+        // 记一句：**圆角的容器里放图，图要自己也圆一次。**
+        // 背景圆了不等于内容圆了，它们是两层。
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .glassBackground(radius: 16, strength: app.settings.glassOpacity)
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -630,6 +699,155 @@ struct MessageBubbleView: View {
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .onTapGesture {
             if let u = URL(string: note.url) { openURL(u) }
+        }
+        .contextMenu {
+            Button(role: .destructive) {
+                app.deleteMessage(message.id, in: conversationID)
+            } label: {
+                Label("删掉", systemImage: Icon.trash)
+            }
+        }
+    }
+
+    /// 他写的那个能玩的东西。
+    ///
+    /// ⚠️ 卡上**不显示代码**。她要的是点开就玩，
+    /// 代码摆出来只是把「一段贴在聊天里的 HTML」换了个更好看的框。
+    private var gameCard: some View {
+        let game = GameStore.shared.games.first { $0.id.uuidString == message.gameID }
+        return Button {
+            if let game { openingGame = game }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: game == nil ? "questionmark.square.dashed" : "gamecontroller.fill")
+                    .font(.app(17))
+                    .foregroundStyle(app.settings.accentColor)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(message.gameName.isEmpty ? "他做的东西" : message.gameName)
+                        .font(.app(14, weight: .medium))
+                        .foregroundStyle(Theme.textMain(scheme))
+                        .lineLimit(1)
+                    // 删掉了就说删掉了，**别摆一个点下去没反应的卡**
+                    Text(game == nil ? "已经从游戏间里删掉了" : "点一下就玩")
+                        .font(.app(10.5))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+                Spacer(minLength: 0)
+                if game != nil {
+                    Image(systemName: "chevron.right")
+                        .font(.app(10, weight: .semibold))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+            }
+            .padding(.horizontal, 13)
+            .padding(.vertical, 11)
+            .frame(maxWidth: 240, alignment: .leading)
+            .glassBackground(radius: 14, strength: app.settings.glassOpacity * 0.85)
+        }
+        .buttonStyle(.plain)
+        .fullScreenCover(item: $openingGame) { g in
+            GamePlayerView(game: g)
+        }
+    }
+
+    /// 一通电话那张卡。
+    ///
+    /// ⚠️ **通话记录不该长得跟他说的话一样。** 那不是一句话，是一件事。
+    /// 正文（小结）是彩头：写成功了摆在下面，没写成功这张卡照样在。
+    private var callCard: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
+                Image(systemName: "phone.fill")
+                    .font(.app(13))
+                    .foregroundStyle(app.settings.accentColor)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(app.settings.accentColor.opacity(0.14)))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("语音通话")
+                        .font(.app(13.5, weight: .medium))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    Text(callLength)
+                        .font(.app(10.5))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+                Spacer(minLength: 0)
+            }
+            // 小结。**跟标题之间横一道线**——那是两件事：
+            // 上面是「打了一通电话」，下面是「都聊了什么」。
+            let said = parsed.clean.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !said.isEmpty {
+                Hairline()
+                MD.inline(said)
+                    .font(.app(12.5))
+                    .foregroundStyle(Theme.textSoft(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+        }
+        .padding(.horizontal, 13)
+        .padding(.vertical, 11)
+        .frame(maxWidth: 265, alignment: .leading)
+        .glassBackground(radius: 16, strength: app.settings.glassOpacity * 0.9)
+        .contextMenu {
+            Button(role: .destructive) {
+                app.deleteMessage(message.id, in: conversationID)
+            } label: {
+                Label("删掉", systemImage: Icon.trash)
+            }
+        }
+    }
+
+    /// 讲了多久。**过一分钟就说「几分几秒」**，
+    /// 光说「137 秒」她还得自己心算。
+    private var callLength: String {
+        let s = Int(message.callSeconds.rounded())
+        if s < 60 { return "\(s) 秒" }
+        let m = s / 60, r = s % 60
+        return r == 0 ? "\(m) 分钟" : "\(m) 分 \(r) 秒"
+    }
+
+    /// 视频卡。封面用抽出来的第一帧——那一帧本来就有，不用再解一次码。
+    ///
+    /// ⚠️ 原件不在了（换机、备份没带上）就摆一句实话，
+    /// **别摆一个点下去没反应的播放键**。
+    private var videoCard: some View {
+        let cover = message.videoFrames.first.flatMap { ImageStore.cached($0) }
+        let playable = VideoStore.exists(message.videoName)
+        return Button {
+            guard playable else { return }
+            playingVideo = true
+        } label: {
+            ZStack {
+                if let cover {
+                    Image(uiImage: cover)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 220, height: 150)
+                        .clipped()
+                } else {
+                    Color.black.opacity(0.35)
+                        .frame(width: 220, height: 150)
+                }
+                if playable {
+                    Image(systemName: "play.circle.fill")
+                        .font(.system(size: 40))
+                        .foregroundStyle(.white.opacity(0.92))
+                } else {
+                    Text("这段视频的原件不在了")
+                        .font(.app(11))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(.black.opacity(0.45)))
+                }
+            }
+            .frame(width: 220, height: 150)
+            // 圆角要自己切一次——`clipped()` 只裁方框，裁不出圆角
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .fullScreenCover(isPresented: $playingVideo) {
+            VideoPlayerSheet(name: message.videoName)
         }
         .contextMenu {
             Button(role: .destructive) {
@@ -766,7 +984,7 @@ struct MessageBubbleView: View {
                 Text(message.quotedName)
                     .font(.app(10, weight: .medium))
                     .foregroundStyle(Theme.textMuted(scheme))
-                Text(message.quotedText)
+                Text(MD.inline(message.quotedText))
                     .font(.app(12))
                     .foregroundStyle(Theme.textSoft(scheme))
                     .lineLimit(2)
@@ -792,7 +1010,33 @@ struct MessageBubbleView: View {
         return message.edits[message.edits.count - editPage]
     }
 
+    /// 正文里的标记，**在这儿再抠一遍**。
+    ///
+    /// 落库那一遍在 `finishStreaming`，一轮只跑一次，所以有三种情况漏网：
+    /// · 字还在一个个蹦出来的时候（那一遍还没跑）
+    /// · 那一轮中途断了（那一遍根本没跑到）
+    /// · `[[cot:]]` 写在正文里（那一遍只在 thinking 里认）
+    /// 三种她都截到了。**摆出来之前先抠，比在落库那边补分支稳。**
+    ///
+    /// 抠干净的正文和抠出来的东西都从这儿走，底下不再直接用 `shownContent`。
+    /// ⚠️ 这个属性**每次重画都会跑**，而流式的时候一秒重画好多次。
+    /// 所以先拿 `contains` 挡一道：没有标记就原样退回去，
+    /// 别为了一条没有标记的长消息把正则跑上几百遍。
+    private var parsed: (clean: String, beats: [MessageBeat], cot: String) {
+        let raw = shownContent
+        guard raw.contains("[[") || raw.contains("*") || raw.contains("〔")
+        else { return (raw, [], "") }
+        return MessageBeats.extract(raw)
+    }
+
+    /// 幕外那几行。落库那一遍跑过了就用存下来的（老消息的 `actionText` 也在里面），
+    /// 没跑过就用刚抠出来的。**两边不会同时有**——落库那一遍会把正文洗干净。
+    private var shownBeats: [MessageBeat] {
+        message.displayBeats.isEmpty ? parsed.beats : message.displayBeats
+    }
+
     private var contentSegments: [String] {
+        let shownContent = parsed.clean
         guard app.settings.segmentAssistant || isUser else { return [shownContent] }
         let parts = shownContent
             .components(separatedBy: "\n\n")
@@ -834,7 +1078,15 @@ struct MessageBubbleView: View {
     @ViewBuilder
     private var processBlock: some View {
         if hasProcess {
-            VStack(alignment: .leading, spacing: 6) {
+            // ⚠️ spacing 必须是 0，那 6 点的缝**由展开的那一块自己带**。
+            //
+            // 以前写的是 `VStack(spacing: 6)` + `if showProcess { … }`：
+            // 收起来的时候里面只剩一个按钮，可那道缝**是 VStack 记着的**，
+            // 收合的动画跑完它还在——她说的「思考链收回会留一段空白」就是它。
+            //
+            // 记一句：**会消失的那一块，它的间距要跟着它一起消失。**
+            // 间距记在容器上，容器不会跟着消失。
+            VStack(alignment: .leading, spacing: 0) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) { showProcess.toggle() }
                 } label: {
@@ -867,7 +1119,9 @@ struct MessageBubbleView: View {
                 }
                 .buttonStyle(.plain)
 
-                if showProcess { processTimeline }
+                if showProcess {
+                    processTimeline.padding(.top, 6)
+                }
             }
         }
     }
@@ -878,6 +1132,11 @@ struct MessageBubbleView: View {
         if let mine = Self.cotLabel(from: message.reasoning ?? ""), !mine.isEmpty {
             return mine
         }
+        // 写在正文里的也算。以前只认 thinking 里的那一句，
+        // 所以他写在正文里的时候，标题退回「想了 28.5s · 动了 1 下手」，
+        // 而那句名字原样留在气泡上（她报的第一条 cot 没生效）。
+        if !message.cotTitle.isEmpty { return message.cotTitle }
+        if !parsed.cot.isEmpty { return parsed.cot }
         if message.isStreaming { return "正在想…" }
         var bits: [String] = []
         if !(message.reasoning ?? "").isEmpty {
@@ -895,13 +1154,64 @@ struct MessageBubbleView: View {
 
     /// 展开之后那条时间线。左边一条竖线串起来，一步一个点。
     private var processTimeline: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        // spacing 6：横线画在每一段**字完的地方**（见 `step` 底下那个 overlay），
+        // 线跟下一段之间再留这么一点，就是她要的「隔一个换行，不要多」。
+        VStack(alignment: .leading, spacing: 6) {
             if let r = message.reasoning, !cleanReasoning(r).isEmpty {
                 step(icon: "brain", tint: Theme.textMuted(scheme), title: "想了想") {
-                    Text(cleanReasoning(r))
-                        .font(.system(size: max(11, app.settings.fontSize - 3)))
-                        .foregroundStyle(Theme.textSoft(scheme))
-                        .textSelection(.enabled)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(MD.inline(cleanReasoning(r)))
+                            .font(.system(size: max(11, app.settings.fontSize - 3)))
+                            .foregroundStyle(Theme.textSoft(scheme))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
+
+                        // 译文。**接在原文底下，不把原文顶掉**——
+                        // 她要看懂他想了什么，不是要把原文换掉。
+                        if message.isTranslatingReasoning {
+                            Text("在翻…")
+                                .font(.app(10.5))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                        } else if let t = message.reasoningTranslation, !t.isEmpty {
+                            HStack(alignment: .top, spacing: 6) {
+                                Capsule()
+                                    .fill(app.settings.accentColor.opacity(0.4))
+                                    .frame(width: 2)
+                                Text(MD.inline(t))
+                                    .font(.system(size: max(11, app.settings.fontSize - 3)))
+                                    .foregroundStyle(Theme.textSoft(scheme))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .textSelection(.enabled)
+                            }
+                        }
+                    }
+                    // 她定的：「思考链也需要长按翻译。」
+                    //
+                    // 他想事情的时候常常整段是英文，
+                    // 而那一段恰恰是她最想看懂的（正文他至少会说中文）。
+                    //
+                    // ⚠️ 用 `contextMenu` 而不是那个横条菜单：
+                    // 横条那个是挂在整条消息上的，而这儿要翻的是里面那一块。
+                    .contextMenu {
+                        Button {
+                            app.translate(message.id, in: conversationID, reasoning: true)
+                        } label: {
+                            Label(message.reasoningTranslation == nil ? "翻译" : "重新翻",
+                                  systemImage: "character.book.closed")
+                        }
+                        if message.reasoningTranslation != nil {
+                            Button {
+                                app.clearReasoningTranslation(message.id, in: conversationID)
+                            } label: {
+                                Label("收起译文", systemImage: "chevron.up")
+                            }
+                        }
+                        Button {
+                            UIPasteboard.general.string = cleanReasoning(r)
+                        } label: {
+                            Label("拷贝", systemImage: "doc.on.doc")
+                        }
+                    }
                 }
             }
             ForEach(Array(message.toolRuns.enumerated()), id: \.element.id) { i, run in
@@ -912,15 +1222,25 @@ struct MessageBubbleView: View {
                      isLast: i == message.toolRuns.count - 1) {
                     VStack(alignment: .leading, spacing: 3) {
                         if !run.arguments.isEmpty, run.arguments != "{}" {
-                            Text(run.arguments)
+                            Text(tidy(run.arguments))
                                 .font(.app(10.5, design: .monospaced))
                                 .foregroundStyle(Theme.textMuted(scheme))
-                                .lineLimit(4)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        Text(tidy(run.result))
+                        // ⚠️ 这两块**都不掐行数**。
+                        //
+                        // 她说「思考链显示不完全……不是说要把行高固定，
+                        // 是根据他们的字数来画横线」——`lineLimit` 就是在固定行高：
+                        // 卡片撑到那个数就不再长了，底下的字看不见，
+                        // 而那道横线也就画在了「第 12 行」而不是「这段话完的地方」。
+                        //
+                        // 长会不会太长？`tidy` 已经把空行收到一行以内了，
+                        // 而且整张卡默认是收起来的——**是她点开才看的**，
+                        // 点开就该看得见全部。
+                        Text(MD.inline(tidy(run.result)))
                             .font(.app(11.5))
                             .foregroundStyle(run.failed ? .red : Theme.textSoft(scheme))
-                            .lineLimit(12)
+                            .fixedSize(horizontal: false, vertical: true)
                             .textSelection(.enabled)
                     }
                 }
@@ -1041,7 +1361,11 @@ struct MessageBubbleView: View {
                 GlassSurface(
                     radius: 18,
                     strength: app.settings.glassOpacity * app.settings.bubbleOpacity,
-                    extra: isUser ? 0.35 : 0
+                    extra: isUser ? 0.35 : 0,
+                    // 她定的：**气泡不该有边框**。
+                    // 卡片要边（得从背景里分出来），
+                    // 气泡不要（本来就有形状，而且一屏几十个）。
+                    edge: false
                 )
                 // 想要一点色的时候才染，默认是 0
                 if isUser && app.settings.bubbleTint > 0.01 {
@@ -1121,21 +1445,43 @@ struct MessageBubbleView: View {
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                     Spacer(minLength: 0)
+                    // 摆一个箭头，告诉她这张卡能点。
+                    // 光把手势挂上去是不够的——看不出能点就不会有人去点。
+                    Image(systemName: "chevron.right")
+                        .font(.app(10, weight: .semibold))
+                        .foregroundStyle(Theme.textMuted(scheme))
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
                 .frame(maxWidth: 240, alignment: .leading)
                 .glassBackground(radius: 14, strength: app.settings.glassOpacity * 0.85)
+                // 她报的：「点击文件无法预览。」
+                // 以前这张卡**根本没挂点击**，纯展示。
+                //
+                // ⚠️ `contentShape` 不能省：不写的话能点的只有图标和字本身那几个像素，
+                // 中间那大片空白是点不到的（跟表情那个图标同一个坑）。
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .onTapGesture {
+                    let u = FileStore.url(for: f)
+                    guard FileManager.default.fileExists(atPath: u.path) else { return }
+                    previewFile = PreviewFile(url: u, name: f.displayName)
+                }
             }
+        }
+        .sheet(item: $previewFile) { p in
+            FilePreview(url: p.url).ignoresSafeArea()
         }
     }
 
     /// 思考正文里把标记去掉，那是给卡片标题用的
     private func cleanReasoning(_ text: String) -> String {
-        text.replacingOccurrences(
+        // ⚠️ 空行也要收。思考过程里连着好几个换行很常见，
+        // 摆出来就是一大片白——她会当成「这儿断了」。
+        // 跟工具那段走**同一个** `tidy`：上一条和下一条之间只留一个空行。
+        tidy(text.replacingOccurrences(
             of: #"\[\[cot:[^\]]*\]\]"#,
             with: "", options: .regularExpression
-        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        ))
     }
 
     // ⚠️ 老的 `reasoningBlock` 删了，理由同 `toolBlock`：两块说的是同一件事，

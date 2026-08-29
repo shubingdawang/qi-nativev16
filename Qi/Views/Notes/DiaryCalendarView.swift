@@ -292,13 +292,13 @@ struct DiaryCalendarView: View {
                         .foregroundStyle(Theme.textMuted(scheme))
                     Spacer(minLength: 4)
                 }
-                Text(e.displayTitle)
+                Text(MD.inline(e.displayTitle))
                     .font(.app(14, weight: .medium))
                     .foregroundStyle(Theme.textMain(scheme))
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                 if !e.body.isEmpty {
-                    Text(e.body)
+                    Text(MD.inline(e.body))
                         .font(.app(11.5))
                         .foregroundStyle(Theme.textSoft(scheme))
                         .lineLimit(2)
@@ -422,11 +422,11 @@ struct DiaryEntrySheet: View {
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
                         if !entry.title.isEmpty {
-                            Text(entry.title)
+                            Text(MD.inline(entry.title))
                                 .font(.app(18, weight: .medium))
                                 .foregroundStyle(Theme.textMain(scheme))
                         }
-                        Text(entry.body)
+                        Text(MD.inline(entry.body))
                             .font(.app(15))
                             .lineSpacing(7)
                             .foregroundStyle(Theme.textSoft(scheme))

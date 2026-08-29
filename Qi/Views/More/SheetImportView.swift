@@ -28,6 +28,10 @@ struct SheetImportView: View {
     @State private var done: [Int: String] = [:]
     /// 底下那一行小字（拆开之后报一句）
     @State private var note: String?
+    /// 已经存进素材库的那几块（第几块）。
+    /// 标一下是因为她可能一块块存，得看得出哪几块存过了
+    @State private var kept: Set<Int> = []
+    @ObservedObject private var bank = PieceStore.shared
 
     private let cols = [GridItem(.adaptive(minimum: 84), spacing: 10)]
 
@@ -90,6 +94,22 @@ struct SheetImportView: View {
                                 .foregroundStyle(Theme.textMuted(scheme))
                                 .padding(.leading, 4)
 
+                            HStack(spacing: 8) {
+                                Button {
+                                    keepAll()
+                                } label: {
+                                    Label("全部存进素材库",
+                                          systemImage: "tray.and.arrow.down")
+                                        .font(.app(13, weight: .medium))
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 11)
+                                        .background(RoundedRectangle(cornerRadius: 13)
+                                            .fill(Theme.softFillDeep))
+                                        .foregroundStyle(Theme.textMain(scheme))
+                                }
+                                .buttonStyle(.plain)
+                            }
+
                             if let note {
                                 Text(note)
                                     .font(.app(11))
@@ -123,6 +143,10 @@ struct SheetImportView: View {
                 // 不用她猜「是不是可以长按」。
                 Button("拆开这一块") {
                     if let i = assigning { assigning = nil; split(i) }
+                }
+                // 她要的那件：切完存下来，下次不用再切同一张
+                Button("存进素材库") {
+                    if let i = assigning { assigning = nil; keep(i) }
                 }
                 // 只列**她已经买了的**——没买的指定了也摆不出来
                 ForEach(myKinds, id: \.0) { pair in
@@ -247,6 +271,42 @@ struct SheetImportView: View {
                 SpriteSheet.slice(img)
             }.value
             pieces = cut
+        }
+    }
+
+    /// 存一块进素材库。
+    ///
+    /// 她的原话：「我想切割之后增加一个选择切割图片后保存的功能，
+    /// 这样我就不用一直切割同一张图片了。」
+    ///
+    /// ⚠️ **存进素材库跟「贴给某件家具」是两件事。**
+    /// 贴给家具是“这件东西现在长这样”，
+    /// 存进素材库是“这张图以后还能再用”。
+    /// 两者不互斥，也不共用同一个文件——
+    /// 删素材库里那张，屋里贴着的那张不会跟着没。
+    private func keep(_ i: Int) {
+        guard pieces.indices.contains(i) else { return }
+        bank.add(pieces[i])
+        kept.insert(i)
+        note = "存进素材库了（现在共 \(bank.pieces.count) 块）"
+        if app.settings.haptics {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+    }
+
+    /// 全部存进去。**已经存过的跳过**，
+    /// 不然多按一下就多一套一模一样的素材。
+    private func keepAll() {
+        var n = 0
+        for i in pieces.indices where !kept.contains(i) {
+            bank.add(pieces[i])
+            kept.insert(i)
+            n += 1
+        }
+        note = n > 0 ? "存进去 \(n) 块（素材库共 \(bank.pieces.count) 块）"
+                     : "这一版都存过了"
+        if app.settings.haptics {
+            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
         }
     }
 

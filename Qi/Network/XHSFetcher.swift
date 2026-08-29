@@ -19,6 +19,13 @@ struct XHSNote: Codable, Hashable {
     /// 视频才有的两样
     var playCount: String = ""
     var duration: String = ""
+    /// 这条是不是视频。
+    ///
+    /// ⚠️ 小红书**三种帖子都有**：纯文字、图片、视频。
+    /// 以前一律当图片笔记读，于是视频帖只剩一张封面图，
+    /// 而他看到的是「配图 1 张」——**他会照着那张封面编里面发生了什么**。
+    /// B 站和抖音那两家靠 `source` 就知道是视频，小红书得单独记一笔。
+    var isVideo: Bool = false
     var comments: [XHSComment] = []
     /// 下载下来的图，存本地
     var localImages: [String] = []
@@ -32,7 +39,12 @@ struct XHSNote: Codable, Hashable {
     var briefForModel: String {
         let head: String
         switch source {
-        case .xhs:      head = "【小红书笔记】"
+        // 小红书三种帖子分开写。他拿到的第一行就该说清是哪一种——
+        // 不说的话，纯文字帖他会问「图呢」，视频帖他会照着封面编情节。
+        case .xhs:
+            if isVideo { head = "【小红书视频笔记】" }
+            else if imageCount > 0 { head = "【小红书图文笔记】" }
+            else { head = "【小红书纯文字笔记】" }
         case .bilibili: head = "【B 站视频】"
         case .douyin:   head = "【抖音视频】"
         }
@@ -48,11 +60,15 @@ struct XHSNote: Codable, Hashable {
             if !commentCount.isEmpty { s += " · 评论 \(commentCount)" }
             if !collectedCount.isEmpty { s += " · 收藏 \(collectedCount)" }
         }
-        if source != .xhs {
-            s += "\n（视频本身你看不了，这里只有封面和简介——别装作看过。"
+        // ⚠️ 「你看不了视频」这句以前只有 B 站和抖音才写。
+        // 小红书的视频笔记也是视频——漏了这一句，他会把封面当成全部内容。
+        if source != .xhs || isVideo {
+            s += "\n（视频本身你看不了，这里只有封面和文字——别装作看过。"
             s += "想知道里面讲了什么，问她。）"
         } else if imageCount > 0 {
             s += "\n配图 \(imageCount) 张（图片本身也一并给你了）"
+        } else {
+            s += "\n（这是一条纯文字笔记，本来就没有图——别问图在哪儿。）"
         }
         if !comments.isEmpty {
             s += "\n\n评论区："
@@ -211,6 +227,20 @@ enum XHSFetcher {
             }
         }
 
+        // 视频帖。`type` 是 "video"，或者干脆有一段 video 数据。
+        // 时长埋在 `video.capa.duration`（秒），有的版本在 `video.consumer` 那边。
+        if (data["type"] as? String) == "video" || data["video"] is [String: Any] {
+            note.isVideo = true
+            if let video = data["video"] as? [String: Any] {
+                let capa = video["capa"] as? [String: Any]
+                let sec = (capa?["duration"] as? NSNumber)?.intValue
+                    ?? (video["duration"] as? NSNumber)?.intValue ?? 0
+                if sec > 0 {
+                    note.duration = String(format: "%d:%02d", sec / 60, sec % 60)
+                }
+            }
+        }
+
         if let comments = state["comment"] as? [String: Any],
            let map = comments["comments"] as? [String: Any],
            let first = map.values.first as? [String: Any],
@@ -293,5 +323,6 @@ extension XHSNote {
         duration = (try? c.decodeIfPresent(String.self, forKey: .duration)) ?? ""
         comments = (try? c.decodeIfPresent([XHSComment].self, forKey: .comments)) ?? []
         localImages = (try? c.decodeIfPresent([String].self, forKey: .localImages)) ?? []
+        isVideo = (try? c.decodeIfPresent(Bool.self, forKey: .isVideo)) ?? false
     }
 }

@@ -16,7 +16,7 @@ struct AppearanceView: View {
     /// 那两根玻璃滑块拖到一半的值。只喂给底下那两块样品——
     /// 全局那份等松手才改（不然拖一下就要重画全屏的玻璃，手感直接死掉）
     @State private var blurDraft: Double?
-    @State private var dimDraft: Double?
+    // ⚠️ `dimDraft` 删了——「深色下压暗」那根滑块没了。
 
     /// 设置页那张外观卡片也要用同一组色，所以放成 static
     static let accentPresets: [(String, String)] = [
@@ -484,13 +484,18 @@ struct AppearanceView: View {
                    readout: "\(Int(app.settings.glassOpacity * 100))%",
                    note: "往右越糊，背后的壁纸化成色块，玻璃看着越实；往左越清楚，能看出壁纸原来是什么。\n\n这根滑块以前调的是整层的透明度——往左只是让玻璃越来越淡、直到快没了，那不是玻璃变了，是玻璃不见了。",
                    onDraft: { blurDraft = $0 })
-            SettingsDivider()
-            slider(title: "深色下压暗",
-                   value: $app.settings.glassDim,
-                   range: 0...0.5, step: nil,
-                   readout: "\(Int(app.settings.glassDim * 100))%",
-                   note: "只在深色模式下生效。压的是一层黑，**不动底下那块玻璃**——磨砂还是磨砂、模糊还是模糊，只是整体沉下去。拉到 0 就是完全不压，深色下玻璃跟浅色一样亮。",
-                   onDraft: { dimDraft = $0 })
+            // ⚠️ 「深色下压暗」那根滑块**删了，别加回来**。
+            //
+            // 她定的：「我认为不用再做这个深色下压暗了，
+            // 因为背景暗下来毛玻璃就自然暗下来了。」
+            //
+            // 她是对的。玻璃就是「把背后的画面糊一糊」，
+            // 背后暗了它自然就暗。另外去压一层黑在玻璃上，
+            // 等于在白玻璃上盖黑纱——出来是死灰。
+            // 她说「全都变成黑色的，太丑了」就是那一层。
+            //
+            // 深色下现在改成**压壁纸**（固定 50%，在
+            // `WallpaperBackground` 里），玻璃那一层一点不碰。
             liveSample
             SettingsDivider()
             slider(title: "自己的气泡染色",
@@ -555,9 +560,10 @@ struct AppearanceView: View {
                 .padding(.vertical, 15)
                 // 拖的时候用草稿值：全局那份要等松手才改，
                 // 但这两块小的必须当场跟着动，不然拉了半天没反馈
+                // ⚠️ 这两块现在只演示**模糊程度**。
+                // 压暗那根滑块没了，它就不再背那一半职责。
                 .glassBackground(radius: 14,
-                                 strength: blurDraft ?? app.settings.glassOpacity,
-                                 dim: dimDraft ?? app.settings.glassDim)
+                                 strength: blurDraft ?? app.settings.glassOpacity)
                 .padding(9)
                 // 钉死这块的深浅。GlassSurface 那层黑看的就是这个。
                 .environment(\.colorScheme, dark ? .dark : .light)
@@ -614,11 +620,13 @@ struct AppearanceView: View {
                                 // **也吃草稿值**。以前这块只读全局，
                                 // 所以拖滑块的时候「预览」是最后一个变的——
                                 // 她说的「设置的玻璃显示效果比其他地方慢很多」。
+                                // ⚠️ 跟真气泡一致：**不描边**。
+                                // 预览里描了而聊天页没描，那这个预览就在说谎。
                                 GlassSurface(radius: 18,
                                              strength: (blurDraft ?? app.settings.glassOpacity)
                                                 * app.settings.bubbleOpacity,
                                              extra: 0.35,
-                                             dim: dimDraft ?? app.settings.glassDim)
+                                             edge: false)
                                 if app.settings.bubbleTint > 0.01 {
                                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                                         .fill(app.settings.accentColor
@@ -636,7 +644,7 @@ struct AppearanceView: View {
                         .glassBackground(radius: 18,
                                          strength: (blurDraft ?? app.settings.glassOpacity)
                                             * app.settings.bubbleOpacity,
-                                         dim: dimDraft ?? app.settings.glassDim)
+                                         edge: false)
                     Spacer(minLength: 40)
                 }
             }

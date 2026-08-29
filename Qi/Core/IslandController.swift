@@ -51,7 +51,8 @@ final class IslandController {
         if activity != nil { end(immediately: true) }
 
         let state = QiActivityAttributes.ContentState(
-            activity: "醒着", preview: "", done: false, startedAt: Date())
+            activity: "醒着", preview: "", done: false, startedAt: Date(),
+            pulse: LocalPulse.shared.snapshot().heartRate)
         do {
             activity = try Activity.request(
                 attributes: QiActivityAttributes(name: name),
@@ -84,7 +85,9 @@ final class IslandController {
             // 岛上放不下长文，取尾巴那一段——正在说的是最后那几个字
             preview: String(preview.suffix(90)),
             done: false,
-            startedAt: started)
+            startedAt: started,
+            // 心跳每次都重取。它一直在变，钉在开始那一刻的数没有意义。
+            pulse: LocalPulse.shared.snapshot().heartRate)
         Task {
             await current.update(.init(state: state,
                                        staleDate: Date().addingTimeInterval(60 * 10)))
@@ -105,7 +108,8 @@ final class IslandController {
             activity: "说完了",
             preview: String(preview.suffix(90)),
             done: true,
-            startedAt: started)
+            startedAt: started,
+            pulse: LocalPulse.shared.snapshot().heartRate)
         activity = nil
         owner = nil
         Task {

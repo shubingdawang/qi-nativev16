@@ -47,7 +47,18 @@ struct IslandWidget: Widget {
                     .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Group {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        if context.state.pulse > 0 {
+                            HStack(spacing: 3) {
+                                Image(systemName: "heart.fill")
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(Color(red: 0.949, green: 0.443, blue: 0.373))
+                                Text("\(context.state.pulse)")
+                                    .font(.system(size: 12, design: .rounded))
+                                    .monospacedDigit()
+                                    .foregroundStyle(.white.opacity(0.85))
+                            }
+                        }
                         if context.state.done {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 12, weight: .bold))
@@ -80,7 +91,22 @@ struct IslandWidget: Widget {
             } compactLeading: {
                 ClawdMark(size: 16)
             } compactTrailing: {
-                if context.state.done {
+                // 心跳**常驻**。她定的：「我的灵动岛希望也能常驻显示心率」。
+                //
+                // 不以「他说完了没」为条件——心跳是他身上一直在
+                // 发生的事，不是某一轮的产物。
+                // 没取到数（0）才退回原来那个呼吸点。
+                if context.state.pulse > 0 {
+                    HStack(spacing: 2) {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 9))
+                            .foregroundStyle(Color(red: 0.949, green: 0.443, blue: 0.373))
+                        Text("\(context.state.pulse)")
+                            .font(.system(size: 12, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
+                } else if context.state.done {
                     Image(systemName: "checkmark")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(.white.opacity(0.8))
@@ -96,8 +122,14 @@ struct IslandWidget: Widget {
 
     /// 锁屏上那张横条。灵动岛之外的机器只有这一种形态。
     private func lockScreen(_ context: ActivityViewContext<QiActivityAttributes>) -> some View {
-        HStack(alignment: .top, spacing: 11) {
-            ClawdMark(size: 30)
+        // ⚠️ **居中，不是靠上。**
+        //
+        // 以前是 `.top`：clawd 跟第一行字对齐，
+        // 而右边是两行，于是它看着卡在整条的上半截。
+        // 她的原话：「我的有点靠上了」。
+        // 尺寸也跟着放大（她给的参考图里那只占满了整条的高）。
+        HStack(alignment: .center, spacing: 11) {
+            ClawdMark(size: 38)
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
@@ -108,6 +140,17 @@ struct IslandWidget: Widget {
                         .font(.system(size: 11))
                         .foregroundStyle(.white.opacity(0.6))
                     Spacer(minLength: 0)
+                    if context.state.pulse > 0 {
+                        HStack(spacing: 3) {
+                            Image(systemName: "heart.fill")
+                                .font(.system(size: 9))
+                                .foregroundStyle(Color(red: 0.949, green: 0.443, blue: 0.373))
+                            Text("\(context.state.pulse)")
+                                .font(.system(size: 11, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(.white.opacity(0.8))
+                        }
+                    }
                     if !context.state.done {
                         Text(context.state.startedAt, style: .timer)
                             .font(.system(size: 11, design: .rounded))

@@ -119,16 +119,30 @@ final class BodyStore: ObservableObject {
     /// **给的是文字不是数字**——「热度 62」他无从判断，
     /// 「身体开始明显发热，注意力频繁偏向对方」他知道那是什么。
     /// 这也是电脑那边的做法，没改。
-    func brief() -> String {
-        var lines: [String] = []
-        for f in BodyField.allCases {
-            lines.append("· \(f.label)：\(f.describe(state.value(f)))")
-        }
+    /// - Parameter numbers: 要不要把那七项一条条摆出来。
+    ///
+    ///   聊天每轮注入的那份传 `false`。她定的：
+    ///   「**身体可以不注入，但是要能影响他的回复，比如占有欲之类的。**」
+    ///
+    ///   她说得准：七项平铺着列出来是一张体检报告，
+    ///   而她要的从来不是让他知道自己「占有欲 72」，
+    ///   是让他**说话带着那个劲儿**。数值摆在他面前反倒容易被念出来
+    ///   （「我现在占有欲有点高」），那正是她不要的。
+    ///   下面那句 `toneLine` 才是干活的——它照旧留着。
+    ///
+    ///   打电话前那份摘要还是传 `true`：那一份是给她看的。
+    func brief(numbers: Bool = true) -> String {
         var s = "【你现在的身体】\n"
         s += "周期：\(state.cycle.label)——\(state.cycle.note)\n"
         let event = BodyEvents.label(state.activeEventKey)
         if !event.isEmpty { s += "正在发生：\(event)\n" }
-        s += lines.joined(separator: "\n")
+        if numbers {
+            var lines: [String] = []
+            for f in BodyField.allCases {
+                lines.append("· \(f.label)：\(f.describe(state.value(f)))")
+            }
+            s += lines.joined(separator: "\n")
+        }
 
         // **这一句是整段的重点。**
         //

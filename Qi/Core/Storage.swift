@@ -108,6 +108,42 @@ enum Storage {
         let url = fileURL(name)
         try? data.write(to: url, options: .atomic)
     }
+
+    /// 写盘那一下**挪到后台**。
+    ///
+    /// ## 为什么要有这一条
+    ///
+    /// 她报的：「有时候还是会卡顿，比如发消息的时候我切到左侧栏去看其他数据。」
+    ///
+    /// 聊天记录那份 JSON 现在有好几兆（她一个窗口就聊到 96k tokens）。
+    /// `save` 是**编码 + 写盘全在叫它的那个线程上**，而叫它的是主线程——
+    /// 流式输出每 400 毫秒来一次。她这时候切页面，
+    /// 新页面要布局要渲染，正好排在那几兆 JSON 后面。
+    ///
+    /// ## 两个坑
+    ///
+    /// ⚠️ **顺序不能乱。** 两次保存要是并发跑，先发的可能后落盘，
+    /// 把新的盖成旧的。所以走一条**串行队列**，一件一件来。
+    ///
+    /// ⚠️ 快照要在**调用方那个线程**上取好再递进来。
+    /// 把 `self.conversations` 直接扔进后台闭包的话，
+    /// 后台读的时候主线程可能正在改它。
+    private static let diskQueue =
+        DispatchQueue(label: "qi.storage.disk", qos: .utility)
+
+    /// ⚠️ 约束只写 `Encodable`，**不写 `Sendable`**。
+    ///
+    /// 工程跑的是 Swift 5 语言模式，那儿 `Sendable` 不强制；
+    /// 而写上去反倒会把某个成员碰巧还没标 Sendable 的类型挡在门外，
+    /// 换来一个跟这件事无关的编译错。
+    ///
+    /// 传进来的都是**值类型的快照**（在调用方那个线程上取好的），
+    /// 后台只读不写，实际是安全的。
+    static func saveAsync<T: Encodable>(_ value: T, to name: String) {
+        diskQueue.async {
+            save(value, to: name)
+        }
+    }
 }
 
 /// 图片单独存成文件，不塞进 JSON 里，不然会越来越卡

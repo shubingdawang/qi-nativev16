@@ -176,9 +176,25 @@ struct FootprintView: View {
                 }
             }
             .frame(height: 8)
-            Text("命中的部分只按很低的价钱算，所以这条越长越好。")
-                .font(.caption2)
-                .foregroundStyle(Theme.textMuted(scheme))
+            // ⚠️ 两个 0 要分得开：**「这个供应商不给这个数」跟「这一天没省下钱」
+            // 不是一件事**，可摆出来都是 0。她第二次问「缓存命中这些还都是 0」，
+            // 一半就是因为屏幕上没说这两者的区别。
+            //
+            // 判断法子：调用了好几次、输入也上量了，缓存那两项却**双双为 0**——
+            // 缓存真在工作的话，第一轮至少会有一笔「写入」。
+            // 两个都是 0，那就是这条链路根本没在缓（或者没把数报回来）。
+            if u.calls >= 3 && u.inputAll > 20_000
+                && u.cacheRead == 0 && u.cacheWrite == 0 {
+                Text(MD.inline("**这条链路没有缓存数据。** 命中和写入同时为 0，"
+                    + "通常是中转不支持缓存标记、或者不把缓存用量报回来。"
+                    + "换直连的官方接口才会有这两个数。"))
+                    .font(.caption2)
+                    .foregroundStyle(Theme.textMuted(scheme))
+            } else {
+                Text("命中的部分只按很低的价钱算，所以这条越长越好。")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
         }
     }
 

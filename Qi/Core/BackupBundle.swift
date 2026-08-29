@@ -167,6 +167,9 @@ enum BackupBundle {
         case "Images":   return "图片（相册、聊天里发过的、墙纸…）"
         case "Stickers": return "表情和 GIF"
         case "Voices":   return "语音条"
+        // ⚠️ 视频常常比 20 MB 的上限大，进不了备份的会记在「跳过」里。
+        // 那不是 bug——一份带着几段视频的备份能有好几百兆。
+        case "Videos":   return "视频"
         case "Music":    return "歌的音频"
         case "Files":    return "文件"
         case "Memory":   return "记忆库里的附件"

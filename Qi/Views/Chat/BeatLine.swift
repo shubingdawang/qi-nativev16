@@ -37,7 +37,7 @@ struct BeatLine: View {
                 .font(.app(8, weight: .semibold))
                 .foregroundStyle(Theme.textMuted(scheme).opacity(0.7))
                 .padding(.top, 3)
-            Text(beat.text)
+            Text(MD.inline(beat.text))
                 .font(.app(12))
                 .italic()
                 .foregroundStyle(Theme.textMuted(scheme))
@@ -55,7 +55,7 @@ struct BeatLine: View {
                 .frame(width: 2)
 
             VStack(alignment: isUser ? .trailing : .leading, spacing: 2) {
-                Text(beat.text)
+                Text(MD.inline(beat.text))
                     .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme).opacity(0.9))
                     .multilineTextAlignment(isUser ? .trailing : .leading)

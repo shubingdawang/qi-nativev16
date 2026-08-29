@@ -349,6 +349,26 @@ final class GameStore: ObservableObject {
         games[i].genre = genre.rawValue
     }
 
+    /// 他自己写了一份存进来。返回那条记录，存不下就返回 nil。
+    ///
+    /// ⚠️ 跟 `importFiles` 是**两条路**：那条是她从文件 App 里挑，
+    /// 要处理沙盒授权；这条是他现写的一段文字，直接落盘。
+    /// 落的地方、注册的方式完全一样，所以她那边看不出区别——
+    /// 游戏间里就是多了一个能点开的。
+    @discardableResult
+    func add(name: String, html: String) -> LocalGame? {
+        guard let data = html.data(using: .utf8) else { return nil }
+        let fileName = UUID().uuidString + ".html"
+        do {
+            try data.write(to: GameStore.dir.appendingPathComponent(fileName),
+                           options: .atomic)
+        } catch { return nil }
+        var g = LocalGame(name: name.isEmpty ? "没名字" : name, fileName: fileName)
+        g.genre = GameGenre.other.rawValue
+        games.append(g)
+        return g
+    }
+
     func remove(_ game: LocalGame) {
         try? FileManager.default.removeItem(at: url(for: game))
         games.removeAll { $0.id == game.id }

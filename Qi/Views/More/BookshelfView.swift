@@ -311,7 +311,7 @@ struct BookshelfView: View {
             }
 
             // 划过的那句，底下垫一层马克笔
-            Text(m.quote)
+            Text(MD.inline(m.quote))
                 .font(.app(14, design: .serif))
                 .foregroundStyle(Theme.textMain(scheme))
                 .fixedSize(horizontal: false, vertical: true)

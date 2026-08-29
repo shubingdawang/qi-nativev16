@@ -333,7 +333,7 @@ struct DigestReaderView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text(digest.summary)
+                Text(MD.inline(digest.summary))
                     .font(.body)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)

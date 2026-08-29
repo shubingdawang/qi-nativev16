@@ -260,6 +260,11 @@ enum ClawdSVG {
     /// 预览和导出用的是**同一份** HTML，所见即所得。
     ///
     /// 背景留透明——表情包贴到聊天里不该带一块白底。
+    /// 预览取景框往外让出多少（左右和下方）。按 viewBox 的单位算，不是点。
+    static let pad: Int = 56
+    /// 顶上让得更多一点——字、闪光、想的那个泡泡都往头顶上放。
+    static let padTop: Int = 78
+
     static func page(svg: String, css: String, scale: Double = 1) -> String {
         // ⚠️ **尺寸不许再写死像素。**
         //
@@ -276,8 +281,24 @@ enum ClawdSVG {
         // 剩下两成留给溢出的内容（`overflow: visible` 让它画得出来）。
         // 容器多大都不会裁。
         //
-        // `scale` 这个参数留着不动——导出那条路要用它决定倍率。
+        // ⚠️ 上一版按百分比铺（`width: 80%`）还是不够。
+        //
+        // 八成只在四周各留一成的余地，而她要放字的地方在 y = -34——
+        // viewBox 高 230，那是往上一成半。**比余地还多，照样被裁**
+        // （裁它的是 `body` 上那句 `overflow: hidden`，
+        //   `overflow: visible` 只让 SVG 自己肯画，管不着外面那一层）。
+        // 她的原话：「根本没有空间可以放文字，稍微放在外面一点就被截断了。」
+        //
+        // 靠百分比调是治不好的：留多少余地是个死数，而她想放多远不是。
+        // 所以改成**把预览的取景框整个撑大**——
+        // 画的内容还是那 320×230，四周各多出一圈，字放到外面也在框里。
+        //
+        // ⚠️ 只动预览这一份。`svg` 那个字符串本身一个字都没改，
+        // 所以导出、存进表情库那条路看到的还是原来的 viewBox。
         _ = scale
+        let framed = svg.replacingOccurrences(
+            of: "viewBox=\"0 0 320 230\"",
+            with: "viewBox=\"\(-pad) \(-padTop) \(320 + pad * 2) \(230 + padTop + pad)\"")
         return """
         <!DOCTYPE html>
         <html><head>
@@ -291,13 +312,13 @@ enum ClawdSVG {
           overflow: hidden;
         }
         svg {
-          width: 80%; height: 80%;
+          width: 100%; height: 100%;
           overflow: visible;
         }
         \(css)
         </style>
         </head><body>
-        \(svg)
+        \(framed)
         </body></html>
         """
     }

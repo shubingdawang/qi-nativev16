@@ -53,6 +53,12 @@ struct QiApp: App {
                 // resume 里会顺手把点进来的那条兜底通知兑现掉：
                 // 那一刻才真的去算他要说什么
                 WakeEngine.shared.resume()
+                // 话题池：够钟了就抓一轮。
+                //
+                // ⚠️ **挂在「App 活过来」上，不开定时器。**
+                // 后台定时器在 iOS 上本来就不保证跑，
+                // 而这件事晚半小时没有任何影响——它抓的是「最近」，不是「刚刚」。
+                app.runTopicScoutIfDue()
                 Notifier.shared.clearAll()
             case .background:
                 WakeEngine.shared.pause()

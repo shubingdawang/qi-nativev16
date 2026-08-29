@@ -33,7 +33,7 @@ struct MemoryLinkView: View {
                             Text(current?.title ?? "")
                                 .font(.app(16, weight: .medium))
                                 .foregroundStyle(Theme.textMain(scheme))
-                            Text(summary)
+                            Text(MD.inline(summary))
                                 .font(.app(12))
                                 .foregroundStyle(Theme.textSoft(scheme))
                         }

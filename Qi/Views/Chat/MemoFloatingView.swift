@@ -132,7 +132,7 @@ struct MemoFloatingView: View {
                 .buttonStyle(.plain)
             }
 
-            Text(memo.text)
+            Text(MD.inline(memo.text))
                 .font(.app(14))
                 .foregroundStyle(memo.color ?? Theme.textMain(scheme))
                 .multilineTextAlignment(.leading)

@@ -42,6 +42,9 @@ struct SettingsView: View {
     /// **标了 `@MainActor` 的 class 本身就是 Sendable 的**，
     /// 传进后台闭包合法，改它的时候再跳回主线程。
     @StateObject private var chore = BackupChore()
+    /// ⚠️ 要观察它：抓的时候那句「在找…」和池子里的条数都得跟着变，
+    /// 只读 `TopicPool.shared` 不订阅的话这一段是死的。
+    @ObservedObject private var topics = TopicPool.shared
     @State private var exportURL: URL?
     @State private var alertMessage: String?
     @State private var showingClearConfirm = false
@@ -507,14 +510,20 @@ struct SettingsView: View {
 
             SettingsDivider()
 
+            typingSection
+
+            SettingsDivider()
+
             Toggle(isOn: $app.settings.segmentUser) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("我分段发")
                         .font(.app(15))
                         .foregroundStyle(Theme.textMain(scheme))
-                    Text(MD.inline("输入的内容先暂存，停止输入后一并发送。"
-                         + "图、文件、语音、表情**都会一起等**——"
-                         + "所以「先说一句再发语音」和「先发语音再补一句」都行"))
+                    Text(MD.inline("输入框旁边多一个「暂存」键：按它把这一条攒进这一轮，"
+                         + "按发送键把攒着的一起发出。"
+                         + "图、文件、语音、表情**都能攒**，"
+                         + "所以「先说一句再发语音」和「先发语音再补一句」都行。"
+                         + "**不限时**，攒多久都行"))
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
@@ -523,26 +532,9 @@ struct SettingsView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 11)
 
-            if app.settings.segmentUser {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text("等多久")
-                            .font(.app(13))
-                            .foregroundStyle(Theme.textSoft(scheme))
-                        Spacer()
-                        Text("\(Int(app.settings.segmentUserDelay)) 秒")
-                            .font(.app(12))
-                            .foregroundStyle(Theme.textMuted(scheme))
-                    }
-                    Slider(value: $app.settings.segmentUserDelay, in: 2...30, step: 1)
-                        .tint(app.settings.accentColor)
-                    Text("自最后一条消息发出后开始计时，期间再次发送则重新计时，停止输入后一并发送。")
-                        .font(.app(11))
-                        .foregroundStyle(Theme.textMuted(scheme))
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 12)
-            }
+            // ⚠️ 「等多久」那根滑块删了：现在没有倒计时了，攒着的东西
+            // 只在按发送键的时候才走。`segmentUserDelay` 那个字段还在
+            // `AppSettings` 里，**只为一件事：让旧设置文件还解得开**。
             }
 
             SettingsDivider()
@@ -610,16 +602,22 @@ struct SettingsView: View {
                         }
                     }
                 } label: {
-                    // ⚠️ 要有个箭头。光秃秃一行字看不出来能点——
-                    // 她说「并没有给我选择的余地」，一半是这个原因。
+                    // ⚠️ 这儿以前挂着一个上下箭头。**她定的：去掉。**
+                    //
+                    // 她的原话：「全部和每 60 条没有这个符号，
+                    // 有些有有些没有就会显得很怪，干脆都不要有，
+                    // 点击能出现选项就行。」
+                    //
+                    // 她对。一屏上同一类东西（右边那一列可点的值）
+                    // 只有两个带箭头、别的都不带，**那个箭头就不再是
+                    // 「这里能点」的记号，而是一处不整齐**——
+                    // 反而让不带箭头的那几行看着像不能点。
+                    // 要么全带要么全不带；这一页历来是全不带，那就跟着。
                     HStack(spacing: 3) {
                         Text(fallbackLabel)
                             .font(.app(14))
                             .foregroundStyle(Theme.textSoft(scheme))
                             .lineLimit(1)
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.app(10))
-                            .foregroundStyle(Theme.textMuted(scheme))
                     }
                 }
             }
@@ -659,14 +657,15 @@ struct SettingsView: View {
                             .font(.app(14))
                             .foregroundStyle(Theme.textSoft(scheme))
                             .lineLimit(1)
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.app(10))
-                            .foregroundStyle(Theme.textMuted(scheme))
                     }
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 9)
+
+            SettingsDivider()
+
+            topicSection
 
             SettingsNote("""
             辅助模型承担非对话类任务：为表情生成关键词、翻译、通话摘要、图像识别、视频抽帧识别。
@@ -1204,6 +1203,200 @@ struct SettingsView: View {
         let mid = String(saved[saved.index(after: cut)...])
         let shown = p.models.first(where: { $0.id == mid })?.displayName ?? mid
         return p.name + " · " + shown
+    }
+
+    // MARK: 打字的节奏
+
+    /// 两个开关，**分量完全不同**，所以分开摆、分开写说明。
+    ///
+    /// 上面那个说的是她**发出来那句话**的附加信息；
+    /// 下面那个是把她**没打算让他看见的那一下**递出去。
+    @ViewBuilder
+    private var typingSection: some View {
+        Toggle(isOn: $app.settings.typingRhythm) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("记录输入节奏")
+                    .font(.app(15))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Text(MD.inline("在消息上附一句「这句打了多久、中间停过几次」。"
+                     + "**仅记录时长与次数，不记录内容**。"
+                     + "本机计算，不额外计费"))
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+        }
+        .tint(app.settings.accentColor)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+
+        Toggle(isOn: $app.settings.typingWithheld) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("告知未发出的输入")
+                    .font(.app(15))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Text(MD.inline("输入较长内容后全部删除、且后续 90 秒未发送任何消息时，"
+                     + "告知模型此事发生过。"
+                     + "**删除后重新输入并发送的不计入**。"
+                     + "内容不会被记录，仅告知字数与次数"))
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+        }
+        .tint(app.settings.accentColor)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+
+        SettingsNote("""
+        输入节奏：发送时在消息前附一句说明（如「这句她打了 47 秒、中间停了 3 次」）。输入时长不足 25 秒且停顿少于 2 次的不附。
+
+        未发出的输入：判定条件为删除 8 字以上、且此后 90 秒内未发送任何消息。删除后重新输入并发送的，判定自动撤销。
+
+        两项均不记录输入内容。存储的仅为时间戳、字数与次数。
+
+        两项均为本机计算，不联网、不调用模型。
+        """, title: "说明")
+    }
+
+    // MARK: 话题池
+
+    /// 话题池那一段。
+    ///
+    /// 它做的事：定期从网上捞一批近期信息，用一个**便宜模型**筛成 0~3 条，
+    /// 放进池子；他自己去翻，觉得有意思就主动跟她开口。
+    ///
+    /// ⚠️ 为什么模型要单独选：辅助模型还要看图看视频，
+    /// 得挑个视觉能力过得去的；筛话题只是读几十行字挑三条，
+    /// 那个可以便宜得多。绑在一个字段上她就只能迁就贵的那头。
+    @ViewBuilder
+    private var topicSection: some View {
+        Toggle(isOn: $app.settings.topicPoolOn) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("话题池")
+                    .font(.app(15))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Text(MD.inline("定期联网抓取近期信息，由下方模型筛选后留下 0～3 条，"
+                     + "供模型主动开启话题。**抓取与筛选不占用对话上下文**"))
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+        }
+        .tint(app.settings.accentColor)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+
+        if app.settings.topicPoolOn {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("筛选模型")
+                        .font(.app(13))
+                        .foregroundStyle(Theme.textSoft(scheme))
+                    Spacer(minLength: 8)
+                    Menu {
+                        Button("跟随辅助模型") { app.settings.topicModel = "" }
+                        ForEach(app.providers.filter { $0.enabled }) { p in
+                            ForEach(p.enabledModels.isEmpty ? p.models : p.enabledModels) { m in
+                                Button(p.name + " · " + m.displayName) {
+                                    app.settings.topicModel = p.id.uuidString + "|" + m.id
+                                }
+                            }
+                        }
+                    } label: {
+                        Text(modelLabel(app.settings.topicModel, empty: "跟随辅助模型"))
+                            .font(.app(13))
+                            .foregroundStyle(Theme.textSoft(scheme))
+                            .lineLimit(1)
+                    }
+                }
+
+                HStack {
+                    Text("抓取间隔")
+                        .font(.app(13))
+                        .foregroundStyle(Theme.textSoft(scheme))
+                    Spacer()
+                    Text("\(Int(app.settings.topicEveryHours)) 小时")
+                        .font(.app(12))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+                Slider(value: $app.settings.topicEveryHours, in: 2...24, step: 1)
+                    .tint(app.settings.accentColor)
+
+                HStack(spacing: 10) {
+                    Button {
+                        // 手动跑一轮。**不看间隔**——她按了就是要现在抓。
+                        guard let reach = app.topicReach() else { return }
+                        Task { @MainActor in
+                            TopicPool.shared.busy = "在找…"
+                            _ = await TopicScout.run(
+                                app: app, reach: reach,
+                                interests: EmotionEngine.shared.state.likeHints
+                                    .prefix(3).map(\.text)) { line in
+                                TopicPool.shared.busy = line
+                            }
+                            TopicPool.shared.busy = nil
+                        }
+                    } label: {
+                        Text(topics.busy ?? "现在抓一轮")
+                            .font(.app(13))
+                            .foregroundStyle(app.settings.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(topics.busy != nil)
+                    Spacer()
+                    Text("池子里 \(topics.pending.count) 条")
+                        .font(.app(11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+
+                if !topics.lastError.isEmpty {
+                    Text(topics.lastError)
+                        .font(.app(11))
+                        .foregroundStyle(.orange)
+                }
+
+                // 池子里现在有什么。**她也能看、也能扔**——
+                // 那份文档里「Agent 和人类决定」那一行说的就是这个。
+                ForEach(topics.pending.prefix(5)) { t in
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(alignment: .top) {
+                            Text(t.title)
+                                .font(.app(12.5))
+                                .foregroundStyle(Theme.textMain(scheme))
+                            Spacer(minLength: 6)
+                            Button {
+                                topics.remove(t.id)
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.app(9))
+                                    .foregroundStyle(Theme.textMuted(scheme))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        if !t.summary.isEmpty {
+                            Text(t.summary)
+                                .font(.app(11))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                                .lineLimit(3)
+                        }
+                    }
+                    .padding(9)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 10)
+                        .fill(Theme.softFillDeep))
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
+        }
+
+        SettingsNote("""
+        每隔设定的时长联网抓取一批近期信息，交由筛选模型判断，最多保留 3 条放入话题池。
+
+        池中条目 48 小时后过期。模型可自行查看并决定是否开启话题，也可全部忽略。
+
+        筛选模型独立于辅助模型：该任务仅需处理文本，可选用更低价的模型。留空则跟随辅助模型。
+
+        抓取与筛选在后台完成，不进入对话上下文。
+        """, title: "说明")
     }
 
     /// 辅助模型现在选的是谁

@@ -19,17 +19,63 @@ struct MusicLibraryView: View {
     @State private var webResults: [Track] = []
     @State private var notice: String?
     @State private var showingLyrics = false
+    /// 按歌手分组还是排成一长条
+    @AppStorage("musicGroupByArtist") private var byArtist = false
+    /// 长按某首歌弹出来的那个
+    @State private var regrouping: Track?
+    @State private var artistDraft = ""
 
     private var mine: [Track] { library.search(keyword) }
 
+    /// 按歌手分好组。
+    ///
+    /// ⚠️ 分组用的是 `groupName`（她自己改过的那个），
+    /// 不是 `artist`。她的原话：「长按可以选择分组，
+    /// 以免一些歌手艺名不同」——
+    /// 同一个人在不同文件里的歌手名可能写法不一样
+    /// （简繁体、中英文、带不带乐队名），
+    /// **按原始歌手名分组一定会把一个人拆成好几组**。
+    /// 所以分组名得能改，而且改的是**另一个字段**——
+    /// 原始歌手名是文件里读出来的事实，不该被抹掉。
+    private var grouped: [(String, [Track])] {
+        var box: [String: [Track]] = [:]
+        for t in mine {
+            box[t.groupName, default: []].append(t)
+        }
+        // 歌多的排前面；一样多的按名字。
+        // 「不知道歌手」那组永远排最后——它不是一个人。
+        return box.sorted { a, b in
+            if a.key == Track.unknownArtist { return false }
+            if b.key == Track.unknownArtist { return true }
+            if a.value.count != b.value.count { return a.value.count > b.value.count }
+            return a.key < b.key
+        }.map { ($0.key, $0.value) }
+    }
+
     var body: some View {
+        // ⚠️ 「正在放的那首」**钉在顶上，不跟着列表滚**。
+        //
+        // 她的原话：「最顶上那个可以点击进入歌词页的应该固定在页面的顶上，
+        // 就是当我下滑音乐列表的时候歌词页依旧在顶上，随时可以点进去，
+        // 不然每次划到很下面找歌还要划到最上才能点进去。」
+        //
+        // 以前它是 ScrollView **里面**的第一个子元素，
+        // 所以一往下滑就跑掉了。现在摆到 ScrollView 外面。
+        VStack(spacing: 0) {
+            if let now = player.current {
+                nowPlayingRow(now)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 10)
+            }
+            listBody
+        }
+        .navigationTitle("音乐")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var listBody: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-
-                // 正在放的那首。**点它进歌词页**——她指名的那个入口。
-                if let now = player.current {
-                    nowPlayingRow(now)
-                }
 
                 HStack(spacing: 8) {
                     HStack(spacing: 5) {
@@ -76,11 +122,39 @@ struct MusicLibraryView: View {
                 }
 
                 if !mine.isEmpty {
-                    Text("我的")
-                        .font(.app(13, weight: .medium))
-                        .foregroundStyle(Theme.textMain(scheme))
-                    ForEach(mine) { track in
-                        row(track, local: true)
+                    HStack(spacing: 8) {
+                        Text("我的")
+                            .font(.app(13, weight: .medium))
+                            .foregroundStyle(Theme.textMain(scheme))
+                        Spacer(minLength: 0)
+                        // 分组开关。记在 `@AppStorage` 里——
+                        // 她选完一次就不应该再选第二次
+                        Button {
+                            withAnimation(.easeOut(duration: 0.18)) { byArtist.toggle() }
+                        } label: {
+                            Label(byArtist ? "按歌手分组" : "不分组",
+                                  systemImage: byArtist
+                                  ? "person.2" : "list.bullet")
+                                .font(.app(11))
+                                .foregroundStyle(app.settings.accentColor)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    if byArtist {
+                        ForEach(grouped, id: \.0) { name, list in
+                            Text(name)
+                                .font(.app(11, weight: .medium))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                                .padding(.top, 4)
+                            ForEach(list) { track in
+                                row(track, local: true)
+                            }
+                        }
+                    } else {
+                        ForEach(mine) { track in
+                            row(track, local: true)
+                        }
                     }
                 }
 
@@ -134,8 +208,7 @@ struct MusicLibraryView: View {
             .padding(.top, 12)
             .padding(.bottom, Layout.tabBarExpanded + 16)
         }
-        .navigationTitle("音乐")
-        .navigationBarTitleDisplayMode(.inline)
+        // 标题挂在外面那一层了，这儿不能再挂一遍
         // 点了一首文件已经不在的歌。**不能一声不吭**——
         // 以前只是什么都不发生，她只会觉得「这 App 坏了」。
         .alert("这首歌的文件不在了", isPresented: Binding(
@@ -157,6 +230,19 @@ struct MusicLibraryView: View {
                     Image(systemName: "chart.bar")
                 }
             }
+        }
+        .alert("归到哪个歌手", isPresented: Binding(
+            get: { regrouping != nil }, set: { if !$0 { regrouping = nil } }
+        )) {
+            TextField("歌手名", text: $artistDraft)
+            Button("取消", role: .cancel) { regrouping = nil }
+            Button("归好了") {
+                if let t = regrouping { library.regroup(t.id, to: artistDraft) }
+                regrouping = nil
+            }
+        } message: {
+            Text("改的只是分组，歌曲自带的歌手名不会被改掉。\n"
+                 + "同一个人的歌写成同一个分组名，就会归到一起。")
         }
         .fullScreenCover(isPresented: $showingLyrics) { NowPlayingView() }
         .fileImporter(isPresented: $importing,
@@ -253,6 +339,25 @@ struct MusicLibraryView: View {
         .glassCard(padding: 0)
         .contextMenu {
             if local {
+                // 她要的：长按选分组。
+                // 现有的分组名直接列出来——
+                // **归一首歌到已有的人名下面，不该需要重新打一遍那个名字**，
+                // 打一遍就有可能打成另一个写法，那就又拆成两组了。
+                Menu("归到哪个歌手") {
+                    ForEach(library.groupNames, id: \.self) { n in
+                        Button(n) { library.regroup(track.id, to: n) }
+                    }
+                    Divider()
+                    Button("另起一个名字…") {
+                        artistDraft = track.groupName
+                        regrouping = track
+                    }
+                    if !track.artistGroup.isEmpty {
+                        Button("改回原来的（\(track.artist)）") {
+                            library.regroup(track.id, to: "")
+                        }
+                    }
+                }
                 Button(role: .destructive) {
                     library.remove(track)
                 } label: {

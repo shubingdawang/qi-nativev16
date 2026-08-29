@@ -38,6 +38,31 @@ struct Track: Codable, Hashable, Identifiable {
     /// iTunes 那条只有三十秒，两种都不是本地文件，得分开。
     var fullLength: Bool = false
 
+    /// 分组名。空 = 跟着 `artist` 走。
+    ///
+    /// ⚠️ **分组名是另一个字段，不是盖掉 `artist`。**
+    ///
+    /// 她的原话：「长按可以选择分组，以免一些歌手艺名不同。」
+    /// 同一个人在不同文件里的歌手名写法往往不一样
+    /// （简繁体、中英文、带不带乐队名），
+    /// 按原始歌手名分组就会把一个人拆成好几组。
+    ///
+    /// 而 `artist` 是**从文件里读出来的事实**，不该被抹掉——
+    /// 她改的是「我把它们归在一起」，不是「这首歌的歌手写错了」。
+    /// 两件事混在一个字段里，改完就再也分不开了。
+    var artistGroup: String = ""
+
+    /// 没歌手名的那一组叫什么
+    static let unknownArtist = "不知道歌手"
+
+    /// 分组的时候用哪个名字
+    var groupName: String {
+        let g = artistGroup.trimmingCharacters(in: .whitespaces)
+        if !g.isEmpty { return g }
+        let a = artist.trimmingCharacters(in: .whitespaces)
+        return a.isEmpty ? Track.unknownArtist : a
+    }
+
     /// 是不是只有三十秒的试听。
     /// 本地文件和网易云那条都是整首，只有 iTunes 那条是试听。
     var isPreview: Bool { localName.isEmpty && !fullLength }
@@ -63,6 +88,9 @@ extension Track {
         title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
         artist = (try? c.decodeIfPresent(String.self, forKey: .artist)) ?? ""
         album = (try? c.decodeIfPresent(String.self, forKey: .album)) ?? ""
+        // ⚠️ 新字段必须在这儿补一行，不补的话
+        // 整个音乐库会在升级那一下变空（见 `Storage.load`）
+        artistGroup = (try? c.decodeIfPresent(String.self, forKey: .artistGroup)) ?? ""
         artworkURL = (try? c.decodeIfPresent(String.self, forKey: .artworkURL)) ?? ""
         artworkName = (try? c.decodeIfPresent(String.self, forKey: .artworkName)) ?? ""
         previewURL = (try? c.decodeIfPresent(String.self, forKey: .previewURL)) ?? ""
@@ -842,6 +870,22 @@ final class MusicLibrary: ObservableObject {
                 .replacingOccurrences(of: " ", with: "")
         }
         return key(a) == key(b) && !b.title.isEmpty
+    }
+
+    /// 把几首歌归到同一个分组名下。
+    /// 传空字串 = 改回去跟着原始歌手名走。
+    func regroup(_ id: UUID, to name: String) {
+        guard let i = tracks.firstIndex(where: { $0.id == id }) else { return }
+        tracks[i].artistGroup = name.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// 现有的分组名（给菜单摆出来，省得她每次重打）
+    var groupNames: [String] {
+        var seen: Set<String> = []
+        for t in tracks where t.groupName != Track.unknownArtist {
+            seen.insert(t.groupName)
+        }
+        return seen.sorted()
     }
 
     func remove(_ track: Track) {

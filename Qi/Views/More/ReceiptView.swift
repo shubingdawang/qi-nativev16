@@ -93,12 +93,12 @@ struct ReceiptSlip: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            band("本日明細")
+            band("今日明细")
             details
             totals
-            band("今日のことば")
+            band("今日关键词")
             keywords
-            band("いっしょに")
+            band("在一起")
             together
             message
             footer
@@ -141,7 +141,7 @@ struct ReceiptSlip: View {
                 Text("栖")
                     .font(Slip.title(34, .bold))
                     .foregroundStyle(Slip.ink)
-                Text("今日の小票")
+                Text("今日总结")
                     .font(Slip.title(19, .semibold))
                     .foregroundStyle(Slip.ink.opacity(0.85))
             }

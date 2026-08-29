@@ -131,20 +131,43 @@ struct MessageReaderView: View {
                 .glassBackground(radius: 0, strength: app.settings.glassOpacity)
             }
         }
-        .overlay(alignment: .topTrailing) {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: Icon.close)
-                    .font(.app(14, weight: .medium))
-                    .foregroundStyle(Theme.textSoft(scheme))
-                    .frame(width: 34, height: 34)
-                    .glassBackground(radius: 17, strength: app.settings.glassOpacity)
+        // ⚠️ 这个叉**以前按不动**（她报的：「双击全屏后点击 x 没法关闭了」）。
+        //
+        // 底下那张 `WallpaperBackground` 是铺满整屏的，
+        // ZStack 的上沿因此顶到了屏幕最顶上，
+        // `.padding(.top, 6)` 就把这个叉塞进了**状态栏／灵动岛底下**——
+        // 那一条是系统的，点下去到不了这儿。
+        //
+        // 两处改：往下让出安全区，再把可点范围撑大一圈
+        // （`contentShape` —— 光有背景不等于整块都能点）。
+        .safeAreaInset(edge: .top, spacing: 0) {
+            HStack {
+                Spacer()
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: Icon.close)
+                        .font(.app(14, weight: .medium))
+                        .foregroundStyle(Theme.textSoft(scheme))
+                        .frame(width: 38, height: 38)
+                        .glassBackground(radius: 19, strength: app.settings.glassOpacity)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
             .padding(.trailing, 14)
             .padding(.top, 6)
         }
+        // ⚠️ **再给一条退路。**
+        //
+        // `fullScreenCover` 自己没有下滑关闭，叉一旦按不动她就困在这一页里
+        // ——只能杀掉 App。这种「唯一出口」的地方永远要有第二条路。
+        .gesture(
+            DragGesture(minimumDistance: 40)
+                .onEnded { v in
+                    if v.translation.height > 90 { dismiss() }
+                }
+        )
     }
 
     private var stamp: String {

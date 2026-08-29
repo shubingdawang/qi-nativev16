@@ -11,8 +11,15 @@ struct MCPEntry: Identifiable, Hashable {
     var author: String = ""
     var tags: [String] = []
     var dateText: String = ""
+    /// 记下来的时分（`03:52`）。老记录里没有，那时候只存到天。
+    var timeText: String = ""
     var title: String = ""
     var body: String = ""
+
+    /// 「2026/8/5 03:52」，没有时分就只有日期
+    var stamp: String {
+        timeText.isEmpty ? dateText : dateText + " " + timeText
+    }
 
     /// 标题优先，没有就拿正文开头顶上
     var displayTitle: String {
@@ -24,9 +31,13 @@ struct MCPEntry: Identifiable, Hashable {
 
 enum MCPEntryParser {
 
-    /// 每条的开头：[id][作者] 后面可能还有一个 [标签]，再后面是日期和冒号
+    /// 每条的开头：[id][作者] 后面可能还有一个 [标签]，再后面是日期、时分和冒号。
+    ///
+    /// ⚠️ 时分那一段（第 5 组）**是可选的**：老记录里只有日期。
+    /// 可它必须在这儿认下来——不认的话 `03:52` 会掉进正文，
+    /// 每条的标题都会以一串数字开头。
     private static let pattern =
-        #"\[([0-9a-zA-Z]{4,16})\]\s*\[([^\]]{0,20})\]\s*(?:\[([^\]]{0,60})\])?\s*([0-9]{4}[/\-\.][0-9]{1,2}[/\-\.][0-9]{1,2})?\s*[：:]?\s*"#
+        #"\[([0-9a-zA-Z]{4,16})\]\s*\[([^\]]{0,20})\]\s*(?:\[([^\]]{0,60})\])?\s*([0-9]{4}[/\-\.][0-9]{1,2}[/\-\.][0-9]{1,2})?\s*([0-9]{1,2}:[0-9]{2})?\s*[：:]?\s*"#
 
     /// 存档摘要是另一种格式：【标题】tid=xxx 2026-08-05 (120条)
     private static let transcriptPattern =
@@ -91,6 +102,7 @@ enum MCPEntryParser {
                     .filter { !$0.isEmpty }
             }
             entry.dateText = group(4)
+            entry.timeText = group(5)
 
             // 正文 = 这条的头结束，到下一条的头开始
             let bodyStart = match.range.location + match.range.length

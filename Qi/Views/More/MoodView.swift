@@ -22,11 +22,28 @@ struct MoodView: View {
     @State private var newDayDate = Date()
     @State private var pendingDelete: MCPEntry?
 
+    /// 纪念日那一栏是不是摊开的。日子多起来之后整张卡会很长，
+    /// 底下的「留句话」「今天的心情」就得一路划过去才够得着。
+    @State private var daysOpen = true
+    @State private var daySearch = ""
+
     private let tag = "纪念日"
 
     private var days: [MCPEntry] {
         guard !failed else { return [] }
         return MCPEntryParser.parse(raw)
+    }
+
+    /// 搜索框里打了字就只留对得上的。标题、正文、日期时间**一起找**——
+    /// 「七夕」和「8/29」她都可能拿来搜。
+    private var shownDays: [MCPEntry] {
+        let q = daySearch.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return days }
+        return days.filter {
+            $0.displayTitle.localizedCaseInsensitiveContains(q)
+                || $0.body.localizedCaseInsensitiveContains(q)
+                || $0.stamp.contains(q)
+        }
     }
 
     var body: some View {
@@ -105,8 +122,25 @@ struct MoodView: View {
     private var anniversaries: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("纪念日").heading(15)
-                    .foregroundStyle(Theme.textMain(scheme))
+                // 抽屉的把手。整行都能点——只点得中那个小箭头的话太难按了。
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { daysOpen.toggle() }
+                } label: {
+                    HStack(spacing: 5) {
+                        Text("纪念日").heading(15)
+                            .foregroundStyle(Theme.textMain(scheme))
+                        if !days.isEmpty {
+                            Text("\(days.count)")
+                                .font(.app(11))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                        }
+                        Image(systemName: "chevron.right")
+                            .font(.app(10, weight: .semibold))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                            .rotationEffect(.degrees(daysOpen ? 90 : 0))
+                    }
+                }
+                .buttonStyle(.plain)
                 Spacer()
                 if loading { ProgressView().scaleEffect(0.7) }
                 Button {
@@ -129,12 +163,47 @@ struct MoodView: View {
                 .buttonStyle(.plain)
             }
 
-            if days.isEmpty {
+            if !daysOpen {
+                // 收起来的时候不摆一整片空白，也不摆搜索框——
+                // 搜索框在收起的抽屉上是够不着结果的
+                EmptyView()
+            } else if days.isEmpty {
                 Text(loading ? "在读…" : "还没记过什么日子。点右上角加一个。")
                     .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
             } else {
-                ForEach(days) { entry in
+                // 搜索框。条数少的时候不摆——十条以内一眼扫得完，
+                // 摆一个框反而占地方。
+                if days.count > 8 {
+                    HStack(spacing: 6) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.app(11))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                        TextField("搜日子", text: $daySearch)
+                            .font(.app(13))
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        if !daySearch.isEmpty {
+                            Button { daySearch = "" } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.app(12))
+                                    .foregroundStyle(Theme.textMuted(scheme))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(Theme.softFillDeep))
+                }
+
+                if shownDays.isEmpty {
+                    Text("没有对得上的。")
+                        .font(.app(12))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+
+                ForEach(shownDays) { entry in
                     HStack(alignment: .top, spacing: 10) {
                         Circle()
                             .fill(app.settings.accentColor.opacity(0.6))
@@ -144,8 +213,16 @@ struct MoodView: View {
                             Text(entry.displayTitle)
                                 .font(.app(14))
                                 .foregroundStyle(Theme.textMain(scheme))
-                            if !entry.author.isEmpty {
-                                Text(entry.author + " 记的")
+                            // 谁记的 + **什么时候记的**，精确到分。
+                            //
+                            // 她定的：「每一条写上记得的准确时间，
+                            // 防止像今天这样被塞入很多条。」
+                            // 只写到天的话，同一下塞进来的十几条看着都一样。
+                            if !entry.author.isEmpty || !entry.stamp.isEmpty {
+                                Text([entry.stamp,
+                                      entry.author.isEmpty ? "" : entry.author + " 记的"]
+                                        .filter { !$0.isEmpty }
+                                        .joined(separator: "　"))
                                     .font(.app(10))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
@@ -274,7 +351,14 @@ struct MoodView: View {
 
     private func load() async {
         loading = true
-        let r = await app.callTool("search_memories", args: ["query": tag, "limit": 60])
+        // ⚠️ **这儿以前传的是 `query: "纪念日"`，那是全文检索，不是筛标签。**
+        //
+        // 于是任何一条**提到**「纪念日」的记忆都会跑到这张卡上来，
+        // 而且检索是带语义的，库越大捞回来的越多——
+        // 她说「一开始只有七夕这一条，不知道为什么多了很多条」，就是这个。
+        //
+        // `search_memories` 本来就收 `tags`，走的是集合求交，只认真打了标签的。
+        let r = await app.callTool("search_memories", args: ["tags": [tag], "limit": 200])
         raw = r.text
         failed = r.failed
         loading = false

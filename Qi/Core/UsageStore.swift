@@ -121,6 +121,7 @@ enum UsageSource: String, Codable, CaseIterable, Identifiable {
     case tts         // 朗读
     case asr         // 语音转文字
     case search      // 联网搜索
+    case topic       // 话题池筛选
     case other
 
     var id: String { rawValue }
@@ -132,6 +133,7 @@ enum UsageSource: String, Codable, CaseIterable, Identifiable {
         case .call:       return "打电话"
         case .translate:  return "翻译"
         case .distill:    return "提炼"
+        case .topic:      return "话题池"
         case .divination: return "占卜"
         case .sticker:    return "表情包"
         case .clawd:      return "clawd 小屋"
@@ -139,6 +141,7 @@ enum UsageSource: String, Codable, CaseIterable, Identifiable {
         case .tts:        return "朗读"
         case .asr:        return "语音转字"
         case .search:     return "联网搜"
+        case .topic:      return "话题池"
         case .other:      return "其他"
         }
     }
@@ -157,6 +160,7 @@ enum UsageSource: String, Codable, CaseIterable, Identifiable {
         case .tts:        return "waveform"
         case .asr:        return "mic"
         case .search:     return "magnifyingglass"
+        case .topic:      return "newspaper"
         case .other:      return "ellipsis.circle"
         }
     }

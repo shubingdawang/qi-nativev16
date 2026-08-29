@@ -24,13 +24,12 @@ extension VoiceService {
         // 密钥不写进代码——仓库是公开的，写进去等于贴在墙上。
         // 装好之后去「设置 → 语音」填一次就行，存在手机上。
         let key = ""
+        // ⚠️ 原来那两条（「阿晏 第六版」CtCNvok… / 「阿晏 第五版」bRx3Dxd…）
+        // **她要求删掉**，换成下面这一个。
         return [
-            VoiceService(name: "阿晏 第六版", apiKey: key,
+            VoiceService(name: "阿晏", apiKey: key,
                          model: "eleven_v3",
-                         voiceID: "CtCNvokLsMOsxpc9OTbn", enabled: true),
-            VoiceService(name: "阿晏 第五版", apiKey: key,
-                         model: "eleven_v3",
-                         voiceID: "bRx3DxdNWLnw7ejYYXyL", enabled: false)
+                         voiceID: "H75Yik9xnLHtKbnc0mSB", enabled: true)
         ]
     }
 }

@@ -131,6 +131,11 @@ enum ToolBlurb {
         // MARK: 记忆库 · 记忆
 
         "add_memory": "新增一条记忆",
+        "browse_topics": "查看话题池中筛选后的近期外部信息",
+        "feel_body": "由模型自行判定这一轮对身体数值的影响",
+        "keep_line": "收藏你说过的某一句，并记下缘由",
+        "make_game": "生成一份 HTML 存入游戏间，点开即玩",
+        "open_link": "读取小红书、B 站、抖音链接的内容与配图",
         "search_memories": "按关键词、标签或重要程度检索记忆",
         "get_all_memories": "列出全部记忆",
         "recall_entity": "按人物或事物检索相关记忆，按时间排列",

@@ -66,6 +66,19 @@ final class CallStore: ObservableObject {
     /// 正在通话中的那通
     @Published var active: CallRecord?
 
+    /// 通话界面**收起来了，但电话还通着**。
+    ///
+    /// 她定的：「在通话页新增一个返回按钮，在打电话的时候让我也能
+    /// 去看看其他页面但不挂断。」
+    ///
+    /// ⚠️ 以前那个 `fullScreenCover` 的 `set` 写死了「关掉 = 挂断」，
+    /// 所以**根本没有不挂断退出去的路**——想看一眼别的页面只能先挂掉。
+    ///
+    /// ⚠️ 收起来之后必须有一条回得去的路（RootView 顶上那条「通话中」），
+    /// 不然她会困在「电话通着但看不见」的状态里。
+    /// 跟全屏看那个叉是同一条道理：**唯一出口的地方要有第二条路。**
+    @Published var minimized = false
+
     /// 刚刚错过的那一通（响完没接／她拒接）。
     ///
     /// 界面看见它就替这通电话在聊天里落一句话，然后把它清掉。
@@ -166,6 +179,10 @@ final class CallStore: ObservableObject {
         call.endedBy = who
         records.insert(call, at: 0)
         active = nil
+        // 挂了就把“收起来”也清掉。
+        // 不清的话下一通电话一接通就是收起来的，
+        // 她会以为没接通。
+        minimized = false
         return call
     }
 

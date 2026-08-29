@@ -70,6 +70,8 @@ struct ClawdHomeView: View {
     @State private var dressing: Furniture?
     @State private var pickingImage = false
     @State private var dressPick: PhotosPickerItem?
+    /// 正在从素材库挑图
+    @State private var pickingPiece = false
 
     /// 房间那一块有多大。算「他该坐在凳子的哪个点」要用——
     /// **跟画屋子那边用的是同一个 `IsoRoom.fit`**，各算各的必然对不齐。
@@ -429,7 +431,7 @@ struct ClawdHomeView: View {
                         Text(app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName)
                             .font(.app(9, weight: .medium))
                             .foregroundStyle(app.settings.accentColor)
-                        Text(himLine)
+                        Text(MD.inline(himLine))
                             .font(.app(12))
                             .foregroundStyle(Theme.textMain(scheme))
                             .fixedSize(horizontal: false, vertical: true)
@@ -479,6 +481,15 @@ struct ClawdHomeView: View {
                     dressing = item
                     pickingImage = true
                 }
+                // 切好的素材直接挑一张，**不用再切一遍同一张图**。
+                // 素材库是空的就不摆这一条——
+                // 一个点进去什么都没有的入口只是噪音。
+                if !PieceStore.shared.pieces.isEmpty {
+                    Button("从素材库挑一张") {
+                        dressing = item
+                        pickingPiece = true
+                    }
+                }
                 if !item.imageName.isEmpty {
                     Button("换回画的这版") { store.undress(item.id) }
                 }
@@ -501,6 +512,15 @@ struct ClawdHomeView: View {
         //
         // 记一句：**弹窗要挂在「按钮活着的那个分支」上**，
         // 不能挂在一个 switch 只走其中一路的公共尾巴上。
+        // ⚠️ 挂在**跟家具菜单同一层**。
+        // 挂在别处的话就是「点了没反应」那个老坑（见下面那段注释）。
+        .sheet(isPresented: $pickingPiece) {
+            PieceBankSheet { img in
+                if let target = dressing { _ = store.dressUp(target.id, with: img) }
+                dressing = nil
+                pickingPiece = false
+            }
+        }
         .photosPicker(isPresented: $pickingImage, selection: $dressPick,
                       matching: .images)
         .onChange(of: dressPick) { _, picked in

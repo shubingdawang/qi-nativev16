@@ -727,6 +727,26 @@ final class ClawdStore: ObservableObject {
     private var loaded = false
 
     init() {
+        readFromDisk()
+    }
+
+    /// 从盘上重读一遍。**还原完备份必须叫一次。**
+    ///
+    /// ⚠️ 这个店是「开 App 读一次进内存、以后按内存往回写」的
+    /// （`owned` 和 `coins` 的 `didSet`）。还原只写盘、不动内存，
+    /// 所以不重读的话内存里还是**还原前**那一份：
+    /// 她看到的币是旧的，而且界面上随便动一下
+    /// （买一件、签一次到、挪一下家具）就把旧的存回去，
+    /// **把刚还原的那份盖掉**——她报的「clawd 的金币会突然消失」就是这个。
+    ///
+    /// 聊天记录当年是同一个坑，`reloadAfterRestore` 里那一串重读
+    /// 就是那次补的；clawd 这份一直漏在外面。
+    func reload() {
+        readFromDisk()
+    }
+
+    private func readFromDisk() {
+        loaded = false
         owned = Storage.load([Furniture].self, from: "clawd-room.json") ?? []
         // 兜底：手上没拿东西，就不该有「因为被举起来」而藏着的家具。
         //
@@ -738,13 +758,23 @@ final class ClawdStore: ObservableObject {
         if UserDefaults.standard.string(forKey: "clawdCarrying") == nil {
             for i in owned.indices where owned[i].carried { owned[i].carried = false }
         }
-        coins = UserDefaults.standard.integer(forKey: "clawdCoins")
+        // ⚠️ 先看**键在不在**，再取值。
+        //
+        // `integer(forKey:)` 取一个不存在的键回的是 0，
+        // 跟「她真的花光了」写的是同一个数——分不出来。
+        // 于是键要是哪次没了（新装、还原的备份是老版本没带这个键），
+        // 币就直接变成 0，而且她屋里家具还在，看着就是「钱突然没了」。
+        //
+        // 键不在 = 从来没记过账 = 头一回进来，给起步的那份。
+        if UserDefaults.standard.object(forKey: "clawdCoins") == nil {
+            coins = 200
+        } else {
+            coins = UserDefaults.standard.integer(forKey: "clawdCoins")
+        }
         let t = UserDefaults.standard.double(forKey: "clawdCheckIn")
         lastCheckIn = t > 0 ? Date(timeIntervalSince1970: t) : nil
         linked = UserDefaults.standard.bool(forKey: "clawdLinked")
         carrying = UserDefaults.standard.string(forKey: "clawdCarrying")
-        // 头一回进来给点起步的钱，不然什么都买不了
-        if coins == 0 && owned.isEmpty { coins = 200 }
         loaded = true
     }
 

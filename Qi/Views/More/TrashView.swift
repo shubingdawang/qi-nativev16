@@ -94,7 +94,16 @@ struct TrashView: View {
                 .lineLimit(1)
 
             Button {
-                if store.restore(item.id) {
+                // 聊天那两种要 `AppState` 才放得回去（`TrashStore` 拿不到它），
+                // 所以**先叫它那一条，再把回收站里这条拿掉**。
+                if item.kind == "chat" || item.kind == "message" {
+                    if app.restoreFromTrash(item) {
+                        store.drop(item.id)
+                        notice = "「\(item.name)」放回去了。"
+                    } else {
+                        notice = "放不回去了——原来那个窗口可能也不在了。"
+                    }
+                } else if store.restore(item.id) {
                     notice = "「\(item.name)」放回去了。"
                 } else {
                     notice = "放不回去了。"
