@@ -141,7 +141,6 @@ enum UsageSource: String, Codable, CaseIterable, Identifiable {
         case .tts:        return "朗读"
         case .asr:        return "语音转字"
         case .search:     return "联网搜"
-        case .topic:      return "话题池"
         case .other:      return "其他"
         }
     }

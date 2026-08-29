@@ -3405,6 +3405,57 @@ final class AppState: ObservableObject {
         guard let reach = helperReach() else { return }
         let p = reach.provider, endpoint = reach.endpoint, model = reach.model
 
+
+        let brief = """
+        这是一张聊天里用的表情包。用三到六个中文词概括它的情绪和内容，词与词之间用顿号隔开。
+        只输出这些词本身，不要解释，不要引号，不要写"这张图"之类的话。
+        """
+
+        let todo = items.filter { $0.note.isEmpty && !$0.fileName.isEmpty }
+        for (i, item) in todo.enumerated() {
+            progress(i, todo.count)
+            guard let dataURL = ImageStore.base64DataURL(item.fileName, maxSide: 512) else { continue }
+
+            var text = ""
+            do {
+                let stream = ChatAPI.stream(
+                    endpoint: endpoint,
+                    apiKey: p.apiKey,
+                    model: model,
+                    messages: [.init(role: "user", text: brief, imageDataURLs: [dataURL])]
+                )
+                for try await event in stream {
+                    if case .content(let piece) = event { text += piece }
+                    if case .usage(let u) = event { UsageStore.shared.record(u, source: .sticker) }
+                }
+            } catch {
+                continue
+            }
+
+            let words = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !words.isEmpty {
+                MediaStore.shared.setNote(words, for: item)
+            }
+        }
+        progress(todo.count, todo.count)
+    }
+
+    /// 给**表情包库里**那些还没写关键词的静图写词。
+    ///
+    /// ⚠️ 上面那个 `tagStickers` 认的是 `MediaStore` 里的 `MediaItem`，
+    /// 而她的表情包、他存进去的表情包，全在 `StickerStore` 里——
+    /// **两个库**。所以 `tag_stickers` 那个工具以前一直在给一个基本是空的
+    /// 集合写词，写了等于没写。这个方法认对的那个库。
+    ///
+    /// 只处理**静图**：会动的他只看得见第一帧，写出来的词经常离题，
+    /// 那些她自己写（这条界线是她定的）。
+    @discardableResult
+    func tagStickerLibrary(_ items: [Sticker],
+                           progress: @escaping (Int, Int) -> Void = { _, _ in }) async -> Int {
+        // 杂活统一走 helperReach（她可以在设置里指定跑杂活的模型）
+        guard let reach = helperReach() else { return 0 }
+        let p = reach.provider, endpoint = reach.endpoint, model = reach.model
+
         // ⚠️ **一次发一批，不是一张一次。**
         //
         // 她报的：「给表情包写关键词竟然是按照张数收钱的。」
