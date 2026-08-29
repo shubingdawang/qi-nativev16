@@ -777,7 +777,12 @@ struct MessageBubbleView: View {
             let said = parsed.clean.trimmingCharacters(in: .whitespacesAndNewlines)
             if !said.isEmpty {
                 Hairline()
-                MD.inline(said)
+                // ⚠️ **要 `Text(...)` 包一层。** `MD.inline` 返回的是
+                // `AttributedString`，不是 View——直接往它上面挂 `.font(...)`
+                // 调到的是 `AttributedString` 自己那个 `font` **属性**，
+                // 不是 View 的修饰符，编译器报的错也就完全指不到病根
+                // （「cannot call value of non-function type ... Optional<Font>」）。
+                Text(MD.inline(said))
                     .font(.app(12.5))
                     .foregroundStyle(Theme.textSoft(scheme))
                     .fixedSize(horizontal: false, vertical: true)
