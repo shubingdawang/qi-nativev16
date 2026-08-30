@@ -1116,8 +1116,14 @@ struct MessageBubbleView: View {
             // 记一句：**会消失的那一块，它的间距要跟着它一起消失。**
             // 间距记在容器上，容器不会跟着消失。
             VStack(alignment: .leading, spacing: 0) {
+                // 工坊那条**就地展开**（终端卡本来就是要连着看的），
+                // 絮语这条**弹窗**：她定的「点进去才是思考链」。
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) { showProcess.toggle() }
+                    if isWorkshop {
+                        withAnimation(.easeInOut(duration: 0.2)) { showProcess.toggle() }
+                    } else {
+                        showProcess = true
+                    }
                 } label: {
                     HStack(spacing: 7) {
                         Image(systemName: "sparkle")
@@ -1134,7 +1140,10 @@ struct MessageBubbleView: View {
                         Spacer(minLength: 6)
                         Image(systemName: "chevron.right")
                             .font(.app(10, weight: .semibold))
-                            .rotationEffect(.degrees(showProcess ? 90 : 0))
+                            // 只有就地展开的那条才转箭头。
+                            // 弹窗那条转了也没意义——弹窗关上之后箭头还朝下，
+                            // 看着像「展开着但什么都没有」。
+                            .rotationEffect(.degrees(isWorkshop && showProcess ? 90 : 0))
                     }
                     .foregroundStyle(Theme.textSoft(scheme))
                     .padding(.horizontal, 13)
@@ -1148,21 +1157,27 @@ struct MessageBubbleView: View {
                 }
                 .buttonStyle(.plain)
 
-                if showProcess {
-                    // 工坐那一栏用**终端的样子**摆。
-                    //
-                    // 那边接的是 Claude Code 本身，它读文件、改代码、跑命令——
-                    // 那些过程拆成一张张「工具卡」是在拿聊天的形状套一件
-                    // 本来不是聊天的事；终端的样子才是它本来的样子。
-                    //
-                    // 絮语那边照旧走时间线：阿晏调的是记忆、表情、音乐那些，
-                    // 把它们画成黑底终端反而不对头。
-                    if isWorkshop {
-                        terminalCard.padding(.top, 6)
-                    } else {
-                        processTimeline.padding(.top, 6)
-                    }
+                // 工坐那一栏用**终端的样子**摆。
+                //
+                // 那边接的是 Claude Code 本身，它读文件、改代码、跑命令——
+                // 那些过程拆成一张张「工具卡」是在拿聊天的形状套一件
+                // 本来不是聊天的事；终端的样子才是它本来的样子。
+                // 而且那是**要连着看的**，塞进弹窗反而断了。
+                if isWorkshop && showProcess {
+                    terminalCard.padding(.top, 6)
                 }
+            }
+            // 絮语那条点开是弹窗。
+            // ⚠️ `isWorkshop` 的时候这个 sheet 也挂着，但它那边
+            // `showProcess` 走的是就地展开——所以要拦住，
+            // 否则工坊点一下会**又展开又弹窗**。
+            .sheet(isPresented: Binding(
+                get: { showProcess && !isWorkshop },
+                set: { if !$0 { showProcess = false } })) {
+                ProcessSheet(message: message,
+                             reasoning: cleanReasoning(message.reasoning ?? ""),
+                             tidied: { tidy($0.result) })
+                    .environmentObject(app)
             }
         }
     }
