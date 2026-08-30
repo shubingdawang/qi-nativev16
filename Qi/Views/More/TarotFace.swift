@@ -17,6 +17,65 @@ import SwiftUI
 
 enum TarotFace {
 
+    // MARK: - 真的牌面（1909 年那套，见 Resources/Tarot/来历.txt）
+    //
+    // 上面那段「为什么是画的不是图片」**过时了**，留着是为了说明当时的取舍。
+    // 现在真放了 78 张进来：韦特塔罗 1909 年的原画，公有领域，
+    // 从维基共享扒的。9.4MB，可以接受。
+    //
+    // ⚠️ 图里**没有颜色**，只有明暗。颜色是在这儿用当前主色乘上去的。
+    // 她定的：「我现在是绿色壁纸，除非我用家的配色，不然用这个配色很突兀。」
+    // 一套图配所有主题——换主题牌跟着变，不用重做 78 张。
+    //
+    // ⚠️ 界面上一律写「塔罗」，**不写那个商标名**（那个名字是 US Games 的商标，
+    // 画是公有领域的，名字不是）。
+
+    /// 大牌 id → 文件名里那半截
+    private static let majorFile = [
+        "fool", "magician", "high_priestess", "empress", "emperor", "hierophant",
+        "lovers", "chariot", "strength", "hermit", "wheel_of_fortune", "justice",
+        "hanged_man", "death", "temperance", "devil", "tower", "star", "moon",
+        "sun", "judgement", "world",
+    ]
+    /// 花色 → 文件名里那半截。**顺序跟 `TarotDeck.minor` 生成时一致**，
+    /// 那边是权杖、圣杯、宝剑、星币，id 从 22 开始每花色 14 张。
+    private static let suitFile = ["wands", "cups", "swords", "pents"]
+
+    /// 这张牌对应哪个图片文件。找不到就 nil，那时候退回画出来的那一版。
+    static func imageName(_ card: TarotCard) -> String? {
+        if card.major {
+            guard card.id >= 0, card.id < majorFile.count else { return nil }
+            return String(format: "major_%02d_%@", card.id, majorFile[card.id])
+        }
+        let off = card.id - 22
+        guard off >= 0, off < 56 else { return nil }
+        return String(format: "%@_%02d", suitFile[off / 14], off % 14 + 1)
+    }
+
+    /// 读一张牌面。**读过的记着**——牌桌上一次要摆七八十张，
+    /// 每次滚动都重新解一遍 jpg 的话会卡得没法看。
+    nonisolated(unsafe) private static var cache: [String: UIImage] = [:]
+
+    static func image(_ card: TarotCard) -> UIImage? {
+        guard let name = imageName(card) else { return nil }
+        if let hit = cache[name] { return hit }
+        guard let url = Bundle.main.url(forResource: name, withExtension: "jpg"),
+              let img = UIImage(contentsOfFile: url.path) else { return nil }
+        cache[name] = img
+        return img
+    }
+
+    /// 主色兑白之后再拿去乘。
+    ///
+    /// ⚠️ 直接拿饱和的原色乘，整张牌会闷成一块色板。
+    /// 兑 42% 的白之后才是她要的那个「淡一点」。
+    ///
+    /// ⚠️ 走 `Theme.blend` 不走 `Color.mix`——`mix` 要 iOS 18，
+    /// 这个工程的部署目标是 17。
+    static func wash(_ c: Color) -> Color {
+        Theme.blend(c, toward: .white, 0.42)
+    }
+
     /// 大阿卡纳每张一个符号。挑的是**看一眼就对得上那张牌的意思**的，
     /// 不是最像原版画面的——原版那些画我们本来也画不出来。
     static let majorSymbol: [Int: String] = [
@@ -86,6 +145,8 @@ struct TarotCardFace: View {
     var width: CGFloat = 54
 
     @Environment(\.colorScheme) private var scheme
+    /// 牌面要跟着主色染，所以这儿得拿得到设置
+    @EnvironmentObject private var app: AppState
 
     private var height: CGFloat { width * 1.55 }
 
@@ -121,6 +182,32 @@ struct TarotCardFace: View {
     }
 
     var body: some View {
+        Group {
+            if let img = TarotFace.image(card) {
+                // 真牌面。图里只有明暗，颜色在这儿乘上去——
+                // 见上面 `TarotFace` 里那段说明。
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: width, height: height)
+                    .clipShape(RoundedRectangle(cornerRadius: width * 0.06,
+                                                style: .continuous))
+                    .colorMultiply(TarotFace.wash(app.settings.accentColor))
+                    // 深色模式下再压一档，不然一张浅牌在黑底上会刺眼
+                    .brightness(scheme == .dark ? -0.10 : 0)
+            } else {
+                drawn
+            }
+        }
+        .frame(width: width, height: height)
+        // **逆位就是整张倒过来**，不是只把字转过来
+        .rotationEffect(.degrees(reversed ? 180 : 0))
+        .shadow(color: .black.opacity(0.16), radius: width * 0.06, y: width * 0.03)
+    }
+
+    /// 画出来的那一版。**留着当兜底**——图没打进包、或者以后加了新牌
+    /// 还没配图的时候，牌桌不至于空着一块。
+    private var drawn: some View {
         ZStack {
             // 牌底：一层米纸色，压一点花色的颜色
             RoundedRectangle(cornerRadius: width * 0.09, style: .continuous)
@@ -153,9 +240,6 @@ struct TarotCardFace: View {
             }
         }
         .frame(width: width, height: height)
-        // **逆位就是整张倒过来**，不是只把字转过来
-        .rotationEffect(.degrees(reversed ? 180 : 0))
-        .shadow(color: .black.opacity(0.16), radius: width * 0.06, y: width * 0.03)
     }
 
     /// 正中那一块

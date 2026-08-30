@@ -209,6 +209,12 @@ struct TarotPane: View {
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
 
+                    // ⚠️ 这一下把牌堆**顶到屏幕底部**去。
+                    // 她定的：「所有牌可以放在底部。」
+                    // 配合下面那句 `containerRelativeFrame`——
+                    // 这一块被撑到跟屏幕一样高，Spacer 就把牌推到了最下面。
+                    Spacer(minLength: 16)
+
                     // 摊开的一排，扇形铺开。
                     //
                     // 她要的选法：「长按移动，手放在哪张牌上就弹出哪张，
@@ -255,6 +261,9 @@ struct TarotPane: View {
                         )
                     }
                     .frame(height: 190)
+                    // ⚠️ 牌堆**不套框**。她定的：「我希望塔罗不要被框起来，
+                    // 所有牌可以放在底部。」——一副摊开的牌本来就该是摊在
+                    // 桌面上的，套一层玻璃卡就成了「一张卡里面装着一副牌」。
 
                     if picked.count == spread.count {
                         Button {
@@ -271,7 +280,12 @@ struct TarotPane: View {
                         .buttonStyle(.plain)
                     }
                 }
-                .glassCard()
+                // 这儿原来有 `.glassCard()`，**拿掉了**（理由见上面那条）。
+                // 只留左右的边距，牌自己摊着。
+                .padding(.horizontal, 4)
+                // 撑到跟这一屏一样高，上面那个 Spacer 才推得动。
+                // 留 60 给顶上那排「塔罗/六爻/骰子…」，不然会顶出去。
+                .containerRelativeFrame(.vertical) { h, _ in max(320, h - 60) }
             }
 
             if revealed, let record {
