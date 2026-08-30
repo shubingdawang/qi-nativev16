@@ -89,8 +89,17 @@ struct JournalCharText: View {
     var focus: Int?
     var onTapChar: ((Int) -> Void)?
 
+    /// 逐字画最多画到这么多字。
+    ///
+    /// ⚠️ 逐字画是**一个字一个 `Text`**：两百个字就是两百个视图，
+    /// 外加一趟自己算的排版。手帐上的字块本来都很短（一个标题、几个词），
+    /// 但没有什么拦着她往里贴一整段。所以给个上限——
+    /// 超过就退回整块画，宁可失去逐字上色，也不能让这一页卡住。
+    private static let charLimit = 120
+
     var body: some View {
-        if element.hasPerChar || onTapChar != nil {
+        let n = element.text.count
+        if (element.hasPerChar || onTapChar != nil), n <= Self.charLimit {
             let chars = Array(element.text)
             CharFlow(maxWidth: maxWidth) {
                 ForEach(chars.indices, id: \.self) { i in

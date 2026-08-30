@@ -52,16 +52,31 @@ enum TarotFace {
         return String(format: "%@_%02d", suitFile[off / 14], off % 14 + 1)
     }
 
-    /// 读一张牌面。**读过的记着**——牌桌上一次要摆七八十张，
-    /// 每次滚动都重新解一遍 jpg 的话会卡得没法看。
-    nonisolated(unsafe) private static var cache: [String: UIImage] = [:]
+    /// 读一张牌面。读过的记着，别每次滚动都重解一遍 jpg。
+    ///
+    /// ⚠️⚠️ **走 `NSCache` 不走字典。**
+    ///
+    /// 头一版我写的是 `[String: UIImage]`，那是个永不清空的坑：
+    /// 一张牌解码后大约 600×1029×4 ≈ 2.4MB，78 张全读进来接近 190MB。
+    /// 她翻一遍占卜记录就能把它填满，然后被系统杀掉——
+    /// 表现就是「闪回主屏」，跟她上次报的那个一模一样。
+    ///
+    /// `NSCache` 两件事都替我们做了：**内存紧张时自己丢**，
+    /// 而且能设上限。留 24 张：一次牌阵最多十张，
+    /// 翻记录的时候前后几张也够用了。
+    nonisolated(unsafe) private static let cache: NSCache<NSString, UIImage> = {
+        let c = NSCache<NSString, UIImage>()
+        c.countLimit = 24
+        return c
+    }()
 
     static func image(_ card: TarotCard) -> UIImage? {
         guard let name = imageName(card) else { return nil }
-        if let hit = cache[name] { return hit }
+        let key = name as NSString
+        if let hit = cache.object(forKey: key) { return hit }
         guard let url = Bundle.main.url(forResource: name, withExtension: "jpg"),
               let img = UIImage(contentsOfFile: url.path) else { return nil }
-        cache[name] = img
+        cache.setObject(img, forKey: key)
         return img
     }
 
