@@ -1504,7 +1504,23 @@ final class AppState: ObservableObject {
     }
 
     private func appendToolRun(_ run: ToolRun, to assistantID: UUID, in conversationID: UUID) {
-        withAssistant(assistantID, in: conversationID) { $0.toolRuns.append(run) }
+        withAssistant(assistantID, in: conversationID) { m in
+            // ⚠️ **在这一刻量思考写了多长**，记进这一条里。
+            //
+            // 她要的是「一个点是 thinking，一条线连接工具，用完工具还有
+            // thinking 就再一个点一条线」——真实的先后顺序。
+            // 而 `reasoning` 是一整块、`toolRuns` 是个数组，
+            // 两者的先后原本一点都没记下来。
+            //
+            // 记住这个数，回头就能按它把思考切成几段，还原出交错。
+            // 量的必须是**这时候**：晚一步、早一步都是别的位置。
+            //
+            // ⚠️ 用 `flushStream` 先把缓着的字落下去再量。
+            // 流是攒 80ms 才写一次的（那是为了不卡），不落就少量一截。
+            var one = run
+            one.reasonMark = (m.reasoning ?? "").count
+            m.toolRuns.append(one)
+        }
 
         // 终端那一页。所有工具——本机的、MCP 的——都从这一个口子过。
         // 结果只留一小截：这一页是拿来看「跑没跑、成没成」的，

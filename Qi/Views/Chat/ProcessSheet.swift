@@ -104,22 +104,63 @@ struct ProcessSheet: View {
         let body: String
     }
 
-    /// 把这一轮拆成一条线上的几步。
+    /// 把这一轮拆成一条线上的几步，**按真实的先后**。
     ///
-    /// ⚠️ 顺序是**先想后做**。
-    /// 真实情况可能是「想→查→再想→再查」，但我们**没有把那个顺序存下来**：
-    /// `reasoning` 是一整块，`toolRuns` 是一个数组，两者之间谁先谁后没有记。
-    /// 所以这儿只能按「想一次、然后依次动手」摆。
-    /// 要摆出真的交错，得在收流的时候给每段思考记上它夹在第几个工具之间——
-    /// 那是改存储的事，等她说要再做。
+    /// 她要的：「一个点是 thinking 再一条线连接工具，
+    /// 用完工具还有 thinking 就再一个点一条线。」
+    ///
+    /// 靠的是每个工具身上那个 `reasonMark`——它记着这个工具开动的时候
+    /// 思考已经写了多少字。按这几个数把思考切成几段，
+    /// 段和工具交替摆出来，就是当时真实的顺序。
+    ///
+    /// ⚠️ 老消息的 `reasonMark` 全是 0：切出来前面几段都是空的，
+    /// 整段思考落在最后一刀之后——**看起来跟以前一模一样**。
+    /// 不用迁移，也不会让旧记录忽然变样。
     private var steps: [Step] {
         var out: [Step] = []
-        if !reasoning.isEmpty {
-            out.append(Step(id: "think", icon: nil,
-                            tint: Theme.textMuted(scheme),
-                            title: "Thinking", note: "", body: reasoning))
+        let full = Array(reasoning)
+        var cut = 0
+
+        // ⚠️ 老消息**一条都没标过**（`reasonMark` 全是 0）。
+        // 照下面那套切的话，每一刀都切在 0，整段思考会落到最后一个工具之后——
+        // 变成「先动手，后思考」，跟以前显示的正好反过来，而且那是假的。
+        // 没标过就照老样子：想在前，动手在后。
+        let marked = message.toolRuns.contains { $0.reasonMark > 0 }
+        if !marked {
+            if !reasoning.isEmpty {
+                out.append(Step(id: "think", icon: nil,
+                                tint: Theme.textMuted(scheme),
+                                title: "Thinking", note: "", body: reasoning))
+            }
+            for run in message.toolRuns {
+                out.append(Step(id: run.id.uuidString,
+                                icon: run.failed
+                                    ? "exclamationmark.triangle" : "wrench.and.screwdriver",
+                                tint: run.failed ? .red : app.settings.accentColor,
+                                title: run.toolName.isEmpty ? "一个工具" : run.toolName,
+                                note: run.serverName,
+                                body: detail(run)))
+            }
+            return out
         }
-        for run in message.toolRuns {
+
+        func think(upTo end: Int, id: String) {
+            let to = max(cut, min(end, full.count))
+            guard to > cut else { return }
+            let piece = String(full[cut..<to]).trimmingCharacters(in: .whitespacesAndNewlines)
+            cut = to
+            guard !piece.isEmpty else { return }
+            out.append(Step(id: id, icon: nil,
+                            tint: Theme.textMuted(scheme),
+                            title: "Thinking", note: "", body: piece))
+        }
+
+        for (i, run) in message.toolRuns.enumerated() {
+            // ⚠️ `reasonMark` 量的是**没剥 [[cot:]] 之前**的长度，
+            // 而这儿的 `reasoning` 已经剥过了，会短一截。
+            // 所以只当成「大概到这儿」用，越界的一律夹回范围内——
+            // 切歪一点点比切崩了强。
+            think(upTo: run.reasonMark, id: "think\(i)")
             out.append(Step(id: run.id.uuidString,
                             icon: run.failed
                                 ? "exclamationmark.triangle" : "wrench.and.screwdriver",
@@ -128,6 +169,8 @@ struct ProcessSheet: View {
                             note: run.serverName,
                             body: detail(run)))
         }
+        // 最后一个工具之后还想了的那一段
+        think(upTo: full.count, id: "thinkEnd")
         return out
     }
 

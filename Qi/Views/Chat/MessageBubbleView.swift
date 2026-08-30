@@ -69,6 +69,43 @@ struct MessageBubbleView: View {
             VStack(alignment: isUser ? .trailing : .leading, spacing: 5) {
                 if showsHeader { header }
                 content
+                    // ⚠️⚠️ 长按和多选**挂在这儿**，不挂在某一个分支里。
+                    //
+                    // 她报的：「语音根本没法长按，就算多选也只能选择文字，
+                    // 其他都不能选择。」
+                    //
+                    // 病根是 `content` 里一串 if/else：歌、视频、语音、表情、
+                    // 游戏各是一支，而长按和那个勾**只写在最后那个「文字」分支里**。
+                    // 于是除了文字，别的一律长按没反应、多选选不上。
+                    //
+                    // 挂在 `content` 外面就是所有分支共用一套，
+                    // 以后再加新的消息类型也自动带上——不会再漏。
+                    .contentShape(Rectangle())
+                    .overlay {
+                        // 挑句子的时候，整条都能点
+                        if selecting {
+                            Rectangle()
+                                .fill(Color.white.opacity(0.001))
+                                .contentShape(Rectangle())
+                                .onTapGesture { onToggleSelect() }
+                        }
+                    }
+                    // 双击进全屏，长按出横条菜单。
+                    // 双击写在前面，不然长按会先把它吃掉。
+                    .onTapGesture(count: 2) {
+                        guard !selecting else { return }
+                        if app.settings.haptics {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        }
+                        onOpenReader()
+                    }
+                    .onLongPressGesture(minimumDuration: 0.32) {
+                        guard !selecting else { return }
+                        if app.settings.haptics {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        }
+                        onOpenMenu(editPage)
+                    }
             }
             .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
         }
@@ -148,13 +185,10 @@ struct MessageBubbleView: View {
                 if isUser { Spacer(minLength: 20) }
                 MusicCard(track: track,
                           caption: message.trackCaption.isEmpty ? "给你放的" : message.trackCaption)
-                    .contextMenu {
-                        Button(role: .destructive) {
-                            app.deleteMessage(message.id, in: conversationID)
-                        } label: {
-                            Label("删掉", systemImage: Icon.trash)
-                        }
-                    }
+                // ⚠️ 这儿原来挂着一个只有「删掉」的 contextMenu，**拿掉了**。
+                // 两个理由：① 它跟外面那条长按抢，谁赢看层级，表现是时灵时不灵；
+                // ② 它里面**没有收藏**——她说「语音没法收藏」，别的卡片同理。
+                // 现在长按一律出那条横菜单（复制/引用/收藏/删除），全类型一个样。
                 if !isUser { Spacer(minLength: 20) }
             }
         }
@@ -238,14 +272,10 @@ struct MessageBubbleView: View {
             HStack {
                 if isUser { Spacer(minLength: 40) }
                 StickerImage(sticker: sticker, size: 116)
-                    .contextMenu {
-                        Text(sticker.name)
-                        Button(role: .destructive) {
-                            app.deleteMessage(message.id, in: conversationID)
-                        } label: {
-                            Label("删掉", systemImage: Icon.trash)
-                        }
-                    }
+                // ⚠️ 这儿原来挂着一个只有「删掉」的 contextMenu，**拿掉了**。
+                // 两个理由：① 它跟外面那条长按抢，谁赢看层级，表现是时灵时不灵；
+                // ② 它里面**没有收藏**——她说「语音没法收藏」，别的卡片同理。
+                // 现在长按一律出那条横菜单（复制/引用/收藏/删除），全类型一个样。
                 if !isUser { Spacer(minLength: 40) }
             }
         } else {
@@ -392,14 +422,8 @@ struct MessageBubbleView: View {
 
             if !isUser { Spacer(minLength: 24) }
         }
-        .overlay {
-            // 挑句子的时候，整条都能点
-            if selecting {
-                Rectangle()
-                    .fill(Color.white.opacity(0.001))
-                    .onTapGesture { onToggleSelect() }
-            }
-        }
+        // ⚠️ 「挑句子时整条能点」那一层**挪走了**，挪到 `content` 外面。
+        // 留在这儿的话它只盖住文字那一支，语音、视频、表情都选不上。
         .overlay(alignment: .topTrailing) {
             if message.starred && !selecting {
                 Image(systemName: "star.fill")
@@ -443,20 +467,9 @@ struct MessageBubbleView: View {
         // 我们的横条菜单（编辑/收藏/引用/念出来/翻译/删除）一个都出不来。
         // 想选字就双击进全屏那一页，那边的 textSelection 还留着。
         // 顺手把「复制」补进横条里，省得没了系统菜单反而拷不了。
-        // 双击进全屏，长按出横条菜单。
-        // 双击写在前面，不然长按会先把它吃掉。
-        .onTapGesture(count: 2) {
-            if app.settings.haptics {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            }
-            onOpenReader()
-        }
-        .onLongPressGesture(minimumDuration: 0.32) {
-            if app.settings.haptics {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            }
-            onOpenMenu(editPage)
-        }
+        // ⚠️ 双击和长按也**挪到 `content` 外面**去了，理由同上：
+        // 挂在这一支上就只有文字能长按。别再加回来——
+        // 一个手势挂两遍，两边会互相抢，表现是「有时候灵有时候不灵」。
         // ⚠️ 这儿原来挂着那条横菜单，**两个毛病**：
         //   ① 八个按钮排成一条，长得出屏幕；
         //   ② 点了没反应——菜单开着的时候 ChatView 在整屏上盖了一层
@@ -706,13 +719,10 @@ struct MessageBubbleView: View {
         .onTapGesture {
             if let u = URL(string: note.url) { openURL(u) }
         }
-        .contextMenu {
-            Button(role: .destructive) {
-                app.deleteMessage(message.id, in: conversationID)
-            } label: {
-                Label("删掉", systemImage: Icon.trash)
-            }
-        }
+    // ⚠️ 这儿原来挂着一个只有「删掉」的 contextMenu，**拿掉了**。
+    // 两个理由：① 它跟外面那条长按抢，谁赢看层级，表现是时灵时不灵；
+    // ② 它里面**没有收藏**——她说「语音没法收藏」，别的卡片同理。
+    // 现在长按一律出那条横菜单（复制/引用/收藏/删除），全类型一个样。
     }
 
     /// 他写的那个能玩的东西。
@@ -799,13 +809,10 @@ struct MessageBubbleView: View {
         .padding(.vertical, 11)
         .frame(maxWidth: 265, alignment: .leading)
         .glassBackground(radius: 16, strength: app.settings.glassOpacity * 0.9)
-        .contextMenu {
-            Button(role: .destructive) {
-                app.deleteMessage(message.id, in: conversationID)
-            } label: {
-                Label("删掉", systemImage: Icon.trash)
-            }
-        }
+    // ⚠️ 这儿原来挂着一个只有「删掉」的 contextMenu，**拿掉了**。
+    // 两个理由：① 它跟外面那条长按抢，谁赢看层级，表现是时灵时不灵；
+    // ② 它里面**没有收藏**——她说「语音没法收藏」，别的卡片同理。
+    // 现在长按一律出那条横菜单（复制/引用/收藏/删除），全类型一个样。
     }
 
     /// 讲了多久。**过一分钟就说「几分几秒」**，
@@ -860,13 +867,10 @@ struct MessageBubbleView: View {
         .fullScreenCover(isPresented: $playingVideo) {
             VideoPlayerSheet(name: message.videoName)
         }
-        .contextMenu {
-            Button(role: .destructive) {
-                app.deleteMessage(message.id, in: conversationID)
-            } label: {
-                Label("删掉", systemImage: Icon.trash)
-            }
-        }
+    // ⚠️ 这儿原来挂着一个只有「删掉」的 contextMenu，**拿掉了**。
+    // 两个理由：① 它跟外面那条长按抢，谁赢看层级，表现是时灵时不灵；
+    // ② 它里面**没有收藏**——她说「语音没法收藏」，别的卡片同理。
+    // 现在长按一律出那条横菜单（复制/引用/收藏/删除），全类型一个样。
     }
 
     /// 语音条。点一下放，再点停。

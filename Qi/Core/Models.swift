@@ -70,6 +70,23 @@ struct ToolRun: Codable, Hashable, Identifiable {
     var result: String = ""
     var failed: Bool = false
     var finished: Bool = false
+    /// 这个工具开动的时候，思考已经写了多少字。
+    ///
+    /// ## 拿来干什么
+    ///
+    /// 她要的是「一个点是 thinking，一条线连接工具，用完工具还有 thinking
+    /// 就再一个点一条线」——也就是**真实的先后顺序**。
+    ///
+    /// 可 `reasoning` 是一整块字符串、`toolRuns` 是一个数组，
+    /// 两者之间谁先谁后原本一点都没记，所以那张卡只能摆成
+    /// 「先想一次，然后依次动手」。
+    ///
+    /// 这个数就是那根缺的针：**收流的时候记一下当时思考的长度**，
+    /// 回头按这几个数把思考切成几段，就还原出交错了。
+    ///
+    /// ⚠️ 默认 0。老消息全是 0，切出来第一段是空的、剩下全在最后一段——
+    /// **跟以前显示的一模一样**。所以这个字段不用迁移，也不会让旧记录变样。
+    var reasonMark: Int = 0
     /// 存了图的话，带一张小卡：缩略图 + 存到哪 + 他当时想的
     var cardThumb: String = ""
     var cardPlace: String = ""
@@ -106,6 +123,9 @@ extension ToolRun {
         cardThought = (try? c.decodeIfPresent(String.self, forKey: .cardThought)) ?? ""
         cardDeleted = (try? c.decodeIfPresent(Bool.self, forKey: .cardDeleted)) ?? false
         cardTrashID = (try? c.decodeIfPresent(String.self, forKey: .cardTrashID)) ?? ""
+        // 老消息里没这个键，退回 0——切出来就是「思考全在最后」，
+        // 跟以前显示的一模一样。
+        reasonMark = (try? c.decodeIfPresent(Int.self, forKey: .reasonMark)) ?? 0
     }
 }
 
