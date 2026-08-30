@@ -76,6 +76,38 @@ struct JournalElement: Codable, Identifiable, Hashable {
     /// 照片存在 Images 里的文件名
     var imageName: String = ""
 
+    /// 逐个字的颜色。空 = 整块一个颜色（走 `colorHex`）。
+    ///
+    /// 她要的：「可以每个字单独点击颜色选，点击颜色后打的字就是这个颜色，
+    /// 然后字体可以每个字都自由缩放。」
+    ///
+    /// 存法是**跟正文并排的一条数组**，第 n 个字用第 n 个色号。
+    /// 比在正文里塞标记好：正文永远是干净的一串字，
+    /// 摘出去给他看、搜索、导出的时候都不用先剥标记。
+    ///
+    /// ⚠️ 数组可能比正文短（改完字还没补色），所以取的时候一律
+    /// 越界就退回 `colorHex`，不许直接下标。
+    var charColors: [String] = []
+    /// 逐个字的大小倍数。空 = 都一样大。规矩同上。
+    var charScales: [Double] = []
+
+    /// 第 n 个字什么颜色
+    func inkAt(_ i: Int) -> Color {
+        if i >= 0, i < charColors.count, !charColors[i].isEmpty,
+           let c = Color(hexString: charColors[i]) { return c }
+        return color
+    }
+    /// 第 n 个字多大
+    func sizeAt(_ i: Int) -> Double {
+        if i >= 0, i < charScales.count, charScales[i] > 0 { return charScales[i] }
+        return 1
+    }
+    /// 有没有逐字设过。没设过就走原来那条快路（一个 `Text` 画完），
+    /// 逐字画要拆成几十个 `Text`，没必要每一块都付这个代价。
+    var hasPerChar: Bool {
+        charColors.contains { !$0.isEmpty } || charScales.contains { $0 != 1 }
+    }
+
     var color: Color { Color(hexString: colorHex) ?? .gray }
 }
 
@@ -102,6 +134,8 @@ extension JournalElement {
         emoji = (try? c.decodeIfPresent(String.self, forKey: .emoji)) ?? ""
         pattern = (try? c.decodeIfPresent(String.self, forKey: .pattern)) ?? ""
         imageName = (try? c.decodeIfPresent(String.self, forKey: .imageName)) ?? ""
+        charColors = (try? c.decodeIfPresent([String].self, forKey: .charColors)) ?? []
+        charScales = (try? c.decodeIfPresent([Double].self, forKey: .charScales)) ?? []
     }
 }
 

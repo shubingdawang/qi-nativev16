@@ -30,12 +30,9 @@ struct JournalElementView: View {
     var body: some View {
             switch e.kind {
             case .text:
-                Text(e.text)
-                    .font(.app(17, weight: .medium, design: .serif))
-                    .foregroundStyle(e.color)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 220)
+                // 逐字设过颜色／大小的走 `JournalCharText`，没设过的它自己
+                // 退回一个 `Text`——那条快路上换行断词全归系统管。
+                JournalCharText(element: e)
 
             case .tape:
                 // 胶带：半透明一条，两头是撕开的毛边，花纹画在上面

@@ -16,6 +16,9 @@ struct JournalPageView: View {
 
     /// 选中的那样东西。选中了才显示它的调节条。
     @State private var picked: UUID?
+    /// 选中的那块文字里，点中的是第几个字。`nil` = 整块。
+    /// 她要的「每个字单独选颜色和大小」全靠它。
+    @State private var charFocus: Int?
     /// 正在拖的那一下挪了多远（不落库，松手才写回去）
     @State private var dragBy: CGSize = .zero
     @State private var pinchScale: Double = 1
@@ -68,6 +71,7 @@ struct JournalPageView: View {
                 e.z = nextZ
                 page.elements.append(e)
                 picked = e.id
+                charFocus = nil
                 store.save(page)
             }
         }
@@ -90,7 +94,7 @@ struct JournalPageView: View {
                 // 纸纹在这儿画一套、那儿画一套的话，
                 // 他看到的那张迟早跟她屏幕上的对不上
                 JournalPaperView(hex: page.paperHex, pattern: page.paperPattern)
-                    .onTapGesture { picked = nil }
+                    .onTapGesture { picked = nil; charFocus = nil }
 
                 ForEach(page.elements.sorted { $0.z < $1.z }) { e in
                     element(e, in: geo.size)
@@ -137,12 +141,14 @@ struct JournalPageView: View {
                     }
                 } else {
                     picked = e.id
+                    charFocus = nil
                 }
             }
             .gesture(
                 DragGesture()
                     .onChanged { v in
                         picked = e.id
+                        charFocus = nil
                         dragBy = v.translation
                     }
                     .onEnded { v in
@@ -160,6 +166,7 @@ struct JournalPageView: View {
                 MagnifyGesture()
                     .onChanged { v in
                         picked = e.id
+                        charFocus = nil
                         pinchScale = v.magnification
                     }
                     .onEnded { v in
@@ -173,6 +180,7 @@ struct JournalPageView: View {
                 RotateGesture()
                     .onChanged { v in
                         picked = e.id
+                        charFocus = nil
                         twist = v.rotation.degrees
                     }
                     .onEnded { v in
@@ -196,8 +204,55 @@ struct JournalPageView: View {
     /// 一个元素长什么样。**整段搬去 JournalSnapshot.swift 了**——
     /// 编辑页和「给他看的那张快照」必须是同一份渲染器，
     /// 两份迟早会长歪，那时候他看到的就不再是她看到的了。
+    @ViewBuilder
     private func render(_ e: JournalElement) -> some View {
-        JournalElementView(e)
+        // 选中的那一块文字才让点字——没选中的时候点它是要拖它，
+        // 逐字的点击会把拖拽吃掉。
+        if e.kind == .text, picked == e.id {
+            JournalCharText(element: e, focus: charFocus) { i in
+                charFocus = (charFocus == i) ? nil : i
+                if app.settings.haptics {
+                    UISelectionFeedbackGenerator().selectionChanged()
+                }
+            }
+        } else {
+            JournalElementView(e)
+        }
+    }
+
+    private func charButton(_ icon: String, _ act: @escaping () -> Void) -> some View {
+        Button(action: act) {
+            Image(systemName: icon)
+                .font(.app(12))
+                .foregroundStyle(Theme.textSoft(scheme))
+                .frame(width: 26, height: 26)
+                .background(Circle().fill(Theme.softFillDeep))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// 把第 `at` 个字改成这个颜色。
+    ///
+    /// ⚠️ 数组可能比正文短（她后来又加了字），所以**先补齐再写**，
+    /// 不然下标就越界了。补出来的位置留空字符串，取的时候会退回整块的颜色。
+    private func setChar(_ e: inout JournalElement, at: Int, hex: String) {
+        let n = Array(e.text).count
+        guard at >= 0, at < n else { return }
+        if e.charColors.count < n {
+            e.charColors += Array(repeating: "", count: n - e.charColors.count)
+        }
+        e.charColors[at] = hex
+    }
+
+    /// 把第 `at` 个字放大缩小。规矩同上。
+    private func setCharSize(_ e: inout JournalElement, at: Int, mul: Double) {
+        let n = Array(e.text).count
+        guard at >= 0, at < n else { return }
+        if e.charScales.count < n {
+            e.charScales += Array(repeating: 1, count: n - e.charScales.count)
+        }
+        let now = e.charScales[at] > 0 ? e.charScales[at] : 1
+        e.charScales[at] = max(0.5, min(3.0, now * mul))
     }
 
     // MARK: 底下那排素材
@@ -319,9 +374,41 @@ struct JournalPageView: View {
     private func selectedBar(_ e: JournalElement) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 7) {
+                // 点中某个字之后，这一排先出现「这个字」的三个钮：
+                // 放大、缩小、还原。不点字就不出现——不占地方。
+                if e.kind == .text, let at = charFocus {
+                    let chars = Array(e.text)
+                    if at < chars.count {
+                        Text(String(chars[at]))
+                            .font(.app(15, weight: .medium, design: .serif))
+                            .frame(width: 26, height: 26)
+                            .background(Circle().fill(app.settings.accentColor.opacity(0.16)))
+                    }
+                    charButton("textformat.size.smaller") {
+                        commit(e.id) { setCharSize(&$0, at: at, mul: 1 / 1.18) }
+                    }
+                    charButton("textformat.size.larger") {
+                        commit(e.id) { setCharSize(&$0, at: at, mul: 1.18) }
+                    }
+                    charButton("arrow.uturn.backward") {
+                        commit(e.id) {
+                            if at < $0.charScales.count { $0.charScales[at] = 1 }
+                            if at < $0.charColors.count { $0.charColors[at] = "" }
+                        }
+                    }
+                    Divider().frame(height: 20)
+                }
                 ForEach(colorsFor(e.kind), id: \.1) { _, hex in
                     Button {
-                        commit(e.id) { $0.colorHex = hex }
+                        // ⚠️ 点中了某个字就**只改那一个字**。
+                        // 她要的：「可以每个字单独点击颜色选，
+                        // 点击颜色后打的字就是这个颜色。」
+                        // 没点中字就还是整块换色（原来那个行为）。
+                        if let at = charFocus, e.kind == .text {
+                            commit(e.id) { setChar(&$0, at: at, hex: hex) }
+                        } else {
+                            commit(e.id) { $0.colorHex = hex }
+                        }
                     } label: {
                         Circle()
                             .fill(Color(hexString: hex) ?? .gray)
@@ -397,11 +484,21 @@ struct JournalPageView: View {
                 }
 
                 small("拉正") { commit(e.id) { $0.angle = 0 } }
+                // ⚠️ 「改文字」得单独给个钮。
+                // 以前是「选中之后再点一下」进编辑，可现在点字是选那个字——
+                // 一个动作不能既是选字又是改内容。
+                if e.kind == .text || e.kind == .note || e.kind == .quote {
+                    small("改文字") {
+                        draftText = e.text
+                        editingText = e
+                    }
+                }
                 small("置顶") { commit(e.id) { $0.z = nextZ } }
                 small("删掉") {
                     if !e.imageName.isEmpty { ImageStore.delete(e.imageName) }
                     page.elements.removeAll { $0.id == e.id }
                     picked = nil
+                    charFocus = nil
                     store.save(page)
                 }
             }
@@ -447,6 +544,7 @@ struct JournalPageView: View {
         e.y = 0.4 + Double.random(in: -0.12...0.12)
         page.elements.append(e)
         picked = e.id
+        charFocus = nil
         store.save(page)
         if kind == .photo || kind == .frame || kind == .cutout {
             showingPhotoPicker = true
