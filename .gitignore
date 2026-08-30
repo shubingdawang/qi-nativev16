@@ -4,3 +4,6 @@ Payload/
 *.ipa
 .DS_Store
 xcuserdata/
+
+# 桥的密钥，绝不能进 git
+scripts/claude-bridge/密钥.txt
