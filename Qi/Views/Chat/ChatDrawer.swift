@@ -207,6 +207,10 @@ struct ChatDrawer: View {
                 .foregroundStyle(Theme.textSoft(scheme))
                 .padding(.horizontal, 18)
                 .padding(.vertical, 14)
+                // ⚠️ 整行都要能点。`buttonStyle(.plain)` 下能点的只有
+                // 真画出来的字和图标——Spacer 和 padding 是透明的。
+                // 她报的：「判定区域太小了，必须要点到字才能进入。」
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
@@ -223,6 +227,10 @@ struct ChatDrawer: View {
                 .foregroundStyle(Theme.textSoft(scheme))
                 .padding(.horizontal, 18)
                 .padding(.vertical, 14)
+                // ⚠️ 整行都要能点。`buttonStyle(.plain)` 下能点的只有
+                // 真画出来的字和图标——Spacer 和 padding 是透明的。
+                // 她报的：「判定区域太小了，必须要点到字才能进入。」
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
@@ -239,6 +247,10 @@ struct ChatDrawer: View {
                 .foregroundStyle(Theme.textSoft(scheme))
                 .padding(.horizontal, 18)
                 .padding(.vertical, 14)
+                // ⚠️ 整行都要能点。`buttonStyle(.plain)` 下能点的只有
+                // 真画出来的字和图标——Spacer 和 padding 是透明的。
+                // 她报的：「判定区域太小了，必须要点到字才能进入。」
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             // 底下也铺到边了，给 home indicator 让出位置

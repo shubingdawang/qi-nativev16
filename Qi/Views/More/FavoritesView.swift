@@ -40,6 +40,41 @@ struct FavoritesView: View {
 
     private var items: [Item] { tab == 0 ? mine : theirs }
 
+    /// 收藏页上的语音条。点一下放，再点停。
+    /// 走的是气泡里那个同一个 `VoicePlayer`——同一条语音在哪儿放都是它，
+    /// 所以在这儿点开、切回聊天页，那边的播放状态也是对的。
+    @ViewBuilder
+    private func voiceBar(_ name: String) -> some View {
+        let playing = VoicePlayer.shared.playingName == name
+        let seconds = Int(VoiceStore.duration(name))
+        Button {
+            VoicePlayer.shared.toggle(name)
+        } label: {
+            HStack(spacing: 9) {
+                Image(systemName: playing ? "stop.fill" : "play.fill")
+                    .font(.app(12))
+                    .foregroundStyle(app.settings.accentColor)
+                HStack(spacing: 2.5) {
+                    ForEach(0..<18, id: \.self) { i in
+                        Capsule()
+                            .fill(app.settings.accentColor.opacity(playing ? 0.85 : 0.45))
+                            .frame(width: 2,
+                                   height: [5.0, 9, 14, 7, 11, 16, 6, 12][i % 8])
+                    }
+                }
+                Text("\(seconds)″")
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 13)
+            .padding(.vertical, 10)
+            .background(Capsule().fill(app.settings.accentColor.opacity(0.10)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 10) {
@@ -81,11 +116,22 @@ struct FavoritesView: View {
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
 
-                        Text(MD.inline(item.message.content))
-                            .font(.app(14))
-                            .foregroundStyle(Theme.textMain(scheme))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .textSelection(.enabled)
+                        // ⚠️ 语音要摆成**能放的一条**，不能只摆文字。
+                        //
+                        // 她报的：「语音没有收藏功能。」收是收得下的（`starred`
+                        // 挂在消息上，语音也是消息），可这一页从头到尾只画
+                        // `Text(content)`——语音那条 `content` 往往是空的，
+                        // 收完看到一张白卡片，等于没收。
+                        if !item.message.voiceName.isEmpty {
+                            voiceBar(item.message.voiceName)
+                        }
+                        if !item.message.content.isEmpty {
+                            Text(MD.inline(item.message.content))
+                                .font(.app(14))
+                                .foregroundStyle(Theme.textMain(scheme))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .textSelection(.enabled)
+                        }
 
                         // 他为什么留着它。
                         // **这句比收本身要紧**——只摆一句她说过的话，

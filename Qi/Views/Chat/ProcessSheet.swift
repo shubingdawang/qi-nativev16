@@ -2,30 +2,36 @@ import SwiftUI
 
 /// 「他刚才干了什么」那张弹窗。
 ///
-/// ## 为什么从内联展开改成弹窗
+/// ## 长什么样
 ///
-/// 她定的：「在我的视角只显示我之前说的让他自己写的 cot 标题，
-/// 点进去才是思考链，然后点开是思考链＋工具这样的弹窗，
-/// 然后再点开各自查看，这样简洁一点。」
+/// 她指着 claude.ai 定的：**一个点是 Thinking，一条线连到工具，
+/// 用完工具还有 thinking 就再一个点、再一条线。**
+/// 左边一条竖线串到底，每一步一个记号。
 ///
-/// 以前是**两层**：气泡上一行标题，点一下把思考全文和每个工具的
-/// 完整返回值**直接铺在聊天流里**。一轮调三个工具就能顶掉大半屏——
-/// 而她往回翻聊天记录的时候，要看的是他说的话，不是他查了什么。
+/// ⚠️ **里面不要框。** 之前每一条都套了一张玻璃卡片，
+/// 一屏三张卡就是三个边框、三层背景——那是「一堆卡片」，不是「一条线」。
+/// 时间线要的是**连续**，卡片天生把它切断。
 ///
-/// 现在是**三层**：
+/// ## 三层
+///
 ///   ① 气泡上只留他自己起的那个名字（`[[cot:…]]`）
-///   ② 点开 —— 弹窗里一条条列出来（想了想、每个工具各一行）
+///   ② 点开 —— 这张弹窗，一条条列出来，各带一行摘要
 ///   ③ 再点某一条 —— 才看那一条的全文
 ///
 /// ⚠️ 第二层**只给一行摘要**，这是整件事的关键。
 /// 第二层要是也铺全文，那只是把「顶掉半屏聊天」换成了「顶掉半屏弹窗」。
+///
+/// ⚠️ 第一条叫 **Thinking**，不叫「想了想」。
+/// 她定的：「想了想改成 thinking，这个不是他自己想的。」
+/// 意思是——那一行是**我们**贴的标签，不是他写的字；
+/// 用中文写会跟他自己起的那个名字混在一起，看着像也是他写的。
 struct ProcessSheet: View {
 
     let message: ChatMessage
 
     /// 思考正文，`[[cot:]]` 剥掉、多余空行压掉。
     ///
-    /// ⚠️ 这两件事**自己在这儿算**，不从气泡那边当参数递进来。
+    /// ⚠️ 这件事**自己在这儿算**，不从气泡那边当参数递进来。
     /// 递进来的话，聊天页要开这张弹窗就得先拿到气泡的私有方法，
     /// 于是弹窗只能挂在气泡上——那正是把 App 点死的那个做法。
     private var reasoning: String {
@@ -44,34 +50,31 @@ struct ProcessSheet: View {
     /// 那就绕回她要解决的那个问题了。
     @State private var open: String?
 
+    /// 开多高。
+    ///
+    /// 她定的：「一开始只要大概比三分之一屏高一点，
+    /// 我按着标题往上滑再是现在的高度。」
+    /// 所以两档：先 0.4，她想看全的时候自己拉满。
+    @State private var height: PresentationDetent = .fraction(0.4)
+
     var body: some View {
         NavigationStack {
             ZStack {
                 WallpaperBackground()
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 8) {
-                        if !reasoning.isEmpty {
-                            row(id: "think", icon: "brain",
-                                tint: Theme.textMuted(scheme),
-                                title: "想了想", note: "",
-                                body: reasoning)
+                    VStack(alignment: .leading, spacing: 0) {
+                        let all = steps
+                        ForEach(Array(all.enumerated()), id: \.element.id) { i, s in
+                            row(s, isLast: i == all.count - 1)
                         }
-                        ForEach(Array(message.toolRuns.enumerated()), id: \.element.id) { _, run in
-                            row(id: run.id.uuidString,
-                                icon: run.failed ? "xmark" : "wrench.and.screwdriver",
-                                tint: run.failed ? .red : app.settings.accentColor,
-                                title: run.toolName.isEmpty ? "一个工具" : run.toolName,
-                                note: run.serverName,
-                                body: detail(run))
-                        }
-                        if reasoning.isEmpty && message.toolRuns.isEmpty {
+                        if all.isEmpty {
                             Text("这一轮他什么都没想、也什么都没做。")
                                 .font(.app(12))
                                 .foregroundStyle(Theme.textMuted(scheme))
-                                .padding(.top, 30)
+                                .padding(.top, 24)
                         }
                     }
-                    .padding(.horizontal, 14)
+                    .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                 }
             }
@@ -83,10 +86,54 @@ struct ProcessSheet: View {
                 }
             }
         }
+        .presentationDetents([.fraction(0.4), .large], selection: $height)
+        .presentationDragIndicator(.visible)
+    }
+
+    // MARK: 一步一步
+
+    /// 时间线上的一步
+    struct Step: Identifiable {
+        let id: String
+        /// 左边那个记号。`nil` = 画一个实心圆点（thinking 那种）
+        let icon: String?
+        let tint: Color
+        let title: String
+        /// 标题右边那点小字（工具是哪台服务器给的）
+        let note: String
+        let body: String
+    }
+
+    /// 把这一轮拆成一条线上的几步。
+    ///
+    /// ⚠️ 顺序是**先想后做**。
+    /// 真实情况可能是「想→查→再想→再查」，但我们**没有把那个顺序存下来**：
+    /// `reasoning` 是一整块，`toolRuns` 是一个数组，两者之间谁先谁后没有记。
+    /// 所以这儿只能按「想一次、然后依次动手」摆。
+    /// 要摆出真的交错，得在收流的时候给每段思考记上它夹在第几个工具之间——
+    /// 那是改存储的事，等她说要再做。
+    private var steps: [Step] {
+        var out: [Step] = []
+        if !reasoning.isEmpty {
+            out.append(Step(id: "think", icon: nil,
+                            tint: Theme.textMuted(scheme),
+                            title: "Thinking", note: "", body: reasoning))
+        }
+        for run in message.toolRuns {
+            out.append(Step(id: run.id.uuidString,
+                            icon: run.failed
+                                ? "exclamationmark.triangle" : "wrench.and.screwdriver",
+                            tint: run.failed ? .red : app.settings.accentColor,
+                            title: run.toolName.isEmpty ? "一个工具" : run.toolName,
+                            note: run.serverName,
+                            body: detail(run)))
+        }
+        return out
     }
 
     /// 弹窗标题用他自己起的那个名字。
-    /// 没起才退回「想了几秒 · 动了几下手」——那句话跟他在想什么毫无关系。
+    /// 没起才退回「想了几秒 · 动了几下手」——那句话跟他在想什么毫无关系，
+    /// 所以提示词里那条已经改成**必写**了。
     private var title: String {
         if !message.cotTitle.isEmpty { return message.cotTitle }
         var bits: [String] = []
@@ -97,69 +144,90 @@ struct ProcessSheet: View {
         return bits.isEmpty ? "他刚才干了什么" : bits.joined(separator: " · ")
     }
 
-    /// 一条。收着的时候只有标题和一行摘要，点开才给全文。
-    @ViewBuilder
-    private func row(id: String, icon: String, tint: Color,
-                     title: String, note: String, body text: String) -> some View {
-        let isOpen = open == id
-        VStack(alignment: .leading, spacing: 0) {
-            Button {
-                withAnimation(.easeOut(duration: 0.18)) {
-                    open = isOpen ? nil : id
-                }
-            } label: {
-                HStack(alignment: .top, spacing: 9) {
-                    Image(systemName: icon)
-                        .font(.app(11))
-                        .foregroundStyle(tint)
-                        .frame(width: 18, height: 18)
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 5) {
-                            Text(title)
-                                .font(.app(13, weight: .medium, design: .monospaced))
-                                .foregroundStyle(Theme.textMain(scheme))
-                            if !note.isEmpty {
-                                Text(note)
-                                    .font(.app(9.5))
-                                    .foregroundStyle(Theme.textMuted(scheme))
-                            }
-                        }
-                        // ⚠️ 收着的时候**只给一行**。
-                        // 第二层要是也铺全文，那只是把「顶掉半屏聊天」
-                        // 换成了「顶掉半屏弹窗」。
-                        if !isOpen {
-                            Text(oneLine(text))
-                                .font(.app(11))
-                                .foregroundStyle(Theme.textMuted(scheme))
-                                .lineLimit(1)
-                        }
-                    }
-                    Spacer(minLength: 6)
-                    Image(systemName: "chevron.right")
-                        .font(.app(9, weight: .semibold))
-                        .foregroundStyle(Theme.textMuted(scheme))
-                        .rotationEffect(.degrees(isOpen ? 90 : 0))
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+    // MARK: 一条
 
-            if isOpen {
-                // 展开之后**给全的**，不掐行数。
-                // 她定过：「不是把行高固定，是根据字数来画」——
-                // 她特地点开这一条，就没有再截断她的道理。
-                Text(MD.inline(text))
-                    .font(.app(12))
-                    .foregroundStyle(Theme.textSoft(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 8)
+    /// 一步。左边记号 + 一条竖线往下接，右边标题和摘要。
+    ///
+    /// ⚠️ **没有卡片背景**。整条线靠左边那根竖线连起来，
+    /// 一加边框就断成一张张卡了。
+    @ViewBuilder
+    private func row(_ s: Step, isLast: Bool) -> some View {
+        let isOpen = open == s.id
+        HStack(alignment: .top, spacing: 11) {
+            // 左边一栏：记号 + 往下那根线
+            VStack(spacing: 0) {
+                Group {
+                    if let icon = s.icon {
+                        Image(systemName: icon)
+                            .font(.app(11))
+                            .foregroundStyle(s.tint)
+                    } else {
+                        // thinking 那种就是一个实心点，跟 claude.ai 一样
+                        Circle()
+                            .fill(s.tint.opacity(0.8))
+                            .frame(width: 7, height: 7)
+                    }
+                }
+                .frame(width: 18, height: 18)
+                // 最后一步底下不画线——线是「还有下一步」的意思
+                if !isLast {
+                    Rectangle()
+                        .fill(Theme.textMuted(scheme).opacity(0.25))
+                        .frame(width: 1)
+                        .frame(maxHeight: .infinity)
+                }
             }
+            .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Button {
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        open = isOpen ? nil : s.id
+                    }
+                } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                        Text(s.title)
+                            .font(.app(13.5, weight: .medium,
+                                       design: s.icon == nil ? .default : .monospaced))
+                            .foregroundStyle(Theme.textMain(scheme))
+                        if !s.note.isEmpty {
+                            Text(s.note)
+                                .font(.app(9.5))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                        }
+                        Spacer(minLength: 6)
+                        Image(systemName: "chevron.right")
+                            .font(.app(9, weight: .semibold))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                            .rotationEffect(.degrees(isOpen ? 90 : 0))
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                // ⚠️ 收着的时候**只给一行**。
+                // 第二层要是也铺全文，那只是把「顶掉半屏聊天」
+                // 换成了「顶掉半屏弹窗」。
+                if isOpen {
+                    // 展开之后**给全的**，不掐行数。
+                    // 她定过：「不是把行高固定，是根据字数来画」——
+                    // 她特地点开这一条，就没有再截断她的道理。
+                    Text(MD.inline(s.body))
+                        .font(.app(12))
+                        .foregroundStyle(Theme.textSoft(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    Text(oneLine(s.body))
+                        .font(.app(11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                        .lineLimit(1)
+                }
+            }
+            .padding(.bottom, 16)
         }
-        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassBackground(radius: 14, strength: app.settings.glassOpacity * 0.8)
     }
 
     /// 工具那一条展开之后看到的：参数在上，结果在下。
@@ -193,7 +261,6 @@ struct ProcessSheet: View {
         return out.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// ⚠️ 空行走常量。反斜杠经脚本改动会被吃掉一层、字符串就跨行了。
     static let nl = "\n"
     private static let gap = "\n\n"
     private static let br: Character = "\n"

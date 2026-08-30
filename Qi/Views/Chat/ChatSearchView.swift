@@ -21,6 +21,8 @@ struct ChatSearchView: View {
     @State private var mode = 0            // 0 关键词，1 日期
     @State private var keyword = ""
     @State private var day = Date()
+    /// 「类型」那一档选的是哪一类
+    @State private var kind: Kind = .voice
     /// 上次点过的那条，重新进来时滚回去
     @State private var restoreTo: UUID?
 
@@ -34,6 +36,7 @@ struct ChatSearchView: View {
                     Picker("", selection: $mode) {
                         Text("关键词").tag(0)
                         Text("日期").tag(1)
+                        Text("类型").tag(2)
                     }
                     .pickerStyle(.segmented)
                     .padding(.horizontal, 16)
@@ -42,6 +45,8 @@ struct ChatSearchView: View {
 
                     if mode == 0 {
                         searchField
+                    } else if mode == 2 {
+                        kindPicker
                     } else {
                         DatePicker("", selection: $day, displayedComponents: .date)
                             .datePickerStyle(.graphical)
@@ -112,9 +117,81 @@ struct ChatSearchView: View {
         let message: ChatMessage
     }
 
+    /// 「类型」那一档挑的是哪一类
+    enum Kind: String, CaseIterable {
+        case voice = "语音"
+        case link = "链接"
+        case image = "图片"
+        case file = "文件"
+
+        var icon: String {
+            switch self {
+            case .voice: return "waveform"
+            case .link:  return "link"
+            case .image: return "photo"
+            case .file:  return "doc"
+            }
+        }
+    }
+
+    /// 这一条算不算这一类。
+    ///
+    /// ⚠️ 链接**不看有没有卡片**。她定的：
+    /// 「小红书／b站／抖音链接，没有卡片框的也属于链接。」
+    /// 卡片是我们认出来才画的，认不出来的照样是一条链接——
+    /// 按「有没有卡片」来分，等于把认漏的那些又漏一次。
+    static func matches(_ m: ChatMessage, _ k: Kind) -> Bool {
+        switch k {
+        case .voice: return !m.voiceName.isEmpty
+        case .image: return !m.imageNames.isEmpty
+        case .file:  return !m.files.isEmpty
+        case .link:
+            let t = m.content
+            return t.contains("http://") || t.contains("https://")
+                || t.contains("xhslink.com") || t.contains("b23.tv")
+                || t.contains("v.douyin.com")
+        }
+    }
+
+    private var kindPicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Kind.allCases, id: \.self) { k in
+                    let on = kind == k
+                    Button {
+                        withAnimation(.easeOut(duration: 0.14)) { kind = k }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: k.icon).font(.app(11))
+                            Text(k.rawValue).font(.app(12.5, weight: on ? .semibold : .regular))
+                        }
+                        .foregroundStyle(on ? .white : Theme.textSoft(scheme))
+                        .padding(.horizontal, 13)
+                        .padding(.vertical, 7)
+                        .background(Capsule().fill(on ? app.settings.accentColor.opacity(0.85)
+                                                   : Theme.softFillDeep))
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 10)
+        }
+    }
+
     private var hits: [Hit] {
         let convs = app.conversations(in: space)
         var out: [Hit] = []
+
+        if mode == 2 {
+            for c in convs {
+                for m in c.messages where Self.matches(m, kind) {
+                    out.append(Hit(conversationID: c.id, conversationTitle: c.title, message: m))
+                }
+            }
+            return out.sorted { $0.message.createdAt > $1.message.createdAt }
+        }
 
         if mode == 0 {
             let key = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -181,9 +258,16 @@ struct ChatSearchView: View {
                                         .font(.app(10))
                                         .foregroundStyle(Theme.textMuted(scheme))
                                 }
-                                Text(snippet(hit.message.content))
+                                // ⚠️ 语音、图片、文件那几条 `content` 常常是空的。
+                                // 只画 `content` 的话，「找语音」找出来一整屏
+                                // 全是空条目——看着像没找到。
+                                Text(snippet(hit.message.content).isEmpty
+                                     ? tagLine(hit.message)
+                                     : snippet(hit.message.content))
                                     .font(.app(13))
-                                    .foregroundStyle(Theme.textMain(scheme))
+                                    .foregroundStyle(snippet(hit.message.content).isEmpty
+                                                     ? Theme.textMuted(scheme)
+                                                     : Theme.textMain(scheme))
                                     .lineLimit(3)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
@@ -217,10 +301,21 @@ struct ChatSearchView: View {
         if mode == 0 {
             return keyword.isEmpty ? "打几个字试试" : "这个词没说过"
         }
+        if mode == 2 { return "这一档里还什么都没有" }
         return "这天没说过话"
     }
 
     /// 命中的词前后各留一点，别把整段都堆出来
+    /// 没有正文的那些条，摆一句「这是什么」。
+    private func tagLine(_ m: ChatMessage) -> String {
+        if !m.voiceName.isEmpty {
+            return "语音 \(Int(VoiceStore.duration(m.voiceName)))″"
+        }
+        if !m.imageNames.isEmpty { return "\(m.imageNames.count) 张图" }
+        if !m.files.isEmpty { return "文件" }
+        return "（没有正文）"
+    }
+
     private func snippet(_ text: String) -> String {
         guard mode == 0,
               let range = text.range(of: keyword, options: .caseInsensitive)
