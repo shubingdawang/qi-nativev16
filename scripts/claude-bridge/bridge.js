@@ -45,6 +45,16 @@ const TIMEOUT_MS = parseInt(process.env.BRIDGE_TIMEOUT || '280000', 10);
 const TMP = path.join(os.tmpdir(), 'qi-claude-bridge');
 fs.mkdirSync(TMP, { recursive: true });
 
+/* 工坐区那一档在哪个目录里干活。
+ *
+ * 她定的：「工作区不是阿晏，工作区就是 claude 本身，
+ * 跟阿晏没关系。所以可以带上上下文。」
+ *
+ * 默认是这个仓库根（桥自己往上两层）。
+ * 要换到别的项目，启动前设 `BRIDGE_WORKSPACE`。 */
+const WORKSPACE = process.env.BRIDGE_WORKSPACE
+  || path.resolve(__dirname, '..', '..');
+
 const IS_WIN = process.platform === 'win32';
 
 /**
@@ -197,13 +207,25 @@ function render(messages, imgBag) {
 
 // ────────────────────────────── 挑模型
 
+/**
+ * 把她选的那个名字归成 claude 认得的档位。
+ *
+ * ⚠️ **`-code` 后缀要原样带回去。**
+ * 上一版这儿把 `opus-code` 直接归成了 `opus`——
+ * 后缀在走到分流那一步之前就没了，
+ * 于是工坐区那一档**永远走不到**，而且不报错、很难查。
+ */
 function pickModel(name) {
-  const s = String(name || '').toLowerCase();
-  if (s.includes('fable')) return 'fable';
-  if (s.includes('opus')) return 'opus';
-  if (s.includes('sonnet')) return 'sonnet';
-  if (s.includes('haiku')) return 'haiku';
-  return null;   // 认不出来就用 Claude Code 自己的默认
+  const raw = String(name || '').toLowerCase();
+  const code = /-code$/.test(raw) ? '-code' : '';
+  const s = raw.replace(/-code$/, '');
+  if (s.includes('fable')) return 'fable' + code;
+  if (s.includes('opus')) return 'opus' + code;
+  if (s.includes('sonnet')) return 'sonnet' + code;
+  if (s.includes('haiku')) return 'haiku' + code;
+  // 认不出型号但带了 `-code`：档位交给 claude 自己默认，
+  // 但**那一档还是要走工坐区**。
+  return code ? code : null;
 }
 
 // ────────────────────────────── 跑一次 claude
@@ -233,26 +255,59 @@ function runClaude({ system, prompt, model, needsRead }, onText) {
     const sysFile = path.join(TMP, `sys-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`);
     fs.writeFileSync(sysFile, system, 'utf8');
 
+    // 这一轮是谁？**模型名带 `-code` 后缀 = 工坐区，不带 = 阿晏。**
+    //
+    // 她定的：「工作区不是阿晏，工作区就是 claude 本身，
+    // 跟阿晏没关系。所以可以带上上下文。」
+    //
+    // 两边要的东西正好相反：
+    // ・絮语（阿晏）—— 不要这台电脑的 CLAUDE.md、不要工具。
+    //   带上了的话，她在手机上等来的是一个跟她讨论 Swift 编译错误的人。
+    // ・工坐（Claude Code）—— 全部都要：项目目录、CLAUDE.md、技能、工具。
+    //   没有这些它就只是个会聊天的，帮不上忙。
+    const isCode = /-code$/i.test(model || '');
+    // 只剩一个 `-code` 的话（型号没认出来）就不传 --model，
+    // 交给 claude 自己的默认——传个空字串过去它会报错。
+    const realModel = (model || '').replace(/-code$/i, '');
+
     const args = [
       '-p',
       '--output-format', 'stream-json',
       '--include-partial-messages',
       '--verbose',
-      '--no-session-persistence',
-      // 她电脑上那些 CLAUDE.md / 技能 / MCP 全部不带进来——
-      // 这一轮他是栖，不是这台电脑上的编码助手
-      '--safe-mode',
-      '--system-prompt-file', sysFile
+      '--no-session-persistence'
     ];
-    if (model) args.push('--model', model);
-    if (needsRead) {
-      // 只为了看那张图。**变长参数要放在最后一个位置之前**，
-      // 后面再跟别的 flag，不然它会把后面的东西当成工具名吃掉。
-      args.push('--add-dir', TMP);
-      args.push('--allowedTools', 'Read');
-      args.push('--tools', 'Read');
+    if (realModel) args.push('--model', realModel);
+
+    if (isCode) {
+      // 工坐区：就是平时那个 Claude Code。
+      //
+      // ⚠️ **不加 `--safe-mode`、不加 `--system-prompt-file`。**
+      // 加了就把仓库里那份 CLAUDE.md 和它自己的人格盖掉了，
+      // 而那正是她要的东西。
+      //
+      // ⚠️ 权限给的是 `acceptEdits`，不是全放开：
+      // 能读能写能改代码，**但跑命令还是要问**。
+      // 她人在手机上，看不见终端里弹的确认——
+      // 全放开的话等于没人看着的时候什么都能跑。
+      args.push('--permission-mode', 'acceptEdits');
+      args.push('--add-dir', TMP);      // 她发的图也得能看
+      // ⚠️ App 那边传来的系统提示（`system`）**在这一档是故意不用的**。
+      // 不是漏了：用了就把仓库里那份 CLAUDE.md 盖掉了。
+      // 工坐区要的就是它在终端里本来的样子。
     } else {
-      args.push('--tools', '');
+      // 阿晏：只是他，不是这台电脑上的编码助手
+      args.push('--safe-mode');
+      args.push('--system-prompt-file', sysFile);
+      if (needsRead) {
+        // 只为了看那张图。**变长参数要放在最后一个位置之前**，
+        // 后面再跟别的 flag，不然它会把后面的东西当成工具名吃掉。
+        args.push('--add-dir', TMP);
+        args.push('--allowedTools', 'Read');
+        args.push('--tools', 'Read');
+      } else {
+        args.push('--tools', '');
+      }
     }
 
     // 指到一个 .js 上的话，用当前这个 node 去跑它
@@ -260,7 +315,9 @@ function runClaude({ system, prompt, model, needsRead }, onText) {
     const isJS = CLAUDE.cmd.toLowerCase().endsWith('.js');
     const child = spawn(isJS ? process.execPath : CLAUDE.cmd,
                         isJS ? [CLAUDE.cmd].concat(args) : args, {
-      cwd: TMP,
+      // 工坐区在项目目录里跑（不然它看不见任何代码），
+      // 阿晏那边继续关在临时目录里。
+      cwd: isCode ? WORKSPACE : TMP,
       shell: CLAUDE.shell,
       windowsHide: true,
       env: process.env
@@ -534,7 +591,11 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       object: 'list',
-      data: ['opus', 'sonnet', 'haiku', 'fable'].map(m => ({
+      // 带 `-code` 的那几个是**工坐区用的**：
+      // 它们带工具、带 CLAUDE.md、在项目目录里跑。
+      // 不带后缀的给絮语（阿晏）用，那边一个工具都没有。
+      data: ['opus', 'sonnet', 'haiku', 'fable',
+             'opus-code', 'sonnet-code', 'haiku-code'].map(m => ({
         id: m, object: 'model', owned_by: 'claude-code'
       }))
     }));
@@ -587,8 +648,16 @@ server.listen(PORT, '0.0.0.0', () => {
   if (addrs.length) {
     console.log('  手机跟这台电脑连同一个 WiFi，在栖里新增一个供应商：');
     for (const a of addrs) console.log('    接口地址   http://' + a + ':' + PORT + '/v1');
-    console.log('    模型       opus（或 sonnet / haiku）');
     console.log('    密钥       ' + (TOKEN ? '（跟 BRIDGE_TOKEN 一样）' : '留空'));
+    console.log('');
+    console.log('  模型分两档，别选错：');
+    console.log('    絮语（阿晏）  opus / sonnet / haiku');
+    console.log('                 —— 只是他。不碰你电脑上任何东西。');
+    console.log('    工坐（写代码）opus-code / sonnet-code');
+    console.log('                 —— 就是终端里那个 Claude Code。');
+    console.log('                 带 CLAUDE.md、带工具，能读能改：');
+    console.log('                 ' + WORKSPACE);
+    console.log('                 跑命令还是会问（acceptEdits）。');
   } else {
     console.log('  没找到局域网地址，检查一下 WiFi 是不是连着。');
   }
