@@ -200,7 +200,7 @@ struct JournalPageView: View {
 
     /// 画出一样东西。
     /// **不叫 body(of:)**——View 协议本身有个 body，同名太容易出岔子。
-    @ViewBuilder
+    ///
     /// 一个元素长什么样。**整段搬去 JournalSnapshot.swift 了**——
     /// 编辑页和「给他看的那张快照」必须是同一份渲染器，
     /// 两份迟早会长歪，那时候他看到的就不再是她看到的了。

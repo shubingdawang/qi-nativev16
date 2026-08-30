@@ -17,7 +17,14 @@ import SwiftUI
 /// ⚠️ 只在**真的逐字设过**的时候才走这条路（见 `hasPerChar`）。
 /// 没设过的还是一个 `Text` 画完——那条路快得多，
 /// 而且换行、断词、标点避头尾全是系统在管，比我们算得好。
-struct FlowRow: Layout {
+/// ⚠️ 名字叫 `CharFlow` 不叫 `FlowRow`——`ReceiptView.swift` 里已经有一个
+/// `FlowRow` 了（小票那排标签用的）。那个是顶对齐、也不认换行符，
+/// 这儿要的是底对齐 + 认换行符，所以是两件东西，不合并。
+///
+/// ⚠️ 协议写全名 `SwiftUI.Layout`——**项目里另有一个 `enum Layout`**
+/// （管标签栏高度那个）。不写全名就会被解析成那个 enum，
+/// 报出来是「inheritance from non-protocol type 'Layout'」。
+struct CharFlow: SwiftUI.Layout {
 
     var spacing: CGFloat = 0
     var lineGap: CGFloat = 2
@@ -85,7 +92,7 @@ struct JournalCharText: View {
     var body: some View {
         if element.hasPerChar || onTapChar != nil {
             let chars = Array(element.text)
-            FlowRow(maxWidth: maxWidth) {
+            CharFlow(maxWidth: maxWidth) {
                 ForEach(chars.indices, id: \.self) { i in
                     let ch = chars[i]
                     // 换行符自己不占位置，但要让排版断在这儿——

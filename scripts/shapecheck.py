@@ -116,6 +116,15 @@ def check(path):
             if cl.count('}') and cur:
                 cur = None
 
+    # ⚠️ `: Layout` 会被解析成**项目自己那个 `enum Layout`**（管标签栏高度的），
+    # 不是 SwiftUI 的布局协议。报出来是
+    # 「inheritance from non-protocol type 'Layout'」+ 一串 'Subviews' 找不到，
+    # 看着像 SDK 出了问题，其实只是重名。写全名 `SwiftUI.Layout` 就好。
+    for i, line in enumerate(lines):
+        if re.match(r'^\s*(public\s+|private\s+)?struct\s+\w+\s*:\s*Layout\s*\{', line):
+            bad.append((i + 1, '`: Layout` 要写成 `: SwiftUI.Layout`'
+                               '——项目里另有一个 enum Layout'))
+
     for i, line in enumerate(lines):
         if not VIEW_ONLY.match(line):
             continue
