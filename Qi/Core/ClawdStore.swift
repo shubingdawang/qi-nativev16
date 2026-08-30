@@ -585,7 +585,243 @@ enum FurnitureCatalog {
             "rrkkkkrr",
             "rrrrrrrr",
             "rr....rr"
-        ], p), category: .gadget, reaction: "隔着玻璃挑了半天")
+        ], p), category: .gadget, reaction: "隔着玻璃挑了半天"),
+
+        // ── 这一批是后加的（她说「clawd 需要更多的风格」）。
+        //
+        // ⚠️ **没有去扒现成素材**，理由值得记一句：
+        // clawd 那间屋子是一套手写的像素图，共用上面那十个色。
+        // Kenney、OpenGameArt 上的 CC0 家具是等距手绘的，
+        // 分辨率、笔触、配色全不是一路——摆进来不是「多了几件家具」，
+        // 是「一间屋子里有两种画法」。
+        // 而这边一件东西就是几行字符串，加二十件也就几 KB，风格还天然统一。
+
+        .init(id: "wardrobe", name: "小衣柜", price: 130, sprite: PixelSprite([
+            "wwwwwwww",
+            "wccwwccw",
+            "wccwwccw",
+            "wccwwccw",
+            "wyywwyyw",
+            "wccwwccw",
+            "wccwwccw",
+            "wwwwwwww",
+            "d......d"
+        ], p), category: .furniture, reaction: "钻进去躲一会儿"),
+
+        .init(id: "mirror", name: "落地镜", price: 95, sprite: PixelSprite([
+            ".wwwwww.",
+            "wbbbbbbw",
+            "wbccbbbw",
+            "wbccbbbw",
+            "wbbbbbbw",
+            "wbbbbbbw",
+            ".wwwwww.",
+            "...dd...",
+            "..dddd.."
+        ], p), category: .furniture, reaction: "对着镜子照半天"),
+
+        .init(id: "desk", name: "书桌", price: 110, sprite: PixelSprite([
+            "wwwwwwwwww",
+            "wwwwwwwwww",
+            "d.wcc...dw",
+            "d.wcc....w",
+            "d.wwww...w",
+            "d........w",
+            "d........w"
+        ], p), category: .furniture, reaction: "趴在桌上发呆"),
+
+        .init(id: "curtain", name: "窗帘", price: 70, sprite: PixelSprite([
+            "wwwwwwwwww",
+            "nn.bbbb.nn",
+            "nn.bbbb.nn",
+            "nn.bbbb.nn",
+            "nnn.bb.nnn",
+            "nnn.bb.nnn",
+            "nnnn..nnnn",
+            ".nnn..nnn."
+        ], p), category: .furniture, reaction: "藏到帘子后面"),
+
+        .init(id: "shoerack", name: "鞋架", price: 55, sprite: PixelSprite([
+            "wwwwwwww",
+            "wrr..bbw",
+            "wwwwwwww",
+            "wnn..ggw",
+            "wwwwwwww",
+            "d......d"
+        ], p), category: .furniture, reaction: "把鞋子排整齐"),
+
+        .init(id: "hanging", name: "吊兰", price: 50, sprite: PixelSprite([
+            "...ss...",
+            "..ssss..",
+            ".gggggg.",
+            "gggggggg",
+            ".gg.gg..",
+            "..g..g..",
+            "..g..g..",
+            "..g.....",
+            "..g....."
+        ], p), category: .plant, reaction: "拨一下垂下来的叶子"),
+
+        .init(id: "sakura", name: "樱花枝", price: 85, sprite: PixelSprite([
+            ".nn..nn..",
+            "nnnn.nnn.",
+            ".nn.nnn.n",
+            "..dnn.nnn",
+            "..d..nn..",
+            "..d......",
+            ".ssss....",
+            ".ssss...."
+        ], p), category: .plant, reaction: "闻一闻花"),
+
+        .init(id: "bonsai", name: "小盆景", price: 120, sprite: PixelSprite([
+            "..gggg..",
+            ".gggggg.",
+            "gg.gg.gg",
+            "...dd...",
+            "..dddd..",
+            "...dd...",
+            ".ssssss.",
+            ".ssssss.",
+            "..ssss.."
+        ], p), category: .plant, reaction: "绕着树转两圈"),
+
+        .init(id: "kite", name: "小风筝", price: 45, sprite: PixelSprite([
+            "...r....",
+            "..rrr...",
+            ".rryrr..",
+            "rrryyyr.",
+            ".rryyr..",
+            "..rrr...",
+            "...r....",
+            "...s....",
+            "..s.s..."
+        ], p), category: .toy, reaction: "拽着线跑"),
+
+        .init(id: "robot", name: "小机器人", price: 140, sprite: PixelSprite([
+            "..s..s..",
+            "..ssss..",
+            ".skkkks.",
+            ".skccks.",
+            ".skkkks.",
+            "ssssssss",
+            "s.ssss.s",
+            "..s..s..",
+            "..s..s.."
+        ], p), category: .toy, reaction: "戳一下它的头"),
+
+        .init(id: "horse", name: "摇摇马", price: 100, sprite: PixelSprite([
+            "...ww...",
+            "..wwww..",
+            ".wwkwww.",
+            "wwwwwwww",
+            ".w.ww.w.",
+            ".w.ww.w.",
+            "........",
+            "rrrrrrrr",
+            ".rrrrrr."
+        ], p), category: .toy, reaction: "骑上去摇两下"),
+
+        .init(id: "record", name: "唱片机", price: 160, sprite: PixelSprite([
+            "wwwwwwww",
+            "w.kkkk.w",
+            "w.kckk.w",
+            "w.kkkk.w",
+            "w......w",
+            "wwwwwwww",
+            "d......d"
+        ], p), category: .gadget, reaction: "跟着调子晃"),
+
+        .init(id: "humid", name: "加湿器", price: 90, sprite: PixelSprite([
+            "..c..c..",
+            ".c..c...",
+            "..ssss..",
+            ".ssssss.",
+            ".sbbbbs.",
+            ".ssssss.",
+            ".ssssss.",
+            "..ssss.."
+        ], p), category: .gadget, reaction: "凑上去吸一口雾"),
+
+        .init(id: "polaroid", name: "拍立得", price: 105, sprite: PixelSprite([
+            "..kkkk..",
+            "cccccccc",
+            "ckkbbkkc",
+            "ckbccbkc",
+            "ckkbbkkc",
+            "cccccccc",
+            ".cccccc."
+        ], p), category: .gadget, reaction: "对着镜头比划"),
+
+        .init(id: "chime", name: "风铃", price: 65, sprite: PixelSprite([
+            ".wwwwww.",
+            "..s.s.s.",
+            "..s.s.s.",
+            "..s.s.s.",
+            ".yy.y.yy",
+            ".yy.y.yy",
+            "..y...y.",
+            "........"
+        ], p), category: .decor, reaction: "碰一下听响"),
+
+        .init(id: "candle", name: "香薰蜡烛", price: 40, sprite: PixelSprite([
+            "...y....",
+            "..yy....",
+            "...k....",
+            ".cccccc.",
+            ".cccccc.",
+            ".cnnnnc.",
+            ".cccccc.",
+            ".ssssss."
+        ], p), category: .decor, reaction: "盯着火苗看"),
+
+        .init(id: "tank", name: "小鱼缸", price: 135, sprite: PixelSprite([
+            ".ssssss.",
+            "sbbbbbbs",
+            "sbrbbbbs",
+            "sbbbbgbs",
+            "sbgbbbbs",
+            "sbbbbbbs",
+            "ssssssss",
+            ".ssssss."
+        ], p), category: .decor, reaction: "隔着玻璃看鱼"),
+
+        .init(id: "icecream", name: "冰淇淋", price: 30, sprite: PixelSprite([
+            "..nnn...",
+            ".nnnnn..",
+            ".ncccn..",
+            "..yyy...",
+            "..yyy...",
+            "...y....",
+            "...y...."
+        ], p), category: .food, reaction: "舔一口"),
+
+        .init(id: "teapot", name: "小茶壶", price: 55, sprite: PixelSprite([
+            "...w....",
+            ".ccccc.w",
+            "cccccccw",
+            "ccccccc.",
+            "ccgcccc.",
+            ".ccccc..",
+            "..sss..."
+        ], p), category: .drink, reaction: "闻一下茶香"),
+
+        .init(id: "beret", name: "贝雷帽", price: 50, sprite: PixelSprite([
+            "...k....",
+            ".rrrrrr.",
+            "rrrrrrrr",
+            "rrrrrrrr",
+            ".kkkkkk.",
+            "........"
+        ], p), category: .wear, reaction: "歪着戴一下"),
+
+        .init(id: "boots", name: "小靴子", price: 60, sprite: PixelSprite([
+            ".dd..dd.",
+            ".dd..dd.",
+            ".dd..dd.",
+            ".dd..dd.",
+            ".ddd.ddd",
+            "kkkkkkkk"
+        ], p), category: .wear, reaction: "踩两下试试")
     ]
 
     static func kind(_ id: String) -> FurnitureKind? {
