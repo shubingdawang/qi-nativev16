@@ -276,18 +276,26 @@ struct SettingsView: View {
                 }
 
                 if app.settings.wallpaperName != nil {
-                    HStack {
-                        Text("压暗")
-                            .font(.app(13))
-                            .foregroundStyle(Theme.textSoft(scheme))
-                        Spacer()
-                        Text("\(Int(app.settings.wallpaperDim * 100))%")
-                            .font(.app(12))
-                            .foregroundStyle(Theme.textMuted(scheme))
-                    }
-                    .padding(.top, 2)
-                    Slider(value: $app.settings.wallpaperDim, in: 0...0.6)
-                        .tint(app.settings.accentColor)
+                    // ⚠️ 走 `SettingsSlider`，**不要写成 `Slider(value: $app.settings.…)`**。
+                    //
+                    // 这一条以前就是裸的 `Slider` 直接绑全局设置：手指划一下
+                    // 一秒六十次改 `AppSettings`，每次都让整个 App 重新求值、
+                    // 屏幕上每一块玻璃重画一次模糊。拖起来卡，拖完切到聊天页
+                    // 那一下要一次把几百条气泡全部重建——直接被系统杀掉，
+                    // 在她那儿就是**闪回主屏**。工坊那边气泡少，所以没事。
+                    //
+                    // `SettingsSlider` 的规矩是：拖的时候只在自己心里改，
+                    // **松手才写回全局**。这个页面上别的滑块早就都走它了，
+                    // 只有这一根漏了。
+                    SettingsSlider(
+                        title: "压暗",
+                        value: $app.settings.wallpaperDim,
+                        range: 0...0.6,
+                        step: nil,
+                        readout: "\(Int(app.settings.wallpaperDim * 100))%",
+                        tint: app.settings.accentColor,
+                        scheme: scheme)
+                        .padding(.top, 2)
                 }
             }
             .padding(.horizontal, 16)

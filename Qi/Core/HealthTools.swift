@@ -170,6 +170,21 @@ enum HealthTools {
     /// 用户到底给没给读的权限（不然「拒绝」这件事本身就泄露了信息）。
     /// 所以这儿只判「问的过程有没有出错」，真没给的话
     /// 后面查出来是空的——那一支会说「读不到」，不会说「没有」。
+    /// 提醒事项和日历那两样，**当场去问**。
+    ///
+    /// 她报的：「开启按钮也并没有弹出权限同意的弹窗。」
+    /// 以前那个开关只是翻了个 Bool，系统那个页面要等他真的去读的时候才弹——
+    /// 可她翻完开关看不到任何动静，只能当成没生效。
+    /// 现在翻开的当下就问，跟这一页上写的「栖会去问」对得上。
+    ///
+    /// 回的是「两样各自给没给」。
+    @discardableResult
+    static func askTodo() async -> (reminders: Bool, calendar: Bool) {
+        let r = (try? await events.requestFullAccessToReminders()) ?? false
+        let c = (try? await events.requestFullAccessToEvents()) ?? false
+        return (r, c)
+    }
+
     @discardableResult
     static func ask() async -> Bool {
         guard HKHealthStore.isHealthDataAvailable() else { return false }

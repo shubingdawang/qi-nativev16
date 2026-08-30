@@ -32,10 +32,19 @@ struct HealthAccessView: View {
                                     guard on else { return }
                                     Task {
                                         let ok = await HealthTools.ask()
-                                        note = ok
-                                            ? "问过了。接下来在系统那个页面上你勾了哪几样，他就只看得到哪几样。"
-                                            : "这台设备读不到健康数据。多半是这个构建没开 HealthKit 那项能力——"
-                                              + "提醒事项那边不受影响，照样能用。"
+                                        if ok {
+                                            note = "问过了。接下来在系统那个页面上你勾了哪几样，他就只看得到哪几样。"
+                                        } else {
+                                            // ⚠️ 读不到就**把开关退回去**。
+                                            // 她报的：「最底下那个健康通知一直没有消掉。」
+                                            // 以前是开关留在「开」、底下挂一句永远的说明——
+                                            // 那个开关在撒谎（它开着，但一个数都读不到），
+                                            // 而那句说明她关不掉。
+                                            app.settings.healthAccess = false
+                                            note = "这台设备读不到健康数据，开关已经退回去了。"
+                                                + "这个构建没带 HealthKit 那项能力，要带上得动签名。"
+                                                + "提醒事项和日历不受影响，照样能用。"
+                                        }
                                     }
                                 }))
                     }
@@ -44,13 +53,40 @@ struct HealthAccessView: View {
                         toggleRow(
                             title: "让他看得到提醒事项和日历",
                             subtitle: "**只读。** 知道你今天压着什么、三点要开会。",
-                            isOn: $app.settings.todoAccess)
+                            isOn: Binding(
+                                get: { app.settings.todoAccess },
+                                set: { on in
+                                    app.settings.todoAccess = on
+                                    guard on else { return }
+                                    // 翻开的当下就去问，别等他真要读的时候才弹。
+                                    Task {
+                                        let got = await HealthTools.askTodo()
+                                        switch (got.reminders, got.calendar) {
+                                        case (true, true):
+                                            note = "问过了，提醒事项和日历都能看了。"
+                                        case (true, false):
+                                            note = "提醒事项给了，日历没给。"
+                                                + "想改的话在「设置 → 栖 → 日历」里。"
+                                        case (false, true):
+                                            note = "日历给了，提醒事项没给。"
+                                                + "想改的话在「设置 → 栖 → 提醒事项」里。"
+                                        case (false, false):
+                                            note = "两样都没给。系统那个页面只弹一次，"
+                                                + "之后要改得去「设置 → 栖」里开。"
+                                        }
+                                    }
+                                }))
 
                         if app.settings.todoAccess {
                             SettingsDivider()
                             toggleRow(
                                 title: "让他帮你记一笔",
-                                subtitle: "**只能新建一条提醒，删不了也改不了。**"
+                                // ⚠️ 句号要在 `**` **外面**。
+                                // 写成「…改不了。**记错了」的话，结尾那个 `**`
+                                // 前面是句号、后面紧跟汉字，按 CommonMark 不算
+                                // right-flanking，闭合不了——屏幕上就是两个星号。
+                                // 上面那行「**只读。** 知道你…」没事，是因为它后面有空格。
+                                subtitle: "**只能新建一条提醒，删不了也改不了**。"
                                     + "记错了你自己划掉就行。",
                                 isOn: $app.settings.todoWrite)
                         }
@@ -76,13 +112,11 @@ struct HealthAccessView: View {
                         .padding(.vertical, 13)
                     }
 
-                    if let note {
-                        Text(MD.inline(note))
-                            .font(.app(12))
-                            .foregroundStyle(Theme.textSoft(scheme))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 4)
-                    }
+                    // ⚠️ 这句话以前是**挂在页底的一行字**，出现之后再也不走。
+                    // 她报的：「最底下那个健康通知一直没有消掉。」
+                    // 它说的是「刚才那一下问的结果」——是一次性的话，
+                    // 摆成常驻文字就变成了一句永远在那儿的抱怨。
+                    // 改成弹窗，看完点掉。
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 4)
@@ -91,6 +125,11 @@ struct HealthAccessView: View {
         }
         .navigationTitle("健康和待办")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("问过了", isPresented: Binding(
+            get: { note != nil }, set: { if !$0 { note = nil } }
+        )) {
+            Button("好") { note = nil }
+        } message: { Text(note ?? "") }
     }
 
     /// 跟设置页别处一个样式的开关行。
