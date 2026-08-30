@@ -25,6 +25,8 @@ struct MessageBubbleView: View {
     var onOpenMenu: (Int) -> Void = { _ in }
     /// 重来一次（报错卡住的时候全靠它）
     var onRetry: () -> Void = {}
+    /// 点了那条「过程」——弹窗由聊天页去开，见上面按钮那儿的说明。
+    var onOpenProcess: () -> Void = {}
     /// 点他存图那张卡 → 打开相册。参数是存到哪儿（表情包 / 动图 / 文件夹名）
     var onOpenLibrary: (String) -> Void = { _ in }
     var onCloseMenu: () -> Void = {}
@@ -1118,11 +1120,18 @@ struct MessageBubbleView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // 工坊那条**就地展开**（终端卡本来就是要连着看的），
                 // 絮语这条**弹窗**：她定的「点进去才是思考链」。
+                //
+                // ⚠️⚠️ 弹窗**不挂在这儿**，交给聊天页去挂。
+                // 我上一版把 `.sheet` 挂在气泡上，气泡是几百条里的一条，
+                // 于是几百个弹窗宿主同时装在列表里，
+                // 结果**整个 App 点哪儿都没反应**——侧边栏、设置全废。
+                // 清单第 154 条我自己写过这句：
+                // 「presentation 要挂在不会被频繁重建的 View 上。」
                 Button {
                     if isWorkshop {
                         withAnimation(.easeInOut(duration: 0.2)) { showProcess.toggle() }
                     } else {
-                        showProcess = true
+                        onOpenProcess()
                     }
                 } label: {
                     HStack(spacing: 7) {
@@ -1166,18 +1175,6 @@ struct MessageBubbleView: View {
                 if isWorkshop && showProcess {
                     terminalCard.padding(.top, 6)
                 }
-            }
-            // 絮语那条点开是弹窗。
-            // ⚠️ `isWorkshop` 的时候这个 sheet 也挂着，但它那边
-            // `showProcess` 走的是就地展开——所以要拦住，
-            // 否则工坊点一下会**又展开又弹窗**。
-            .sheet(isPresented: Binding(
-                get: { showProcess && !isWorkshop },
-                set: { if !$0 { showProcess = false } })) {
-                ProcessSheet(message: message,
-                             reasoning: cleanReasoning(message.reasoning ?? ""),
-                             tidied: { tidy($0.result) })
-                    .environmentObject(app)
             }
         }
     }

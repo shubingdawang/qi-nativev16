@@ -92,6 +92,8 @@ struct ChatView: View {
     /// 面板挪到这一层之后要拿它的正文去复制、翻译、判断有没有语音。
     @State private var menuMessage: ChatMessage?
     @State private var editingMessage: ChatMessage?
+    /// 点开了哪一条的「过程」。弹窗挂在这一页上，不挂在气泡上。
+    @State private var processMessage: ChatMessage?
     @State private var editText = ""
     @State private var reading: ChatMessage?
     @State private var browsing: BrowserLink?
@@ -176,6 +178,7 @@ struct ChatView: View {
                             editingMessage = msg
                         },
                         onRetry: { msg in app.retry(msg.id, in: conv.id) },
+                        onOpenProcess: { msg in processMessage = msg },
                         onOpenLibrary: { place in
                             // 存到哪儿决定开哪一栏：动图 → GIF，
                             // 表情包 → 表情包，别的（相册文件夹）→ 图片
@@ -468,6 +471,17 @@ struct ChatView: View {
         .sheet(item: $browsing) { link in
             InAppBrowser(url: link.url)
                 .ignoresSafeArea()
+        }
+        // 「他刚才干了什么」那张。
+        //
+        // ⚠️⚠️ 挂在**这儿**，不挂在气泡上。
+        // 我上一版挂在了 `MessageBubbleView` 里，那是列表里几百条中的一条，
+        // 等于同时装了几百个弹窗宿主——结果整个 App 点哪儿都没反应：
+        // 侧边栏点了只弹回聊天页，设置里供应商、语音全按不动。
+        // 清单第 154 条写过同一句话：
+        // **presentation 要挂在不会被频繁重建的 View 上。**
+        .sheet(item: $processMessage) { msg in
+            ProcessSheet(message: msg)
         }
         .environment(\.openURL, OpenURLAction { url in
             // 聊天里点链接就在 App 里开，不跳出去
@@ -1635,6 +1649,8 @@ struct MessageListView: View {
     var onCloseMenu: () -> Void = {}
     var onEdit: (ChatMessage) -> Void = { _ in }
     var onRetry: (ChatMessage) -> Void = { _ in }
+    /// 点了「过程」那条。弹窗归聊天页挂，不挂在气泡上。
+    var onOpenProcess: (ChatMessage) -> Void = { _ in }
     var onOpenLibrary: (String) -> Void = { _ in }
     /// 长按头像 @ 这个人
     var onMention: (String) -> Void = { _ in }
@@ -1691,6 +1707,7 @@ struct MessageListView: View {
                             menuOpenID: menuOpenID,
                             onOpenMenu: { page in onOpenMenu(message, page) },
                             onRetry: { onRetry(message) },
+                            onOpenProcess: { onOpenProcess(message) },
                             onOpenLibrary: { place in onOpenLibrary(place) },
                             onCloseMenu: onCloseMenu,
                             showsHeader: showsHeader(at: index),

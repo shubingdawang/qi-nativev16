@@ -22,10 +22,17 @@ import SwiftUI
 struct ProcessSheet: View {
 
     let message: ChatMessage
-    /// 思考正文（已经把 `[[cot:]]` 剥掉了）
-    let reasoning: String
-    /// 工具结果收拾过的版本
-    let tidied: (ToolRun) -> String
+
+    /// 思考正文，`[[cot:]]` 剥掉、多余空行压掉。
+    ///
+    /// ⚠️ 这两件事**自己在这儿算**，不从气泡那边当参数递进来。
+    /// 递进来的话，聊天页要开这张弹窗就得先拿到气泡的私有方法，
+    /// 于是弹窗只能挂在气泡上——那正是把 App 点死的那个做法。
+    private var reasoning: String {
+        Self.tidy((message.reasoning ?? "").replacingOccurrences(
+            of: #"\[\[cot:[^\]]*\]\]"#,
+            with: "", options: .regularExpression))
+    }
 
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
@@ -161,11 +168,33 @@ struct ProcessSheet: View {
         if !run.arguments.isEmpty, run.arguments != "{}" {
             out += run.arguments + Self.gap
         }
-        out += tidied(run)
+        out += Self.tidy(run.result)
+        return out.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// 首尾空白去掉；**连着两个以上的换行压成一个空行**。
+    /// 跟气泡里那个 `tidy` 是同一套规矩。
+    static func tidy(_ s: String) -> String {
+        // ⚠️ 换行**走上面那个常量**，别在这儿写字面量。
+        // 这一行我栽过：脚本改这段的时候反斜杠被吃掉一层，
+        // `"\n"` 落盘变成真的换行，字符串跨行，编译不过。
+        let brs = Self.nl
+        var out = ""
+        var blanks = 0
+        for line in s.components(separatedBy: brs) {
+            if line.trimmingCharacters(in: .whitespaces).isEmpty {
+                blanks += 1
+                if blanks > 1 { continue }
+            } else {
+                blanks = 0
+            }
+            out += (out.isEmpty ? "" : brs) + line
+        }
         return out.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// ⚠️ 空行走常量。反斜杠经脚本改动会被吃掉一层、字符串就跨行了。
+    static let nl = "\n"
     private static let gap = "\n\n"
     private static let br: Character = "\n"
 
