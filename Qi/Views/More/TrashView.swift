@@ -27,9 +27,24 @@ struct TrashView: View {
                     if store.items.isEmpty {
                         empty
                     } else {
-                        LazyVGrid(columns: columns, spacing: 12) {
-                            ForEach(store.items) { item in
-                                cell(item)
+                        // ⚠️ 聊天**不塞进图片格子里**。
+                        //
+                        // 以前所有东西都走同一个三列网格。聊天没有缩略图，
+                        // 渲染出来就是一块灰方块，跟「加载失败的图」一个样——
+                        // 她扫一眼只看见一堆图片，就以为聊天根本没进回收站。
+                        // 加上底下那句「删除的表情与照片」，等于两头都在说没有。
+                        if !chats.isEmpty {
+                            header("聊天", count: chats.count)
+                            VStack(spacing: 8) {
+                                ForEach(chats) { chatRow($0) }
+                            }
+                        }
+                        if !pictures.isEmpty {
+                            header("图片", count: pictures.count)
+                            LazyVGrid(columns: columns, spacing: 12) {
+                                ForEach(pictures) { item in
+                                    cell(item)
+                                }
                             }
                         }
                         note
@@ -46,6 +61,82 @@ struct TrashView: View {
         )) {
             Button("好") { notice = nil }
         } message: { Text(notice ?? "") }
+    }
+
+    /// 删掉的聊天窗口和单条消息
+    private var chats: [TrashItem] {
+        store.items.filter { $0.kind == "chat" || $0.kind == "message" }
+    }
+    /// 剩下的（表情、照片、整个文件夹）都有图，走格子
+    private var pictures: [TrashItem] {
+        store.items.filter { $0.kind != "chat" && $0.kind != "message" }
+    }
+
+    private func header(_ title: String, count: Int) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .font(.app(12.5, weight: .medium))
+                .foregroundStyle(Theme.textMain(scheme))
+            Text("\(count)")
+                .font(.app(10, design: .monospaced))
+                .foregroundStyle(Theme.textMuted(scheme))
+            Spacer()
+        }
+        .padding(.top, 2)
+    }
+
+    /// 聊天那一条：横着一行，图标 + 名字 + 剩几天 + 放回去。
+    private func chatRow(_ item: TrashItem) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: item.kind == "chat"
+                  ? "bubble.left.and.bubble.right" : "text.bubble")
+                .font(.app(15))
+                .foregroundStyle(app.settings.accentColor.opacity(0.75))
+                .frame(width: 26)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.name)
+                    .font(.app(12.5))
+                    .foregroundStyle(Theme.textMain(scheme))
+                    .lineLimit(1)
+                Text(item.place + " · 还剩 \(daysLeft(item)) 天")
+                    .font(.app(9.5))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 6)
+            Button { putBack(item) } label: {
+                Text("放回去")
+                    .font(.app(11))
+                    .foregroundStyle(app.settings.accentColor)
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(app.settings.accentColor.opacity(0.14)))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassBackground(radius: 13, strength: app.settings.glassOpacity * 0.8)
+    }
+
+    /// 放回去。**两处共用**——聊天那一行和图片那一格是同一套规矩，
+    /// 分开写迟早会有一边忘了改。
+    private func putBack(_ item: TrashItem) {
+        // 聊天那两种要 `AppState` 才放得回去（`TrashStore` 拿不到它），
+        // 所以**先叫它那一条，再把回收站里这条拿掉**。
+        if item.kind == "chat" || item.kind == "message" {
+            if app.restoreFromTrash(item) {
+                store.drop(item.id)
+                notice = "「\(item.name)」放回去了。"
+            } else {
+                notice = "放不回去了——原来那个窗口可能也不在了。"
+            }
+        } else if store.restore(item.id) {
+            notice = "「\(item.name)」放回去了。"
+        } else {
+            notice = "放不回去了。"
+        }
     }
 
     private func cell(_ item: TrashItem) -> some View {
@@ -93,22 +184,7 @@ struct TrashView: View {
                 .foregroundStyle(Theme.textMuted(scheme))
                 .lineLimit(1)
 
-            Button {
-                // 聊天那两种要 `AppState` 才放得回去（`TrashStore` 拿不到它），
-                // 所以**先叫它那一条，再把回收站里这条拿掉**。
-                if item.kind == "chat" || item.kind == "message" {
-                    if app.restoreFromTrash(item) {
-                        store.drop(item.id)
-                        notice = "「\(item.name)」放回去了。"
-                    } else {
-                        notice = "放不回去了——原来那个窗口可能也不在了。"
-                    }
-                } else if store.restore(item.id) {
-                    notice = "「\(item.name)」放回去了。"
-                } else {
-                    notice = "放不回去了。"
-                }
-            } label: {
+            Button { putBack(item) } label: {
                 Text("放回去")
                     .font(.app(11))
                     .foregroundStyle(app.settings.accentColor)
@@ -135,7 +211,7 @@ struct TrashView: View {
             Text("回收站是空的")
                 .font(.app(13))
                 .foregroundStyle(Theme.textMuted(scheme))
-            Text("删除的表情与照片在此保留三十天，期间可随时还原。")
+            Text("删除的聊天、表情与照片在此保留三十天，期间可随时还原。")
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme).opacity(0.85))
                 .multilineTextAlignment(.center)
