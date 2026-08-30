@@ -1149,10 +1149,71 @@ struct MessageBubbleView: View {
                 .buttonStyle(.plain)
 
                 if showProcess {
-                    processTimeline.padding(.top, 6)
+                    // 工坐那一栏用**终端的样子**摆。
+                    //
+                    // 那边接的是 Claude Code 本身，它读文件、改代码、跑命令——
+                    // 那些过程拆成一张张「工具卡」是在拿聊天的形状套一件
+                    // 本来不是聊天的事；终端的样子才是它本来的样子。
+                    //
+                    // 絮语那边照旧走时间线：阿晏调的是记忆、表情、音乐那些，
+                    // 把它们画成黑底终端反而不对头。
+                    if isWorkshop {
+                        terminalCard.padding(.top, 6)
+                    } else {
+                        processTimeline.padding(.top, 6)
+                    }
                 }
             }
         }
+    }
+
+    /// ⚠️ 换行走这个常量。反斜杠经脚本改动会被吃掉一层、
+    /// 字符串就跨行了——这一窗已经栽了第十七次（`strspan.py` 抓的）。
+    private static let br: Character = "\n"
+
+    /// 这一条是不是工坐里的。
+    private var isWorkshop: Bool {
+        app.conversation(conversationID)?.space == ChatSpace.workshop.rawValue
+    }
+
+    /// 工坐那边那张终端卡。
+    ///
+    /// ⚠️ 行是**拼出来的不是真的终端输出**：
+    /// 我们手上只有工具名、参数和返回值。
+    /// 拼成终端的样子是为了让它**读起来像那么回事**，
+    /// 不是为了假装我们真的接了一个终端。
+    private var terminalCard: some View {
+        var lines: [String] = []
+        if let r = message.reasoning {
+            let t = cleanReasoning(r)
+            if !t.isEmpty {
+                for one in t.split(separator: Self.br).prefix(6) {
+                    lines.append("  " + one.trimmingCharacters(in: .whitespaces))
+                }
+            }
+        }
+        for run in message.toolRuns {
+            let name = run.toolName.isEmpty ? "?" : run.toolName
+            lines.append((run.failed ? "✗ " : "› ") + name)
+            let out = tidy(run.result)
+            if !out.isEmpty {
+                // 每个工具只摆前几行。全摆的话一个搜记忆
+                // 就能把整张卡撑成一屏，而她要看的是「做了哪几步」。
+                for one in out.split(separator: Self.br).prefix(3) {
+                    lines.append("    " + one.trimmingCharacters(in: .whitespaces))
+                }
+            }
+        }
+        var foot = ""
+        if let sec = message.reasoningSeconds, sec > 0 {
+            foot = String(format: "* %.1fs", sec)
+        }
+        if let n = message.totalTokens, n > 0 {
+            foot += (foot.isEmpty ? "" : "    ") + "\(n) tokens"
+        }
+        return TerminalCard(title: message.cotTitle.isEmpty ? "main" : message.cotTitle,
+                            lines: lines.isEmpty ? ["（什么都没做）"] : lines,
+                            footer: foot)
     }
 
     /// 标题。**他自己写的那句优先**——`[[cot:…]]` 是他给这一轮起的名字，

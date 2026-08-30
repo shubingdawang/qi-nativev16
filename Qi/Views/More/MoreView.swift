@@ -3,6 +3,8 @@ import SwiftUI
 struct FootprintView: View {
 
     @EnvironmentObject var app: AppState
+    /// 订阅额度。**要订阅它**——不订阅的话新拿到的额度不会上屏。
+    @ObservedObject private var quota = RateLimitStore.shared
     @ObservedObject private var usage = UsageStore.shared
     @Environment(\.colorScheme) private var scheme
 

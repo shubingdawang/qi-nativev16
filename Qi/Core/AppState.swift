@@ -1091,6 +1091,8 @@ final class AppState: ObservableObject {
                     case .usage(let u):
                         setTokens(u.total, to: assistantID, in: conversationID)
                         UsageStore.shared.record(u, source: .group)
+                    case .rateLimit(let r):
+                        RateLimitStore.shared.note(r)
                     case .toolCallDelta(let idx, let id, let name, let argsPiece):
                         var call = pending[idx] ?? ChatAPI.ToolCallPayload(id: "", name: "", arguments: "")
                         if let id, !id.isEmpty { call.id = id }
@@ -1318,6 +1320,9 @@ final class AppState: ObservableObject {
                             case .usage(let u):
                                 self.setTokens(u.total, to: assistantID, in: conversationID)
                                 UsageStore.shared.record(u, source: .chat)
+                            case .rateLimit(let r):
+                                // 只有走桥那条路会给。见 `RateLimit`。
+                                RateLimitStore.shared.note(r)
                             case .toolCallDelta(let idx, let id, let name, let argsPiece):
                                 var call = pending[idx] ?? ChatAPI.ToolCallPayload(id: "", name: "", arguments: "")
                                 if let id, !id.isEmpty { call.id = id }

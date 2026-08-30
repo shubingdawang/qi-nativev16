@@ -248,7 +248,8 @@ function freeSlot() {
 
 /**
  * @param onText 每收到一小段正文就回调一次
- * @returns {Promise<{text:string, usage:object|null, error:string|null}>}
+ * @returns {Promise<{text:string, usage:object|null, error:string|null,
+ *                    limit:object|null, cost:number|null}>}
  */
 function runClaude({ system, prompt, model, needsRead }, onText) {
   return new Promise(resolve => {
@@ -335,6 +336,8 @@ function runClaude({ system, prompt, model, needsRead }, onText) {
 
     let text = '';
     let usage = null;
+    let limit = null;      // 额度（rate_limit_event）
+    let cost = null;       // 这一轮折合多少美金（claude 自己算的）
     let error = null;
     let buf = '';
     let done = false;
@@ -349,7 +352,7 @@ function runClaude({ system, prompt, model, needsRead }, onText) {
       done = true;
       clearTimeout(timer);
       try { fs.unlinkSync(sysFile); } catch (e) {}
-      resolve({ text, usage, error });
+      resolve({ text, usage, error, limit, cost });
     }
 
     child.stdout.on('data', chunk => {
@@ -382,8 +385,21 @@ function runClaude({ system, prompt, model, needsRead }, onText) {
           continue;
         }
 
+        // 额度。**claude 自己会报，不用另外去查。**
+        //
+        // 她问「五小时额度周额度能不能搬过来」，
+        // 我一开始说搬不过来——**那是错的**。
+        // stream-json 的输出里就有 `rate_limit_event`：
+        //   { status, resetsAt, rateLimitType: 'five_hour', utilization: 0.99, ... }
+        //
+        // ⚠️ 不要拿它去改 usage：额度是「还剩多少」，
+        // usage 是「这一轮花了多少 token」，两回事。
+        if (ev.type === 'rate_limit_event' && ev.rate_limit_info) {
+          limit = ev.rate_limit_info;
+        }
         if (ev.type === 'result') {
           if (ev.usage) usage = ev.usage;
+          if (typeof ev.total_cost_usd === 'number') cost = ev.total_cost_usd;
           if (ev.is_error) error = error || String(ev.result || '这一轮出错了');
           continue;
         }
@@ -534,12 +550,20 @@ async function handleChat(req, res, body) {
       sse(res, chunkOf(id, model, { tool_calls: calls.map((c, i) => Object.assign({ index: i }, c)) }, null));
     }
     sse(res, chunkOf(id, model, {}, finish));
-    if (result.usage) {
-      sse(res, {
+    if (result.usage || result.limit) {
+      const tail = {
         id, object: 'chat.completion.chunk',
         created: Math.floor(Date.now() / 1000),
-        model, choices: [], usage: result.usage
-      });
+        model, choices: [], usage: result.usage || {}
+      };
+      // 额度搭在最后那一帧上。
+      //
+      // ⚠️ 放在 usage 旁边，**不混进 usage 里**：
+      // usage 是「这一轮花了多少 token」，
+      // 额度是「你这个窗口还剩多少」——两回事，混了就再也分不开。
+      if (result.limit) tail.rate_limit = result.limit;
+      if (typeof result.cost === 'number') tail.subscription_cost_usd = result.cost;
+      sse(res, tail);
     }
     res.write('data: [DONE]\n\n');
     res.end();
@@ -561,7 +585,9 @@ async function handleChat(req, res, body) {
       },
       finish_reason: finish
     }],
-    usage: result.usage || {}
+    usage: result.usage || {},
+    rate_limit: result.limit || undefined,
+    subscription_cost_usd: typeof result.cost === 'number' ? result.cost : undefined
   }));
 }
 

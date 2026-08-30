@@ -35,6 +35,13 @@ enum ChatAPI {
         case reasoning(String)
         /// 这一轮花了多少 token（输入、缓存命中、缓存写入、输出分开算）
         case usage(TokenUsage)
+        /// 订阅额度还剩多少。**只有走桥那条路会给。**
+        ///
+        /// ⛰️ 跟 `usage` 是两回事：
+        /// `usage` 是「这一轮花了多少 token」（按 API 价钱算钱），
+        /// 这一条是「你这个五小时窗口还剩多少」。
+        /// 走桥的时候花的是订阅额度，**不花 API 的钱**。
+        case rateLimit(RateLimit)
         /// 工具调用是一小段一小段拼出来的，index 用来区分同时调的第几个
         case toolCallDelta(index: Int, id: String?, name: String?, argsPiece: String?)
         case finish(String?)
@@ -117,6 +124,12 @@ enum ChatAPI {
                         if let usage = json["usage"] as? [String: Any] {
                             let parsed = TokenUsage.parse(usage)
                             if !parsed.isEmpty { continuation.yield(.usage(parsed)) }
+                        }
+                        // 走桥那条路会在最后一帧搭上额度。
+                        // 普通供应商没这一项，缺就缺了。
+                        if let rl = json["rate_limit"] as? [String: Any],
+                           let parsed = RateLimit(json: rl) {
+                            continuation.yield(.rateLimit(parsed))
                         }
 
                         guard let choices = json["choices"] as? [[String: Any]],
