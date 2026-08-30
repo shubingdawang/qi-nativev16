@@ -164,13 +164,18 @@ struct JournalTapeView: View {
     let color: Color
     /// plain / stripe / check / dot / wave / dash
     let pattern: String
-    var width: CGFloat = 110
-    var height: CGFloat = 26
     /// 花纹自己的颜色。不给就还是半透明的白（老页面全是这一种）。
     ///
     /// 她定的：「一个素底点点图案的胶带，我想做红白配色，
     /// 我就可以把底色选红色、圆点点选白色。」
+    ///
+    /// ⚠️ **摆在 `width` 前面**。Swift 的逐成员构造器要求实参顺序
+    /// 跟属性声明顺序一致——摆在后面的话，
+    /// `JournalTapeView(color:pattern:ink:width:height:)` 编译不过
+    /// （「argument 'width' must precede argument 'ink'」）。
     var ink: Color? = nil
+    var width: CGFloat = 110
+    var height: CGFloat = 26
 
     var body: some View {
         ZStack {
