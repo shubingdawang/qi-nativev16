@@ -86,6 +86,8 @@ struct ChatView: View {
     @State private var shareImage: ShareImage?
     @State private var quoting: ChatMessage?
     @State private var menuOpenID: UUID?
+    /// 菜单打开那一刻，她翻在第几页（0 = 现在这版）
+    @State private var menuEditPage = 0
     /// 菜单是对着哪一条开的。**存整条**，不只是 id——
     /// 面板挪到这一层之后要拿它的正文去复制、翻译、判断有没有语音。
     @State private var menuMessage: ChatMessage?
@@ -158,10 +160,12 @@ struct ChatView: View {
                             travelling = j
                         },
                         menuOpenID: menuOpenID,
-                        onOpenMenu: { msg in
+                        onOpenMenu: { msg, page in
                             withAnimation(.spring(response: 0.26, dampingFraction: 0.8)) {
                                 menuOpenID = msg.id
                                 menuMessage = msg
+                                // 她正翻在第几页。「删这一版」靠它才知道删哪一版。
+                                menuEditPage = page
                             }
                         },
                         onCloseMenu: {
@@ -764,7 +768,8 @@ struct ChatView: View {
                         .font(.app(11))
                         .foregroundStyle(app.settings.accentColor)
                     Text("已暂存，包含文字、图片与语音。"
-                         + "按发送键一起发出，不会自动发。")
+                         + "按发送键一起发出，不会自动发；"
+                         + "输入框为空时再按暂存键可撤回。")
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                     Spacer(minLength: 0)
@@ -1023,21 +1028,45 @@ struct ChatView: View {
                 // 就会超出我设置的时间，这样有点赶。」
                 // ——按钮不会自己走，找多久都行。
                 if app.settings.segmentUser, !isRunning {
-                    Button { sendCurrent(conv) } label: {
+                    // 已经攒着东西了而且框里是空的 → 这一下是**取消**。
+                    //
+                    // 她定的：「新增再次点击暂存按钮取消暂存，有时候会误触。」
+                    //
+                    // ⚠️ 条件里要加 `!canSend`：框里还有字的时候，
+                    // 她按它显然是想**再攒一句**，不是想把前面那些撤掉。
+                    let undo = waiting && !canSend
+                    Button {
+                        if undo {
+                            // 退回输入框，一个字都不丢
+                            let back = app.unstage(conv.id)
+                            if !back.isEmpty {
+                                let gap = "\n\n"
+                                draft = draft.isEmpty ? back : back + gap + draft
+                            }
+                            if app.settings.haptics {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            }
+                            inputFocused = true
+                        } else {
+                            sendCurrent(conv)
+                        }
+                    } label: {
                         ZStack {
                             Circle()
                                 .fill(Theme.softFillDeep)
                                 .frame(width: 36, height: 36)
-                            Image(systemName: "tray.and.arrow.down.fill")
+                            Image(systemName: undo
+                                  ? "arrow.uturn.backward"
+                                  : "tray.and.arrow.down.fill")
                                 .font(.app(13.5, weight: .semibold))
-                                .foregroundStyle(canSend
+                                .foregroundStyle(undo || canSend
                                                  ? app.settings.primaryColor
                                                  : Theme.textMuted(scheme))
                         }
                     }
                     .buttonStyle(.plain)
-                    .disabled(!canSend)
-                    .accessibilityLabel("暂存")
+                    .disabled(!canSend && !undo)
+                    .accessibilityLabel(undo ? "取消暂存" : "暂存")
                 }
 
                 Button {
@@ -1579,7 +1608,7 @@ struct MessageListView: View {
     var onOpenReader: (ChatMessage) -> Void = { _ in }
     var onOpenJourney: (Journey, Int) -> Void = { _, _ in }
     var menuOpenID: UUID? = nil
-    var onOpenMenu: (ChatMessage) -> Void = { _ in }
+    var onOpenMenu: (ChatMessage, Int) -> Void = { _, _ in }
     var onCloseMenu: () -> Void = {}
     var onEdit: (ChatMessage) -> Void = { _ in }
     var onRetry: (ChatMessage) -> Void = { _ in }
@@ -1637,7 +1666,7 @@ struct MessageListView: View {
                             onOpenJourney: { j, at in onOpenJourney(j, at) },
                             onEdit: { onEdit(message) },
                             menuOpenID: menuOpenID,
-                            onOpenMenu: { onOpenMenu(message) },
+                            onOpenMenu: { page in onOpenMenu(message, page) },
                             onRetry: { onRetry(message) },
                             onOpenLibrary: { place in onOpenLibrary(place) },
                             onCloseMenu: onCloseMenu,
@@ -1792,7 +1821,9 @@ extension ChatView {
                     // 而不是这句话本身。
                     if !msg.edits.isEmpty {
                         menuItem("删这一版", "trash") {
-                            if let cid { app.deleteEdit(msg.id, in: cid) }
+                            if let cid {
+                                app.deleteEdit(msg.id, in: cid, page: menuEditPage)
+                            }
                         }
                     }
                     menuItem(msg.edits.isEmpty ? "删除" : "整条删掉", "trash") {

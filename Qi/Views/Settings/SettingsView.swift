@@ -20,7 +20,6 @@ struct SettingsView: View {
 
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
-    @State private var showingImporter = false
     /// 占了多少地方。**进这一页才算**——要走几百个文件，
     /// 每次刷设置都算一遍太亏
     @State private var usage: StorageUsage.Report?
@@ -84,19 +83,15 @@ struct SettingsView: View {
             .onChange(of: wallpaperItem) { _, item in loadWallpaper(item) }
             .onChange(of: userAvatarItem) { _, item in loadAvatar(item, into: \.userAvatarName) }
             .onChange(of: aiAvatarItem) { _, item in loadAvatar(item, into: \.aiAvatarName) }
-            .fileImporter(
-                isPresented: $showingImporter,
-                // 只写 .json 的话，从微信/QQ 存下来的那份会是灰的选不中——
-                // 那些文件系统认不出类型，只当成一坨 data。所以两种都收。
-                // ⚠️ 记忆库那些 txt 也得选得中（`identity.txt`）
-                allowedContentTypes: [.json, .text, .plainText, .data],
-                // **能多选**（她报的）。整包备份本来只有一个文件，
-                // 但她常常是拿着记忆库那一堆 json 过来的——
-                // 多选之后这个口两种都收，见 `importBackup`。
-                allowsMultipleSelection: true
-            ) { result in
-                importBackup(result)
-            }
+            // ⚠️ 选文件那个弹窗**不在这一层了**，挪进了 `ImportButton`。
+            //
+            // 她报的：「点击导入备份弹出文件后会自己关闭」
+            // 「第一次导入了五次才成功」——都是同一个根：
+            // 这一页订阅着 `app`，**它里任何一个 `@Published` 变化都会重建 body**
+            // （后台存盘完了、身体推进了一格、话题池抓完一轮…），
+            // 而重建那一下就把正在弹的选择器撤掉了。
+            //
+            // 而且这一层一口气挂了五个 presentation，它们之间还会抢。
             .sheet(item: Binding(
                 get: { exportURL.map { ExportFile(url: $0) } },
                 set: { _ in exportURL = nil }
@@ -663,10 +658,6 @@ struct SettingsView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 9)
 
-            SettingsDivider()
-
-            topicSection
-
             SettingsNote("""
             辅助模型承担非对话类任务：为表情生成关键词、翻译、通话摘要、图像识别、视频抽帧识别。
 
@@ -674,6 +665,18 @@ struct SettingsView: View {
 
             选择「自动选择」时，按供应商顺序取第一个可用模型。
             """, title: "说明")
+
+            SettingsDivider()
+
+            // ⚠️ 话题池要摆在辅助模型**那段说明之后**。
+            //
+            // 上一版我插在了「辅助模型」和它自己那段说明中间，
+            // 于是话题池底下挂着两个「说明」：
+            // 一个是它自己的，一个是上面那一项被挤下来的。
+            //
+            // 记一句：**往设置页插一项之前，先看清楚上一项的说明在哪儿。**
+            // 这一页是「开关 + 说明」成对的，插在对中间就把一对拆成了两截。
+            topicSection
 
             SettingsDivider()
 
@@ -866,10 +869,9 @@ struct SettingsView: View {
 
             SettingsDivider()
 
-            Button { showingImporter = true } label: {
-                SettingsRowLabel(title: "导入备份", icon: "square.and.arrow.down")
+            ImportButton(title: "导入备份", icon: "square.and.arrow.down") { result in
+                importBackup(result)
             }
-            .buttonStyle(.plain)
 
             SettingsDivider()
 

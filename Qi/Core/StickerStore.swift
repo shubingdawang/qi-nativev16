@@ -176,6 +176,45 @@ final class StickerStore: ObservableObject {
         return item
     }
 
+    /// 把一张表情**复制一份给另一个人**。
+    ///
+    /// 她定的：「没有将我的表情包复制一模一样的一份给他、
+    /// 或者他的复制给我的功能。」
+    ///
+    /// ⚠️ **文件真的拄一份，不是两条记录指同一个文件。**
+    /// 共用文件的话，他删掉他那份的时候她那张也会成为空图——
+    /// 而她根本不知道自己那张跟他那张是同一个。
+    ///
+    /// 关键词、描述、专辑都跟着走——那些是一张张看着写出来的，
+    /// 不带过去的话对面拿到的就是一堆无名的图。
+    ///
+    /// - Returns: 复制成功几张。
+    @discardableResult
+    func copy(_ items: [Sticker], to newOwner: String) -> Int {
+        var done = 0
+        for one in items {
+            guard one.owner != newOwner else { continue }
+            // 已经有一张一模一样的就不再拄
+            // （同一张图拄两遍，她在库里会看到两个一模一样的）
+            guard !stickers.contains(where: {
+                $0.owner == newOwner && $0.name == one.name
+                    && $0.description == one.description && !one.name.isEmpty
+            }) else { continue }
+            guard let data = try? Data(contentsOf: url(of: one)) else { continue }
+            let ext = (one.fileName as NSString).pathExtension
+            guard var fresh = add(data: data,
+                                  ext: ext.isEmpty ? "png" : ext,
+                                  owner: newOwner) else { continue }
+            fresh.name = one.name
+            fresh.description = one.description
+            fresh.tags = one.tags
+            fresh.album = one.album
+            update(fresh)
+            done += 1
+        }
+        return done
+    }
+
     func update(_ sticker: Sticker) {
         guard let i = stickers.firstIndex(where: { $0.id == sticker.id }) else { return }
         stickers[i] = sticker

@@ -7,6 +7,15 @@ import SwiftUI
 /// 像换了个 App。
 struct AppearanceView: View {
 
+    /// 「家」那一档额外多说的一句，接在 `preset.detail` 后面。
+    ///
+    /// ⚠️ 单独拎成常量是**为了那两个换行**：写在表达式里的话，
+    /// 反斜杠经脚本改动时会被吃掉一层，字符串就跨行了、编译不过。
+    /// 这个坑这一窗又栽了一次（`strspan.py` 抓的）。
+    private static let homeAccentNote =
+        "\n\n强调色每屏最多一处，仅用于发送键或主按钮。"
+        + "列表、图标与标题不使用强调色，强调通过字重和面板色实现。"
+
     /// 背景那层光的开关。跟 `AuroraLayer` 读的是同一个键
     @AppStorage("auroraOn") private var auroraOn = true
 
@@ -399,15 +408,23 @@ struct AppearanceView: View {
                 }
             }
 
+            // ⚠️ 这两段**合成一块**了。
+            //
+            // 以前后面那句「家主题限制强调色…」是**无条件显示**的，
+            // 她没在用「家」也摆在那儿——于是这一段底下堆着两三个「说明」。
+            // 她报的：「同样有两个说明的是『底』下方。
+            // 说明在同一个位置的话合并就好了。」
+            //
+            // 而且那句话本来就是在说「家」这一档改了什么，
+            // 它本就属于「此主题的改动范围」。
             if app.settings.preset.ownsBackground {
                 SettingsDivider()
                 // 每一档自己带着这句话（`ThemePreset.detail`）——
                 // 摆在这儿写 if-else 的话，加一档就得回来补一次
-                SettingsNote(app.settings.preset.detail,
+                SettingsNote(app.settings.preset.detail
+                             + (app.settings.preset == .home ? Self.homeAccentNote : ""),
                              title: "此主题的改动范围")
             }
-
-            SettingsNote("「家」主题限制强调色的使用：每屏最多一处，仅用于发送键或主按钮。列表、图标与标题不使用强调色，强调通过字重和面板色实现。")
         }
     }
 

@@ -17,7 +17,12 @@ struct MessageBubbleView: View {
     var onEdit: () -> Void = {}
     /// 同一时刻只有一条开着菜单，所以这个状态放在外面统一管
     var menuOpenID: UUID? = nil
-    var onOpenMenu: () -> Void = {}
+    /// 参数是**她现在翻在第几页**（0 = 现在这版）。
+    ///
+    /// ⚠️ 翻页状态（`editPage`）是气泡自己的 `@State`，
+    /// 而菜单在 `ChatView` 那一层——不报上去的话，
+    /// 菜单里那个「删这一版」根本不知道「这一版」是哪一版。
+    var onOpenMenu: (Int) -> Void = { _ in }
     /// 重来一次（报错卡住的时候全靠它）
     var onRetry: () -> Void = {}
     /// 点他存图那张卡 → 打开相册。参数是存到哪儿（表情包 / 动图 / 文件夹名）
@@ -448,7 +453,7 @@ struct MessageBubbleView: View {
             if app.settings.haptics {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
             }
-            onOpenMenu()
+            onOpenMenu(editPage)
         }
         // ⚠️ 这儿原来挂着那条横菜单，**两个毛病**：
         //   ① 八个按钮排成一条，长得出屏幕；
@@ -479,11 +484,10 @@ struct MessageBubbleView: View {
             }
             .disabled(editPage >= message.edits.count)
 
-            if editPage < message.edits.count {
-                Text("改之前的第 \(editPage + 1) 版")
-                    .font(.caption2)
-                    .foregroundStyle(Theme.textMuted(scheme))
-            }
+            // ⚠️ 这儿以前有一句「改之前的第 N 版」。**她要求删掉。**
+            //
+            // 旁边那个 `1/2` 已经把这件事说完了，
+            // 再写一遍是同一件事说两遍，而且它比那个数字长得多。
         }
         .buttonStyle(.plain)
         .foregroundStyle(Theme.textMuted(scheme))
@@ -1029,9 +1033,29 @@ struct MessageBubbleView: View {
     /// 别为了一条没有标记的长消息把正则跑上几百遍。
     private var parsed: (clean: String, beats: [MessageBeat], cot: String) {
         let raw = shownContent
-        guard raw.contains("[[") || raw.contains("*") || raw.contains("〔")
-        else { return (raw, [], "") }
+        guard Self.mightHaveMarkers(raw) else { return (raw, [], "") }
         return MessageBeats.extract(raw)
+    }
+
+    /// 这段字里**有可能**藏着标记吗。快速挣一眼，宁可误报。
+    ///
+    /// ⚠️ 上一版这儿写的是 `raw.contains("*")`，**那是个真的性能问题**：
+    /// 他到处用 `**粗体**`，所以那一条几乎永远为真——
+    /// 于是几乎每一条消息都要跑一遍正则，而一屏几十个气泡。
+    ///
+    /// `*` 那条本意只是为了接住**整行的** `*看着你不说话*`（行内的不算），
+    /// 所以只需要看有没有哪一行是以 `*` 开头的，
+    /// 而不是整段里有没有 `*`。
+    private static func mightHaveMarkers(_ raw: String) -> Bool {
+        if raw.contains("[[") || raw.contains("〔") { return true }
+        guard raw.contains("*") else { return false }
+        // 整行的 `*…*` 才算。行内强调（`**粗体**`）不走这条。
+        let br: Character = "\n"
+        for line in raw.split(separator: br, omittingEmptySubsequences: true) {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.hasPrefix("*"), !t.hasPrefix("**"), t.hasSuffix("*") { return true }
+        }
+        return false
     }
 
     /// 幕外那几行。落库那一遍跑过了就用存下来的（老消息的 `actionText` 也在里面），

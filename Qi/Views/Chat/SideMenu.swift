@@ -371,6 +371,13 @@ struct SideMenuItem: Identifiable, Hashable {
         // 跟心情、承诺是一路的，不该沉在工具堆里
         .init(id: "moment",    title: "此刻", icon: "circle.dotted"),
         .init(id: "footprint", title: "足迹", icon: Icon.footprint),
+        // ⚠️ **回收站一直没有入口。**
+        //
+        // `TrashView` 写完了、`TrashStore` 也一直在收东西，
+        // 可侧边栏里根本没摆这一条——她说「回收站我目前的 v119
+        // 还没有在左侧栏」。存了三十天的东西而没人找得到，
+        // **跟没存是一回事**。
+        .init(id: "trash",     title: "回收站", icon: Icon.trash),
         // 终端摆在最后：平时用不着，出事的时候得找得到
         .init(id: "terminal",  title: "终端", icon: "terminal")
     ]

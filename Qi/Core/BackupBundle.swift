@@ -517,9 +517,33 @@ enum BackupBundle {
             if mode == .merge {
                 // 当前这套配置不该被一份旧备份改掉——
                 // 她现在用哪个模型、连哪台 MCP、字多大，跟「找回聊天记录」是两件事
-                if keepMineWhenMerging.contains(name) { continue }
-                if let mine = try? String(contentsOf: url, encoding: .utf8),
-                   let merged = mergeJSON(mine: mine, theirs: text, name: name) {
+                if keepMineWhenMerging.contains(name) {
+                    // 这四份（settings / mcp / voices / providers）默认不碰：
+                    // 她现在用哪个模型、连哪台 MCP，
+                    // 跟「找回丢的东西」是两件事。
+                    //
+                    // 但全跳过是过头的，她报了两回：
+                    //
+                    // ① 「只补没有的设置里的内容也没导入，比如供应商、语音。」
+                    //    ——本机那份是**空**的时候，根本没有「现在」可以护。
+                    //    新装一台手机导备份，要的就是把配置拿回来。
+                    //    **「没有的」本来就包括这种。**
+                    //
+                    // ② 「整个盖掉有壁纸和头像，只补没有的没有。」
+                    //    ——壁纸头像那几个字段指向的图**已经跟着 blobs 放回盘上了**，
+                    //    不补字段的话那几张图就是躺在那儿没人认领。
+                    if isBlank(fileAt: url) {
+                        // 本机那份是空的 → 不 continue，落到下面整份写回去
+                    } else if name == "settings.json",
+                              let mine = try? String(contentsOf: url, encoding: .utf8),
+                              let merged = fillBlanks(mine: mine, theirs: text) {
+                        // 本机有内容 → 只补空着的那几项（壁纸、两个头像）
+                        text = merged
+                    } else {
+                        continue
+                    }
+                } else if let mine = try? String(contentsOf: url, encoding: .utf8),
+                          let merged = mergeJSON(mine: mine, theirs: text, name: name) {
                     text = merged
                 }
                 // 本地压根没有这个文件的话，就是直接写，那也是「增加」
@@ -824,6 +848,67 @@ enum BackupBundle {
     ///   · **两边都是字典** → 现在缺的键才补（比如心情是「日期 → 那天」）
     ///   · **别的形状** → 保留现在这份
     ///
+    /// 合并时从备份里补的那几项。
+    ///
+    /// 她报的：「『整个盖掉』有壁纸和头像，『只补没有的』没有。」
+    ///
+    /// ⚠️ **名单开得很小，而且只补本机空着的。**
+    /// 这里面都是「指向一张图」的字段：图本身已经跟着 blobs
+    /// 放回盘上了，不补这几个字段的话，那几张图就是躺在那儿没人认领。
+    ///
+    /// 模型、MCP、字号、主题那些一律不补——
+    /// 那是「她现在的偏好」，跟「找回丢的东西」是两件事。
+    /// ⚠️ 这三个名字是**照着 `AppSettings` 核对过的**，不是想当然写的。
+    /// 写错一个就是默默地什么都不补，而且不报错。
+    static let fillOnMerge = [
+        "wallpaperName", "userAvatarName", "aiAvatarName"
+    ]
+
+    /// 本机那份算不算「空」。
+    ///
+    /// 空的定义：文件不在、读不出来、空数组、空字典。
+    ///
+    /// ⚠️ `settings.json` 永远不算空（它是个带默认值的字典，
+    /// 刚装好也是满的）——它走的是 `fillBlanks` 那条路。
+    /// 这一条只为 `providers` / `voices` / `mcp` 那三份数组服务。
+    static func isBlank(fileAt url: URL) -> Bool {
+        guard let d = try? Data(contentsOf: url) else { return true }
+        guard let obj = try? JSONSerialization.jsonObject(
+            with: d, options: [.fragmentsAllowed]) else { return true }
+        if let arr = obj as? [Any] { return arr.isEmpty }
+        if let dict = obj as? [String: Any] { return dict.isEmpty }
+        return false
+    }
+
+    /// 只把**本机空着的**那几项从备份里补上，其余一个字不碰。
+    ///
+    /// 返回 nil = 一项都没补成，调用方就该跳过这个文件。
+    static func fillBlanks(mine: String, theirs: String) -> String? {
+        guard let md = mine.data(using: .utf8), let td = theirs.data(using: .utf8),
+              var m = (try? JSONSerialization.jsonObject(with: md)) as? [String: Any],
+              let t = (try? JSONSerialization.jsonObject(with: td)) as? [String: Any]
+        else { return nil }
+
+        var filled = 0
+        for key in fillOnMerge {
+            // 本机有值就不碰。「有值」包括空字符串也算没值——
+            // 这几个字段存的是文件名，空字符串就是「没设」。
+            let mineHas: Bool
+            if let sv = m[key] as? String { mineHas = !sv.isEmpty }
+            else { mineHas = m[key] != nil && !(m[key] is NSNull) }
+            guard !mineHas else { continue }
+            guard let v = t[key], !(v is NSNull) else { continue }
+            if let sv = v as? String, sv.isEmpty { continue }
+            m[key] = v
+            filled += 1
+        }
+        guard filled > 0 else { return nil }
+        guard let out = try? JSONSerialization.data(withJSONObject: m,
+                                                   options: [.sortedKeys]),
+              let text = String(data: out, encoding: .utf8) else { return nil }
+        return text
+    }
+
     /// `conversations.json` 单独处理：同一个窗口要**把消息并起来**，
     /// 不然「同 id 就跳过」等于备份里那半段聊天永远进不来。
     static func mergeJSON(mine: String, theirs: String, name: String) -> String? {

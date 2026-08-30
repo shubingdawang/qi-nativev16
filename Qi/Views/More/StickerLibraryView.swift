@@ -102,10 +102,54 @@ struct StickerLibraryView: View {
         .safeAreaInset(edge: .bottom) {
             if selecting {
                 HStack(spacing: 14) {
-                    Text("选了 \(chosenIDs.count) 个")
+                    // 全选 / 取消全选。她报的：「相册没有全选功能。」
+                    //
+                    // ⚠️ 全选的范围是**她现在看得见的那些**（`list`），
+                    // 不是整个库——她搜了词、切了档之后按全选，
+                    // 选中一堆屏幕上看不见的东西是很吓人的。
+                    Button {
+                        let ids = Set(list.map(\.id))
+                        if chosenIDs.isSuperset(of: ids) && !ids.isEmpty {
+                            chosenIDs.subtract(ids)
+                        } else {
+                            chosenIDs.formUnion(ids)
+                        }
+                    } label: {
+                        Text(chosenIDs.isSuperset(of: Set(list.map(\.id))) && !list.isEmpty
+                             ? "取消全选" : "全选")
+                            .font(.app(12.5))
+                            .foregroundStyle(app.settings.accentColor)
+                    }
+                    .buttonStyle(.plain)
+
+                    Text("\(chosenIDs.count) 个")
                         .font(.app(12))
                         .foregroundStyle(Theme.textMuted(scheme))
                     Spacer()
+
+                    // 复制一份给对面。她定的。
+                    //
+                    // 文字按现在看的是谁的库来写——
+                    // 写成固定的「复制给他」，她在他那一栏里看到就反了。
+                    Button {
+                        let picked = list.filter { chosenIDs.contains($0.id) }
+                        let to = owner == "user" ? "assistant" : "user"
+                        let n = store.copy(picked, to: to)
+                        tagNote = n == 0
+                            ? "那边已经都有了。"
+                            : "拄了 \(n) 张给" + (to == "user" ? "你" : "他") + "。"
+                        chosenIDs.removeAll()
+                    } label: {
+                        Label(owner == "user" ? "复制给他" : "复制给我",
+                              systemImage: "doc.on.doc")
+                            .font(.app(13, weight: .medium))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(chosenIDs.isEmpty
+                                     ? Theme.textMuted(scheme)
+                                     : app.settings.accentColor)
+                    .disabled(chosenIDs.isEmpty)
+
                     Button(role: .destructive) {
                         confirmBatch = true
                     } label: {

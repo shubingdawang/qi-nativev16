@@ -451,13 +451,34 @@ final class AppState: ObservableObject {
     ///
     /// ⚠️ 撤的是**当前这一版**：把最后一条历史提回来当正文。
     /// `edits` 里最早的在最前面，所以拿的是 `removeLast()`。
-    func deleteEdit(_ messageID: UUID, in conversationID: UUID) {
+    /// - Parameter page: 她正看着第几页（0 = 现在这版，1 起是旧版）。
+    ///
+    ///   ⚠️ **必须传进来。** 上一版我写的是 `edits.removeLast()`，
+    ///   可她屏幕上那一版是 `edits[count - page]`（看 `shownContent`）——
+    ///   只有 `page == 1` 那一下碰巧对上。
+    ///   她报的：「选择删这一版并不是删我目前显示的版本，
+    ///   而是删掉了第一版。」
+    ///
+    ///   记一句：**「删这一个」里的「这」，指的是她眼睛看到的那个，
+    ///   不是数组里最方便拿的那个。**
+    func deleteEdit(_ messageID: UUID, in conversationID: UUID, page: Int) {
         guard let i = index(of: conversationID),
-              let j = conversations[i].messages.firstIndex(where: { $0.id == messageID }),
-              !conversations[i].messages[j].edits.isEmpty
+              let j = conversations[i].messages.firstIndex(where: { $0.id == messageID })
         else { return }
-        conversations[i].messages[j].content =
-            conversations[i].messages[j].edits.removeLast()
+        var m = conversations[i].messages[j]
+        guard !m.edits.isEmpty else { return }
+
+        if page == 0 {
+            // 删的是**现在这版**：把最近一条历史提上来顶上。
+            m.content = m.edits.removeLast()
+        } else {
+            // 删的是旧版。下标跟 `shownContent` 用**同一个算法**，
+            // 两边各算各的早晚再错开一次。
+            let idx = m.edits.count - page
+            guard m.edits.indices.contains(idx) else { return }
+            m.edits.remove(at: idx)
+        }
+        conversations[i].messages[j] = m
         conversations[i].updatedAt = Date()
     }
 
@@ -723,6 +744,48 @@ final class AppState: ObservableObject {
         waitingWindows.insert(conversationID)
         pendingUserTask[conversationID]?.cancel()
         pendingUserTask[conversationID] = nil
+    }
+
+    /// 把攒着的那一轮**撤回来**，文字退回输入框。
+    ///
+    /// 她定的：「新增再次点击暂存按钮取消暂存，有时候会误触。」
+    ///
+    /// ⚠️ **撤的是整一轮，不是最后一次。**
+    /// 多次暂存的文字是合并进同一条消息的（空行分段），
+    /// 拆开只能靠猜。而撤整轮的行为是**可预测**的，
+    /// 而且一个字都没丢——全退回输入框了，她想重发哪句自己改。
+    ///
+    /// - Returns: 退回来的那些字，界面把它填回输入框。
+    @discardableResult
+    func unstage(_ conversationID: UUID) -> String {
+        pendingUserTask[conversationID]?.cancel()
+        pendingUserTask[conversationID] = nil
+        waitingWindows.remove(conversationID)
+        guard let mid = pendingUserMessage.removeValue(forKey: conversationID),
+              let i = index(of: conversationID),
+              let msg = conversations[i].messages.first(where: { $0.id == mid })
+        else { return "" }
+
+        // 这一轮里所有她发的那几条（文字、语音、表情、视频）。
+        // 语音和表情是**单独成条**的（见 `queueSend`），
+        // 只删文字那一条的话，她删完会发现语音还挂在那儿。
+        let turn = msg.turnID
+        let mine = conversations[i].messages.filter {
+            $0.role == .user && (turn != nil ? $0.turnID == turn : $0.id == mid)
+        }
+        // ⚠️ 空行走常量，别写在 `joined(separator:)` 里——
+        // 那个位置的反斜杠这一窗已经被脚本吃掉两次了。
+        let gap = "\n\n"
+        let text = mine.map(\.content)
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .joined(separator: gap)
+
+        // ⚠️ 图和语音的文件**不删**——她只是取消暂存，
+        // 不是要把刚选的那几张图从手机里抹掉。
+        let ids = Set(mine.map(\.id))
+        conversations[i].messages.removeAll { ids.contains($0.id) }
+        conversations[i].updatedAt = Date()
+        return text
     }
 
     /// 攒够了，或者你不想等了，就把攒着的那条交出去。
@@ -1040,6 +1103,10 @@ final class AppState: ObservableObject {
                 }
 
                 if Task.isCancelled || pending.isEmpty { break }
+                // 要去跑工具了。先把攒着的字刷出去——
+                // 工具可能要跑好几秒，**那几秒里她应该看得见
+                // 他动手之前说的那半句**，而不是一片空白。
+                flushStream(assistantID, in: conversationID, force: true)
                 let calls = pending.sorted { $0.key < $1.key }.map { $0.value }
                 apiMsgs.append(ChatAPI.OutgoingMessage(role: "assistant", text: roundText, toolCalls: calls))
                 for call in calls {
@@ -1154,6 +1221,9 @@ final class AppState: ObservableObject {
         IslandController.shared.end(immediately: true)
         if let i = index(of: id),
            let last = conversations[i].messages.indices.last {
+            // 按停止也要刷：她停的是「别再说下去」，
+            // 不是「把已经说的那几个字收回去」。
+            endStreamBuffer(conversations[i].messages[last].id, in: id)
             conversations[i].messages[last].isStreaming = false
         }
     }
@@ -1272,7 +1342,13 @@ final class AppState: ObservableObject {
                         useEndpoint = alt.endpoint
                         useKey = alt.key
                         useModel = alt.model
-                        // 断在半路的那半句要抹掉，不然接上去是两截拼的
+                        // 断在半路的那半句要抹掉，不然接上去是两截拼的。
+                        //
+                        // ⚠️ **攒着还没写回去的那几个字也要丢。**
+                        // 只清 `content` 的话，缓冲里那半句会在下一次 flush
+                        // 时候倒回来，拼在新模型说的话前面——
+                        // 那正好是这两行想避免的事。
+                        self.dropStreamBuffer(assistantID)
                         self.withAssistant(assistantID, in: conversationID) {
                             $0.content = ""
                             $0.reasoning = nil
@@ -1286,6 +1362,9 @@ final class AppState: ObservableObject {
                     if Task.isCancelled { break }
                     if pending.isEmpty { break }   // 没有要调的工具，这轮就是最终回答
 
+                    // 要去跑工具了。先刷一次——工具可能要跑好几秒，
+                    // 那几秒里她应该看得见他动手之前说的那半句。
+                    self.flushStream(assistantID, in: conversationID, force: true)
                     let calls = pending.sorted { $0.key < $1.key }.map { $0.value }
                     apiMessages.append(ChatAPI.OutgoingMessage(
                         role: "assistant", text: roundText, toolCalls: calls))
@@ -1326,14 +1405,80 @@ final class AppState: ObservableObject {
         conversations[ci].updatedAt = Date()
     }
 
+    // MARK: 流式那几个字怎么落到屏幕上
+
+    /// 还没写回去的那几个字（消息 id → 正文 / 思考）
+    private var pendingText: [UUID: String] = [:]
+    private var pendingReason: [UUID: String] = [:]
+    private var flushAt: [UUID: Date] = [:]
+
+    /// 多久写回去一次。
+    ///
+    /// ## 为什么要节流
+    ///
+    /// 她报的：「正在回话的时候不管做什么都有点卡卡的。」
+    ///
+    /// 以前是**每来一个 token 就改一次 `conversations`**。
+    /// 而 `conversations` 是 `@Published`——改一下，
+    /// **整个 App 里订阅了 `app` 的 View 全部重画**：
+    /// 侧边栏、设置页、札记页、悬浮窗…一个不漏。
+    ///
+    /// 一秒几十个 token = 一秒几十次全局重画。
+    /// 她这时候划出侧边栏，那一页刚好要在这个风暴里建起来。
+    ///
+    /// 八十毫秒：一秒十二次，足够像「字在一个个蹦」，
+    /// 而重画次数降到原来的零头。
+    ///
+    /// ⚠️ **一定要在收尾那儿 `flushStream`**（正常结束、出错、取消三条路）。
+    /// 不刷的话最后那几个字永远到不了屏幕上。
+    private static let streamFlush: TimeInterval = 0.08
+
     private func appendContent(_ piece: String, to assistantID: UUID, in conversationID: UUID) {
-        withAssistant(assistantID, in: conversationID) { $0.content += piece }
+        pendingText[assistantID, default: ""] += piece
+        flushStream(assistantID, in: conversationID, force: false)
         pushIsland(assistantID, in: conversationID)
     }
 
     private func appendReasoning(_ piece: String, to assistantID: UUID, in conversationID: UUID) {
-        withAssistant(assistantID, in: conversationID) { $0.reasoning = ($0.reasoning ?? "") + piece }
+        pendingReason[assistantID, default: ""] += piece
+        flushStream(assistantID, in: conversationID, force: false)
         pushIsland(assistantID, in: conversationID)
+    }
+
+    /// 把攒着的那几个字写回消息里。
+    ///
+    /// - Parameter force: 真的写，不看时间。收尾的时候传 true。
+    func flushStream(_ assistantID: UUID, in conversationID: UUID, force: Bool) {
+        let hasText = !(pendingText[assistantID] ?? "").isEmpty
+        let hasReason = !(pendingReason[assistantID] ?? "").isEmpty
+        guard hasText || hasReason else { return }
+        if !force {
+            let last = flushAt[assistantID] ?? .distantPast
+            guard Date().timeIntervalSince(last) >= Self.streamFlush else { return }
+        }
+        flushAt[assistantID] = Date()
+        let t = pendingText.removeValue(forKey: assistantID) ?? ""
+        let r = pendingReason.removeValue(forKey: assistantID) ?? ""
+        withAssistant(assistantID, in: conversationID) {
+            if !t.isEmpty { $0.content += t }
+            if !r.isEmpty { $0.reasoning = ($0.reasoning ?? "") + r }
+        }
+    }
+
+    /// 把攒着的那几个字**丢掉不写**。
+    /// 只用在换备用模型那一下：那半句是断的，不该接在新的前面。
+    private func dropStreamBuffer(_ assistantID: UUID) {
+        pendingText[assistantID] = nil
+        pendingReason[assistantID] = nil
+        flushAt[assistantID] = nil
+    }
+
+    /// 这一轮完了（不管怎么完的），把攒着的那几个字清干净。
+    private func endStreamBuffer(_ assistantID: UUID, in conversationID: UUID) {
+        flushStream(assistantID, in: conversationID, force: true)
+        pendingText[assistantID] = nil
+        pendingReason[assistantID] = nil
+        flushAt[assistantID] = nil
     }
 
     /// 把当前进度推给灵动岛。
@@ -5558,6 +5703,10 @@ final class AppState: ObservableObject {
     }
 
     private func finishStreaming(assistantID: UUID, in conversationID: UUID) {
+        // ⚠️ **第一件事：把攒着的那几个字写回去。**
+        // 不刷的话最后不到 80 毫秒那一截永远到不了屏幕上，
+        // 而下面那一堆洗标记、抽 promise、存库都要读 `content`。
+        endStreamBuffer(assistantID, in: conversationID)
         runningConversationIDs.remove(conversationID)
         streamTasks[conversationID] = nil
 
@@ -5729,6 +5878,9 @@ final class AppState: ObservableObject {
     }
 
     private func finishWithError(_ error: Error, assistantID: UUID, in conversationID: UUID) {
+        // 出错也要刷——**出错前说出来的那半句是真的说过了**，
+        // 丢掉它她会以为他什么都没说。
+        endStreamBuffer(assistantID, in: conversationID)
         guard let ci = index(of: conversationID),
               let mi = conversations[ci].messages.firstIndex(where: { $0.id == assistantID })
         else { return }
