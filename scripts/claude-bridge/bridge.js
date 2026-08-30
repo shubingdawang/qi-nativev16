@@ -613,6 +613,75 @@ const server = http.createServer((req, res) => {
     }
   }
 
+  // ───── 终端：真的在这台电脑上跑一条命令
+  //
+  // 她定的：「我需要终端可以敲命令，我的需求就是一个完整的
+  // claudecode 搬到我的 app。」
+  //
+  // ⚠️⚠️ **这是整个桥里权限最大的一处。** 它等于把这台电脑的命令行
+  // 摆在了局域网上。所以有一条硬规矩：
+  //
+  //   **没设 BRIDGE_TOKEN 就不开这个端点。**
+  //
+  // 不是「建议设」——是不设就没有。聊天那几个口子最坏是有人替你
+  // 花点额度；这个口子最坏是有人把你的盘格了。两件事的严重程度
+  // 差得太远，不该共用同一档默认。
+  //
+  // 另外两道：只在 WORKSPACE 里跑（不给改目录）；跑过两分钟就掐。
+  if (req.method === 'POST' && (url === '/v1/shell' || url === '/shell')) {
+    if (!TOKEN) {
+      res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error:
+        '终端没开。这个口子能在这台电脑上跑任意命令，' +
+        '所以必须先设密钥：启动前 set BRIDGE_TOKEN=你自己编一串，' +
+        '手机那边供应商的「密钥」栏填一样的。' }));
+      return;
+    }
+    let body = '';
+    req.on('data', d => { body += d; });
+    req.on('end', () => {
+      let cmd = '';
+      try { cmd = String(JSON.parse(body || '{}').command || ''); } catch (e) {}
+      cmd = cmd.trim();
+      if (!cmd) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: '没给命令' }));
+        return;
+      }
+      // 流式吐回去（ndjson）——跑个 build 要好几十秒，
+      // 等完了才给的话她那边就是一屏空白。
+      res.writeHead(200, {
+        'Content-Type': 'application/x-ndjson; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'Access-Control-Allow-Origin': '*'
+      });
+      const line = o => { try { res.write(JSON.stringify(o) + '\n'); } catch (e) {} };
+      line({ type: 'start', cwd: WORKSPACE, command: cmd });
+
+      const sh = IS_WIN ? 'cmd.exe' : '/bin/sh';
+      const shArgs = IS_WIN ? ['/d', '/s', '/c', cmd] : ['-c', cmd];
+      const child = spawn(sh, shArgs, { cwd: WORKSPACE, windowsHide: true });
+
+      child.stdout.on('data', d => line({ type: 'out', text: d.toString('utf8') }));
+      child.stderr.on('data', d => line({ type: 'err', text: d.toString('utf8') }));
+      child.on('error', e => line({ type: 'err', text: String(e.message || e) }));
+
+      // 跑太久就掐。卡死一个子进程在那儿，
+      // 她那边只会看到一个永远转着的圈。
+      const killer = setTimeout(() => {
+        line({ type: 'err', text: '（跑了太久，停了）' });
+        try { child.kill(); } catch (e) {}
+      }, 120000);
+
+      child.on('close', code => {
+        clearTimeout(killer);
+        line({ type: 'exit', code: code });
+        res.end();
+      });
+    });
+    return;
+  }
+
   if (req.method === 'GET' && (url === '/v1/models' || url === '/models')) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({

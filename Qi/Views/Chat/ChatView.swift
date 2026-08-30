@@ -495,13 +495,36 @@ struct ChatView: View {
                         Button("取消") { editingMessage = nil }
                     }
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("保存") {
-                            if let id = app.activeID(for: space) {
-                                app.editMessage(msg.id, in: id, text: editText)
+                        // 改自己那条的时候，两个按钮：存着、改完重发。
+                        //
+                        // 她问的：「claude code 里可以在模型回复前打断，
+                        // 然后自己修改好再发，我的 app 可以吗？」
+                        //
+                        // 以前要点两次：存一次，再长按一次点「重发」。
+                        // 而第二步藏在长按菜单里，**根本看不出来要去那里找**。
+                        //
+                        // ⚠️ 两个都留着：有时候她只是想把错字改了，
+                        // 不想再花一次钱重跑一轮。
+                        HStack(spacing: 14) {
+                            Button("存着") {
+                                if let id = app.activeID(for: space) {
+                                    app.editMessage(msg.id, in: id, text: editText)
+                                }
+                                editingMessage = nil
                             }
-                            editingMessage = nil
+                            if msg.role == .user {
+                                Button("改完重发") {
+                                    if let id = app.activeID(for: space) {
+                                        app.editMessage(msg.id, in: id, text: editText)
+                                        // `retry` 自己会先 `cancelStream`，
+                                        // 正在说着的那一轮不用她先去按停。
+                                        app.retry(msg.id, in: id)
+                                    }
+                                    editingMessage = nil
+                                }
+                                .fontWeight(.semibold)
+                            }
                         }
-                        .fontWeight(.semibold)
                     }
                 }
             }

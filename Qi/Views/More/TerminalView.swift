@@ -14,7 +14,13 @@ struct TerminalView: View {
     @ObservedObject private var console = Console.shared
 
     /// 选中的筛子。空 = 全都要。
+    @State private var tab = 0
     @State private var picked: Set<Console.Kind> = []
+    /// 命令那一栏
+    @State private var cmd = ""
+    @State private var shellLines: [ShellBridge.Line] = []
+    @State private var running = false
+    @State private var shellNote: String?
     @State private var toBottom = true
     @State private var copied = false
 
@@ -24,6 +30,22 @@ struct TerminalView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // 两栏。**日志和命令是两回事**：
+            // 日志是 App 自己干了什么（只读），
+            // 命令是她去动那台电脑（可写）。
+            // 混在一页里的话，她满屏日志里找不到自己刚跑的那条。
+            Picker("", selection: $tab) {
+                Text("日志").tag(0)
+                Text("命令").tag(1)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 16)
+            .padding(.top, 10)
+            .padding(.bottom, 8)
+
+            if tab == 1 {
+                shellTab
+            } else {
             filters
 
             if shown.isEmpty {
@@ -49,6 +71,7 @@ struct TerminalView: View {
                     }
                     .onAppear { proxy.scrollTo("底", anchor: .bottom) }
                 }
+            }
             }
         }
         .background { WallpaperBackground() }
@@ -88,6 +111,116 @@ struct TerminalView: View {
     }
 
     // MARK: 筛子
+
+    // MARK: 命令那一栏
+
+    /// 在电脑上跑一条命令，输出流回来。
+    ///
+    /// ⚠️ 这一栏动的是**那台电脑**，不是这个 App。
+    /// 所以顶上那句话要说清楚在哪儿跑——不写的话她会以为是手机本地的。
+    @ViewBuilder
+    private var shellTab: some View {
+        VStack(spacing: 0) {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 2) {
+                        if shellLines.isEmpty {
+                            Text("在电脑上跑命令，输出显示在这里。\n"
+                                 + "目录是桥所在的那个项目；桥的窗口关了就连不上。")
+                                .font(.app(11))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                                .padding(.top, 24)
+                        }
+                        ForEach(shellLines) { l in
+                            Text(l.text)
+                                .font(.system(size: 11, design: .monospaced))
+                                // 出错的那几行单独一个色——她多半是为了它才看的
+                                .foregroundStyle(l.kind == "err" ? .orange
+                                                 : (l.kind == "start"
+                                                    ? app.settings.accentColor
+                                                    : Theme.textSoft(scheme)))
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        Color.clear.frame(height: 1).id("shellBottom")
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                }
+                .onChange(of: shellLines.count) { _, _ in
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        proxy.scrollTo("shellBottom", anchor: .bottom)
+                    }
+                }
+            }
+
+            if let shellNote {
+                Text(shellNote)
+                    .font(.app(11))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 6)
+            }
+
+            HStack(spacing: 8) {
+                Text("$")
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                TextField("git status", text: $cmd)
+                    .font(.system(size: 12, design: .monospaced))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .onSubmit { send() }
+                if running {
+                    ProgressView().scaleEffect(0.7)
+                } else {
+                    Button { send() } label: {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.app(19))
+                            .foregroundStyle(cmd.trimmingCharacters(in: .whitespaces).isEmpty
+                                             ? Theme.textMuted(scheme)
+                                             : app.settings.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(cmd.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Theme.softFillDeep))
+            .padding(.horizontal, 12)
+            .padding(.bottom, Layout.tabBarSpace + 12)
+        }
+    }
+
+    private func send() {
+        let line = cmd.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !line.isEmpty, !running else { return }
+        guard let p = ShellBridge.find(in: app.providers) else {
+            shellNote = ShellBridge.ShellError.noBridge.errorDescription
+            return
+        }
+        cmd = ""
+        shellNote = nil
+        running = true
+        Task { @MainActor in
+            do {
+                try await ShellBridge.run(line, provider: p) { l in
+                    shellLines.append(l)
+                    // 太长就砍前面。**留 500 行**——
+                    // 一次 build 的输出能有上千行，全留着这一页会越翻越卡。
+                    if shellLines.count > 500 {
+                        shellLines.removeFirst(shellLines.count - 500)
+                    }
+                }
+            } catch {
+                shellNote = error.localizedDescription
+            }
+            running = false
+        }
+    }
 
     private var filters: some View {
         ScrollView(.horizontal, showsIndicators: false) {
