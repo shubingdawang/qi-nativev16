@@ -44,6 +44,9 @@ struct JournalPaperView: View {
                 case "ruled":  ruled(&ctx, size, step: 30)
                 case "dot":    dots(&ctx, size, step: 24)
                 case "stripe": stripes(&ctx, size, step: 22)
+                case "diag":   diag(&ctx, size, step: 20)
+                case "cross":  cross(&ctx, size, step: 24)
+                case "manuscript": manuscript(&ctx, size)
                 default:       break
                 }
             }
@@ -95,6 +98,53 @@ struct JournalPaperView: View {
         ctx.fill(p, with: .color(lineColor.opacity(0.9)))
     }
 
+    /// 斜纹。跟 `stripes` 的区别只在方向，但方向就是全部——
+    /// 竖条是本子，斜条是包装纸。
+    private func diag(_ ctx: inout GraphicsContext, _ size: CGSize, step: CGFloat) {
+        var p = Path()
+        var x: CGFloat = -size.height
+        while x <= size.width {
+            p.move(to: CGPoint(x: x, y: size.height))
+            p.addLine(to: CGPoint(x: x + size.height, y: 0))
+            x += step
+        }
+        ctx.stroke(p, with: .color(lineColor), lineWidth: 0.7)
+    }
+
+    /// 十字。方格纸的交点画个小十字，不画整条线——
+    /// 比满格的线轻，写字的时候不抢。
+    private func cross(_ ctx: inout GraphicsContext, _ size: CGSize, step: CGFloat) {
+        var p = Path()
+        let arm: CGFloat = 2.5
+        var y: CGFloat = step / 2
+        while y <= size.height {
+            var x: CGFloat = step / 2
+            while x <= size.width {
+                p.move(to: CGPoint(x: x - arm, y: y)); p.addLine(to: CGPoint(x: x + arm, y: y))
+                p.move(to: CGPoint(x: x, y: y - arm)); p.addLine(to: CGPoint(x: x, y: y + arm))
+                x += step
+            }
+            y += step
+        }
+        ctx.stroke(p, with: .color(lineColor), lineWidth: 0.7)
+    }
+
+    /// 稿纸。一格一格的方框，中间留一道缝——就是那种作文本。
+    private func manuscript(_ ctx: inout GraphicsContext, _ size: CGSize) {
+        var p = Path()
+        let cell: CGFloat = 22, gap: CGFloat = 3
+        var y: CGFloat = 8
+        while y + cell <= size.height {
+            var x: CGFloat = 8
+            while x + cell <= size.width {
+                p.addRect(CGRect(x: x, y: y, width: cell, height: cell))
+                x += cell + gap
+            }
+            y += cell + gap * 2
+        }
+        ctx.stroke(p, with: .color(lineColor), lineWidth: 0.6)
+    }
+
     private func stripes(_ ctx: inout GraphicsContext, _ size: CGSize, step: CGFloat) {
         var p = Path()
         var x: CGFloat = 0
@@ -116,13 +166,21 @@ struct JournalTapeView: View {
     let pattern: String
     var width: CGFloat = 110
     var height: CGFloat = 26
+    /// 花纹自己的颜色。不给就还是半透明的白（老页面全是这一种）。
+    ///
+    /// 她定的：「一个素底点点图案的胶带，我想做红白配色，
+    /// 我就可以把底色选红色、圆点点选白色。」
+    var ink: Color? = nil
 
     var body: some View {
         ZStack {
             TornTape()
                 .fill(color.opacity(0.62))
             Canvas { ctx, size in
-                let ink = Color.white.opacity(0.5)
+                // ⚠️ 自己选了花纹色就**用实的**，不再压半透。
+                // 压了的话红底上的白点会透出红来变成粉的，
+                // 她要的「红底白点」就不成立了。
+                let ink = self.ink ?? Color.white.opacity(0.5)
                 switch pattern {
                 case "stripe":
                     var p = Path()
@@ -179,6 +237,105 @@ struct JournalTapeView: View {
                     p.addLine(to: CGPoint(x: size.width, y: mid))
                     ctx.stroke(p, with: .color(ink),
                                style: StrokeStyle(lineWidth: 2, dash: [7, 5]))
+
+                // ── 后加的八种。**每一种配上两层色就是几十卷**，
+                // 所以这儿加一个花纹，比去扒十张胶带图划算得多。
+                case "hline":
+                    var p = Path()
+                    var y: CGFloat = size.height / 6
+                    while y < size.height {
+                        p.move(to: CGPoint(x: 0, y: y))
+                        p.addLine(to: CGPoint(x: size.width, y: y))
+                        y += size.height / 3
+                    }
+                    ctx.stroke(p, with: .color(ink), lineWidth: 2)
+                case "vline":
+                    var p = Path()
+                    var x: CGFloat = 4
+                    while x < size.width {
+                        p.move(to: CGPoint(x: x, y: 0))
+                        p.addLine(to: CGPoint(x: x, y: size.height))
+                        x += 8
+                    }
+                    ctx.stroke(p, with: .color(ink), lineWidth: 1.6)
+                case "graph":
+                    var p = Path()
+                    var x: CGFloat = 0
+                    while x < size.width { p.move(to: CGPoint(x: x, y: 0))
+                        p.addLine(to: CGPoint(x: x, y: size.height)); x += 7 }
+                    var y: CGFloat = 0
+                    while y < size.height { p.move(to: CGPoint(x: 0, y: y))
+                        p.addLine(to: CGPoint(x: size.width, y: y)); y += 7 }
+                    ctx.stroke(p, with: .color(ink), lineWidth: 0.9)
+                case "hound":
+                    // 千鸟格：一排小方块，隔一行错开半格
+                    var p = Path()
+                    var y: CGFloat = 0
+                    var row = 0
+                    while y < size.height {
+                        var x: CGFloat = row % 2 == 0 ? 0 : 5
+                        while x < size.width {
+                            p.addRect(CGRect(x: x, y: y, width: 5, height: 5))
+                            x += 10
+                        }
+                        y += 5; row += 1
+                    }
+                    ctx.fill(p, with: .color(ink))
+                case "tri":
+                    var p = Path()
+                    var x: CGFloat = 0
+                    while x < size.width {
+                        p.move(to: CGPoint(x: x, y: size.height - 3))
+                        p.addLine(to: CGPoint(x: x + 5, y: 4))
+                        p.addLine(to: CGPoint(x: x + 10, y: size.height - 3))
+                        p.closeSubpath()
+                        x += 13
+                    }
+                    ctx.fill(p, with: .color(ink))
+                case "rhomb":
+                    var p = Path()
+                    let mid = size.height / 2
+                    var x: CGFloat = 0
+                    while x < size.width {
+                        p.move(to: CGPoint(x: x, y: mid))
+                        p.addLine(to: CGPoint(x: x + 5, y: mid - 5))
+                        p.addLine(to: CGPoint(x: x + 10, y: mid))
+                        p.addLine(to: CGPoint(x: x + 5, y: mid + 5))
+                        p.closeSubpath()
+                        x += 13
+                    }
+                    ctx.fill(p, with: .color(ink))
+                case "plus":
+                    var p = Path()
+                    let arm: CGFloat = 3
+                    var y: CGFloat = size.height / 4
+                    while y < size.height {
+                        var x: CGFloat = 6
+                        while x < size.width {
+                            p.move(to: CGPoint(x: x - arm, y: y))
+                            p.addLine(to: CGPoint(x: x + arm, y: y))
+                            p.move(to: CGPoint(x: x, y: y - arm))
+                            p.addLine(to: CGPoint(x: x, y: y + arm))
+                            x += 12
+                        }
+                        y += size.height / 2
+                    }
+                    ctx.stroke(p, with: .color(ink), lineWidth: 1.6)
+                case "spark":
+                    var p = Path()
+                    var y: CGFloat = 5
+                    var row = 0
+                    while y < size.height {
+                        var x: CGFloat = row % 2 == 0 ? 6 : 12
+                        while x < size.width {
+                            p.addEllipse(in: CGRect(x: x - 1.6, y: y - 1.6,
+                                                    width: 3.2, height: 3.2))
+                            x += 12
+                        }
+                        y += 9; row += 1
+                    }
+                    ctx.fill(p, with: .color(ink))
+
                 default:
                     break
                 }
@@ -228,6 +385,13 @@ struct JournalStickerView: View {
     let shape: String
     let color: Color
     var side: CGFloat = 42
+    /// 底下那圈模切白边的颜色。不给就还是白的（老页面全是这一种）。
+    ///
+    /// 贴纸的「两层色」是这么分的：`color` 是图案本身，这个是衬在底下那一层。
+    /// 跟胶带那边的 `ink` 是同一个字段（`inkHex`），
+    /// 只是在这两种东西上指的位置不一样——胶带的第二层在上面（花纹），
+    /// 贴纸的第二层在下面（白边）。合成一个字段是因为它俩不会同时出现。
+    var backing: Color? = nil
 
     var body: some View {
         let style = FillStyle(eoFill: JournalStickerShape.needsEO(shape))
@@ -237,7 +401,7 @@ struct JournalStickerView: View {
             .padding(4)
             .background {
                 JournalStickerShape(kind: shape)
-                    .fill(Color.white, style: style)
+                    .fill(backing ?? Color.white, style: style)
                     .padding(-1)
                     .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
             }
@@ -329,6 +493,122 @@ struct JournalStickerShape: Shape {
             p.addEllipse(in: CGRect(x: w * 0.32 - notch, y: h * 0.5 - notch,
                                     width: notch * 2, height: notch * 2))
 
+        // ── 后加的十二个。都跟着颜色走，一个形状就是一整套配色。
+        case "fly":
+            // 蝴蝶：四片翅膀 + 中间一条身子
+            p.addEllipse(in: CGRect(x: 0, y: h * 0.08, width: w * 0.46, height: h * 0.46))
+            p.addEllipse(in: CGRect(x: w * 0.54, y: h * 0.08, width: w * 0.46, height: h * 0.46))
+            p.addEllipse(in: CGRect(x: w * 0.06, y: h * 0.48, width: w * 0.40, height: h * 0.42))
+            p.addEllipse(in: CGRect(x: w * 0.54, y: h * 0.48, width: w * 0.40, height: h * 0.42))
+            p.addRoundedRect(in: CGRect(x: w * 0.45, y: h * 0.14, width: w * 0.10, height: h * 0.74),
+                             cornerSize: CGSize(width: w * 0.05, height: w * 0.05))
+        case "bird":
+            p.move(to: CGPoint(x: w * 0.10, y: h * 0.62))
+            p.addQuadCurve(to: CGPoint(x: w * 0.62, y: h * 0.30),
+                           control: CGPoint(x: w * 0.28, y: h * 0.22))
+            p.addQuadCurve(to: CGPoint(x: w * 0.92, y: h * 0.52),
+                           control: CGPoint(x: w * 0.90, y: h * 0.26))
+            p.addQuadCurve(to: CGPoint(x: w * 0.46, y: h * 0.86),
+                           control: CGPoint(x: w * 0.74, y: h * 0.88))
+            p.closeSubpath()
+        case "sakura":
+            // 五片花瓣绕一圈
+            let cx = w / 2, cy = h / 2, pr = w * 0.22
+            for i in 0..<5 {
+                let a = Double(i) / 5 * .pi * 2 - .pi / 2
+                p.addEllipse(in: CGRect(x: cx + cos(a) * w * 0.24 - pr,
+                                        y: cy + sin(a) * h * 0.24 - pr,
+                                        width: pr * 2, height: pr * 2))
+            }
+        case "grass":
+            for (i, lean) in [(0, -0.12), (1, 0.0), (2, 0.14)] {
+                let x0 = w * (0.28 + Double(i) * 0.22)
+                p.move(to: CGPoint(x: x0, y: h * 0.92))
+                p.addQuadCurve(to: CGPoint(x: x0 + w * lean, y: h * 0.14),
+                               control: CGPoint(x: x0 + w * lean * 2, y: h * 0.5))
+                p.addQuadCurve(to: CGPoint(x: x0 + w * 0.07, y: h * 0.92),
+                               control: CGPoint(x: x0 + w * 0.06, y: h * 0.5))
+                p.closeSubpath()
+            }
+        case "stamp":
+            // 邮戳：一个圆环，中间一道横杠
+            p.addEllipse(in: CGRect(x: w * 0.06, y: h * 0.06, width: w * 0.88, height: h * 0.88))
+            p.addEllipse(in: CGRect(x: w * 0.20, y: h * 0.20, width: w * 0.60, height: h * 0.60))
+            p.addRect(CGRect(x: w * 0.14, y: h * 0.44, width: w * 0.72, height: h * 0.12))
+        case "mail":
+            p.addRoundedRect(in: CGRect(x: 0, y: h * 0.20, width: w, height: h * 0.60),
+                             cornerSize: CGSize(width: 3, height: 3))
+            p.move(to: CGPoint(x: w * 0.04, y: h * 0.24))
+            p.addLine(to: CGPoint(x: w / 2, y: h * 0.56))
+            p.addLine(to: CGPoint(x: w * 0.96, y: h * 0.24))
+            p.addLine(to: CGPoint(x: w * 0.96, y: h * 0.32))
+            p.addLine(to: CGPoint(x: w / 2, y: h * 0.64))
+            p.addLine(to: CGPoint(x: w * 0.04, y: h * 0.32))
+            p.closeSubpath()
+        case "tag":
+            p.move(to: CGPoint(x: w * 0.30, y: h * 0.08))
+            p.addLine(to: CGPoint(x: w * 0.94, y: h * 0.08))
+            p.addLine(to: CGPoint(x: w * 0.94, y: h * 0.92))
+            p.addLine(to: CGPoint(x: w * 0.30, y: h * 0.92))
+            p.addLine(to: CGPoint(x: w * 0.06, y: h * 0.50))
+            p.closeSubpath()
+            p.addEllipse(in: CGRect(x: w * 0.26, y: h * 0.42, width: w * 0.14, height: h * 0.14))
+        case "flag":
+            p.addRect(CGRect(x: w * 0.10, y: h * 0.06, width: w * 0.09, height: h * 0.88))
+            p.move(to: CGPoint(x: w * 0.19, y: h * 0.10))
+            p.addLine(to: CGPoint(x: w * 0.92, y: h * 0.10))
+            p.addLine(to: CGPoint(x: w * 0.72, y: h * 0.32))
+            p.addLine(to: CGPoint(x: w * 0.92, y: h * 0.54))
+            p.addLine(to: CGPoint(x: w * 0.19, y: h * 0.54))
+            p.closeSubpath()
+        case "drop":
+            p.move(to: CGPoint(x: w / 2, y: h * 0.06))
+            p.addQuadCurve(to: CGPoint(x: w * 0.88, y: h * 0.62),
+                           control: CGPoint(x: w * 0.86, y: h * 0.32))
+            p.addQuadCurve(to: CGPoint(x: w / 2, y: h * 0.94),
+                           control: CGPoint(x: w * 0.88, y: h * 0.94))
+            p.addQuadCurve(to: CGPoint(x: w * 0.12, y: h * 0.62),
+                           control: CGPoint(x: w * 0.12, y: h * 0.94))
+            p.addQuadCurve(to: CGPoint(x: w / 2, y: h * 0.06),
+                           control: CGPoint(x: w * 0.14, y: h * 0.32))
+        case "snow":
+            let cx2 = w / 2, cy2 = h / 2
+            for i in 0..<6 {
+                let a = Double(i) / 6 * .pi * 2
+                let dx = cos(a) * w * 0.44
+                let dy = sin(a) * h * 0.44
+                p.move(to: CGPoint(x: cx2 - dx * 0.12, y: cy2 - dy * 0.12))
+                p.addLine(to: CGPoint(x: cx2 + dx, y: cy2 + dy))
+                p.addLine(to: CGPoint(x: cx2 + dx * 0.94 - dy * 0.10,
+                                      y: cy2 + dy * 0.94 + dx * 0.10))
+                p.closeSubpath()
+            }
+            p.addEllipse(in: CGRect(x: cx2 - w * 0.10, y: cy2 - h * 0.10,
+                                    width: w * 0.20, height: h * 0.20))
+        case "sun":
+            p.addEllipse(in: CGRect(x: w * 0.26, y: h * 0.26, width: w * 0.48, height: h * 0.48))
+            let cx3 = w / 2, cy3 = h / 2
+            for i in 0..<8 {
+                let a = Double(i) / 8 * .pi * 2
+                let x1 = cx3 + cos(a) * w * 0.34
+                let y1 = cy3 + sin(a) * h * 0.34
+                let x2 = cx3 + cos(a) * w * 0.48
+                let y2 = cy3 + sin(a) * h * 0.48
+                p.addRoundedRect(in: CGRect(x: min(x1, x2) - 1.4, y: min(y1, y2) - 1.4,
+                                            width: abs(x2 - x1) + 2.8,
+                                            height: abs(y2 - y1) + 2.8),
+                                 cornerSize: CGSize(width: 1.4, height: 1.4))
+            }
+        case "shell":
+            p.move(to: CGPoint(x: w / 2, y: h * 0.92))
+            p.addQuadCurve(to: CGPoint(x: w * 0.06, y: h * 0.30),
+                           control: CGPoint(x: w * 0.02, y: h * 0.74))
+            p.addQuadCurve(to: CGPoint(x: w * 0.94, y: h * 0.30),
+                           control: CGPoint(x: w / 2, y: h * -0.14))
+            p.addQuadCurve(to: CGPoint(x: w / 2, y: h * 0.92),
+                           control: CGPoint(x: w * 0.98, y: h * 0.74))
+            p.closeSubpath()
+
         default:
             p.addEllipse(in: r)
         }
@@ -338,6 +618,8 @@ struct JournalStickerShape: Shape {
     /// 月亮那个是「大圆挖掉小圆」，得用奇偶填充；票根那个缺口同理。
     /// 别的正常填——正常填的话月亮会是一个整圆，缺口那一半填不掉。
     static func needsEO(_ kind: String) -> Bool {
-        kind == "moon" || kind == "ticket"
+        // ⚠️ 这几个都是「一个形状里挖掉另一个」，得用奇偶填充。
+        // 不用的话邮戳会是一个实心圆、信封那道折线看不见。
+        ["moon", "ticket", "stamp", "mail"].contains(kind)
     }
 }

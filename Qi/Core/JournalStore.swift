@@ -76,6 +76,19 @@ struct JournalElement: Codable, Identifiable, Hashable {
     /// 照片存在 Images 里的文件名
     var imageName: String = ""
 
+    /// 花纹自己的颜色。空 = 照旧用半透明的白（老页面全是这一种）。
+    ///
+    /// 她定的：「可以给贴纸单独图案和背景选色，比如一个素底点点图案的胶带，
+    /// 我想做红白配色，我就可以把底色选红色、圆点点选白色。」
+    ///
+    /// 所以一件东西有两层色：`colorHex` 是底，这个是画在底上的花纹。
+    /// ⚠️ 只有**画出来的**那几种吃这一层（胶带、画的贴纸、纸纹）——
+    /// emoji 贴纸和照片本来就没有「花纹」这一说。
+    var inkHex: String = ""
+    /// 花纹的颜色。没设过就退回半透明的白，跟以前一样。
+    var ink: Color { Color(hexString: inkHex) ?? Color.white.opacity(0.5) }
+    var hasInk: Bool { !inkHex.isEmpty }
+
     /// 逐个字的颜色。空 = 整块一个颜色（走 `colorHex`）。
     ///
     /// 她要的：「可以每个字单独点击颜色选，点击颜色后打的字就是这个颜色，
@@ -134,6 +147,7 @@ extension JournalElement {
         emoji = (try? c.decodeIfPresent(String.self, forKey: .emoji)) ?? ""
         pattern = (try? c.decodeIfPresent(String.self, forKey: .pattern)) ?? ""
         imageName = (try? c.decodeIfPresent(String.self, forKey: .imageName)) ?? ""
+        inkHex = (try? c.decodeIfPresent(String.self, forKey: .inkHex)) ?? ""
         charColors = (try? c.decodeIfPresent([String].self, forKey: .charColors)) ?? []
         charScales = (try? c.decodeIfPresent([Double].self, forKey: .charScales)) ?? []
     }
@@ -231,20 +245,30 @@ enum JournalKit {
     /// 纸上的纹路。**画出来的**，不是贴图。
     static let paperPatterns: [(String, String)] = [
         ("素", "plain"), ("格纹", "grid"), ("横线", "ruled"),
-        ("点阵", "dot"), ("方格", "graph"), ("竖条", "stripe")
+        ("点阵", "dot"), ("方格", "graph"), ("竖条", "stripe"),
+        ("斜纹", "diag"), ("十字", "cross"), ("稿纸", "manuscript")
     ]
 
     /// 胶带的花纹。同样是画出来的，所以换个颜色就是另一卷。
     static let tapePatterns: [(String, String)] = [
         ("素", "plain"), ("斜条", "stripe"), ("格子", "check"),
-        ("圆点", "dot"), ("波浪", "wave"), ("虚线", "dash")
+        ("圆点", "dot"), ("波浪", "wave"), ("虚线", "dash"),
+        // 后加的一批。**每一种配上两层色就是几十卷**，
+        // 所以这儿加一个花纹，比扒十张胶带图划算得多。
+        ("细横条", "hline"), ("竖条", "vline"), ("千鸟", "hound"),
+        ("方格纸", "graph"), ("小三角", "tri"), ("菱形", "rhomb"),
+        ("十字", "plus"), ("星点", "spark")
     ]
 
     /// 画出来的贴纸。跟 emoji 那排的区别是**它跟着颜色走**——
     /// 同一片叶子换个色就是另一张，不用再找一套素材。
     static let stickerShapes: [(String, String)] = [
         ("叶", "leaf"), ("花", "flower"), ("星", "star"), ("心", "heart"),
-        ("云", "cloud"), ("月", "moon"), ("蝴蝶结", "bow"), ("票根", "ticket")
+        ("云", "cloud"), ("月", "moon"), ("蝴蝶结", "bow"), ("票根", "ticket"),
+        // 后加的一批
+        ("蝴蝶", "fly"), ("小鸟", "bird"), ("樱花", "sakura"), ("小草", "grass"),
+        ("邮戳", "stamp"), ("信封", "mail"), ("标签", "tag"), ("旗子", "flag"),
+        ("水滴", "drop"), ("雪花", "snow"), ("太阳", "sun"), ("贝壳", "shell")
     ]
 
     /// 画出来的贴纸默认用什么颜色。低饱和，贴在纸上不抢戏。

@@ -36,7 +36,8 @@ struct JournalElementView: View {
 
             case .tape:
                 // 胶带：半透明一条，两头是撕开的毛边，花纹画在上面
-                JournalTapeView(color: e.color, pattern: e.pattern)
+                JournalTapeView(color: e.color, pattern: e.pattern,
+                                ink: e.hasInk ? e.ink : nil)
 
             case .sticker:
                 // 两种贴纸：她挑了形状就画那个（跟着颜色走），
@@ -44,7 +45,8 @@ struct JournalElementView: View {
                 if !e.pattern.isEmpty {
                     JournalStickerView(shape: e.pattern,
                                        color: e.color,
-                                       side: 42)
+                                       side: 42,
+                                       backing: e.hasInk ? e.ink : nil)
                 } else {
                     Text(e.emoji).font(.app(34))
                 }

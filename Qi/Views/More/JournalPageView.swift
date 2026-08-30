@@ -370,8 +370,66 @@ struct JournalPageView: View {
         .background(.ultraThinMaterial)
     }
 
-    /// 选中之后那一排：换色、置顶、删掉
+    /// 选中之后那一排：换色、置顶、删掉。
+    /// 胶带和画出来的贴纸底下多一排——**第二层颜色**。
     private func selectedBar(_ e: JournalElement) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            firstBar(e)
+            // 她定的：「可以给贴纸单独图案和背景选色，
+            // 比如一个素底点点图案的胶带，我想做红白配色，
+            // 我就可以把底色选红色、圆点点选白色。」
+            //
+            // ⚠️ 只给**画出来的**那两种。emoji 贴纸和照片没有「第二层」，
+            // 给它们摆一排点不动的颜色只会让人以为坏了。
+            if e.kind == .tape || (e.kind == .sticker && !e.pattern.isEmpty) {
+                secondBar(e)
+            }
+        }
+    }
+
+    /// 第二层颜色。胶带是花纹，贴纸是底下那圈白边。
+    private func secondBar(_ e: JournalElement) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 7) {
+                Text(e.kind == .tape ? "花纹" : "衬底")
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                    .frame(width: 26)
+                // 头一个是「还原成白」——她十有八九还是最常用白的。
+                Button {
+                    commit(e.id) { $0.inkHex = "" }
+                } label: {
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 22, height: 22)
+                        .overlay {
+                            Circle().strokeBorder(
+                                e.hasInk ? Theme.softStroke : app.settings.accentColor,
+                                lineWidth: e.hasInk ? 1 : 2)
+                        }
+                }
+                .buttonStyle(.plain)
+                ForEach(JournalKit.stickerInks, id: \.1) { _, hex in
+                    Button {
+                        commit(e.id) { $0.inkHex = hex }
+                    } label: {
+                        Circle()
+                            .fill(Color(hexString: hex) ?? .gray)
+                            .frame(width: 22, height: 22)
+                            .overlay {
+                                Circle().strokeBorder(
+                                    app.settings.accentColor,
+                                    lineWidth: e.inkHex == hex ? 2 : 0)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 14)
+        }
+    }
+
+    private func firstBar(_ e: JournalElement) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 7) {
                 // 点中某个字之后，这一排先出现「这个字」的三个钮：
@@ -429,6 +487,7 @@ struct JournalPageView: View {
                             commit(e.id) { $0.pattern = key }
                         } label: {
                             JournalTapeView(color: e.color, pattern: key,
+                                            ink: e.hasInk ? e.ink : nil,
                                             width: 34, height: 18)
                                 .overlay {
                                     if e.pattern == key {
@@ -462,7 +521,8 @@ struct JournalPageView: View {
                                     color: e.pattern == key
                                         ? e.color
                                         : (Color(hexString: "A8A296") ?? .gray),
-                                    side: 20)
+                                    side: 20,
+                                    backing: e.hasInk ? e.ink : nil)
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel(name)
