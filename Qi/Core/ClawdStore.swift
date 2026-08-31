@@ -863,6 +863,28 @@ final class ClawdStore: ObservableObject {
     // 两边看的是同一个他，不是两只长得一样的。
 
     /// 手上那件东西的 kind id（FurnitureCatalog 里的），没拿就是 nil
+    /// 他身上穿戴着什么（帽子、围巾、眼镜…）。`nil` = 什么都没戴。
+    ///
+    /// 她报的：「clawd 的穿戴比如贝雷帽被当成家具放在房间里，
+    /// 实际上应该给他直接穿上。」——对，一顶帽子摆在地板上是很怪。
+    ///
+    /// ⚠️ 跟 `carrying`（拎在手上那件）是**两个槽**：
+    /// 手上能拎一张床，头上戴的是帽子，两件事互不影响。
+    @Published var wearing: String? {
+        didSet { if loaded { UserDefaults.standard.set(wearing, forKey: "clawdWearing") } }
+    }
+
+    /// 他这会儿戴着的那件是什么
+    var wornKind: FurnitureKind? {
+        wearing.flatMap { FurnitureCatalog.kind($0) }
+    }
+
+    /// 穿上／脱下。已经戴着这件就是脱下来。
+    /// **一次只戴一件**——两顶帽子叠在头上不是可爱，是坏了。
+    func wear(_ kindID: String) {
+        wearing = (wearing == kindID) ? nil : kindID
+    }
+
     @Published var carrying: String? {
         didSet {
             if loaded { UserDefaults.standard.set(carrying, forKey: "clawdCarrying") }
@@ -1011,6 +1033,7 @@ final class ClawdStore: ObservableObject {
         lastCheckIn = t > 0 ? Date(timeIntervalSince1970: t) : nil
         linked = UserDefaults.standard.bool(forKey: "clawdLinked")
         carrying = UserDefaults.standard.string(forKey: "clawdCarrying")
+        wearing = UserDefaults.standard.string(forKey: "clawdWearing")
         loaded = true
     }
 
@@ -1382,14 +1405,22 @@ extension ClawdStore {
         }
     }
 
+    /// 这一件该不该摆在屋里。
+    ///
+    /// ⚠️ **穿在身上那件不摆。** 她报的：「贝雷帽被当成家具放在房间里。」
+    /// 收起来的、拎在手上的、穿在身上的，三种都不该出现在地板上。
+    private func onFloor(_ f: Furniture) -> Bool {
+        !f.hidden && !f.carried && f.kind != wearing
+    }
+
     /// 某一间屋里摆着的东西
     func furniture(in room: HomeRoom) -> [Furniture] {
-        owned.filter { !$0.hidden && !$0.carried && $0.room == room.rawValue }
+        owned.filter { onFloor($0) && $0.room == room.rawValue }
     }
 
     /// 某一间屋里有几件（户型图上那个小数字）
     func count(in room: HomeRoom) -> Int {
-        owned.filter { !$0.hidden && !$0.carried && $0.room == room.rawValue }.count
+        owned.filter { onFloor($0) && $0.room == room.rawValue }.count
     }
 
     /// 把一件东西搬到另一间屋。

@@ -134,13 +134,10 @@ struct JournalPageView: View {
                 }
             }
             .onTapGesture {
-                if picked == e.id {
-                    // 已经选中了再点，就是要改内容
-                    if e.kind == .text || e.kind == .note || e.kind == .quote {
-                        draftText = e.text
-                        editingText = e
-                    }
-                } else {
+                // ⚠️ 选中之后再点**不再自动开编辑器**——
+                // 改文字现在有自己的钮（见 `firstBar` 里那个「改文字」）。
+                // 以前这一下会把「点某个字」也吃掉。
+                if picked != e.id {
                     picked = e.id
                     charFocus = nil
                 }
@@ -207,18 +204,17 @@ struct JournalPageView: View {
     /// 两份迟早会长歪，那时候他看到的就不再是她看到的了。
     @ViewBuilder
     private func render(_ e: JournalElement) -> some View {
-        // 选中的那一块文字才让点字——没选中的时候点它是要拖它，
-        // 逐字的点击会把拖拽吃掉。
-        if e.kind == .text, picked == e.id {
-            JournalCharText(element: e, focus: charFocus) { i in
-                charFocus = (charFocus == i) ? nil : i
-                if app.settings.haptics {
-                    UISelectionFeedbackGenerator().selectionChanged()
-                }
-            }
-        } else {
-            JournalElementView(e)
-        }
+        // ⚠️ **选中和没选中画的是同一份。**
+        //
+        // 上一版这儿是「选中的文字换成逐字渲染、让她点字」，两个毛病：
+        //   ① 逐字排版跟整块 `Text` 的排版不一样，一选中**位置就跳**
+        //      （她报的「文字在编辑模式的时候位置有些问题」）；
+        //   ② 点字压根点不着——父层那句「已经选中了再点就是改内容」
+        //      把这一下抢走了，所以她「无法选择单独一个字改色」。
+        //
+        // 现在选字挪到底下工具条那一排小方块上（见 `charStrip`）：
+        // 画布不变形，选字也不跟拖拽、缩放、旋转抢手势。
+        JournalElementView(e)
     }
 
     private func charButton(_ icon: String, _ act: @escaping () -> Void) -> some View {
@@ -410,6 +406,12 @@ struct JournalPageView: View {
     /// 胶带和画出来的贴纸底下多一排——**第二层颜色**。
     private func selectedBar(_ e: JournalElement) -> some View {
         VStack(alignment: .leading, spacing: 7) {
+            // 一个字一个小方块，点哪个选哪个。
+            // ⚠️ 选字**在这儿选，不在画布上点**——画布上点会跟拖拽、
+            // 缩放、旋转抢手势，而且逐字渲染会让那块字的位置跳。
+            if e.kind == .text, !e.text.isEmpty {
+                charStrip(e)
+            }
             firstBar(e)
             // 她定的：「可以给贴纸单独图案和背景选色，
             // 比如一个素底点点图案的胶带，我想做红白配色，
@@ -422,6 +424,46 @@ struct JournalPageView: View {
             }
         }
     }
+
+    /// 那一排字。点一个就选中它，再点一下取消。
+    ///
+    /// 选中的那个会被下面那排颜色和大小按钮作用到；
+    /// 一个都没选就是整块一起改（老行为）。
+    private func charStrip(_ e: JournalElement) -> some View {
+        let chars = Array(e.text)
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                ForEach(chars.indices, id: \.self) { i in
+                    let on = charFocus == i
+                    Button {
+                        charFocus = on ? nil : i
+                        if app.settings.haptics {
+                            UISelectionFeedbackGenerator().selectionChanged()
+                        }
+                    } label: {
+                        Text(chars[i] == Self.nl ? "⏎" : String(chars[i]))
+                            .font(.app(14, weight: .medium, design: .serif))
+                            .foregroundStyle(e.inkAt(i))
+                            .frame(width: 27, height: 27)
+                            .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .fill(on ? app.settings.accentColor.opacity(0.22)
+                                      : Theme.softFillDeep))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                    .strokeBorder(app.settings.accentColor,
+                                                  lineWidth: on ? 1.6 : 0)
+                            }
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 14)
+        }
+    }
+
+    /// ⚠️ 换行走常量，别在上面写字面量。
+    private static let nl: Character = "\n"
 
     /// 第二层颜色。胶带是花纹，贴纸是底下那圈白边。
     private func secondBar(_ e: JournalElement) -> some View {
@@ -471,13 +513,7 @@ struct JournalPageView: View {
                 // 点中某个字之后，这一排先出现「这个字」的三个钮：
                 // 放大、缩小、还原。不点字就不出现——不占地方。
                 if e.kind == .text, let at = charFocus {
-                    let chars = Array(e.text)
-                    if at < chars.count {
-                        Text(String(chars[at]))
-                            .font(.app(15, weight: .medium, design: .serif))
-                            .frame(width: 26, height: 26)
-                            .background(Circle().fill(app.settings.accentColor.opacity(0.16)))
-                    }
+                    // 选中的是哪个字，上面那一排已经高亮了，这儿不再重复摆一遍
                     charButton("textformat.size.smaller") {
                         commit(e.id) { setCharSize(&$0, at: at, mul: 1 / 1.18) }
                     }

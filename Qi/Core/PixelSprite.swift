@@ -238,19 +238,25 @@ enum ClawdSprites {
         "ppppppppppppppppppppppppppppppnp",
         "....pppppppppppppppppppppppp..n.",
         "....pppppppppppppppppppppppp..n.",
-        "....pppppppppppppppppppppppp..n.",
-        "....pppppppppppppppppppppppptttt",
-        "....pppppppppppppppppppppppptttt",
+        "....pppppppppppppppppppppppp.nn.",
+        "....pppppppppppppppppppppppp.nn.",
+        "....pppppppppppppppppppppppp.nn.",
         "....pppppppppppppppppppppppp....",
         "....ppp..ppp........ppp..ppp....",
         "....ppp..ppp........ppp..ppp....",
         "....ppp..ppp........ppp..ppp....",
-        "....ppp..ppp........ppp..ppp....",
-        "....ppp..ppp........ppp..ppp....",
-        "....ppp..ppp........ppp..ppp...."
+        "..ttppp..ppp........ppp..ppp....",
+        ".tttttp..ppp........ppp..ppp....",
+        "tttttttt.ppp........ppp..ppp...."
     ], palette)
 
-    /// 扫地：扫头摆到右边
+    /// 扫地：扫头甩到右边。
+    ///
+    /// ⚠️ **两帧的差别要足够大。** 她报的：
+    /// 「扫把很小很小，跟他本体不符合，太小导致动的幅度根本看不见，
+    ///   我一直观察才发现扫把有在左右晃动，没有真的在扫地的感觉。」
+    /// 以前扫头只有 4×2 格、两帧只差一格——那不叫扫地，叫抖了一下。
+    /// 现在扫头横跨八格，一帧甩到左下、一帧甩到右下，隔着屏幕也看得出在扫。
     static let sweep2 = PixelSprite([
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
@@ -265,16 +271,16 @@ enum ClawdSprites {
         "ppppppppppppppppppppppppppppppnp",
         "....pppppppppppppppppppppppp..n.",
         "....pppppppppppppppppppppppp..n.",
-        "....pppppppppppppppppppppppp..n.",
-        "....pppppppppppppppppppppppp.ttt",
-        "....pppppppppppppppppppppppp.ttt",
+        "....pppppppppppppppppppppppp.nn.",
+        "....pppppppppppppppppppppppp.nn.",
+        "....pppppppppppppppppppppppp.nn.",
         "....pppppppppppppppppppppppp....",
         "....ppp..ppp........ppp..ppp....",
         "....ppp..ppp........ppp..ppp....",
         "....ppp..ppp........ppp..ppp....",
-        "....ppp..ppp........ppp..ppp....",
-        "....ppp..ppp........ppp..ppp....",
-        "....ppp..ppp........ppp..ppp...."
+        "....ppp..ppp........ppp..ppptt..",
+        "....ppp..ppp........ppp..pttttt.",
+        "....ppp..ppp........ppp.tttttttt"
     ], palette)
 
     /// 甜：眯着眼笑，腮红。爱心是界面上飘的，不画进图纸

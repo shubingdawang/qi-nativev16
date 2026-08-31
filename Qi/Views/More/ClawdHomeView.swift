@@ -734,7 +734,24 @@ struct ClawdHomeView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                         .glassCard(padding: 0)
-                        .onTapGesture { store.toggleHidden(item.id) }
+                        // ⚠️ 穿戴那一类点一下是**穿上／脱下**，不是收起来。
+                        // 她报的：「贝雷帽被当成家具放在房间里，
+                        // 实际上应该给他直接穿上。」——一顶帽子摆在地板上是很怪。
+                        .overlay(alignment: .topTrailing) {
+                            if kind.category == .wear, store.wearing == item.kind {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.app(12))
+                                    .foregroundStyle(app.settings.accentColor)
+                                    .padding(5)
+                            }
+                        }
+                        .onTapGesture {
+                            if kind.category == .wear {
+                                store.wear(item.kind)
+                            } else {
+                                store.toggleHidden(item.id)
+                            }
+                        }
                     }
                 }
             }

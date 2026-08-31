@@ -64,8 +64,22 @@ struct JournalPaperView: View {
                     // 图存的是中性灰（平均明度正好 128），叠加以 128 为界——
                     // 亮的地方提一点、暗的地方压一点，**纸的颜色照样透过来**。
                     // 换成 normal 就是拿一张灰布把她选的纸色盖掉了。
+                    // ⚠️ 强度从 0.55 提到 1.0，再叠一层 `multiply` 压出暗部。
+                    //
+                    // 她报的：「粗亚麻、华夫格、人字呢不太明显，
+                    // 特别是在淡色的背景。」——对，浅纸上 overlay 只往亮处推，
+                    // 而浅纸本来就亮，推不动。加一层很轻的 multiply
+                    // 把织纹的暗部压出来，浅底上才看得见纹路。
                     .blendMode(.overlay)
-                    .opacity(0.55)
+                    .allowsHitTesting(false)
+            }
+        }
+        .overlay {
+            if !weave.isEmpty, let img = JournalPaperView.weaveImage(weave) {
+                Image(uiImage: img)
+                    .resizable(resizingMode: .tile)
+                    .blendMode(.multiply)
+                    .opacity(0.30)
                     .allowsHitTesting(false)
             }
         }

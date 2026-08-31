@@ -37,7 +37,10 @@ for path in sys.argv[1:]:
             print('BAD %s  id 重复：%s（%d 次）' % (path, i, ids.count(i)))
             total += 1
 
-    for m in re.finditer(r'PixelSprite\(\[(.*?)\], p\)', s, re.S):
+    # ⚠️ 两套调色板：家具那边叫 p，clawd 那边叫 palette。
+    # 头一版只认 p，于是 clawd 那三十几张图**一张都没查到**——
+    # 我改扫地那两帧的时候才发现它一直在放空。
+    for m in re.finditer(r'PixelSprite\(\[(.*?)\],\s*(?:p|palette)\)', s, re.S):
         rows = re.findall(r'"([^"]*)"', m.group(1))
         if not rows:
             continue
