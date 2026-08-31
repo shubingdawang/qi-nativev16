@@ -42,7 +42,27 @@ def drawn(block_start, block_end=None):
     return re.findall(r'case "([a-z]+)"', draw[a:b])
 
 
-PLAIN = {'plain'}          # 「素」不用画，就是什么都不画
+PLAIN = {'plain', ''}      # 「素」「没有」不用画，就是什么都不画
+
+# 相框、照片边、便签、夹子、邮票那五张表：key 在 JournalStyle.swift 的
+# switch 里。⚠️ 少一个分支的话，她点那一格什么都不会变，也不报错。
+STYLE = 'Qi/Views/More/JournalStyle.swift'
+try:
+    style_src = io.open(STYLE, encoding='utf-8').read()
+    style_cases = set(re.findall(r'case "([a-z]+)"', style_src))
+    for label, table in [('相框', 'frameStyles'), ('照片边', 'photoEdges'),
+                         ('便签', 'noteStyles'), ('夹子', 'clipStyles'),
+                         ('邮票', 'stampStyles')]:
+        m2 = re.search(r'static let %s: \[\(String, String\)\] = \[(.*?)\n    \]'
+                       % table, kit, re.S)
+        if not m2:
+            continue
+        want = re.findall(r'\("[^"]*", "([^"]*)"\)', m2.group(1))
+        miss = [k for k in want if k and k not in style_cases]
+        if miss:
+            print('BAD %s：目录里列了但 JournalStyle 里没分支 → %s' % (label, miss))
+except IOError:
+    pass
 
 checks = [
     ('纸纹',   listed('paperPatterns'),

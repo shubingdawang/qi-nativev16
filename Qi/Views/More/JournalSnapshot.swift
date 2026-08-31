@@ -80,23 +80,15 @@ struct JournalElementView: View {
                     .background {
                         ZStack {
                             Rectangle().fill(Color(hexString: "F6F2E8")!)
+                            JournalStyle.StampSkin(kind: e.pattern, tint: e.color)
                             Rectangle()
-                                .strokeBorder(e.color.opacity(0.5),
+                                .strokeBorder(e.color.opacity(e.pattern.isEmpty ? 0.5 : 0),
                                               style: StrokeStyle(lineWidth: 2, dash: [3, 3]))
                         }
                     }
 
             case .clip:
-                // 夹子：一个圆角小方块加一道内线
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(e.color)
-                    .frame(width: 20, height: 30)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 2)
-                            .strokeBorder(.white.opacity(0.6), lineWidth: 1.5)
-                            .padding(4)
-                    }
-                    .shadow(color: .black.opacity(0.16), radius: 2, y: 1)
+                JournalStyle.Clip(kind: e.pattern, tint: e.color)
 
             case .note:
                 Text(e.text)
@@ -105,20 +97,33 @@ struct JournalElementView: View {
                     .padding(10)
                     .frame(width: 110, alignment: .topLeading)
                     .frame(minHeight: 90, alignment: .topLeading)
-                    .background(e.color)
+                    .background {
+                        // 底色照旧是她挑的那个，纹路和撕口另画一层
+                        ZStack {
+                            e.color
+                            JournalStyle.NoteSkin(kind: e.pattern)
+                        }
+                    }
+                    .clipShape(JournalStyle.NoteShape(kind: e.pattern))
                     .shadow(color: .black.opacity(0.12), radius: 3, y: 2)
 
             case .photo:
-                if let img = ImageStore.load(e.imageName) {
-                    Image(uiImage: img)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 120, height: 120)
-                        .clipped()
-                } else {
-                    Rectangle().fill(Color.gray.opacity(0.3))
-                        .frame(width: 120, height: 120)
+                // ⚠️ 照片本来一条边都没有。她定的「照片需要可以选择边框」——
+                // 所以 `pattern` 空的时候还是**光板**（老页面全是这一种），
+                // 挑了才加边。
+                Group {
+                    if let img = ImageStore.load(e.imageName) {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 120, height: 120)
+                            .clipped()
+                    } else {
+                        Rectangle().fill(Color.gray.opacity(0.3))
+                            .frame(width: 120, height: 120)
+                    }
                 }
+                .modifier(JournalStyle.PhotoEdge(kind: e.pattern, tint: e.color))
 
             case .frame:
                 // 拍立得：白框，底下留一条写字的地方
@@ -140,8 +145,21 @@ struct JournalElementView: View {
                         .foregroundStyle(Color(hexString: "6B655A")!)
                         .frame(width: 116, height: 26)
                 }
-                .padding(7)
-                .background(Color.white)
+                // ⚠️ 边宽、底色、圆角**跟着 `pattern` 走**。
+                // 她定的：「相框需要多种风格。」
+                // 底下写字那条留着——那是拍立得的味道，别的风格也不亏。
+                .padding(JournalStyle.framePad(e.pattern))
+                .background(JournalStyle.frameFill(e.pattern))
+                .clipShape(RoundedRectangle(cornerRadius: JournalStyle.frameRadius(e.pattern),
+                                            style: .continuous))
+                .overlay {
+                    if e.pattern == "double" {
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .strokeBorder(Color(hexString: "8A8378")!.opacity(0.55),
+                                          lineWidth: 1)
+                            .padding(3)
+                    }
+                }
                 .shadow(color: .black.opacity(0.18), radius: 5, y: 3)
 
             case .quote:

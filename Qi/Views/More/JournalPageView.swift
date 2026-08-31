@@ -422,6 +422,56 @@ struct JournalPageView: View {
             if e.kind == .tape || (e.kind == .sticker && !e.pattern.isEmpty) {
                 secondBar(e)
             }
+            // 相框、照片边、便签、夹子、邮票各自的几种样子。
+            // 她定的：「相框、便签、夹子、邮票需要多种风格，
+            // 照片需要可以选择边框。」
+            if let styles = Self.styles(for: e.kind) {
+                styleBar(e, styles)
+            }
+        }
+    }
+
+    /// 这一类有没有可选的样子。没有就返回 nil，那一排不出现。
+    static func styles(for kind: JournalKind) -> [(String, String)]? {
+        switch kind {
+        case .frame: return JournalKit.frameStyles
+        case .photo: return JournalKit.photoEdges
+        case .note:  return JournalKit.noteStyles
+        case .clip:  return JournalKit.clipStyles
+        case .stamp: return JournalKit.stampStyles
+        default:     return nil
+        }
+    }
+
+    /// 挑样子那一排。**摆名字不摆缩略图**——
+    /// 这几种的区别在边和角上，缩到 30 点根本分不出来，
+    /// 不如老老实实写「木框」「胶片」。
+    private func styleBar(_ e: JournalElement, _ styles: [(String, String)]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 7) {
+                Text("样子")
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                    .frame(width: 26)
+                ForEach(styles, id: \.1) { name, key in
+                    let on = e.pattern == key
+                    Button {
+                        commit(e.id) { $0.pattern = key }
+                    } label: {
+                        Text(name)
+                            .font(.app(12, weight: on ? .semibold : .regular))
+                            .foregroundStyle(on ? .white : Theme.textSoft(scheme))
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(on
+                                ? app.settings.accentColor.opacity(0.85)
+                                : Theme.softFillDeep))
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 14)
         }
     }
 

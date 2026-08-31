@@ -87,13 +87,26 @@ struct ShareCardView: View {
                 }
 
                 if !message.imageNames.isEmpty {
-                    HStack(spacing: 6) {
-                        ForEach(message.imageNames.prefix(3), id: \.self) { n in
+                    // ⚠️ **有几张摆几张**，不再只摆前三张。
+                    //
+                    // 她报的：「多张图片一起发送（photostack 形式）长按分享后
+                    // 只显示三张图片，而我这个勾选的有 9 张。」——
+                    // 以前这儿写死了 `prefix(3)` 加一排 `HStack`，
+                    // 一行摆三张，第四张起直接丢掉。
+                    //
+                    // 改成三列的网格：三张是一行，九张是三行，谁都不丢。
+                    // 一格宽度按张数缩一点，多的时候整张卡不会太长。
+                    let names = message.imageNames
+                    let side: CGFloat = names.count <= 3 ? 92 : (names.count <= 6 ? 78 : 66)
+                    LazyVGrid(columns: Array(repeating: GridItem(.fixed(side), spacing: 6),
+                                             count: min(3, names.count)),
+                              spacing: 6) {
+                        ForEach(names, id: \.self) { n in
                             if let img = ImageStore.load(n) {
                                 Image(uiImage: img)
                                     .resizable()
                                     .scaledToFill()
-                                    .frame(width: 92, height: 92)
+                                    .frame(width: side, height: side)
                                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                             }
                         }

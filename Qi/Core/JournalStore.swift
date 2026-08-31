@@ -277,6 +277,40 @@ enum JournalKit {
         ("水滴", "drop"), ("雪花", "snow"), ("太阳", "sun"), ("贝壳", "shell")
     ]
 
+    // ── 下面这四张表都走 `pattern` 那个字段（跟胶带、贴纸共用）。
+    // 她定的：「相框、便签、夹子、邮票需要多种风格，
+    // 照片需要可以选择边框。」
+
+    /// 相框的样子。空 = 拍立得（老页面全是这一种）。
+    static let frameStyles: [(String, String)] = [
+        ("拍立得", ""), ("窄白边", "thin"), ("木框", "wood"),
+        ("圆角", "round"), ("双线", "double"), ("撕边", "torn")
+    ]
+
+    /// 照片的边框。**照片本来一条边都没有**，所以第一个是「没有」。
+    static let photoEdges: [(String, String)] = [
+        ("没有", ""), ("白边", "white"), ("细线", "hair"),
+        ("圆角", "round"), ("胶片", "film"), ("虚线", "dash")
+    ]
+
+    /// 便签的样子
+    static let noteStyles: [(String, String)] = [
+        ("素", ""), ("横线", "ruled"), ("方格", "grid"),
+        ("撕口", "torn"), ("折角", "fold"), ("打孔", "punch")
+    ]
+
+    /// 夹子的样子
+    static let clipStyles: [(String, String)] = [
+        ("方夹", ""), ("回形针", "paper"), ("木夹", "wood"),
+        ("长尾夹", "bull"), ("别针", "pin")
+    ]
+
+    /// 邮票的样子
+    static let stampStyles: [(String, String)] = [
+        ("锯齿", ""), ("方章", "square"), ("圆戳", "round"),
+        ("双框", "double"), ("旧票", "aged")
+    ]
+
     /// 纸的织纹。**这几张是真的布料实拍**（CC0，见 Resources/Weave/织纹来历.txt）——
     /// 亚麻那种毛边画不出来，只能拍。
     /// 图里只有明暗、没有颜色，纸色照样是她选的那个。
