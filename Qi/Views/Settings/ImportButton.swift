@@ -41,9 +41,22 @@ struct ImportButton: View {
 
     @State private var showing = false
 
+    /// 自己给个长相。给了就不用设置页那种一整行的样子。
+    ///
+    /// ⚠️ 加这个是因为**别处也要用它**：音乐库顶上那个「＋」、
+    /// 手机页那个「换文件」，长相都不一样，但**弹窗必须挂在这儿**
+    /// （挂回那些页上就会自己关掉，见开头那段）。
+    /// 不给这个口子的话，别处只能各自再写一遍 `fileImporter`——
+    /// 那就等于把坑又挖回去了。
+    var label: AnyView? = nil
+
     var body: some View {
         Button { showing = true } label: {
-            SettingsRowLabel(title: title, icon: icon)
+            if let label {
+                label
+            } else {
+                SettingsRowLabel(title: title, icon: icon)
+            }
         }
         .buttonStyle(.plain)
         .fileImporter(

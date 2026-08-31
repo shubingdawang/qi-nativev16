@@ -592,10 +592,14 @@ final class MusicPlayer: NSObject, ObservableObject {
     /// 她说「一首歌播完就不再播了」——以前放完直接 stop，
     /// 连「刚才放的是哪首」都一起清掉，歌词页就空成一张白纸。
     enum Repeat: String, CaseIterable {
-        case off, one, shuffle
+        // ⚠️ `list` 是后加的。她报的：「音乐没有按照歌单播放下来的模式
+        // （列表播放）。」——以前只有停、单曲、随机三档，
+        // 而「一首接一首往下放」才是听歌最常见的那一种。
+        case off, list, one, shuffle
         var label: String {
             switch self {
             case .off:     return "放完就停"
+            case .list:    return "顺着往下放"
             case .one:     return "单曲循环"
             case .shuffle: return "随机播放"
             }
@@ -603,13 +607,15 @@ final class MusicPlayer: NSObject, ObservableObject {
         var icon: String {
             switch self {
             case .off:     return "arrow.right.to.line"
+            case .list:    return "list.bullet"
             case .one:     return "repeat.1"
             case .shuffle: return "shuffle"
             }
         }
         var next: Repeat {
             switch self {
-            case .off: return .one
+            case .off: return .list
+            case .list: return .one
             case .one: return .shuffle
             case .shuffle: return .off
             }
@@ -628,6 +634,18 @@ final class MusicPlayer: NSObject, ObservableObject {
             seek(to: 0)
             player?.play()
             playing = true
+        case .list:
+            // 顺着库里的顺序往下一首。
+            // ⚠️ 放到最后一首就**停在那儿**，不绕回第一首——
+            // 绕回去等于永远放不完，她睡着了它还在响。
+            let all = MusicLibrary.shared.tracks
+            if let i = all.firstIndex(where: { $0.id == current?.id }),
+               i + 1 < all.count {
+                start(all[i + 1])
+            } else {
+                seek(to: 0)
+                pause()
+            }
         case .shuffle:
             let pool = MusicLibrary.shared.tracks.filter { $0.id != current?.id }
             if let next = pool.randomElement() { start(next) } else { seek(to: 0); pause() }
@@ -810,9 +828,34 @@ final class MusicLibrary: ObservableObject {
             .sorted { $0.1 > $1.1 }
     }
 
-    func add(_ track: Track) {
+    /// 入库。**同一首已经有了就不再收**，把已有那首还回去。
+    ///
+    /// 她报的：「音乐没有重复筛选，我有时候会导入一模一样的。」
+    ///
+    /// ⚠️ 「同一首」按**歌名 + 歌手**认，不按文件。
+    /// 按文件认是没用的：同一首歌换个地方下载一次，
+    /// 文件名和字节数就都不一样了，而她要挡的正是那种。
+    /// 两边都去掉空格、不分大小写——「周杰伦」和「周杰伦 」是一首。
+    @discardableResult
+    func add(_ track: Track) -> Track {
+        if let old = tracks.first(where: { same($0, track) }) {
+            return old
+        }
         tracks.append(track)
         refreshMissing()
+        return track
+    }
+
+    /// 这两首算不算同一首
+    func same(_ a: Track, _ b: Track) -> Bool {
+        func norm(_ s: String) -> String {
+            s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        }
+        let ta = norm(a.title), tb = norm(b.title)
+        guard !ta.isEmpty, ta == tb else { return false }
+        let aa = norm(a.artist), ab = norm(b.artist)
+        // 有一边没填歌手就只认歌名——总比放两首一模一样的强
+        return aa.isEmpty || ab.isEmpty || aa == ab
     }
 
     /// 同一首歌，库里有没有更好的一版。

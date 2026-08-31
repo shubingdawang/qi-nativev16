@@ -153,8 +153,14 @@ struct MusicFloatingView: View {
         HStack(spacing: 9) {
             // **不转**。方的封面一转就成了菱形（她说的「点开悬浮窗封面图变成菱形」）——
             // 转只留给收起来时那颗圆的，圆的怎么转都还是圆的。
+            // ⚠️ 封面也要能点进歌词页。
+            // 她报的：「音乐悬浮窗也是，点击头像没法进入歌词页。」
+            // 以前只有中间那块文字能点——而封面是这条上最大、
+            // 最像「主体」的那一块，点它进不去最反直觉。
             TrackArtwork(track: track, side: 34)
                 .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .onTapGesture { showingLyrics = true }
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(track.title)

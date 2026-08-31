@@ -17,7 +17,23 @@ struct MusicLibraryView: View {
     @State private var keyword = ""
     @State private var searching = false
     @State private var webResults: [Track] = []
-    @State private var notice: String?
+    @State private var notice: String? {
+        didSet {
+            // ⚠️ 说完自己走。
+            // 她报的：「导入后会显示导入了 x 首歌，没有消掉会一直显示。」
+            // 那句话是**一次性的回执**，不是这一页的状态——
+            // 常驻在那儿之后，她下次进来还看见「导进来 3 首」，
+            // 会以为刚刚又导了一次。
+            guard notice != nil else { return }
+            let mine = notice
+            noticeTask?.cancel()
+            noticeTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                if !Task.isCancelled, notice == mine { notice = nil }
+            }
+        }
+    }
+    @State private var noticeTask: Task<Void, Never>?
     @State private var showingLyrics = false
     /// 按歌手分组还是排成一长条
     @AppStorage("musicGroupByArtist") private var byArtist = false
@@ -92,15 +108,40 @@ struct MusicLibraryView: View {
                     .padding(.vertical, 10)
                     .background(Capsule().fill(Theme.softFillDeep))
 
-                    Button {
-                        importing = true
-                    } label: {
-                        Image(systemName: Icon.add)
-                            .font(.app(16))
-                            .foregroundStyle(app.settings.accentColor)
-                            .frame(width: 34, height: 34)
+                    // ⚠️ 走 `ImportButton`：弹窗不能挂在这一页上。
+                    // 这一页订阅了 `app`，后台存盘、身体推进、他在别的窗口
+                    // 回了一句话，都会重建它，正在弹的选择器当场被撤掉——
+                    // 跟当初「导入备份要点五次」是同一个病。
+                    ImportButton(title: "", icon: Icon.add,
+                                 types: [.audio, .mp3, .mpeg4Audio, .data],
+                                 multiple: true,
+                                 label: AnyView(
+                                    Image(systemName: Icon.add)
+                                        .font(.app(16))
+                                        .foregroundStyle(app.settings.accentColor)
+                                        .frame(width: 34, height: 34)
+                                        .contentShape(Rectangle())
+                                 )) { result in
+                        guard case .success(let urls) = result else { return }
+                        var added = 0
+                        var dup = 0
+                        for u in urls {
+                            guard let t = MusicStore.importFile(from: u) else { continue }
+                            // ⚠️ `add` 现在会查重，重了就把已有那首还回来。
+                            // 靠「回来的是不是同一件」判断这次到底收没收——
+                            // 只数 importFile 成功几次的话，
+                            // 重复导入十次也会说「导进来 10 首」。
+                            let got = library.add(t)
+                            if got.id == t.id { added += 1 } else { dup += 1 }
+                        }
+                        if added == 0 && dup > 0 {
+                            notice = "这 \(dup) 首库里已经有了"
+                        } else if dup > 0 {
+                            notice = "导进来 \(added) 首，另外 \(dup) 首库里已经有了"
+                        } else {
+                            notice = added > 0 ? "导进来 \(added) 首" : "这些文件读不出来"
+                        }
                     }
-                    .buttonStyle(.plain)
                 }
 
                 if let notice {
@@ -245,19 +286,7 @@ struct MusicLibraryView: View {
                  + "同一个人的歌写成同一个分组名，就会归到一起。")
         }
         .fullScreenCover(isPresented: $showingLyrics) { NowPlayingView() }
-        .fileImporter(isPresented: $importing,
-                      allowedContentTypes: [.audio, .mp3, .mpeg4Audio, .data],
-                      allowsMultipleSelection: true) { result in
-            guard case .success(let urls) = result else { return }
-            var added = 0
-            for u in urls {
-                if let t = MusicStore.importFile(from: u) {
-                    library.add(t)
-                    added += 1
-                }
-            }
-            notice = added > 0 ? "导进来 \(added) 首" : "这些文件读不出来"
-        }
+
     }
 
     /// 正在放的那一条。整条都能点，进歌词页。
@@ -290,6 +319,13 @@ struct MusicLibraryView: View {
             }
             .padding(12)
             .glassCard(padding: 0)
+            // ⚠️ 整条都要能点。
+            // 她报的：「音乐功能里最顶上的点击进入歌词页也是跟聊天记录一个毛病，
+            // 不是整条都能点击的。」——对，`buttonStyle(.plain)` 下
+            // 能点的只有真画出来的字和图，`Spacer` 和 padding 是透明的。
+            // 跟侧边栏那几行是同一个病。
+            .contentShape(RoundedRectangle(cornerRadius: Theme.cardRadius,
+                                           style: .continuous))
         }
         .buttonStyle(.plain)
     }
