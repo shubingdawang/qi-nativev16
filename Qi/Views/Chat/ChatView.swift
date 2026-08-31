@@ -17,10 +17,7 @@ struct ChatView: View {
     @State private var drawerOpen = false
     @State private var sideOpen = false
     @State private var destination: SideMenuItem?
-    @State private var showingModelPicker = false
-    @State private var showingSystemPrompt = false
     @State private var showingSearch = false
-    @State private var showingTools = false
     /// 输入框里的字。**存在 AppState 里，不是 @State**——
     /// 见 `AppState.drafts` 那段：切去设置页再回来不能白打。
     ///
@@ -43,7 +40,6 @@ struct ChatView: View {
     @State private var jumpTo: UUID?
     @State private var pickedItems: [PhotosPickerItem] = []
     @State private var showingPlus = false
-    @State private var showingPoke = false
     @State private var pendingImages: [UIImage] = []
     /// 已经原样存好的动图（gif）。**不走 pendingImages**——
     /// 那条路要过一遍 UIImage，动画会被压成第一帧。
@@ -93,15 +89,15 @@ struct ChatView: View {
     @State private var menuMessage: ChatMessage?
     @State private var editingMessage: ChatMessage?
     /// 点开了哪一条的「过程」。弹窗挂在这一页上，不挂在气泡上。
-    @State private var processMessage: ChatMessage?
+    /// 这一页上那七张面板，**共用一个 presentation 宿主**。
+    /// 理由见下面 `.sheet(item: $panel)` 那儿。
+    @State private var panel: ChatPanel?
     @State private var editText = ""
     @State private var reading: ChatMessage?
     @State private var browsing: BrowserLink?
     @State private var travelling: Journey?
     /// 从这趟旅行的第几处进去（她在卡片上停在哪张）
     @State private var travellingAt = 0
-    @State private var showingGroup = false
-    @State private var showingMemoryLink = false
 
     private var activeConversation: Conversation? {
         app.conversation(app.activeID(for: space))
@@ -178,7 +174,7 @@ struct ChatView: View {
                             editingMessage = msg
                         },
                         onRetry: { msg in app.retry(msg.id, in: conv.id) },
-                        onOpenProcess: { msg in processMessage = msg },
+                        onOpenProcess: { msg in panel = .process(msg) },
                         onOpenLibrary: { place in
                             // 存到哪儿决定开哪一栏：动图 → GIF，
                             // 表情包 → 表情包，别的（相册文件夹）→ 图片
@@ -306,10 +302,10 @@ struct ChatView: View {
 
             if showsDrawer {
             ChatDrawer(space: space, isOpen: $drawerOpen,
-                       onEditPrompt: { showingSystemPrompt = true },
+                       onEditPrompt: { panel = .prompt },
                        onOpenSearch: { showingSearch = true },
-                       onOpenGroup: { showingGroup = true },
-                       onOpenMemoryLink: { showingMemoryLink = true })
+                       onOpenGroup: { panel = .group },
+                       onOpenMemoryLink: { panel = .memory })
             }
 
             // 菜单开着的时候，点别处就把它关掉
@@ -395,22 +391,34 @@ struct ChatView: View {
             if space == .chat { app.isChatVisible = false }
         }
         .onChange(of: pickedItems) { _, items in loadPicked(items) }
-        .sheet(isPresented: $showingModelPicker) { ModelPickerView(space: space) }
-        .sheet(isPresented: $showingSystemPrompt) { SystemPromptView(space: space) }
-        .sheet(isPresented: $showingTools) { ToolToggleView() }
-        .sheet(isPresented: $showingPoke) {
-            if let id = app.activeID(for: space) {
-                PokeSheet(conversationID: id)
-            }
-        }
-        .sheet(isPresented: $showingMemoryLink) {
-            if let id = app.activeID(for: space) {
-                MemoryLinkView(space: space, conversationID: id)
-            }
-        }
-        .sheet(isPresented: $showingGroup) {
-            if let id = app.activeID(for: space) {
-                GroupSetupView(conversationID: id)
+        // ⚠️⚠️ **这七张合成了一张**（见 `ChatPanel`）。
+        //
+        // 以前是七个 `.sheet(isPresented:)` 一个接一个串在这同一个 view 上，
+        // 加上别的一共十四个。SwiftUI 对「同一层挂一大串 presentation」
+        // 很脆：这个结构已经害过两次——上一次是气泡上挂五个，
+        // 表现是**整个 App 点哪儿都没反应**；她这次报的是
+        // **从别的页面回絮语就崩**。
+        //
+        // 合成一个 `.sheet(item:)` 之后，同一时刻只有一个 presentation 宿主。
+        // 以后再加新面板，**往 `ChatPanel` 里加一个 case**，
+        // 不要再往这儿续 `.sheet`。
+        .sheet(item: $panel) { which in
+            switch which {
+            case .model:  ModelPickerView(space: space)
+            case .prompt: SystemPromptView(space: space)
+            case .tools:  ToolToggleView()
+            case .poke:
+                if let id = app.activeID(for: space) { PokeSheet(conversationID: id) }
+            case .memory:
+                if let id = app.activeID(for: space) {
+                    MemoryLinkView(space: space, conversationID: id)
+                }
+            case .group:
+                if let id = app.activeID(for: space) {
+                    GroupSetupView(conversationID: id)
+                }
+            case .process(let msg):
+                ProcessSheet(message: msg)
             }
         }
         .sheet(isPresented: $showingSearch) {
@@ -471,17 +479,6 @@ struct ChatView: View {
         .sheet(item: $browsing) { link in
             InAppBrowser(url: link.url)
                 .ignoresSafeArea()
-        }
-        // 「他刚才干了什么」那张。
-        //
-        // ⚠️⚠️ 挂在**这儿**，不挂在气泡上。
-        // 我上一版挂在了 `MessageBubbleView` 里，那是列表里几百条中的一条，
-        // 等于同时装了几百个弹窗宿主——结果整个 App 点哪儿都没反应：
-        // 侧边栏点了只弹回聊天页，设置里供应商、语音全按不动。
-        // 清单第 154 条写过同一句话：
-        // **presentation 要挂在不会被频繁重建的 View 上。**
-        .sheet(item: $processMessage) { msg in
-            ProcessSheet(message: msg)
         }
         .environment(\.openURL, OpenURLAction { url in
             // 聊天里点链接就在 App 里开，不跳出去
@@ -929,7 +926,7 @@ struct ChatView: View {
                     Button("视频") { showingVideos = true }
                     Button("文件") { importingFile = true }
                     // 戳一戳也是「发点什么」——发过去的是一件事，不是一句话
-                    Button("戳一戳") { showingPoke = true }
+                    Button("戳一戳") { panel = .poke }
                     Button("取消", role: .cancel) {}
                 }
 
@@ -954,7 +951,7 @@ struct ChatView: View {
 
                 Button {
                     hideKeyboard()
-                    showingTools = true
+                    panel = .tools
                 } label: {
                     Image(systemName: "wrench.and.screwdriver")
                         .font(.app(15, weight: .light))
@@ -966,7 +963,7 @@ struct ChatView: View {
 
                 Button {
                     hideKeyboard()
-                    showingModelPicker = true
+                    panel = .model
                 } label: {
                     Text(app.modelChipLabel(for: conv))
                         .font(.app(12, weight: .medium))
@@ -1668,6 +1665,9 @@ struct MessageListView: View {
 
     @EnvironmentObject var app: AppState
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var scheme
+    /// 离底还远不远。**只记一个布尔**，理由见下面那个 onScrollGeometryChange。
+    @State private var awayFromBottom = false
 
     /// 这一条是不是「这一天的第一条」。是就返回那天，好横一道分隔。
     private func daybreak(at index: Int) -> Date? {
@@ -1726,7 +1726,29 @@ struct MessageListView: View {
                             .padding(.top, 2)
                     }
 
+                    // 这一格既是滚动的锚点，也负责上报「底还在不在视野里」。
+                    //
+                    // ⚠️ **不用 `onScrollGeometryChange`**——那个要 iOS 18，
+                    // 这个工程的部署目标是 17。
+                    //
+                    // ⚠️ 而且**只在布尔翻转的时候才写 state**。
+                    // 每滚一像素写一次的话，就是每一帧重建整个列表——
+                    // 那正是她报过好几次的那种卡。
                     Color.clear.frame(height: 1).id("__bottom")
+                        .background {
+                            GeometryReader { g -> Color in
+                                let y = g.frame(in: .global).minY
+                                let far = y > UIScreen.main.bounds.height + 300
+                                if far != awayFromBottom {
+                                    DispatchQueue.main.async {
+                                        withAnimation(.easeOut(duration: 0.18)) {
+                                            awayFromBottom = far
+                                        }
+                                    }
+                                }
+                                return Color.clear
+                            }
+                        }
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 100)
@@ -1736,6 +1758,31 @@ struct MessageListView: View {
                 .padding(.bottom, bottomInset)
             }
             .scrollDismissesKeyboard(.interactively)
+            // 回到底部。她要的：「一个圈圈上面一个↓就行，跟着玻璃变换。」
+            //
+            // ⚠️ 只在**离底还远**的时候出现——一直挂着的话它就成了
+            // 输入栏上方一块永远在挡字的东西。
+            .overlay(alignment: .bottomTrailing) {
+                if awayFromBottom {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.28)) {
+                            proxy.scrollTo("__bottom", anchor: .bottom)
+                        }
+                    } label: {
+                        Image(systemName: "arrow.down")
+                            .font(.app(14, weight: .semibold))
+                            .foregroundStyle(Theme.textSoft(scheme))
+                            .frame(width: 38, height: 38)
+                            .glassBackground(radius: 19,
+                                             strength: app.settings.glassOpacity)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.trailing, 14)
+                    .padding(.bottom, bottomInset + 10)
+                    .transition(.scale.combined(with: .opacity))
+                }
+            }
             // 正文、思考链、工具调用，只要有一样在往外冒字，就跟着滚
             .onChange(of: conversation.scrollTick) { _, _ in
                 proxy.scrollTo("__bottom", anchor: .bottom)

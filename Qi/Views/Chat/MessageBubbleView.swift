@@ -877,9 +877,17 @@ struct MessageBubbleView: View {
     private var voiceBar: some View {
         let playing = VoicePlayer.shared.playingName == message.voiceName
         let seconds = Int(VoiceStore.duration(message.voiceName))
-        return Button {
-            VoicePlayer.shared.toggle(message.voiceName)
-        } label: {
+        // ⚠️ **不用 `Button`。**
+        //
+        // 她报的：「无法长按语音，长按只会播放语音。」
+        // 病根就在这儿：`Button` 自带一整套手势，它会把长按也认成
+        // 「按下再抬起」，于是外面那条长按根本收不到——
+        // 手指一松就播放了。
+        //
+        // 换成 `onTapGesture`：**点击照旧放，长按落到外面那层**，
+        // 出的是收藏／引用／删除那条横菜单。
+        // 图片、文件那几处本来就是 `onTapGesture`，所以它们是好的。
+        return VStack {
             HStack(spacing: 9) {
                 Image(systemName: playing ? "stop.fill" : "play.fill")
                     .font(.app(12))
@@ -904,8 +912,8 @@ struct MessageBubbleView: View {
             .frame(width: voiceWidth(seconds), alignment: .leading)
             .glassBackground(radius: 22, strength: app.settings.glassOpacity)
             .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .onTapGesture { VoicePlayer.shared.toggle(message.voiceName) }
         }
-        .buttonStyle(.plain)
     }
 
     /// 语音条多宽。**按时长长短**（她说的第 5 条）——

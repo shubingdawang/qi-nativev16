@@ -21,8 +21,8 @@ struct ChatSearchView: View {
     @State private var mode = 0            // 0 关键词，1 日期
     @State private var keyword = ""
     @State private var day = Date()
-    /// 「类型」那一档选的是哪一类
-    @State private var kind: Kind = .voice
+    /// 挑了哪一类。`nil` = 不按类型筛（只按词或日子）。
+    @State private var kind: Kind?
     /// 上次点过的那条，重新进来时滚回去
     @State private var restoreTo: UUID?
 
@@ -33,10 +33,13 @@ struct ChatSearchView: View {
 
                 VStack(spacing: 0) {
 
+                    // ⚠️ 「类型」**不单开一栏**。她定的：
+                    // 「聊天记录的类型应该放在关键词页，不是单独开一个区域。」
+                    // 对——找语音和打个词找，本来就是同一件事的两种入口，
+                    // 分成两栏等于逼她先想「我这次算哪一类」。
                     Picker("", selection: $mode) {
                         Text("关键词").tag(0)
                         Text("日期").tag(1)
-                        Text("类型").tag(2)
                     }
                     .pickerStyle(.segmented)
                     .padding(.horizontal, 16)
@@ -45,7 +48,6 @@ struct ChatSearchView: View {
 
                     if mode == 0 {
                         searchField
-                    } else if mode == 2 {
                         kindPicker
                     } else {
                         DatePicker("", selection: $day, displayedComponents: .date)
@@ -159,7 +161,9 @@ struct ChatSearchView: View {
                 ForEach(Kind.allCases, id: \.self) { k in
                     let on = kind == k
                     Button {
-                        withAnimation(.easeOut(duration: 0.14)) { kind = k }
+                        // 再点一下取消——不给「全部」那一档，
+                        // 多一个按钮不如少一次思考。
+                        withAnimation(.easeOut(duration: 0.14)) { kind = on ? nil : k }
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: k.icon).font(.app(11))
@@ -184,20 +188,17 @@ struct ChatSearchView: View {
         let convs = app.conversations(in: space)
         var out: [Hit] = []
 
-        if mode == 2 {
-            for c in convs {
-                for m in c.messages where Self.matches(m, kind) {
-                    out.append(Hit(conversationID: c.id, conversationTitle: c.title, message: m))
-                }
-            }
-            return out.sorted { $0.message.createdAt > $1.message.createdAt }
-        }
-
         if mode == 0 {
+            // 关键词和类型是**与**的关系：
+            // 只挑了类型就翻出那一类的全部；打了词又挑了类型，
+            // 就是「在这一类里找这个词」。两个都空才什么都不给。
             let key = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard key.count >= 1 else { return [] }
+            guard !key.isEmpty || kind != nil else { return [] }
             for c in convs {
-                for m in c.messages where m.content.localizedCaseInsensitiveContains(key) {
+                for m in c.messages {
+                    if let k = kind, !Self.matches(m, k) { continue }
+                    if !key.isEmpty,
+                       !m.content.localizedCaseInsensitiveContains(key) { continue }
                     out.append(Hit(conversationID: c.id, conversationTitle: c.title, message: m))
                 }
             }
@@ -299,9 +300,10 @@ struct ChatSearchView: View {
 
     private var emptyHint: String {
         if mode == 0 {
-            return keyword.isEmpty ? "打几个字试试" : "这个词没说过"
+            if keyword.isEmpty && kind == nil { return "打几个字，或者挑一类" }
+            if keyword.isEmpty { return "这一类里还什么都没有" }
+            return "这个词没说过"
         }
-        if mode == 2 { return "这一档里还什么都没有" }
         return "这天没说过话"
     }
 

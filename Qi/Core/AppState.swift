@@ -468,14 +468,35 @@ final class AppState: ObservableObject {
         var m = conversations[i].messages[j]
         guard !m.edits.isEmpty else { return }
 
+        // ⚠️ **删掉的那一版也要进回收站。**
+        // 她报的：「单独删掉了打错字的一版，依旧没有进回收站。」
+        // 以前这儿只是从数组里 remove 掉，一句话就这么没了。
+        //
+        // 存的是**那一版的正文**，不是整个窗口——
+        // 她要的正是「显示被删掉的句子」。
+        // 做法：拿这条消息复制一份、正文换成被删的那一版、
+        // 把 edits 清空（回收站里那条不需要再带一串历史），
+        // 走 `keep(message:)` 那条现成的路。
+        func bin(_ text: String) {
+            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            var one = m
+            one.id = UUID()          // 别跟活着的那条撞 id
+            one.content = text
+            one.edits = []
+            TrashStore.shared.keep(message: one, in: conversationID,
+                                   title: conversations[i].title + " · 改掉的一版")
+        }
+
         if page == 0 {
             // 删的是**现在这版**：把最近一条历史提上来顶上。
+            bin(m.content)
             m.content = m.edits.removeLast()
         } else {
             // 删的是旧版。下标跟 `shownContent` 用**同一个算法**，
             // 两边各算各的早晚再错开一次。
             let idx = m.edits.count - page
             guard m.edits.indices.contains(idx) else { return }
+            bin(m.edits[idx])
             m.edits.remove(at: idx)
         }
         conversations[i].messages[j] = m

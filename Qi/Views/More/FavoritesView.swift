@@ -125,6 +125,48 @@ struct FavoritesView: View {
                         if !item.message.voiceName.isEmpty {
                             voiceBar(item.message.voiceName)
                         }
+                        // ⚠️ 图和视频也得画出来。
+                        // 她报的：「图片视频收藏后都是空白的。」
+                        // 收是收下了（`starred` 挂在消息上），
+                        // 可这一页从头到尾只画 `Text(content)`——
+                        // 图片那条 `content` 是空的，于是一张白卡。
+                        if !item.message.imageNames.isEmpty {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 6) {
+                                    ForEach(item.message.imageNames, id: \.self) { n in
+                                        if let img = ImageStore.load(n) {
+                                            Image(uiImage: img)
+                                                .resizable()
+                                                .scaledToFill()
+                                                .frame(width: 92, height: 92)
+                                                .clipShape(RoundedRectangle(cornerRadius: 9,
+                                                                            style: .continuous))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if !item.message.videoName.isEmpty {
+                            HStack(spacing: 7) {
+                                Image(systemName: "play.rectangle.fill")
+                                    .font(.app(15))
+                                    .foregroundStyle(app.settings.accentColor)
+                                Text(item.message.videoNote.isEmpty
+                                     ? "一段视频" : item.message.videoNote)
+                                    .font(.app(12))
+                                    .foregroundStyle(Theme.textSoft(scheme))
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 9)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Theme.softFill))
+                        }
+                        if let sid = item.message.stickerID,
+                           let st = StickerStore.shared.sticker(id: sid) {
+                            StickerImage(sticker: st, size: 74)
+                        }
                         if !item.message.content.isEmpty {
                             Text(MD.inline(item.message.content))
                                 .font(.app(14))
