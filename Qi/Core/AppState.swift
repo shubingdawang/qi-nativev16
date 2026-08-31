@@ -381,11 +381,43 @@ final class AppState: ObservableObject {
         return [ayan, maker]
     }
 
+    /// 把重复的空群聊并成一个。
+    ///
+    /// 她报的：「合并消息不知道为什么多出这么多群聊。」——
+    /// 记忆合并那一页上摆着七八个「群聊 · 还没有消息」。
+    ///
+    /// ⚠️ 那些是**旧版留下的**：`groupConversation` 以前是
+    /// 「点一次建一个」，后来改成了「认准已有的那个」（见它上面那段注释），
+    /// 但**已经建出来的没人去收**。
+    ///
+    /// ⚠️ 只删**一条消息都没有**的那些，而且**至少留一个**。
+    /// 有内容的一律不碰——哪怕它也叫「群聊」，
+    /// 那也是她真的在里面说过话的窗口。
+    private func mergeEmptyGroups(in space: ChatSpace) {
+        let groups = conversations.filter { $0.isGroup && $0.space == space.rawValue }
+        guard groups.count > 1 else { return }
+        // 留哪个：优先留有消息的；都没消息就留最早那个（她可能已经并过记忆了）
+        let keep = groups.first(where: { !$0.messages.isEmpty })
+            ?? groups.min(by: { $0.createdAt < $1.createdAt })
+        guard let keep else { return }
+        let doomed = groups.filter { $0.id != keep.id && $0.messages.isEmpty }
+        guard !doomed.isEmpty else { return }
+        let ids = Set(doomed.map(\.id))
+        conversations.removeAll { ids.contains($0.id) }
+        // 当前正停在被删的那个上面的话，挪到留下的那个
+        if let a = activeChatID, ids.contains(a) { activeChatID = keep.id }
+        if let a = activeWorkshopID, ids.contains(a) { activeWorkshopID = keep.id }
+        Console.log(.app, "收拾了 \(doomed.count) 个空群聊",
+                    "旧版一次建一个留下来的，没有消息，已合成一个")
+    }
+
     /// 保证某个区域一定有一个当前会话
     func ensureActive(in space: ChatSpace) {
         // 群聊是常驻的，得先保证它在——他手上那个「发到群聊」的工具
         // 认的就是这一个窗口，没建出来的话工具会直接失败。
         if space == .chat { groupConversation(in: .chat) }
+        // 顺手收拾旧版留下的那一堆空群（理由见上面那段）
+        mergeEmptyGroups(in: space)
         if let id = activeID(for: space), conversations.contains(where: { $0.id == id }) { return }
         // 群聊排在最前面（它是置顶的），但默认落脚点该是普通对话，
         // 不然一进来就掉进群里了
