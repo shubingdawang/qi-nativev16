@@ -68,6 +68,18 @@ struct MessageBubbleView: View {
         } else {
             VStack(alignment: isUser ? .trailing : .leading, spacing: 5) {
                 if showsHeader { header }
+                // 思考链和工具**合成一张卡**（她给的 p5–p6 那种）。
+                //
+                // ⚠️⚠️ **摆在 `content` 外面**，跟长按那件事同一个道理。
+                //
+                // 以前它写在 `content` 里最后那个「文字」分支里，于是
+                // **他那一轮要是发的是表情、语音、图**，这张卡整个不出现——
+                // 而发表情走的正是自带工具（`send_sticker`），
+                // 所以她看到的是「只有 app 自带工具会吞气泡」。
+                //
+                // 挪出来之后，不管他那一轮说的是话、贴的是表情、还是发的语音，
+                // 「他刚才干了什么」都摆在同一个位置。
+                processBlock
                 content
                     // ⚠️⚠️ 长按和多选**挂在这儿**，不挂在某一个分支里。
                     //
@@ -340,12 +352,6 @@ struct MessageBubbleView: View {
                 if !message.files.isEmpty {
                     fileRow
                 }
-
-                // 思考链和工具**合成一张卡**（她给的 p5–p6 那种）。
-                // 以前是上下两块各带一个标题，一轮里他想一下、调三个工具，
-                // 屏幕上就先出一条「想了一会儿」再出一条「叮叮咣咣了 3 下」——
-                // 两条都在说同一件事：他刚才干了什么。
-                processBlock
 
                 // 存了图的话，先出一张小卡，比那行工具日志好看得多
                 ForEach(message.toolRuns.filter { $0.hasCard }) { run in

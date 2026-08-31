@@ -23,6 +23,9 @@ struct SettingsView: View {
     /// 占了多少地方。**进这一页才算**——要走几百个文件，
     /// 每次刷设置都算一遍太亏
     @State private var usage: StorageUsage.Report?
+    /// 「重新采集声音样本」的确认和回执
+    @State private var askResetVoice = false
+    @State private var voiceResetDone = false
     @State private var measuring = false
     /// 正在「查一遍图」（`MediaAudit`）
     @State private var auditing = false
@@ -414,8 +417,17 @@ struct SettingsView: View {
                      + "换了麦克风、感冒一周之后不准了，可以让它重新认识你。"))
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
+                // ⚠️ 要先问一句。
+                //
+                // 她报的：「我点击『重新采集声音样本』没反应，最好再加一个确认，
+                // 免得手误清掉了。我有点不确定这个了，我写下面的 bug 时
+                // 回去看了一眼从 2/8 变成 0/8 了，也就是说重新采样了。」
+                //
+                // 两件事一起坏：**它做了，但一个字都不说**——
+                // 于是「像没反应」和「手误就清了」是同一个原因。
+                // 攒满八条要说八次话，清掉的代价不小，值得挡一下。
                 Button {
-                    VoiceBaseline.shared.reset()
+                    askResetVoice = true
                 } label: {
                     Text("重新采集声音样本")
                         .font(.app(12))
@@ -423,6 +435,24 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 2)
+                .confirmationDialog("重新采集声音样本",
+                                    isPresented: $askResetVoice,
+                                    titleVisibility: .visible) {
+                    Button("清掉，重新认识我", role: .destructive) {
+                        VoiceBaseline.shared.reset()
+                        voiceResetDone = true
+                    }
+                    Button("算了", role: .cancel) {}
+                } message: {
+                    Text("已经攒下的样本会清空，要重新说满八条才会再开始比对。")
+                }
+                .alert("清好了", isPresented: $voiceResetDone) {
+                    Button("好") { voiceResetDone = false }
+                } message: {
+                    // 做完了要**说一声**——上一版就是做了不吭声，
+                    // 她以为没反应，回头才发现已经清了。
+                    Text("样本已清空，重新说满八条语音后会再开始比对。")
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)

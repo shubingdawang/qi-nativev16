@@ -20,6 +20,16 @@ struct LocalBodyCard: View {
     @State private var confirmSettle = false
 
     private var s: BodyState { store.state }
+    /// 流水账里哪几条被点开看全文了
+    @State private var openLedger: Set<UUID> = []
+
+    /// 截断，**并且把下半个引号带上**。
+    /// 直接 `lineLimit` 的话系统在哪儿切就在哪儿断，
+    /// 「」的下半个会被切没，看着像话没说完（她报的）。
+    private func clip(_ text: String, _ max: Int = 34) -> String {
+        if text.count <= max { return "「" + text + "」" }
+        return "「" + String(text.prefix(max)) + "…」"
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -27,11 +37,13 @@ struct LocalBodyCard: View {
                 Text("身体")
                     .font(.app(15, weight: .semibold))
                     .foregroundStyle(Theme.textMain(scheme))
-                Text("本机")
-                    .font(.app(9, weight: .medium))
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(Capsule().fill(StatusTone.done.color.opacity(0.22)))
-                    .foregroundStyle(Theme.textSoft(scheme))
+                // ⚠️ 「本机」那枚角标**去掉了**。
+                //
+                // 她定的：「很多不花钱的功能都在气泡右上角标了不花钱，
+                // 只用花钱的在说明里说就行了，不花钱不用说，不然好廉价。」
+                //
+                // 她是对的：不花钱是**常态**，常态不需要每处都声明。
+                // 要提醒的只有反过来那件事——这一处会花钱。
                 Spacer()
                 Button {
                     app.catchUpBody()
@@ -122,10 +134,32 @@ struct LocalBodyCard: View {
                             ForEach(store.nudges.prefix(12)) { e in
                                 VStack(alignment: .leading, spacing: 3) {
                                     HStack(alignment: .top) {
-                                        Text("「" + e.quote + "」")
+                                        // ⚠️ 截断要**把下半个引号带上**。
+                                        //
+                                        // 她报的：「好感判定的句子根本没有显示完全，
+                                        // 甚至只有一个上括号没有下括号。如果显示不完全，
+                                        // 用 … 再带上下括号就行，点击展开这个句子的全部内容。」
+                                        //
+                                        // 以前是 `lineLimit(2)` 硬切——系统在哪儿切就在哪儿断，
+                                        // 那个「」的下半个自然被切没了，看着像话没说完。
+                                        // 现在自己截：留够字数，补上 `…」`。
+                                        Text(openLedger.contains(e.id)
+                                             ? "「" + e.quote + "」"
+                                             : clip(e.quote))
                                             .font(.app(11))
                                             .foregroundStyle(Theme.textSoft(scheme))
-                                            .lineLimit(2)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture {
+                                                // 点一下展开全部，再点收回去
+                                                withAnimation(.easeOut(duration: 0.16)) {
+                                                    if openLedger.contains(e.id) {
+                                                        openLedger.remove(e.id)
+                                                    } else {
+                                                        openLedger.insert(e.id)
+                                                    }
+                                                }
+                                            }
                                         Spacer(minLength: 6)
                                         Button {
                                             store.undoNudge(e.id)

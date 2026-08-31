@@ -248,6 +248,18 @@ struct JournalPageView: View {
         JournalElementView(e)
     }
 
+    /// 钉在右边那两个放大缩小
+    private func sizeButton(_ icon: String, _ act: @escaping () -> Void) -> some View {
+        Button(action: act) {
+            Image(systemName: icon)
+                .font(.app(13))
+                .foregroundStyle(Theme.textSoft(scheme))
+                .frame(width: 30, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
     private func charButton(_ icon: String, _ act: @escaping () -> Void) -> some View {
         Button(action: act) {
             Image(systemName: icon)
@@ -783,6 +795,18 @@ struct JournalPageView: View {
     /// 透的话底下的按钮会从它背后透出来，看着像两层字叠在一起。
     private func pinnedBar(_ e: JournalElement) -> some View {
         HStack(spacing: 7) {
+            // ⚠️ 大小给**按钮**，不只靠捏合。
+            //
+            // 她报的：「贴纸不能放大缩小，就像表情工坊那样。」
+            // 捏合其实一直都在（`MagnifyGesture`），但一张贴纸才几十点宽，
+            // 两根手指落上去根本压不准，而且一碰就先把它拖走了。
+            // 点两下按钮是**看得见也点得着**的那个办法。
+            sizeButton("minus.magnifyingglass") {
+                commit(e.id) { $0.scale = max(0.25, $0.scale / 1.2) }
+            }
+            sizeButton("plus.magnifyingglass") {
+                commit(e.id) { $0.scale = min(5, $0.scale * 1.2) }
+            }
             small("置顶") { commit(e.id) { $0.z = nextZ } }
             small("删掉") {
                 if !e.imageName.isEmpty { ImageStore.delete(e.imageName) }
