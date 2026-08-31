@@ -42,8 +42,18 @@ struct JournalElementView: View {
             case .sticker:
                 // 两种贴纸：她挑了形状就画那个（跟着颜色走），
                 // 没挑就还是一个 emoji（老页面全是这一种）
-                // 实物贴纸排在最前面——它自己带颜色，不吃 tint。
-                if !e.assetName.isEmpty, let img = JournalKit.stickerImage(e.assetName) {
+                // ⚠️ 擦过的那张排在最前面。
+                // 擦完存的是她自己的一张新图（走 `imageName`），
+                // 不认这一支的话她擦完会发现「一点变化都没有」。
+                if !e.imageName.isEmpty, let img = ImageStore.load(e.imageName) {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 72, height: 72)
+                }
+                // 实物贴纸——它自己带颜色，不吃 tint。
+                else if !e.assetName.isEmpty,
+                        let img = JournalKit.stickerImage(e.assetName) {
                     Image(uiImage: img)
                         .resizable()
                         .scaledToFit()

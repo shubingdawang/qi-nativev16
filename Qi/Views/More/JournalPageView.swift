@@ -31,6 +31,26 @@ struct JournalPageView: View {
     @State private var editingText: JournalElement?
     @State private var draftText = ""
     @State private var showingPhotoPicker = false
+    /// 正在擦哪一件。`nil` = 没在擦。
+    @State private var erasing: ErasePick?
+
+    /// 要擦的那一件：哪个元素、擦的是哪张图
+    struct ErasePick: Identifiable {
+        let id: UUID
+        let image: UIImage
+    }
+
+    /// 这一件有没有可擦的像素。
+    ///
+    /// ⚠️ 三种来源要分清：
+    /// · `imageName` —— 她自己那张（照片、或者上次擦完存下来的）
+    /// · `assetName` —— 包里那 44 张实物贴纸
+    /// · 画出来的形状和 emoji —— **没有像素**，擦不了
+    private func erasableImage(_ e: JournalElement) -> UIImage? {
+        if !e.imageName.isEmpty { return ImageStore.load(e.imageName) }
+        if !e.assetName.isEmpty { return JournalKit.stickerImage(e.assetName) }
+        return nil
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -77,6 +97,17 @@ struct JournalPageView: View {
         }
         .sheet(item: $editingText) { e in
             textEditor(for: e)
+        }
+        .sheet(item: $erasing) { pick in
+            StickerEraser(source: pick.image) { name in
+                // ⚠️ 擦完存的是**她自己的一张新图**，所以改成走 `imageName`，
+                // 并且把 `assetName` 清掉——包里那张是只读的，
+                // 而且同一张原图可能贴了好几处，动它会牵连别处。
+                commit(pick.id) {
+                    $0.imageName = name
+                    $0.assetName = ""
+                }
+            }
         }
         .photosPicker(isPresented: $showingPhotoPicker, selection: $photoItem,
                       matching: .images)
@@ -633,13 +664,20 @@ struct JournalPageView: View {
                         // 所以真东西该先摆出来，画的那些退到后面当补充。
                         ForEach(JournalKit.realStickers, id: \.1) { _, file in
                             Button {
-                                commit(e.id) {
-                                    $0.assetName = file
-                                    // ⚠️ 把画的那个形状清掉。
-                                    // 不清的话渲染那边虽然优先走实物，
-                                    // 但她再点回「画的」那一排时会跳回上一个形状，
-                                    // 看着像点错了。
-                                    $0.pattern = ""
+                                // ⚠️ **手上这张已经有图了就再贴一张，不是换掉。**
+                                //
+                                // 她报的：「手帐贴纸只能贴一个。」——
+                                // 以前不管点第几张都是改当前选中那一个，
+                                // 于是贴第二张的时候第一张就没了。
+                                //
+                                // 现在：刚加出来那个空贴纸，第一次点是填进去；
+                                // 已经填过了，再点就是**新贴一张**。
+                                // 想换掉的话，把那张删了重贴——
+                                // 比「有时候是换、有时候是加」好懂得多。
+                                if e.assetName.isEmpty && e.pattern.isEmpty {
+                                    commit(e.id) { $0.assetName = file }
+                                } else {
+                                    addSticker(asset: file, near: e)
                                 }
                             } label: {
                                 Group {
@@ -663,6 +701,11 @@ struct JournalPageView: View {
 
                         ForEach(JournalKit.stickerShapes, id: \.1) { name, key in
                             Button {
+                                // 规矩同上：空的就填，填过了就再贴一张
+                                if !e.assetName.isEmpty || !e.pattern.isEmpty {
+                                    addSticker(shape: key, near: e)
+                                    return
+                                }
                                 commit(e.id) {
                                     // 挑了画的那种，就把实物那张清掉（理由同上）
                                     $0.assetName = ""
@@ -704,6 +747,11 @@ struct JournalPageView: View {
                 // ⚠️ 「改文字」得单独给个钮。
                 // 以前是「选中之后再点一下」进编辑，可现在点字是选那个字——
                 // 一个动作不能既是选字又是改内容。
+                // 擦一擦。只给**有图**的那几种——
+                // 画出来的贴纸和 emoji 没有像素可擦。
+                if let img = erasableImage(e) {
+                    small("擦一擦") { erasing = ErasePick(id: e.id, image: img) }
+                }
                 if e.kind == .text || e.kind == .note || e.kind == .quote {
                     small("改文字") {
                         draftText = e.text
@@ -747,6 +795,32 @@ struct JournalPageView: View {
     }
 
     // MARK: 加一样
+
+    /// 再贴一张贴纸，落在刚才那张旁边。
+    ///
+    /// ⚠️ **落在旁边而不是画布中间**：她刚在某个位置贴了一张，
+    /// 下一张多半也是想放在那附近。丢回中间的话她得再拖一次。
+    private func addSticker(asset: String = "", shape: String = "",
+                            near old: JournalElement) {
+        var e = JournalKit.make(.sticker)
+        e.assetName = asset
+        e.pattern = shape
+        if !shape.isEmpty {
+            e.colorHex = old.colorHex.isEmpty
+                ? (JournalKit.stickerInks.first?.1 ?? "8FAE84") : old.colorHex
+        }
+        e.z = nextZ
+        e.x = min(0.95, max(0.05, old.x + Double.random(in: 0.06...0.14)))
+        e.y = min(0.95, max(0.05, old.y + Double.random(in: -0.06...0.10)))
+        e.angle = Double.random(in: -8...8)
+        page.elements.append(e)
+        picked = e.id
+        charFocus = nil
+        store.save(page)
+        if app.settings.haptics {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+    }
 
     private func add(_ kind: JournalKind) {
         if kind == .quote {

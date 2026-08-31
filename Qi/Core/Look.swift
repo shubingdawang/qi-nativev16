@@ -63,9 +63,46 @@ enum Look {
     /// ⚠️ **只动字，不动背景。** 从现有的外观对象上改，
     /// 底色该透的还是透、该实的还是实；自己造一个新的会把
     /// 各页的 `.toolbarBackground` 全洗掉。
+    /// ⚠️ **`applyNavBar` 现在也管背景了**，上面那句「只动字，不动背景」
+    /// 是老话，留着是为了说明当初为什么不碰。
+    ///
+    /// 她报的：「更换玻璃导航栏没有跟着一起更换。」——对。
+    /// 导航栏走的是 UIKit 那套 `UINavigationBarAppearance`，
+    /// 跟 App 里那套 `GlassSurface` **是两个体系**，
+    /// 所以她在设置里换玻璃样式，别的地方全变了，就顶上那条不动。
+    ///
+    /// 现在按当前样式给它配一份对应的材质。
+    /// ⚠️ 换样式之后要**重新调一次**这个函数才生效（见 `syncTheme`）——
+    /// UIKit 的 appearance 是一次性写进去的，不像 SwiftUI 会自己跟着状态走。
     @MainActor
-    static func applyNavBar() {
+    static func applyNavBar(style: GlassStyle = .frosted, opacity: Double = 1) {
         let bar = UINavigationBar.appearance()
+
+        /// 这一档玻璃对应哪种系统材质
+        func material() -> UIBlurEffect.Style {
+            switch style {
+            // 磨砂：糊得最厉害
+            case .frosted: return .systemThickMaterial
+            // 通透：让背后透过来，只留一点点
+            case .clear:   return .systemUltraThinMaterial
+            // 模糊：中间那一档
+            case .blur:    return .systemMaterial
+            }
+        }
+
+        func dressBackground(_ a: UINavigationBarAppearance) {
+            // ⚠️ 「模糊程度」拉到很低的时候就别铺材质了——
+            // 那一档她要的是「能看清背后的壁纸」，
+            // 顶上压一层毛玻璃正好把那个愿望取消掉。
+            if opacity < 0.12 {
+                a.configureWithTransparentBackground()
+            } else {
+                a.configureWithDefaultBackground()
+                a.backgroundEffect = UIBlurEffect(style: material())
+                a.backgroundColor = .clear
+                a.shadowColor = .clear      // 底下那条分隔线，玻璃上不该有
+            }
+        }
 
         func dress(_ a: UINavigationBarAppearance) {
             let title = UIFont(name: serifName(.semibold), size: 17)
@@ -80,12 +117,17 @@ enum Look {
         // 都可能给的是另一份，直接改手上这份不一定算数。
         let std = bar.standardAppearance
         dress(std)
+        dressBackground(std)
         bar.standardAppearance = std
 
         // 滚到顶那一档默认是空的（系统给的是「透明」），
         // 空着的话标题字就不会跟着变——照系统那份补一个透明的。
         if let edge = bar.scrollEdgeAppearance {
             dress(edge)
+            // ⚠️ 滚到顶那一档**不铺材质**，保持透明。
+            // 铺了的话页面顶端会突然多出一条实心带子，
+            // 而那正是「滚到顶」最该干净的时候。
+            edge.configureWithTransparentBackground()
             bar.scrollEdgeAppearance = edge
         } else {
             let a = UINavigationBarAppearance()
@@ -95,6 +137,7 @@ enum Look {
         }
         if let compact = bar.compactAppearance {
             dress(compact)
+            dressBackground(compact)
             bar.compactAppearance = compact
         }
     }

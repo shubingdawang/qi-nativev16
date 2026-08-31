@@ -28,6 +28,11 @@ final class AppState: ObservableObject {
         // 灰字要跟着主题色的冷暖走，理由见 `Theme.textSoft` 那段
         Theme.accentMirror = settings.accentColor
         Theme.punchMirror = settings.themePunch
+        // ⚠️ 导航栏走的是 UIKit 的 appearance，**一次性写进去的**，
+        // 不像 SwiftUI 会自己跟着状态走。所以换玻璃样式、拧模糊程度之后
+        // 都得在这儿重调一次，不然顶上那条永远停在启动时那一档
+        // （她报的「更换玻璃导航栏没有跟着一起更换」）。
+        Look.applyNavBar(style: settings.glassStyle, opacity: settings.glassOpacity)
         Theme.preset = settings.preset
         Theme.glassStyle = settings.glassStyle
         // 身体开着的时候，渴／想她／累／压着这四维读身体，别两套各算各的

@@ -31,7 +31,8 @@ struct QiApp: App {
                 .preferredColorScheme(app.settings.preferredColorScheme)
                 .onAppear {
                     // 导航栏标题换成宋体。全 App 八十多处一次到位。
-                    Look.applyNavBar()
+                    Look.applyNavBar(style: app.settings.glassStyle,
+                                     opacity: app.settings.glassOpacity)
                     KeyboardDismisser.shared.install()
                     WakeEngine.shared.app = app
                     WakeEngine.shared.resume()
