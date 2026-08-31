@@ -74,8 +74,21 @@ enum Look {
     /// 现在按当前样式给它配一份对应的材质。
     /// ⚠️ 换样式之后要**重新调一次**这个函数才生效（见 `syncTheme`）——
     /// UIKit 的 appearance 是一次性写进去的，不像 SwiftUI 会自己跟着状态走。
+    /// 上一次是按哪一档配的。**没变就一步都不走。**
+    ///
+    /// ⚠️ `syncTheme()` 是每次设置一变就调，而这个函数要走一遍整棵视图树。
+    /// 不挡住的话，她拖任何一根滑块都会顺带遍历全屏所有 view——
+    /// 那正是我们花了三轮在消灭的那种代价。
+    @MainActor private static var lastNav: (GlassStyle, Double)?
+
     @MainActor
     static func applyNavBar(style: GlassStyle = .frosted, opacity: Double = 1) {
+        // 模糊程度只在跨过「几乎全透」那条线时才影响导航栏，
+        // 所以按档比较，不按精确值——不然拖滑块每一帧都要重来一遍。
+        let step = opacity < 0.12 ? 0.0 : 1.0
+        if let last = lastNav, last.0 == style, last.1 == step { return }
+        lastNav = (style, step)
+
         let bar = UINavigationBar.appearance()
 
         /// 这一档玻璃对应哪种系统材质
@@ -140,6 +153,35 @@ enum Look {
             dressBackground(compact)
             bar.compactAppearance = compact
         }
+
+        // ⚠️⚠️ **光改 `appearance()` 不够。**
+        //
+        // 她报了两次「导航栏依旧没有跟着变」，病根在这儿：
+        // `UINavigationBar.appearance()` 是个**模板**，只对
+        // **之后新建的**导航栏生效。她换玻璃的时候，屏幕上那条
+        // 早就建好了——模板改了它一眼都不看。
+        //
+        // 所以还得把**活着的那些**挨个更新一遍。
+        // 全 App 四十处 `NavigationStack`，一个个去加 `.toolbarBackground`
+        // 是四十次改动、以后每加一页还得记得加；走这儿一处管全部。
+        for scene in UIApplication.shared.connectedScenes {
+            guard let ws = scene as? UIWindowScene else { continue }
+            for w in ws.windows { refresh(in: w) }
+        }
+    }
+
+    /// 把这棵树里所有活着的导航栏都换一遍。
+    @MainActor
+    private static func refresh(in root: UIView) {
+        if let bar = root as? UINavigationBar {
+            let a = UINavigationBar.appearance()
+            bar.standardAppearance = a.standardAppearance
+            bar.scrollEdgeAppearance = a.scrollEdgeAppearance
+            bar.compactAppearance = a.compactAppearance
+            // 不叫这一句的话，材质换了但屏幕上不重画
+            bar.setNeedsLayout()
+        }
+        for v in root.subviews { refresh(in: v) }
     }
 }
 

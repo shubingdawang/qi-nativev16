@@ -1584,7 +1584,22 @@ struct SettingsCard<Content: View>: View {
                 SectionHeader(title)
             }
             VStack(spacing: 0) { content }
-                .glassBackground(radius: 20, strength: app.settings.glassOpacity)
+                // ⚠️⚠️ **这儿钉死 1，不读 `glassOpacity`。**
+                //
+                // 她报的：「模糊程度的滑块依旧拖不动，甚至点击都没有反应。」
+                // 我上一版猜是样品重画太贵，猜错了——真正的病根是个自噬循环：
+                //
+                //   模糊那根滑块**就坐在这张卡上**，
+                //   而这张卡的底读的正是它调的那个值。
+                //   手指一动 → `glassOpacity` 变 → 整张卡的玻璃重建 →
+                //   连同滑块一起换了个新的 → 手势当场断掉。
+                //
+                // 所以「拖不动」和「点了没反应」是同一件事：
+                // 它每次刚接住手指就把自己拆了重建。
+                //
+                // 设置页的卡片本来也不该跟着这一档走——
+                // 那一档是给聊天界面调的，不是给设置页调的。
+                .glassBackground(radius: 20, strength: 1)
         }
     }
 }
