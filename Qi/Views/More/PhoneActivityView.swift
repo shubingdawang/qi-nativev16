@@ -9,6 +9,12 @@ struct PhoneActivityView: View {
     @Environment(\.colorScheme) private var scheme
 
     @ObservedObject private var peek = ScreenPeek.shared
+    /// 预览那一张。**不存进 ScreenPeek**——那是全局单例，
+    /// 把一整张全屏图挂在上面等于永远占着那块内存，
+    /// 而这张只有她停在这一页时才有用。
+    @State private var peekShot: UIImage?
+    @State private var peekAt: Date?
+    @State private var peekWhy: String?
     @State private var picking = false
     @State private var pickingFolder = false
     @State private var showHelp = false
@@ -269,6 +275,69 @@ struct PhoneActivityView: View {
         .glassCard(padding: 0)
     }
 
+    /// 他现在会看到的那一张。
+    ///
+    /// ⚠️ **只在这一页停留时刷**（`onAppear` 拿一次、每 4 秒再拿一次），
+    /// 而且一离开就把定时器停掉。不停的话它会在后台一直读文件夹、
+    /// 一直解码整张截图——那是纯烧电，而她根本没在看。
+    @ViewBuilder
+    private var peekPreview: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("他会看到")
+                    .font(.app(12, weight: .medium))
+                    .foregroundStyle(Theme.textSoft(scheme))
+                Spacer()
+                if let at = peekAt {
+                    Text(ScreenPeek.ageText(at))
+                        .font(.app(10))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+            }
+            if let img = peekShot {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 220)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(Theme.softStroke, lineWidth: 0.8)
+                    }
+            } else {
+                Text(peekWhy ?? "文件夹里还没有截图。")
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 14)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Theme.softFill))
+            }
+        }
+        // ⚠️ 走 `.task` 不走 `Timer` + `onReceive`。
+        //
+        // 我头一版写的是一个计算属性里 `Timer.publish(...).autoconnect()`，
+        // 那是个漏：**计算属性每次重绘都造一个新的发布者**，
+        // 定时器越堆越多，最后一秒钟读好几次文件夹。
+        //
+        // `.task` 视图一消失自己就取消了，不用手动收。
+        .task {
+            while !Task.isCancelled {
+                refreshPeek()
+                // 四秒一次。**不做得更快**——每一次都要读目录、
+                // 读整个文件、解码一张全屏图。
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+            }
+        }
+    }
+
+    private func refreshPeek() {
+        let r = peek.fresh()
+        peekShot = r.shot?.image
+        peekAt = r.shot?.at
+        peekWhy = r.why
+    }
+
     private var screenPeekCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -286,6 +355,47 @@ struct PhoneActivityView: View {
             Text(MD.inline("指定一个文件夹，由快捷指令将截图存入。模型调用「看一眼屏幕」时读取其中最新的一张。\n\n⚠️ **非实时**：iOS 不允许 App 主动截取其他 App 的画面，读取到的始终是上一次保存的截图，返回结果中标注其时间。"))
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
+
+            if peek.ready {
+                Divider().padding(.vertical, 2)
+
+                // ⚠️ 开关跟「选没选文件夹」是两回事。
+                // 以前只要选过文件夹他就永远看得到——
+                // 屏幕上什么都可能有，得有一个随手能关的闸。
+                Toggle(isOn: $peek.sharing) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("正在共享")
+                            .font(.app(14))
+                            .foregroundStyle(Theme.textMain(scheme))
+                        Text(peek.sharing
+                             ? "他现在可以看这个文件夹里最新的那张。"
+                             : "关着的时候他看不了，会被告知你没开。")
+                            .font(.app(11))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
+                }
+                .tint(app.settings.accentColor)
+
+                HStack {
+                    Text("超过这么久就不给他")
+                        .font(.app(12))
+                        .foregroundStyle(Theme.textSoft(scheme))
+                    Spacer()
+                    Text("\(Int(peek.staleMinutes)) 分钟")
+                        .font(.app(12, design: .monospaced))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+                Slider(value: $peek.staleMinutes, in: 2...60, step: 1)
+                    .tint(app.settings.accentColor)
+                Text(MD.inline("⚠️ **一张过期的图比没有图更坏**：没有图他会问你，有旧图他会拿它当此刻讲。超过这个时间就直接不给，只告诉他「最近没有新的」。"))
+                    .font(.app(10.5))
+                    .foregroundStyle(Theme.textMuted(scheme))
+
+                // 他看到的那一张，摆在这儿。
+                // **她得看得见自己共享出去的是什么**——
+                // 只给一个开关的话，她永远不知道那边到底收到了什么。
+                peekPreview
+            }
 
             // 她说「我并不知道该怎么使用」——只写「挑个文件夹」确实不够，
             // 真正要做的是**在快捷指令里配一条**，这儿把步骤写全。

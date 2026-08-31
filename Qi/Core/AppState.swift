@@ -4268,11 +4268,13 @@ final class AppState: ObservableObject {
             }
 
         case "see_screen":
-            guard ScreenPeek.shared.ready else {
-                return ("她还没配这个。（设置 → 手机 → 让他看屏幕）", true)
-            }
-            guard let shot = ScreenPeek.shared.latest() else {
-                return (ScreenPeek.shared.lastError ?? "现在没有截图可看。", true)
+            // ⚠️ 走 `fresh()` 不走 `latest()`。它一并管三件事：
+            // 配没配、共享开没开、那张图够不够新。
+            // 尤其最后一条——一张三小时前的图比没有图更坏：
+            // 没有图他会问，有旧图他会拿它当现在讲。
+            let peek = ScreenPeek.shared.fresh()
+            guard let shot = peek.shot else {
+                return (peek.why ?? "现在没有截图可看。", true)
             }
             // 图直接落进这一轮的聊天记录里，他下一轮就**真的看得见**。
             // 只把「有一张图」写进返回值是没用的——工具返回值是文字，

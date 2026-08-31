@@ -34,8 +34,43 @@ final class ScreenPeek: ObservableObject {
     }
     @Published var lastError: String?
 
+    /// 共享开着没有。
+    ///
+    /// ⚠️ **跟「选没选文件夹」是两回事。**
+    /// 以前只要选过文件夹，他就永远看得到——她没有一个「现在别看」的开关。
+    /// 屏幕上什么都可能有，这个开关必须是她随手能关的那种。
+    @Published var sharing: Bool {
+        didSet { UserDefaults.standard.set(sharing, forKey: "screenPeekSharing") }
+    }
+
+    /// 多久以前的图就不给他了（分钟）。
+    ///
+    /// ⚠️ 光在旁边写一句「三小时前截的」是不够的——
+    /// 他照样会拿着那张图讲此刻。超过这个数就**根本不给**，
+    /// 只回一句「共享开着，但最近这段没有新的」。
+    /// 一张过期的图比没有图更坏：没有图他会问，有旧图他会猜。
+    @Published var staleMinutes: Double {
+        didSet { UserDefaults.standard.set(staleMinutes, forKey: "screenPeekStale") }
+    }
+
     private init() {
         bookmark = UserDefaults.standard.data(forKey: "screenPeekBookmark")
+        sharing = UserDefaults.standard.bool(forKey: "screenPeekSharing")
+        let m = UserDefaults.standard.double(forKey: "screenPeekStale")
+        staleMinutes = m > 0 ? m : 10
+    }
+
+    /// 他现在到底能不能看。看不了的时候，**说清楚是哪一环没开**——
+    /// 只回一句「看不了」的话，她不知道该去点哪儿。
+    /// 返回 nil 表示能看。
+    func blockedReason() -> String? {
+        if bookmark == nil {
+            return "她还没配这个。（设置 → 手机 → 让他看屏幕）"
+        }
+        if !sharing {
+            return "屏幕共享现在是关着的。她想让我看的时候会自己打开。"
+        }
+        return nil
     }
 
     var ready: Bool { bookmark != nil }
@@ -114,6 +149,21 @@ final class ScreenPeek: ObservableObject {
             .contentModificationDate ?? Date()
         lastError = nil
         return (image, at)
+    }
+
+    /// 拿一张**够新的**。太旧的宁可不给，理由见 `staleMinutes`。
+    /// 第二个返回值是拿不到时该说的话。
+    func fresh() -> (shot: (image: UIImage, at: Date)?, why: String?) {
+        if let why = blockedReason() { return (nil, why) }
+        guard let shot = latest() else {
+            return (nil, lastError ?? "现在没有截图可看。")
+        }
+        let age = Date().timeIntervalSince(shot.at)
+        if age > staleMinutes * 60 {
+            return (nil, "共享开着，但最近 \(Int(staleMinutes)) 分钟里没有新的截图——"
+                       + "最新那张是\(Self.ageText(shot.at))的，太旧了，不拿它当现在。")
+        }
+        return (shot, nil)
     }
 
     /// 几分钟前截的。给他看的时候要说清楚新旧。
