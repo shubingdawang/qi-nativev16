@@ -88,6 +88,19 @@ if weave_keys:
     if extra:
         print('ⓘ  织纹：包里有但目录没列（白占体积）→ %s' % extra)
 
+# 实物贴纸：key 是文件名，对的是包里有没有那个 png。
+sticker_keys = listed('realStickers')
+if sticker_keys:
+    import os as _os
+    have_png = set(f[:-4] for f in _os.listdir('Qi/Resources/Stickers')
+                   if f.endswith('.png'))
+    miss = [k for k in sticker_keys if k not in have_png]
+    extra = sorted(have_png - set(sticker_keys))
+    if miss:
+        print('BAD 实物贴纸：目录里列了但包里没这个文件 → %s' % miss)
+    if extra:
+        print('ⓘ  实物贴纸：包里有但目录没列（白占体积）→ %s' % extra)
+
 total = 0
 for label, want, have in checks:
     have = set(have)

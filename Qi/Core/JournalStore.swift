@@ -76,6 +76,13 @@ struct JournalElement: Codable, Identifiable, Hashable {
     /// 照片存在 Images 里的文件名
     var imageName: String = ""
 
+    /// 实物贴纸的文件名。空 = 不是实物贴纸。
+    ///
+    /// ⚠️ **不复用 `pattern`**：那个字段已经被「画出来的贴纸是什么形状」
+    /// 占着了，而这两种是同一个 `kind`（都是贴纸）。
+    /// 共用一个字段的话，挑了实物再挑画的，前一个会被悄悄冲掉。
+    var assetName: String = ""
+
     /// 花纹自己的颜色。空 = 照旧用半透明的白（老页面全是这一种）。
     ///
     /// 她定的：「可以给贴纸单独图案和背景选色，比如一个素底点点图案的胶带，
@@ -147,6 +154,7 @@ extension JournalElement {
         emoji = (try? c.decodeIfPresent(String.self, forKey: .emoji)) ?? ""
         pattern = (try? c.decodeIfPresent(String.self, forKey: .pattern)) ?? ""
         imageName = (try? c.decodeIfPresent(String.self, forKey: .imageName)) ?? ""
+        assetName = (try? c.decodeIfPresent(String.self, forKey: .assetName)) ?? ""
         inkHex = (try? c.decodeIfPresent(String.self, forKey: .inkHex)) ?? ""
         charColors = (try? c.decodeIfPresent([String].self, forKey: .charColors)) ?? []
         charScales = (try? c.decodeIfPresent([Double].self, forKey: .charScales)) ?? []
@@ -319,6 +327,83 @@ enum JournalKit {
         ("华夫格", "waffle_pique_cotton"), ("提花", "floral_jacquard"),
         ("人字呢", "poly_wool_herringbone"), ("平纹布", "cotton_jersey")
     ]
+
+    /// **实物贴纸**：博物馆里那些博物学写生抠出来的。
+    ///
+    /// 她说画出来的那种「很怪，而且可换色区域只有一部分，本身就是色块」——
+    /// 对，一片纯色的叶子换个颜色还是一片纯色的叶子。
+    /// 这一批是真的版画和水彩，一只蝴蝶翅膀上有七八种颜色。
+    ///
+    /// ⚠️ 它们**自己带颜色，不跟主色染**（跟塔罗、织纹那两套不一样）。
+    /// 染一遍就成一坨单色了，而她要的正是那些细节——细节全在颜色里。
+    ///
+    /// 见 Resources/Stickers/贴纸来历.txt
+    static let realStickers: [(String, String)] = [
+        ("鸟1", "bird_01"),
+        ("鸟2", "bird_02"),
+        ("鸟3", "bird_03"),
+        ("鸟4", "bird_04"),
+        ("鸟5", "bird_05"),
+        ("鸟6", "bird_06"),
+        ("鸟7", "bird_07"),
+        ("鸟8", "bird_08"),
+        ("虫1", "bug_01"),
+        ("虫2", "bug_02"),
+        ("虫3", "bug_03"),
+        ("虫4", "bug_04"),
+        ("虫5", "bug_05"),
+        ("虫6", "bug_06"),
+        ("虫7", "bug_07"),
+        ("虫8", "bug_08"),
+        ("虫9", "bug_09"),
+        ("虫10", "bug_10"),
+        ("虫11", "bug_11"),
+        ("虫12", "bug_12"),
+        ("虫13", "bug_13"),
+        ("虫14", "bug_14"),
+        ("虫15", "bug_15"),
+        ("叶1", "leaf_01"),
+        ("叶2", "leaf_02"),
+        ("叶3", "leaf_03"),
+        ("叶4", "leaf_04"),
+        ("叶5", "leaf_05"),
+        ("叶6", "leaf_06"),
+        ("叶7", "leaf_07"),
+        ("蝶1", "moth_01"),
+        ("蝶2", "moth_02"),
+        ("蝶3", "moth_03"),
+        ("蝶4", "moth_04"),
+        ("蝶5", "moth_05"),
+        ("蝶6", "moth_06"),
+        ("蝶7", "moth_07"),
+        ("蝶8", "moth_08"),
+        ("蝶9", "moth_09"),
+        ("蝶10", "moth_10"),
+        ("蝶11", "moth_11"),
+        ("蝶12", "moth_12"),
+        ("枝1", "sprig_01"),
+        ("枝2", "sprig_02")
+    ]
+
+    /// 读一张实物贴纸。
+    ///
+    /// ⚠️ 走 `NSCache`：一共四十几张，但她一页上可能贴十几张，
+    /// 每次重绘都重解 png 会卡。内存紧张时该让系统能收走
+    /// （塔罗那处就是栽在用字典上，78 张能吃掉一百多兆）。
+    nonisolated(unsafe) private static let stickerCache: NSCache<NSString, UIImage> = {
+        let c = NSCache<NSString, UIImage>()
+        c.countLimit = 40
+        return c
+    }()
+
+    static func stickerImage(_ name: String) -> UIImage? {
+        let key = name as NSString
+        if let hit = stickerCache.object(forKey: key) { return hit }
+        guard let url = Bundle.main.url(forResource: name, withExtension: "png"),
+              let img = UIImage(contentsOfFile: url.path) else { return nil }
+        stickerCache.setObject(img, forKey: key)
+        return img
+    }
 
     /// 画出来的贴纸默认用什么颜色。低饱和，贴在纸上不抢戏。
     static let stickerInks: [(String, String)] = [

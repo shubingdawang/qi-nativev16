@@ -628,9 +628,44 @@ struct JournalPageView: View {
                     // 画出来的那几张。**摆在 emoji 前面**——
                     // 这一排才是新东西，摆后面她翻不到
                     if e.kind == .sticker {
+                        // ── 实物贴纸排在最前面。
+                        // 她说画出来的那种「很怪，本身就是色块」——
+                        // 所以真东西该先摆出来，画的那些退到后面当补充。
+                        ForEach(JournalKit.realStickers, id: \.1) { _, file in
+                            Button {
+                                commit(e.id) {
+                                    $0.assetName = file
+                                    // ⚠️ 把画的那个形状清掉。
+                                    // 不清的话渲染那边虽然优先走实物，
+                                    // 但她再点回「画的」那一排时会跳回上一个形状，
+                                    // 看着像点错了。
+                                    $0.pattern = ""
+                                }
+                            } label: {
+                                Group {
+                                    if let img = JournalKit.stickerImage(file) {
+                                        Image(uiImage: img).resizable().scaledToFit()
+                                    } else {
+                                        Color.clear
+                                    }
+                                }
+                                .frame(width: 30, height: 30)
+                                .padding(3)
+                                .background(RoundedRectangle(cornerRadius: 8,
+                                                             style: .continuous)
+                                    .fill(e.assetName == file
+                                          ? app.settings.accentColor.opacity(0.20)
+                                          : Color.clear))
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+
                         ForEach(JournalKit.stickerShapes, id: \.1) { name, key in
                             Button {
                                 commit(e.id) {
+                                    // 挑了画的那种，就把实物那张清掉（理由同上）
+                                    $0.assetName = ""
                                     $0.pattern = key
                                     // 从 emoji 换过来的时候还没有颜色，给一个
                                     if $0.colorHex.isEmpty || $0.colorHex == "FFFFFF" {
