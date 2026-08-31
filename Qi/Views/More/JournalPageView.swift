@@ -369,7 +369,7 @@ struct JournalPageView: View {
 
                 // 纸的织纹。**跟上面那排格线是两层**：
                 // 格线是印在纸上的，织纹是纸本身的质地，可以同时有。
-                // 这一排是真实拍的布纹（CC0，见 Resources/Weave/来历.txt），
+                // 这一排是真实拍的布纹（CC0，见 Resources/Weave/织纹来历.txt），
                 // 不是画的——画不出亚麻那种毛边。
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 7) {

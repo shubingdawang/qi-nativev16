@@ -17,7 +17,7 @@ import SwiftUI
 
 enum TarotFace {
 
-    // MARK: - 真的牌面（1909 年那套，见 Resources/Tarot/来历.txt）
+    // MARK: - 真的牌面（1909 年那套，见 Resources/Tarot/塔罗来历.txt）
     //
     // 上面那段「为什么是画的不是图片」**过时了**，留着是为了说明当时的取舍。
     // 现在真放了 78 张进来：韦特塔罗 1909 年的原画，公有领域，

@@ -26,7 +26,7 @@ struct JournalPaperView: View {
     let hex: String
     /// plain / grid / ruled / dot / graph / stripe
     let pattern: String
-    /// 纸的织纹文件名。空 = 不铺。见 Resources/Weave/来历.txt
+    /// 纸的织纹文件名。空 = 不铺。见 Resources/Weave/织纹来历.txt
     var weave: String = ""
 
     private var base: Color {

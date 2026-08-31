@@ -277,7 +277,7 @@ enum JournalKit {
         ("水滴", "drop"), ("雪花", "snow"), ("太阳", "sun"), ("贝壳", "shell")
     ]
 
-    /// 纸的织纹。**这几张是真的布料实拍**（CC0，见 Resources/Weave/来历.txt）——
+    /// 纸的织纹。**这几张是真的布料实拍**（CC0，见 Resources/Weave/织纹来历.txt）——
     /// 亚麻那种毛边画不出来，只能拍。
     /// 图里只有明暗、没有颜色，纸色照样是她选的那个。
     static let weaves: [(String, String)] = [
