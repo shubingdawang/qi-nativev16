@@ -45,18 +45,25 @@ enum ShellBridge {
     /// ⚠️ 认的是**地址形状**，不是名字——她可以把那个供应商叫任何名字。
     /// 端口 8787 是桥的默认；她要是改过端口，就靠 `/v1` 加私网地址来认。
     static func find(in providers: [Provider]) -> Provider? {
+        providers.first { $0.enabled && looksLikeBridge($0) }
+    }
+
+    /// 这个供应商是不是那座桥。
+    ///
+    /// ⚠️ 抽出来是因为**两处都要认**：终端那一页要找它发命令，
+    /// 模型选择那一页要把它单列一组（她定的「做着备用吧」——
+    /// 那就得让她一眼认出哪条是备用的，以及按下去的代价）。
+    /// 两处各写一份判断，迟早会有一处认得出、另一处认不出。
+    static func looksLikeBridge(_ p: Provider) -> Bool {
         func isLocal(_ host: String) -> Bool {
             host.hasPrefix("192.168.") || host.hasPrefix("10.")
                 || host.hasPrefix("127.") || host == "localhost"
                 || host.hasPrefix("100.")        // Tailscale
                 || host.hasPrefix("172.")
         }
-        return providers.first { p in
-            guard p.enabled,
-                  let u = URL(string: p.baseURL.trimmingCharacters(in: .whitespaces)),
-                  let host = u.host else { return false }
-            return isLocal(host) && (u.port == 8787 || p.baseURL.hasSuffix("/v1"))
-        }
+        guard let u = URL(string: p.baseURL.trimmingCharacters(in: .whitespaces)),
+              let host = u.host else { return false }
+        return isLocal(host) && (u.port == 8787 || p.baseURL.hasSuffix("/v1"))
     }
 
     /// 跑一条命令。每来一行就叫一次 `onLine`。

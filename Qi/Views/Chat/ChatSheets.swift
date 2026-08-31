@@ -123,8 +123,39 @@ struct ModelPickerView: View {
                 || $0.provider.name.localizedCaseInsensitiveContains(search)
             }
         }
-        return ModelBrand.group(all) { $0.model.id }
+        // ⚠️ 桥单列一组，**不跟别的品牌混在一起**。
+        //
+        // 她定的：「做着备用吧。」——那就得让她一眼认出哪一条是备用的，
+        // 以及按下去的代价是什么（吃订阅额度、要电脑开着）。
+        // 混在 Claude 那一组里的话，她某天随手点了一个，
+        // 电脑没开就一直失败，而失败信息里根本不会提到「电脑」。
+        let bridged = all.filter { ShellBridge.looksLikeBridge($0.provider) }
+        let rest = all.filter { !ShellBridge.looksLikeBridge($0.provider) }
+        var out = ModelBrand.group(rest) { $0.model.id }
+        if !bridged.isEmpty {
+            out.append((brand: Self.bridgeGroup, items: bridged))
+        }
+        return out
     }
+
+    /// 桥那一组的名字。**放在最后**——它是备用，不该占着第一眼。
+    static let bridgeGroup = "电脑上的 Claude（走订阅额度）"
+
+    /// 按下去之前该知道的四件事。
+    ///
+    /// 写全是故意的：这一条跟别的模型**不是同一类东西**——
+    /// 别的只要有网就行，这一条要那台电脑醒着。
+    /// 不写在这儿的话，她某天随手点了一个，电脑没开就一直失败，
+    /// 而失败信息里根本不会提到「电脑」。
+    static let bridgeNote = """
+    走你电脑上那个 Claude Code，不花中转站的钱，用订阅额度。
+
+    ⚠️ **要电脑开着**，桥的窗口关了就连不上。
+    ⚠️ 额度**跟工坊共用**——在这儿聊久了，工坊那边也会没得用。
+    ⚠️ 工具走的是文字协议、不是原生调用，比中转站那条**脆**：他可能忘了格式。
+    ⚠️ 名字带 `-code` 的那几个是工坊那条（能读文件、跑命令），聊天别选。
+    """
+
 
     var body: some View {
         NavigationStack {
@@ -143,7 +174,7 @@ struct ModelPickerView: View {
                 }
 
                 ForEach(groups, id: \.brand) { group in
-                    Section(group.brand) {
+                    Section {
                         ForEach(group.items) { entry in
                             Button {
                                 choose(entry)
