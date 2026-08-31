@@ -15,8 +15,6 @@ struct PhoneActivityView: View {
     @State private var peekShot: UIImage?
     @State private var peekAt: Date?
     @State private var peekWhy: String?
-    @State private var picking = false
-    @State private var pickingFolder = false
     @State private var showHelp = false
     /// 往回翻了几天。0 是今天。
     @State private var dayOffset = 0
@@ -71,12 +69,6 @@ struct PhoneActivityView: View {
                 }
             }
         }
-        .fileImporter(isPresented: $picking,
-                      allowedContentTypes: [.plainText, .text, .data]) { result in
-            if case .success(let url) = result {
-                store.remember(url)
-            }
-        }
         .onAppear { store.reload() }
     }
 
@@ -88,18 +80,15 @@ struct PhoneActivityView: View {
             Text(MD.inline("由快捷指令将记录写入 txt 文件，本 App 直接读取该文件。全程不经网络。"))
                 .font(.app(12))
                 .foregroundStyle(Theme.textSoft(scheme))
-            Button {
-                picking = true
-            } label: {
-                Text("选那个 txt")
-                    .font(.app(14))
-                    .foregroundStyle(Theme.textMain(scheme))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(RoundedRectangle(cornerRadius: 13)
-                        .fill(app.settings.accentColor.opacity(0.28)))
+            // 理由同上：这一页会被后台的任何一次改动重建，
+            // 弹窗挂在这儿会自己关掉。
+            ImportButton(title: "选那个 txt", icon: "doc.text",
+                         types: [.plainText, .text, .data],
+                         multiple: false) { result in
+                if case .success(let urls) = result, let u = urls.first {
+                    store.remember(u)
+                }
             }
-            .buttonStyle(.plain)
         }
         .glassCard()
     }
@@ -112,14 +101,14 @@ struct PhoneActivityView: View {
                     .tracking(2)
                     .foregroundStyle(Theme.textMuted(scheme))
                 Spacer()
-                Button {
-                    picking = true
-                } label: {
-                    Text("换文件")
-                        .font(.app(10))
-                        .foregroundStyle(Theme.textMuted(scheme))
+                // 理由同 setupCard 里那个：弹窗不能挂在这一页上
+                ImportButton(title: "换文件", icon: "doc.text",
+                             types: [.plainText, .text, .data],
+                             multiple: false) { result in
+                    if case .success(let urls) = result, let u = urls.first {
+                        store.remember(u)
+                    }
                 }
-                .buttonStyle(.plain)
             }
 
             HStack(spacing: 12) {
@@ -433,18 +422,24 @@ struct PhoneActivityView: View {
             }
 
             HStack(spacing: 8) {
-                Button {
-                    pickingFolder = true
-                } label: {
-                    Text(peek.ready ? "换个文件夹" : "挑文件夹")
-                        .font(.app(13))
-                        .foregroundStyle(Theme.textMain(scheme))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 9)
-                        .background(RoundedRectangle(cornerRadius: 11)
-                            .fill(app.settings.accentColor.opacity(0.26)))
+                // ⚠️ 走 `ImportButton`，**不要在这一页上挂 `fileImporter`**。
+                //
+                // 她报的：「"让他看屏幕"点击挑文件夹无反应。」
+                // 跟当初「导入备份要点五次」是**同一个病**：
+                // 弹窗挂在整页上，而这一页订阅 `app`——
+                // 后台存盘、身体推进、话题池抓完，任何一样都会重建这一页，
+                // 正在弹的选择器当场被撤掉。
+                //
+                // `ImportButton` 自己拿着弹窗、不订阅任何东西，
+                // 外面重建多少次都跟它无关。理由写在那个文件开头。
+                ImportButton(title: peek.ready ? "换个文件夹" : "挑文件夹",
+                             icon: "folder",
+                             types: [.folder],
+                             multiple: false) { result in
+                    if case .success(let urls) = result, let u = urls.first {
+                        peek.remember(u)
+                    }
                 }
-                .buttonStyle(.plain)
 
                 if peek.ready {
                     Button {
@@ -470,10 +465,6 @@ struct PhoneActivityView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard()
-        .fileImporter(isPresented: $pickingFolder,
-                      allowedContentTypes: [.folder]) { result in
-            if case .success(let url) = result { peek.remember(url) }
-        }
     }
 
     // MARK: 翻天

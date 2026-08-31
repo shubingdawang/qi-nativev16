@@ -155,6 +155,33 @@ final class ThoughtPool: ObservableObject {
     }
 
     /// 给他看的：池子里现在转着什么
+    /// 注进系统提示的那一行。空 = 脑子里没东西，那就一个字都不占。
+    ///
+    /// ⚠️ 跟 `brief()` 分开写是故意的：
+    /// `brief()` 是她点开「念头池」那一页、或者他主动查的时候看的**全貌**；
+    /// 这一行是**每轮都塞进提示里**的，所以只能给最压着的那两三件，
+    /// 而且不报数字——报了他会去念「这件事强度 0.87」，那不是人话。
+    func line() -> String? {
+        settle()
+        let obs = obsessions.prefix(3)
+        let fla = flashes.prefix(2)
+        if obs.isEmpty && fla.isEmpty { return nil }
+        var out: [String] = []
+        for t in obs {
+            // 压得越久说得越重——**给的是分量，不是数字**
+            let weight = t.strength > 0.9 ? "一直压着" : (t.strength > 0.7 ? "反复回来" : "还在想")
+            out.append("· \(t.text)（\(weight)）")
+        }
+        for t in fla {
+            out.append("· \(t.text)（刚飘过）")
+        }
+        let br = "\n"
+        return out.joined(separator: br)
+            + br + "这些是你自己在想的事，不是她说的。别把它们念出来当台词——"
+            + "它们只决定你这会儿容易被什么勾住。"
+            + br + "想通了、或者她把这事解决了，就用 satisfied 把它放下。"
+    }
+
     func brief() -> String {
         settle()
         let obs = obsessions

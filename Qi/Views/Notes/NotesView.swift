@@ -1340,7 +1340,8 @@ struct PulsePane: View {
 
                 if let snap {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                        vital("心跳", "\(snap.heartRate)", "次/分", "heart.fill", .red)
+                        vital("心跳", "\(snap.heartRate)", "次/分", "heart.fill", .red,
+                              beat: snap.heartRate)
                         vital("呼吸", "\(snap.breathing)", snap.breathDepth, "wind", .teal)
                         vital("体温", String(format: "%.1f", snap.temperature), "℃", "thermometer", .orange)
                         vital("疲劳", String(format: "%.0f%%", snap.fatigue * 100), "", "zzz", .purple)
@@ -1410,13 +1411,39 @@ struct PulsePane: View {
                 .glassCard()
             }
         }
-        .task { await load() }
+        .task {
+            // ⚠️ **要一直刷**，不能只在进页面时读一次。
+            //
+            // 她报的：「心率好像卡住了，一直保持着 87 的心跳、20 的呼吸。」
+            // 算是算对的——公式里有按时段的基线、情绪、天气，
+            // 外加一个 45 秒周期的噪声，本来就一直在变。
+            // 病在**没人再去问它**：`load()` 只在进页面时叫一次。
+            //
+            // 六秒一次：那个噪声的周期是 45 秒，六秒能看出起伏，
+            // 又不至于跳得像秒表。走本机那套的时候一次网络都不发。
+            while !Task.isCancelled {
+                await load()
+                try? await Task.sleep(nanoseconds: 6_000_000_000)
+            }
+        }
     }
 
+    /// 一格生命体征。
+    ///
+    /// `beat` 给了就让那个图标**按这个心率跳**。
+    /// 她要的：「希望给心跳上面的小爱心加上跳动的动画，这样更直观。
+    /// 记得别让 app 变得卡顿。」
     private func vital(_ title: String, _ value: String, _ unit: String,
-                       _ icon: String, _ color: Color) -> some View {
+                       _ icon: String, _ color: Color,
+                       beat: Int? = nil) -> some View {
         VStack(spacing: 4) {
-            Image(systemName: icon).font(.app(15)).foregroundStyle(color)
+            Group {
+                if let beat, beat > 0 {
+                    HeartBeat(bpm: beat, color: color, icon: icon)
+                } else {
+                    Image(systemName: icon).font(.app(15)).foregroundStyle(color)
+                }
+            }
             Text(value).font(.app(22, weight: .semibold, design: .rounded))
                 .foregroundStyle(Theme.textMain(scheme))
             Text(unit.isEmpty ? title : "\(title) · \(unit)")
