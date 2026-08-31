@@ -44,6 +44,7 @@ struct ToolToggleView: View {
                             }
                             .padding(14)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            // 这块是空态提示，就几行高，玻璃没问题
                             .glassBackground(radius: 18, strength: app.settings.glassOpacity)
                         }
 
@@ -186,7 +187,7 @@ struct ToolToggleView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .glassBackground(radius: 18, strength: app.settings.glassOpacity)
+        .background { groupBack(isOpen) }
     }
 
     // MARK: 记忆库那批
@@ -229,7 +230,7 @@ struct ToolToggleView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .glassBackground(radius: 18, strength: app.settings.glassOpacity)
+        .background { groupBack(isOpen) }
     }
 
     // MARK: 一台 MCP
@@ -269,7 +270,7 @@ struct ToolToggleView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .glassBackground(radius: 18, strength: app.settings.glassOpacity)
+        .background { groupBack(isOpen) }
     }
 
     // MARK: 零件
@@ -305,6 +306,40 @@ struct ToolToggleView: View {
     }
 
     /// 展开之后每一件工具各自那一行
+    /// 一组工具的底。
+    ///
+    /// ⚠️⚠️ **展开之后不能再用玻璃。**
+    ///
+    /// 她报的：「工具那个静态的时候不显示气泡，动起来会显示，
+    /// 但是到中间部分动起来也不显示了，头尾的时候动起来会显示，
+    /// 而且只有 app 自带工具会吞气泡。」
+    ///
+    /// 那几句话精确地描述了**一块太大的 `Material` 被渲染器放弃采样**：
+    /// 自带工具有 68 条，展开之后这块玻璃几千点高——
+    /// 系统不会为这么大一片一直做实时模糊，于是它一会儿在一会儿不在，
+    /// 滚到头尾（面积被裁小）反而又出来了。
+    /// 别的组只有十几条，没到那个尺寸，所以「只有自带工具」会这样。
+    ///
+    /// `Theme.swift` 里 `GlassSurface` 那段已经记着一条相关的：
+    /// **`Material` 上面不能套 `.shadow` / `.blur` / `.drawingGroup`**。
+    /// 这一条是它的近亲：**也不能铺得太大**。
+    ///
+    /// 所以收起来的时候照旧是玻璃（就一行，很小），
+    /// 展开之后换成一层实心的浅底——看着差一点，但它一定在。
+    @ViewBuilder
+    private func groupBack(_ isOpen: Bool) -> some View {
+        if isOpen {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Theme.softFill)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(Theme.softStroke, lineWidth: 0.8)
+                }
+        } else {
+            GlassSurface(radius: 18, strength: app.settings.glassOpacity)
+        }
+    }
+
     private func toolRow(name: String, desc: String,
                          on: Binding<Bool>, enabled: Bool) -> some View {
         HStack(spacing: 10) {
