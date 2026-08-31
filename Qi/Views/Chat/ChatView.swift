@@ -557,22 +557,44 @@ struct ChatView: View {
     // MARK: 输入栏
 
     @ViewBuilder
-    private func inputBar(_ conv: Conversation) -> some View {
-        VStack(spacing: 8) {
+    // MARK: 输入栏拆开的那几块
+    //
+    // ⚠️ **别再把它们塞回 `inputBar` 里去。**
+    //
+    // 原来这些全在 `inputBar` 一个函数里：六百行、一百四十六个修饰符，
+    // 同一个不透明返回类型。那个类型是一层套一层的 `ModifiedContent`，
+    // mangled name 长到 **Swift 解析这个类型名本身就把栈用光了**——
+    // 她报的「从其他页面进入絮语就崩溃」，崩溃日志指的就是这儿：
+    //
+    //     EXC_BAD_ACCESS · Stack Guard（栈溢出）
+    //     swift_getTypeByMangledName
+    //       → swift_getOpaqueTypeMetadataImpl
+    //         → closure #14 in closure #1 in ChatView.inputBar(_:)
+    //
+    // ⚠️ 这不是「渲染慢」，是**类型系统在建这个 view 的时候递归爆栈**。
+    // 所以优化渲染救不了它，只能把那个类型拆小。
+    // 每一块现在有自己的不透明类型，各自解析、递归都变浅。
 
-            // 抽帧要跑好几秒。**不摆一个在动的东西在这儿，
-            // 她只会以为点坏了**——而且会再点一遍。
-            if let videoBusy {
-                HStack(spacing: 7) {
-                    ProgressView().scaleEffect(0.7)
-                    Text(videoBusy)
-                        .font(.app(11))
-                        .foregroundStyle(Theme.textMuted(scheme))
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 4)
+    @ViewBuilder
+    private var barVideoBusy: some View {
+        if let videoBusy {
+            HStack(spacing: 7) {
+                ProgressView().scaleEffect(0.7)
+                Text(videoBusy)
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, 4)
+        }
+    }
 
+    @ViewBuilder
+    /// ⚠️ 这一块**套了 `AnyView`**：类型擦除把元数据的递归从根上切断。
+    /// 输入栏一屏只画一次，`AnyView` 那点代价在这儿无所谓，
+    /// 而它是防止「类型名长到解析就爆栈」最稳的一道。
+    private var barPending: some View {
+        AnyView(
             if !pendingImages.isEmpty || !pendingGIFs.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -616,48 +638,60 @@ struct ChatView: View {
                 }
                 .frame(height: 58)
             }
+        )
+    }
 
-            // 打了 @ 就把群里的人列出来，点一下补进去
-            if let conv = activeConversation, conv.isGroup, mentioning {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 7) {
-                        ForEach(conv.activeMembers) { m in
-                            Button {
-                                insertMention(m.name)
-                            } label: {
-                                Text("@" + (m.name.isEmpty ? "没起名" : m.name))
-                                    .font(.app(12))
-                                    .foregroundStyle(Theme.textMain(scheme))
-                                    .padding(.horizontal, 11)
-                                    .padding(.vertical, 7)
-                                    .background(Capsule().fill(app.settings.accentColor.opacity(0.2)))
-                            }
-                            .buttonStyle(.plain)
+    @ViewBuilder
+    private func barMention(_ conv: Conversation) -> some View {
+        if let conv = activeConversation, conv.isGroup, mentioning {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 7) {
+                    ForEach(conv.activeMembers) { m in
+                        Button {
+                            insertMention(m.name)
+                        } label: {
+                            Text("@" + (m.name.isEmpty ? "没起名" : m.name))
+                                .font(.app(12))
+                                .foregroundStyle(Theme.textMain(scheme))
+                                .padding(.horizontal, 11)
+                                .padding(.vertical, 7)
+                                .background(Capsule().fill(app.settings.accentColor.opacity(0.2)))
                         }
+                        .buttonStyle(.plain)
                     }
-                    .padding(.horizontal, 2)
                 }
-                .frame(height: 34)
+                .padding(.horizontal, 2)
             }
+            .frame(height: 34)
+        }
+    }
 
-            if listening {
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(Color.red.opacity(0.8))
-                        .frame(width: 7, height: 7)
-                    Text(listeningHint)
-                        .font(.app(13))
-                        .foregroundStyle(Theme.textMain(scheme))
-                        .lineLimit(2)
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Theme.softFillDeep))
+    @ViewBuilder
+    private var barListening: some View {
+        if listening {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(Color.red.opacity(0.8))
+                    .frame(width: 7, height: 7)
+                Text(listeningHint)
+                    .font(.app(13))
+                    .foregroundStyle(Theme.textMain(scheme))
+                    .lineLimit(2)
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Theme.softFillDeep))
+        }
+    }
 
-            // 刚录好还没发的那段。点左边听一遍，点叉扔掉。
+    @ViewBuilder
+    /// ⚠️ 这一块**套了 `AnyView`**：类型擦除把元数据的递归从根上切断。
+    /// 输入栏一屏只画一次，`AnyView` 那点代价在这儿无所谓，
+    /// 而它是防止「类型名长到解析就爆栈」最稳的一道。
+    private var barVoice: some View {
+        AnyView(
             if let v = pendingVoice {
                 HStack(spacing: 10) {
                     Button {
@@ -701,166 +735,175 @@ struct ChatView: View {
                 .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(Theme.softFillDeep))
             }
+        )
+    }
 
-            if let s = pendingSticker {
-                HStack(spacing: 8) {
-                    StickerImage(sticker: s, size: 46)
-                        .frame(width: 52, height: 52)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(s.name)
-                            .font(.app(12, weight: .medium))
-                            .foregroundStyle(Theme.textMain(scheme))
-                        Text("跟文字一起发出去")
-                            .font(.app(10))
-                            .foregroundStyle(Theme.textMuted(scheme))
-                    }
-                    Spacer(minLength: 0)
-                    Button {
-                        pendingSticker = nil
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.app(11, weight: .medium))
-                            .foregroundStyle(Theme.textMuted(scheme))
-                    }
-                    .buttonStyle(.plain)
+    @ViewBuilder
+    private var barSticker: some View {
+        if let s = pendingSticker {
+            HStack(spacing: 8) {
+                StickerImage(sticker: s, size: 46)
+                    .frame(width: 52, height: 52)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(s.name)
+                        .font(.app(12, weight: .medium))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    Text("跟文字一起发出去")
+                        .font(.app(10))
+                        .foregroundStyle(Theme.textMuted(scheme))
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Theme.softFillDeep))
+                Spacer(minLength: 0)
+                Button {
+                    pendingSticker = nil
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.app(11, weight: .medium))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+                .buttonStyle(.plain)
             }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Theme.softFillDeep))
+        }
+    }
 
-            if !pendingFiles.isEmpty {
-                VStack(spacing: 6) {
-                    ForEach(pendingFiles) { f in
-                        HStack(spacing: 8) {
-                            Image(systemName: f.icon)
-                                .font(.app(14))
-                                .foregroundStyle(app.settings.accentColor)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(f.displayName)
-                                    .font(.app(12))
-                                    .foregroundStyle(Theme.textMain(scheme))
-                                    .lineLimit(1)
-                                Text(f.unreadable ? "\(f.sizeText) · 读不出文字" : "\(f.sizeText) · 已读出内容")
-                                    .font(.app(10))
-                                    .foregroundStyle(Theme.textMuted(scheme))
-                            }
-                            Spacer(minLength: 0)
-                            Button {
-                                FileStore.delete(f)
-                                pendingFiles.removeAll { $0.id == f.id }
-                            } label: {
-                                Image(systemName: "xmark")
-                                    .font(.app(10, weight: .medium))
-                                    .foregroundStyle(Theme.textMuted(scheme))
-                            }
-                            .buttonStyle(.plain)
+    @ViewBuilder
+    private var barFiles: some View {
+        if !pendingFiles.isEmpty {
+            VStack(spacing: 6) {
+                ForEach(pendingFiles) { f in
+                    HStack(spacing: 8) {
+                        Image(systemName: f.icon)
+                            .font(.app(14))
+                            .foregroundStyle(app.settings.accentColor)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(f.displayName)
+                                .font(.app(12))
+                                .foregroundStyle(Theme.textMain(scheme))
+                                .lineLimit(1)
+                            Text(f.unreadable ? "\(f.sizeText) · 读不出文字" : "\(f.sizeText) · 已读出内容")
+                                .font(.app(10))
+                                .foregroundStyle(Theme.textMuted(scheme))
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Theme.softFillDeep))
+                        Spacer(minLength: 0)
+                        Button {
+                            FileStore.delete(f)
+                            pendingFiles.removeAll { $0.id == f.id }
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.app(10, weight: .medium))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                        }
+                        .buttonStyle(.plain)
                     }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Theme.softFillDeep))
                 }
             }
+        }
+    }
 
-            // 待发的那段视频。**只摆一条，不摆那十二张帧**——
-            // 帧是给他看的，她这边看到的应该是「一段视频」这一件东西。
-            if let v = pendingVideo {
-                HStack(spacing: 8) {
-                    Image(systemName: "film")
-                        .font(.app(12))
-                        .foregroundStyle(app.settings.accentColor)
-                    Text("一段视频")
+    @ViewBuilder
+    private var barVideo: some View {
+        if let v = pendingVideo {
+            HStack(spacing: 8) {
+                Image(systemName: "film")
+                    .font(.app(12))
+                    .foregroundStyle(app.settings.accentColor)
+                Text("一段视频")
+                    .font(.app(12))
+                    .foregroundStyle(Theme.textSoft(scheme))
+                Spacer(minLength: 0)
+                Button {
+                    VideoStore.delete(v)
+                    for f in pendingVideoFrames { ImageStore.delete(f) }
+                    pendingVideo = nil
+                    pendingVideoFrames = []
+                    pendingVideoNote = ""
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.app(10, weight: .medium))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Theme.softFillDeep))
+        }
+    }
+
+    @ViewBuilder
+    private var barWaiting: some View {
+        if waiting {
+            HStack(spacing: 7) {
+                Image(systemName: "hourglass")
+                    .font(.app(11))
+                    .foregroundStyle(app.settings.accentColor)
+                Text("已暂存，包含文字、图片与语音。"
+                     + "按发送键一起发出，不会自动发；"
+                     + "输入框为空时再按暂存键可撤回。")
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Theme.softFillDeep))
+        }
+    }
+
+    @ViewBuilder
+    private var barQuote: some View {
+        if let q = quoting {
+            // ⚠️ `alignment: .top` + `fixedSize`：不这么写的话，
+            // 那道竖线会跟着容器一路拉长，中间全是空的（她报的第 11 条）。
+            HStack(alignment: .top, spacing: 8) {
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(app.settings.accentColor.opacity(0.6))
+                    .frame(width: 3)
+                    .frame(maxHeight: 30)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(q.role == .user
+                         ? (app.settings.userName.isEmpty ? "我" : app.settings.userName)
+                         : (q.senderName.isEmpty ? app.settings.aiName : q.senderName))
+                        .font(.app(10, weight: .medium))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                    Text(q.content)
                         .font(.app(12))
                         .foregroundStyle(Theme.textSoft(scheme))
-                    Spacer(minLength: 0)
-                    Button {
-                        VideoStore.delete(v)
-                        for f in pendingVideoFrames { ImageStore.delete(f) }
-                        pendingVideo = nil
-                        pendingVideoFrames = []
-                        pendingVideoNote = ""
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.app(10, weight: .medium))
-                            .foregroundStyle(Theme.textMuted(scheme))
-                    }
-                    .buttonStyle(.plain)
+                        .lineLimit(1)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Theme.softFillDeep))
-            }
-
-            // 攒着话的时候得给个说法，不然看着像发出去了他却不理你
-            if waiting {
-                HStack(spacing: 7) {
-                    Image(systemName: "hourglass")
-                        .font(.app(11))
-                        .foregroundStyle(app.settings.accentColor)
-                    Text("已暂存，包含文字、图片与语音。"
-                         + "按发送键一起发出，不会自动发；"
-                         + "输入框为空时再按暂存键可撤回。")
-                        .font(.app(11))
+                Spacer(minLength: 0)
+                Button {
+                    quoting = nil
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.app(11, weight: .medium))
                         .foregroundStyle(Theme.textMuted(scheme))
-                    Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Theme.softFillDeep))
+                .buttonStyle(.plain)
             }
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Theme.softFillDeep))
+        }
+    }
 
-            // 她自己的动作和心里话。
-            //
-            // 她定的：「给我也设置一个动作块心理块，就在我的输入法上方两个选项，
-            // 一个动作一个心理，点击后上方出现一个框，可以输入我的动作和心理，
-            // 跟他发这些是一样的表达方式。」
-            //
-            // ⚠️ 走的就是**他那一套标记**（`[[act:]]` / `[[mind:]]`）：
-            // 摆出来之前会被剥成气泡上方那两行小字（`MessageBeats`），
-            // 而他收到的历史里标记还在——他因此知道她做了什么、没说出口什么。
-            // 单独做一套只会变成两种写法，而且他那边读不懂。
-            beatRow
-            if let q = quoting {
-                // ⚠️ `alignment: .top` + `fixedSize`：不这么写的话，
-                // 那道竖线会跟着容器一路拉长，中间全是空的（她报的第 11 条）。
-                HStack(alignment: .top, spacing: 8) {
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(app.settings.accentColor.opacity(0.6))
-                        .frame(width: 3)
-                        .frame(maxHeight: 30)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(q.role == .user
-                             ? (app.settings.userName.isEmpty ? "我" : app.settings.userName)
-                             : (q.senderName.isEmpty ? app.settings.aiName : q.senderName))
-                            .font(.app(10, weight: .medium))
-                            .foregroundStyle(Theme.textMuted(scheme))
-                        Text(q.content)
-                            .font(.app(12))
-                            .foregroundStyle(Theme.textSoft(scheme))
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
-                    Button {
-                        quoting = nil
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.app(11, weight: .medium))
-                            .foregroundStyle(Theme.textMuted(scheme))
-                    }
-                    .buttonStyle(.plain)
-                }
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 7)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Theme.softFillDeep))
-            }
-
+    @ViewBuilder
+    /// ⚠️ 这一块**套了 `AnyView`**：类型擦除把元数据的递归从根上切断。
+    /// 输入栏一屏只画一次，`AnyView` 那点代价在这儿无所谓，
+    /// 而它是防止「类型名长到解析就爆栈」最稳的一道。
+    private func barField(_ conv: Conversation) -> some View {
+        AnyView(
             TextField(app.settings.inputPlaceholder, text: draftBinding, axis: .vertical)
                 .focused($inputFocused)
                 .onChange(of: inputFocused) { _, on in
@@ -901,6 +944,15 @@ struct ChatView: View {
                     sendCurrent(conv)
                 }
 
+        )
+    }
+
+    @ViewBuilder
+    /// ⚠️ 这一块**套了 `AnyView`**：类型擦除把元数据的递归从根上切断。
+    /// 输入栏一屏只画一次，`AnyView` 那点代价在这儿无所谓，
+    /// 而它是防止「类型名长到解析就爆栈」最稳的一道。
+    private func barTools(_ conv: Conversation) -> some View {
+        AnyView(
             HStack(spacing: 14) {
                 // 「+」不再只是相册。什么都能发——
                 // 文档、音频、压缩包、随便什么，选了就带上去。
@@ -1129,6 +1181,52 @@ struct ChatView: View {
                 .disabled(!canSend && !isRunning && !waiting)
                 .accessibilityLabel(app.settings.segmentUser ? "直接发送" : "发送")
             }
+        )
+    }
+
+    private func inputBar(_ conv: Conversation) -> some View {
+        VStack(spacing: 8) {
+
+            // 抽帧要跑好几秒。**不摆一个在动的东西在这儿，
+            // 她只会以为点坏了**——而且会再点一遍。
+            barVideoBusy
+
+            barPending
+
+            // 打了 @ 就把群里的人列出来，点一下补进去
+            barMention(conv)
+
+            barListening
+
+            // 刚录好还没发的那段。点左边听一遍，点叉扔掉。
+            barVoice
+
+            barSticker
+
+            barFiles
+
+            // 待发的那段视频。**只摆一条，不摆那十二张帧**——
+            // 帧是给他看的，她这边看到的应该是「一段视频」这一件东西。
+            barVideo
+
+            // 攒着话的时候得给个说法，不然看着像发出去了他却不理你
+            barWaiting
+
+            // 她自己的动作和心里话。
+            //
+            // 她定的：「给我也设置一个动作块心理块，就在我的输入法上方两个选项，
+            // 一个动作一个心理，点击后上方出现一个框，可以输入我的动作和心理，
+            // 跟他发这些是一样的表达方式。」
+            //
+            // ⚠️ 走的就是**他那一套标记**（`[[act:]]` / `[[mind:]]`）：
+            // 摆出来之前会被剥成气泡上方那两行小字（`MessageBeats`），
+            // 而他收到的历史里标记还在——他因此知道她做了什么、没说出口什么。
+            // 单独做一套只会变成两种写法，而且他那边读不懂。
+            beatRow
+            barQuote
+
+            barField(conv)
+            barTools(conv)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
