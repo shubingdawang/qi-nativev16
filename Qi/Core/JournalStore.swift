@@ -164,6 +164,11 @@ struct JournalPage: Codable, Identifiable, Hashable {
     var paperHex: String = "F3E9D8"
     /// 纸上的纹路：plain / grid / ruled / dot / graph / stripe
     var paperPattern: String = "plain"
+    /// 纸的织纹。空 = 不铺（老页面全是这一种）。
+    ///
+    /// 跟 `paperPattern`（画出来的格线）是**两层**：
+    /// 格线是印在纸上的，织纹是纸本身的质地，两个可以同时有。
+    var paperWeave: String = ""
     var elements: [JournalElement] = []
     var updatedAt: Date = Date()
 
@@ -181,6 +186,7 @@ struct JournalPage: Codable, Identifiable, Hashable {
         title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
         paperHex = (try? c.decodeIfPresent(String.self, forKey: .paperHex)) ?? "F3E9D8"
         paperPattern = (try? c.decodeIfPresent(String.self, forKey: .paperPattern)) ?? "plain"
+        paperWeave = (try? c.decodeIfPresent(String.self, forKey: .paperWeave)) ?? ""
         elements = (try? c.decodeIfPresent([JournalElement].self, forKey: .elements)) ?? []
         updatedAt = (try? c.decodeIfPresent(Date.self, forKey: .updatedAt)) ?? Date()
         shared = (try? c.decodeIfPresent(Bool.self, forKey: .shared)) ?? false
@@ -269,6 +275,15 @@ enum JournalKit {
         ("蝴蝶", "fly"), ("小鸟", "bird"), ("樱花", "sakura"), ("小草", "grass"),
         ("邮戳", "stamp"), ("信封", "mail"), ("标签", "tag"), ("旗子", "flag"),
         ("水滴", "drop"), ("雪花", "snow"), ("太阳", "sun"), ("贝壳", "shell")
+    ]
+
+    /// 纸的织纹。**这几张是真的布料实拍**（CC0，见 Resources/Weave/来历.txt）——
+    /// 亚麻那种毛边画不出来，只能拍。
+    /// 图里只有明暗、没有颜色，纸色照样是她选的那个。
+    static let weaves: [(String, String)] = [
+        ("粗亚麻", "rough_linen"), ("麻布", "hessian_230"),
+        ("华夫格", "waffle_pique_cotton"), ("提花", "floral_jacquard"),
+        ("人字呢", "poly_wool_herringbone"), ("平纹布", "cotton_jersey")
     ]
 
     /// 画出来的贴纸默认用什么颜色。低饱和，贴在纸上不抢戏。

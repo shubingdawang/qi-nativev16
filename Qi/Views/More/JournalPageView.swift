@@ -93,7 +93,8 @@ struct JournalPageView: View {
                 // 纸。**跟快照共用同一份** `JournalPaperView`——
                 // 纸纹在这儿画一套、那儿画一套的话，
                 // 他看到的那张迟早跟她屏幕上的对不上
-                JournalPaperView(hex: page.paperHex, pattern: page.paperPattern)
+                JournalPaperView(hex: page.paperHex, pattern: page.paperPattern,
+                                 weave: page.paperWeave)
                     .onTapGesture { picked = nil; charFocus = nil }
 
                 ForEach(page.elements.sorted { $0.z < $1.z }) { e in
@@ -344,13 +345,48 @@ struct JournalPageView: View {
                                 page.paperPattern = key
                                 store.save(page)
                             } label: {
-                                JournalPaperView(hex: page.paperHex, pattern: key)
+                                JournalPaperView(hex: page.paperHex, pattern: key,
+                                                 weave: page.paperWeave)
                                     .frame(width: 42, height: 30)
                                     .clipShape(RoundedRectangle(cornerRadius: 8))
                                     .overlay {
                                         RoundedRectangle(cornerRadius: 8)
                                             .strokeBorder(app.settings.accentColor,
                                                           lineWidth: page.paperPattern == key ? 2 : 0)
+                                    }
+                                    .overlay(alignment: .bottom) {
+                                        Text(name)
+                                            .font(.app(8))
+                                            .foregroundStyle(Theme.textMuted(scheme))
+                                            .padding(.bottom, 1)
+                                    }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                }
+
+                // 纸的织纹。**跟上面那排格线是两层**：
+                // 格线是印在纸上的，织纹是纸本身的质地，可以同时有。
+                // 这一排是真实拍的布纹（CC0，见 Resources/Weave/来历.txt），
+                // 不是画的——画不出亚麻那种毛边。
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 7) {
+                        ForEach(JournalKit.weaves, id: \.1) { name, key in
+                            Button {
+                                // 再点一下取消，跟胶带那边一个规矩
+                                page.paperWeave = (page.paperWeave == key) ? "" : key
+                                store.save(page)
+                            } label: {
+                                JournalPaperView(hex: page.paperHex,
+                                                 pattern: "plain", weave: key)
+                                    .frame(width: 42, height: 30)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .strokeBorder(app.settings.accentColor,
+                                                          lineWidth: page.paperWeave == key ? 2 : 0)
                                     }
                                     .overlay(alignment: .bottom) {
                                         Text(name)

@@ -179,7 +179,8 @@ struct JournalCanvas: View {
 
     var body: some View {
         ZStack {
-            JournalPaperView(hex: page.paperHex, pattern: page.paperPattern)
+            JournalPaperView(hex: page.paperHex, pattern: page.paperPattern,
+                             weave: page.paperWeave)
 
             ForEach(page.elements.sorted { $0.z < $1.z }) { e in
                 JournalElementView(e)

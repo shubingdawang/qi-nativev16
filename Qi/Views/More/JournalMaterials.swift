@@ -26,6 +26,8 @@ struct JournalPaperView: View {
     let hex: String
     /// plain / grid / ruled / dot / graph / stripe
     let pattern: String
+    /// 纸的织纹文件名。空 = 不铺。见 Resources/Weave/来历.txt
+    var weave: String = ""
 
     private var base: Color {
         Color(hexString: hex) ?? Color(hexString: "F3E9D8") ?? .white
@@ -53,10 +55,45 @@ struct JournalPaperView: View {
             .allowsHitTesting(false)
         }
         .overlay {
+            // 真的织纹。**铺在格线之上、颗粒之下**：
+            // 格线是印在纸上的，织纹是纸本身的质地。
+            if !weave.isEmpty, let img = JournalPaperView.weaveImage(weave) {
+                Image(uiImage: img)
+                    .resizable(resizingMode: .tile)
+                    // ⚠️ 叠加混合，不是直接盖。
+                    // 图存的是中性灰（平均明度正好 128），叠加以 128 为界——
+                    // 亮的地方提一点、暗的地方压一点，**纸的颜色照样透过来**。
+                    // 换成 normal 就是拿一张灰布把她选的纸色盖掉了。
+                    .blendMode(.overlay)
+                    .opacity(0.55)
+                    .allowsHitTesting(false)
+            }
+        }
+        .overlay {
             // 纸的颗粒。很淡，凑近才看得见——
             // 没有它那就是一块塑料色板，不像纸。
             GrainOverlay(opacity: 0.05)
         }
+    }
+
+    /// 织纹图。**读过的记着**——这一张会铺满整页，
+    /// 每次重绘都重解一遍 jpg 的话，拖一下贴纸就卡。
+    ///
+    /// ⚠️ 走 `NSCache`：一共就六张、每张几十 KB，
+    /// 但内存紧张的时候该让系统能收走（塔罗那处就是栽在字典上）。
+    nonisolated(unsafe) private static let weaveCache: NSCache<NSString, UIImage> = {
+        let c = NSCache<NSString, UIImage>()
+        c.countLimit = 8
+        return c
+    }()
+
+    static func weaveImage(_ name: String) -> UIImage? {
+        let key = name as NSString
+        if let hit = weaveCache.object(forKey: key) { return hit }
+        guard let url = Bundle.main.url(forResource: name, withExtension: "jpg"),
+              let img = UIImage(contentsOfFile: url.path) else { return nil }
+        weaveCache.setObject(img, forKey: key)
+        return img
     }
 
     private func grid(_ ctx: inout GraphicsContext, _ size: CGSize, step: CGFloat) {

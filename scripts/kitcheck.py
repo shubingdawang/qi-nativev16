@@ -53,6 +53,21 @@ checks = [
      drawn('struct JournalStickerShape')),
 ]
 
+# 织纹那一张表不一样：它的 key 是**文件名**，不是 switch 里的分支。
+# 所以对的是「包里有没有这个文件」。
+# ⚠️ 少一个文件的话，她点那一格什么都不会发生，也不报错。
+weave_keys = listed('weaves')
+weave_dir = 'Qi/Resources/Weave'
+if weave_keys:
+    have_files = set(f[:-4] for f in __import__('os').listdir(weave_dir)
+                     if f.endswith('.jpg'))
+    miss = [k for k in weave_keys if k not in have_files]
+    extra = sorted(have_files - set(weave_keys))
+    if miss:
+        print('BAD 织纹：目录里列了但包里没这个文件 → %s' % miss)
+    if extra:
+        print('ⓘ  织纹：包里有但目录没列（白占体积）→ %s' % extra)
+
 total = 0
 for label, want, have in checks:
     have = set(have)
