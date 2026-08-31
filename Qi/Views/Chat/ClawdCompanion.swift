@@ -31,6 +31,30 @@ struct ClawdRoamer: View {
     @State private var facingLeft = false
     @State private var walkSeconds: Double = 2.6
     @State private var walkTask: Task<Void, Never>?
+
+    /// 他此刻站在哪儿（屏幕比例）。
+    ///
+    /// ⚠️ **走路的每一步写这个，不写 `app.settings`。**
+    /// `settings` 是 `AppState` 上的 `@Published`，
+    /// 改一次全 App 重新求值一遍；而走一趟要改八十次。
+    /// 她说的「没回话的时候也卡」就是这儿——clawd 恰恰是
+    /// 安静的时候才起来走。
+    ///
+    /// 全局那两个只在**停下来**的时候写一次，
+    /// 它是「关了 App 再打开他还站在原地」用的；
+    /// 走路中间那四十个位置一个都不用记。
+    @State private var liveX: Double = .nan
+    @State private var liveY: Double = .nan
+
+    /// 现在该画在哪儿。还没对齐过就用存下来的那个。
+    private var posX: Double { liveX.isNaN ? app.settings.clawdX : liveX }
+    private var posY: Double { liveY.isNaN ? app.settings.clawdY : liveY }
+
+    /// 停下来了，把位置记住。
+    private func settle() {
+        if !liveX.isNaN { app.settings.clawdX = liveX }
+        if !liveY.isNaN { app.settings.clawdY = liveY }
+    }
     @State private var line: String?
     @State private var lineTask: Task<Void, Never>?
     /// 手上那件东西**此刻怎么拿**。空手就是 `.none`
@@ -121,13 +145,13 @@ struct ClawdRoamer: View {
                     // 顺便放大一圈——它只有三十几个点宽，按准太难了。
                     .contentShape(Rectangle().inset(by: -14))
             }
-            .position(x: app.settings.clawdX * geo.size.width,
-                      y: app.settings.clawdY * geo.size.height)
+            .position(x: posX * geo.size.width,
+                      y: posY * geo.size.height)
             .onAppear { pageWidth = geo.size.width }
             .onChange(of: geo.size.width) { _, w in pageWidth = w }
             // 拎着的时候要跟手，所以不给动画
-            .animation(held ? nil : .easeInOut(duration: walkSeconds), value: app.settings.clawdX)
-            .animation(held ? nil : .easeInOut(duration: walkSeconds), value: app.settings.clawdY)
+            .animation(held ? nil : .easeInOut(duration: walkSeconds), value: posX)
+            .animation(held ? nil : .easeInOut(duration: walkSeconds), value: posY)
             .animation(.spring(response: 0.28, dampingFraction: 0.6), value: held)
             .animation(.easeInOut(duration: 0.25), value: line)
             // ⚠️ **一个手势管两件事**：轻点是戳，按住 0.28 秒是拎起来。
@@ -152,10 +176,13 @@ struct ClawdRoamer: View {
                             }
                         }
                         guard held else { return }
-                        app.settings.clawdX = min(right, max(left, value.location.x / geo.size.width))
-                        app.settings.clawdY = min(bottom, max(top, value.location.y / geo.size.height))
+                        // 拖的每一帧也只写本地，松手才落全局（理由同 `liveX`）
+                        liveX = min(right, max(left, value.location.x / geo.size.width))
+                        liveY = min(bottom, max(top, value.location.y / geo.size.height))
                     }
                     .onEnded { value in
+                        // 松手了，把拖到的位置记住（拖的过程只写了本地）
+                        settle()
                         liftTask?.cancel()
                         let quick = Date().timeIntervalSince(pressAt ?? Date()) < 0.28
                         let still = abs(value.translation.width) < 12
@@ -179,7 +206,7 @@ struct ClawdRoamer: View {
             // 上次关 App 的时候他正躲在边外面（clawdX 存的是屏幕外的数），
             // 那就接着躲——但**绝不能让他就这么消失**：直接接回探头那一套，
             // 至少那只眼睛还在这儿。
-            let x = app.settings.clawdX
+            let x = posX
             if x < 0 || x > 1 {
                 walkTask?.cancel()
                 walkTask = Task { @MainActor in
@@ -365,7 +392,7 @@ struct ClawdRoamer: View {
         // 那条会盖掉 withAnimation 给的时长，而 walk() 结束时 walkSeconds 是 0——
         // 所以上一版这几下全是瞬移。要改时长得改 walkSeconds 本身。
         walkSeconds = 0.5
-        app.settings.clawdX = hiddenX(right: right)
+        liveX = hiddenX(right: right); settle()
         try? await Task.sleep(nanoseconds: UInt64.random(in: 700...1400) * 1_000_000)
         if Task.isCancelled { return }
 
@@ -377,7 +404,7 @@ struct ClawdRoamer: View {
             // 探出来
             mood = .peeking
             walkSeconds = 0.55
-            app.settings.clawdX = peekX(right: right)
+            liveX = peekX(right: right); settle()
             // 这儿**故意不说话**：气泡是跟他一起居中的，
             // 他人在屏幕外，气泡也就跟着出去了，只会在边上露半个白角。
             // 躲着的时候本来也该是安静的。
@@ -388,7 +415,7 @@ struct ClawdRoamer: View {
             // 缩回去
             mood = .idle
             walkSeconds = 0.4
-            app.settings.clawdX = hiddenX(right: right)
+            liveX = hiddenX(right: right); settle()
             try? await Task.sleep(nanoseconds: UInt64.random(in: 900...2200) * 1_000_000)
         }
 
@@ -409,8 +436,8 @@ struct ClawdRoamer: View {
     /// 现在拆成很多小步：每步只挪一点点，配合 walk1/walk2 两帧换脚，
     /// 再加一个上下一像素的颠簸。距离越远步数越多，走得就越久。
     private func walk(to tx: Double, _ ty: Double) async {
-        let fromX = app.settings.clawdX
-        let fromY = app.settings.clawdY
+        let fromX = posX
+        let fromY = posY
         let dx = tx - fromX
         let dy = ty - fromY
         let dist = (dx * dx + dy * dy).squareRoot()
@@ -430,13 +457,16 @@ struct ClawdRoamer: View {
             let t = Double(i) / Double(steps)
             // 起步和收步稍微慢一点，中间快——真人走路就是这样
             let eased = t < 0.5 ? 2 * t * t : 1 - pow(-2 * t + 2, 2) / 2
-            app.settings.clawdX = fromX + dx * eased
+            liveX = fromX + dx * eased
             // 每一步上下颠一点点，走路的那个起伏
             let bob = (i % 2 == 0 ? 0.0 : -0.004)
-            app.settings.clawdY = fromY + dy * eased + bob
+            liveY = fromY + dy * eased + bob
             try? await Task.sleep(nanoseconds: 90_000_000)
         }
-        app.settings.clawdY = ty
+        liveY = ty
+        // ⚠️ 走完了才把位置记进全局，**一趟只写这一次**。
+        // 中间那四十步一步都不写——那是她说的「没回话的时候卡」的病根。
+        settle()
     }
 
     // MARK: 掏东西吃喝
@@ -783,7 +813,7 @@ struct ClawdRoamer: View {
         // 把他放到屏幕边上，他就**真的躲到边外面去**，
         // 只留一只眼睛在这儿看着——她要的就是这个。
         // 以前不管放哪儿都是原地站住然后接着乱跑。
-        let x = app.settings.clawdX
+        let x = posX
         if x <= 0.07 || x >= 0.93 {
             say(["那我躲这儿", "嘘——", "我不出来了"].randomElement() ?? "嘘")
             walkTask?.cancel()
