@@ -425,6 +425,14 @@ struct AppearanceView: View {
                              + (app.settings.preset == .home ? Self.homeAccentNote : ""),
                              title: "此主题的改动范围")
             }
+
+            SettingsDivider()
+            slider(title: "浓淡",
+                   value: $app.settings.themePunch,
+                   range: 0.4...1.8, step: 0.05,
+                   readout: String(format: "%.2f", app.settings.themePunch),
+                   note: "调整主题配色的饱和度，作用于所有配色方案。1.00 为原始值。\n\n"
+                       + "⚠️ 玻璃质感由系统渲染，其呈现效果随 iOS 版本变化，本项不影响该部分。")
         }
     }
 

@@ -94,7 +94,21 @@ enum ThemePreset: String, CaseIterable, Identifiable, Codable {
 struct SkinColor {
     var light: Color
     var dark: Color
-    func c(_ scheme: ColorScheme) -> Color { scheme == .dark ? dark : light }
+    /// 取这一档配色在当前深浅下的颜色。
+    ///
+    /// ⚠️ **所有主题色都从这一个口子出去**，所以「浓淡」那一档在这儿加。
+    ///
+    /// 她报的：「家和兔牙的配色变得有些奇怪，怎么感觉比之前淡了很多。」
+    /// 我查过：这几套的色值是写死的十六进制，从 v118 起一个字都没动过；
+    /// `Theme` 和 `SettingsSlider` 也都没碰过它们。
+    /// 她那台是 iOS 26.6——玻璃材质是**系统**渲染的，
+    /// 系统更新会改它的样子，而我这边一行都不用变。那我查不到也控制不了。
+    ///
+    /// 所以与其继续猜，不如给她一个能自己拧的旋钮：
+    /// 觉得淡就往浓里拧，觉得艳就往淡里拧。
+    func c(_ scheme: ColorScheme) -> Color {
+        Theme.punch(scheme == .dark ? dark : light)
+    }
 
     init(_ light: Color, _ dark: Color) {
         self.light = light

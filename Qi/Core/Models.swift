@@ -548,6 +548,14 @@ struct AppSettings: Codable {
     var glassOpacity: Double = 1.0
     /// 玻璃是哪一套做法
     var glassStyle: GlassStyle = .frosted
+    /// 配色的浓淡。1 = 原样，往上更浓、往下更淡。
+    ///
+    /// 她报的：「家和兔牙的配色变得有些奇怪，怎么感觉比之前淡了很多。」
+    /// 那几套的色值是写死的、从 v118 起没动过——她那台是 iOS 26.6，
+    /// 玻璃材质是系统渲染的，系统更新会改它的样子，我这边查不到也控制不了。
+    /// 与其继续猜，不如给她一根能自己拧的。
+    var themePunch: Double = 1.0
+
     /// 深色模式下把玻璃压暗多少（0~0.5）。
     /// 压的是一层黑，**不动底下那块 material**——
     /// 所以磨砂还是磨砂、模糊还是模糊，只是整体沉下去，
@@ -853,6 +861,7 @@ extension AppSettings {
         glassOpacity = (try? c.decodeIfPresent(Double.self, forKey: .glassOpacity)) ?? 1.0
         glassStyle = (try? c.decodeIfPresent(GlassStyle.self, forKey: .glassStyle)) ?? .frosted
         glassDim = (try? c.decodeIfPresent(Double.self, forKey: .glassDim)) ?? 0.22
+        themePunch = (try? c.decodeIfPresent(Double.self, forKey: .themePunch)) ?? 1.0
         nativeToolsEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .nativeToolsEnabled)) ?? true
         localMemory = (try? c.decodeIfPresent(Bool.self, forKey: .localMemory)) ?? true
         localPulse = (try? c.decodeIfPresent(Bool.self, forKey: .localPulse)) ?? true

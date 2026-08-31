@@ -27,6 +27,7 @@ final class AppState: ObservableObject {
         Theme.customTextHexDark = settings.textHexDark
         // 灰字要跟着主题色的冷暖走，理由见 `Theme.textSoft` 那段
         Theme.accentMirror = settings.accentColor
+        Theme.punchMirror = settings.themePunch
         Theme.preset = settings.preset
         Theme.glassStyle = settings.glassStyle
         // 身体开着的时候，渴／想她／累／压着这四维读身体，别两套各算各的

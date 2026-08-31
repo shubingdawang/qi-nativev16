@@ -93,6 +93,47 @@ enum Theme {
     /// 跟 `customTextHex` 一样由 `syncTheme()` 推进来。
     nonisolated(unsafe) static var accentMirror: Color = Color(red: 0.4, green: 0.5, blue: 0.62)
 
+    /// 配色的浓淡。1 = 原样，往上更浓、往下更淡。
+    /// 跟 `accentMirror` 一样由 `syncTheme()` 推进来。
+    nonisolated(unsafe) static var punchMirror: Double = 1
+
+    /// 把一个主题色按「浓淡」那一档调一下。
+    ///
+    /// ⚠️ 调的是**饱和度**，不是亮度。
+    /// 调亮度的话浅色主题会整片发白、深色主题会糊成一团黑；
+    /// 而她说的「淡」指的是颜色不够，正是饱和度那一维。
+    ///
+    /// ⚠️ 亮度只跟着动一点点（往浓里拧的时候略压暗），
+    /// 不然高饱和的粉在白纸上会发荧光。
+    /// 算过的记着。**这一步每帧要跑几百次**——
+    /// 屏幕上每一块玻璃、每一行字都从 `SkinColor.c` 走一遍。
+    /// 每次都做一遍 HSB 转换的话，光这一处就能把主线程吃掉一截。
+    ///
+    /// ⚠️ 主色一换、浓淡一拧，这份缓存就作废，所以拿 `punchMirror` 当版本号。
+    nonisolated(unsafe) private static var punchCache: [String: Color] = [:]
+    nonisolated(unsafe) private static var punchCacheFor: Double = .nan
+
+    static func punch(_ c: Color) -> Color {
+        let k = punchMirror
+        // 1 就是原样——绝大多数人不会动这一档，让它一步都不多走
+        guard abs(k - 1) > 0.01 else { return c }
+        if punchCacheFor != k {
+            punchCache.removeAll(keepingCapacity: true)
+            punchCacheFor = k
+        }
+        let key = c.description
+        if let hit = punchCache[key] { return hit }
+        var h: CGFloat = 0, sat: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard UIColor(c).getHue(&h, saturation: &sat, brightness: &b, alpha: &a)
+        else { return c }
+        let s2 = max(0, min(1, sat * CGFloat(k)))
+        let b2 = max(0, min(1, b - (CGFloat(k) - 1) * 0.04))
+        let out = Color(hue: Double(h), saturation: Double(s2),
+                        brightness: Double(b2), opacity: Double(a))
+        punchCache[key] = out
+        return out
+    }
+
     /// 把 a 往 b 挪一点点。
     /// iOS 18 才有 `Color.mix(with:by:)`，这边要兼容 17，自己算。
     static func blend(_ a: Color, toward b: Color, _ t: Double) -> Color {
