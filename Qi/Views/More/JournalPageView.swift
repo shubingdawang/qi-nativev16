@@ -588,7 +588,16 @@ struct JournalPageView: View {
         }
     }
 
+    /// 选中之后第一排：会滚的那半 + 钉在右边的那半。
     private func firstBar(_ e: JournalElement) -> some View {
+        HStack(spacing: 0) {
+            scrollingBar(e)
+            pinnedBar(e)
+        }
+        .frame(height: 38)
+    }
+
+    private func scrollingBar(_ e: JournalElement) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 7) {
                 // 点中某个字之后，这一排先出现「这个字」的三个钮：
@@ -758,17 +767,35 @@ struct JournalPageView: View {
                         editingText = e
                     }
                 }
-                small("置顶") { commit(e.id) { $0.z = nextZ } }
-                small("删掉") {
-                    if !e.imageName.isEmpty { ImageStore.delete(e.imageName) }
-                    page.elements.removeAll { $0.id == e.id }
-                    picked = nil
-                    charFocus = nil
-                    store.save(page)
-                }
+                // ⚠️ 「置顶／删掉」**搬出去了**，钉在右边不跟着滚。
+                // 她报的：「删除等等功能要拖动到最后很麻烦。」
+                // 那一排现在有选字、字号、两排颜色、样子……越加越长，
+                // 而「删掉」是最常用的一个，凭什么排在最远。
             }
-            .padding(.horizontal, 14)
+            .padding(.leading, 14)
+            .padding(.trailing, 4)
         }
+    }
+
+    /// 钉在右边那两个：置顶、删掉。
+    ///
+    /// ⚠️ 底下垫一层玻璃**并且不透明**：它压在会滚动的那一排上面，
+    /// 透的话底下的按钮会从它背后透出来，看着像两层字叠在一起。
+    private func pinnedBar(_ e: JournalElement) -> some View {
+        HStack(spacing: 7) {
+            small("置顶") { commit(e.id) { $0.z = nextZ } }
+            small("删掉") {
+                if !e.imageName.isEmpty { ImageStore.delete(e.imageName) }
+                page.elements.removeAll { $0.id == e.id }
+                picked = nil
+                charFocus = nil
+                store.save(page)
+            }
+        }
+        .padding(.leading, 8)
+        .padding(.trailing, 12)
+        .frame(maxHeight: .infinity)
+        .background(.ultraThinMaterial)
     }
 
     private func small(_ t: String, run: @escaping () -> Void) -> some View {

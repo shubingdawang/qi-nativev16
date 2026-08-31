@@ -261,6 +261,10 @@ enum ImageStore {
     }
 
     /// 存一张带透明通道的图。像素图必须走 png，jpg 会把透明填成黑的。
+    ///
+    /// ⚠️ **抠过、擦过的图一律走这个，别走上面那个 `save`。**
+    /// 她报的「贴纸擦完之后变成白底了」就是走错了那一条：
+    /// 擦掉的地方是透明的，存成 jpg 之后透明一律被填实。
     static func savePNG(_ image: UIImage) -> String? {
         guard let data = image.pngData() else { return nil }
         return save(data: data, ext: "png")

@@ -38,12 +38,30 @@ struct StickerEraser: View {
     @State private var canvas: CGSize = .zero
     @State private var saving = false
 
+    /// 放大了多少倍、挪到哪儿了。
+    ///
+    /// 她定的：「贴纸不能放大缩小，擦细小的地方很麻烦。」
+    ///
+    /// ⚠️ **缩放和平移只作用在「看」上，不动那些擦过的道。**
+    /// 道存的是**画布坐标**（没缩放时的那一套），
+    /// 所以放大擦完再缩回去，位置是对的；
+    /// 存盘那一步也不用管当时缩放到了几倍。
+    @State private var zoom: CGFloat = 1
+    @State private var zoomLive: CGFloat = 1
+    @State private var pan: CGSize = .zero
+    @State private var panLive: CGSize = .zero
+
+    private var scaleNow: CGFloat { zoom * zoomLive }
+    private var panNow: CGSize {
+        CGSize(width: pan.width + panLive.width, height: pan.height + panLive.height)
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
                 WallpaperBackground()
                 VStack(spacing: 14) {
-                    Text("手指抹过去就擦掉。擦坏了点「撤一步」。")
+                    Text("一根手指抹过去就擦掉，两根手指捏着放大。擦坏了点「撤一步」。")
                         .font(.app(12))
                         .foregroundStyle(Theme.textMuted(scheme))
 
@@ -63,6 +81,17 @@ struct StickerEraser: View {
                     .padding(.horizontal, 20)
 
                     HStack(spacing: 12) {
+                        if scaleNow > 1.05 {
+                            Text(String(format: "%.1f×", scaleNow))
+                                .font(.app(11, design: .monospaced))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                            Button("回到原大") {
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    zoom = 1; zoomLive = 1
+                                    pan = .zero; panLive = .zero
+                                }
+                            }
+                        }
                         Button("撤一步") {
                             if !strokes.isEmpty { strokes.removeLast() }
                         }
@@ -122,8 +151,15 @@ struct StickerEraser: View {
                     }
                     .compositingGroup()
             }
+            // ⚠️ 缩放**加在最外面**，而擦的那一笔记的是缩放前的坐标——
+            // `v.location` 在被 `scaleEffect` 变换过的视图里，
+            // 报回来的仍然是这个视图自己的坐标系（也就是没缩放时那一套）。
+            // 所以放大之后擦，道的位置照样是对的，存盘那步一点都不用改。
+            .scaleEffect(scaleNow)
+            .offset(panNow)
             .contentShape(Rectangle())
             .gesture(
+                // 一根手指 = 擦
                 DragGesture(minimumDistance: 0)
                     .onChanged { v in current.append(v.location) }
                     .onEnded { _ in
@@ -131,10 +167,42 @@ struct StickerEraser: View {
                         current = []
                     }
             )
+            // 两根手指 = 缩放和挪。
+            // ⚠️ 走 `simultaneousGesture`：跟上面那条并存，
+            // 用 `.gesture` 串起来的话两条会互相抢，表现是「有时候擦、有时候缩」。
+            .simultaneousGesture(
+                MagnifyGesture()
+                    .onChanged { v in zoomLive = v.magnification }
+                    .onEnded { v in
+                        zoom = min(6, max(1, zoom * v.magnification))
+                        zoomLive = 1
+                        // 缩回 1 倍就把挪过的也归位——
+                        // 不然会出现「明明是原始大小，图却在屏幕外」
+                        if zoom <= 1.01 { pan = .zero }
+                    }
+            )
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 12)
+                    .onChanged { v in
+                        // 只有放大了才让挪。1 倍时挪它没有意义，
+                        // 而且会跟擦那一笔抢手势。
+                        guard scaleNow > 1.05 else { return }
+                        panLive = v.translation
+                    }
+                    .onEnded { v in
+                        guard scaleNow > 1.05 else { return }
+                        pan = CGSize(width: pan.width + v.translation.width,
+                                     height: pan.height + v.translation.height)
+                        panLive = .zero
+                    }
+            )
             .onAppear { canvas = geo.size }
             .onChange(of: geo.size) { _, n in canvas = n }
         }
         .aspectRatio(1, contentMode: .fit)
+        // ⚠️ 裁一下：放大之后图会顶出这块地方，
+        // 不裁的话会盖到底下的笔头滑块上，手指一碰就误触。
+        .clipped()
         .padding(.horizontal, 24)
     }
 
@@ -174,7 +242,7 @@ struct StickerEraser: View {
                 g.strokePath()
             }
         }
-        if let name = ImageStore.save(out) {
+        if let name = ImageStore.savePNG(out) {
             onDone(name)
         }
         dismiss()

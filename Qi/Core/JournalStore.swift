@@ -35,7 +35,10 @@ enum JournalKind: String, Codable, CaseIterable {
         switch self {
         case .text:    return "textformat"
         case .tape:    return "bandage"
-        case .sticker: return "face.smiling"
+        // ⚠️ 不用 `face.smiling`——那是个笑脸，
+        // 她说「在外面缩略图上看不是贴纸，是 emoji」。
+        // 现在这一栏里绝大多数是博物馆那批实物贴纸，图标该跟着走。
+        case .sticker: return "leaf"
         case .stamp:   return "seal"
         case .clip:    return "paperclip"
         case .note:    return "note.text"
@@ -439,7 +442,18 @@ enum JournalKit {
             // 但一上来全是素的话，「胶带有花纹」这件事她根本不会发现
             e.pattern = tapePatterns.randomElement()?.1 ?? "plain"
         case .sticker:
-            e.emoji = stickers.randomElement() ?? "🌿"
+            // ⚠️ 新建的时候**先给一张实物贴纸**，不给 emoji。
+            //
+            // 她报的：「没有贴纸在外面缩略图上看不是贴纸，是 emoji。」
+            // 以前是随机塞一个 emoji，于是点「贴纸」出来的是一个笑脸，
+            // 她还得再去那一排里挑一张真的——多一步，而且第一眼就错了。
+            //
+            // emoji 那一排还留着（有人就是想贴 emoji），只是不再是默认。
+            if let first = realStickers.randomElement() {
+                e.assetName = first.1
+            } else {
+                e.emoji = stickers.randomElement() ?? "🌿"
+            }
         case .stamp:
             e.colorHex = "C9A227"
             e.emoji = "📮"
