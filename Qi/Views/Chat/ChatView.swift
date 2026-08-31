@@ -556,7 +556,6 @@ struct ChatView: View {
 
     // MARK: 输入栏
 
-    @ViewBuilder
     // MARK: 输入栏拆开的那几块
     //
     // ⚠️ **别再把它们塞回 `inputBar` 里去。**
@@ -594,7 +593,7 @@ struct ChatView: View {
     /// 输入栏一屏只画一次，`AnyView` 那点代价在这儿无所谓，
     /// 而它是防止「类型名长到解析就爆栈」最稳的一道。
     private var barPending: some View {
-        AnyView(
+        AnyView(Group {
             if !pendingImages.isEmpty || !pendingGIFs.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -638,7 +637,7 @@ struct ChatView: View {
                 }
                 .frame(height: 58)
             }
-        )
+        })
     }
 
     @ViewBuilder
@@ -691,7 +690,7 @@ struct ChatView: View {
     /// 输入栏一屏只画一次，`AnyView` 那点代价在这儿无所谓，
     /// 而它是防止「类型名长到解析就爆栈」最稳的一道。
     private var barVoice: some View {
-        AnyView(
+        AnyView(Group {
             if let v = pendingVoice {
                 HStack(spacing: 10) {
                     Button {
@@ -735,7 +734,7 @@ struct ChatView: View {
                 .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(Theme.softFillDeep))
             }
-        )
+        })
     }
 
     @ViewBuilder
@@ -903,7 +902,7 @@ struct ChatView: View {
     /// 输入栏一屏只画一次，`AnyView` 那点代价在这儿无所谓，
     /// 而它是防止「类型名长到解析就爆栈」最稳的一道。
     private func barField(_ conv: Conversation) -> some View {
-        AnyView(
+        AnyView(Group {
             TextField(app.settings.inputPlaceholder, text: draftBinding, axis: .vertical)
                 .focused($inputFocused)
                 .onChange(of: inputFocused) { _, on in
@@ -944,7 +943,7 @@ struct ChatView: View {
                     sendCurrent(conv)
                 }
 
-        )
+        })
     }
 
     @ViewBuilder
@@ -952,7 +951,7 @@ struct ChatView: View {
     /// 输入栏一屏只画一次，`AnyView` 那点代价在这儿无所谓，
     /// 而它是防止「类型名长到解析就爆栈」最稳的一道。
     private func barTools(_ conv: Conversation) -> some View {
-        AnyView(
+        AnyView(Group {
             HStack(spacing: 14) {
                 // 「+」不再只是相册。什么都能发——
                 // 文档、音频、压缩包、随便什么，选了就带上去。
@@ -1181,7 +1180,7 @@ struct ChatView: View {
                 .disabled(!canSend && !isRunning && !waiting)
                 .accessibilityLabel(app.settings.segmentUser ? "直接发送" : "发送")
             }
-        )
+        })
     }
 
     private func inputBar(_ conv: Conversation) -> some View {
