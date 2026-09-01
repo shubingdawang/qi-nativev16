@@ -26,6 +26,21 @@ BODY = (
 # 别去手改每一行，改漏一行整只就歪了。
 BODY = ['....' + r + '....' for r in BODY]
 
+# ⚠️ 肩膀抬到身体上 1/4（见 `抬肩膀.py`）：身子外面那几列整体上移两格。
+# 这个生成器要是不跟上，下次重跑一遍就把抬肩那次改动覆盖掉。
+def _lift(rows, up=2, left=8, right=31):
+    g = [list(r) for r in rows]
+    for x in range(len(g[0])):
+        if left <= x <= right:
+            continue
+        col = [g[y][x] for y in range(len(g))][up:] + ['.'] * up
+        for y, ch in enumerate(col):
+            g[y][x] = ch
+    return [''.join(r) for r in g]
+
+
+BODY = _lift(BODY)
+
 assert len(BODY) == H, len(BODY)
 assert all(len(r) == W for r in BODY), '有行不是 %d 格宽' % W
 for r in BODY:
@@ -80,7 +95,8 @@ def straw(rows, cx):
 def frame(dx, hand_x, tip_x):
     rows = lean(BODY, dx)
     # 杆从手里（第 10 行，右手那一块）斜下来，落到稻草中心
-    rows = line(rows, hand_x, 14, tip_x, 23, 'n')
+    # ⚠️ 手在第 8..12 行了（抬肩之后），扫把杆从手上出发：14 → 12
+    rows = line(rows, hand_x, 12, tip_x, 23, 'n')
     return straw(rows, tip_x)
 
 
