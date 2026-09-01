@@ -401,10 +401,10 @@ struct StickerLibraryView: View {
                 .padding(.bottom, Layout.tabBarExpanded + 16)
             }
         }
-        .fileImporter(isPresented: $importing,
-                      allowedContentTypes: [UTType.gif, UTType.webP],
-                      allowsMultipleSelection: true) { result in
-            guard case .success(let urls) = result else { return }
+        // ⚠️ 弹窗挪进了不订阅任何东西的宿主，见 `PickHosts.swift`。
+        // 挂在这一页上会被 AppState 的每一次变化撤掉。
+        .background(FileImportHost(open: $importing,
+                                   types: [UTType.gif, UTType.webP]) { urls in
             for u in urls {
                 let stop = u.startAccessingSecurityScopedResource()
                 defer { if stop { u.stopAccessingSecurityScopedResource() } }
@@ -416,9 +416,9 @@ struct StickerLibraryView: View {
                     editing = made
                 }
             }
-        }
-        .photosPicker(isPresented: $pickingAnimated, selection: $picking,
-                      maxSelectionCount: 20, matching: .images)
+        })
+        .background(PhotoPickHost(open: $pickingAnimated, picked: $picking,
+                                  maxCount: 20))
         .onChange(of: picking) { _, items in
             guard !items.isEmpty else { return }
             Task {

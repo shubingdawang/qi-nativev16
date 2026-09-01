@@ -81,12 +81,12 @@ struct ChatView: View {
     /// 那条路要过一遍 UIImage，动画会被压成第一帧。
     @State private var pendingGIFs: [String] = []
     @State private var pendingFiles: [FileAttachment] = []
-    @State private var importingFile = false
-    @State private var showingPhotos = false
+    /// 现在开着哪一个「挑东西」的弹窗。见 `ChatPickers`。
+    /// **一个值，不是三个布尔**——两个同时为真从根上不可能。
+    @State private var picking: ChatPickers.Kind?
     // 看一段视频（见 `VideoDigest`）。
     // 抽帧和转台词都在本机跑，不花钱；
     // 花钱的只有她自己按那一下发送。
-    @State private var showingVideos = false
     @State private var pickedVideo: [PhotosPickerItem] = []
     /// 正在抽帧。要跑好几秒，**界面上得有个在动的东西**
     @State private var videoBusy: String?
@@ -497,24 +497,25 @@ struct ChatView: View {
         .sheet(item: $shareImage) { item in
             ShareSheet(items: [item.image])
         }
-        .photosPicker(isPresented: $showingPhotos, selection: $pickedItems,
-                      maxSelectionCount: 6, matching: .images)
-        // 一次只收一段。两段视频抽出二十多张图，
-        // 他看到的是一堆分不清哪段是哪段的画面
-        .photosPicker(isPresented: $showingVideos, selection: $pickedVideo,
-                      maxSelectionCount: 1, matching: .videos)
         .onChange(of: pickedVideo) { _, items in loadVideo(items) }
-        .fileImporter(isPresented: $importingFile,
-                      allowedContentTypes: [.data],
-                      allowsMultipleSelection: true) { result in
-            if case .success(let urls) = result {
+        // ⚠️⚠️ 照片／视频／文件那三个弹窗**不挂在这儿了**，见 `ChatPickers`。
+        //
+        // 这一页订阅着 `app`，`AppState` 里任何一个 @Published 变化
+        // 都会让它重求值——他在流式吐字、身体推进一格、后台存盘存完，
+        // 全算。SwiftUI 的 presentation 经不起这个：重建那一下，
+        // 正在弹的选择器就被撤掉了。她为这个病报过三次。
+        //
+        // 挂在一块不订阅任何东西的透明层上，
+        // 而且「开着哪一个」是一个值不是三个布尔（同 `ChatPanel`）。
+        .background(
+            ChatPickers(pick: $picking, images: $pickedItems, video: $pickedVideo) { urls in
                 for u in urls {
                     if let item = FileStore.importFile(from: u) {
                         pendingFiles.append(item)
                     }
                 }
             }
-        }
+        )
         .fullScreenCover(item: $travelling) { j in
             JourneyPlayerView(journey: j, startAt: travellingAt)
         }
@@ -1029,9 +1030,9 @@ struct ChatView: View {
                 .buttonStyle(.plain)
                 .confirmationDialog("要发点什么", isPresented: $showingPlus,
                                     titleVisibility: .hidden) {
-                    Button("照片") { showingPhotos = true }
-                    Button("视频") { showingVideos = true }
-                    Button("文件") { importingFile = true }
+                    Button("照片") { picking = .photos }
+                    Button("视频") { picking = .videos }
+                    Button("文件") { picking = .files }
                     // 戳一戳也是「发点什么」——发过去的是一件事，不是一句话
                     Button("戳一戳") { panel = .poke }
                     Button("取消", role: .cancel) {}

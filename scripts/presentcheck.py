@@ -67,11 +67,37 @@ def check(path):
     return out
 
 
-total = 0
+# 分两级报。
+#
+# 一开始这儿是「见一个报一个」，扫出十八处，其中十五处是
+# **一层只挂一个**的单例——而她真正栽过的那几次
+# （设置页导入备份、聊天页崩、书架、表情库）**全都是同一层叠了两个以上**。
+#
+# 叠着才是真的危险：那几个 presentation 会互相抢，谁赢看层级，
+# 表现是「时灵时不灵」；单挂一个只是**有风险**，
+# 页面刷得凶的时候才会露出来。
+#
+# **一个总在报警的检查等于没有检查。** 所以：
+#   · 同一个 struct 上两个以上 → BAD，必须拆（见 PickHosts.swift）
+#   · 单挂一个           → 只记一笔，不拦
+import collections
+
+bad = 0
+lonely = 0
 for path in sys.argv[1:]:
-    for ln, name in check(path):
-        print('BAD %s:%d  `%s` 订阅了 app，弹窗挂在它身上会自己关掉'
-              '——拎进一个不订阅任何东西的小 View（见 ImportButton.swift）'
-              % (path, ln, name))
-        total += 1
-print('--- %d 处' % total)
+    hits = check(path)
+    if not hits:
+        continue
+    per = collections.defaultdict(list)
+    for ln, name in hits:
+        per[name].append(ln)
+    for name, lns in per.items():
+        if len(lns) >= 2:
+            print('BAD %s:%d  `%s` 订阅了 app，身上却叠着 %d 个弹窗——'
+                  '它们会互相抢，而且 AppState 一变就整层被撤掉。'
+                  '拆进 PickHosts.swift 里那几个宿主，一个宿主管一个。'
+                  % (path, lns[0], name, len(lns)))
+            bad += 1
+        else:
+            lonely += 1
+print('--- %d 处要拆；另有 %d 处是单挂一个（有风险，暂不拦）' % (bad, lonely))

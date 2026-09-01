@@ -347,8 +347,9 @@ struct ClawdHomeView: View {
             // ⚠️ 挂在**这一条**上，不是挂在下面那个 room 上。
             // 「点了没反应，切到别的档才弹出来」那次的教训：
             // 弹窗要挂在按钮活着的那个分支上。
-            .photosPicker(isPresented: $pickingDecor, selection: $decorPick,
-                          matching: .images)
+            // ⚠️ 弹窗挪进了不订阅任何东西的宿主，见 `PickHosts.swift`。
+        // 挂在这一页上会被 AppState 的每一次变化撤掉。
+            .background(SinglePhotoPickHost(open: $pickingDecor, picked: $decorPick))
             .onChange(of: decorPick) { _, picked in
                 guard let picked else { return }
                 Task { @MainActor in
@@ -521,8 +522,9 @@ struct ClawdHomeView: View {
                 pickingPiece = false
             }
         }
-        .photosPicker(isPresented: $pickingImage, selection: $dressPick,
-                      matching: .images)
+        // ⚠️ 弹窗挪进了不订阅任何东西的宿主，见 `PickHosts.swift`。
+        // 挂在这一页上会被 AppState 的每一次变化撤掉。
+        .background(SinglePhotoPickHost(open: $pickingImage, picked: $dressPick))
         .onChange(of: dressPick) { _, picked in
             guard let picked, let target = dressing else { return }
             Task { @MainActor in

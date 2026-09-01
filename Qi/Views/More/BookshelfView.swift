@@ -77,22 +77,21 @@ struct BookshelfView: View {
                 }
             }
         }
-        .fileImporter(isPresented: $importing,
-                      allowedContentTypes: [.plainText, .epub, .data],
-                      allowsMultipleSelection: true) { result in
-            if case .success(let urls) = result { load(urls) }
-        }
-        .fileImporter(isPresented: $importingImages,
-                      allowedContentTypes: [.image],
-                      allowsMultipleSelection: true) { result in
+        // ⚠️ 弹窗挪进了不订阅任何东西的宿主，见 `PickHosts.swift`。
+        // 挂在这一页上会被 AppState 的每一次变化撤掉。
+        // 两个各挂各的：同一层挂两个，它们还会互相抢。
+        .background(FileImportHost(open: $importing,
+                                   types: [.plainText, .epub, .data]) { urls in
+            load(urls)
+        })
+        .background(FileImportHost(open: $importingImages, types: [.image]) { urls in
             // **一叠图＝一本**，所以先问名字再造书
-            if case .success(let urls) = result, !urls.isEmpty {
-                pendingMangaFiles = urls
-                mangaName = urls.first?.deletingPathExtension()
-                    .deletingLastPathComponent().lastPathComponent ?? ""
-                namingManga = true
-            }
-        }
+            guard !urls.isEmpty else { return }
+            pendingMangaFiles = urls
+            mangaName = urls.first?.deletingPathExtension()
+                .deletingLastPathComponent().lastPathComponent ?? ""
+            namingManga = true
+        })
         .alert("这叠图叫什么", isPresented: $namingManga) {
             TextField("书名", text: $mangaName)
             Button("算了", role: .cancel) { pendingMangaFiles = [] }
@@ -488,10 +487,12 @@ struct ShelfBooksView: View {
         }
         .navigationTitle(shelf.isEmpty ? "还没归架" : shelf)
         .navigationBarTitleDisplayMode(.inline)
-        .photosPicker(isPresented: Binding(
+        // ⚠️ 弹窗挪进了不订阅任何东西的宿主，见 `PickHosts.swift`。
+        // 挂在这一页上会被 AppState 的每一次变化撤掉。
+        .background(SinglePhotoPickHost(open: Binding(
             get: { pickingCoverFor != nil },
             set: { if !$0 { pickingCoverFor = nil } }
-        ), selection: $picked, matching: .images)
+        ), picked: $picked))
         .onChange(of: picked) { _, item in saveCover(item) }
     }
 
