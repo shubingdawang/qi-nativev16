@@ -71,6 +71,17 @@ enum LegacyLayout {
         if records.mentions(name, in: "stickers.json") { return "Stickers/" + name }
         if records.mentions(name, in: "music.json") { return "Music/" + name }
         if records.mentions(name, in: "media.json") { return "Images/" + name }
+        // ⚠️ 这两份**以前漏了**。这个函数开头写着「谁的记录里写着这个文件名，
+        // 它就是谁的」，可名单里只有表情、音乐、相册三样——
+        // clawd 那些切好的家具素材（`furniture-pieces.json`）和
+        // 已经摆进屋里的那些（`clawd-room.json`）没人认领，
+        // 只能落到最后那个「按后缀猜」的默认里。
+        //
+        // 猜的结果**碰巧是对的**（图片默认进 `Images/`，那正是它们的家），
+        // 所以一直没出事。但「碰巧对」和「说得出为什么对」是两回事——
+        // 哪天默认改了，丢的就是她切了半天的那批图。
+        if records.mentions(name, in: "furniture-pieces.json") { return "Images/" + name }
+        if records.mentions(name, in: "clawd-room.json") { return "Images/" + name }
 
         // 没人明说的，按后缀走一个不会更坏的默认：
         // 会响的归语音（聊天里的语音条最多），别的归图片。

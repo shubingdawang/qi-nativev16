@@ -54,6 +54,10 @@ struct SettingsView: View {
     /// 去弹分享面板——两张同时弹的话，后来的会把先来的顶掉，
     /// 那就是她说的「第一次点击弹窗就自动收回了」。见 `exportBackup()`。
     @State private var pendingExport: URL?
+
+    /// 换行走这个常量。反斜杠经脚本改动会被吃掉一层、字符串就跨行了——
+    /// 这仓库栽过十几次，`strspan.py` 每次都抓得到。
+    private let br = String(UnicodeScalar(10))
     @State private var alertMessage: String?
     @State private var showingClearConfirm = false
     @State private var wallpaperItem: PhotosPickerItem?
@@ -1177,9 +1181,16 @@ struct SettingsView: View {
         // 引用先取出来。**别在后台闭包里写 `chore.xxx`**——
         // 那等于把整个 View 捕获进一个 Sendable 闭包里。
         let prog = chore
+        // ⚠️ **在主线程上数好再递进去。** 打包那一段跑在 `Task.detached` 里，
+        // 而这几个 store 是 `@MainActor` 的，在那儿读是跨 actor 访问。
+        let named: [(String, Int)] = [
+            ("clawd 家具素材", PieceStore.shared.pieces.count),
+            ("手帐", JournalStore.shared.pages.count),
+            ("表情", StickerStore.shared.stickers.count),
+        ]
         Task {
             let report = await Task.detached(priority: .userInitiated) {
-                BackupBundle.write(to: url) { line in
+                BackupBundle.write(to: url, named: named) { line in
                     Task { @MainActor in prog.line = line }
                 }
             }.value
@@ -1220,6 +1231,17 @@ struct SettingsView: View {
             // **一个总数答不了「为什么是 10」，只会让她再猜一次。**
             for (label, n) in report.breakdown {
                 msg += "\n　　· " + label + "：\(n)"
+            }
+            // ⚠ 再单报几件**她认得的东西**。见 `BackupBundle.Report.named`：
+            // 上面那几行数的是「文件」，这几行数的是「里面有没有东西」。
+            // 她说过「我的素材库之前是有图的，那只能说明素材库没有备份」——
+            // 素材库一直在备份里，但她**没法验证**，
+            // 而一个查不了的承诺跟没有承诺是一样的。
+            if !report.named.isEmpty {
+                msg += br
+                for (label, n) in report.named {
+                    msg += br + "· " + label + "：**\(n)**"
+                }
             }
             if report.writeFailed {
                 msg += "\n\n⚠️ **中途有写不进去的地方，这份包不能当数。**"

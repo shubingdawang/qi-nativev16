@@ -153,6 +153,25 @@ enum BackupBundle {
         /// **拆开了就不用猜了。**
         var byFolder: [String: Int] = [:]
 
+        /// 几件**要紧的东西**各有几条。
+        ///
+        /// ⚠️⚠️ 跟上面那个 `byFolder` 不是一回事：那个数的是「文件」，
+        /// 这个数的是「**她认得的东西**」。
+        ///
+        /// 她报的：「我的素材库之前是有图的，那只能说明素材库没有备份。」
+        ///
+        /// 那个推断是错的——素材库**一直在备份里**（备份是整棵目录树扫，
+        /// 没有白名单；还原也没有过滤）。但她**没法验证**这件事，
+        /// 因为那些图混在「图片（相册、聊天里发过的、墙纸…）」那一大类里，
+        /// 谁都看不出来它在不在。
+        ///
+        /// 于是「我不知道它在不在」只能变成「那它一定没在」。
+        /// **一个查不了的承诺，跟没有承诺是一样的。**
+        ///
+        /// 现在导完当场报出来：clawd 家具素材几件、手帐几页、表情几张。
+        /// 是 0 就是 0，当场看得见，不用等到还原那天才发现。
+        var named: [(String, Int)] = []
+
         /// 拆开那几行，按个数从多到少
         var breakdown: [(String, Int)] {
             byFolder.sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
@@ -209,7 +228,10 @@ enum BackupBundle {
     /// 峰值内存 = 最大的那一个文件，跟她有多少张图无关。
     ///
     /// ⚠️ 这个函数**会读一大堆文件、跑很久**，一定要在后台线程上叫。
+    /// - Parameter named: 几件她认得的东西各有几条（「clawd 家具素材 12 件」这种）。
+    ///   **调用方在主线程上数好了递进来**，理由见底下 `report.named` 那段。
     static func write(to dest: URL,
+                      named: [(String, Int)] = [],
                       progress: ((String) -> Void)? = nil) -> Report {
         var report = Report()
         let root = Storage.documentsURL
@@ -246,6 +268,15 @@ enum BackupBundle {
         }
 
         report.files = files.count
+
+        // 几件她认得的东西各有几条，见 `Report.named` 那段。
+        //
+        // ⚠️ **由调用方数好了递进来，这儿不去读那几个 store。**
+        // 这个函数整个跑在 `Task.detached` 里（打包要几十秒，
+        // 不能占着主线程），而 `PieceStore.shared` 那些是 `@MainActor` 的——
+        // 在这儿碰它们是跨 actor 访问，现在是警告，Swift 6 下就是错。
+        // （`HealthTools.dayLabel` 那次栽的是同一个坑。）
+        report.named = named
 
         // ── 图片语音先只**点名**，不读内容 ────────────────────
         //
