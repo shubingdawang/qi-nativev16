@@ -118,36 +118,30 @@ enum FurnitureCatalog {
     // 所以床有三张：素的 80、草莓的 140、圣诞的 150。别的大件以后照这个加。
     static let all: [FurnitureKind] = [
         .init(id: "bed", name: "小床", price: 80, sprite: PixelSprite([
-            "wwwwwwwwwwwwwwwwwwwwww",
-            "wnnnnccccccccccccccccw",
-            "wnnnnccccccccccccccccw",
-            "wccccccccccccccccccccw",
-            "wccccccccccccccccccccw",
-            "wccccccccccccccccccccw",
+            "ddd...................",
+            "ddd...................",
+            "dddccccccccccccccccccc",
+            "dddccccccccccccccccccc",
             "wwwwwwwwwwwwwwwwwwwwww",
             "..dd..............dd..",
             "..dd..............dd.."
         ], p), category: .furniture, reaction: "爬上去睡一会儿"),
 
         .init(id: "bed_berry", name: "草莓小床", price: 140, sprite: PixelSprite([
-            "wwwwwwwwwwwwwwwwwwwwww",
-            "wnnnnccccccccccccccccw",
-            "wnnnnccccccccccccccccw",
-            "wnnnnnnnnnnnnnnnnnnnnw",
-            "wnnrnnnnnrnnnnnrnnnnnw",
-            "wnnnnnnnnnnnnnnnnnnnnw",
+            "ddd...................",
+            "ddd...................",
+            "dddccccccccccccccccccc",
+            "dddnnrnnnnnrnnnnnrnnnn",
             "wwwwwwwwwwwwwwwwwwwwww",
             "..dd..............dd..",
             "..dd..............dd.."
         ], p), category: .furniture, reaction: "滚到草莓被子里"),
 
         .init(id: "bed_xmas", name: "圣诞小床", price: 150, sprite: PixelSprite([
-            "wwwwwwwwwwwwwwwwwwwwww",
-            "wnnnnccccccccccccccccw",
-            "wnnnnccccccccccccccccw",
-            "wggggggggggggggggggggw",
-            "wrrggrrggrrggrrggrrggw",
-            "wggggggggggggggggggggw",
+            "ddd...................",
+            "ddd...................",
+            "dddccccccccccccccccccc",
+            "dddrrggrrggrrggrrggrrg",
             "wwwwwwwwwwwwwwwwwwwwww",
             "..dd..............dd..",
             "..dd..............dd.."

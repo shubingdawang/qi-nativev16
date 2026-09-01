@@ -341,7 +341,10 @@ enum ClawdRig {
         ["kkkk"] + Array(repeating: "pppp", count: 11), ClawdSprites.palette)
 
     /// 手举起来时，**手掌高出头顶几格**。固定值。
-    static let armUpAboveHead = 3
+    /// ⚠️ 3 → 2：她说「你的床和你的人是要避嫌吗」。
+    /// 高出三格的话，床跟他脑袋之间空着三行，中间只有两条细手臂连着，
+    /// 看着不是"举着"，是"托着一块飘在头顶上方的板"。
+    static let armUpAboveHead = 2
 
     /// 举起来的手有多宽（格）
     static let armUpWide = 4
