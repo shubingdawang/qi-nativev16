@@ -1156,6 +1156,22 @@ struct MessageBubbleView: View {
         return false
     }
 
+    /// 他这会儿想到哪儿了。**只在他还在想、还没开口的时候有。**
+    ///
+    /// 取思考的最后一小段——尾巴才是「现在」。
+    /// 他一开口（`content` 有字了）就撤掉：那之后她该看的是他说的话，
+    /// 底下再挂一行滚动的思考只会抢注意力。
+    private var livePeek: String? {
+        guard message.isStreaming, !isUser, message.content.isEmpty else { return nil }
+        let r = cleanReasoning(message.reasoning ?? "")
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !r.isEmpty else { return nil }
+        // 只留末尾这么些字。整段塞进来的话，`lineLimit(1)` 虽然只画一行，
+        // 但排版仍旧要量完整段——一秒十几次，那是白花的力气。
+        return String(r.suffix(60))
+    }
+
     @ViewBuilder
     private var processBlock: some View {
         if hasProcess {
@@ -1184,6 +1200,7 @@ struct MessageBubbleView: View {
                         onOpenProcess()
                     }
                 } label: {
+                    VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 7) {
                         Image(systemName: "sparkle")
                             .font(.app(10))
@@ -1205,6 +1222,32 @@ struct MessageBubbleView: View {
                             .rotationEffect(.degrees(isWorkshop && showProcess ? 90 : 0))
                     }
                     .foregroundStyle(Theme.textSoft(scheme))
+                    // ⚠️⚠️ **他还在想的时候，这儿要有个在动的东西。**
+                    //
+                    // 她说的：「以前一直都有 thinking 也有流式，也是先 thinking
+                    // 再文字，只是有时候文字比较短 thinking 比较长。」
+                    // ——对，那是三层结构之前的样子：思考是**摊开**在气泡里的，
+                    // 一个字一个字往外冒，她看得见他在想。
+                    //
+                    // 改成三层之后气泡上只剩一行标题，于是他想的那二十秒里
+                    // **屏幕上一动不动**；等他开口，那几句话又短，
+                    // 两三次刷新就写完了——她看到的就是
+                    // 「没有流式，直接全部蹦出来」。
+                    //
+                    // 三层这个结构本身是她要的，不改。要补的是**这段时间的动静**：
+                    // 收起来的这一行底下，跟着最新想到的那一句走。
+                    // 一行，截断，不占地方——想看全的还是点进去。
+                    if let peek = livePeek {
+                        Text(peek)
+                            .font(.app(11))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                            .lineLimit(1)
+                            .truncationMode(.head)   // 尾巴才是最新的，掐头不掐尾
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 3)
+                            .transition(.opacity)
+                    }
+                    }
                     .padding(.horizontal, 13)
                     .padding(.vertical, 9)
                     // ⚠️ 这里以前写着「附属卡片一律铺满可用宽度」——**改了**。

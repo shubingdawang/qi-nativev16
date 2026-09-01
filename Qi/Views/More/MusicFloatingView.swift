@@ -29,7 +29,6 @@ struct MusicFloatingView: View {
     @State private var drag: CGSize = .zero
     @State private var dragging = false
     @State private var showingLyrics = false
-    @State private var spin: Double = 0
 
     /// 顶上留给三条杠的地方
     private let topGuard: CGFloat = 132
@@ -92,26 +91,8 @@ struct MusicFloatingView: View {
         // 转起来。**三个时机都要管**：进来、开始放、换了一首——
         // 以前只管前两个，所以她看到的常常是「一直没动」
         .onAppear { startSpin() }
-        .onChange(of: player.playing) { _, on in if on { startSpin() } }
-        .onChange(of: player.current?.id) { _, _ in startSpin() }
-        // 展开再收回来也要重新转。
-        //
-        // 收着的那颗封面（pill）在展开的时候整个从界面上撤掉了，
-        // SwiftUI 会把它身上那条 repeatForever 一起取消；收回来是**新建**一个视图，
-        // 上面什么动画都没有——她看到的就是「展开后再收起就不转了」。
-        // 这三个 onChange 少一个都会有一种「不转」的情况。
-        .onChange(of: mini) { _, _ in startSpin() }
-    }
-
-    /// 转封面。放着才转，停了就停在原地——一眼能看出它是不是活的。
-    private func startSpin() {
-        guard player.playing else { return }
-        // 先把角度归零再起，不然第二次调用时 spin 已经是 360，
-        // 「从 360 转到 360」= 一动不动（她说的「动画貌似没有正常播放」）
-        spin = 0
-        withAnimation(.linear(duration: 12).repeatForever(autoreverses: false)) {
-            spin = 360
-        }
+        // ⚠️ 这儿以前挂着三个 `onChange` 去重启一段 `repeatForever` 动画，
+        // **全撤了**。理由见 `DiscSpin`。
     }
 
     // MARK: 收着的样子：一颗贴边的封面
@@ -128,9 +109,14 @@ struct MusicFloatingView: View {
                     .animation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true),
                                value: player.playing)
             }
-            TrackArtwork(track: track, side: 42)
-                .clipShape(Circle())
-                .rotationEffect(.degrees(player.playing ? spin : spin))
+            // ⚠️ **角度由时钟算，不存在 `@State` 里。** 见 `DiscSpin`。
+            // `paused:` 那一档在他停下的时候连重画都省了。
+            TimelineView(.animation(paused: !player.playing)) { tl in
+                TrackArtwork(track: track, side: 42)
+                    .clipShape(Circle())
+                    .rotationEffect(.degrees(
+                        DiscSpin.angle(at: tl.date, playing: player.playing)))
+            }
                 .overlay {
                     Circle().strokeBorder(.white.opacity(0.45), lineWidth: 1)
                 }
@@ -283,5 +269,57 @@ struct TrackArtwork: View {
                 .font(.app(side * 0.36))
                 .foregroundStyle(app.settings.accentColor.opacity(0.8))
         }
+    }
+}
+
+/// 唱片转到哪儿了。
+///
+/// ## 为什么不用 `@State` + `repeatForever`
+///
+/// 她报的：「英语播放的悬浮窗，转起来不是一直顺时针的，
+/// 我一拉开悬浮窗就回到原来的位置开始转。」
+///
+/// 一点没错，而且是写死在那儿的：以前每次重启动画的第一句是
+/// `spin = 0`——**先瞬间归零，再从 0 转到 360**。
+/// 于是「拉开悬浮窗」（收着那颗封面被撤掉重建）就等于
+/// 倒回原位重来一遍，看着就是往回跳了一下。
+///
+/// 而那句 `spin = 0` 当初是**不得不写**的：`spin` 已经是 360 了，
+/// 不归零的话「从 360 转到 360」就是一动不动。
+/// 也就是说，只要角度存在视图自己身上，这两个毛病必居其一。
+///
+/// ## 现在
+///
+/// 角度是**时钟的函数**：`base`（上次停下时停在哪儿）加上
+/// 「这一段转了多久」。视图被撤掉重建多少次都不影响——
+/// 它不记角度，它只是问「现在几点」。
+/// 停下来的时候把走过的度数并进 `base`，所以**接着转，不回头**。
+///
+/// 跟心跳那颗小爱心（`HeartBeat`）是同一个路子：
+/// **要动又不想让 App 变卡，就别让动画去改状态。**
+@MainActor
+enum DiscSpin {
+
+    /// 转一圈多少秒。真唱片 33 转是 1.8 秒一圈，那太快了看着像陀螺。
+    static let period: Double = 12
+
+    /// 上一次停下的时候停在哪个角度
+    private static var base: Double = 0
+    /// 这一段是什么时候开始转的。`nil` = 这会儿没在转
+    private static var since: Date?
+
+    static func angle(at now: Date, playing: Bool) -> Double {
+        guard playing else {
+            // 停了：把这一段走过的度数并进 base，然后停在那儿。
+            if let s = since {
+                base = (base + now.timeIntervalSince(s) / period * 360)
+                    .truncatingRemainder(dividingBy: 360)
+                since = nil
+            }
+            return base
+        }
+        if since == nil { since = now }
+        return (base + now.timeIntervalSince(since ?? now) / period * 360)
+            .truncatingRemainder(dividingBy: 360)
     }
 }
