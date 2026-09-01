@@ -130,6 +130,48 @@ actor MCPClient {
 
     private var handshaked = false
 
+    /// 这个错是不是「会话没了」。
+    ///
+    /// 服务器重启一次，我们手里那个 `Mcp-Session-Id` 就作废了。
+    /// 对面一般回 404，正文里写着 session not found / invalid session。
+    /// 有的实现回 400。**只认这几种**——别的错（超时、密钥不对、
+    /// 工具名写错）重连一百次也是一样的错。
+    private func sessionGone(_ error: Error) -> Bool {
+        guard case MCPError.http(let code, let body) = error else { return false }
+        guard code == 404 || code == 400 else { return false }
+        let t = body.lowercased()
+        return t.contains("session") || t.isEmpty
+    }
+
+    /// 会话没了就重握一次手，然后**只重来一次**。
+    ///
+    /// ## 为什么要有这个
+    ///
+    /// 她刷到一篇服务端运维复盘，骂的是「报错了重试、限流了重试、
+    /// 撤销 token 了接着重试、服务都挂了还在契而不舍地打过来」。
+    /// 我们不在那份名单上——但顺着查出来一个**反方向**的毛病：
+    ///
+    /// `handshaked` 一旦为 true 就再也不会变回去。服务器重启之后，
+    /// 我们还揣着那个作废的会话号，于是**之后每一次工具调用都失败，
+    /// 直到她重开 App**。她那边看到的是「工具突然全都不好使了」。
+    ///
+    /// ⚠️ 修的时候得小心别修成那篇帖子骂的样子。所以两条线划死：
+    ///   ① **只在「会话没了」这一种错上重来**，别的错一次都不重
+    ///   ② **只重一次**，不是循环——第二次再失败就老老实实报错
+    private func retryingSession<T>(_ work: () async throws -> T) async throws -> T {
+        do {
+            return try await work()
+        } catch {
+            guard sessionGone(error) else { throw error }
+            sessionID = nil
+            handshaked = false
+            try await handshake()
+            // ⚠️ 这一次**不再兜底**。再失败就是真的连不上，
+            // 报出去让她看见，比在这儿反复打过去强。
+            return try await work()
+        }
+    }
+
     private func handshake() async throws {
         if handshaked { return }
         _ = try await send(method: "initialize", params: [
@@ -144,8 +186,10 @@ actor MCPClient {
     /// 拉工具清单
     func listTools() async throws -> [MCPTool] {
         try await handshake()
-        guard let result = try await send(method: "tools/list", params: [:]),
-              let list = result["tools"] as? [[String: Any]]
+        let result = try await retryingSession {
+            try await send(method: "tools/list", params: [:])
+        }
+        guard let result, let list = result["tools"] as? [[String: Any]]
         else { return [] }
 
         return list.compactMap { item in
@@ -162,10 +206,13 @@ actor MCPClient {
     /// 真正调用一个工具，返回给模型看的文本
     func callTool(name: String, arguments: [String: Any]) async throws -> String {
         try await handshake()
-        guard let result = try await send(method: "tools/call", params: [
-            "name": name,
-            "arguments": arguments
-        ]) else { return "（没有返回内容）" }
+        let got = try await retryingSession {
+            try await send(method: "tools/call", params: [
+                "name": name,
+                "arguments": arguments
+            ])
+        }
+        guard let result = got else { return "（没有返回内容）" }
 
         // 返回格式是 content: [{type:"text", text:"..."}]
         if let content = result["content"] as? [[String: Any]] {
