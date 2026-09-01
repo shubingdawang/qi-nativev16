@@ -139,7 +139,9 @@ enum ClawdSprites {
         "c": Color(hexString: "8EC5FF")!,   // 眼泪
         "n": Color(hexString: "8B5E34")!,   // 扫把杆
         "t": Color(hexString: "C9A227")!,   // 扫把那撮稻草
-        "r": Color(hexString: "FF9AA0")!    // 腮红
+        "r": Color(hexString: "FF9AA0")!,   // 腮红
+        "g": Color(hexString: "78909C")!,   // 笔记本屏幕背面
+        "G": Color(hexString: "546E7A")!    // 笔记本底座
     ]
 
     /// 睁着眼站着。这就是图纸原样，两只手各往外长了一格。
@@ -152,11 +154,11 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
@@ -165,12 +167,12 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........"
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........"
     ], palette)
 
     /// 哭：眼睛闭成一条，泪刚涌出来
@@ -183,11 +185,11 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....ppppppppcppppppppppppppcpppppppp....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddppppcppppppppppppppcppppdddd....",
         "........ppppcppppppppppppppcpppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
@@ -196,12 +198,12 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........"
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........"
     ], palette)
 
     /// 哭：那滴泪往下掉了两格
@@ -214,11 +216,11 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
         "........pppppppppppppppppppppppp........",
         "........ppppcppppppppppppppcpppp........",
         "........pppppppppppppppppppppppp........",
@@ -227,12 +229,12 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........"
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........"
     ], palette)
 
     // MARK: 扫地
@@ -270,29 +272,29 @@ enum ClawdSprites {
         "........................................",
         "........................................",
         "........................................",
-        ".......pppppppppppppppppppppppp.........",
-        ".......pppppppppppppppppppppppp.........",
-        ".......pppppppppppppppppppppppp.........",
-        ".......pppppppppppppppppppppppp.........",
-        "...pppppppppppppppppppppppppppppppp.....",
-        "...pppppppkkkppppppppppppkkkppppppp.....",
-        "...pppppppkkkppppppppppppkkkppppppp.....",
-        "...pppppppkkkppppppppppppkkkppppppp.....",
-        "...pppppppppppppppppppppppppppppppnn....",
-        ".......pppppppppppppppppppppppp..nn.....",
-        ".......pppppppppppppppppppppppp.nn......",
-        ".......ppppppppppppppppppppppppnn.......",
-        ".......pppppppppppppppppppppppnn........",
-        ".......ppppppppppppppppppppppnp.........",
-        ".......ppppppppppppppppppppppnp.........",
-        ".......pppppppppppppppppppppnpp.........",
-        ".......ppppppppppppppppppppnppp.........",
-        "........ppp..ppp........ppnn.ppp........",
-        "........ppp..ppp........pnp..ppp........",
-        "........ppp..ppp........npp..ppp........",
-        "........ppp..ppp......ttttt..ppp........",
-        "........ppp..ppp.....ttttttt.ppp........",
-        "........ppp..ppp....tttttttttppp........"
+        ".......dppppppppppppppppppppppp.........",
+        ".......dppppppppppppppppppppppp.........",
+        ".......dppppppppppppppppppppppp.........",
+        ".......dppppppppppppppppppppppp.........",
+        "...dddddppppppppppppppppppppppppddd.....",
+        "...dddddppkkkppppppppppppkkkppppddd.....",
+        "...dddddppkkkppppppppppppkkkppppddd.....",
+        "...dddddppkkkppppppppppppkkkppppddd.....",
+        "...dddddppppppppppppppppppppppppddnn....",
+        ".......dppppppppppppppppppppppp..nn.....",
+        ".......dppppppppppppppppppppppp.nn......",
+        ".......dpppppppppppppppppppppppnn.......",
+        ".......dppppppppppppppppppppppnn........",
+        ".......dpppppppppppppppppppppnp.........",
+        ".......dpppppppppppppppppppppnp.........",
+        ".......dppppppppppppppppppppnpp.........",
+        ".......dpppppppppppppppppppnppp.........",
+        "........ddd..ddd........ddnn.ddd........",
+        "........ddd..ddd........dnd..ddd........",
+        "........ddd..ddd........ndd..ddd........",
+        "........ddd..ddd......ttttt..ddd........",
+        "........ddd..ddd.....ttttttt.ddd........",
+        "........ddd..ddd....tttttttttddd........"
     ], palette)
 
     /// 扫地：扫到中间，身子直起来
@@ -305,11 +307,11 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....ppppppppppppppppppppppppppppppnp....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddppppppppppppppppppppppppddnd....",
         "........pppppppppppppppppppppppp..nn....",
         "........pppppppppppppppppppppppp.nn.....",
         "........pppppppppppppppppppppppp.nn.....",
@@ -318,12 +320,12 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppnn.......",
         "........pppppppppppppppppppppppnn.......",
         "........ppppppppppppppppppppppnp........",
-        "........ppp..ppp........ppp..pnp........",
-        "........ppp..ppp........ppp..npp........",
-        "........ppp..ppp........ppp..npp........",
-        "........ppp..ppp........pppttttt........",
-        "........ppp..ppp........ppttttttt.......",
-        "........ppp..ppp........pttttttttt......"
+        "........ddd..ddd........ddd..dnd........",
+        "........ddd..ddd........ddd..ndd........",
+        "........ddd..ddd........ddd..ndd........",
+        "........ddd..ddd........dddttttt........",
+        "........ddd..ddd........ddttttttt.......",
+        "........ddd..ddd........dttttttttt......"
     ], palette)
 
     /// 扫地：甩到右边，身子往右倾
@@ -332,29 +334,29 @@ enum ClawdSprites {
         "........................................",
         "........................................",
         "........................................",
-        ".........pppppppppppppppppppppppp.......",
-        ".........pppppppppppppppppppppppp.......",
-        ".........pppppppppppppppppppppppp.......",
-        ".........pppppppppppppppppppppppp.......",
-        ".....pppppppppppppppppppppppppppppppp...",
-        ".....pppppppkkkppppppppppppkkkppppppp...",
-        ".....pppppppkkkppppppppppppkkkppppppp...",
-        ".....pppppppkkkppppppppppppkkkppppppp...",
-        ".....ppppppppppppppppppppppppppppppnp...",
-        ".........pppppppppppppppppppppppp..nn...",
-        ".........pppppppppppppppppppppppp..nn...",
-        ".........pppppppppppppppppppppppp.nn....",
-        ".........pppppppppppppppppppppppp.nn....",
-        ".........pppppppppppppppppppppppp.nn....",
-        ".........pppppppppppppppppppppppp.nn....",
-        ".........pppppppppppppppppppppppp.nn....",
-        ".........pppppppppppppppppppppppp.nn....",
-        "........ppp..ppp........ppp..ppp.nn.....",
-        "........ppp..ppp........ppp..ppp.nn.....",
-        "........ppp..ppp........ppp..ppp.nn.....",
-        "........ppp..ppp........ppp..ppttttt....",
-        "........ppp..ppp........ppp..pttttttt...",
-        "........ppp..ppp........ppp..ttttttttt.."
+        ".........pppppppppppppppppppppppd.......",
+        ".........pppppppppppppppppppppppd.......",
+        ".........pppppppppppppppppppppppd.......",
+        ".........pppppppppppppppppppppppd.......",
+        ".....dddppppppppppppppppppppppppddddd...",
+        ".....dddppppkkkppppppppppppkkkppddddd...",
+        ".....dddppppkkkppppppppppppkkkppddddd...",
+        ".....dddppppkkkppppppppppppkkkppddddd...",
+        ".....dddppppppppppppppppppppppppdddnd...",
+        ".........pppppppppppppppppppppppd..nn...",
+        ".........pppppppppppppppppppppppd..nn...",
+        ".........pppppppppppppppppppppppd.nn....",
+        ".........pppppppppppppppppppppppd.nn....",
+        ".........pppppppppppppppppppppppd.nn....",
+        ".........pppppppppppppppppppppppd.nn....",
+        ".........pppppppppppppppppppppppd.nn....",
+        ".........pppppppppppppppppppppppd.nn....",
+        "........ddd..ddd........ddd..ddd.nn.....",
+        "........ddd..ddd........ddd..ddd.nn.....",
+        "........ddd..ddd........ddd..ddd.nn.....",
+        "........ddd..ddd........ddd..ddttttt....",
+        "........ddd..ddd........ddd..dttttttt...",
+        "........ddd..ddd........ddd..ttttttttt.."
     ], palette)
 
     /// 扫地：收回中间。跟第二帧同一个姿势，所以一个来回是「左-中-右-中」，不是左右跳
@@ -367,11 +369,11 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....ppppppppppppppppppppppppppppppnp....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddppppppppppppppppppppppppddnd....",
         "........pppppppppppppppppppppppp..nn....",
         "........pppppppppppppppppppppppp.nn.....",
         "........pppppppppppppppppppppppp.nn.....",
@@ -380,12 +382,12 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppnn.......",
         "........pppppppppppppppppppppppnn.......",
         "........ppppppppppppppppppppppnp........",
-        "........ppp..ppp........ppp..pnp........",
-        "........ppp..ppp........ppp..npp........",
-        "........ppp..ppp........ppp..npp........",
-        "........ppp..ppp........pppttttt........",
-        "........ppp..ppp........ppttttttt.......",
-        "........ppp..ppp........pttttttttt......"
+        "........ddd..ddd........ddd..dnd........",
+        "........ddd..ddd........ddd..ndd........",
+        "........ddd..ddd........ddd..ndd........",
+        "........ddd..ddd........dddttttt........",
+        "........ddd..ddd........ddttttttt.......",
+        "........ddd..ddd........dttttttttt......"
     ], palette)
 
     /// 甜：眯着眼笑，腮红。爱心是界面上飘的，不画进图纸
@@ -398,11 +400,11 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppdddppppppppppppdddppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....ppppprrpppppppppppppppppprrppppp....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddpppdddppppppppppppdddpppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddprrpppppppppppppppppprrpdddd....",
         "........prrpppppppppppppppppprrp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
@@ -411,12 +413,12 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........"
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........"
     ], palette)
 
     /// 呼吸：整只往下沉一格，腿跟着收短一截
@@ -430,11 +432,11 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
@@ -442,12 +444,12 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........"
+        "........dddddddddddddddddddddddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........"
     ], palette)
 
     /// 眨眼：三格高的眼睛只剩最下面一格
@@ -460,11 +462,11 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
@@ -473,12 +475,12 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........"
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........"
     ], palette)
 
     /// 开心：眼睛眯起来，只剩下面两格
@@ -491,11 +493,11 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
@@ -504,12 +506,12 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........"
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........"
     ], palette)
 
     /// 笑：眼睛留上下两道、中间亮着，像弯起来了
@@ -522,11 +524,11 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
@@ -535,12 +537,12 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........"
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........"
     ], palette)
 
     /// 睡着：眼睛闭成一道暗色的缝
@@ -553,11 +555,11 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppdddppppppppppppdddppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddpppdddppppppppppppdddpppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
@@ -566,12 +568,12 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........"
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........"
     ], palette)
 
     /// 在想事情：头顶冒小方块
@@ -584,11 +586,11 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
@@ -597,12 +599,12 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........"
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........"
     ], palette)
 
     /// 想得更凶：小方块换个位置，看着像在冒
@@ -615,11 +617,11 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
@@ -628,12 +630,12 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........"
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........"
     ], palette)
 
     /// 干活：左手抬起来、右手压下去
@@ -645,26 +647,26 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "....pppppppppppppppppppppppppppp........",
-        "....pppppppppppppppppppppppppppp........",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "........pppppppppppppppppppppppppppp....",
-        "........pppppppppppppppppppppppppppp....",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........"
+        "....ddddppkkkppppppppppppkkkppppdddd....",
+        "....ddddppkkkppppppppppppkkkppppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddggggggggggggggggggggggggdddd....",
+        "........gggggggggggggggggggggggg........",
+        "........gggggggggggwwggggggggggg........",
+        "........gggggggggggwwggggggggggg........",
+        "........gggggggggggggggggggggggg........",
+        "........gggggggggggggggggggggggg........",
+        ".......GGGGGGGGGGGGGGGGGGGGGGGGGG.......",
+        ".......GGGGGGGGGGGGGGGGGGGGGGGGGG.......",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........"
     ], palette)
 
     /// 换只手。两帧来回切就是在忙活。
@@ -676,26 +678,26 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppppppp....",
-        "........pppppppppppppppppppppppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppppppppppppppppppppppp........",
-        "....pppppppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........"
+        "........ppppkkkppppppppppppkkkpp........",
+        "....ddddppppkkkppppppppppppkkkppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddggggggggggggggggggggggggdddd....",
+        "....ddddggggggggggggggggggggggggdddd....",
+        "........gggggggggggwwggggggggggg........",
+        "........gggggggggggwwggggggggggg........",
+        "........gggggggggggggggggggggggg........",
+        "........gggggggggggggggggggggggg........",
+        ".......GGGGGGGGGGGGGGGGGGGGGGGGGG.......",
+        ".......GGGGGGGGGGGGGGGGGGGGGGGGGG.......",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........"
     ], palette)
 
     /// 走路第一步：左边那两条腿抬起来。跟 walk2 交替就是在迈步，
@@ -709,11 +711,11 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
@@ -722,12 +724,12 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        ".............ppp.............ppp........",
-        ".............ppp.............ppp........"
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        ".............ddd.............ddd........",
+        ".............ddd.............ddd........"
     ], palette)
 
     /// 走路第二步：换右边那两条腿抬
@@ -740,11 +742,11 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
@@ -753,12 +755,12 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp.............ppp.............",
-        "........ppp.............ppp............."
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd.............ddd.............",
+        "........ddd.............ddd............."
     ], palette)
 
     /// 搬东西：两只手都放低到身前，像抱着一个箱子
@@ -773,23 +775,23 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppkkkppppppppppppkkkppp........",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppkkkppppppppppppkkkppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppppppppppppppppppppppppppp....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........"
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........"
     ], palette)
 
     // MARK: 探头（这一版：只画头）
@@ -817,9 +819,9 @@ enum ClawdSprites {
         "........pppkkkppppppppppppkkkppp........",
         "........pppkkkppppppppppppkkkppp........",
         "........pppppppppppppppppppppppp........",
-        "......pppppppppppppppppppppppppp........",
-        "......pppppppppppppppppppppppppp........",
-        "......pppppppppppppppppppppppppp........",
+        "......ddpppppppppppppppppppppppp........",
+        "......ddpppppppppppppppppppppppp........",
+        "......ddpppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pp..............................",
         "........................................",
@@ -828,7 +830,7 @@ enum ClawdSprites {
 
     /// 探头（二）：手抬起来挥
     static let peekHead2 = PixelSprite([
-        "......pppp..............................",
+        "......ddpp..............................",
         "........pp..............................",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
@@ -862,15 +864,15 @@ enum ClawdSprites {
         "........................................",
         "........................................",
         "........................................",
-        "....pppppppppppppppppppppppppppp........",
-        "....pppppppppppppppppppppppppppp........",
+        "....ddddpppppppppppppppppppppppp........",
+        "....ddddpppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppkkkpppppppppppppppppp........",
-        "........pppkkkpppppppppppppppppppppp....",
-        "........pppkkkpppppppppppppppppppppp....",
-        "........pppppppppppppppppppppppppppp....",
+        "........pppkkkppppppppppppppppppdddd....",
+        "........pppkkkppppppppppppppppppdddd....",
+        "........ppppppppppppppppppppppppdddd....",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
@@ -879,12 +881,12 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........"
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........"
     ], palette)
 
     /// 探头（二）：探出来之后没站住，往下缩一格、手也放下来。
@@ -900,10 +902,10 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "....pppppppppppppppppppppppppppppppp....",
-        "....pppppppkkkpppppppppppppppppppppp....",
-        "........pppkkkpppppppppppppppppppppp....",
-        "........pppkkkpppppppppppppppppppppp....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddpppkkkppppppppppppppppppdddd....",
+        "........pppkkkppppppppppppppppppdddd....",
+        "........pppkkkppppppppppppppppppdddd....",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
@@ -912,11 +914,11 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
-        "........ppp..ppp........ppp..ppp........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
+        "........ddd..ddd........ddd..ddd........",
         "........................................"
     ], palette)
 
@@ -1086,6 +1088,31 @@ struct ClawdView: View {
     /// ⚠️ 用 `TimelineView(.animation)` 取时间，**不要拿 `@State` 计时**。
     /// 这只 clawd 在小屋、聊天页、输入框上同时活着，
     /// 每秒六十次改状态的话整棵树跟着重画。
+    /// 干活时飘起来的数据粒子。五颗，各自错开，从电脑那一带往上飘。
+    ///
+    /// ⚠️ 走 `TimelineView` 取时间，不拿 `@State` 计时——
+    /// 这只 clawd 同时活在小屋、聊天页、输入框上。
+    private var dataBits: some View {
+        TimelineView(.animation) { ctx in
+            let now = ctx.date.timeIntervalSinceReferenceDate
+            ZStack(alignment: .bottom) {
+                ForEach(0..<5, id: \.self) { i in
+                    // 每颗自己的周期和起点，错开才像"冒出来"不像"齐步走"
+                    let period = 1.1 + Double(i) * 0.17
+                    let t = (now / period).truncatingRemainder(dividingBy: 1)
+                    let fromX = [-9.0, -4.0, 1.0, 6.0, 10.0][i]
+                    Rectangle()
+                        .fill(Color(hexString: "40C4FF") ?? .cyan)
+                        .frame(width: scale * 1.2, height: scale * 1.2)
+                        .offset(x: (fromX + t * 2) * scale,
+                                y: -(4 + t * 9) * scale)
+                        .opacity(t < 0.15 ? 0 : (1 - t) * 0.8)
+                }
+            }
+            .allowsHitTesting(false)
+        }
+    }
+
     private var waving: some View {
         let body = sprites[min(frame, sprites.count - 1)].0
         let cols = CGFloat(body.width), rows = CGFloat(body.height)
@@ -1143,6 +1170,19 @@ struct ClawdView: View {
             // **不画进图纸**：图纸只有 32×23，身子占满了，
             // 心画进去只能替掉身上的豆子，看着像破了个洞。
             // 飘在外面才是「冒出来的」。
+
+            // 干活的时候从电脑后面往上飘的数据粒子。
+            //
+            // 抄的 `clawd-on-desk` 那份 `clawd-working-typing.svg`：
+            // 七个 `#40C4FF` 的小方块，各自错开延迟往上飘、边飘边淡。
+            //
+            // ⚠️ 她问「你说打电脑，你的电脑呢」——电脑已经画进图纸了，
+            // 但光有一台电脑还是静的。**粒子是「他在干活」这件事本身**：
+            // 电脑说明他坐在那儿，粒子才说明他正在动。
+            if mood == .working {
+                dataBits
+            }
+
             if mood == .loving {
                 ZStack {
                     ForEach(0..<3, id: \.self) { i in
