@@ -189,7 +189,19 @@ struct ClawdArmView: View {
             // **改了 `armOut` 或者手的长度，这个 `.center` 就不再对了**——
             // 得跟着改成 `UnitPoint(x: armOut / arm.width, y: 0.5)`，
             // 否则整条手会绕着一个错的点甩出去。
-            .rotationEffect(.degrees(onLeft ? -angle : angle), anchor: .center)
+            //
+            // ⚠️⚠️ **符号：左手 `+`、右手 `-`。别凭感觉写。**
+            //
+            // SwiftUI 的正角度是**顺时针**（y 轴朝下）。
+            // 左手在支点左边 `(-1, 0)`，顺时针转 90° → `(0, -1)`，往**上**；
+            // 右手在支点右边 `(+1, 0)`，顺时针转 90° → `(0, +1)`，往**下**。
+            // 所以要让两只手都抬起来，左手取正、右手取负。
+            //
+            // 这儿原来写反了，两只手一直是**往下甩**的。
+            // `plan` 里的约定是「正数 = 抬起来」（`.lift` 举过头顶 = 72），
+            // 所以举家具、喝东西、摇杯子那几档也一起反了很久。
+            // 她一句话点破：「你挥手往里挥的吗。」
+            .rotationEffect(.degrees(onLeft ? angle : -angle), anchor: .center)
             .offset(x: left * scale, y: CGFloat(ClawdRig.armRow) * scale)
     }
 }
