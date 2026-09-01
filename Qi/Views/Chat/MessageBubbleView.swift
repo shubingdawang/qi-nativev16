@@ -1310,7 +1310,11 @@ struct MessageBubbleView: View {
         // 线跟下一段之间再留这么一点，就是她要的「隔一个换行，不要多」。
         VStack(alignment: .leading, spacing: 6) {
             if let r = message.reasoning, !cleanReasoning(r).isEmpty {
-                step(icon: "brain", tint: Theme.textMuted(scheme), title: "想了想") {
+                // ⚠️ 叫 **Thinking**，不叫「想了想」。她定的：
+                //「想了想改成 thinking，这个不是他自己想的。」
+                // 那一行是我们贴的标签，用中文写会跟他自己起的那个名字
+                // 混在一起，看着像也是他写的。弹窗那边也是这么写的。
+                step(icon: "brain", tint: Theme.textMuted(scheme), title: "Thinking") {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(MD.inline(cleanReasoning(r)))
                             .font(.system(size: max(11, app.settings.fontSize - 3)))

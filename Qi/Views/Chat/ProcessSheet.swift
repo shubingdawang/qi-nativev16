@@ -125,7 +125,22 @@ struct ProcessSheet: View {
         // 照下面那套切的话，每一刀都切在 0，整段思考会落到最后一个工具之后——
         // 变成「先动手，后思考」，跟以前显示的正好反过来，而且那是假的。
         // 没标过就照老样子：想在前，动手在后。
-        let marked = message.toolRuns.contains { $0.reasonMark > 0 }
+        //
+        // ⚠️ 还有一种「标了，但标的是假的」：
+        // 有的中转站**把思考攒到一轮的最后才吐**（她的那个就是）。
+        // 那第一次动工具的时候 `reasoning` 还是空的，标下来就是 0；
+        // 要是这一轮动了好几次手、后面几次标到了数，
+        // `contains { > 0 }` 就为真，于是照下面那套切——
+        // 第一刀切在 0，思考整段落到工具后面。
+        // 她报的「点进去会先出现工具，最后才出现 thinking」就是这个。
+        //
+        // 所以再加一条：**他想了，可第一次动手却标着 0 —— 那这几个数不能信。**
+        // 真的先动手再想的话，那一刀本来就该在 0，
+        // 但那种情况下「想在前、动手在后」也只是把顺序说得保守一点，
+        // 不会把不存在的思考塞到中间去。
+        let firstMark = message.toolRuns.first?.reasonMark ?? 0
+        let trustworthy = firstMark > 0 || reasoning.isEmpty
+        let marked = message.toolRuns.contains { $0.reasonMark > 0 } && trustworthy
         if !marked {
             if !reasoning.isEmpty {
                 out.append(Step(id: "think", icon: nil,

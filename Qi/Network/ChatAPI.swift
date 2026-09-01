@@ -78,38 +78,70 @@ enum ChatAPI {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    var request = URLRequest(url: endpoint)
-                    request.httpMethod = "POST"
-                    request.timeoutInterval = 300
-                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-                    if !apiKey.isEmpty {
-                        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-                    }
-                    // 名字不叫 payload：底下那个 SSE 循环里已经有一个 payload
-                    // （每行 data: 后面那段），撞名字读起来会以为是同一个东西
-                    let bodyData = try buildBody(model: model, messages: messages, tools: tools)
-                    request.httpBody = bodyData
-
-                    // 终端那一页。**只记不发**——一条都不会进提示词。
-                    let began = Date()
-                    Console.log(.net, "发请求 → " + model,
-                                "\(messages.count) 条消息 · \(tools.count) 个工具 · "
-                                + "\(bodyData.count / 1024) KB")
-
-                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
-
-                    guard let http = response as? HTTPURLResponse else { throw APIError.noResponse }
-                    guard (200..<300).contains(http.statusCode) else {
-                        var body = ""
-                        for try await line in bytes.lines {
-                            body += line
-                            if body.count > 600 { break }
+                    /// 发一次。返回逐字流，或者把对面报的错抛出来。
+                    ///
+                    /// 拆成一个闭包是为了**能原地重发一次**：
+                    /// 有的中转站不认「我要思考过程」那几个键，会回 400。
+                    /// 那时候脱掉再来一次，她那边什么都不用管。
+                    func send(_ wantThinking: Bool) async throws
+                        -> URLSession.AsyncBytes {
+                        var request = URLRequest(url: endpoint)
+                        request.httpMethod = "POST"
+                        request.timeoutInterval = 300
+                        request.setValue("application/json",
+                                         forHTTPHeaderField: "Content-Type")
+                        request.setValue("text/event-stream",
+                                         forHTTPHeaderField: "Accept")
+                        if !apiKey.isEmpty {
+                            request.setValue("Bearer \(apiKey)",
+                                             forHTTPHeaderField: "Authorization")
                         }
-                        // 出错这一条最值钱：她八成就是为了它才点开终端的
-                        Console.log(.warn, "HTTP \(http.statusCode) · " + model,
-                                    String(body.prefix(300)))
-                        throw APIError.badStatus(http.statusCode, body)
+                        // 名字不叫 payload：底下那个 SSE 循环里已经有一个 payload
+                        // （每行 data: 后面那段），撞名字读起来会以为是同一个东西
+                        let bodyData = try buildBody(model: model, messages: messages,
+                                                     tools: tools,
+                                                     wantThinking: wantThinking)
+                        request.httpBody = bodyData
+
+                        // 终端那一页。**只记不发**——一条都不会进提示词。
+                        Console.log(.net, "发请求 → " + model,
+                                    "\(messages.count) 条消息 · \(tools.count) 个工具 · "
+                                    + "\(bodyData.count / 1024) KB"
+                                    + (wantThinking ? " · 要思考过程" : ""))
+
+                        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+                        guard let http = response as? HTTPURLResponse else {
+                            throw APIError.noResponse
+                        }
+                        guard (200..<300).contains(http.statusCode) else {
+                            var body = ""
+                            for try await line in bytes.lines {
+                                body += line
+                                if body.count > 600 { break }
+                            }
+                            // 出错这一条最值钱：她八成就是为了它才点开终端的
+                            Console.log(.warn, "HTTP \(http.statusCode) · " + model,
+                                        String(body.prefix(300)))
+                            throw APIError.badStatus(http.statusCode, body)
+                        }
+                        return bytes
+                    }
+
+                    let began = Date()
+                    let bytes: URLSession.AsyncBytes
+                    // 这个地址上一次就说过它不认，别再白发一遍
+                    let ask = !rejectsThinking(endpoint)
+                    do {
+                        bytes = try await send(ask)
+                    } catch let e as APIError {
+                        guard ask, case .badStatus(let code, let body) = e,
+                              isThinkingRejection(code, body)
+                        else { throw e }
+                        // 它嫌那几个键。记下来，脱掉再来一次。
+                        noThinking.insert(endpoint.absoluteString)
+                        Console.log(.warn, "这个中转不收思考参数 → " + model,
+                                    "已经脱掉重发，这一轮不会有思考链")
+                        bytes = try await send(false)
                     }
 
                     for try await line in bytes.lines {
@@ -142,13 +174,29 @@ enum ChatAPI {
 
                         guard let delta = choice["delta"] as? [String: Any] else { continue }
 
-                        if let r = delta["reasoning_content"] as? String, !r.isEmpty {
-                            continuation.yield(.reasoning(r))
-                        } else if let r = delta["reasoning"] as? String, !r.isEmpty {
-                            continuation.yield(.reasoning(r))
+                        // ⚠️ **思考这一段的写法，各家中转不一样。**
+                        //
+                        // 她报的「看不见 thinking」有一半是这儿：以前只认头两种。
+                        // 认得越全越好——认不出来的后果不是报错，
+                        // 是**那一段静悄悄地丢了**，界面上看着就是「他没想」。
+                        for piece in Self.reasoningPieces(in: delta) {
+                            continuation.yield(.reasoning(piece))
                         }
                         if let c = delta["content"] as? String, !c.isEmpty {
                             continuation.yield(.content(c))
+                        } else if let parts = delta["content"] as? [[String: Any]] {
+                            // 有的中转把 Anthropic 那套块结构原样透传：
+                            // content 是个数组，思考和正文各是一块。
+                            for part in parts {
+                                let kind = (part["type"] as? String) ?? ""
+                                if kind.contains("thinking") || kind.contains("reasoning") {
+                                    let t = (part["thinking"] as? String)
+                                        ?? (part["text"] as? String) ?? ""
+                                    if !t.isEmpty { continuation.yield(.reasoning(t)) }
+                                } else if let t = part["text"] as? String, !t.isEmpty {
+                                    continuation.yield(.content(t))
+                                }
+                            }
                         }
                         if let calls = delta["tool_calls"] as? [[String: Any]] {
                             for call in calls {
@@ -178,12 +226,71 @@ enum ChatAPI {
         }
     }
 
+    /// 这一小段 delta 里的思考，有多少抠多少。
+    ///
+    /// 各家中转的写法（都见过）：
+    ///   · `reasoning_content`  —— DeepSeek 那套，国内中转最常见
+    ///   · `reasoning`          —— OpenRouter 早期，一段纯文本
+    ///   · `reasoning_details`  —— OpenRouter 现在这套，一个数组
+    ///   · `thinking`           —— Anthropic 原样透传
+    ///
+    /// ⚠️ **不是 else if 串下来**：有的中转同时给两种（一种给全文、
+    /// 一种给增量）。所以每一种都看，但**同一段只算一次**——
+    /// 重复的会让思考链里同一句话出现两遍。
+    private static func reasoningPieces(in delta: [String: Any]) -> [String] {
+        var out: [String] = []
+        func add(_ t: String?) {
+            guard let t, !t.isEmpty, !out.contains(t) else { return }
+            out.append(t)
+        }
+        add(delta["reasoning_content"] as? String)
+        add(delta["reasoning"] as? String)
+        add(delta["thinking"] as? String)
+        if let arr = delta["reasoning_details"] as? [[String: Any]] {
+            for one in arr {
+                add((one["text"] as? String) ?? (one["thinking"] as? String))
+            }
+        }
+        // `reasoning` 偶尔是个对象而不是字符串
+        if let obj = delta["reasoning"] as? [String: Any] {
+            add((obj["text"] as? String) ?? (obj["content"] as? String))
+        }
+        return out
+    }
+
     // MARK: 组请求体
+
+    /// 这些地址不认「我要思考过程」那几个键，别再往上发了。
+    ///
+    /// 中转站五花八门：有的原样透传给 Anthropic，有的自己解析，
+    /// 有的见到不认识的键直接 400。**先发，被拒了就记下来、脱掉重发一次**——
+    /// 比让她去设置里猜自己的中转站是哪一种强。
+    /// 只存在内存里：她换了中转站或者对面升级了，重开一次 App 就重新试。
+    private static var noThinking = Set<String>()
+
+    static func rejectsThinking(_ endpoint: URL) -> Bool {
+        noThinking.contains(endpoint.absoluteString)
+    }
+
+    /// 对面明说了不认识这几个键吗。
+    /// 认的是**参数错**那一类，不是额度、密钥、地址那些——
+    /// 那些脱掉思考也一样会错，脱了只是白跑一趟。
+    static func isThinkingRejection(_ code: Int, _ body: String) -> Bool {
+        guard code == 400 || code == 422 else { return false }
+        let t = body.lowercased()
+        for key in ["thinking", "reasoning_effort", "reasoning"] where t.contains(key) {
+            return true
+        }
+        // 有些中转只回一句「不支持的参数」，不说是哪个
+        return t.contains("unsupported") || t.contains("unrecognized")
+            || t.contains("unknown parameter") || t.contains("extra fields")
+    }
 
     private static func buildBody(
         model: String,
         messages: [OutgoingMessage],
-        tools: [[String: Any]]
+        tools: [[String: Any]],
+        wantThinking: Bool
     ) throws -> Data {
 
         var payload: [[String: Any]] = []
@@ -282,6 +389,29 @@ enum ChatAPI {
         if !tools.isEmpty {
             body["tools"] = tools
             body["tool_choice"] = "auto"
+        }
+
+        // ⚠️⚠️ **要思考过程得自己开口要。**
+        //
+        // 她报的：「目前 cot 块不怎么出现了，他有用 cot，
+        // 我问了怎么看不见 thinking，后面两次就有 cot 块，不问又没有了。」
+        //
+        // 病根在这儿：这个请求体里**从来没有任何一个字说过我们要思考**。
+        // 不说的话，Anthropic 那边默认就是不想；中转站转过去也是不想。
+        // 于是他写在正文里的 `[[cot:…]]` 是有的（那是他自己写的字），
+        // 而真正的思考那一段一个字都没有——她看到的正是这个差别。
+        //
+        // 三种写法一起发，因为中转站五花八门：
+        //   · `thinking`         —— Anthropic 原样那一套，透传型的中转吃这个
+        //   · `reasoning`        —— OpenRouter 那套统一写法
+        //   · `reasoning_effort` —— OpenAI o 系列那套
+        // 认得哪个用哪个，不认识的一般当多余的键忽略掉。
+        // **真有中转站为此报 400 的**，见 `isThinkingRejection`：
+        // 那时候脱掉这几个键原地重发一次，并把这个地址记下来不再试。
+        if wantThinking {
+            body["thinking"] = ["type": "enabled", "budget_tokens": 2048]
+            body["reasoning"] = ["max_tokens": 2048]
+            body["reasoning_effort"] = "medium"
         }
         return try JSONSerialization.data(withJSONObject: body)
     }
