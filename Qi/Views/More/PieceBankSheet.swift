@@ -21,6 +21,10 @@ struct PieceBankSheet: View {
     @State private var newName = ""
     @State private var deleting: FurniturePiece?
 
+    /// 换行走这个常量。反斜杠经脚本改动会被吃掉一层、字符串就跨行了——
+    /// 这仓库栽过十几次，`strspan.py` 每次都抓得到。
+    private let br = String(UnicodeScalar(10))
+
     private let cols = [GridItem(.adaptive(minimum: 92), spacing: 10)]
 
     var body: some View {
@@ -29,10 +33,18 @@ struct PieceBankSheet: View {
                 WallpaperBackground()
                 ScrollView {
                     if bank.pieces.isEmpty {
+                        // ⚠️ 这段提示以前**她一次都没机会看见**：
+                        // 长按菜单里那个入口写着「库空就不显示」，
+                        // 于是空的时候进不来，进不来就永远填不满。
+                        // 现在入口常驻了（见 ClawdHomeView 那段注释）。
                         EmptyNote(icon: "tray",
                                   title: "素材库还是空的",
-                                  hint: "在「从整版图里取家具」中切开一整版后，"
-                                      + "点某一块选「存进素材库」，或直接「全部存进素材库」。")
+                                  hint: "回到小屋，点底下那条「从整版图里取家具」，"
+                                      + "选一张整版图切开，"
+                                      + "然后点某一块选「存进素材库」"
+                                      + "，或者直接「全部存进素材库」。" + br + br
+                                      + "存进来之后，长按任意家具选「从素材库挑一张」"
+                                      + "就能直接换，不用再切一遍同一张图。")
                             .padding(.top, 40)
                     } else {
                         LazyVGrid(columns: cols, spacing: 12) {

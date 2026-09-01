@@ -475,21 +475,32 @@ struct ClawdHomeView: View {
             titleVisibility: .visible
         ) {
             if let item = acting {
-                // 她自己的图。**这是她那批 AI 生成的等距家具进来的口子。**
-                // 导入的时候会自动抠掉白底、裁紧边（见 `FurnitureImage`），
-                // 她只要截一件下来就行。
-                Button(item.imageName.isEmpty ? "换成我的图" : "再换一张图") {
+                // ⚠️⚠️ **素材库排在相册前面，而且永远都在。**
+                //
+                // 她报的：「clawd 小屋我没找到素材库在哪里。
+                // 　我长按家具点击『用我的图』弹出来的是让我在相册导入，
+                // 　这个地方应该连接的是素材库，
+                // 　因为只有素材库是我已经确定好的图。」
+                //
+                // 两件事都栽在同一句话上——上一版这儿写着
+                // 「素材库是空的就不摆这一条，一个点进去什么都没有的入口只是噪音」。
+                //
+                // 那句话是错的，而且错得跟念头池、动态那两次一模一样：
+                // **一个空着才需要被发现的入口，恰恰在空着的时候被藏了起来。**
+                // 库是空的 → 入口不出现 → 她永远填不满它 → 库永远是空的。
+                // `PieceBankSheet` 里那段「素材库还是空的，去哪儿切」的提示
+                // 写得好好的，可她一次都没机会看见。
+                //
+                // 顺序也倒过来：**素材库在前，相册在后**。
+                // 她说得对——素材库里那些是她已经切好、确定要用的；
+                // 相册是原始素材，还得再切一遍。默认该给确定的那个。
+                Button("从素材库挑一张") {
+                    dressing = item
+                    pickingPiece = true
+                }
+                Button(item.imageName.isEmpty ? "从相册挑一张原图" : "再换一张原图") {
                     dressing = item
                     pickingImage = true
-                }
-                // 切好的素材直接挑一张，**不用再切一遍同一张图**。
-                // 素材库是空的就不摆这一条——
-                // 一个点进去什么都没有的入口只是噪音。
-                if !PieceStore.shared.pieces.isEmpty {
-                    Button("从素材库挑一张") {
-                        dressing = item
-                        pickingPiece = true
-                    }
                 }
                 if !item.imageName.isEmpty {
                     Button("换回画的这版") { store.undress(item.id) }
