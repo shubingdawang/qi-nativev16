@@ -119,51 +119,38 @@ enum FurnitureCatalog {
     static let all: [FurnitureKind] = [
         .init(id: "bed", name: "小床", price: 80, sprite: PixelSprite([
             "wwwwwwwwwwwwwwwwwwwwww",
-            "wccccccccccccccccccccw",
             "wnnnnccccccccccccccccw",
             "wnnnnccccccccccccccccw",
-            "wnnnnccccccccccccccccw",
-            "wccccccccccccccccccccw",
-            "wccccccccccccccccccccw",
             "wccccccccccccccccccccw",
             "wccccccccccccccccccccw",
             "wccccccccccccccccccccw",
             "wwwwwwwwwwwwwwwwwwwwww",
-            "d....................d",
-            "d....................d"
+            "..dd..............dd..",
+            "..dd..............dd.."
         ], p), category: .furniture, reaction: "爬上去睡一会儿"),
 
         .init(id: "bed_berry", name: "草莓小床", price: 140, sprite: PixelSprite([
             "wwwwwwwwwwwwwwwwwwwwww",
-            "wccccccccccccccccccccw",
             "wnnnnccccccccccccccccw",
-            "wnnnncnnncnnncnnncnncw",
+            "wnnnnccccccccccccccccw",
             "wnnnnnnnnnnnnnnnnnnnnw",
             "wnnrnnnnnrnnnnnrnnnnnw",
             "wnnnnnnnnnnnnnnnnnnnnw",
-            "wnnnnnrnnnnnnnrnnnnnnw",
-            "wnnnnnnnnnnnnnnnnnnnnw",
-            "wnnnnnnnnnnnnnnnnnnnnw",
             "wwwwwwwwwwwwwwwwwwwwww",
-            "d....................d",
-            "d....................d"
+            "..dd..............dd..",
+            "..dd..............dd.."
         ], p), category: .furniture, reaction: "滚到草莓被子里"),
 
         .init(id: "bed_xmas", name: "圣诞小床", price: 150, sprite: PixelSprite([
-            "...yy.........yy......",
             "wwwwwwwwwwwwwwwwwwwwww",
-            "wccccccccccccccccccccw",
-            "wccccrrccrrccrrccrrccw",
+            "wnnnnccccccccccccccccw",
+            "wnnnnccccccccccccccccw",
             "wggggggggggggggggggggw",
-            "wrgrgrgrgrgrgrgrgrgrgw",
-            "wggggggggggggggggggggw",
-            "wrgrgrgrgrgrgrgrgrgrgw",
-            "wggggggggggggggggggggw",
-            "wrgrgrgrgrgrgrgrgrgrgw",
+            "wrrggrrggrrggrrggrrggw",
             "wggggggggggggggggggggw",
             "wwwwwwwwwwwwwwwwwwwwww",
-            "d....................d",
-            "d....................d"
+            "..dd..............dd..",
+            "..dd..............dd.."
         ], p), category: .furniture, reaction: "把袜子挂到床头上"),
 
         .init(id: "lamp", name: "台灯", price: 60, sprite: PixelSprite([
