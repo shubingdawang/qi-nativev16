@@ -118,39 +118,52 @@ enum FurnitureCatalog {
     // 所以床有三张：素的 80、草莓的 140、圣诞的 150。别的大件以后照这个加。
     static let all: [FurnitureKind] = [
         .init(id: "bed", name: "小床", price: 80, sprite: PixelSprite([
-            "wwwwwwwwwwww",
-            "wccccccccccw",
-            "wccccccccccw",
-            "wnnccccccccw",
-            "wnnccccccccw",
-            "wccccccccccw",
-            "wwwwwwwwwwww",
-            "d..........d",
-            "d..........d"
+            "wwwwwwwwwwwwwwwwwwwwww",
+            "wccccccccccccccccccccw",
+            "wnnnnccccccccccccccccw",
+            "wnnnnccccccccccccccccw",
+            "wnnnnccccccccccccccccw",
+            "wccccccccccccccccccccw",
+            "wccccccccccccccccccccw",
+            "wccccccccccccccccccccw",
+            "wccccccccccccccccccccw",
+            "wccccccccccccccccccccw",
+            "wwwwwwwwwwwwwwwwwwwwww",
+            "d....................d",
+            "d....................d"
         ], p), category: .furniture, reaction: "爬上去睡一会儿"),
 
         .init(id: "bed_berry", name: "草莓小床", price: 140, sprite: PixelSprite([
-            "wwwwwwwwwwww",
-            "wccccccccccw",
-            "wnncnnncnncw",
-            "wnnnnnnnnnnw",
-            "wnrnnnrnnrnw",
-            "wnnnnnnnnnnw",
-            "wwwwwwwwwwww",
-            "d..........d",
-            "d..........d"
+            "wwwwwwwwwwwwwwwwwwwwww",
+            "wccccccccccccccccccccw",
+            "wnnnnccccccccccccccccw",
+            "wnnnncnnncnnncnnncnncw",
+            "wnnnnnnnnnnnnnnnnnnnnw",
+            "wnnrnnnnnrnnnnnrnnnnnw",
+            "wnnnnnnnnnnnnnnnnnnnnw",
+            "wnnnnnrnnnnnnnrnnnnnnw",
+            "wnnnnnnnnnnnnnnnnnnnnw",
+            "wnnnnnnnnnnnnnnnnnnnnw",
+            "wwwwwwwwwwwwwwwwwwwwww",
+            "d....................d",
+            "d....................d"
         ], p), category: .furniture, reaction: "滚到草莓被子里"),
 
         .init(id: "bed_xmas", name: "圣诞小床", price: 150, sprite: PixelSprite([
-            "..y......y..",
-            "wwwwwwwwwwww",
-            "wccccccccccw",
-            "wrrcrrcrrcrw",
-            "wggggggggggw",
-            "wrgrgrgrgrgw",
-            "wwwwwwwwwwww",
-            "dyy......yyd",
-            "d..........d"
+            "...yy.........yy......",
+            "wwwwwwwwwwwwwwwwwwwwww",
+            "wccccccccccccccccccccw",
+            "wccccrrccrrccrrccrrccw",
+            "wggggggggggggggggggggw",
+            "wrgrgrgrgrgrgrgrgrgrgw",
+            "wggggggggggggggggggggw",
+            "wrgrgrgrgrgrgrgrgrgrgw",
+            "wggggggggggggggggggggw",
+            "wrgrgrgrgrgrgrgrgrgrgw",
+            "wggggggggggggggggggggw",
+            "wwwwwwwwwwwwwwwwwwwwww",
+            "d....................d",
+            "d....................d"
         ], p), category: .furniture, reaction: "把袜子挂到床头上"),
 
         .init(id: "lamp", name: "台灯", price: 60, sprite: PixelSprite([
