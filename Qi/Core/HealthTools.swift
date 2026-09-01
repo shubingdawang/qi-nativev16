@@ -261,7 +261,11 @@ enum HealthTools {
 
     private struct DayValue { let day: String; let value: Double }
 
-    private static func dayLabel(_ d: Date) -> String {
+    /// ⚠️ `nonisolated`：这一句是**纯算术**，一个共享状态都不碰。
+    /// 不标的话它跟着外面那个类型继承了 `@MainActor`，
+    /// 而调它的地方（`HKStatistics` 那几个回调）在别的线程上——
+    /// 现在是个警告，Swift 6 下就是编译错了。
+    nonisolated private static func dayLabel(_ d: Date) -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "zh_CN")
         f.dateFormat = "M月d日"

@@ -26,7 +26,9 @@ SWIFT = ['arginit', 'buildercheck', 'dupdecl', 'findbad', 'hitarea',
          'shapecheck', 'viewsize', 'cmp']
 # 自己知道该去哪儿找、不用给参数的
 STANDALONE = ['blurbcheck', 'bundlecheck', 'dupcase', 'kitcheck',
-              'spritecheck', 'strspan']
+              'spritecheck', 'strspan',
+              # 自己去问 git 这一版删了什么，不用给文件
+              'orphan']
 
 
 def swift_files(changed):

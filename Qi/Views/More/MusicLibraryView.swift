@@ -121,7 +121,11 @@ struct MusicLibraryView: View {
                                         .foregroundStyle(app.settings.accentColor)
                                         .frame(width: 34, height: 34)
                                         .contentShape(Rectangle())
-                                 )) { result in
+                                 ),
+                                 // ⚠️ 这个标签不能省：`label` 排在 `onPick`
+                                 // 前面，尾随闭包往回配会先撞上它——
+                                 // 编译器现在只是警告，以后就不认了。
+                                 onPick: { result in
                         guard case .success(let urls) = result else { return }
                         var added = 0
                         var dup = 0
@@ -141,7 +145,7 @@ struct MusicLibraryView: View {
                         } else {
                             notice = added > 0 ? "导进来 \(added) 首" : "这些文件读不出来"
                         }
-                    }
+                    })
                 }
 
                 if let notice {

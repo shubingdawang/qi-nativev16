@@ -88,11 +88,10 @@ struct MusicFloatingView: View {
         .fullScreenCover(isPresented: $showingLyrics) {
             NowPlayingView()
         }
-        // 转起来。**三个时机都要管**：进来、开始放、换了一首——
-        // 以前只管前两个，所以她看到的常常是「一直没动」
-        .onAppear { startSpin() }
-        // ⚠️ 这儿以前挂着三个 `onChange` 去重启一段 `repeatForever` 动画，
-        // **全撤了**。理由见 `DiscSpin`。
+        // ⚠️ 这儿以前挂着一个 `onAppear` 和三个 `onChange`，
+        // 各自去重启一段 `repeatForever` 动画——**四个全撤了**。
+        // 现在角度由时钟算，进来、开始放、换了一首、展开再收回，
+        // 一个都不用管。理由见文件末尾的 `DiscSpin`。
     }
 
     // MARK: 收着的样子：一颗贴边的封面
