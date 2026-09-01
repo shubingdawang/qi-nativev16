@@ -53,6 +53,97 @@ def structs(src):
     return out
 
 
+def balanced(src, start):
+    """从 `Name(` 后面那一格开始，一直读到配对的那个右括号。
+
+    ⚠️ **不能用正则。** 上一版写的是 `\(([^()]{0,400}?)\)`——
+    「实参里不许有括号」。可真出事那一次的调用长这样：
+
+        ImportButton(title: "", icon: Icon.add,
+                     types: [...], multiple: true,
+                     label: AnyView(Image(...)...),
+                     onPick: { result in … 三十行 … })
+
+    里面全是括号和闭包，那条正则一次都没匹配上，
+    于是这个检查**从来没看过它**，`argument 'onPick' must precede
+    argument 'label'` 照样让她那边的构建挂了一次。
+
+    字符串和注释里的括号一并跳过，不然 `"（整包会大到导不出来）"`
+    这种中文括号倒没事，`"a)"` 那种会把深度算歪。
+    """
+    depth = 1
+    i = start
+    n = len(src)
+    while i < n:
+        c = src[i]
+        if c == '"':
+            i += 1
+            while i < n and src[i] != '"':
+                i += 2 if src[i] == chr(92) else 1
+        elif c == '/' and i + 1 < n and src[i + 1] == '/':
+            while i < n and src[i] != chr(10):
+                i += 1
+        elif c == '(':
+            depth += 1
+        elif c == ')':
+            depth -= 1
+            if depth == 0:
+                return src[start:i], i
+        i += 1
+    return None, n
+
+
+def top_labels(inner):
+    """只取**最外一层**的实参标签。
+
+    嵌套调用里的标签不算——`AnyView(Image(systemName: …))` 里那个
+    `systemName` 不是这个构造器的实参。
+
+    ⚠️ **注释要跳过。** 这一版差点又漏掉那个真出事的调用：
+    实参之间夹着七行 `// …` 说明，逗号后面第一个字符是 `/`，
+    于是它以为「这个实参已经开始了、没有标签」，
+    后面的 `onPick:` 就再也不认了。
+    **人会在实参中间写注释，检查器得当它不存在。**
+    """
+    out = []
+    depth = 0
+    i = 0
+    n = len(inner)
+    want = True          # 现在处在一个实参的开头吗
+    while i < n:
+        c = inner[i]
+        if c == '/' and i + 1 < n and inner[i + 1] == '/':
+            while i < n and inner[i] != chr(10):
+                i += 1
+            continue
+        if c == '"':
+            i += 1
+            while i < n and inner[i] != '"':
+                i += 2 if inner[i] == chr(92) else 1
+        elif c in '([{':
+            depth += 1
+        elif c in ')]}':
+            depth -= 1
+        elif depth == 0 and c == ',':
+            want = True
+        elif depth == 0 and want and (c.isalpha() or c == '_'):
+            j = i
+            while j < n and (inner[j].isalnum() or inner[j] == '_'):
+                j += 1
+            k = j
+            while k < n and inner[k] == ' ':
+                k += 1
+            if k < n and inner[k] == ':':
+                out.append(inner[i:j])
+            want = False
+            i = j
+            continue
+        elif depth == 0 and not c.isspace():
+            want = False
+        i += 1
+    return out
+
+
 def check(paths):
     src = {p: io.open(p, encoding='utf-8').read() for p in paths}
     table = {}
@@ -64,8 +155,11 @@ def check(paths):
         for name, props in table.items():
             if len(props) < 2:
                 continue
-            for m in re.finditer(re.escape(name) + r'\(([^()]{0,400}?)\)', s):
-                labels = re.findall(r'(?:^|,)\s*(\w+)\s*:', m.group(1))
+            for m in re.finditer(r'(?<![.\w])' + re.escape(name) + r'\(', s):
+                inner, end = balanced(s, m.end())
+                if inner is None:
+                    continue
+                labels = top_labels(inner)
                 labels = [l for l in labels if l in props]
                 if len(labels) < 2:
                     continue

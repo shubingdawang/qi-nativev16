@@ -139,16 +139,13 @@ struct MusicLibraryView: View {
                     ImportButton(title: "", icon: Icon.add,
                                  types: [.audio, .mp3, .mpeg4Audio, .data],
                                  multiple: true,
-                                 label: AnyView(
-                                    Image(systemName: Icon.add)
-                                        .font(.app(16))
-                                        .foregroundStyle(app.settings.accentColor)
-                                        .frame(width: 34, height: 34)
-                                        .contentShape(Rectangle())
-                                 ),
-                                 // ⚠️ 这个标签不能省：`label` 排在 `onPick`
-                                 // 前面，尾随闭包往回配会先撞上它——
-                                 // 编译器现在只是警告，以后就不认了。
+                                 // ⚠️ `onPick` 要排在 `label` **前面**。
+                                 // ImportButton 里 onPick 声明得比 label 早，
+                                 // 而 Swift 的合成 init **认声明顺序**：
+                                 // 反过来写是 error，不是警告。
+                                 //
+                                 // 也不能省掉标签用尾随闭包：`label` 排在最后，
+                                 // 尾随闭包往回配会先撞上它（那是上一版的警告）。
                                  onPick: { result in
                         guard case .success(let urls) = result else { return }
                         var added = 0
@@ -169,7 +166,14 @@ struct MusicLibraryView: View {
                         } else {
                             notice = added > 0 ? "导进来 \(added) 首" : "这些文件读不出来"
                         }
-                    })
+                    },
+                                 label: AnyView(
+                                    Image(systemName: Icon.add)
+                                        .font(.app(16))
+                                        .foregroundStyle(app.settings.accentColor)
+                                        .frame(width: 34, height: 34)
+                                        .contentShape(Rectangle())
+                                 ))
                 }
 
                 if let notice {
