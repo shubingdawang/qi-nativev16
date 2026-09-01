@@ -356,7 +356,16 @@ struct IsoRoomView<Clawd: View>: View {
 
         // 她自己那张图占多宽：**按它占几格算**，不看图本身多少像素。
         // 这样她导进来的图不管多大，摆在屋里都是这件家具该有的大小。
-        let mineW = geoRoom.tileW * CGFloat(s.w + s.d) / 2
+        //
+        // ⚠️ 末尾那个 1.5 是她报的：「这批家具挺不错的，就是有点小，
+        // 不管是对于屋子还是对于 clawd 来说。」
+        //
+        // 原因：`(w + d) / 2` 算的是这件东西**底面**在屏幕上有多宽，
+        // 那对「摊在地上的」（地毯、坐垫）是对的。
+        // 可一个书柜的图**整张都是它**——底面只占图的下边一条，
+        // 上面那一大截是它的高。按底面宽去定整张图的宽，
+        // 等于把一个一人多高的柜子压成一格那么高。
+        let mineW = geoRoom.tileW * CGFloat(s.w + s.d) / 2 * 1.5
 
         return VStack(spacing: 0) {
             if let mine {
@@ -382,10 +391,31 @@ struct IsoRoomView<Clawd: View>: View {
         .contentShape(mine == nil
                       ? AnyShape(SpriteHitShape(sprite: sprite))
                       : AnyShape(Rectangle()))
-        .position(x: c.x, y: c.y)
+        // ⚠️ **贴着墙那一排要再往墙里挪半格。**
+        //
+        // 她报的：「就是不能靠墙。」——摆放本身是能到 0 号格的（贴墙那一格），
+        // 拦不住她；拦住的是**画法**：家具画在**格子的中心**，
+        // 而墙在那一格的**外边缘**上。中心到边缘正好半格，
+        // 于是最靠墙的一件也永远悬着半格，看着像谁都不敢靠墙。
+        //
+        // 等距里往 -gx 走一格 = 屏幕上 (-tileW/2, -tileH/2)，
+        // 往 -gy 走一格 = (+tileW/2, -tileH/2)。各取一半。
+        .position(x: c.x + wallHug(cell, geoRoom).x,
+                   y: c.y + wallHug(cell, geoRoom).y)
         .animation(.spring(response: 0.26, dampingFraction: 0.78), value: lifted)
         .onTapGesture { onTapFurniture(item) }
         .gesture(dragGesture(item, s, geoRoom))
+    }
+
+    /// 贴墙那一排往墙里挪多少。不在边上就是零。
+    ///
+    /// 理由见 `piece` 里 `.position` 那段：家具画在格子中心，
+    /// 墙在格子外边缘，中间差半格。
+    private func wallHug(_ cell: (gx: Int, gy: Int), _ g: IsoRoom) -> CGPoint {
+        var dx: CGFloat = 0, dy: CGFloat = 0
+        if cell.gx == 0 { dx -= g.tileW / 4; dy -= g.tileH / 4 }
+        if cell.gy == 0 { dx += g.tileW / 4; dy -= g.tileH / 4 }
+        return CGPoint(x: dx, y: dy)
     }
 
     private func dragGesture(_ item: Furniture, _ s: IsoShape,

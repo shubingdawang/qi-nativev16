@@ -968,6 +968,13 @@ struct ClawdView: View {
     /// 脚底下那团影子。摆在房间里要有，不然它像浮在半空；
     /// 输入框上蹲的那只太小，加了反而脏。
     var shadow: Bool = false
+    /// **身上穿戴的那件**（帽子、眼镜、围巾…）。
+    ///
+    /// ⚠️ 小屋里那只走的是这个 `ClawdView`，不是聊天页那个 `ClawdRigView`。
+    /// 两边**都要传**——只给一边的话，她在小屋给他戴上帽子，
+    /// 切到聊天页帽子就没了，看着像刚才那一下没生效。
+    var worn: PixelSprite?
+    var wornID: String = ""
 
     @State private var frame = 0
     @State private var ticker: Task<Void, Never>?
@@ -996,6 +1003,15 @@ struct ClawdView: View {
             }
 
             PixelSpriteView(sprite: sprites[min(frame, sprites.count - 1)].0, scale: scale)
+
+            // 身上戴的那件，贴在对应的位置上（见 `ClawdRig.wearAt`）
+            if let worn {
+                PixelSpriteView(sprite: worn, scale: scale)
+                    .offset(x: ClawdRig.wearAt(wornID, itemW: CGFloat(worn.width),
+                                               itemH: CGFloat(worn.height)).x * scale,
+                            y: ClawdRig.wearAt(wornID, itemW: CGFloat(worn.width),
+                                               itemH: CGFloat(worn.height)).y * scale)
+            }
 
             // 甜的时候头顶飘爱心。
             //

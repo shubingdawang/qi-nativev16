@@ -647,7 +647,11 @@ struct ClawdHomeView: View {
                 // 那才是她那句「屋子像是能住人的」真正的意思。
                 //
                 // 32 是他那张图纸的宽度（`ClawdSprites` 每张都是 32 格）。
-                ClawdView(mood: mood, scale: tile * 0.87 / 32, shadow: true)
+                ClawdView(mood: mood, scale: tile * 0.87 / 32, shadow: true,
+                          // 小屋里也要戴上。**两边都传**——只给一边的话，
+                          // 她在这儿给他戴上帽子，切到聊天页就没了。
+                          worn: store.wornKind?.sprite,
+                          wornID: store.wearing ?? "")
                     // 大件**举过头顶**（她画的那张参考图就是这个动作）。
                     // 聊天页读的是同一个 store、同一套判断，所以两边一模一样：
                     // 这边在搬床，切过去那边也在搬床，也是举着的。

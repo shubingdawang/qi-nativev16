@@ -1589,6 +1589,19 @@ struct MessageBubbleView: View {
         }
     }
 
+    /// 一张图在上限里该显示多大。
+    ///
+    /// ⚠️ 这件事**必须算出确切的宽高**，不能只给上限——理由见 `singleImages`
+    /// 里那段：给上限的话最终多大要看父容器提议多少，
+    /// 框比图大一点点，圆角就切在留白上，图的角还是方的。
+    static func fitted(_ size: CGSize, max cap: CGSize) -> CGSize {
+        guard size.width > 0, size.height > 0 else { return cap }
+        let k = min(cap.width / size.width, cap.height / size.height, 1)
+        // 至少也得有点大小——零宽的图会让整条气泡塌掉
+        return CGSize(width: max(24, size.width * k),
+                      height: max(24, size.height * k))
+    }
+
     private var imageRow: some View {
         VStack(alignment: isUser ? .trailing : .leading, spacing: 6) {
             // 一次发好几张的话，摞成一张能翻的卡——
@@ -1636,11 +1649,26 @@ struct MessageBubbleView: View {
                         // `aspectRatio(比例, contentMode: .fit)` 是让**这个视图自己**
                         // 按图的比例定尺寸，外面那个 frame 就只是个上限。
                         // 于是框跟图一样大，圆角才切在图上。
+                        // ⚠️⚠️ **尺寸自己算，别让 SwiftUI 去协商。**
+                        //
+                        // 她报了两次「单张图片还是尖角的」。
+                        // 第一次我改成了 `aspectRatio(比例, .fit)` +
+                        // `frame(maxWidth:maxHeight:)`——理论上外框会缩到跟图一样大，
+                        // 圆角就切在图上。**可她装上之后说还是尖的。**
+                        //
+                        // 问题在「理论上」：`frame(max…)` 是**给一个上限**，
+                        // 最终多大取决于父容器提议多少、子视图回多少。
+                        // 一屏聊天里这条链上有 `VStack` / `HStack` / `Spacer`，
+                        // 提议的宽度未必是 220——只要框比图大一点点，
+                        // 圆角就落在了透明的留白上，图自己的角还是方的。
+                        //
+                        // 现在**先算出这张图该显示多大**，再用确切的
+                        // `frame(width:height:)`。框和图从此严丝合缝，
+                        // 不留任何协商的余地。
+                        let fit = Self.fitted(image.size, max: CGSize(width: 220, height: 260))
                         Image(uiImage: image)
                             .resizable()
-                            .aspectRatio(image.size.width / max(1, image.size.height),
-                                         contentMode: .fit)
-                            .frame(maxWidth: 220, maxHeight: 260)
+                            .frame(width: fit.width, height: fit.height)
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                 }

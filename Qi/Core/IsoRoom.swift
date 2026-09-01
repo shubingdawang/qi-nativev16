@@ -78,12 +78,13 @@ struct IsoRoom {
         // **竖着还剩多少就给墙多少**。屋子从此是撑满这一屏的，
         // 而地板一格也没变小。
         //
-        // 上限 9 格：再高就成了一口井，家具都缩在井底那一小块。
+        // 上限 7 格：她说「小屋有点太高了」——9 格那版墙占了整屋的六成，
+        // 家具缩在井底一小块。7 格之后墙和地大致对半，看着才像一间屋。
         // 下限还是 4.2 格——横屏或者小窗口的时候剩不下地方，
         // 至少得是间屋子的样子。
         let floorH = tileH * n / 2 + tileH
         let room = size.height * 0.94 - floorH
-        let wallH = min(max(tileH * 4.2, room), tileH * 9)
+        let wallH = min(max(tileH * 4.2, room), tileH * 7)
 
         // 整块（墙顶到地板最下）的高度，用来把屋子**竖着摆正中**
         let whole = wallH + floorH

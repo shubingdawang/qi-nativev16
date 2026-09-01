@@ -14,156 +14,202 @@ struct VoiceSettingsView: View {
     ///
     /// 这一段原来是独立的 `VoiceInputSettingsView`，
     /// 现在并到这一页来了（见 body 开头那段）。
-    @ViewBuilder
-    private var inputSections: some View {
-
-            Section {
-                ForEach(VoiceInputMode.allCases) { mode in
-                    Button {
-                        app.settings.voiceInput = mode
-                    } label: {
-                        HStack(alignment: .top, spacing: 10) {
-                            Image(systemName: app.settings.voiceInput == mode
-                                  ? "largecircle.fill.circle" : "circle")
-                                .foregroundStyle(app.settings.accentColor)
-                                .padding(.top, 2)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(mode.title).foregroundStyle(.primary)
-                                Text(mode.note)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
+    /// 上半：她按住说话的时候，那段声音交给谁转成字。
+    ///
+    /// 这一段原来是独立的 `VoiceInputSettingsView`，并进来了；
+    /// 这一版又从 `Section` 换成了卡片（理由见 body 那段）。
+    private var inputCard: some View {
+        SettingsCard(title: "按住说话时用哪个") {
+            ForEach(Array(VoiceInputMode.allCases.enumerated()), id: \.element) { i, mode in
+                if i > 0 { SettingsDivider() }
+                Button {
+                    app.settings.voiceInput = mode
+                } label: {
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: app.settings.voiceInput == mode
+                              ? "largecircle.fill.circle" : "circle")
+                            .foregroundStyle(app.settings.accentColor)
+                            .padding(.top, 2)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(mode.title)
+                                .font(.app(15))
+                                .foregroundStyle(Theme.textMain(scheme))
+                            Text(mode.note)
+                                .font(.app(11))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                                .fixedSize(horizontal: false, vertical: true)
                         }
+                        Spacer(minLength: 0)
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 11)
+                    // ⚠️ 整行都要能点，不只是那几个字（这病栽过六次）
+                    .contentShape(Rectangle())
                 }
-            } header: {
-                Text("按住说话时用哪个")
-            } footer: {
-                Text(MD.inline("以下三项用于语音识别（输入）。语音合成（输出）在「语音」中配置，两者互不影响。"))
+                .buttonStyle(.plain)
             }
 
             if app.settings.voiceInput == .elevenLabs {
-                Section {
-                    Text(app.activeVoice == nil
-                         ? "还没配 ElevenLabs。去「设置 → 语音」填一次密钥，这里就能直接用。"
-                         : "用的是「语音」里那个密钥，不用另填。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                } header: {
-                    Text("密钥")
-                } footer: {
-                    Text(MD.inline("可识别笑声、鼓掌、哭泣等声音事件，但不输出情绪判定。需要情绪识别请选择 SenseVoice。"))
-                }
+                SettingsDivider()
+                SettingsNote(app.activeVoice == nil
+                             ? "还没配 ElevenLabs。下面填一次密钥，这里就能直接用。"
+                             : "用的是下面那个密钥，不用另填。\n\n可识别笑声、鼓掌、哭泣等声音事件，但不输出情绪判定。需要情绪识别请选择 SenseVoice。",
+                             title: "密钥")
             }
 
             if app.settings.voiceInput == .senseVoice {
-                Section {
-                    SecureField("SiliconFlow API Key", text: $app.settings.siliconKey)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                } header: {
-                    Text("密钥")
-                } footer: {
-                    Text("密钥在 siliconflow.cn 注册获取，使用 SenseVoiceSmall 模型，费用较低。\n\n可识别开心、难过、生气、意外等情绪，以及笑声与哭声。识别结果随语音文本一并发送，用于区分相同措辞的不同语气。")
-                }
+                SettingsDivider()
+                SecureField("SiliconFlow API Key", text: $app.settings.siliconKey)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .font(.app(13))
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 9)
+                SettingsDivider()
+                SettingsNote("密钥在 siliconflow.cn 注册获取，使用 SenseVoiceSmall 模型，费用较低。\n\n可识别开心、难过、生气、意外等情绪，以及笑声与哭声。识别结果随语音文本一并发送，用于区分相同措辞的不同语气。")
             }
+
+            SettingsDivider()
+            SettingsNote("以上三项用于语音识别（输入）。下面几张卡是语音合成（输出），两者互不影响。")
+        }
     }
 
-    var body: some View {
-        List {
-            // ⚠️⚠️ **「语音输入」并进来了，不再是单独一页。**
-            //
-            // 她定的：「语音输入和语音服务合并，都是语音功能。」
-            // 一个是她说话转文字、一个是他说话出声——
-            // 分成设置页上两行，看着像两件不相干的事，
-            // 而她想调「语音」的时候得先猜是哪一个。
-            //
-            // 上半是**她这边**（识别），下半是**他那边**（合成）。
-            inputSections
-
-            if app.voices.isEmpty {
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("还没有语音服务")
-                            .font(.headline)
-                        Text("配置完成后，长按任意消息可朗读；模型也可主动发送语音消息。")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 6)
+    /// 一把嗓子那几行。
+    @ViewBuilder
+    private func voiceRows(_ voice: VoiceService) -> some View {
+        Button {
+            editing = voice
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(voice.name.isEmpty ? "未命名" : voice.name)
+                        .font(.app(15))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    Text(voice.ready ? voice.voiceID : "还没填全")
+                        .font(.app(11))
+                        .foregroundStyle(voice.ready ? Theme.textMuted(scheme) : .orange)
+                        .lineLimit(1)
                 }
+                Spacer(minLength: 8)
+                Image(systemName: Icon.chevron)
+                    .font(.app(10))
+                    .foregroundStyle(Theme.textMuted(scheme))
             }
-
-            ForEach(app.voices) { voice in
-                Section {
-                    Button {
-                        editing = voice
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(voice.name.isEmpty ? "未命名" : voice.name)
-                                    .foregroundStyle(.primary)
-                                Text(voice.ready ? voice.voiceID : "还没填全")
-                                    .font(.caption)
-                                    .foregroundStyle(voice.ready ? Color.secondary : Color.orange)
-                                    .lineLimit(1)
-                            }
-                            Spacer()
-                            Image(systemName: Icon.chevron)
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
-
-                    Toggle("用这个", isOn: Binding(
-                        get: { voice.enabled },
-                        set: { on in
-                            // 同一时刻只启用一个，免得不知道在用哪把嗓子
-                            if on {
-                                for i in app.voices.indices { app.voices[i].enabled = false }
-                            }
-                            if let i = app.voices.firstIndex(where: { $0.id == voice.id }) {
-                                app.voices[i].enabled = on
-                            }
-                        }
-                    ))
-
-                    Button {
-                        test(voice)
-                    } label: {
-                        HStack {
-                            Label("试听", systemImage: "waveform")
-                            Spacer()
-                            if testing { ProgressView() }
-                        }
-                    }
-                    .disabled(!voice.ready || testing)
-                }
-            }
-            .onDelete { offsets in
-                app.voices.remove(atOffsets: offsets)
-            }
-
-            Section {
-                Button {
-                    creatingNew = true
-                } label: {
-                    Label("添加音色", systemImage: Icon.add)
-                }
-                if let notice {
-                    Text(notice)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            } footer: {
-                Text("音色 ID 在 ElevenLabs 网站上每个声音的详情里能找到。同一个密钥下可以放好几个音色，随时切。")
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // 换成卡片之后没有 swipeActions 了，删掉走长按
+        .contextMenu {
+            Button(role: .destructive) {
+                app.voices.removeAll { $0.id == voice.id }
+            } label: {
+                Label("删掉这把嗓子", systemImage: Icon.trash)
             }
         }
-        .transparentList()
-        .listRowBackground(GlassRowBackground())
-        .safeAreaInset(edge: .bottom) {
-            Color.clear.frame(height: Layout.tabBarExpanded)
+
+        SettingsDivider()
+
+        Toggle(isOn: Binding(
+            get: { voice.enabled },
+            set: { on in
+                // 同一时刻只启用一个，免得不知道在用哪把嗓子
+                if on {
+                    for i in app.voices.indices { app.voices[i].enabled = false }
+                }
+                if let i = app.voices.firstIndex(where: { $0.id == voice.id }) {
+                    app.voices[i].enabled = on
+                }
+            }
+        )) {
+            Text("用这个")
+                .font(.app(15))
+                .foregroundStyle(Theme.textMain(scheme))
+        }
+        .tint(app.settings.accentColor)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+
+        SettingsDivider()
+
+        Button { test(voice) } label: {
+            HStack {
+                SettingsRowLabel(title: "试听", icon: "waveform")
+                if testing {
+                    ProgressView().padding(.trailing, 16)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!voice.ready || testing)
+        .opacity(voice.ready ? 1 : 0.5)
+    }
+
+    // ⚠️⚠️ **这一页原来是 `List`，换成了跟设置页一样的卡片。**
+    //
+    // 她报的：「我跟你说的设置白底你没弄成玻璃。」
+    //
+    // 玻璃**其实一直挂着**（`.listRowBackground(GlassRowBackground())`），
+    // 可它盖不住：`List` 默认是 `insetGrouped`，那一层白圆角是
+    // **分组容器自己画的**，行背景压在它上面，白底照样透出来。
+    //
+    // 记一句：**`listRowBackground` 管的是「行」，管不了分组的底。**
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        ZStack {
+            WallpaperBackground().ignoresSafeArea()
+            ScrollView {
+                VStack(spacing: 18) {
+                    // 上半是**她这边**（把话转成字）
+                    inputCard
+
+                    // 下半是**他那边**（把字读出声）
+                    if app.voices.isEmpty {
+                        SettingsCard(title: "他的嗓子") {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("还没有语音服务")
+                                    .font(.app(15, weight: .semibold))
+                                    .foregroundStyle(Theme.textMain(scheme))
+                                Text("配置完成后，长按任意消息可朗读；模型也可主动发送语音消息。")
+                                    .font(.app(12))
+                                    .foregroundStyle(Theme.textMuted(scheme))
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                        }
+                    } else {
+                        ForEach(app.voices) { voice in
+                            SettingsCard { voiceRows(voice) }
+                        }
+                    }
+
+                    SettingsCard {
+                        Button { creatingNew = true } label: {
+                            SettingsRowLabel(title: "添加音色", icon: Icon.add)
+                        }
+                        .buttonStyle(.plain)
+                        if let notice {
+                            SettingsDivider()
+                            Text(notice)
+                                .font(.app(11))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 9)
+                        }
+                        SettingsDivider()
+                        SettingsNote("音色 ID 在 ElevenLabs 网站上每个声音的详情里能找到。同一个密钥下可以放好几个音色，随时切。")
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 4)
+                .padding(.bottom, Layout.tabBarExpanded + 16)
+            }
         }
         .navigationTitle("语音")
         .navigationBarTitleDisplayMode(.inline)

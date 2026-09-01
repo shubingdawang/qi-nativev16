@@ -8,65 +8,50 @@ struct MCPListView: View {
     @State private var editing: MCPServer?
     @State private var creatingNew = false
 
-    var body: some View {
-        List {
-            if app.mcpServers.isEmpty {
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("还没有连 MCP")
-                            .font(.headline)
-                        Text("MCP 用于向模型提供可调用的工具，如查询记忆、写日记、记录经期。点击右上角的 + 填写服务地址。")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 6)
-                }
-            }
+    // ⚠️⚠️ **这一页原来是 `List`，换成了跟设置页一样的卡片。**
+    //
+    // 她报的：「我跟你说的设置白底你没弄成玻璃。」
+    //
+    // 玻璃**其实一直挂着**（`.listRowBackground(GlassRowBackground())`），
+    // 可它盖不住：`List` 默认是 `insetGrouped`，那一层白圆角是
+    // **分组容器自己画的**，行背景压在它上面，白底照样透出来。
+    // 自动唤醒那一页当初也是这个病，换成 `SettingsCard` 之后就对了。
+    //
+    // 记一句：**`listRowBackground` 管的是「行」，管不了分组的底。**
+    @Environment(\.colorScheme) private var scheme
 
-            ForEach(app.mcpServers) { server in
-                Button {
-                    editing = server
-                } label: {
-                    HStack(spacing: 10) {
-                        Circle()
-                            .fill(server.enabled ? Color.green : Color.gray.opacity(0.4))
-                            .frame(width: 8, height: 8)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(server.name.isEmpty ? "未命名" : server.name)
-                                .foregroundStyle(.primary)
-                            Text(server.url)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                            if let err = server.lastError {
-                                Text(err)
-                                    .font(.caption2)
-                                    .foregroundStyle(.red)
-                                    .lineLimit(2)
+    var body: some View {
+        ZStack {
+            WallpaperBackground().ignoresSafeArea()
+            ScrollView {
+                VStack(spacing: 18) {
+                    if app.mcpServers.isEmpty {
+                        SettingsCard {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("还没有连 MCP")
+                                    .font(.app(15, weight: .semibold))
+                                    .foregroundStyle(Theme.textMain(scheme))
+                                Text("MCP 用于向模型提供可调用的工具，如查询记忆、写日记、记录经期。点击右上角的 + 填写服务地址。")
+                                    .font(.app(12))
+                                    .foregroundStyle(Theme.textMuted(scheme))
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                        }
+                    } else {
+                        SettingsCard {
+                            ForEach(Array(app.mcpServers.enumerated()), id: \.element.id) { i, server in
+                                if i > 0 { SettingsDivider() }
+                                serverRow(server)
                             }
                         }
-                        Spacer()
-                        Text("\(server.enabledTools.count)/\(server.tools.count) 个工具")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
                     }
                 }
-                .swipeActions {
-                    Button(role: .destructive) {
-                        app.mcpServers.removeAll { $0.id == server.id }
-                    } label: {
-                        Label("删除", systemImage: "trash")
-                    }
-                }
+                .padding(.horizontal, 16)
+                .padding(.top, 4)
+                .padding(.bottom, Layout.tabBarExpanded + 16)
             }
-        }
-        .transparentList()
-        .listRowBackground(GlassRowBackground())
-        .safeAreaInset(edge: .bottom) {
-            Color.clear.frame(height: Layout.tabBarExpanded)
         }
         .navigationTitle("MCP")
         .navigationBarTitleDisplayMode(.inline)
@@ -80,6 +65,53 @@ struct MCPListView: View {
         }
         .sheet(isPresented: $creatingNew) {
             MCPFormView(server: MCPServer(), isNew: true)
+        }
+    }
+    private func serverRow(_ server: MCPServer) -> some View {
+        Button {
+            editing = server
+        } label: {
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(server.enabled ? Color.green : Color.gray.opacity(0.4))
+                    .frame(width: 8, height: 8)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(server.name.isEmpty ? "未命名" : server.name)
+                        .font(.app(15))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    Text(server.url)
+                        .font(.app(11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                        .lineLimit(1)
+                    if let err = server.lastError {
+                        Text(err)
+                            .font(.app(10))
+                            .foregroundStyle(.red)
+                            .lineLimit(2)
+                    }
+                }
+                Spacer(minLength: 8)
+                Text("\(server.enabledTools.count)/\(server.tools.count) 个工具")
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                Image(systemName: "chevron.right")
+                    .font(.app(10))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            // ⚠️ 整行都要能点。`buttonStyle(.plain)` 认的是真画出来的像素，
+            // 中间那一大片空白本来是点不着的（这病栽过六次）。
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // 换成卡片之后没有 `swipeActions` 了，删掉走长按
+        .contextMenu {
+            Button(role: .destructive) {
+                app.mcpServers.removeAll { $0.id == server.id }
+            } label: {
+                Label("删掉", systemImage: Icon.trash)
+            }
         }
     }
 }

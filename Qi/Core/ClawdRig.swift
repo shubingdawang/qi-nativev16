@@ -51,6 +51,10 @@ struct ClawdRigView: View {
     var mood: ClawdMood = .idle
     /// 手上那件东西。空着就是没拿
     var item: PixelSprite?
+    /// **身上穿戴的那件**（帽子、眼镜、围巾…）。跟手上那件是两个槽。
+    var worn: PixelSprite?
+    /// 那件穿戴是什么（决定贴在身上哪儿，见 `ClawdRig.wearAt`）
+    var wornID: String = ""
     var pose: CarryPose = .none
     /// 一格画多大
     var scale: CGFloat = 4
@@ -78,6 +82,19 @@ struct ClawdRigView: View {
             // 两只手
             arm(.left)
             arm(.right)
+
+            // 身上穿戴的那件（帽子、眼镜、围巾、背包、靴子…）。
+            //
+            // ⚠️ **画在手之后、手上那件之前**：
+            // 帽子该压在身子和手上面，但他举起来的床该压在帽子上面——
+            // 不然一张床会从帽檐底下钻出来。
+            if let worn {
+                PixelSpriteView(sprite: worn, scale: scale)
+                    .offset(x: ClawdRig.wearAt(wornID, itemW: CGFloat(worn.width),
+                                               itemH: CGFloat(worn.height)).x * scale,
+                            y: ClawdRig.wearAt(wornID, itemW: CGFloat(worn.width),
+                                               itemH: CGFloat(worn.height)).y * scale)
+            }
 
             // 手上那件东西。**不缩小**——她说的就是这个：
             // 缩小的东西看着是「顶在头上的挂件」，不是「他举着的家具」。
@@ -261,6 +278,54 @@ enum ClawdRig {
             p.itemTilt = sin(a) * 12
         }
         return p
+    }
+
+    // MARK: 穿在身上
+
+    /// 一件穿戴该贴在他身上**哪个位置**（图纸格，相对左上角）。
+    ///
+    /// ## 为什么以前没有这个
+    ///
+    /// 她报过两次。第一次：「clawd 的穿戴比如贝雷帽被当成家具放在房间里，
+    /// 实际上应该给他直接穿上。」——那次加了 `ClawdStore.wearing` 这个槽，
+    /// 存是存下了。
+    ///
+    /// 可**没有任何一个视图去读它**。她这次说「穿衣服也是像图上这样，
+    /// 不是一成不变的一个纸片」——去查了一下，`wornKind` 全项目零处引用：
+    /// 帽子买了、穿上了、存下来了，**然后就再也没出现过**。
+    ///
+    /// ⚠️ 记一句：**存下来不等于画出来。** 加一个字段很容易，
+    /// 而「谁去读它」是另一件必须单独做完的事。
+    ///
+    /// ## 怎么定位
+    ///
+    /// 图纸 32 格宽、23 格高（见 `ClawdSprites`）：
+    /// 身子 4..27 列，脸在第 5..8 行，脚在最底下几行。
+    /// 所以帽子在头顶偏上、眼镜压在眼睛那一行、围巾在下巴底下、
+    /// 靴子贴着脚、背包挂在身后偏一侧。
+    static func wearAt(_ id: String, itemW: CGFloat, itemH: CGFloat) -> CGPoint {
+        let midX = CGFloat(bodyLeft + bodyRight + 1) / 2
+        switch id {
+        case "hat", "beret":
+            // 扣在头顶：横着居中，竖着**压住最上那一行**，别浮在头顶上方
+            return CGPoint(x: midX - itemW / 2, y: -itemH + 3)
+        case "glasses":
+            // 眼睛在第 5..7 行，镜框压在那一片上
+            return CGPoint(x: midX - itemW / 2, y: 5)
+        case "bowtie":
+            return CGPoint(x: midX - itemW / 2, y: 11)
+        case "scarf":
+            // 围巾绕在脖子那一圈——比领结低一点、宽一点
+            return CGPoint(x: midX - itemW / 2, y: 10)
+        case "bag":
+            // 背包**挂在身后偏一侧**，露出一半才看得出是背着的
+            return CGPoint(x: CGFloat(bodyRight) - itemW * 0.55, y: 9)
+        case "boots":
+            // 贴着脚。图纸 23 行高，脚在最底下
+            return CGPoint(x: midX - itemW / 2, y: 23 - itemH)
+        default:
+            return CGPoint(x: midX - itemW / 2, y: 8)
+        }
     }
 
     /// 一件东西**该怎么拿**。

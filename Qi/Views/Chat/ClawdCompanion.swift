@@ -132,6 +132,13 @@ struct ClawdRoamer: View {
                 // 喝和摇晃是**真的在动**（`beat` 驱动），不是配一句台词。
                 ClawdRigView(mood: room.carrying == nil ? mood : .carrying,
                              item: room.carriedKind?.sprite,
+                             // 身上穿戴的那件。**以前这一项根本没传**——
+                             // 帽子买了、穿上了、存进 `ClawdStore.wearing` 了，
+                             // 然后就再也没出现过（`wornKind` 全项目零处引用）。
+                             // 她报了两次，第二次是「穿衣服也是像图上这样，
+                             // 不是一成不变的一个纸片」。
+                             worn: room.wornKind?.sprite,
+                             wornID: room.wearing ?? "",
                              pose: carryPose,
                              scale: 1.1,
                              beat: rigBeat,
@@ -561,11 +568,34 @@ struct ClawdRoamer: View {
     //
     // 一只永远精神的宠物是个摆件，**会困的那只才像跟她过同一个作息**。
 
-    /// 多久没说话就开始困（秒）。八分钟——比「她走开一下」长，
-    /// 比「她今天不聊了」短。
-    private let drowsyAfter: Double = 8 * 60
+    /// 多久没说话就开始困（秒）。
+    ///
+    /// ⚠️⚠️ 八分钟改成四十分钟，**而且只在该睡的钟点才算**。
+    ///
+    /// 她报的：「现在说的最多的话就是困了，大白天也说困。」
+    ///
+    /// 一点没错，而且原因很直白：**这一整段只看「她多久没说话」，
+    /// 一个小时都没看过**。下午两点她八分钟没打字，他就打哈欠。
+    /// 而八分钟在白天根本不算「安静」——她可能只是在开会、在洗碗、
+    /// 在看这条消息想怎么回。
+    ///
+    /// 困是**跟作息绑在一起**的，不是跟「有没有人理我」绑在一起。
+    /// 一只白天犯困的宠物不像跟她过同一个作息，像坏了。
+    private let drowsyAfter: Double = 40 * 60
     /// 再过多久真睡着
-    private let sleepAfter: Double = 3 * 60
+    private let sleepAfter: Double = 8 * 60
+
+    /// 这会儿是该困的钟点吗。
+    ///
+    /// 23 点到早上 7 点。这之外再安静也只是「她今天忙」，不是「夜深了」。
+    ///
+    /// ⚠️ 白天的长时间安静**不是没有反应**——他会去做自己的事
+    /// （扫地、发呆、走两步，见 `ownThings`）。
+    /// 那才是「她不在的时候他也存在」，而不是「她不在他就昏过去」。
+    private var bedtimeNow: Bool {
+        let h = Calendar.current.component(.hour, from: Date())
+        return h >= 23 || h < 7
+    }
 
     /// 开始数困。**每次她说话都要重新数**。
     private func armSleep() {
@@ -579,6 +609,9 @@ struct ClawdRoamer: View {
             if Task.isCancelled { return }
             // 他正忙着的时候不困——有人在说话呢
             guard !busy, !held, !peeking else { return }
+            // ⚠️ **不到钟点就不困。** 白天再安静也只是她忙，
+            // 那时候他该去做自己的事，不该打哈欠（见 `bedtimeNow`）。
+            guard bedtimeNow else { return }
             mood = .drowsy
             say(["唔……有点困", "呼啊——", "眼睛睁不开了"].randomElement() ?? "有点困")
 
