@@ -1309,6 +1309,14 @@ struct PulsePane: View {
     @State private var offline = false
     @State private var loading = false
     @State private var error: String?
+    /// 连着失败五次，这一页**不再往那台服务器发请求了**。
+    ///
+    /// 一个连不上的地址，多打一百次也还是连不上，
+    /// 只是把她那台机器和这只手机的电一起耗掉。
+    /// 停下来之后界面上说一句，她下拉才重来。
+    @State private var stalled = false
+    /// 轮询重开了几次。`task(id:)` 认它——加一就是重新起一遍。
+    @State private var pollRun = 0
     @State private var history: [PulseAPI.HistoryPoint] = []
 
     private var base: String { app.settings.pulseBaseURL }
@@ -1326,13 +1334,21 @@ struct PulsePane: View {
                 HStack {
                     Text("阿晏现在").heading(15)
                     if offline {
-                        Text("电脑没开")
+                        // 停下来之后要说清楚**是我们不再问了**，
+                        // 不然她会以为这一页坏了、或者以为数字是新的。
+                        Text(stalled ? "停了 · 点右边重来" : "电脑没开")
                             .font(.app(10, weight: .medium))
                             .padding(.horizontal, 7).padding(.vertical, 3)
                             .background(Capsule().fill(Color.orange.opacity(0.25)))
                     }
                     Spacer()
-                    Button { Task { await load() } } label: {
+                    Button {
+                        // 手动这一下**把闸重新合上**：连着失败停掉之后，
+                        // 只有这儿能让它重新开始问。
+                        stalled = false
+                        pollRun += 1        // 把那个轮询重新起一遍
+                        Task { await load() }
+                    } label: {
                         if loading { ProgressView() } else { Image(systemName: "arrow.clockwise") }
                     }
                     .buttonStyle(.plain)
@@ -1411,7 +1427,10 @@ struct PulsePane: View {
                 .glassCard()
             }
         }
-        .task {
+        // ⚠️ `task(id:)` 而不是 `task {}`：停下来之后，
+        // 她按刷新会把 `pollRun` 加一，这个 task 才会**重新起一遍**。
+        // 光把 `stalled` 清掉是不够的——那个循环已经 return 了，没人再唤醒它。
+        .task(id: pollRun) {
             // ⚠️ **要一直刷**，不能只在进页面时读一次。
             //
             // 她报的：「心率好像卡住了，一直保持着 87 的心跳、20 的呼吸。」
@@ -1421,9 +1440,40 @@ struct PulsePane: View {
             //
             // 六秒一次：那个噪声的周期是 45 秒，六秒能看出起伏，
             // 又不至于跳得像秒表。走本机那套的时候一次网络都不发。
+            // ⚠️⚠️ **失败要退避，连着失败要放弃。**
+            //
+            // 上一版是死板的「六秒一次，永远」：服务器挂了照样六秒一发，
+            // 只要这一页开着就一直打过去。那正是那篇运维复盘骂的东西——
+            // 「报错了重试，限流警告了重试，撤销 token 了接着重试，
+            // 　服务都挂了还在契而不舍地打过来」。
+            //
+            // 这是**她自己的那台小服务器**，不是别人的，但道理一样：
+            // 一个连不上的地址，多打一百次也还是连不上，
+            // 只是把她那台机器和这只手机的电一起耗掉。
+            //
+            // 现在：成功就六秒一轮；失败就翻倍往后退（6→12→24→…封顶两分钟）；
+            // 连着失败五次就**彻底停下**，界面上说一句，她下拉才重来。
+            var wait: UInt64 = 6
+            var fails = 0
             while !Task.isCancelled {
+                let before = offline
                 await load()
-                try? await Task.sleep(nanoseconds: 6_000_000_000)
+                // `load()` 连不上的时候会把 `offline` 立起来（有缓存），
+                // 或者写 `error`（没缓存）。两种都算这一轮没成。
+                let failed = offline || error != nil
+                if failed {
+                    fails += 1
+                    if fails >= 5 {
+                        stalled = true
+                        return          // ⚠️ **真的退出，不是继续空转**
+                    }
+                    wait = min(120, wait * 2)
+                } else {
+                    if before { wait = 6 }   // 刚缓过来，回到正常节奏
+                    fails = 0
+                    wait = 6
+                }
+                try? await Task.sleep(nanoseconds: wait * 1_000_000_000)
             }
         }
     }
