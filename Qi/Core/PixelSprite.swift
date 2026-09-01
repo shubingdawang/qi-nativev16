@@ -223,64 +223,141 @@ enum ClawdSprites {
         "....ppp..ppp........ppp..ppp...."
     ], palette)
 
-    /// 扫地：扫头在左边
+    // MARK: 扫地
+    //
+    // ⚠️⚠️ 这四帧是 `scripts/画扫地.py` 算出来的，**别手改**。
+    // 手打 3×23 行像素，错一格就是扫把插进腿里，看图看不出来。
+    //
+    // ## 上一版错在哪儿
+    //
+    // 她报的：「聊天页的 clawd 扫地的时候是一只手上拿着棍子（扫把的柄），
+    // 下面黄色的自己在左右动，根本不是扫地。做动作是要连接上身体的，
+    // 不是一直让 clawd 保持直挺挺的。」
+    //
+    // 她说得一点没错，去数一下那两帧就看得见：
+    //   · **杆（`n`）在两帧里一格都没动**——都钉在第 29..31 列那条竖线上
+    //   · **稻草（`t`）从最左边瞬移到最右边**——中间隔着整个身子
+    //   · **身子两帧一模一样**——一根手指头都没动
+    //
+    // 也就是说那根本不是一把扫把：是一根杵着不动的棍子，
+    // 外加一块自己在地上左右横跳的黄色。
+    //
+    // ## 现在这版
+    //
+    //   · 杆是**一条真的斜线**，上头在手里、下头连着稻草。
+    //     扫到哪儿，杆就斜到哪儿——这是「连着」的意思。
+    //   · 稻草接在杆的下端，跟着杆走，不再自己动。
+    //   · **身子跟着倾**（上半身左右，腿钉在地上不动）：
+    //     人扫地是上半身在带，脚是不挪的。
+    //   · 四帧走「左-中-右-中」一个来回，不是两帧左右跳。
+    //     两帧的话眼睛只看得见「弹」，看不见「扫」。
+
+    /// 扫地：甩到左边，身子跟着往左倾
     static let sweep1 = PixelSprite([
-        "....pppppppppppppppppppppppp....",
-        "....pppppppppppppppppppppppp....",
-        "....pppppppppppppppppppppppp....",
-        "....pppppppppppppppppppppppp..n.",
-        "....pppppppppppppppppppppppp..n.",
-        "....pppkkkppppppppppppkkkppp..n.",
-        "pppppppkkkppppppppppppkkkpppppnp",
-        "pppppppkkkppppppppppppkkkpppppnp",
-        "ppppppppppppppppppppppppppppppnp",
-        "ppppppppppppppppppppppppppppppnp",
-        "ppppppppppppppppppppppppppppppnp",
-        "....pppppppppppppppppppppppp..n.",
-        "....pppppppppppppppppppppppp..n.",
-        "....pppppppppppppppppppppppp.nn.",
-        "....pppppppppppppppppppppppp.nn.",
-        "....pppppppppppppppppppppppp.nn.",
-        "....pppppppppppppppppppppppp....",
-        "....ppp..ppp........ppp..ppp....",
-        "....ppp..ppp........ppp..ppp....",
-        "....ppp..ppp........ppp..ppp....",
-        "..ttppp..ppp........ppp..ppp....",
-        ".tttttp..ppp........ppp..ppp....",
-        "tttttttt.ppp........ppp..ppp...."
+        "...pppppppppppppppppppppppp.....",
+        "...pppppppppppppppppppppppp.....",
+        "...pppppppppppppppppppppppp.....",
+        "...pppppppppppppppppppppppp.....",
+        "...pppppppppppppppppppppppp.....",
+        "...pppkkkppppppppppppkkkppp.....",
+        "ppppppkkkppppppppppppkkkppppppp.",
+        "ppppppkkkppppppppppppkkkppppppp.",
+        "ppppppppppppppppppppppppppppppp.",
+        "ppppppppppppppppppppppppppppppp.",
+        "ppppppppppppppppppppppppppppppnn",
+        "...pppppppppppppppppppppppp..nn.",
+        "...pppppppppppppppppppppppp.nn..",
+        "...ppppppppppppppppppppppppnn...",
+        "...ppppppppppppppppppppppnnn....",
+        "...pppppppppppppppppppppnpp.....",
+        "...ppppppppppppppppppppnppp.....",
+        "....ppp..ppp........ppnn.ppp....",
+        "....ppp..ppp........pnp..ppp....",
+        "....ppp..ppp........npp..ppp....",
+        "....ppp..ppp......ttttt..ppp....",
+        "....ppp..ppp.....ttttttt.ppp....",
+        "....ppp..ppp....tttttttttppp...."
     ], palette)
 
-    /// 扫地：扫头甩到右边。
-    ///
-    /// ⚠️ **两帧的差别要足够大。** 她报的：
-    /// 「扫把很小很小，跟他本体不符合，太小导致动的幅度根本看不见，
-    ///   我一直观察才发现扫把有在左右晃动，没有真的在扫地的感觉。」
-    /// 以前扫头只有 4×2 格、两帧只差一格——那不叫扫地，叫抖了一下。
-    /// 现在扫头横跨八格，一帧甩到左下、一帧甩到右下，隔着屏幕也看得出在扫。
+    /// 扫地：扫到中间，身子直起来
     static let sweep2 = PixelSprite([
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
-        "....pppppppppppppppppppppppp..n.",
-        "....pppppppppppppppppppppppp..n.",
-        "....pppkkkppppppppppppkkkppp..n.",
-        "pppppppkkkppppppppppppkkkpppppnp",
-        "pppppppkkkppppppppppppkkkpppppnp",
-        "ppppppppppppppppppppppppppppppnp",
-        "ppppppppppppppppppppppppppppppnp",
-        "ppppppppppppppppppppppppppppppnp",
-        "....pppppppppppppppppppppppp..n.",
-        "....pppppppppppppppppppppppp..n.",
-        "....pppppppppppppppppppppppp.nn.",
-        "....pppppppppppppppppppppppp.nn.",
-        "....pppppppppppppppppppppppp.nn.",
         "....pppppppppppppppppppppppp....",
-        "....ppp..ppp........ppp..ppp....",
-        "....ppp..ppp........ppp..ppp....",
-        "....ppp..ppp........ppp..ppp....",
-        "....ppp..ppp........ppp..ppptt..",
-        "....ppp..ppp........ppp..pttttt.",
-        "....ppp..ppp........ppp.tttttttt"
+        "....pppppppppppppppppppppppp....",
+        "....pppkkkppppppppppppkkkppp....",
+        "pppppppkkkppppppppppppkkkppppppp",
+        "pppppppkkkppppppppppppkkkppppppp",
+        "pppppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppppp",
+        "ppppppppppppppppppppppppppppppnp",
+        "....pppppppppppppppppppppppp.nn.",
+        "....pppppppppppppppppppppppp.nn.",
+        "....ppppppppppppppppppppppppnn..",
+        "....ppppppppppppppppppppppppnn..",
+        "....pppppppppppppppppppppppnn...",
+        "....pppppppppppppppppppppppnn...",
+        "....ppp..ppp........ppp..pnp....",
+        "....ppp..ppp........ppp..pnp....",
+        "....ppp..ppp........ppp..npp....",
+        "....ppp..ppp........pppttttt....",
+        "....ppp..ppp........ppttttttt...",
+        "....ppp..ppp........pttttttttt.."
+    ], palette)
+
+    /// 扫地：甩到右边，身子往右倾
+    static let sweep3 = PixelSprite([
+        ".....pppppppppppppppppppppppp...",
+        ".....pppppppppppppppppppppppp...",
+        ".....pppppppppppppppppppppppp...",
+        ".....pppppppppppppppppppppppp...",
+        ".....pppppppppppppppppppppppp...",
+        ".....pppkkkppppppppppppkkkppp...",
+        ".pppppppkkkppppppppppppkkkpppppp",
+        ".pppppppkkkppppppppppppkkkpppppp",
+        ".ppppppppppppppppppppppppppppppp",
+        ".ppppppppppppppppppppppppppppppp",
+        ".ppppppppppppppppppppppppppppppn",
+        ".....pppppppppppppppppppppppp..n",
+        ".....pppppppppppppppppppppppp..n",
+        ".....pppppppppppppppppppppppp.nn",
+        ".....pppppppppppppppppppppppp.nn",
+        ".....pppppppppppppppppppppppp.nn",
+        ".....pppppppppppppppppppppppp.nn",
+        "....ppp..ppp........ppp..ppp.nn.",
+        "....ppp..ppp........ppp..ppp.nn.",
+        "....ppp..ppp........ppp..ppp.nn.",
+        "....ppp..ppp........ppp..ppttttt",
+        "....ppp..ppp........ppp..ptttttt",
+        "....ppp..ppp........ppp..ttttttt"
+    ], palette)
+
+    /// 扫地：收回中间。跟第二帧同一个姿势，所以一个来回是「左-中-右-中」，不是左右跳
+    static let sweep4 = PixelSprite([
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppppppppppppppppppppppp....",
+        "....pppkkkppppppppppppkkkppp....",
+        "pppppppkkkppppppppppppkkkppppppp",
+        "pppppppkkkppppppppppppkkkppppppp",
+        "pppppppppppppppppppppppppppppppp",
+        "pppppppppppppppppppppppppppppppp",
+        "ppppppppppppppppppppppppppppppnp",
+        "....pppppppppppppppppppppppp.nn.",
+        "....pppppppppppppppppppppppp.nn.",
+        "....ppppppppppppppppppppppppnn..",
+        "....ppppppppppppppppppppppppnn..",
+        "....pppppppppppppppppppppppnn...",
+        "....pppppppppppppppppppppppnn...",
+        "....ppp..ppp........ppp..pnp....",
+        "....ppp..ppp........ppp..pnp....",
+        "....ppp..ppp........ppp..npp....",
+        "....ppp..ppp........pppttttt....",
+        "....ppp..ppp........ppttttttt...",
+        "....ppp..ppp........pttttttttt.."
     ], palette)
 
     /// 甜：眯着眼笑，腮红。爱心是界面上飘的，不画进图纸
@@ -874,7 +951,11 @@ enum ClawdMood: String, Codable {
         case .loving:
             return [(ClawdSprites.sweet, 1.1), (ClawdSprites.happy, 0.5)]
         case .sweeping:
-            return [(ClawdSprites.sweep1, 0.4), (ClawdSprites.sweep2, 0.4)]
+            // 一个来回：左 → 中 → 右 → 中。
+            // 中间那两帧短一点——扫把甩过中段本来就快，
+            // 四帧等长会显得像节拍器。
+            return [(ClawdSprites.sweep1, 0.22), (ClawdSprites.sweep2, 0.16),
+                    (ClawdSprites.sweep3, 0.22), (ClawdSprites.sweep4, 0.16)]
         }
     }
 }

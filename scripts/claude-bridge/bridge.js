@@ -248,10 +248,15 @@ function freeSlot() {
 
 /**
  * @param onText 每收到一小段正文就回调一次
+ * @param onReason 每收到一小段**思考**就回调一次。
+ *   ⚠️ 这一路以前整个是缺的：只接了 `text_delta`，`thinking_delta` 一个字没接，
+ *   于是 App 那边 `reasoning` 永远是空的。她报的
+ *   「目前 cot 块不怎么出现了，他有用 cot，我问了怎么看不见 thinking」
+ *   就是这儿——不是他没想，是想的那一段根本没出电脑。
  * @returns {Promise<{text:string, usage:object|null, error:string|null,
  *                    limit:object|null, cost:number|null}>}
  */
-function runClaude({ system, prompt, model, needsRead }, onText) {
+function runClaude({ system, prompt, model, needsRead }, onText, onReason) {
   return new Promise(resolve => {
     const sysFile = path.join(TMP, `sys-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`);
     fs.writeFileSync(sysFile, system, 'utf8');
@@ -335,6 +340,7 @@ function runClaude({ system, prompt, model, needsRead }, onText) {
     child.stdin.on('error', () => {});
 
     let text = '';
+    let think = '';      // 想的那一段，跟正文分开攒
     let usage = null;
     let limit = null;      // 额度（rate_limit_event）
     let cost = null;       // 这一轮折合多少美金（claude 自己算的）
@@ -369,6 +375,12 @@ function runClaude({ system, prompt, model, needsRead }, onText) {
         if (ev.type === 'stream_event' && ev.event && ev.event.type === 'content_block_delta') {
           const d = ev.event.delta || {};
           if (d.type === 'text_delta' && d.text) { text += d.text; onText(d.text); }
+          // 想的那一段。跟正文分开走——App 那边它落在 `reasoning` 里，
+          // 是「思考链」那张卡的内容，不是气泡里的话。
+          if (d.type === 'thinking_delta' && d.thinking && onReason) {
+            think += d.thinking;
+            onReason(d.thinking);
+          }
           continue;
         }
 
@@ -380,6 +392,11 @@ function runClaude({ system, prompt, model, needsRead }, onText) {
             if (b.type === 'text' && b.text && !text.includes(b.text)) {
               text += b.text;
               onText(b.text);
+            }
+            if (b.type === 'thinking' && b.thinking && !think.includes(b.thinking)
+                && onReason) {
+              think += b.thinking;
+              onReason(b.thinking);
             }
           }
           continue;
@@ -517,6 +534,17 @@ async function handleChat(req, res, body) {
     }
   };
 
+  // 想的那一段。**跟正文走不同的字段**——
+  // App 那边 `reasoning_content` 落进 `message.reasoning`，
+  // 是「思考链」那张卡的内容；`content` 才是气泡里她看得见的话。
+  //
+  // ⚠️ 思考**不过 `holdBack`/`visiblePart`**：那两个是为了不让她看见
+  // 半截 ```tool_call``` 围栏，而围栏只会出现在正文里。
+  const onReason = piece => {
+    if (!wantsStream || !piece) return;
+    sse(res, chunkOf(id, model, { reasoning_content: piece }, null));
+  };
+
   let result;
   try {
     result = await runClaude({
@@ -524,7 +552,7 @@ async function handleChat(req, res, body) {
       prompt,
       model: pickModel(model),
       needsRead: imgBag.length > 0
-    }, onText);
+    }, onText, onReason);
   } finally {
     freeSlot();
     for (const f of imgBag) { try { fs.unlinkSync(f); } catch (e) {} }

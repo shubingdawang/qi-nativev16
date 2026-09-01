@@ -129,6 +129,13 @@ struct RootView: View {
         .onAppear {
             // 札记、设置这些页面导航常驻，不然翻着翻着就出不去了
             if selection > 1 { navOpen = true }
+            // ⚠️ **冷启动那一下要在这儿再兑现一次。**
+            //
+            // 点横幅把 App 从零拉起来的时候，`openConversationID` 是在
+            // 这一页画出来**之前**就设好的——`.onChange` 只认「变化」，
+            // 值早就在那儿了，它一次都不会响。
+            // 于是通知代理明明收到了，页面还是停在默认那一页。
+            openFromBanner()
         }
         .onChange(of: selection) { _, v in
             if v > 1 {
@@ -143,15 +150,22 @@ struct RootView: View {
         .onChange(of: notifier.pendingNudge) { _, pending in
             if pending { WakeEngine.shared.consumeNudgeIfNeeded() }
         }
-        // 从横幅点进来的，直接翻到他说话的那个窗口
-        .onChange(of: notifier.openConversationID) { _, id in
-            guard let id else { return }
-            selection = 0
-            app.setActive(id, for: .chat)
-            notifier.openConversationID = nil
-        }
+        // 从横幅点进来的，直接翻到他说话的那个窗口。
+        // App 已经开着的时候走这条；冷启动走上面 `onAppear` 那条。
+        .onChange(of: notifier.openConversationID) { _, _ in openFromBanner() }
 
 
+    }
+
+    /// 从横幅点进来那一下：翻到他说话的那个窗口。
+    ///
+    /// 冷启动和「App 已经开着」两条路都叫这一个，
+    /// 叫两遍也没事——兑现完就把 `openConversationID` 清了。
+    private func openFromBanner() {
+        guard let id = notifier.openConversationID else { return }
+        notifier.openConversationID = nil
+        selection = 0
+        app.setActive(id, for: .chat)
     }
 }
 

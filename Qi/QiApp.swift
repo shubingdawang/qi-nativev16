@@ -100,7 +100,24 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             }
             Self.handleProcessing(p)
         }
-        Task { @MainActor in
+        // ⚠️⚠️ **这一句必须在这个函数返回之前跑完，不能塞进 `Task {}`。**
+        //
+        // 她报的：「自动唤醒成功了，但是我点击他的横幅弹窗，
+        // 并没有跳转到 app。」
+        //
+        // 病根：以前这儿是 `Task { @MainActor in bootstrap() }`。
+        // 「点横幅冷启动」这条路上，系统是**在 `didFinishLaunching` 返回的
+        // 那一刻**把这一下点击交给 `UNUserNotificationCenter.delegate` 的——
+        // 那时候 `Task` 还排在下一轮 runloop 里，`delegate` 还是 nil，
+        // 于是这一下点击**被直接丢掉**，谁都收不到。
+        // App 照常起来，但停在默认那一页，看着就是「点了没跳」。
+        //
+        // App 已经开着的时候不受影响（delegate 早就挂上了），
+        // 所以这个坑只在她锁屏点进来的时候露出来。
+        //
+        // `assumeIsolated`：这个回调本来就在主线程上，
+        // 只是编译器不知道——不用为了它绕一圈异步。
+        MainActor.assumeIsolated {
             Notifier.shared.bootstrap()
         }
         return true

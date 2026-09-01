@@ -12,29 +12,65 @@ struct ChatView: View {
 
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
+    /// 退到后台的时候把草稿存回去，见 `stashDraft()`
+    @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var keyboard = KeyboardWatcher.shared
 
     @State private var drawerOpen = false
     @State private var sideOpen = false
     @State private var destination: SideMenuItem?
     @State private var showingSearch = false
-    /// 输入框里的字。**存在 AppState 里，不是 @State**——
-    /// 见 `AppState.drafts` 那段：切去设置页再回来不能白打。
+    /// 输入框里的字。
     ///
-    /// 写成计算属性（不是 Binding），这样底下几十处 `draft = …`、
-    /// `draft.hasSuffix(…)` 一个字都不用改；TextField 那儿单独给它一个
-    /// `draftBinding`。
+    /// ⚠️ **敲字只动这个本地 `@State`，不动 `app.drafts`。**
+    ///
+    /// 她报的：「聊天非常卡顿，就连我打字都一卡一卡的。」
+    /// 原来这儿是个读写 `app.drafts` 的计算属性——`drafts` 是
+    /// `AppState` 上的 `@Published`，于是**每敲一个字就等于通知全 App
+    /// 重新求值一遍**：一屏消息、侧边栏、输入栏、悬浮窗，全部跟着走一轮。
+    /// 打字是所有交互里频率最高的一件事，这个代价直接顶在指尖上。
+    ///
+    /// 存回 `app.drafts` 的时机改成**离开这段对话的时候**
+    /// （切窗口 / 退到后台 / 页面消失），见 `stashDraft()`。
+    /// 「切去设置页再回来不能白打」照样成立，因为那时候页面已经走了 `onDisappear`。
+    @State private var draftText: String = ""
+    /// 现在这份草稿是哪段对话的。切窗口的时候靠它把旧的存回去。
+    @State private var draftOwner: UUID?
+
     private var draft: String {
-        get { app.drafts[draftKey] ?? "" }
-        nonmutating set { app.drafts[draftKey] = newValue }
+        get { draftText }
+        nonmutating set { draftText = newValue }
     }
     private var draftKey: UUID { activeConversation?.id ?? Self.noConversation }
     private static let noConversation = UUID()
-    private var draftBinding: Binding<String> {
-        Binding(get: { draft }, set: { draft = $0 })
+    private var draftBinding: Binding<String> { $draftText }
+
+    /// 把手里这份存回 `AppState`，再把新那段对话的取出来。
+    /// 只在换窗口/离开页面的时候调，一次打字过程里一次都不会走到。
+    private func syncDraft(to key: UUID) {
+        if let owner = draftOwner, owner != key {
+            if draftText.isEmpty { app.drafts[owner] = nil }
+            else { app.drafts[owner] = draftText }
+        }
+        if draftOwner != key {
+            draftText = app.drafts[key] ?? ""
+            draftOwner = key
+        }
     }
+
+    private func stashDraft() {
+        guard let owner = draftOwner else { return }
+        if draftText.isEmpty { app.drafts[owner] = nil }
+        else { app.drafts[owner] = draftText }
+    }
+
     /// 她在打字。列表看见它变就滚到底。
+    ///
+    /// ⚠️ **不是每个字都递一次。** 每递一次，整个消息列表要重新求值、
+    /// 还要跑一段 `withAnimation` 的滚动——一秒钟五六下，就是她说的那种一卡一卡。
+    /// 真正需要滚的只有「输入栏长高了一行」那一下，见 `bumpTypingIfGrew`。
     @State private var typingTick = 0
+
     @FocusState private var inputFocused: Bool
     /// 从聊天记录点进来的那一条，滚到它那儿并闪一下
     @State private var jumpTo: UUID?
@@ -264,6 +300,9 @@ struct ChatView: View {
                                     var t = Transaction()
                                     t.disablesAnimations = true
                                     withTransaction(t) { composerHeight = h }
+                                    // 输入栏长高/变矮了，底下那几条会被顶出去——
+                                    // **打字期间只有这一下需要滚**。
+                                    typingTick += 1
                                 }
                         })
                     }
@@ -386,9 +425,20 @@ struct ChatView: View {
         .onAppear {
             app.ensureActive(in: space)
             if space == .chat { app.isChatVisible = true }
+            // 把这段对话上次没打完的那半句取回来
+            syncDraft(to: draftKey)
         }
         .onDisappear {
             if space == .chat { app.isChatVisible = false }
+            // 走的时候才存。打字期间一次都不写 `app.drafts`——
+            // 它是 `@Published`，每写一次全 App 重新求值一遍。
+            stashDraft()
+        }
+        // 换了一段对话：旧的那份存回去，新的那份取出来
+        .onChange(of: draftKey) { _, key in syncDraft(to: key) }
+        // 退到后台也存一次，免得直接被系统回收掉就白打了
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { stashDraft() }
         }
         .onChange(of: pickedItems) { _, items in loadPicked(items) }
         // ⚠️⚠️ **这七张合成了一张**（见 `ChatPanel`）。
@@ -914,7 +964,13 @@ struct ChatView: View {
                 .onChange(of: draft) { old, text in
                     // 她一开始打字，列表就滑到最底下。
                     // 以前不滑，打字的时候最后那几条被键盘顶上去看不见了。
-                    typingTick += 1
+                    //
+                    // ⚠️ **这儿不再递 `typingTick` 了。**
+                    // 真正需要滚的只有「输入栏长高了一行」那一下，
+                    // 而那一下 `composerHeight` 会变——就在量高度那儿递（见上面）。
+                    // 每个字递一次的话，整个消息列表要重新求值、
+                    // 还要跑一段带动画的滚动，一秒五六下，
+                    // 就是她说的「打字都一卡一卡的」。
                     // 打字的节奏。**只递字数，不递内容**——
                     // 写成字数不是为了省事，是为了那边拿不到内容：
                     // 拿得到就迟早会有人顺手用上。

@@ -894,30 +894,50 @@ struct MessageBubbleView: View {
         // 出的是收藏／引用／删除那条横菜单。
         // 图片、文件那几处本来就是 `onTapGesture`，所以它们是好的。
         return VStack {
-            HStack(spacing: 9) {
-                Image(systemName: playing ? "stop.fill" : "play.fill")
-                    .font(.app(12))
-                    .foregroundStyle(app.settings.accentColor)
-
-                // 几根高低不一的竖条，装个声波的样子。
-                // 根数跟着时长走——三秒和四十秒不该长得一样。
-                HStack(spacing: 2.5) {
-                    ForEach(0..<waveCount(seconds), id: \.self) { i in
-                        Capsule()
-                            .fill(app.settings.accentColor.opacity(playing ? 0.85 : 0.45))
-                            .frame(width: 2, height: waveHeight(i))
-                    }
+            HStack(spacing: 8) {
+                // 发出去的那条：空白在左，记号顶到右边；收到的反过来。
+                if isUser { Spacer(minLength: 0) }
+                // 发出去的那条：秒数在左、记号在右（跟微信一个方向，
+                // 记号永远靠着自己那一侧的气泡尖）。收到的反过来。
+                if isUser {
+                    Text("\(seconds)\u{2033}")
+                        .font(.app(12))
+                        .foregroundStyle(Theme.textMuted(scheme))
                 }
 
-                Text("\(seconds)″")
-                    .font(.app(11))
-                    .foregroundStyle(Theme.textMuted(scheme))
+                // ⚠️ **只有这一个记号，没有波形。**
+                //
+                // 她定的：「语音和语音的文字我想改成这种微信式的，
+                // 只显示一个类似信号的，然后秒数，
+                // 语音条根据秒数决定长短，下方是语音的文字内容。」
+                //
+                // 以前这儿是「播放键 + 十几根高低不一的竖条」。
+                // 那些竖条是**装出来的**——高度是一组写死的数，
+                // 跟这一条到底录了什么毫无关系。装一个假的波形，
+                // 不如就一个记号说清楚「这是一段语音」。
+                Image(systemName: "dot.radiowaves.right")
+                    .font(.app(15))
+                    .foregroundStyle(app.settings.accentColor)
+                    // 收到的那条记号朝右（指向条子里），发出去的朝左
+                    .rotationEffect(.degrees(isUser ? 180 : 0))
+                    // 放的时候那几道波自己一圈圈跑。
+                    // 系统自带的效果：不用开定时器、不改任何状态，
+                    // 页面看不见的时候系统自己会停。
+                    .symbolEffect(.variableColor.iterative, isActive: playing)
+
+                if !isUser {
+                    Text("\(seconds)\u{2033}")
+                        .font(.app(12))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+
+                if !isUser { Spacer(minLength: 0) }
             }
-            .padding(.horizontal, 15)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
             .frame(width: voiceWidth(seconds), alignment: .leading)
-            .glassBackground(radius: 22, strength: app.settings.glassOpacity)
-            .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .glassBackground(radius: 18, strength: app.settings.glassOpacity)
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .onTapGesture { VoicePlayer.shared.toggle(message.voiceName) }
         }
     }
@@ -926,23 +946,15 @@ struct MessageBubbleView: View {
     /// 以前一律 230，三秒和四十秒长得一模一样，看不出哪条更长。
     ///
     /// 微信那种是「越长越宽，但有上限」：
-    /// 一秒起步 120，之后每秒加 5，最宽到 260 就不再长了。
+    /// 一秒起步 76，之后每秒加 4.2，最宽到 240 就不再长了。
     /// 再宽就顶到屏幕边，反而不好看。
+    ///
+    /// ⚠️ 起步那个数比以前小了一截（120 → 76）：
+    /// 条子里现在只剩一个记号和秒数，还按原来的宽度画，
+    /// 一秒的语音会是一条中间空着一大半的长条。
     private func voiceWidth(_ seconds: Int) -> CGFloat {
         let s = max(1, min(60, seconds))
-        return min(260, 120 + CGFloat(s) * 5)
-    }
-
-    /// 波形画几根。跟着宽度走，不然短条子里挤 14 根、长条子里又空着一截。
-    private func waveCount(_ seconds: Int) -> Int {
-        let usable = voiceWidth(seconds) - 100      // 减掉按钮、秒数和留白
-        return max(5, min(22, Int(usable / 4.5)))
-    }
-
-    /// 固定的一组高度，看着像波形又不会每次刷新都乱跳
-    private func waveHeight(_ i: Int) -> CGFloat {
-        let pattern: [CGFloat] = [6, 11, 8, 15, 10, 18, 12, 16, 9, 14, 7, 12, 8, 5]
-        return pattern[i % pattern.count]
+        return min(240, 76 + CGFloat(s) * 4.2)
     }
 
     /// 他抛过来的几个选项，点一下那句话就成了你的下一条消息
@@ -1119,9 +1131,29 @@ struct MessageBubbleView: View {
     // 为什么合并：这两块回答的是同一个问题（「他刚才干了什么」），
     // 分成两张卡，一轮就顶掉半屏，而且她要看全还得点两次。
 
-    /// 有没有东西可展开
+    /// 有没有东西可展开。
+    ///
+    /// ⚠️ **他自己起的那个名字（`[[cot:…]]`）也算一件事。**
+    ///
+    /// 她报的：「目前 cot 块不怎么出现了，他有用 cot，我问了怎么看不见
+    /// thinking，后面两次就有 cot 块，不问又没有了。」
+    ///
+    /// 病根在这一句只认 `reasoning` 和 `toolRuns`：
+    /// 有些供应商**不把思考过程回给我们**，而他那一轮又没动工具——
+    /// 于是他明明写了 `[[cot:…]]`，这张卡整个不出现，那句名字也跟着没了。
+    /// 她一追问，他下一轮就去查了点东西（有 `toolRuns` 了），卡又回来了，
+    /// 看着就像「问了才有」。
+    ///
+    /// 还有一条：**正在说的时候就要先摆出来**。
+    /// 她报的另一半是「cot 块并没有先出现，反而是文字先出现了」——
+    /// 流式的时候先有个「正在想…」占住位置，比等他说完再蹦出来一张卡自然。
     private var hasProcess: Bool {
-        !(message.reasoning ?? "").isEmpty || !message.toolRuns.isEmpty
+        if !(message.reasoning ?? "").isEmpty { return true }
+        if !message.toolRuns.isEmpty { return true }
+        if !message.cotTitle.isEmpty { return true }
+        if !parsed.cot.isEmpty { return true }
+        if message.isStreaming && !isUser { return true }
+        return false
     }
 
     @ViewBuilder
