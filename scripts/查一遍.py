@@ -21,7 +21,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HERE = os.path.join(ROOT, 'scripts')
 
 # 吃一串 .swift 路径的
-SWIFT = ['arginit', 'buildercheck', 'dupdecl', 'findbad', 'hitarea',
+SWIFT = ['arginit', 'buildercheck', 'comma', 'dupdecl', 'findbad', 'hitarea',
          'hotwrite', 'mdflank', 'mdwrap', 'presentcheck', 'scope',
          'isohard', 'pollcheck', 'selfeat', 'shapecheck', 'slowexpr', 'viewsize', 'cmp']
 # 自己知道该去哪儿找、不用给参数的

@@ -484,7 +484,7 @@ enum JournalKit {
         ("蝶11", "moth_11"),
         ("蝶12", "moth_12"),
         ("枝1", "sprig_01"),
-        ("枝2", "sprig_02")
+        ("枝2", "sprig_02"),
 
         // ── 第二批：可爱／日系那一路（Microsoft Fluent Emoji，MIT）
         //
