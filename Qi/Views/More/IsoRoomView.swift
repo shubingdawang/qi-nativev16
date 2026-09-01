@@ -62,6 +62,15 @@ struct IsoRoomView<Clawd: View>: View {
             // **同一个名字两个意思**了。所以叫 `geoRoom`。
             let geoRoom = IsoRoom.fit(in: geo.size)
 
+            // ⚠️ 整块**裁进屋子的轮廓里**（见 `IsoRoom.roomPath`）。
+            //
+            // 她指出来的：「注意靠墙的木家具，他们都有阴影，
+            // 阴影靠墙就在外面了。」——Kenney 那批图自带一层烘死的投影，
+            // 上一版让贴墙那排往墙里挪了半格，影子就跟着落到墙线外面去了。
+            //
+            // 不把家具挪回来（那她又贴不了墙），改成给屋子加一道边界：
+            // **超出轮廓的一律裁掉**。影子该被墙挡住的那部分自然没了，
+            // 家具照样贴着墙。
             ZStack(alignment: .topLeading) {
                 walls(geoRoom)
                 floor(geoRoom)
@@ -75,6 +84,13 @@ struct IsoRoomView<Clawd: View>: View {
                     }
                 }
             }
+            // ⚠️ 裁进屋子的轮廓（理由见上面 ZStack 那段）。
+            //
+            // `contentShape` 要单独补一句：`clipShape` 只管画出来的样子，
+            // **不改可点范围**——不补的话，被裁掉的那块还照样接触摸，
+            // 她点屋子外面一片空气，却选中了一件家具。
+            .clipShape(geoRoom.roomPath)
+            .contentShape(geoRoom.roomPath)
             // 拖到他身上的时候，在他脚下点一圈光——
             // **她得看得见「松手就是给他」**，不能靠猜
             .overlay(alignment: .topLeading) {
