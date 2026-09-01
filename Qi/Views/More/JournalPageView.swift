@@ -801,6 +801,33 @@ struct JournalPageView: View {
                     }
                 }
 
+                // ── 印章的图案。剪影，跟着她挑的颜色染（见 `stampAssets`）。
+                if e.kind == .stamp {
+                    ForEach(JournalKit.stampAssets, id: \.1) { name, file in
+                        Button {
+                            commit(e.id) { $0.assetName = file }
+                        } label: {
+                            Group {
+                                if let img = JournalKit.stampImage(file) {
+                                    Image(uiImage: img).resizable().scaledToFit()
+                                        .foregroundStyle(Theme.textSoft(scheme))
+                                } else {
+                                    Color.clear
+                                }
+                            }
+                            .frame(width: 26, height: 26)
+                            .padding(5)
+                            .background(RoundedRectangle(cornerRadius: 8,
+                                                         style: .continuous)
+                                .fill(e.assetName == file
+                                      ? app.settings.accentColor.opacity(0.25)
+                                      : Theme.softFillDeep))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(name)
+                    }
+                }
+
                 if e.kind == .sticker || e.kind == .stamp {
                     // 画出来的那几张。**摆在 emoji 前面**——
                     // 这一排才是新东西，摆后面她翻不到

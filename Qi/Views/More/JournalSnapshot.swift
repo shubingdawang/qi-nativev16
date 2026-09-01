@@ -89,9 +89,27 @@ struct JournalElementView: View {
                 }
 
             case .stamp:
-                // 邮票：锯齿边靠一圈白点做出来
-                Text(e.emoji.isEmpty ? "📮" : e.emoji)
-                    .font(.app(26))
+                // 邮票：锯齿边靠一圈白点做出来。
+                //
+                // 票面上那个图案：她挑了剪影就画剪影（`assetName`），
+                // 没挑才退回 emoji——老页面上的邮票全是 emoji，
+                // 不留这条退路它们会变成一张空票。
+                Group {
+                    if !e.assetName.isEmpty,
+                       let img = JournalKit.stampImage(e.assetName) {
+                        // ⚠️ **跟着她挑的颜色染。** 印章本来就是一个颜色的，
+                        // 而这批图正好是单色剪影（见 `stampAssets` 那段）。
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 32, height: 32)
+                            .foregroundStyle(e.color)
+                            .colorMultiply(e.color)
+                    } else {
+                        Text(e.emoji.isEmpty ? "\u{1F4EE}" : e.emoji)
+                            .font(.app(26))
+                    }
+                }
                     .frame(width: 54, height: 62)
                     .background {
                         ZStack {

@@ -365,6 +365,44 @@ enum JournalKit {
         ("长尾夹", "bull"), ("别针", "pin")
     ]
 
+
+    /// **印章的图案**：盖在纸上的那个剪影。
+    ///
+    /// 来源 game-icons.net，**CC BY 3.0**——可用可改可随包分发，
+    /// 但**要署名**（署名在 `Resources/Stamps/印章来历.txt` 里）。
+    ///
+    /// ⚠️ 这跟いらすとや不是一回事：那家**禁止再分发**（原文拿 LINE 表情包
+    /// 举例），所以只能她自己在手机上导；这家只要求署名，打包是允许的。
+    /// **「要署名」和「不许分发」是两种完全不同的限制**，
+    /// 别混成一句「有限制」——我上一轮就混过一次。
+    ///
+    /// ⚠️ 它们**跟着主题色染**，跟实物贴纸正相反：
+    /// 真印章本来就是一个颜色的，而一只蝴蝶翅膀上有七八种颜色，
+    /// 染一遍就成一坨单色了。两批的用法从根上不同，所以分开放。
+    static let stampAssets: [(String, String)] = [
+        ("橡果", "stamp_acorn"),
+        ("心", "stamp_ball_heart"),
+        ("书", "stamp_book_cover"),
+        ("书签", "stamp_bookmark"),
+        ("蝴蝶", "stamp_butterfly"),
+        ("烛台", "stamp_candle_holder"),
+        ("猫", "stamp_cat"),
+        ("樱桃", "stamp_cherry"),
+        ("咖啡", "stamp_coffee_cup"),
+        ("卷叶", "stamp_curled_leaf"),
+        ("信封", "stamp_envelope"),
+        ("落叶", "stamp_falling_leaf"),
+        ("羽毛", "stamp_feather"),
+        ("星", "stamp_flat_star"),
+        ("花盆", "stamp_flower_pot"),
+        ("房子", "stamp_house"),
+        ("蜂鸟", "stamp_hummingbird"),
+        ("情书", "stamp_love_letter"),
+        ("铅笔", "stamp_pencil"),
+        ("琴键", "stamp_piano_keys"),
+        ("线轴", "stamp_sewing_string"),
+    ]
+
     /// 邮票的样子
     static let stampStyles: [(String, String)] = [
         ("锯齿", ""), ("方章", "square"), ("圆戳", "round"),
@@ -528,6 +566,24 @@ enum JournalKit {
         guard let url = Bundle.main.url(forResource: name, withExtension: "png"),
               let img = UIImage(contentsOfFile: url.path) else { return nil }
         stickerCache.setObject(img, forKey: key)
+        return img
+    }
+
+    /// 印章那张剪影。跟贴纸分开一个缓存——
+    /// 它们不在同一个目录，也不在同一个用法上（这批要染色，那批不能染）。
+    ///
+    /// ⚠️ `NSCache` 不是字典：内存紧张的时候系统会自己清掉几张。
+    /// 用无上限的字典存着，翻几页手帐就把内存吃满了。
+    private static let stampCache = NSCache<NSString, UIImage>()
+
+    static func stampImage(_ name: String) -> UIImage? {
+        let key = name as NSString
+        if let hit = stampCache.object(forKey: key) { return hit }
+        guard let url = Bundle.main.url(forResource: name, withExtension: "png"),
+              let img = UIImage(contentsOfFile: url.path)?
+                .withRenderingMode(.alwaysTemplate)
+        else { return nil }
+        stampCache.setObject(img, forKey: key)
         return img
     }
 
