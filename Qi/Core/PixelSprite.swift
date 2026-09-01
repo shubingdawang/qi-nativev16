@@ -1096,9 +1096,12 @@ struct ClawdView: View {
                 .truncatingRemainder(dividingBy: 1)
             let plan = ClawdRig.plan(pose: pose, beat: beat, itemW: 0, itemH: 0)
             ZStack(alignment: .topLeading) {
-                PixelSpriteView(sprite: ClawdRig.stripArms(body), scale: scale)
+                // ⚠️⚠️ **手在下、身子在上**，跟 `ClawdRigView` 一样。
+                // 手有一半是埋在身子里的（`ClawdRig.arm` 那段注释说了为什么），
+                // 顺序反了那半截就糊在他脸上。
                 ClawdArmView(onLeft: true, angle: plan.leftArm, scale: scale)
                 ClawdArmView(onLeft: false, angle: plan.rightArm, scale: scale)
+                PixelSpriteView(sprite: ClawdRig.stripArms(body), scale: scale)
             }
             .frame(width: cols * scale, height: rows * scale, alignment: .topLeading)
         }

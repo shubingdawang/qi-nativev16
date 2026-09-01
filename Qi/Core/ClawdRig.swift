@@ -81,12 +81,16 @@ struct ClawdRigView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // 身子（手已经抠掉了）
-            PixelSpriteView(sprite: body0, scale: scale)
-
-            // 两只手
+            // ⚠️⚠️ **手在下、身子在上。顺序反了就前功尽弃。**
+            //
+            // 手加长到 8 格、里面 4 格埋进身子，靠的就是**身子盖住它**。
+            // 要是手画在身子上面，埋进去的那 4 格会直接糊在他脸上
+            // （眼睛在第 9..11 行，手在第 10..14 行，正好撞上）。
             arm(.left)
             arm(.right)
+
+            // 身子（图纸上原来那两块手已经抠掉了，见 `stripArms`）
+            PixelSpriteView(sprite: body0, scale: scale)
 
             // 身上穿戴的那件（帽子、眼镜、围巾、背包、靴子…）。
             //
@@ -174,13 +178,19 @@ struct ClawdArmView: View {
         let shoulderX: CGFloat = onLeft
             ? CGFloat(ClawdRig.bodyLeft)
             : CGFloat(ClawdRig.bodyRight + 1)
+        // 手往外只露 `armOut` 格，剩下的往身子里塞——所以左上角
+        // 从肩膀往外退 `armOut`，而不是退整条手臂的长度。
+        let left = shoulderX - CGFloat(ClawdRig.armOut)
         PixelSpriteView(sprite: ClawdRig.arm, scale: scale)
-            // 转的支点在肩膀那一端，不是手臂中间——
-            // 从中间转的话整条手臂会从身子里穿出去
-            .rotationEffect(.degrees(onLeft ? -angle : angle),
-                            anchor: onLeft ? .trailing : .leading)
-            .offset(x: (onLeft ? shoulderX - CGFloat(ClawdRig.arm.width) : shoulderX) * scale,
-                    y: CGFloat(ClawdRig.armRow) * scale)
+            // ⚠️ 支点是**手臂的正中心**，不是内侧边。
+            //
+            // 手一共 8 格长、外面只露 4 格，所以正中心正好落在肩膀那条线上
+            // （`armOut / width = 4/8 = 0.5`）。
+            // **改了 `armOut` 或者手的长度，这个 `.center` 就不再对了**——
+            // 得跟着改成 `UnitPoint(x: armOut / arm.width, y: 0.5)`，
+            // 否则整条手会绕着一个错的点甩出去。
+            .rotationEffect(.degrees(onLeft ? -angle : angle), anchor: .center)
+            .offset(x: left * scale, y: CGFloat(ClawdRig.armRow) * scale)
     }
 }
 
@@ -206,23 +216,37 @@ enum ClawdRig {
     /// **漏改这一个，手就会长在肚子上。**
     static let armRow = 10
 
-    /// 一只手。就是原来长在身子外面那一小块，抠出来单独画。
+    /// 一只手。**8 格长**：外面露 4 格，里面还有 4 格**埋在身子里**。
     ///
-    /// ⚠️ **必须跟 `ClawdSprites.idle` 里那块一模一样：4 格宽、5 格高、
-    /// 从第 10 行到第 14 行**（加高之后的行号）。 她说「手臂太细而且位置有点靠上」——
-    /// 根子就是这儿只写了两行：身子那张图上的手是 6~10 行整整五格，
-    /// 抠掉之后补上来的却是贴在第 6 行的两格。
-    /// 于是手瘦了六成、整条往上提了一格半。
+    /// ## 为什么要埋这 4 格
     ///
-    /// 改这里之前先跑一遍：把 `idle` 的第 0..3 列和第 28..31 列打出来，
-    /// 是 `p` 的那几行就是手该占的行。**别照着感觉调。**
+    /// 她指出来的：「他手挥动时有一块镂空……正常生物手臂会不和身体连接吗。」
+    /// ——一点没错，而且是个硬伤不是审美问题：
+    ///
+    /// 手臂是个**矩形绕内侧边的中点转**。一转，那条内侧边就不再贴着
+    /// 身子的竖边了，根部当场豁开一个**楔形的洞**。
+    /// 转得越高洞越大：手 5 格高，转到 75° 时缺口有 `2.5 × sin75° ≈ 2.4` 格。
+    ///
+    /// 修法是标准的那一种：**把关节埋起来**。
+    /// 手加长到 8 格，多出来的 4 格塞进身子里，
+    /// 再把手画在**身子底下**（见 `ClawdRigView` / `ClawdView` 的图层顺序）。
+    /// 这样转到任何角度，根部那块永远被身子自己盖着，洞露不出来。
+    /// 埋 4 格是算过的：最深只需要 2.4 格，留了余量。
+    ///
+    /// ⚠️ **露在外面那 4 格必须跟 `ClawdSprites.idle` 里那块一模一样**
+    /// （4 格宽、5 格高、第 10..14 行）。她说过「手臂太细而且位置靠上」——
+    /// 根子就是这儿曾经只写了两行。改之前先把 `idle` 的
+    /// 第 4..7 列和第 32..35 列打出来对一遍，**别照着感觉调。**
     static let arm = PixelSprite([
-        "pppp",
-        "pppp",
-        "pppp",
-        "pppp",
-        "pppp"
+        "pppppppp",
+        "pppppppp",
+        "pppppppp",
+        "pppppppp",
+        "pppppppp"
     ], ClawdSprites.palette)
+
+    /// 手露在身子外面几格（剩下的埋进去）
+    static let armOut = 4
 
     /// 把手从身子那张图里抠掉。
     ///
