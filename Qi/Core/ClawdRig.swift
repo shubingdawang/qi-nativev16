@@ -115,6 +115,17 @@ struct ClawdRigView: View {
                                                itemH: CGFloat(worn.height)).y * scale)
             }
 
+            // 举重物会出汗。抄的参考里那两滴 `.bb-sweat`：
+            // 从身子两侧的肩膀那儿甩出去，往外、往下、边飞边淡。
+            //
+            // ⚠️ 她问「举重物的汗呢」——这不是装饰。
+            // 一个姿势要读得出"费劲"，光有动作不够；
+            // 汗是**唯一一处能看出"重"的东西**，
+            // 别的都只能看出"在动"。
+            if plan.armsUp {
+                sweat
+            }
+
             // 手上那件东西。**不缩小**——她说的就是这个：
             // 缩小的东西看着是「顶在头上的挂件」，不是「他举着的家具」。
             if let item {
@@ -151,13 +162,38 @@ struct ClawdRigView: View {
 
     /// 举过头顶的那只手臂。
     ///
-    /// ⚠️ **底端钉在 `armUpBottom`，只有顶端跟着 `lift` 走**——
-    /// 也就是手臂在伸长，不是整条往上飘（见 `ClawdRig.armUp(rows:)`）。
+    /// 举重物甩出来的汗。两滴，一左一右，错开半个周期。
+    ///
+    /// ⚠️ 走 `beat` 取进度，不另开计时器——这只 clawd 同时活在
+    /// 小屋、聊天页、输入框上，多一个每秒六十次的状态就多一份重画。
+    private var sweat: some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(0..<2, id: \.self) { i in
+                // 两滴错开半个周期，别一起蹦
+                let t = (beat + (i == 0 ? 0 : 0.5))
+                    .truncatingRemainder(dividingBy: 1)
+                let side: CGFloat = i == 0 ? -1 : 1
+                let fromX = i == 0
+                    ? CGFloat(ClawdRig.bodyLeft) - 1
+                    : CGFloat(ClawdRig.bodyRight) + 1
+                Circle()
+                    .fill(Color(hexString: "7EC8FF") ?? .cyan)
+                    .frame(width: scale * 1.2, height: scale * 1.6)
+                    .offset(x: (fromX + side * CGFloat(t) * 3) * scale,
+                            y: (CGFloat(ClawdRig.bodyTop) + 3
+                                + CGFloat(t) * 5) * scale)
+                    // 飞出去的过程里淡掉；`t` 很小的时候还没甩出来
+                    .opacity(t < 0.1 ? 0 : (1 - t) * 0.85)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    /// **长度固定，整条跟着身子沉浮**——人的胳膊不会伸缩。
     private func armUp(onLeft: Bool) -> some View {
-        let top = ClawdRig.armUpTop(lift: plan.lift)
-        let rows = Int((CGFloat(ClawdRig.armUpBottom) - top).rounded()) + 1
-        return PixelSpriteView(sprite: ClawdRig.armUp(rows: rows), scale: scale)
-            .offset(x: ClawdRig.armUpX(onLeft: onLeft) * scale, y: top * scale)
+        PixelSpriteView(sprite: ClawdRig.armUp, scale: scale)
+            .offset(x: ClawdRig.armUpX(onLeft: onLeft) * scale,
+                    y: ClawdRig.armUpTop(squat: plan.squat) * scale)
     }
 
     // MARK: 这一刻该摆成什么样
@@ -301,14 +337,11 @@ enum ClawdRig {
     /// 顶上那行 `k` 是**握把**——抄的参考里压在手臂顶上那块深色
     /// （`<rect ... fill="#333"/>`）。没有它手和手臂一整条同色，
     /// 看不出"握住"，东西像浮在手上面。
-    static func armUp(rows: Int) -> PixelSprite {
-        let n = max(2, rows)
-        return PixelSprite(["kkkk"] + Array(repeating: "pppp", count: n - 1),
-                           ClawdSprites.palette)
-    }
+    static let armUp = PixelSprite(
+        ["kkkk"] + Array(repeating: "pppp", count: 11), ClawdSprites.palette)
 
-    /// 手臂底端压到第几行。**这一行是钉死的**——肩膀不会跟着手往上跑。
-    static let armUpBottom = 16
+    /// 手举起来时，**手掌高出头顶几格**。固定值。
+    static let armUpAboveHead = 3
 
     /// 举起来的手有多宽（格）
     static let armUpWide = 4
@@ -357,19 +390,23 @@ enum ClawdRig {
 
     /// 举起来那只手的**手尖**在第几行（也就是东西搁在哪儿）。
     ///
-    /// ⚠️⚠️ **不要把 `squat` 加进来。**
+    /// ⚠️⚠️⚠️ **手臂长度是固定的。这儿只跟着 `squat` 走，没有别的变量。**
     ///
-    /// 我第一版写的是 `bodyTop + squat - 3 - lift`，理由听着很对：
-    /// 「身子沉了，头顶那条线也跟着沉」。结果是**腿弯多少、手就降多少，
-    /// 正好抵消**——量出来床和手一格没动，只有腿在弯。
+    /// 她的原话：「手是保持不变的啊，手臂变长能动吗，
+    /// 手臂跟着身体一起，因为人的长度是固定的啊。」
     ///
-    /// 手要的是**绝对往上顶**。反向对抗的意思正是两边朝相反方向走：
-    /// 手往上、身子往下，中间的距离才拉得开，才看得出在使劲。
+    /// 我在这一处连着错了两版，一版比一版离谱：
+    ///  · 第一版：手不动、身子沉，两边加起来正好抵消——什么都没动
+    ///  · 第二版：让手臂**能伸缩**——等于给他装了两根液压杆
     ///
-    /// 至于「手会不会跟身子裂开」：不会。`armUp` 有 14 格长，
-    /// 顶到头也只有上面几格露在外面，根还深深埋在身子里。
-    static func armUpTop(lift: CGFloat) -> CGFloat {
-        CGFloat(bodyTop) - 3 - lift
+    /// 正确的只有一种：**举重物时唯一在动的是腿。**
+    /// 腿一弯，肩膀、手臂、手、床整个跟着往下沉；腿一蹬，整个跟着起来。
+    /// 手臂自始至终一格没变，因为人的胳膊不会伸缩。
+    ///
+    /// 所以这儿 `= bodyTop + squat - armUpAboveHead`：
+    /// 手掌永远高出头顶固定的几格，头沉多少它沉多少。
+    static func armUpTop(squat: Int) -> CGFloat {
+        CGFloat(bodyTop + squat - armUpAboveHead)
     }
 
     /// 把手从身子那张图里抠掉。
@@ -411,8 +448,6 @@ enum ClawdRig {
         /// 手和东西是**一个整体一起平移**，一根手臂都没转。
         /// 我们「床跟手对不齐」「根部镂空」，根子就是各转各的。
         var armsUp = false
-        /// 这一坨（手 + 东西）比站定时高几格
-        var lift: CGFloat = 0
         /// **腿弯几格**。
         ///
         /// ⚠️ 弯的是腿，不是身子。她的原话：
@@ -487,11 +522,12 @@ enum ClawdRig {
             //   · 手 + 床往上顶
             //   · 同时**腿弯下去**、眼睛眯起来
             // 两边同方向动就只是整只在飘；反向对抗才读得出「在使劲」。
+            // ⚠️ **只有一个变量：腿弯几格。**
+            // 手臂、手、床全跟着身子走，因为人的胳膊长度是固定的。
             let t = (sin(beat * .pi * 2) + 1) / 2       // 0→1→0，一个来回
             p.armsUp = true
-            p.lift = t * 3                              // 手往上顶三格
-            p.squat = Int((t * 2).rounded())            // 腿往下弯两格
-            let top = armUpTop(lift: p.lift)
+            p.squat = Int((t * 2).rounded())            // 腿弯两格，蹬起来再放下
+            let top = armUpTop(squat: p.squat)
             // 床就搁在手尖上——**同一个数算出来的**，不可能对不齐
             p.itemAt = CGPoint(x: midX - itemW / 2, y: top - itemH)
 
