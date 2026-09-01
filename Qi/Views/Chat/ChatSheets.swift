@@ -374,7 +374,7 @@ struct DigestReaderView: View {
                     Text("原文摘录（未经改写）")
                         .font(.headline)
                     ForEach(digest.voice, id: \.self) { line in
-                        Text("「" + line + "」")
+                        Text("「\(line)」")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)

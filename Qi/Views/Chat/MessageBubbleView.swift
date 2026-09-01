@@ -268,7 +268,7 @@ struct MessageBubbleView: View {
             VStack(alignment: isUser ? .trailing : .leading, spacing: 5) {
                 voiceBar
                 if !message.content.isEmpty {
-                    Text("\u{201C}" + message.content + "\u{201D}")
+                    Text("\u{201C}\(message.content)\u{201D}")
                         .font(.app(12))
                         .italic()
                         .foregroundStyle(Theme.textMuted(scheme))

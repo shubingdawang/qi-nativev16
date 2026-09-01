@@ -210,6 +210,14 @@ struct SettingsView: View {
                     .font(.app(15))
                     .foregroundStyle(Theme.textMain(scheme))
 
+                // ⚠️ 颜色**先取出来再进闭包**。
+                //
+                // `PhotosPicker` 那个 label 闭包是 `@Sendable` 的，
+                // 而 `app.settings` 是 @MainActor 上的——在里面直接读它，
+                // 编译器现在警告「can not be referenced from a Sendable closure」，
+                // Swift 6 下就是错。
+                // 取成一个 `Color` 局部量之后闭包捕的是个值，跟 actor 无关了。
+                let tint = app.settings.accentColor
                 HStack(spacing: 10) {
                     PhotosPicker(selection: $wallpaperItem, matching: .images) {
                         Text("换张图片")
@@ -218,7 +226,7 @@ struct SettingsView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
                             .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(app.settings.accentColor.opacity(0.22)))
+                                .fill(tint.opacity(0.22)))
                     }
                     .buttonStyle(.plain)
 

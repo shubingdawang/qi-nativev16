@@ -241,7 +241,7 @@ struct MomentsView: View {
     private func replySheet(_ m: Moment) -> some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 12) {
-                Text(m.isHers ? "你自己那条" : (him + "：" + m.text))
+                Text(m.isHers ? "你自己那条" : "\(him)：\(m.text)")
                     .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .lineLimit(3)

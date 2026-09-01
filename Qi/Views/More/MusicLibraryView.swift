@@ -41,6 +41,30 @@ struct MusicLibraryView: View {
     @State private var regrouping: Track?
     @State private var artistDraft = ""
 
+    /// 文件不在了那句话。
+    ///
+    /// ⚠️⚠️ **拆出来是为了能编过。** 原来它是写在 `Text(...)` 里的
+    /// 一串 `+`：一个可选解包加三段字面量，摆在 `alert` 的
+    /// `message:` 那个泛型闭包里——编译器要在那儿同时定
+    /// `Text` 的初始化重载、`+` 的几十个重载、`??` 的两个重载，
+    /// 组合爆了，报的是
+    /// 「unable to type-check this expression in reasonable time」。
+    ///
+    /// ⚠️ 这个错**跟改动大小无关**：它是有阈值的，
+    /// 同一个文件里别处多几行就可能把它顶过线。
+    /// 所以记一句：**别在 ViewBuilder 里拼长字符串。**
+    /// 先在外面把 `String` 拼好，`Text` 只接一个现成的值。
+    private var missingWhy: String {
+        let br = "\n\n"
+        var s = player.missingFile ?? ""
+        s += br
+        s += "两种可能：一是这首超过 20 MB，备份本来就不带"
+        s += "（整包会大到导不出来）；"
+        s += "二是它是被 v112 之前那个备份路径 bug 弄丢的。"
+        s += "从「文件」重新导一次就行。"
+        return s
+    }
+
     private var mine: [Track] { library.search(keyword) }
 
     /// 按歌手分好组。
@@ -262,10 +286,7 @@ struct MusicLibraryView: View {
         )) {
             Button("好") { player.missingFile = nil }
         } message: {
-            Text((player.missingFile ?? "") + "\n\n"
-                 + "两种可能：一是这首超过 20 MB，备份本来就不带（整包会大到导不出来）；"
-                 + "二是它是被 v112 之前那个备份路径 bug 弄丢的。"
-                 + "从「文件」重新导一次就行。")
+            Text(missingWhy)
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

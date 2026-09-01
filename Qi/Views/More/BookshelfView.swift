@@ -319,7 +319,7 @@ struct BookshelfView: View {
                 .background(m.color.opacity(0.28))
 
             ForEach(m.notes) { n in
-                Text("⤷ " + n.author + "：" + n.text)
+                Text("⤷ \(n.author)：\(n.text)")
                     .font(.app(12))
                     .foregroundStyle(Theme.textSoft(scheme))
                     .fixedSize(horizontal: false, vertical: true)

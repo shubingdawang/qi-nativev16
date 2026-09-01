@@ -169,9 +169,8 @@ struct TriggersDreamsView: View {
                                 Text(stamp(d.at) + (d.told ? "" : " · 未讲述"))
                                     .font(.app(11))
                                     .foregroundStyle(Theme.textMain(scheme))
-                                Text("那晚身体在「"
-                                     + BodyConfig.cycle(d.cycleKey).label
-                                     + "」，掷出 \(Int(d.roll * 100))，"
+                                Text("那晚身体在「\(BodyConfig.cycle(d.cycleKey).label)」，"
+                                     + "掷出 \(Int(d.roll * 100))，"
                                      + "当时的门槛是 \(Int(d.chance * 100))")
                                     .font(.app(10))
                                     .foregroundStyle(Theme.textMuted(scheme))

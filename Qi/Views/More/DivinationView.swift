@@ -758,9 +758,7 @@ struct DivinationHistoryView: View {
                                 .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         } else if let p = r.primary {
-                            Text(p.name + (r.changed.map { c in
-                                c.name != p.name ? " → " + c.name : ""
-                            } ?? ""))
+                            Text(p.line(changedTo: r.changed))
                                 .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         } else if !r.layout.isEmpty {
@@ -844,4 +842,22 @@ final class DivinationStore: ObservableObject {
     }
 
     func remove(_ id: UUID) { records.removeAll { $0.id == id } }
+}
+
+/// 卦名那一行：本卦，变了的话再接一个「→ 变卦」。
+///
+/// ⚠️ 拎出来是为了能编过：原来是
+/// `Text(名字 + (可选.map { 三元 } ?? ""))`——
+/// 闭包、三元、`??`、`+`、`Text` 的重载全挤在一个式子里，
+/// 编译器会卡到超时。**别在 ViewBuilder 里拼长字符串。**
+///
+/// ⚠️ 写成 `Hexagram` 的扩展，不是某一页的私有方法。
+/// 我第一版把它塞进了 `LiuyaoPane`，而叫它的地方在
+/// `DivinationHistoryView`——**两个不同的 struct**，编译不过。
+/// 这个文件里住着五个 struct，「拎出来放外面」得先看清放进了谁家。
+extension Hexagram {
+    func line(changedTo other: Hexagram?) -> String {
+        guard let other, other.name != name else { return name }
+        return name + " → " + other.name
+    }
 }

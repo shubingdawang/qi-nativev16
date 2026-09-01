@@ -153,7 +153,7 @@ struct PromiseView: View {
                                              : Theme.textMuted(scheme))
                     }
                     if p.done, let at = p.doneAt {
-                        Text("· " + String(at.prefix(10)) + " 做到了")
+                        Text("· \(at.prefix(10)) 做到了")
                             .font(.app(10))
                             .foregroundStyle(app.settings.accentColor.opacity(0.8))
                     }

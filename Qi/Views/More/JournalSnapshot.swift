@@ -181,7 +181,7 @@ struct JournalElementView: View {
             case .quote:
                 // 摘句：带引号，底下写是谁说的
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("「" + e.text + "」")
+                    Text("「\(e.text)」")
                         .font(.app(14, design: .serif))
                         .foregroundStyle(e.color)
                         .fixedSize(horizontal: false, vertical: true)

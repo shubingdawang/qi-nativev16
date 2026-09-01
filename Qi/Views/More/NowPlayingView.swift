@@ -74,7 +74,7 @@ struct NowPlayingView: View {
             Button("取消", role: .cancel) { aiming = nil }
             Button("画起来") { commitMark() }
         } message: {
-            Text(aiming.map { "「" + $0.text + "」" } ?? "")
+            Text(aiming.map { "「\($0.text)」" } ?? "")
         }
     }
 

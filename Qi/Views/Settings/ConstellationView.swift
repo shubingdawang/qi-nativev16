@@ -155,7 +155,7 @@ struct ConstellationView: View {
                 .fill(app.settings.accentColor)
                 .frame(width: 13, height: 13)
                 .shadow(color: app.settings.accentColor.opacity(0.7), radius: 7)
-            Text(me + " · " + him)
+            Text("\(me) · \(him)")
                 .font(.app(9, weight: .medium))
                 .foregroundStyle(Theme.textMain(scheme))
         }

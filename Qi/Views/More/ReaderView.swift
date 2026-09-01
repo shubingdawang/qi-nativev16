@@ -132,7 +132,7 @@ struct ReaderView: View {
             }
             Button("画起来") { commitMark() }
         } message: {
-            Text(aiming.map { "「" + $0.prefix(30) + "」" } ?? "")
+            Text(aiming.map { "「\($0.prefix(30))」" } ?? "")
         }
         .alert("记个生词", isPresented: Binding(
             get: { vocabContext != nil },
@@ -142,8 +142,7 @@ struct ReaderView: View {
             Button("算了", role: .cancel) { vocabContext = nil }
             Button("记下") { commitVocab() }
         } message: {
-            Text((vocabContext.map { "「" + $0.prefix(40) + "」\n" } ?? "")
-                 + "记下来之后他会写注解——什么意思、在这句里是哪个意思。")
+            Text(vocabWhy)
         }
         .sheet(isPresented: $showVocab) { vocabSheet }
         .onAppear {
@@ -358,6 +357,20 @@ struct ReaderView: View {
                 }
             }
         }
+    }
+
+    /// 「记个生词」那句提示。
+    ///
+    /// ⚠️ 拎出来是为了能编过：原来是 `Text(闭包 ?? "" + 一段字面量)`——
+    /// `map` 的闭包、`??` 的重载、`+` 的重载、`Text` 的重载，
+    /// 四层乘在一个式子里，编译器会报
+    /// 「unable to type-check this expression in reasonable time」。
+    /// **别在 ViewBuilder 里拼长字符串**，先算好，Text 只接现成的值。
+    private var vocabWhy: String {
+        var s = ""
+        if let c = vocabContext { s = "「\(c.prefix(40))」\n" }
+        s += "记下来之后他会写注解——什么意思、在这句里是哪个意思。"
+        return s
     }
 
     private func commitVocab() {

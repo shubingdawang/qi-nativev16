@@ -22,8 +22,8 @@ HERE = os.path.join(ROOT, 'scripts')
 
 # 吃一串 .swift 路径的
 SWIFT = ['arginit', 'buildercheck', 'dupdecl', 'findbad', 'hitarea',
-         'hotwrite', 'mdflank', 'mdwrap', 'presentcheck', 'selfeat',
-         'shapecheck', 'viewsize', 'cmp']
+         'hotwrite', 'mdflank', 'mdwrap', 'presentcheck', 'scope',
+         'selfeat', 'shapecheck', 'slowexpr', 'viewsize', 'cmp']
 # 自己知道该去哪儿找、不用给参数的
 STANDALONE = ['blurbcheck', 'bundlecheck', 'dupcase', 'kitcheck',
               'spritecheck', 'strspan',
