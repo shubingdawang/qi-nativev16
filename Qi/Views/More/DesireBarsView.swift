@@ -21,11 +21,20 @@ struct DesireBars: View {
                     .font(.app(14, weight: .semibold))
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer()
-                Text("不花钱")
-                    .font(.app(10))
-                    .foregroundStyle(Theme.textMuted(scheme))
-                    .padding(.horizontal, 7).padding(.vertical, 3)
-                    .background(Capsule().fill(Theme.softFill))
+                // ⚠️ 这儿以前有一个「不花钱」的小胶囊，**撤了**。
+                //
+                // 她报的：「很多不花钱的功能都在气泡右上角标了不花钱……
+                // 　不然好廉价。」
+                //
+                // 她说得对，而且理由比「难看」更实在：
+                // **这一整页本来就没有一处会花钱**——身体、意愿、好感全是
+                // 本机算的。在一页不花钱的东西上贴一枚「不花钱」，
+                // 等于在替一件没人怀疑的事辩解，反而让人开始怀疑。
+                //
+                // ⚠️ 真正需要标的是**反过来那一种**：会花钱的地方要说清楚。
+                // 那几处（占卜要调模型、结算身体、提炼记忆）都写在说明里，
+                // 而且是整句话，不是一枚角标。
+                // 记一句：**标记留给例外，别给常态。**
             }
 
             ForEach(Drive.allCases, id: \.self) { d in
