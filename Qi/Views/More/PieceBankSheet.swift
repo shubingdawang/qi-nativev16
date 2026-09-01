@@ -32,46 +32,19 @@ struct PieceBankSheet: View {
             ZStack {
                 WallpaperBackground()
                 ScrollView {
-                    // ── App 自带的那几件（Kenney，CC0）。**摆在最前面。**
+                    // ── App 自带的。**两套，摆在最前面。**
                     //
-                    // 她说「先预存」——那就得**一进来就看得见**，
+                    // 她说「先预存」——那就得一进来就看得见，
                     // 而不是等她自己切出几张图之后才出现。
-                    // 这也顺带把「素材库还是空的」那句话变成不再成立：
-                    // 现在它从来不是空的。
-                    VStack(alignment: .leading, spacing: 8) {
-                        SectionHeader("自带的")
-                        LazyVGrid(columns: cols, spacing: 12) {
-                            ForEach(KenneyPieces.all, id: \.1) { label, file in
-                                Button {
-                                    guard let img = KenneyPieces.image(file) else { return }
-                                    onPick(img)
-                                    dismiss()
-                                } label: {
-                                    VStack(spacing: 4) {
-                                        if let img = KenneyPieces.image(file) {
-                                            Image(uiImage: img)
-                                                .resizable().scaledToFit()
-                                                .frame(height: 62)
-                                        } else {
-                                            Color.clear.frame(height: 62)
-                                        }
-                                        Text(label)
-                                            .font(.app(10))
-                                            .foregroundStyle(Theme.textMuted(scheme))
-                                            .lineLimit(1)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 8)
-                                    .background(RoundedRectangle(cornerRadius: 12,
-                                                                 style: .continuous)
-                                        .fill(Theme.softFillDeep))
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
+                    //
+                    // 分两栏是因为**这两套是两个世界**：
+                    // 像素那批按这间屋的配色生成，跟 clawd 本人同一路；
+                    // 木质那批是 Kenney 的中世纪图书馆风，深色木头。
+                    // 混着摆她会以为是同一套里深浅不同的两件。
+                    builtIn("像素（跟屋子同风格）", PixelPieces.all,
+                            load: PixelPieces.image)
+                    builtIn("木质（Kenney）", KenneyPieces.all,
+                            load: KenneyPieces.image)
 
                     if bank.pieces.isEmpty {
                         // ⚠️ 这段提示以前**她一次都没机会看见**：
@@ -80,7 +53,7 @@ struct PieceBankSheet: View {
                         // 现在入口常驻了（见 ClawdHomeView 那段注释）。
                         EmptyNote(icon: "tray",
                                   title: "你自己那批还是空的",
-                                  hint: "上面那些是 App 自带的，随时能用。"
+                                  hint: "上面那两栏是 App 自带的，随时能用。"
                                       + "想加自己的："
                                       + "回到小屋，点底下那条「从整版图里取家具」，"
                                       + "选一张整版图切开，"
@@ -131,6 +104,55 @@ struct PieceBankSheet: View {
                 Text("只删素材库里这一块。已经贴到家具上的图不受影响。")
             }
         }
+    }
+
+    /// 自带的那一栏。两套走同一个，只是名字和取图的地方不同。
+    ///
+    /// ⚠️ 挑中之后**直接把 `UIImage` 交出去就完了**，
+    /// 不往她的素材库里存一份。存了的话每台手机都多几百 KB，
+    /// 还会跟着她的备份来回搬——而它们本来就在每一版 App 里。
+    /// 她真的用上某一件，那一件才会存成她自己的图（外面 `onPick` 那边做）。
+    @ViewBuilder
+    private func builtIn(_ title: String, _ items: [(String, String)],
+                         load: @escaping (String) -> UIImage?) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionHeader(title)
+            LazyVGrid(columns: cols, spacing: 12) {
+                ForEach(items, id: \.1) { label, file in
+                    Button {
+                        guard let img = load(file) else { return }
+                        onPick(img)
+                        dismiss()
+                    } label: {
+                        VStack(spacing: 4) {
+                            if let img = load(file) {
+                                Image(uiImage: img)
+                                    .resizable()
+                                    // ⚠️ 像素图放大要用**最近邻**，
+                                    // 默认那种平滑插值会把它糊成一团。
+                                    .interpolation(.none)
+                                    .scaledToFit()
+                                    .frame(height: 58)
+                            } else {
+                                Color.clear.frame(height: 58)
+                            }
+                            Text(label)
+                                .font(.app(10))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(RoundedRectangle(cornerRadius: 12,
+                                                     style: .continuous)
+                            .fill(Theme.softFillDeep))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
     }
 
     private func cell(_ p: FurniturePiece) -> some View {

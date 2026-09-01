@@ -1,0 +1,44 @@
+{
+  "image": {
+    "canvas": [
+      "width",
+      "height"
+    ],
+    "alpha": "boolean",
+    "transparent_bbox": [
+      "x0",
+      "y0",
+      "x1",
+      "y1"
+    ]
+  },
+  "visual_language": {
+    "dominant_palette": "array",
+    "edge_density": "number",
+    "pixel_scale_estimate": "number",
+    "outline_weight": "number",
+    "cluster_density": "number",
+    "highlight_density": "number",
+    "shadow_density": "number"
+  },
+  "objects": [
+    {
+      "id": "string",
+      "bbox": [
+        "x0",
+        "y0",
+        "x1",
+        "y1"
+      ],
+      "mask": "optional",
+      "semantic_candidate": "string",
+      "parts": [],
+      "confidence": "number"
+    }
+  ],
+  "camera": {
+    "projection": "orthographic_2_5d|perspective|unknown",
+    "azimuth": "number|unknown",
+    "elevation": "number|unknown"
+  }
+}

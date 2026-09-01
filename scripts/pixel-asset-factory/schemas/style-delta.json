@@ -1,0 +1,25 @@
+{
+  "name": "StyleDelta",
+  "fields": {
+    "palette_shift": "optional",
+    "materials": "optional",
+    "patterns": "optional",
+    "trim": "optional",
+    "decorations": "optional",
+    "lighting": "optional",
+    "mood": "optional",
+    "preserve": [
+      "semantic_identity",
+      "topology",
+      "required_parts",
+      "anatomy",
+      "camera_unless_explicitly_changed"
+    ],
+    "forbid": [
+      "theme-specific forced colors",
+      "duplicate anatomy",
+      "merging independent objects",
+      "structural changes without explicit request"
+    ]
+  }
+}

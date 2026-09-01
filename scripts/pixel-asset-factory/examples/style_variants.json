@@ -1,0 +1,41 @@
+{
+  "base": "bed_cozy_001",
+  "variants": [
+    {
+      "style_id": "winter_cabin",
+      "palette_strategy": "theme_generated",
+      "visual_changes": [
+        "wool texture",
+        "knit trim",
+        "small pine ornament"
+      ]
+    },
+    {
+      "style_id": "spring_garden",
+      "palette_strategy": "theme_generated",
+      "visual_changes": [
+        "floral fabric",
+        "leaf embroidery",
+        "soft ribbon"
+      ]
+    },
+    {
+      "style_id": "space_station",
+      "palette_strategy": "theme_generated",
+      "visual_changes": [
+        "synthetic panel material",
+        "status lights",
+        "rounded tech trim"
+      ]
+    },
+    {
+      "style_id": "underwater",
+      "palette_strategy": "theme_generated",
+      "visual_changes": [
+        "pearl trim",
+        "shell ornament",
+        "wave-like fabric pattern"
+      ]
+    }
+  ]
+}

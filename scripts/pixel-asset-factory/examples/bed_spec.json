@@ -1,0 +1,139 @@
+{
+  "asset_id": "bed_cozy_001",
+  "camera": {
+    "azimuth_deg": 45,
+    "elevation_deg": 30,
+    "scale": 8,
+    "origin": [
+      128,
+      45
+    ]
+  },
+  "parts": [
+    {
+      "id": "leg_1",
+      "position": [
+        0.15,
+        0.15,
+        0
+      ],
+      "size": [
+        0.18,
+        0.18,
+        0.55
+      ]
+    },
+    {
+      "id": "leg_2",
+      "position": [
+        2.05,
+        0.15,
+        0
+      ],
+      "size": [
+        0.18,
+        0.18,
+        0.55
+      ]
+    },
+    {
+      "id": "leg_3",
+      "position": [
+        0.15,
+        1.65,
+        0
+      ],
+      "size": [
+        0.18,
+        0.18,
+        0.55
+      ]
+    },
+    {
+      "id": "leg_4",
+      "position": [
+        2.05,
+        1.65,
+        0
+      ],
+      "size": [
+        0.18,
+        0.18,
+        0.55
+      ]
+    },
+    {
+      "id": "frame",
+      "position": [
+        0,
+        0,
+        0.45
+      ],
+      "size": [
+        2.25,
+        1.85,
+        0.32
+      ]
+    },
+    {
+      "id": "mattress",
+      "position": [
+        0.12,
+        0.1,
+        0.77
+      ],
+      "size": [
+        2.01,
+        1.65,
+        0.32
+      ]
+    },
+    {
+      "id": "blanket",
+      "position": [
+        0.18,
+        0.18,
+        1.09
+      ],
+      "size": [
+        1.85,
+        1.35,
+        0.1
+      ]
+    },
+    {
+      "id": "pillow",
+      "position": [
+        0.2,
+        1.12,
+        1.19
+      ],
+      "size": [
+        1.75,
+        0.38,
+        0.12
+      ]
+    },
+    {
+      "id": "headboard",
+      "position": [
+        0.08,
+        1.7,
+        0.7
+      ],
+      "size": [
+        2.09,
+        0.12,
+        0.95
+      ]
+    }
+  ],
+  "support_graph": [
+    "floor→legs",
+    "legs→frame",
+    "frame→mattress",
+    "mattress→blanket",
+    "mattress→pillow",
+    "floor→headboard"
+  ]
+}

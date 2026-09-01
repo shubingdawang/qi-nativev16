@@ -1,0 +1,10 @@
+{
+  "style_id": "string",
+  "base_asset": "string",
+  "palette_strategy": "theme_generated",
+  "palette": {},
+  "material_overrides": {},
+  "patterns": [],
+  "decorations": [],
+  "forbidden_topology_changes": true
+}
