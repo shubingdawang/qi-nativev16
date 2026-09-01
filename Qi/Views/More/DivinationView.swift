@@ -228,7 +228,18 @@ struct TarotPane: View {
                             }
                         }
                         .padding(.horizontal, 30)
-                        .padding(.vertical, 20)
+                        // ⚠️ 竖着留够：抬起来那张往上跑 34 点，
+                        // 她的手指跟着往上走，一出这块就断了。
+                        .padding(.vertical, 26)
+                        // ⚠️⚠️ **整条都要能感应到手指。**
+                        //
+                        // 她报的：「塔罗牌拖动判定的位置太小了。」
+                        // 病根跟长按删不掉那几处是同一个：手势认的是
+                        // **真画出来的那几个像素**——牌是圆角矩形，
+                        // 牌与牌之间的缝、上下的留白、抬起来那张让出的位置，
+                        // 全都是空的，手指扫到那儿就断了。
+                        // 补一块实心的感应区，这一条才是连续的。
+                        .contentShape(Rectangle())
                         .coordinateSpace(name: "fan")
                         // 按住再扫：扫到谁谁抬起来。
                         //
@@ -247,8 +258,13 @@ struct TarotPane: View {
                                 .onChanged { value in
                                     guard case .second(_, let drag?) = value else { return }
                                     // 一张 62 宽、叠着 -26，所以每张往右挪 36
-                                    let i = Int((drag.location.x - 30) / 36)
-                                    guard deck.indices.contains(i) else { return }
+                                    //
+                                    // ⚠️ 越界的**夹回两头**，不是直接不理。
+                                    // 手指扫到最左边那张再往外一点就返回 nil 的话，
+                                    // 头尾两张最难选中——而她多半正想选那两张。
+                                    guard !deck.isEmpty else { return }
+                                    let raw = Int((drag.location.x - 30) / 36)
+                                    let i = min(deck.count - 1, max(0, raw))
                                     if hovering != i {
                                         hovering = i
                                         if app.settings.haptics {
@@ -313,20 +329,10 @@ struct TarotPane: View {
     private func cardBack(_ i: Int) -> some View {
         let chosen = picked.contains(i)
         let lifted = hovering == i
-        return RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [
-                        app.settings.accentColor.opacity(0.55),
-                        app.settings.accentColor.opacity(0.30)
-                    ],
-                    startPoint: .topLeading, endPoint: .bottomTrailing)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.45), lineWidth: 1)
-                    .padding(3)
-            }
+        // 牌背那一整面花纹见 `TarotBack`。
+        // 她报的：「背景的图案有点太简单了。」——以前这儿是
+        // 一块渐变加一道白边，那不是牌背，是一块圆角矩形。
+        return TarotBack(tint: app.settings.accentColor)
             .frame(width: 62, height: 100)
             .rotationEffect(.degrees(Double(i % 7) - 3))
             // 抬起来那张要更高、更大、还带一圈光，跟已经抽走的那些分得开
