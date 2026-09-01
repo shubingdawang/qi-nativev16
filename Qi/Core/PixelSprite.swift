@@ -653,20 +653,20 @@ enum ClawdSprites {
         "....ddddppkkkppppppppppppkkkppppdddd....",
         "....ddddppkkkppppppppppppkkkppppdddd....",
         "....ddddppppppppppppppppppppppppdddd....",
-        "....ddddppppppppppppppppppppppppdddd....",
-        "....ddddggggggggggggggggggggggggdddd....",
-        "........gggggggggggggggggggggggg........",
-        "........gggggggggggwwggggggggggg........",
-        "........gggggggggggwwggggggggggg........",
-        "........gggggggggggggggggggggggg........",
-        "........gggggggggggggggggggggggg........",
-        ".......GGGGGGGGGGGGGGGGGGGGGGGGGG.......",
-        ".......GGGGGGGGGGGGGGGGGGGGGGGGGG.......",
-        "........ddd..ddd........ddd..ddd........",
-        "........ddd..ddd........ddd..ddd........",
-        "........ddd..ddd........ddd..ddd........",
-        "........ddd..ddd........ddd..ddd........",
-        "........ddd..ddd........ddd..ddd........"
+        "....ddddppggggggggggggggggggggppdddd....",
+        "....ddddppggggggggggggggggggggppdddd....",
+        "........ppggggggggggggggggggggpp........",
+        "........ppggggggggggggggggggggpp........",
+        "........ppggggggggggggggggggggpp........",
+        "........ppgggggggggwwgggggggggpp........",
+        "........ppgggggggggwwgggggggggpp........",
+        "........ppggggggggggggggggggggpp........",
+        "........ddggggggggggggggggggggdd........",
+        "........ddggggggggggggggggggggdd........",
+        "........ddggggggggggggggggggggdd........",
+        "........dGGGGGGGGGGGGGGGGGGGGGGd........",
+        "........dGGGGGGGGGGGGGGGGGGGGGGd........",
+        "........dGGGGGGGGGGGGGGGGGGGGGGd........"
     ], palette)
 
     /// 换只手。两帧来回切就是在忙活。
@@ -684,20 +684,20 @@ enum ClawdSprites {
         "........ppppkkkppppppppppppkkkpp........",
         "....ddddppppkkkppppppppppppkkkppdddd....",
         "....ddddppppppppppppppppppppppppdddd....",
-        "....ddddppppppppppppppppppppppppdddd....",
-        "....ddddggggggggggggggggggggggggdddd....",
-        "....ddddggggggggggggggggggggggggdddd....",
-        "........gggggggggggwwggggggggggg........",
-        "........gggggggggggwwggggggggggg........",
-        "........gggggggggggggggggggggggg........",
-        "........gggggggggggggggggggggggg........",
-        ".......GGGGGGGGGGGGGGGGGGGGGGGGGG.......",
-        ".......GGGGGGGGGGGGGGGGGGGGGGGGGG.......",
-        "........ddd..ddd........ddd..ddd........",
-        "........ddd..ddd........ddd..ddd........",
-        "........ddd..ddd........ddd..ddd........",
-        "........ddd..ddd........ddd..ddd........",
-        "........ddd..ddd........ddd..ddd........"
+        "....ddddppggggggggggggggggggggppdddd....",
+        "....ddddppggggggggggggggggggggppdddd....",
+        "....ddddppggggggggggggggggggggppdddd....",
+        "........ppggggggggggggggggggggpp........",
+        "........ppggggggggggggggggggggpp........",
+        "........ppgggggggggwwgggggggggpp........",
+        "........ppgggggggggwwgggggggggpp........",
+        "........ppggggggggggggggggggggpp........",
+        "........ddggggggggggggggggggggdd........",
+        "........ddggggggggggggggggggggdd........",
+        "........ddggggggggggggggggggggdd........",
+        "........dGGGGGGGGGGGGGGGGGGGGGGd........",
+        "........dGGGGGGGGGGGGGGGGGGGGGGd........",
+        "........dGGGGGGGGGGGGGGGGGGGGGGd........"
     ], palette)
 
     /// 走路第一步：左边那两条腿抬起来。跟 walk2 交替就是在迈步，
@@ -1088,7 +1088,12 @@ struct ClawdView: View {
     /// ⚠️ 用 `TimelineView(.animation)` 取时间，**不要拿 `@State` 计时**。
     /// 这只 clawd 在小屋、聊天页、输入框上同时活着，
     /// 每秒六十次改状态的话整棵树跟着重画。
-    /// 干活时飘起来的数据粒子。五颗，各自错开，从电脑那一带往上飘。
+    /// 干活时飘起来的数据粒子。五颗，各自错开，从电脑后面升到头顶以上。
+    ///
+    /// ⚠️ 起点要在**电脑后面**（屏幕顶在第 13 行，离底 14 格），
+    /// 终点要**飘过他的头**（头顶在第 4 行，离底 23 格）。
+    /// 我第一版只让它升到离底 4..13 格——整段都埋在屏幕那一片灰里，
+    /// 等于没画。
     ///
     /// ⚠️ 走 `TimelineView` 取时间，不拿 `@State` 计时——
     /// 这只 clawd 同时活在小屋、聊天页、输入框上。
@@ -1104,8 +1109,8 @@ struct ClawdView: View {
                     Rectangle()
                         .fill(Color(hexString: "40C4FF") ?? .cyan)
                         .frame(width: scale * 1.2, height: scale * 1.2)
-                        .offset(x: (fromX + t * 2) * scale,
-                                y: -(4 + t * 9) * scale)
+                        .offset(x: (fromX + t * 3) * scale,
+                                y: -(8 + t * 17) * scale)
                         .opacity(t < 0.15 ? 0 : (1 - t) * 0.8)
                 }
             }
@@ -1171,14 +1176,13 @@ struct ClawdView: View {
             // 心画进去只能替掉身上的豆子，看着像破了个洞。
             // 飘在外面才是「冒出来的」。
 
-            // 干活的时候从电脑后面往上飘的数据粒子。
+            // 干活时从电脑后面往上飘的数据粒子。
             //
             // 抄的 `clawd-on-desk` 那份 `clawd-working-typing.svg`：
-            // 七个 `#40C4FF` 的小方块，各自错开延迟往上飘、边飘边淡。
+            // 一串 `#40C4FF` 的小方块，各自错开延迟往上飘、边飘边淡。
             //
-            // ⚠️ 她问「你说打电脑，你的电脑呢」——电脑已经画进图纸了，
-            // 但光有一台电脑还是静的。**粒子是「他在干活」这件事本身**：
-            // 电脑说明他坐在那儿，粒子才说明他正在动。
+            // ⚠️ 这不是装饰。**电脑只说明他坐在那儿，粒子才说明他正在动。**
+            // 光在图纸上摆一台电脑，画面还是静的。
             if mood == .working {
                 dataBits
             }

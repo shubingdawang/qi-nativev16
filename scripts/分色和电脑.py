@@ -106,9 +106,31 @@ def laptop(rows, tap):
         box(ex + look, 10, ex + look + 2, 11, 'k')   # 压成两行 = 眯着
 
     # 电脑：屏幕背面 + 底座 + 会亮的 logo。**画在身子上面**
-    box(BODY_LEFT, 14, BODY_RIGHT, 19, 'g')          # 屏背
-    box(BODY_LEFT - 1, 20, BODY_RIGHT + 1, 21, 'G')  # 底座
-    box(19, 16, 20, 17, 'w')                         # logo
+    #
+    # ⚠️ 位置和高度**照参考里的比例算出来的**，不是拍脑袋定的。
+    # 她说「屏幕太扁、整体太高，为了不挡眼睛只能变矮」——
+    # 根子就是我上一版把电脑架得太高，只好把屏幕压扁去避开眼睛。
+    #
+    # `clawd-working-typing.svg` 里：躯干 y 6..13（7 格），
+    # 笔记本 `translate(3, 9.5)`，屏幕 y 9.5..15、底座 y 14.5..15.5。
+    # 换算过来：
+    #   · 屏幕**顶**在躯干正中间（(9.5-6)/7 = 0.50）
+    #   · 屏幕**底**落在脚底线上（(15-6)/7 = 1.29，脚底就是 1.29）
+    #   · 屏幕高度 = 躯干的 79%
+    #   · 屏幕宽 = 躯干的 82%，底座 = 91%（比屏幕宽一点才像个底座）
+    #
+    # 我们躯干第 4..20 行（17 格）、脚底第 26 行、身子 8..31 列（24 格）：
+    SCREEN_TOP = 13          # 4 + 0.50 × 17 ≈ 12.5
+    SCREEN_BOT = 23
+    BASE_BOT = 26            # 落在脚底线上
+    sw = 20                  # 24 × 82%
+    bw = 22                  # 24 × 91%
+    mid = (BODY_LEFT + BODY_RIGHT + 1) // 2
+    box(mid - sw // 2, SCREEN_TOP, mid + sw // 2 - 1, SCREEN_BOT, 'g')
+    box(mid - bw // 2, SCREEN_BOT + 1, mid + bw // 2 - 1, BASE_BOT, 'G')
+    # logo 摆在屏幕正中
+    ly = (SCREEN_TOP + SCREEN_BOT) // 2
+    box(mid - 1, ly, mid, ly + 1, 'w')
     return [''.join(r) for r in g]
 
 
