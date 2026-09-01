@@ -30,6 +30,19 @@ struct ClawdHomeView: View {
     static var floorBottom: Double { ClawdStore.floorBottom }
 
     @State private var mood: ClawdMood = .idle
+
+    /// 这个情绪该不该把手摆起来。
+    ///
+    /// ⚠️ **别铺太宽。** 手一直在摆就等于没在摆——
+    /// 只有"这一下真的高兴"才摆，平时垂着，落差才看得出来。
+    static func armPose(_ m: ClawdMood) -> CarryPose {
+        switch m {
+        case .loving: return .cheer      // 甜的时候：两只手一起摆
+        case .happy: return .wave        // 被摸了：招一只手
+        case .flail: return .cheer       // 被连戳，甩手抗议
+        default: return .none
+        }
+    }
     @State private var clawdX: Double = 0.5
     /// 他现在站在房间高度的百分之几。以前写死在 0.78，只能左右走。
     @State private var clawdY: Double = 0.78
@@ -646,12 +659,20 @@ struct ClawdHomeView: View {
                 // 屋子怎么变，他都还是「大概占一格」——
                 // 那才是她那句「屋子像是能住人的」真正的意思。
                 //
-                // 32 是他那张图纸的宽度（`ClawdSprites` 每张都是 32 格）。
+                // ⚠️ 这个 32 **不要跟着图纸改成 40**。
+                // 图纸从 32 加宽到 40 之后，多出来的八格全是透明边；
+                // 身子还是那 24 格，`scale` 不变它画出来就还是原来那么大。
+                // 改成 40 的话身子会当场瘦两成——她抱怨过一次他太小了。
                 ClawdView(mood: mood, scale: tile * 0.87 / 32, shadow: true,
                           // 小屋里也要戴上。**两边都传**——只给一边的话，
                           // 她在这儿给他戴上帽子，切到聊天页就没了。
                           worn: store.wornKind?.sprite,
-                          wornID: store.wearing ?? "")
+                          wornID: store.wearing ?? "",
+                          // 高兴的时候**手要摆起来**。
+                          // 她说的「随着他的情绪联动的表情，笑、冒爱心等等都没有」——
+                          // 冒爱心那条早就有了（`.loving` 那一档），
+                          // 缺的是手：以前不管什么情绪，手都是垂着的两块。
+                          pose: ClawdHomeView.armPose(mood))
                     // 大件**举过头顶**（她画的那张参考图就是这个动作）。
                     // 聊天页读的是同一个 store、同一套判断，所以两边一模一样：
                     // 这边在搬床，切过去那边也在搬床，也是举着的。

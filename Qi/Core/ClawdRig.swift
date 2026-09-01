@@ -33,6 +33,10 @@ import SwiftUI
 enum CarryPose: String, Codable, Sendable {
     /// 空着手
     case none
+    /// 欢呼：两只手绕肩膀来回摆
+    case cheer
+    /// 招手：一只手摆，另一只垂着
+    case wave
     /// 拿在手上（扫把、书、一罐可乐）。一只手，东西挨着手边
     case hold
     /// 双手抬过头顶举着（床、柜子这类大件）
@@ -126,18 +130,9 @@ struct ClawdRigView: View {
     private enum Side { case left, right }
 
     private func arm(_ side: Side) -> some View {
-        let a = side == .left ? plan.leftArm : plan.rightArm
-        // 肩膀在图纸上的位置：身子左边缘 / 右边缘那一格，手臂那五行
-        let shoulderX: CGFloat = side == .left
-            ? CGFloat(ClawdRig.bodyLeft)
-            : CGFloat(ClawdRig.bodyRight + 1)
-        return PixelSpriteView(sprite: ClawdRig.arm, scale: scale)
-            // 转的支点在肩膀那一端，不是手臂中间——
-            // 从中间转的话整条手臂会从身子里穿出去
-            .rotationEffect(.degrees(side == .left ? -a : a),
-                            anchor: side == .left ? .trailing : .leading)
-            .offset(x: (side == .left ? shoulderX - CGFloat(ClawdRig.arm.width) : shoulderX) * scale,
-                    y: CGFloat(ClawdRig.armRow) * scale)
+        ClawdArmView(onLeft: side == .left,
+                     angle: side == .left ? plan.leftArm : plan.rightArm,
+                     scale: scale)
     }
 
     // MARK: 这一刻该摆成什么样
@@ -159,6 +154,33 @@ struct ClawdRigView: View {
                 frame = (frame + 1) % frames.count
             }
         }
+    }
+}
+
+/// 一只会转的手。
+///
+/// ⚠️ **`ClawdRigView` 和 `ClawdView` 共用这一个。**
+/// 两边各写一份的话，肩膀位置迟早对不上——
+/// 而肩膀差一格，手看着就像长在肚子上。
+struct ClawdArmView: View {
+
+    let onLeft: Bool
+    /// 抬多少度（0 = 垂着）
+    let angle: Double
+    let scale: CGFloat
+
+    var body: some View {
+        // 肩膀在图纸上的位置：身子左边缘 / 右边缘那一格，手臂那五行
+        let shoulderX: CGFloat = onLeft
+            ? CGFloat(ClawdRig.bodyLeft)
+            : CGFloat(ClawdRig.bodyRight + 1)
+        PixelSpriteView(sprite: ClawdRig.arm, scale: scale)
+            // 转的支点在肩膀那一端，不是手臂中间——
+            // 从中间转的话整条手臂会从身子里穿出去
+            .rotationEffect(.degrees(onLeft ? -angle : angle),
+                            anchor: onLeft ? .trailing : .leading)
+            .offset(x: (onLeft ? shoulderX - CGFloat(ClawdRig.arm.width) : shoulderX) * scale,
+                    y: CGFloat(ClawdRig.armRow) * scale)
     }
 }
 
@@ -253,6 +275,29 @@ enum ClawdRig {
         switch pose {
         case .none:
             return p
+
+        case .cheer, .wave:
+            // 欢呼 / 招手。
+            //
+            // ⚠️⚠️ **手臂一格都不重画。**
+            //
+            // 这是照着官方那套表情（`clawd-emotes`）的规矩来的：
+            // 手就是身侧那一小块，**永远不变形**，
+            // 「举手」= 把它绕肩膀转 35°…75°，来回摆。
+            // 没有小臂、没有肘、没有手掌。
+            // 它那儿庆生就是 35°↔75°、新年 50°↔70°，全是这么做的。
+            //
+            // 我在这上面翻了四次车：一直在雕一条静态的胳膊
+            // （加长、收腕、加手掌、拐个肘），
+            // 她的评价一次比一次难听，最后那版
+            // 「像头上装了两个杠铃」——都对。
+            //
+            // **读出「在欢呼」的是动作，不是轮廓。**
+            // 一块不变形的疙瘩，摆起来就是手；
+            // 雕得再细，不动也还是个疙瘩。
+            let t = abs(beat * 2 - 1)               // 0→1→0 的三角波
+            p.rightArm = 35 + 40 * t
+            p.leftArm = pose == .cheer ? p.rightArm : 0
 
         case .hold:
             // 一只手往前伸一点，东西挨着手边、**落在地上那条线上**。

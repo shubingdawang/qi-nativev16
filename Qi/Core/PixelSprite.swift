@@ -1059,6 +1059,15 @@ struct ClawdView: View {
     /// 切到聊天页帽子就没了，看着像刚才那一下没生效。
     var worn: PixelSprite?
     var wornID: String = ""
+    /// **两只手摆起来**（欢呼 / 招手）。
+    ///
+    /// 她要的「随着情绪联动」里最要紧的一件。做法见 `ClawdRig.plan`
+    /// 的 `.cheer` 那一档：手是身侧那块不变形的疙瘩，只是绕肩膀来回转。
+    ///
+    /// ⚠️ 小屋和聊天页那只走的是这个 `ClawdView`（画整张图，没有能转的手），
+    /// 而能转手的是 `ClawdRigView`——所以以前不管情绪怎么变，
+    /// 他的手**永远是垂着的两块**。这个开关就是把那条路接上。
+    var pose: CarryPose = .none
 
     @State private var frame = 0
     @State private var ticker: Task<Void, Never>?
@@ -1069,6 +1078,31 @@ struct ClawdView: View {
 
     /// 睡着和呼吸那两帧整只往下沉了一格，影子跟着淡一点、扁一点
     private var settled: Bool { mood == .sleeping }
+
+    /// 手摆起来的那一版身子。
+    ///
+    /// 身子照常放帧（眨眼、呼吸都还在），**只把两只手抠掉换成会转的**。
+    ///
+    /// ⚠️ 用 `TimelineView(.animation)` 取时间，**不要拿 `@State` 计时**。
+    /// 这只 clawd 在小屋、聊天页、输入框上同时活着，
+    /// 每秒六十次改状态的话整棵树跟着重画。
+    private var waving: some View {
+        let body = sprites[min(frame, sprites.count - 1)].0
+        let cols = CGFloat(body.width), rows = CGFloat(body.height)
+        return TimelineView(.animation) { ctx in
+            // 0.62 秒一个来回。官方那套表情摆手是 0.55s，
+            // 慢一点点更像"高兴"而不是"抽筋"
+            let beat = (ctx.date.timeIntervalSinceReferenceDate / 0.62)
+                .truncatingRemainder(dividingBy: 1)
+            let plan = ClawdRig.plan(pose: pose, beat: beat, itemW: 0, itemH: 0)
+            ZStack(alignment: .topLeading) {
+                PixelSpriteView(sprite: ClawdRig.stripArms(body), scale: scale)
+                ClawdArmView(onLeft: true, angle: plan.leftArm, scale: scale)
+                ClawdArmView(onLeft: false, angle: plan.rightArm, scale: scale)
+            }
+            .frame(width: cols * scale, height: rows * scale, alignment: .topLeading)
+        }
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -1086,7 +1120,11 @@ struct ClawdView: View {
                     .allowsHitTesting(false)
             }
 
-            PixelSpriteView(sprite: sprites[min(frame, sprites.count - 1)].0, scale: scale)
+            if pose == .none {
+                PixelSpriteView(sprite: sprites[min(frame, sprites.count - 1)].0, scale: scale)
+            } else {
+                waving
+            }
 
             // 身上戴的那件，贴在对应的位置上（见 `ClawdRig.wearAt`）
             if let worn {
