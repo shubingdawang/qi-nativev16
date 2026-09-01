@@ -16,7 +16,9 @@ struct ClawdHomeView: View {
     // 这儿那两个状态没人用了
     /// 地板从房间高度的百分之几开始。
     ///
-    /// 墙和地板的分界线画在 0.62（见下面 `room` 里那两块 Rectangle）。
+    /// ⚠️ 这儿以前写着「墙和地板的分界线画在 0.62」——**那句已经不作数了**。
+    /// 平面的墙和地板早就换成 `IsoRoomView` 那间立体屋了，
+    /// 分界线由 `IsoRoom.fit` 现算，不再是一个写死的比例。
     /// 他是**脚站在这个 y 上**的，所以能站的范围要比分界线再低一点，
     /// 不然半只身子会插进墙里——她说的「他现在可以走到墙壁的区域」就是这个。
     /// 地板范围。**跟 ClawdStore 那两个是同一件事**——
@@ -571,7 +573,14 @@ struct ClawdHomeView: View {
     private func clawdBody(_ size: CGSize) -> some View {
         // clawd 本人。长按能拎起来放到任何地方，
         // 没人管的时候他自己也会在屋里走来走去。
-        VStack(spacing: 4) {
+        //
+        // ⚠️ **一格多大：这一段里所有的尺寸都从它算。**
+        // 她说「小屋放大 clawd 的活动范围也要放大，连带的你都检查下」——
+        // 「连带的」就是这些：他本人、他手上举的、举多高。
+        // 写死一个数的话，屋子每改一次就有一样东西悄悄跟不上，
+        // 而跟不上要等她截图给我看才发现。
+        let tile = IsoRoom.fit(in: size).tileW
+        return VStack(spacing: 4) {
             if let bubble {
                 Text(bubble)
                     .font(.app(11))
@@ -588,27 +597,40 @@ struct ClawdHomeView: View {
                     .transition(.scale(scale: 0.9).combined(with: .opacity))
             }
             HStack(alignment: .bottom, spacing: 2) {
-                // ⚠️ 从 1.8 收到 1.25。
+                // ⚠️⚠️ **他多大是从一格多大**算出来的，不写死。
                 //
-                // 她说「clawd 也（太大），如果屋子只有这么大的话，
-                // clawd 完全不能住」。1.8 倍的他有 58 点宽——
-                // 比一格（约 40 点）还宽一半，站在床边跟床一样高。
-                // 收到 1.25 之后他大概占一格，**屋子才像是能住人的**。
-                ClawdView(mood: mood, scale: 1.25, shadow: true)
+                // 原来这儿写着 1.25，注释解释说「1.8 倍的他有 58 点宽，
+                // 比一格（约 40 点）还宽一半……收到 1.25 之后他大概占一格」。
+                //
+                // 那个数当时是对的，**但它把「一格 40 点」焊死在了里面**。
+                // 她这次说「小屋太小了，记得小屋放大 clawd 的活动范围也要放大，
+                // 连带的你都检查下」——查到的就是这一处：
+                // 屋子一变大，格子跟着变大，他却还是 40 点，越来越像个小玩具。
+                //
+                // 现在按**她当初调好的那个比例**（0.87 格宽）跟着格子走。
+                // 屋子怎么变，他都还是「大概占一格」——
+                // 那才是她那句「屋子像是能住人的」真正的意思。
+                //
+                // 32 是他那张图纸的宽度（`ClawdSprites` 每张都是 32 格）。
+                ClawdView(mood: mood, scale: tile * 0.87 / 32, shadow: true)
                     // 大件**举过头顶**（她画的那张参考图就是这个动作）。
                     // 聊天页读的是同一个 store、同一套判断，所以两边一模一样：
                     // 这边在搬床，切过去那边也在搬床，也是举着的。
                     .overlay(alignment: .top) {
                         if let kind = store.carriedKind, store.overhead(kind) {
-                            PixelSpriteView(sprite: kind.sprite, scale: 1.3)
-                                .offset(y: -22)
+                            // ⚠️ 他手上那件东西也**跟着格子走**，理由同上。
+                            // 屋子一变大，他跟着大了，手里举的还是原来那么小，
+                            // 看着像举了个模型——这两处是 `isohard.py` 揪出来的。
+                            PixelSpriteView(sprite: kind.sprite,
+                                            scale: tile * 1.05 / 32)
+                                .offset(y: -tile * 0.46)
                                 .transition(.scale(scale: 0.5).combined(with: .opacity))
                         }
                     }
                 // 小东西还是端在手边
                 if let kind = store.carriedKind, !store.overhead(kind) {
-                    PixelSpriteView(sprite: kind.sprite, scale: 1.5)
-                        .offset(y: -8)
+                    PixelSpriteView(sprite: kind.sprite, scale: tile * 1.2 / 32)
+                        .offset(y: -tile * 0.17)
                         .transition(.scale(scale: 0.5).combined(with: .opacity))
                 }
             }
@@ -931,7 +953,7 @@ struct ClawdHomeView: View {
                     continue
                 }
 
-                // **只在地板上走。** 地板是从 0.62 往下那一块，
+                // **只在地板上走。** 地板是哪一块由 `IsoRoom.fit` 现算，
                 // 以前这儿是 0.22…0.90——0.22 在墙上，所以他会走进墙里去。
                 // **只在地板上走**，而且是**菱形**的地板：
                 // 先随便挑一个深度，再按那个深度上地板有多宽挑左右。

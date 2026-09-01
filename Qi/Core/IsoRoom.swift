@@ -57,13 +57,36 @@ struct IsoRoom {
         //
         // 整间屋子竖着一共占：墙(4.2 格高) + 地板(n 格 × 半格高)。
         // 两头各算一次取小的，屋子就一定塞得进去。
-        let byWidth = (size.width * 0.94) / n
-        let byHeight = (size.height * 0.92) / (n / 2 + 4.2 + 1)
+        let byWidth = (size.width * 0.985) / n
+        // ⚠️ 这一条按**最矮的墙**算：先保证「地板 + 一堵矮墙」一定塞得下，
+        // 墙具体多高留到下面再定。
+        let byHeight = (size.height * 0.94) / (n / 2 + 4.2 + 1)
         let tileW = min(byWidth, byHeight)
         let tileH = tileW / 2
-        let wallH = tileH * 4.2
+
+        // ⚠️⚠️ **剩下的竖向空间全给墙。**
+        //
+        // 她报的：「clawd 的小屋太小了。」
+        //
+        // 去量一下就明白了：地板的宽度**已经顶到容器的 94%**，
+        // 再宽就出屏幕了——横着没有余地。
+        // 可整间屋子（墙 4.2 格 + 地板）竖着只占了屏幕高度的**三分之一**，
+        // 上下各空着一大片。屋子不是画小了，是**摆在一片空地当中**，
+        // 所以看着小。
+        //
+        // 所以不再把墙写死成 4.2 格：地板按宽度定好之后，
+        // **竖着还剩多少就给墙多少**。屋子从此是撑满这一屏的，
+        // 而地板一格也没变小。
+        //
+        // 上限 9 格：再高就成了一口井，家具都缩在井底那一小块。
+        // 下限还是 4.2 格——横屏或者小窗口的时候剩不下地方，
+        // 至少得是间屋子的样子。
+        let floorH = tileH * n / 2 + tileH
+        let room = size.height * 0.94 - floorH
+        let wallH = min(max(tileH * 4.2, room), tileH * 9)
+
         // 整块（墙顶到地板最下）的高度，用来把屋子**竖着摆正中**
-        let whole = wallH + tileH * n / 2 + tileH
+        let whole = wallH + floorH
         let top = (size.height - whole) / 2
         return IsoRoom(size: ClawdStore.roomSize,
                        tileW: tileW, tileH: tileH,
