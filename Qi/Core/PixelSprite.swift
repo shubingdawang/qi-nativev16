@@ -648,22 +648,22 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "....ddddppkkkppppppppppppkkkppppdddd....",
-        "....ddddppkkkppppppppppppkkkppppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
         "....ddddppppppppppppppppppppppppdddd....",
         "....ddddppggggggggggggggggggggppdddd....",
         "....ddddppggggggggggggggggggggppdddd....",
-        "........ppggggggggggggggggggggpp........",
-        "........ppggggggggggggggggggggpp........",
-        "........ppggggggggggggggggggggpp........",
-        "........ppgggggggggwwgggggggggpp........",
-        "........ppgggggggggwwgggggggggpp........",
-        "........ppggggggggggggggggggggpp........",
-        "........ddggggggggggggggggggggdd........",
-        "........ddggggggggggggggggggggdd........",
-        "........ddggggggggggggggggggggdd........",
+        "....ddddppggggggggggggggggggggppdddd....",
+        "....ddddppggggggggggggggggggggppdddd....",
+        "....ddddppggggggggggggggggggggppdddd....",
+        "....ddddppgggggggggwwgggggggggppdddd....",
+        "....ddddppgggggggggwwgggggggggppdddd....",
+        "....ddddppggggggggggggggggggggppdddd....",
+        "....ddddddggggggggggggggggggggdddddd....",
+        "....ddddddggggggggggggggggggggdddddd....",
+        "....ddddddggggggggggggggggggggdddddd....",
         "........dGGGGGGGGGGGGGGGGGGGGGGd........",
         "........dGGGGGGGGGGGGGGGGGGGGGGd........",
         "........dGGGGGGGGGGGGGGGGGGGGGGd........"
@@ -679,23 +679,23 @@ enum ClawdSprites {
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
         "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "........ppppkkkppppppppppppkkkpp........",
-        "....ddddppppkkkppppppppppppkkkppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddppppppppppppppppppppppppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
+        "....ddddpppkkkppppppppppppkkkpppdddd....",
         "....ddddppppppppppppppppppppppppdddd....",
         "....ddddppggggggggggggggggggggppdddd....",
         "....ddddppggggggggggggggggggggppdddd....",
         "....ddddppggggggggggggggggggggppdddd....",
-        "........ppggggggggggggggggggggpp........",
-        "........ppggggggggggggggggggggpp........",
-        "........ppgggggggggwwgggggggggpp........",
-        "........ppgggggggggwwgggggggggpp........",
-        "........ppggggggggggggggggggggpp........",
-        "........ddggggggggggggggggggggdd........",
-        "........ddggggggggggggggggggggdd........",
-        "........ddggggggggggggggggggggdd........",
-        "........dGGGGGGGGGGGGGGGGGGGGGGd........",
+        "....ddddppggggggggggggggggggggppdddd....",
+        "....ddddppggggggggggggggggggggppdddd....",
+        "....ddddppgggggggggwwgggggggggppdddd....",
+        "....ddddppgggggggggwwgggggggggppdddd....",
+        "....ddddppggggggggggggggggggggppdddd....",
+        "....ddddddggggggggggggggggggggdddddd....",
+        "....ddddddggggggggggggggggggggdddddd....",
+        "....ddddddggggggggggggggggggggdddddd....",
+        "....dddddGGGGGGGGGGGGGGGGGGGGGGddddd....",
         "........dGGGGGGGGGGGGGGGGGGGGGGd........",
         "........dGGGGGGGGGGGGGGGGGGGGGGd........"
     ], palette)
@@ -1017,7 +1017,13 @@ enum ClawdMood: String, Codable {
             // 头顶那两个小方块交替冒，像在运算
             return [(ClawdSprites.thinking, 0.45), (ClawdSprites.thinking2, 0.45)]
         case .working:
-            return [(ClawdSprites.working, 0.22), (ClawdSprites.working2, 0.22)]
+            // ⚠️ 0.22 → 0.34。她说「速度太快……看起来像疯癫了」。
+            //
+            // 参考里手臂是 0.12~0.15 秒一轮，比这还快——但它那是
+            // **绕肩膀转角度**，手一直指着键盘，快只是手指在动。
+            // 我们是两张整图硬切，切得越快整只越像在抽搐。
+            // 换算不能照搬秒数，得照搬"看着像什么"。
+            return [(ClawdSprites.working, 0.34), (ClawdSprites.working2, 0.34)]
         case .talking:
             return [(ClawdSprites.smile, 0.5), (ClawdSprites.idle, 0.4)]
         case .upset:
@@ -1092,8 +1098,7 @@ struct ClawdView: View {
     ///
     /// ⚠️ 起点要在**电脑后面**（屏幕顶在第 13 行，离底 14 格），
     /// 终点要**飘过他的头**（头顶在第 4 行，离底 23 格）。
-    /// 我第一版只让它升到离底 4..13 格——整段都埋在屏幕那一片灰里，
-    /// 等于没画。
+    /// 第一版只升到离底 4..13 格——整段埋在屏幕那片灰里，等于没画。
     ///
     /// ⚠️ 走 `TimelineView` 取时间，不拿 `@State` 计时——
     /// 这只 clawd 同时活在小屋、聊天页、输入框上。
@@ -1182,7 +1187,6 @@ struct ClawdView: View {
             // 一串 `#40C4FF` 的小方块，各自错开延迟往上飘、边飘边淡。
             //
             // ⚠️ 这不是装饰。**电脑只说明他坐在那儿，粒子才说明他正在动。**
-            // 光在图纸上摆一台电脑，画面还是静的。
             if mood == .working {
                 dataBits
             }
