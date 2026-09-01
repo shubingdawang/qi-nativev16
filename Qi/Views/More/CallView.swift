@@ -784,6 +784,15 @@ struct CallHistoryView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)
                     .glassCard(padding: 0)
+                    // ⚠️ 整条都要能长按。
+                    //
+                    // 她报的：「我测试的只有 1s 就挂掉、没有说话没有内容的
+                    // 就不能长按删除。」——对：`contextMenu` 认的是
+                    // **真画出来的那几个像素**，一条没内容的记录只有顶上那一行字，
+                    // 底下大片是空的，长按在空处什么都收不到。
+                    // 有内容的那些正因为字多，随便按哪儿都压得着，所以看着像好的。
+                    .contentShape(RoundedRectangle(cornerRadius: Theme.cardRadius,
+                                                   style: .continuous))
                     .contextMenu {
                         Button(role: .destructive) {
                             store.records.removeAll { $0.id == r.id }

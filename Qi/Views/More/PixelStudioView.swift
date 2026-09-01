@@ -83,6 +83,8 @@ struct PixelStudioView: View {
                                 }
                             }
                             .buttonStyle(.plain)
+                            // ⚠ `contextMenu` 认的是真画出来的那几个像素，内容少的那几条底下是空的、长按收不到。
+                            .contentShape(Rectangle())
                             .contextMenu {
                                 Button {
                                     saveToStickers(art)

@@ -778,6 +778,11 @@ struct DivinationHistoryView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)
                     .glassCard(padding: 0)
+                    // ⚠️ 同通话记录那一处：`contextMenu` 认的是真画出来的像素，
+                    // 「单纯翻牌的」那种没有解读文字，底下大片是空的，
+                    // 长按在空处收不到。补一块实心的感应区。
+                    .contentShape(RoundedRectangle(cornerRadius: Theme.cardRadius,
+                                                   style: .continuous))
                     .contextMenu {
                         Button(role: .destructive) {
                             store.remove(r.id)

@@ -194,6 +194,8 @@ struct FavoritesView: View {
                     .padding(12)
                     .glassCard(padding: 0)
                     .padding(.horizontal, 14)
+                    // ⚠ `contextMenu` 认的是真画出来的那几个像素，内容少的那几条底下是空的、长按收不到。
+                    .contentShape(Rectangle())
                     .contextMenu {
                         Button {
                             UIPasteboard.general.string = item.message.content

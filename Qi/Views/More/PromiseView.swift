@@ -162,6 +162,8 @@ struct PromiseView: View {
         }
         .padding(13)
         .glassBackground(radius: 16, strength: app.settings.glassOpacity)
+        // ⚠ `contextMenu` 认的是真画出来的那几个像素，内容少的那几条底下是空的、长按收不到。
+        .contentShape(Rectangle())
         .contextMenu {
             Button {
                 toggle(p)

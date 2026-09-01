@@ -489,6 +489,8 @@ struct MemoryListView: View {
                         }
                         .padding(13)
                         .glassBackground(radius: 16, strength: app.settings.glassOpacity)
+                        // ⚠ `contextMenu` 认的是真画出来的那几个像素，内容少的那几条底下是空的、长按收不到。
+                        .contentShape(Rectangle())
                         .contextMenu {
                             // 钉住的不随时间沉下去（上限 20 条，Ombre-Brain 那套）
                             Button {
@@ -616,6 +618,8 @@ struct MemoryTranscriptListView: View {
                             .glassBackground(radius: 16, strength: app.settings.glassOpacity)
                         }
                         .buttonStyle(.plain)
+                        // ⚠ `contextMenu` 认的是真画出来的那几个像素，内容少的那几条底下是空的、长按收不到。
+                        .contentShape(Rectangle())
                         .contextMenu {
                             Button(role: .destructive) {
                                 store.deleteTranscript(t.id)
@@ -744,6 +748,8 @@ struct GlossaryListView: View {
                         }
                         .padding(13)
                         .glassBackground(radius: 16, strength: app.settings.glassOpacity)
+                        // ⚠ `contextMenu` 认的是真画出来的那几个像素，内容少的那几条底下是空的、长按收不到。
+                        .contentShape(Rectangle())
                         .contextMenu {
                             Button(role: .destructive) {
                                 store.glossary.removeAll { $0.term == g.term }
