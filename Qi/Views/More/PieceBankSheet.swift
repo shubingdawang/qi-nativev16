@@ -32,14 +32,57 @@ struct PieceBankSheet: View {
             ZStack {
                 WallpaperBackground()
                 ScrollView {
+                    // ── App 自带的那几件（Kenney，CC0）。**摆在最前面。**
+                    //
+                    // 她说「先预存」——那就得**一进来就看得见**，
+                    // 而不是等她自己切出几张图之后才出现。
+                    // 这也顺带把「素材库还是空的」那句话变成不再成立：
+                    // 现在它从来不是空的。
+                    VStack(alignment: .leading, spacing: 8) {
+                        SectionHeader("自带的")
+                        LazyVGrid(columns: cols, spacing: 12) {
+                            ForEach(KenneyPieces.all, id: \.1) { label, file in
+                                Button {
+                                    guard let img = KenneyPieces.image(file) else { return }
+                                    onPick(img)
+                                    dismiss()
+                                } label: {
+                                    VStack(spacing: 4) {
+                                        if let img = KenneyPieces.image(file) {
+                                            Image(uiImage: img)
+                                                .resizable().scaledToFit()
+                                                .frame(height: 62)
+                                        } else {
+                                            Color.clear.frame(height: 62)
+                                        }
+                                        Text(label)
+                                            .font(.app(10))
+                                            .foregroundStyle(Theme.textMuted(scheme))
+                                            .lineLimit(1)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                                    .background(RoundedRectangle(cornerRadius: 12,
+                                                                 style: .continuous)
+                                        .fill(Theme.softFillDeep))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+
                     if bank.pieces.isEmpty {
                         // ⚠️ 这段提示以前**她一次都没机会看见**：
                         // 长按菜单里那个入口写着「库空就不显示」，
                         // 于是空的时候进不来，进不来就永远填不满。
                         // 现在入口常驻了（见 ClawdHomeView 那段注释）。
                         EmptyNote(icon: "tray",
-                                  title: "素材库还是空的",
-                                  hint: "回到小屋，点底下那条「从整版图里取家具」，"
+                                  title: "你自己那批还是空的",
+                                  hint: "上面那些是 App 自带的，随时能用。"
+                                      + "想加自己的："
+                                      + "回到小屋，点底下那条「从整版图里取家具」，"
                                       + "选一张整版图切开，"
                                       + "然后点某一块选「存进素材库」"
                                       + "，或者直接「全部存进素材库」。" + br + br
