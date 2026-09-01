@@ -72,7 +72,10 @@ struct ClawdRigView: View {
 
     private var frames: [(PixelSprite, Double)] { mood.frames }
     private var body0: PixelSprite {
-        ClawdRig.stripArms(frames[min(frame, frames.count - 1)].0)
+        // ⚠️ 弯腿要在**抠掉手之后**做：`stripArms` 认的是列，`bendLegs` 动的是行，
+        // 反过来做也对，但两个都做完才是这一帧真正的身子。
+        ClawdRig.bendLegs(ClawdRig.stripArms(frames[min(frame, frames.count - 1)].0),
+                          by: plan.squat)
     }
 
     /// 图纸一共多宽多高（格）
@@ -86,8 +89,15 @@ struct ClawdRigView: View {
             // 手加长到 8 格、里面 4 格埋进身子，靠的就是**身子盖住它**。
             // 要是手画在身子上面，埋进去的那 4 格会直接糊在他脸上
             // （眼睛在第 9..11 行，手在第 10..14 行，正好撞上）。
-            arm(.left)
-            arm(.right)
+            // 举东西的时候手是**整条画好的**（`armUp`），不转角度；
+            // 平时才用会转的那只。见 `ClawdRig.armUp` 那段注释。
+            if plan.armsUp {
+                armUp(onLeft: true)
+                armUp(onLeft: false)
+            } else {
+                arm(.left)
+                arm(.right)
+            }
 
             // 身子（图纸上原来那两块手已经抠掉了，见 `stripArms`）
             PixelSpriteView(sprite: body0, scale: scale)
@@ -137,6 +147,14 @@ struct ClawdRigView: View {
         ClawdArmView(onLeft: side == .left,
                      angle: side == .left ? plan.leftArm : plan.rightArm,
                      scale: scale)
+    }
+
+    /// 举过头顶的那只手。**整条画好的，只平移，不转。**
+    private func armUp(onLeft: Bool) -> some View {
+        PixelSpriteView(sprite: ClawdRig.armUp, scale: scale)
+            .offset(x: ClawdRig.armUpX(onLeft: onLeft,
+                                       itemW: CGFloat(item?.width ?? 0)) * scale,
+                    y: ClawdRig.armUpTop(lift: plan.lift) * scale)
     }
 
     // MARK: 这一刻该摆成什么样
@@ -260,6 +278,90 @@ enum ClawdRig {
     /// 手露在身子外面几格（剩下的埋进去）
     static let armOut = 4
 
+    /// **举过头顶的那只手。整条画出来的，不转角度。**
+    ///
+    /// 为什么不接着转：转一个 4×5 的长方块，像素落不到格子上，
+    /// 边就是糊的；官方那套表情能一路转角度，是因为**它的手是 2×2 接近正方形**
+    /// 的一小团，转到哪儿都还是一小团。我们的手一拉长，转出来是一片斜板。
+    ///
+    /// 所以举东西这一档改成**手绘 + 整格平移**（她带回来的第 ① 条）。
+    ///
+    /// 顶上那行 `k` 是**握把**——参考里那块压在手臂顶上的深色
+    /// （`<rect ... fill="#333"/>`）。没有它，手和手臂一整条同色，
+    /// 看不出"握住"，东西像浮在手上面。
+    static let armUp = PixelSprite([
+        "kkkk",
+        "pppp", "pppp", "pppp", "pppp", "pppp", "pppp",
+        "pppp", "pppp", "pppp", "pppp", "pppp", "pppp", "pppp"
+    ], ClawdSprites.palette)
+
+    /// 举起来的手有多宽（格）
+    static let armUpWide = 4
+    /// 手根部往身子里盖几格。**这就是「连着」**——
+    /// 不靠转角度去凑，所以永远不会豁开她说的那个镂空。
+    static let armUpOverlap = 2
+    /// 身子顶在第几行
+    static let bodyTop = 4
+    /// 腿从第几行开始（`idle` 第 21 行起就有断口了）
+    static let legTop = 21
+
+    /// 弯腿：腿缩短 `n` 格，**整个上半身跟着往下沉**，脚底钉在原地。
+    ///
+    /// ⚠️⚠️ **弯的是腿，不是身子。**
+    /// 她指出来的：「正常人举杠铃不会是身体变短的，而是腿。」
+    /// 从躯干里抽行的话，等于他上半身缩了一截——人不是那么使劲的。
+    ///
+    /// ⚠️ 也不能整只往下挪：脚跟着走，那是往下掉，不是在蹲。
+    ///
+    /// 做法是从**腿中间**抽掉 `n` 行、顶上补 `n` 行空：
+    /// 躯干一格不变形，脚底还在最后一行。
+    static func bendLegs(_ s: PixelSprite, by n: Int) -> PixelSprite {
+        guard n > 0, s.rows.count > legTop + n else { return s }
+        var rows = s.rows
+        // 从腿中间抽（不是从底下砍——从底下砍脚就往上跑了）
+        let at = legTop + 2
+        rows.removeSubrange((at - n + 1)...at)
+        let blank = String(repeating: ".", count: s.width)
+        return PixelSprite(Array(repeating: blank, count: n) + rows, s.palette)
+    }
+
+    /// 举起来那只手的**左上角**在第几列。
+    ///
+    /// ⚠️ **跟着东西的宽度走，不是钉在身子两边。**
+    ///
+    /// 床只有 12 格宽，身子有 24 格。手要是钉在身子最外侧，
+    /// 两只手隔着 26 格，中间飘着一张 12 格的床——**谁也没托着谁**。
+    ///
+    /// 手的根部反正埋在身子里（`armUpOverlap`），
+    /// 所以它放在哪一列都还是"连着"的，那就让它贴到东西的两端内侧去。
+    /// 只有一条底线：根不能跑出身子，否则就真的断开了。
+    static func armUpX(onLeft: Bool, itemW: CGFloat) -> CGFloat {
+        let mid = CGFloat(bodyLeft + bodyRight + 1) / 2
+        // 手掌贴在东西两端往里一格的地方
+        let half = max(CGFloat(armUpWide), itemW / 2 - 1)
+        let x = onLeft ? mid - half : mid + half - CGFloat(armUpWide)
+        let lo = CGFloat(bodyLeft + armUpOverlap - armUpWide)
+        let hi = CGFloat(bodyRight + 1 - armUpOverlap)
+        return min(max(x, lo), hi)
+    }
+
+    /// 举起来那只手的**手尖**在第几行（也就是东西搁在哪儿）。
+    ///
+    /// ⚠️⚠️ **不要把 `squat` 加进来。**
+    ///
+    /// 我第一版写的是 `bodyTop + squat - 3 - lift`，理由听着很对：
+    /// 「身子沉了，头顶那条线也跟着沉」。结果是**腿弯多少、手就降多少，
+    /// 正好抵消**——量出来床和手一格没动，只有腿在弯。
+    ///
+    /// 手要的是**绝对往上顶**。反向对抗的意思正是两边朝相反方向走：
+    /// 手往上、身子往下，中间的距离才拉得开，才看得出在使劲。
+    ///
+    /// 至于「手会不会跟身子裂开」：不会。`armUp` 有 14 格长，
+    /// 顶到头也只有上面几格露在外面，根还深深埋在身子里。
+    static func armUpTop(lift: CGFloat) -> CGFloat {
+        CGFloat(bodyTop) - 3 - lift
+    }
+
     /// 把手从身子那张图里抠掉。
     ///
     /// **只清身子边界外的列**（0..3 和 28..31），
@@ -289,6 +391,23 @@ enum ClawdRig {
         var itemAt: CGPoint = .zero
         /// 东西歪多少度
         var itemTilt: Double = 0
+
+        /// **手举过头顶**（不转角度，换成整条画好的 `armUp`）。
+        ///
+        /// 她带回来那份参考里最要紧的一句：
+        /// 「bar + plates + both arms live in a single group that
+        ///  translates as one piece (**no per-arm rotation,
+        ///  so no detached-hand risk**)」——
+        /// 手和东西是**一个整体一起平移**，一根手臂都没转。
+        /// 我们「床跟手对不齐」「根部镂空」，根子就是各转各的。
+        var armsUp = false
+        /// 这一坨（手 + 东西）比站定时高几格
+        var lift: CGFloat = 0
+        /// **腿弯几格**。
+        ///
+        /// ⚠️ 弯的是腿，不是身子。她的原话：
+        /// 「正常人举杠铃不会是身体变短的，而是腿。」
+        var squat: Int = 0
     }
 
     /// 姿势表。
@@ -344,16 +463,27 @@ enum ClawdRig {
             p.itemTilt = -8
 
         case .lift:
-            // 双手抬过头顶。**东西压在两只手中间的正上方**，
-            // 不缩小——这是她要的「真正举着」。
+            // 双手抬过头顶（搬床、搬柜子）。**东西不缩小**——
+            // 缩小的东西看着是顶在头上的挂件，不是他举着的家具。
             //
-            // 手抬到 72 度：再高手臂就转到身子里去了，
-            // 再低看着像在推，不像在举。
-            let strain = sin(beat * .pi * 2) * 0.35     // 举久了会抖一下
-            p.leftArm = 72 + strain
-            p.rightArm = 72 + strain
-            p.itemAt = CGPoint(x: midX - itemW / 2,
-                               y: -itemH - 1.2 + strain * 0.15)
+            // ⚠️⚠️ **这一档不转角度了。**
+            //
+            // 原来是把手转到 72°，东西的位置另外写死——两套算法各算各的，
+            // 所以床跟手永远差那么一点，手根部还豁着一个洞。
+            // 参考里的做法是反过来的：**手和东西是一个整体一起平移**，
+            // 位置只有一个来源，对不齐这件事从根上不成立。
+            //
+            // 动作分两半，而且**是反着的**（这一条是她指出来的）：
+            //   · 手 + 床往上顶
+            //   · 同时**腿弯下去**、眼睛眯起来
+            // 两边同方向动就只是整只在飘；反向对抗才读得出「在使劲」。
+            let t = (sin(beat * .pi * 2) + 1) / 2       // 0→1→0，一个来回
+            p.armsUp = true
+            p.lift = t * 3                              // 手往上顶三格
+            p.squat = Int((t * 2).rounded())            // 腿往下弯两格
+            let top = armUpTop(lift: p.lift)
+            // 床就搁在手尖上——**同一个数算出来的**，不可能对不齐
+            p.itemAt = CGPoint(x: midX - itemW / 2, y: top - itemH)
 
         case .sip:
             // 举到嘴边喝。beat 0→1 是「凑近 → 仰头灌 → 放下」，

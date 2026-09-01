@@ -663,30 +663,48 @@ struct ClawdHomeView: View {
                 // 图纸从 32 加宽到 40 之后，多出来的八格全是透明边；
                 // 身子还是那 24 格，`scale` 不变它画出来就还是原来那么大。
                 // 改成 40 的话身子会当场瘦两成——她抱怨过一次他太小了。
-                ClawdView(mood: mood, scale: tile * 0.87 / 32, shadow: true,
-                          // 小屋里也要戴上。**两边都传**——只给一边的话，
-                          // 她在这儿给他戴上帽子，切到聊天页就没了。
-                          worn: store.wornKind?.sprite,
-                          wornID: store.wearing ?? "",
-                          // 高兴的时候**手要摆起来**。
-                          // 她说的「随着他的情绪联动的表情，笑、冒爱心等等都没有」——
-                          // 冒爱心那条早就有了（`.loving` 那一档），
-                          // 缺的是手：以前不管什么情绪，手都是垂着的两块。
-                          pose: ClawdHomeView.armPose(mood))
-                    // 大件**举过头顶**（她画的那张参考图就是这个动作）。
-                    // 聊天页读的是同一个 store、同一套判断，所以两边一模一样：
-                    // 这边在搬床，切过去那边也在搬床，也是举着的。
-                    .overlay(alignment: .top) {
-                        if let kind = store.carriedKind, store.overhead(kind) {
-                            // ⚠️ 他手上那件东西也**跟着格子走**，理由同上。
-                            // 屋子一变大，他跟着大了，手里举的还是原来那么小，
-                            // 看着像举了个模型——这两处是 `isohard.py` 揪出来的。
-                            PixelSpriteView(sprite: kind.sprite,
-                                            scale: tile * 1.05 / 32)
-                                .offset(y: -tile * 0.46)
-                                .transition(.scale(scale: 0.5).combined(with: .opacity))
-                        }
+                if let kind = store.carriedKind, store.overhead(kind) {
+                    // 举大件（床、柜子）。
+                    //
+                    // ⚠️⚠️ **这一档必须走 `ClawdRigView`，不能再用
+                    // 「`ClawdView` + 上面叠一张床」那套。**
+                    //
+                    // 叠的那套里，床的高度是 `-tile * 0.46` 硬写的，
+                    // 手的位置是另一套算出来的——**两个来源**，
+                    // 所以床跟手永远差那么一点，他一动就更明显。
+                    //
+                    // 换成 rig 之后，手和床都从 `ClawdRig.plan` 的
+                    // 同一个 `armUpTop` 里来（见那一档的注释）：
+                    // 床就搁在手尖上，对不齐这件事从根上不成立。
+                    TimelineView(.animation) { ctx in
+                        // 3.2 秒一个来回：举上去 → 撑住 → 沉下来。
+                        // ⚠️ 用时钟取进度，不要拿 `@State` 计时——
+                        // 这只 clawd 在小屋、聊天页、输入框上同时活着，
+                        // 每秒六十次改状态整棵树跟着重画。
+                        let beat = (ctx.date.timeIntervalSinceReferenceDate / 3.2)
+                            .truncatingRemainder(dividingBy: 1)
+                        ClawdRigView(mood: mood,
+                                     item: kind.sprite,
+                                     worn: store.wornKind?.sprite,
+                                     wornID: store.wearing ?? "",
+                                     pose: .lift,
+                                     scale: tile * 0.87 / 32,
+                                     beat: beat,
+                                     shadow: true)
                     }
+                    .transition(.scale(scale: 0.5).combined(with: .opacity))
+                } else {
+                    ClawdView(mood: mood, scale: tile * 0.87 / 32, shadow: true,
+                              // 小屋里也要戴上。**两边都传**——只给一边的话，
+                              // 她在这儿给他戴上帽子，切到聊天页就没了。
+                              worn: store.wornKind?.sprite,
+                              wornID: store.wearing ?? "",
+                              // 高兴的时候**手要摆起来**。
+                              // 她说的「随着他的情绪联动的表情，笑、冒爱心等等都没有」——
+                              // 冒爱心那条早就有了（`.loving` 那一档），
+                              // 缺的是手：以前不管什么情绪，手都是垂着的两块。
+                              pose: ClawdHomeView.armPose(mood))
+                }
                 // 小东西还是端在手边
                 if let kind = store.carriedKind, !store.overhead(kind) {
                     PixelSpriteView(sprite: kind.sprite, scale: tile * 1.2 / 32)
