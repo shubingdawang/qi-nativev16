@@ -27,6 +27,11 @@ struct JournalPageView: View {
     @State private var showingPalette = true
     @State private var showingQuotes = false
     @State private var showingPapers = false
+    /// 她自己那批贴纸。见 `MyStickers`。
+    @State private var mine: [String] = MyStickers.all()
+    /// 正在从相册挑要导进库里的那几张
+    @State private var importing = false
+    @State private var importPick: [PhotosPickerItem] = []
     @State private var photoItem: PhotosPickerItem?
     @State private var editingText: JournalElement?
     @State private var draftText = ""
@@ -59,6 +64,25 @@ struct JournalPageView: View {
         }
         .navigationTitle(page.displayTitle)
         .navigationBarTitleDisplayMode(.inline)
+        // ⚠️ 走 `PhotoPickHost`，**不直接挂在这一页上**：
+        // 这一页订阅着 `app`，AppState 一变就重求值，
+        // 正在弹的选择器会被当场撤掉（那个病这仓库里栽过四次）。
+        .background(PhotoPickHost(open: $importing, picked: $importPick,
+                                  maxCount: 20))
+        .onChange(of: importPick) { _, items in
+            guard !items.isEmpty else { return }
+            Task {
+                for it in items {
+                    // ⚠️ 拿 `Data` 不拿 `UIImage`：过一遍 UIImage 再存
+                    // 会丢掉原始编码，而**透明底就是在那一步没的**。
+                    if let d = try? await it.loadTransferable(type: Data.self) {
+                        MyStickers.add(d)
+                    }
+                }
+                importPick = []
+                mine = MyStickers.all()
+            }
+        }
         .toolbar {
             // 「给他看」。**默认关**——手帐上常常是随手写的心事，
             // 她点头他才看得见。开了他就能把这一页原样画成图看见，
@@ -784,6 +808,66 @@ struct JournalPageView: View {
                         // ── 实物贴纸排在最前面。
                         // 她说画出来的那种「很怪，本身就是色块」——
                         // 所以真东西该先摆出来，画的那些退到后面当补充。
+                        // ── 她自己导进来的那些，**排在最前面**。
+                        //
+                        // 自带那批有八十多张，她刚导进来的那一张要是排在后面，
+                        // 得横着划半天才找得到——而那张恰恰是她这会儿想贴的。
+                        //
+                        // 见 `MyStickers`：有些素材（比如いらすとや）条款允许
+                        // 「自己用」但不允许「打包再分发」，这条路走的是前者。
+                        Button {
+                            importing = true
+                        } label: {
+                            VStack(spacing: 1) {
+                                Image(systemName: "plus")
+                                    .font(.app(13))
+                                Text("导入")
+                                    .font(.app(8))
+                            }
+                            .foregroundStyle(Theme.textSoft(scheme))
+                            .frame(width: 30, height: 30)
+                            .padding(3)
+                            .background(RoundedRectangle(cornerRadius: 8,
+                                                         style: .continuous)
+                                .fill(Theme.softFillDeep))
+                        }
+                        .buttonStyle(.plain)
+
+                        ForEach(mine, id: \.self) { file in
+                            Button {
+                                if e.assetName.isEmpty && e.pattern.isEmpty {
+                                    commit(e.id) { $0.assetName = file }
+                                } else {
+                                    addSticker(asset: file, near: e)
+                                }
+                            } label: {
+                                Group {
+                                    if let img = JournalKit.stickerImage(file) {
+                                        Image(uiImage: img).resizable().scaledToFit()
+                                    } else {
+                                        Color.clear
+                                    }
+                                }
+                                .frame(width: 30, height: 30)
+                                .padding(3)
+                                .background(RoundedRectangle(cornerRadius: 8,
+                                                             style: .continuous)
+                                    .fill(Theme.softFillDeep))
+                            }
+                            .buttonStyle(.plain)
+                            // 长按删掉这一张。**只从她的库里删，不动已经贴出去的**——
+                            // 贴出去那些是页面上的东西，跟库里这一张是两回事。
+                            .contentShape(Rectangle())
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    MyStickers.remove(file)
+                                    mine = MyStickers.all()
+                                } label: {
+                                    Label("从我的库里删掉", systemImage: Icon.trash)
+                                }
+                            }
+                        }
+
                         ForEach(JournalKit.realStickers, id: \.1) { _, file in
                             Button {
                                 // ⚠️ **手上这张已经有图了就再贴一张，不是换掉。**

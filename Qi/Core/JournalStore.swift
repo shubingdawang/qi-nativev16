@@ -520,6 +520,9 @@ enum JournalKit {
     }()
 
     static func stickerImage(_ name: String) -> UIImage? {
+        // 她自己导进来的那些走另一条路（存在手机沙盒里，不在 Bundle）。
+        // 见 `MyStickers` 开头那段：为什么有些素材只能这么用。
+        if name.hasPrefix(MyStickers.mark) { return MyStickers.image(name) }
         let key = name as NSString
         if let hit = stickerCache.object(forKey: key) { return hit }
         guard let url = Bundle.main.url(forResource: name, withExtension: "png"),
