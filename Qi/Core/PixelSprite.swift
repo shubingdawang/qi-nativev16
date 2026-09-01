@@ -144,6 +144,10 @@ enum ClawdSprites {
 
     /// 睁着眼站着。这就是图纸原样，两只手各往外长了一格。
     static let idle = PixelSprite([
+        "................................",
+        "................................",
+        "................................",
+        "................................",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
@@ -171,6 +175,10 @@ enum ClawdSprites {
 
     /// 哭：眼睛闭成一条，泪刚涌出来
     static let cry1 = PixelSprite([
+        "................................",
+        "................................",
+        "................................",
+        "................................",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
@@ -198,6 +206,10 @@ enum ClawdSprites {
 
     /// 哭：那滴泪往下掉了两格
     static let cry2 = PixelSprite([
+        "................................",
+        "................................",
+        "................................",
+        "................................",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
@@ -254,6 +266,10 @@ enum ClawdSprites {
 
     /// 扫地：甩到左边，身子跟着往左倾
     static let sweep1 = PixelSprite([
+        "................................",
+        "................................",
+        "................................",
+        "................................",
         "...pppppppppppppppppppppppp.....",
         "...pppppppppppppppppppppppp.....",
         "...pppppppppppppppppppppppp.....",
@@ -281,6 +297,10 @@ enum ClawdSprites {
 
     /// 扫地：扫到中间，身子直起来
     static let sweep2 = PixelSprite([
+        "................................",
+        "................................",
+        "................................",
+        "................................",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
@@ -308,6 +328,10 @@ enum ClawdSprites {
 
     /// 扫地：甩到右边，身子往右倾
     static let sweep3 = PixelSprite([
+        "................................",
+        "................................",
+        "................................",
+        "................................",
         ".....pppppppppppppppppppppppp...",
         ".....pppppppppppppppppppppppp...",
         ".....pppppppppppppppppppppppp...",
@@ -335,6 +359,10 @@ enum ClawdSprites {
 
     /// 扫地：收回中间。跟第二帧同一个姿势，所以一个来回是「左-中-右-中」，不是左右跳
     static let sweep4 = PixelSprite([
+        "................................",
+        "................................",
+        "................................",
+        "................................",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
@@ -362,6 +390,10 @@ enum ClawdSprites {
 
     /// 甜：眯着眼笑，腮红。爱心是界面上飘的，不画进图纸
     static let sweet = PixelSprite([
+        "................................",
+        "................................",
+        "................................",
+        "................................",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
@@ -390,6 +422,10 @@ enum ClawdSprites {
     /// 呼吸：整只往下沉一格，腿跟着收短一截
     static let breathe = PixelSprite([
         "................................",
+        "................................",
+        "................................",
+        "................................",
+        "................................",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
@@ -416,6 +452,10 @@ enum ClawdSprites {
 
     /// 眨眼：三格高的眼睛只剩最下面一格
     static let blink = PixelSprite([
+        "................................",
+        "................................",
+        "................................",
+        "................................",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
@@ -443,6 +483,10 @@ enum ClawdSprites {
 
     /// 开心：眼睛眯起来，只剩下面两格
     static let happy = PixelSprite([
+        "................................",
+        "................................",
+        "................................",
+        "................................",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
@@ -470,6 +514,10 @@ enum ClawdSprites {
 
     /// 笑：眼睛留上下两道、中间亮着，像弯起来了
     static let smile = PixelSprite([
+        "................................",
+        "................................",
+        "................................",
+        "................................",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
@@ -497,6 +545,10 @@ enum ClawdSprites {
 
     /// 睡着：眼睛闭成一道暗色的缝
     static let sleep = PixelSprite([
+        "................................",
+        "................................",
+        "................................",
+        "................................",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
@@ -524,6 +576,8 @@ enum ClawdSprites {
 
     /// 在想事情：头顶冒小方块
     static let thinking = PixelSprite([
+        "................................",
+        "................................",
         ".......y........................",
         "..................y.............",
         "....pppppppppppppppppppppppp....",
@@ -553,6 +607,8 @@ enum ClawdSprites {
 
     /// 想得更凶：小方块换个位置，看着像在冒
     static let thinking2 = PixelSprite([
+        "................................",
+        "................................",
         "..................y.............",
         ".......y........................",
         "....pppppppppppppppppppppppp....",
@@ -582,6 +638,10 @@ enum ClawdSprites {
 
     /// 干活：左手抬起来、右手压下去
     static let working = PixelSprite([
+        "................................",
+        "................................",
+        "................................",
+        "................................",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
@@ -609,6 +669,10 @@ enum ClawdSprites {
 
     /// 换只手。两帧来回切就是在忙活。
     static let working2 = PixelSprite([
+        "................................",
+        "................................",
+        "................................",
+        "................................",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
@@ -637,6 +701,10 @@ enum ClawdSprites {
     /// 走路第一步：左边那两条腿抬起来。跟 walk2 交替就是在迈步，
     /// 不是原地翻个身就瞬移过去。
     static let walk1 = PixelSprite([
+        "................................",
+        "................................",
+        "................................",
+        "................................",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
@@ -664,6 +732,10 @@ enum ClawdSprites {
 
     /// 走路第二步：换右边那两条腿抬
     static let walk2 = PixelSprite([
+        "................................",
+        "................................",
+        "................................",
+        "................................",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
@@ -691,6 +763,10 @@ enum ClawdSprites {
 
     /// 搬东西：两只手都放低到身前，像抱着一个箱子
     static let carry = PixelSprite([
+        "................................",
+        "................................",
+        "................................",
+        "................................",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
@@ -782,6 +858,10 @@ enum ClawdSprites {
     ///   · 只留靠外那一只眼睛（另一只在屏幕外，看不见也不用画）
     ///   · 那只手抬到高处，像扒着墙沿探身子
     static let peek1 = PixelSprite([
+        "................................",
+        "................................",
+        "................................",
+        "................................",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",
         "pppppppppppppppppppppppppppp....",
@@ -811,6 +891,10 @@ enum ClawdSprites {
     /// 跟 peek1 来回换，配上位置上那一点点进退，看着就是在探头探脑，
     /// 不是一张钉死的静态图。
     static let peek2 = PixelSprite([
+        "................................",
+        "................................",
+        "................................",
+        "................................",
         "................................",
         "....pppppppppppppppppppppppp....",
         "....pppppppppppppppppppppppp....",

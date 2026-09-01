@@ -1,16 +1,19 @@
 # -*- coding: utf-8 -*-
 """生成扫地那几帧。
 
-手打 3×23 行像素太容易错一格，所以由这儿算出来再贴进 Swift。
+手打 3×27 行像素太容易错一格，所以由这儿算出来再贴进 Swift。
 
-图纸 32 格宽、23 格高：
+图纸 32 格宽、**27 格高**（顶上四行是留给举手的空，见 `加高图纸.py`）：
   · 身子 4..27 列，手是 0..3 和 28..31 列（第 6..10 行）
   · 腿 17..22 行
   · n = 扫把杆，t = 稻草，k = 眼睛，p = 身子
 """
-W, H = 32, 23
+W, H = 32, 27
 
 BODY = (
+    # ⚠️ 顶上这四行是**留给举手的空**（图纸从 23 行加高到 27 行）。
+    # 底下每一行都跟着往下挪了四行，所以下面所有行号都是加过 4 的。
+    ['.' * 32] * 4 +
     ['....pppppppppppppppppppppppp....'] * 5 +
     ['....pppkkkppppppppppppkkkppp....'] +
     ['pppppppkkkppppppppppppkkkppppppp'] * 2 +
@@ -28,7 +31,7 @@ def lean(rows, dx):
     人扫地是**上半身在带**，脚是不挪的。"""
     out = []
     for y, row in enumerate(rows):
-        if dx == 0 or y >= 17:
+        if dx == 0 or y >= 21:
             out.append(row)
             continue
         if dx > 0:
@@ -61,7 +64,7 @@ def straw(rows, cx):
     画成一个下宽上窄的扇形，中心跟着杆走。"""
     g = [list(r) for r in rows]
     for dy, half in ((0, 2), (1, 3), (2, 4)):
-        y = 20 + dy
+        y = 24 + dy
         for x in range(cx - half, cx + half + 1):
             if 0 <= x < W:
                 g[y][x] = 't'
@@ -71,7 +74,7 @@ def straw(rows, cx):
 def frame(dx, hand_x, tip_x):
     rows = lean(BODY, dx)
     # 杆从手里（第 10 行，右手那一块）斜下来，落到稻草中心
-    rows = line(rows, hand_x, 10, tip_x, 19, 'n')
+    rows = line(rows, hand_x, 14, tip_x, 23, 'n')
     return straw(rows, tip_x)
 
 

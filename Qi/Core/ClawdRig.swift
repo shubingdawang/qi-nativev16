@@ -166,8 +166,12 @@ enum ClawdRig {
     /// 身子在图纸上占第几格到第几格。手长在这两格外面。
     static let bodyLeft = 4
     static let bodyRight = 27
-    /// 手臂从第几行起
-    static let armRow = 6
+    /// 手臂从第几行起。
+    ///
+    /// ⚠️⚠️ **6 → 10**：图纸从 23 行加高到 27 行（顶上补了四行空），
+    /// 每一格原样往下挪了四行，所以肩膀也跟着挪。
+    /// **漏改这一个，手就会长在肚子上。**
+    static let armRow = 10
 
     /// 一只手。就是原来长在身子外面那一小块，抠出来单独画。
     ///
@@ -299,8 +303,8 @@ enum ClawdRig {
     ///
     /// ## 怎么定位
     ///
-    /// 图纸 32 格宽、23 格高（见 `ClawdSprites`）：
-    /// 身子 4..27 列，脸在第 5..8 行，脚在最底下几行。
+    /// 图纸 32 格宽、**27 格高**（见 `ClawdSprites`；顶上四行是留给举手的空）：
+    /// 身子 4..27 列，脸在第 9..12 行，脚在最底下几行。
     /// 所以帽子在头顶偏上、眼镜压在眼睛那一行、围巾在下巴底下、
     /// 靴子贴着脚、背包挂在身后偏一侧。
     static func wearAt(_ id: String, itemW: CGFloat, itemH: CGFloat) -> CGPoint {
@@ -308,23 +312,23 @@ enum ClawdRig {
         switch id {
         case "hat", "beret":
             // 扣在头顶：横着居中，竖着**压住最上那一行**，别浮在头顶上方
-            return CGPoint(x: midX - itemW / 2, y: -itemH + 3)
+            return CGPoint(x: midX - itemW / 2, y: 4 - itemH + 3)
         case "glasses":
             // 眼睛在第 5..7 行，镜框压在那一片上
-            return CGPoint(x: midX - itemW / 2, y: 5)
+            return CGPoint(x: midX - itemW / 2, y: 9)
         case "bowtie":
-            return CGPoint(x: midX - itemW / 2, y: 11)
+            return CGPoint(x: midX - itemW / 2, y: 15)
         case "scarf":
             // 围巾绕在脖子那一圈——比领结低一点、宽一点
-            return CGPoint(x: midX - itemW / 2, y: 10)
+            return CGPoint(x: midX - itemW / 2, y: 14)
         case "bag":
             // 背包**挂在身后偏一侧**，露出一半才看得出是背着的
-            return CGPoint(x: CGFloat(bodyRight) - itemW * 0.55, y: 9)
+            return CGPoint(x: CGFloat(bodyRight) - itemW * 0.55, y: 13)
         case "boots":
             // 贴着脚。图纸 23 行高，脚在最底下
-            return CGPoint(x: midX - itemW / 2, y: 23 - itemH)
+            return CGPoint(x: midX - itemW / 2, y: 27 - itemH)
         default:
-            return CGPoint(x: midX - itemW / 2, y: 8)
+            return CGPoint(x: midX - itemW / 2, y: 12)
         }
     }
 
