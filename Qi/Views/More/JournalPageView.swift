@@ -132,6 +132,9 @@ struct JournalPageView: View {
                     element(e, in: geo.size)
                 }
             }
+            // 手柄要按「手指相对元素中心转了多少度」来算，
+            // 所以得有一个跟这张纸对齐的坐标系。
+            .coordinateSpace(name: Self.canvasSpace)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
             .padding(.horizontal, 14)
@@ -139,31 +142,54 @@ struct JournalPageView: View {
         }
     }
 
+    /// 这张纸的坐标系。手柄算角度要用。
+    static let canvasSpace = "journal"
+
     @ViewBuilder
     private func element(_ e: JournalElement, in size: CGSize) -> some View {
         let live = picked == e.id
         let scale = e.scale * (live ? pinchScale : 1)
         let angle = e.angle + (live ? twist : 0)
+        let center = CGPoint(x: e.x * size.width + (live ? dragBy.width : 0),
+                             y: e.y * size.height + (live ? dragBy.height : 0))
 
         render(e)
-            .scaleEffect(scale)
-            .rotationEffect(.degrees(angle))
-            .position(
-                x: e.x * size.width + (live ? dragBy.width : 0),
-                y: e.y * size.height + (live ? dragBy.height : 0)
-            )
+            // ⚠️⚠️ **整块都要能碰，不只是画出来的那几个像素。**
+            //
+            // 她报的：「夹子换了款式之后就不能拖动了，
+            // 点击也没有虚线边框（就是选中）出现。」
+            //
+            // 回形针那一款是 `PaperClip().stroke(…, lineWidth: 2.4)`——
+            // **一条两点四宽的线**，除了这条线，整块都是透明的，
+            // 手指落在别处什么都收不到。别的款式是填充的形状，所以是好的，
+            // 她换了款才发现。
+            //
+            // 补一块实心的感应区，从此所有款式一个样。
+            // （这已经是这个病的第六次了，见 `scripts/hitarea.py`。）
+            .contentShape(Rectangle())
             .overlay {
-                // 选中的圈一下。虚线框，不遮内容。
+                // 选中的圈一下。
+                //
+                // ⚠️ 这个框**贴着元素自己**，跟着它一起缩放旋转。
+                // 上一版是写死的 `frame(width: 200, height: 120)` 摆在中心——
+                // 一枚夹子才十几点宽，框比它大十几倍；
+                // 一张大照片又框不住。既指不准是哪一件，也看不出它多大。
                 if live {
                     RoundedRectangle(cornerRadius: 6)
                         .strokeBorder(app.settings.accentColor,
                                       style: StrokeStyle(lineWidth: 1.2, dash: [4, 3]))
-                        .frame(width: 200, height: 120)
-                        .position(x: e.x * size.width + dragBy.width,
-                                  y: e.y * size.height + dragBy.height)
+                        .padding(-4)
                         .allowsHitTesting(false)
                 }
             }
+            .scaleEffect(scale)
+            .rotationEffect(.degrees(angle))
+            // ⚠️ 手柄挂在**缩放和旋转之后**：这样它自己不跟着变大变斜，
+            // 元素缩到很小的时候它还是那么大、还是正的，指头按得着。
+            .overlay(alignment: .bottomTrailing) {
+                if live { handle(e, center: center) }
+            }
+            .position(center)
             .onTapGesture {
                 // ⚠️ 选中之后再点**不再自动开编辑器**——
                 // 改文字现在有自己的钮（见 `firstBar` 里那个「改文字」）。
@@ -191,6 +217,8 @@ struct JournalPageView: View {
                         dragBy = .zero
                     }
             )
+            // 两指捏合／旋转照旧留着——东西够大的时候那才是最顺手的。
+            // 小东西走上面那个手柄。
             .simultaneousGesture(
                 MagnifyGesture()
                     .onChanged { v in
@@ -214,6 +242,63 @@ struct JournalPageView: View {
                     }
                     .onEnded { v in
                         commit(e.id) { $0.angle += v.rotation.degrees }
+                        twist = 0
+                    }
+            )
+    }
+
+    /// 选中之后右下角那个小圆点：**一根手指按住它，转圈就是转，
+    /// 往外拉就是放大**。
+    ///
+    /// ## 为什么非要有它
+    ///
+    /// 她报了两次，第二次说得最清楚：
+    /// 「我发现手帐有一些是可以放大缩小旋转的，但是必须要两只手都在物体上，
+    /// 　但如果物体很小的话，我很难旋转。」
+    ///
+    /// 一点没错——`MagnifyGesture` / `RotateGesture` 要求**两根手指都落在
+    /// 这个元素身上**。一枚夹子十几点宽、一张贴纸四十几点，
+    /// 两根手指根本排不下；就算排下了，指尖也把那个东西整个盖住了，
+    /// 转到哪儿全靠猜。
+    ///
+    /// 手柄把这件事变成一根手指的事，而且**手指在物体外面**，看得见。
+    ///
+    /// ## 怎么算
+    ///
+    /// 拿手指相对**元素中心**的向量：
+    ///   · 长度之比 = 缩放（往外拉变大，往里推变小）
+    ///   · 夹角之差 = 旋转
+    /// 一次手势同时给这两样，跟真的用手捏着一个角在转是一回事。
+    private func handle(_ e: JournalElement, center: CGPoint) -> some View {
+        Circle()
+            .fill(app.settings.accentColor)
+            .overlay { Circle().strokeBorder(.white.opacity(0.9), lineWidth: 1.5) }
+            .frame(width: 20, height: 20)
+            // 感应区比看得见的那个圆大一圈——20 点的圆按起来是勉强的
+            .contentShape(Circle().inset(by: -10))
+            .offset(x: 10, y: 10)
+            .gesture(
+                DragGesture(coordinateSpace: .named(Self.canvasSpace))
+                    .onChanged { v in
+                        let a = CGVector(dx: v.startLocation.x - center.x,
+                                         dy: v.startLocation.y - center.y)
+                        let b = CGVector(dx: v.location.x - center.x,
+                                         dy: v.location.y - center.y)
+                        let r0 = sqrt(a.dx * a.dx + a.dy * a.dy)
+                        let r1 = sqrt(b.dx * b.dx + b.dy * b.dy)
+                        // 起手离中心太近的话，比例会炸——那时候就只转不缩
+                        pinchScale = r0 > 12 ? min(4, max(0.25, r1 / r0)) : 1
+                        twist = (atan2(b.dy, b.dx) - atan2(a.dy, a.dx)) * 180 / .pi
+                    }
+                    .onEnded { _ in
+                        let s = pinchScale
+                        let t = twist
+                        commit(e.id) {
+                            $0.scale = min(4, max(0.25, $0.scale * s))
+                            $0.angle += t
+                            $0.z = nextZ
+                        }
+                        pinchScale = 1
                         twist = 0
                     }
             )
@@ -313,7 +398,9 @@ struct JournalPageView: View {
                             VStack(spacing: 3) {
                                 Image(systemName: kind.icon)
                                     .font(.app(15))
-                                Text(kind.rawValue)
+                                // ⚠️ `title` 不是 `rawValue`：
+                                // rawValue 是存档里的词，改不得（见 JournalKind）。
+                                Text(kind.title)
                                     .font(.app(9))
                             }
                             .foregroundStyle(Theme.textSoft(scheme))
@@ -471,6 +558,19 @@ struct JournalPageView: View {
             if let styles = Self.styles(for: e.kind) {
                 styleBar(e, styles)
             }
+            // 那几样光看名字猜不出来的，选中的时候在底下说一句。
+            //
+            // 她报的：「剪贴不知道是什么作用，目前看起来作用跟照片差不多。」
+            // ——那一档确实跟照片不一样（原样存，保住透明底），
+            // 但**界面上一个字都没说过**，而它跟照片长得又几乎一模一样。
+            // 名字已经改成「透明贴」了，这一行再补一句它到底干嘛的。
+            if !e.kind.hint.isEmpty {
+                Text(e.kind.hint)
+                    .font(.app(10))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 2)
+            }
         }
     }
 
@@ -482,6 +582,7 @@ struct JournalPageView: View {
         case .note:  return JournalKit.noteStyles
         case .clip:  return JournalKit.clipStyles
         case .stamp: return JournalKit.stampStyles
+        case .quote: return JournalKit.quoteStyles
         default:     return nil
         }
     }

@@ -193,9 +193,14 @@ struct JournalElementView: View {
                     }
                 }
                 .frame(maxWidth: 190)
-                .padding(10)
+                .padding(12)
                 .background {
-                    Rectangle().fill(Color.white.opacity(0.42))
+                    ZStack {
+                        Rectangle().fill(Color.white.opacity(0.42))
+                        // 花纹边框（她要的）。素的那一档什么都不画，
+                        // 老页面上的摘句保持原样。
+                        JournalStyle.QuoteSkin(kind: e.pattern, tint: e.color)
+                    }
                 }
             }
     }

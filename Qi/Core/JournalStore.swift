@@ -29,6 +29,29 @@ enum JournalKind: String, Codable, CaseIterable {
     /// 她自己从网上找的那种贴纸：一张透明底的 PNG，原样贴上去。
     /// 跟「照片」的区别是**不裁成方块、不套框**——
     /// 裁了的话透明底那圈就没了，看着就不是贴纸。
+    /// ⚠️⚠️ **`rawValue` 一个字都不能改——它是存档里的那个词。**
+    ///
+    /// 差点在这儿栽一个：我本来把它从 `"剪贴"` 改成了 `"透明贴"`。
+    /// 可 `JournalElement` 的解码器是
+    /// `(try? c.decodeIfPresent(JournalKind.self, …)) ?? .text`——
+    /// 老页面里存着 `"剪贴"`，新的枚举不认这个词，
+    /// 于是**她已经贴上去的每一张透明贴都会变成一块文字**，图没了。
+    ///
+    /// 显示用的名字走 `title`，跟存档那个词分开。
+    /// **给用户看的名字随时可以改，存进文件的那个不行。**
+    ///
+    /// 她报的：「剪贴不知道是什么作用，目前看起来作用跟照片差不多，
+    /// 就是比照片多了一层黑底。」
+    ///
+    /// 它跟照片**确实有区别，而且是关键区别**：这一档把图**原样落盘**，
+    /// 一个字节都不重编码，所以 PNG 的透明底能保住；
+    /// 照片那一档会转成 JPEG，而 **JPEG 没有透明通道**——
+    /// 透明的地方会全变成白块，那张贴纸就废了。
+    ///
+    /// 可「剪贴」这两个字一个字都没说出这件事，
+    /// 而她要是随手挑了一张没有透明底的照片，两者看起来就真的一样
+    /// （她说的那层「黑底」是投影，为了让它看着像贴上去的）。
+    /// 名字换成「透明贴」，再加一句说明——见 `JournalKind.hint`。
     case cutout   = "剪贴"
 
     var icon: String {
@@ -46,6 +69,32 @@ enum JournalKind: String, Codable, CaseIterable {
         case .frame:   return "rectangle.inset.filled"
         case .quote:   return "quote.opening"
         case .cutout:  return "scissors"
+        }
+    }
+
+    /// 界面上显示的名字。**跟 `rawValue` 分开**，理由见 `cutout` 那段。
+    ///
+    /// 她报的：「剪贴不知道是什么作用。」——「剪贴」这两个字
+    /// 一个字都没说出它跟照片的区别（原样存、保住透明底）。
+    /// 别的几样名字就是它本身，照旧用 `rawValue`。
+    var title: String {
+        self == .cutout ? "透明贴" : rawValue
+    }
+
+    /// 挑这一样的时候在底下写一句。空 = 不用解释。
+    ///
+    /// 只给那几个**光看名字猜不出来**的：
+    /// 剩下的（照片、便签、胶带…）名字就是它本身，多一句话反而吵。
+    var hint: String {
+        switch self {
+        case .cutout:
+            return "原样贴上，保住透明底。挑没有透明底的图会跟「照片」看着一样。"
+        case .photo:
+            return "会压缩重存，可以选边框。"
+        case .quote:
+            return "一句话加引号，底下署名。"
+        default:
+            return ""
         }
     }
 }
@@ -320,6 +369,18 @@ enum JournalKit {
     static let stampStyles: [(String, String)] = [
         ("锯齿", ""), ("方章", "square"), ("圆戳", "round"),
         ("双框", "double"), ("旧票", "aged")
+    ]
+
+    /// 摘句的花纹边框。
+    ///
+    /// 她要的：「摘句也需要花纹边框。」——原来它只有一层半透明的白底，
+    /// 一条边都没有，摆在纸上像一块洇开的水渍，不像「摘下来的一句话」。
+    ///
+    /// 第一个仍旧是「素」：老页面上那些摘句全是这一种，
+    /// 加了边就等于把她以前排好的版改了。
+    static let quoteStyles: [(String, String)] = [
+        ("素", ""), ("细框", "hair"), ("双线", "double"),
+        ("虚线", "dash"), ("书角", "corner"), ("引号", "quotes")
     ]
 
     /// 纸的织纹。**这几张是真的布料实拍**（CC0，见 Resources/Weave/织纹来历.txt）——

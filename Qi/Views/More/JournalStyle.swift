@@ -318,4 +318,68 @@ enum JournalStyle {
             }
         }
     }
+
+    /// 摘句那一圈花纹边框。
+    ///
+    /// 她要的：「摘句也需要花纹边框。」原来它只有一层半透明的白底，
+    /// 一条边都没有，摆在纸上像一块洇开的水渍。
+    ///
+    /// ⚠️ **「素」那一档什么都不画。** 老页面上的摘句全是这一种，
+    /// 给它们凭空加一圈边，等于把她以前排好的版改了。
+    ///
+    /// 跟便签、邮票那两套一样走 `Canvas`：一条路径画完，
+    /// 不铺几十个图层——一页上可能有好几条摘句。
+    struct QuoteSkin: View {
+        let kind: String
+        let tint: Color
+
+        var body: some View {
+            Canvas { ctx, size in
+                let r = CGRect(origin: .zero, size: size)
+                let ink = tint.opacity(0.55)
+                switch kind {
+                case "hair":
+                    ctx.stroke(Path(r.insetBy(dx: 2, dy: 2)),
+                               with: .color(ink), lineWidth: 0.8)
+                case "double":
+                    ctx.stroke(Path(r.insetBy(dx: 1.5, dy: 1.5)),
+                               with: .color(ink), lineWidth: 1.4)
+                    ctx.stroke(Path(r.insetBy(dx: 5, dy: 5)),
+                               with: .color(ink.opacity(0.6)), lineWidth: 0.6)
+                case "dash":
+                    ctx.stroke(Path(r.insetBy(dx: 2.5, dy: 2.5)),
+                               with: .color(ink),
+                               style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                case "corner":
+                    // 只画四个角。整圈太满，四个角像书页上压的那种角标。
+                    let d: CGFloat = 14
+                    var p = Path()
+                    for (x, y, dx, dy) in [(r.minX + 3, r.minY + 3, 1.0, 1.0),
+                                           (r.maxX - 3, r.minY + 3, -1.0, 1.0),
+                                           (r.minX + 3, r.maxY - 3, 1.0, -1.0),
+                                           (r.maxX - 3, r.maxY - 3, -1.0, -1.0)] {
+                        p.move(to: CGPoint(x: x + d * dx, y: y))
+                        p.addLine(to: CGPoint(x: x, y: y))
+                        p.addLine(to: CGPoint(x: x, y: y + d * dy))
+                    }
+                    ctx.stroke(p, with: .color(ink), lineWidth: 1.2)
+                case "quotes":
+                    // 左上角一枚大引号，右下角一枚倒着的。**不画框**——
+                    // 摘句本来就是靠引号说话的。
+                    let big = Font.system(size: 30, weight: .semibold, design: .serif)
+                    var open = ctx.resolve(Text("\u{201C}").font(big)
+                        .foregroundColor(ink.opacity(0.5)))
+                    open.shading = .color(ink.opacity(0.5))
+                    ctx.draw(open, at: CGPoint(x: r.minX + 10, y: r.minY + 12))
+                    var close = ctx.resolve(Text("\u{201D}").font(big)
+                        .foregroundColor(ink.opacity(0.5)))
+                    close.shading = .color(ink.opacity(0.5))
+                    ctx.draw(close, at: CGPoint(x: r.maxX - 10, y: r.maxY - 10))
+                default:
+                    break      // 「素」：什么都不画
+                }
+            }
+        }
+    }
+
 }

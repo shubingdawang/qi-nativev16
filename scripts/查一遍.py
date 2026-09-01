@@ -28,7 +28,9 @@ SWIFT = ['arginit', 'buildercheck', 'dupdecl', 'findbad', 'hitarea',
 STANDALONE = ['blurbcheck', 'bundlecheck', 'dupcase', 'kitcheck',
               'spritecheck', 'strspan',
               # 自己去问 git 这一版删了什么，不用给文件
-              'orphan']
+              'orphan',
+              # 存档里的枚举名字改了没有
+              'rawvalue']
 
 
 def swift_files(changed):
