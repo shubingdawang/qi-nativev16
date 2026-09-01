@@ -146,7 +146,17 @@ struct ClawdGridEditor: View {
             // 大出去的部分靠 pan 挪着看（不用 ScrollView：
             // 滚动和画画抢的是同一根手指，摆在一起必然打架）。
             let viewW = geo.size.width
-            let viewH = viewW * CGFloat(ClawdDoodle.baseRows) / CGFloat(ClawdDoodle.baseCols)
+            // ⚠️ **缩小的时候连视窗一起缩**（`min(zoom, 1)`）。
+            //
+            // 她说的：「显示效果的地方可以缩小，我做画的地方反而不能缩小了，
+            // 那我想画上面的区域怎么办。」——上一版只让画布本身变小，
+            // 视窗还占着满满一块，屏幕一点没省出来，
+            // 上面那截照样被顶出可视范围。
+            //
+            // 放大（zoom > 1）时视窗**不动**，超出的部分靠 pan 挪着看。
+            let shrink = min(zoom, 1)
+            let viewH = viewW * CGFloat(ClawdDoodle.baseRows)
+                / CGFloat(ClawdDoodle.baseCols) * shrink
             let side = viewW * zoom
             let cell = side / CGFloat(doc.cols)
             let boardH = cell * CGFloat(doc.rows)
@@ -195,7 +205,11 @@ struct ClawdGridEditor: View {
             }
             .frame(width: side, height: boardH)
             .offset(x: pan.width, y: pan.height)
-            .frame(width: viewW, height: viewH, alignment: .topLeading)
+            // ⚠️ 缩小时视窗跟着窄到 `side`，不然画布缩了、
+            // 底下那块灰卡还占着满宽，右边空一大条。
+            // **对齐必须留 topLeading**：底下 `stroke(at:)` 换算坐标时
+            // 只减了 pan，一旦改成居中，点哪儿都会偏。
+            .frame(width: min(side, viewW), height: viewH, alignment: .topLeading)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -228,8 +242,14 @@ struct ClawdGridEditor: View {
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Theme.softFillDeep))
         }
-        // 按比例把高度定死，不然 GeometryReader 撑不起来
-        .aspectRatio(CGFloat(ClawdDoodle.baseCols) / CGFloat(ClawdDoodle.baseRows),
+        // 按比例把高度定死，不然 GeometryReader 撑不起来。
+        //
+        // ⚠️ 缩小的时候**除以 zoom**：比例变宽 = 同样宽度下变矮，
+        // 也就是这一整块真的从屏幕上省出地方来。
+        // 跟里面那个 `shrink` 是同一件事，两边必须一致，
+        // **改一个漏另一个，画布就会跟视窗错位、点哪儿都不准。**
+        .aspectRatio(CGFloat(ClawdDoodle.baseCols) / CGFloat(ClawdDoodle.baseRows)
+                        / min(zoom, 1),
                      contentMode: .fit)
     }
 
@@ -240,7 +260,9 @@ struct ClawdGridEditor: View {
                 Text("放大")
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
-                Slider(value: $zoom, in: 1...4, step: 0.5)
+                // ⚠️ 下限是 **0.5，不是 1**。她说「我做画的地方反而不能缩小了」，
+                // 指的就是这儿——上面那个预览能缩到 0.4×，画布却卡在 1× 下不去。
+                Slider(value: $zoom, in: 0.5...4, step: 0.25)
                     .onChange(of: zoom) { _, _ in
                         // 缩回去的时候顺手把画布拉回原位，
                         // 不然会停在一个「明明没放大却缺一块」的位置上
@@ -647,14 +669,35 @@ struct ClawdGridEditor: View {
 /// 翻译成 SVG 之后跟代码模式画出来的是同一种东西。
 struct ClawdDoodle: Codable, Equatable {
 
-    /// 画布多少格。clawd 的 viewBox 是 320×230，
-    /// 20×15 格正好一格 16×15.33，方块感跟它原来的样子对得上。
+    /// 画布多少格。clawd 的 viewBox 是 320×230。
+    ///
+    /// ⚠️⚠️ **必须是 32×23，不能改成别的。**
+    ///
+    /// 她说的：「背景这个 clawd 和方格不匹配，
+    /// 我用方格画，边上的图案都只有一半，让我怎么按照辅助的来画。」
+    /// ——一点没错，而且是**单位对不上**，放大缩小救不了：
+    ///
+    /// clawd 自己的每一条边都是 **10 的倍数**
+    /// （手 x=0/40/280/320、身子 y=0/170、腿 x=90/120/200/230、
+    ///   眼睛 x=70/220、y=50/80）。
+    /// 上一版画布是 20×15 格，**一格 16 × 15.33**——
+    /// 320/20=16 跟 10 除不尽，230/15 干脆连整数都不是。
+    /// 于是他每一条边都落在某一格的**中间**，
+    /// 底图看着就是「半格半格」的，照着描根本描不准。
+    ///
+    /// 32×23 之后 **320/32 = 230/23 = 10**：
+    /// 他每一条边都正好压在格线上，而且格子是**正方形**的
+    /// （以前 16×15.33 是长方形，画出来的点本身就是扁的）。
+    ///
+    /// 顺带：32×23 也正是 `ClawdSprites` 那套图纸的格数——
+    /// 本来就是同一只，两边终于同一把尺子了。
     ///
     /// **格子粗细可以换**（她说「更小的格子」）：`grid` 是倍数，
-    /// 1 = 20×15（粗，跟 clawd 本身一个颗粒度），2 = 40×30，3 = 60×45。
+    /// 1 = 32×23（粗，跟 clawd 本身一个颗粒度），
+    /// 2 = 64×46，3 = 96×69。
     /// 换的时候画好的东西会跟着换算，不会白画（见 `setGrid`）。
-    static let baseCols = 20
-    static let baseRows = 15
+    static let baseCols = 32
+    static let baseRows = 23
 
     /// 格子倍数。1 / 2 / 3
     var grid: Int = 1
