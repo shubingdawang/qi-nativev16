@@ -149,12 +149,15 @@ struct ClawdRigView: View {
                      scale: scale)
     }
 
-    /// 举过头顶的那只手。**整条画好的，只平移，不转。**
+    /// 举过头顶的那只手臂。
+    ///
+    /// ⚠️ **底端钉在 `armUpBottom`，只有顶端跟着 `lift` 走**——
+    /// 也就是手臂在伸长，不是整条往上飘（见 `ClawdRig.armUp(rows:)`）。
     private func armUp(onLeft: Bool) -> some View {
-        PixelSpriteView(sprite: ClawdRig.armUp, scale: scale)
-            .offset(x: ClawdRig.armUpX(onLeft: onLeft,
-                                       itemW: CGFloat(item?.width ?? 0)) * scale,
-                    y: ClawdRig.armUpTop(lift: plan.lift) * scale)
+        let top = ClawdRig.armUpTop(lift: plan.lift)
+        let rows = Int((CGFloat(ClawdRig.armUpBottom) - top).rounded()) + 1
+        return PixelSpriteView(sprite: ClawdRig.armUp(rows: rows), scale: scale)
+            .offset(x: ClawdRig.armUpX(onLeft: onLeft) * scale, y: top * scale)
     }
 
     // MARK: 这一刻该摆成什么样
@@ -278,22 +281,34 @@ enum ClawdRig {
     /// 手露在身子外面几格（剩下的埋进去）
     static let armOut = 4
 
-    /// **举过头顶的那只手。整条画出来的，不转角度。**
+    /// **举过头顶的那只手臂。手绘、不转角度，而且是「伸长」出来的。**
     ///
-    /// 为什么不接着转：转一个 4×5 的长方块，像素落不到格子上，
-    /// 边就是糊的；官方那套表情能一路转角度，是因为**它的手是 2×2 接近正方形**
-    /// 的一小团，转到哪儿都还是一小团。我们的手一拉长，转出来是一片斜板。
+    /// 为什么不转：转一个 4×5 的长方块，像素落不到格子上，边就是糊的。
+    /// 官方那套表情能一路转角度，是因为**它的手是 2×2 接近正方形**的一小团，
+    /// 转到哪儿都还是一小团；我们的手一拉长，转出来是一片斜板。
     ///
-    /// 所以举东西这一档改成**手绘 + 整格平移**（她带回来的第 ① 条）。
+    /// ⚠️⚠️ **为什么要按高度现生成，而不是一张固定的图整条上移**
     ///
-    /// 顶上那行 `k` 是**握把**——参考里那块压在手臂顶上的深色
-    /// （`<rect ... fill="#333"/>`）。没有它，手和手臂一整条同色，
+    /// 上一版是固定一张图往上平移的。她指出来：
+    /// 「举杠铃动的是手臂，不是手。你的手变高了——
+    ///   难道正常人举哑铃手会变高吗。」
+    ///
+    /// 一整条往上飘，等于**手臂根部脱开了肩膀**：肩膀跟着手一起升，
+    /// 那不是在举，是整条胳膊在往上浮。
+    /// 真实的是**肩膀钉住不动，手臂伸长**——所以这儿按当前高度
+    /// 现算长度：底端永远压在 `armUpBottom`，只有顶端跟着手往上跑。
+    ///
+    /// 顶上那行 `k` 是**握把**——抄的参考里压在手臂顶上那块深色
+    /// （`<rect ... fill="#333"/>`）。没有它手和手臂一整条同色，
     /// 看不出"握住"，东西像浮在手上面。
-    static let armUp = PixelSprite([
-        "kkkk",
-        "pppp", "pppp", "pppp", "pppp", "pppp", "pppp",
-        "pppp", "pppp", "pppp", "pppp", "pppp", "pppp", "pppp"
-    ], ClawdSprites.palette)
+    static func armUp(rows: Int) -> PixelSprite {
+        let n = max(2, rows)
+        return PixelSprite(["kkkk"] + Array(repeating: "pppp", count: n - 1),
+                           ClawdSprites.palette)
+    }
+
+    /// 手臂底端压到第几行。**这一行是钉死的**——肩膀不会跟着手往上跑。
+    static let armUpBottom = 16
 
     /// 举起来的手有多宽（格）
     static let armUpWide = 4
@@ -325,24 +340,19 @@ enum ClawdRig {
         return PixelSprite(Array(repeating: blank, count: n) + rows, s.palette)
     }
 
-    /// 举起来那只手的**左上角**在第几列。
+    /// 举起来那只手的**左上角**在第几列。**钉死在肩膀上。**
     ///
-    /// ⚠️ **跟着东西的宽度走，不是钉在身子两边。**
+    /// ⚠️⚠️ 我上一版让它**跟着东西的宽度走**，想让手去够到床。
+    /// 床窄，手就被挪进身子里——她一眼看穿：
+    /// 「你手长头顶啊」「你再说一遍这是肩膀吗大哥」。
     ///
-    /// 床只有 12 格宽，身子有 24 格。手要是钉在身子最外侧，
-    /// 两只手隔着 26 格，中间飘着一张 12 格的床——**谁也没托着谁**。
-    ///
-    /// 手的根部反正埋在身子里（`armUpOverlap`），
-    /// 所以它放在哪一列都还是"连着"的，那就让它贴到东西的两端内侧去。
-    /// 只有一条底线：根不能跑出身子，否则就真的断开了。
-    static func armUpX(onLeft: Bool, itemW: CGFloat) -> CGFloat {
-        let mid = CGFloat(bodyLeft + bodyRight + 1) / 2
-        // 手掌贴在东西两端往里一格的地方
-        let half = max(CGFloat(armUpWide), itemW / 2 - 1)
-        let x = onLeft ? mid - half : mid + half - CGFloat(armUpWide)
-        let lo = CGFloat(bodyLeft + armUpOverlap - armUpWide)
-        let hi = CGFloat(bodyRight + 1 - armUpOverlap)
-        return min(max(x, lo), hi)
+    /// **肩膀是身子的肩膀，不是随东西移动的一个点。**
+    /// 手永远在身子最外侧那几列；东西不够宽，就**把东西画大**
+    /// 去够手（床已经画到 22 格了），不是让手去迁就东西。
+    static func armUpX(onLeft: Bool) -> CGFloat {
+        onLeft
+            ? CGFloat(bodyLeft + armUpOverlap - armUpWide)
+            : CGFloat(bodyRight + 1 - armUpOverlap)
     }
 
     /// 举起来那只手的**手尖**在第几行（也就是东西搁在哪儿）。
