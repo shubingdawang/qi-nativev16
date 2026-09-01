@@ -314,6 +314,18 @@ struct ClawdHomeView: View {
                             }
                         }
                     }
+                    // ⚠️ **摆在最前面。** 她要的是「整间换成那个样子」，
+                    // 不是「墙挑一次、地再挑一次」——
+                    // 底下那两栏留给想单独调的时候。
+                    Menu("整套换") {
+                        ForEach(RoomFinish.suites) { st in
+                            Button(st.label + "（" + st.note + "）") {
+                                store.setWallpaper(st.wall.token, for: r)
+                                store.setFlooring(st.floor.token, for: r)
+                                notice = r.rawValue + "换成「" + st.label + "」了"
+                            }
+                        }
+                    }
                     Menu("内置地面") {
                         ForEach(RoomFinish.Floor.allCases) { f in
                             Button(f.label) {
