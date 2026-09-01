@@ -27,6 +27,24 @@ struct ToolToggleView: View {
             WallpaperBackground()
                 .ignoresSafeArea()
 
+            // ⚠️⚠️ **玻璃铺在整页上，不铺在每一组上。**
+            //
+            // 她报的：「现在整个工具栏都没有玻璃了。」——是我上一版换的：
+            // 自带工具有 62 条，展开之后那一组的 `Material` 几千点高，
+            // 系统直接放弃采样（她那次的说法是「静态不显示，动起来才显示，
+            // 滚到头尾又出来了」）。当时我把展开态换成了实色底，
+            // 副作用就是**她一展开，整页就没有玻璃了**。
+            //
+            // 现在换个摆法：这一块玻璃**跟屏幕一样大**，
+            // 不管底下的列表有多长它都是这么大——**有界，所以一定渲染**。
+            // 组不再各自带玻璃了（那会变成玻璃叠玻璃，糊成一片），
+            // 只留一道描边和很淡的一层，把每组从这面玻璃上分出来。
+            //
+            // 记一句：**玻璃的尺寸要跟屏幕走，别跟内容走。**
+            GlassSurface(radius: 0, strength: app.settings.glassOpacity,
+                         edge: false)
+                .ignoresSafeArea()
+
             VStack(spacing: 0) {
                 topBar
 
@@ -44,8 +62,8 @@ struct ToolToggleView: View {
                             }
                             .padding(14)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            // 这块是空态提示，就几行高，玻璃没问题
-                            .glassBackground(radius: 18, strength: app.settings.glassOpacity)
+                            // 跟别的组一个底：玻璃在整页那一层，这儿只描个边
+                            .background { groupBack(false) }
                         }
 
                         group("App 自带") {
@@ -326,18 +344,18 @@ struct ToolToggleView: View {
     ///
     /// 所以收起来的时候照旧是玻璃（就一行，很小），
     /// 展开之后换成一层实心的浅底——看着差一点，但它一定在。
-    @ViewBuilder
+    /// ⚠️ **开着关着都不再自己带玻璃了。**
+    /// 玻璃在整页那一层（见 body 开头），这儿只负责把这一组
+    /// 从那面玻璃上分出来：一道描边，加很淡的一层。
+    /// 再叠一层 `Material` 就是玻璃压玻璃，糊成一片，
+    /// 而且开着的时候又会长到几千点高——那正是上一版的病。
     private func groupBack(_ isOpen: Bool) -> some View {
-        if isOpen {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Theme.softFill)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(Theme.softStroke, lineWidth: 0.8)
-                }
-        } else {
-            GlassSurface(radius: 18, strength: app.settings.glassOpacity)
-        }
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(Color.white.opacity(scheme == .dark ? 0.05 : 0.16))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(Theme.softStroke, lineWidth: 0.8)
+            }
     }
 
     private func toolRow(name: String, desc: String,

@@ -48,6 +48,12 @@ struct SettingsView: View {
     /// 只读 `TopicPool.shared` 不订阅的话这一段是死的。
     @ObservedObject private var topics = TopicPool.shared
     @State private var exportURL: URL?
+    /// 刚导好、**还没交出去**的那份。
+    ///
+    /// 她按掉「打好了…」那张结果弹窗之后，才把它挪进 `exportURL`
+    /// 去弹分享面板——两张同时弹的话，后来的会把先来的顶掉，
+    /// 那就是她说的「第一次点击弹窗就自动收回了」。见 `exportBackup()`。
+    @State private var pendingExport: URL?
     @State private var alertMessage: String?
     @State private var showingClearConfirm = false
     @State private var wallpaperItem: PhotosPickerItem?
@@ -148,7 +154,20 @@ struct SettingsView: View {
                 get: { alertMessage != nil },
                 set: { if !$0 { alertMessage = nil } }
             )) {
-                Button("好") { alertMessage = nil }
+                Button("好") {
+                    alertMessage = nil
+                    // 这张关掉了，现在才轮到分享面板。
+                    //
+                    // ⚠️ 隔一拍再交。同一拍里「关 alert」和「开 sheet」
+                    // 还是撞在一起——UIKit 那边的关闭动画还没跑完，
+                    // 新的 presentation 会被当场丢掉。
+                    if let url = pendingExport {
+                        pendingExport = nil
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                            exportURL = url
+                        }
+                    }
+                }
             } message: {
                 Text(MD.inline(alertMessage ?? ""))
             }
@@ -1176,7 +1195,7 @@ struct SettingsView: View {
                 alertMessage = "导出失败，一个字节都没写出来。"
                 return
             }
-            exportURL = url
+            // ⚠️ 这儿**不再直接设 `exportURL`**，理由见函数末尾那段。
             BackupClock.markDone()
 
             // ⚠️ **图片的数目一定要报给她看。**
@@ -1225,6 +1244,20 @@ struct SettingsView: View {
             }
             msg += "\n\n存到「文件」里最稳，微信传大文件容易截断。"
             alertMessage = msg
+            // ⚠️⚠️ **分享面板等这张结果弹窗关掉之后再出来。**
+            //
+            // 她报的：「导出备份第一次点击弹窗就自动收回了，
+            // 第二次点击才可以真正的存文件。」
+            //
+            // 病根：上面 `exportURL = url` 和这儿的 `alertMessage = msg`
+            // 是**同一拍**里设的，于是「分享面板」和「打好了…」那张
+            // alert 在同一层上同时要弹。SwiftUI 同一时刻只给一个，
+            // 后来的把先来的顶掉——她看到的就是「弹一下自己收回去了」。
+            // 第二次点的时候 alert 已经关了，才轮到分享面板。
+            //
+            // 现在先只留 alert，把文件记在一边；她按「好」之后
+            // 才把 `exportURL` 交出去（见 `pendingExport`）。
+            pendingExport = url
         }
     }
 

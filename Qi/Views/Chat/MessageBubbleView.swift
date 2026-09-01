@@ -1213,13 +1213,24 @@ struct MessageBubbleView: View {
                                 .font(.app(10))
                                 .foregroundStyle(.orange)
                         }
-                        Spacer(minLength: 6)
-                        Image(systemName: "chevron.right")
-                            .font(.app(10, weight: .semibold))
-                            // 只有就地展开的那条才转箭头。
-                            // 弹窗那条转了也没意义——弹窗关上之后箭头还朝下，
-                            // 看着像「展开着但什么都没有」。
-                            .rotationEffect(.degrees(isWorkshop && showProcess ? 90 : 0))
+                        // ⚠️ **只有工坊那条才有 `>`，也只有它才有 `Spacer`。**
+                        //
+                        // 她定的：「thinking 的气泡就不用占满屏幕了，
+                        // 就按照他 cot 文字的长度来变换就行，也不要后面的 > 了，
+                        // > 是展开的。」
+                        //
+                        // 她说得对，两件事其实是一件：
+                        // `>` 的意思是「按一下会在这儿摊开」，而絮语这条是**开弹窗**，
+                        // 挂个 `>` 是在承诺一件它不做的事。
+                        // 而 `Spacer` 是为了把 `>` 顶到最右边才有的——
+                        // `>` 一去掉，它就只剩「把这块撑满整行」这一个效果了，
+                        // 于是他起的名字只有五个字，右边空着一大片。
+                        if isWorkshop {
+                            Spacer(minLength: 6)
+                            Image(systemName: "chevron.right")
+                                .font(.app(10, weight: .semibold))
+                                .rotationEffect(.degrees(showProcess ? 90 : 0))
+                        }
                     }
                     .foregroundStyle(Theme.textSoft(scheme))
                     // ⚠️⚠️ **他还在想的时候，这儿要有个在动的东西。**
@@ -1243,7 +1254,10 @@ struct MessageBubbleView: View {
                             .foregroundStyle(Theme.textMuted(scheme))
                             .lineLimit(1)
                             .truncationMode(.head)   // 尾巴才是最新的，掐头不掐尾
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            // ⚠️ 封一个宽度，**不是 `.infinity`**。
+                            // 撑满的话这张卡又回到「占满整行」了，
+                            // 而那正是上面刚拆掉的东西。
+                            .frame(maxWidth: 230, alignment: .leading)
                             .padding(.top, 3)
                             .transition(.opacity)
                     }
@@ -1604,14 +1618,28 @@ struct MessageBubbleView: View {
                 // 会变成一张静图（第 8 条的另一半）。
                 Group {
                     if name.lowercased().hasSuffix(".gif") {
+                        // 动图这一支高度是写死的（拿不到帧的尺寸），
+                        // 所以留白还是有——但动图基本是方的，看不太出来。
                         AnimatedImageView(url: ImageStore.url(for: name))
                             .frame(maxWidth: 220)
                             .frame(height: 200)
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     } else if let image = ImageStore.cached(name) {
+                        // ⚠️ **`aspectRatio` 而不是 `scaledToFit`。**
+                        //
+                        // 她报的：「单张图片还是尖角的，应该改成圆角的。」
+                        // 圆角本来就写着，但**裁的是外框，不是图**：
+                        // `scaledToFit` 之后，图在 220×260 那个框里是居中缩放的，
+                        // 竖图两边留白、横图上下留白——
+                        // 圆角切在**留白的四角**上，图自己那四个角还是方的。
+                        //
+                        // `aspectRatio(比例, contentMode: .fit)` 是让**这个视图自己**
+                        // 按图的比例定尺寸，外面那个 frame 就只是个上限。
+                        // 于是框跟图一样大，圆角才切在图上。
                         Image(uiImage: image)
                             .resizable()
-                            .scaledToFit()
+                            .aspectRatio(image.size.width / max(1, image.size.height),
+                                         contentMode: .fit)
                             .frame(maxWidth: 220, maxHeight: 260)
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
