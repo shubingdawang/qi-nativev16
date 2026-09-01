@@ -10,8 +10,78 @@ struct VoiceSettingsView: View {
     @State private var testing = false
     @State private var notice: String?
 
+    /// 上半：她按住说话的时候，那段声音交给谁转成字。
+    ///
+    /// 这一段原来是独立的 `VoiceInputSettingsView`，
+    /// 现在并到这一页来了（见 body 开头那段）。
+    @ViewBuilder
+    private var inputSections: some View {
+
+            Section {
+                ForEach(VoiceInputMode.allCases) { mode in
+                    Button {
+                        app.settings.voiceInput = mode
+                    } label: {
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: app.settings.voiceInput == mode
+                                  ? "largecircle.fill.circle" : "circle")
+                                .foregroundStyle(app.settings.accentColor)
+                                .padding(.top, 2)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(mode.title).foregroundStyle(.primary)
+                                Text(mode.note)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                        }
+                    }
+                }
+            } header: {
+                Text("按住说话时用哪个")
+            } footer: {
+                Text(MD.inline("以下三项用于语音识别（输入）。语音合成（输出）在「语音」中配置，两者互不影响。"))
+            }
+
+            if app.settings.voiceInput == .elevenLabs {
+                Section {
+                    Text(app.activeVoice == nil
+                         ? "还没配 ElevenLabs。去「设置 → 语音」填一次密钥，这里就能直接用。"
+                         : "用的是「语音」里那个密钥，不用另填。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("密钥")
+                } footer: {
+                    Text(MD.inline("可识别笑声、鼓掌、哭泣等声音事件，但不输出情绪判定。需要情绪识别请选择 SenseVoice。"))
+                }
+            }
+
+            if app.settings.voiceInput == .senseVoice {
+                Section {
+                    SecureField("SiliconFlow API Key", text: $app.settings.siliconKey)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("密钥")
+                } footer: {
+                    Text("密钥在 siliconflow.cn 注册获取，使用 SenseVoiceSmall 模型，费用较低。\n\n可识别开心、难过、生气、意外等情绪，以及笑声与哭声。识别结果随语音文本一并发送，用于区分相同措辞的不同语气。")
+                }
+            }
+    }
+
     var body: some View {
         List {
+            // ⚠️⚠️ **「语音输入」并进来了，不再是单独一页。**
+            //
+            // 她定的：「语音输入和语音服务合并，都是语音功能。」
+            // 一个是她说话转文字、一个是他说话出声——
+            // 分成设置页上两行，看着像两件不相干的事，
+            // 而她想调「语音」的时候得先猜是哪一个。
+            //
+            // 上半是**她这边**（识别），下半是**他那边**（合成）。
+            inputSections
+
             if app.voices.isEmpty {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {

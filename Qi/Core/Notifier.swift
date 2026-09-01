@@ -81,7 +81,7 @@ final class Notifier: NSObject, ObservableObject {
         cancelNudges()
         // iOS 每个 App 最多挂 64 条待发通知，这里远用不到，
         // 但还是留个上限，免得哪天参数调飞了把配额占满
-        for (i, date) in dates.prefix(12).enumerated() {
+        for (i, date) in dates.prefix(Self.maxNudges).enumerated() {
             let gap = date.timeIntervalSinceNow
             guard gap > 60 else { continue }
 
@@ -98,18 +98,39 @@ final class Notifier: NSObject, ObservableObject {
         }
     }
 
+    /// 把还没到点的那批兜底通知撤掉。
+    ///
+    /// ⚠️⚠️ **同步撤，不要去问「现在挂着哪些」。**
+    ///
+    /// 以前这儿是 `getPendingNotificationRequests { … }` —— 那是**异步**的。
+    /// 而 `scheduleNudges` 的第一句就是 `cancelNudges()`，紧接着同步地
+    /// 把新的十二条加进去；那个异步回调过一会儿才跑，一跑就把
+    /// 前缀是 `nudge-` 的**全删了——包括刚加进去的那批**。
+    /// 谁先谁后看系统心情，所以表现是「有时候有、有时候没有」。
+    ///
+    /// `removePendingNotificationRequests` 本来就可以直接按 id 删，
+    /// 不存在的 id 传进去也没事。id 是我们自己编的（`nudge-0…11`），
+    /// 根本不需要先去问一遍。
     func cancelNudges() {
-        center.getPendingNotificationRequests { list in
-            let ids = list.map(\.identifier).filter { $0.hasPrefix(Self.nudgePrefix) }
-            guard !ids.isEmpty else { return }
-            UNUserNotificationCenter.current().removePendingNotificationRequests(
-                withIdentifiers: ids)
-        }
+        center.removePendingNotificationRequests(
+            withIdentifiers: (0..<Self.maxNudges).map { Self.nudgePrefix + "\($0)" })
     }
+
+    /// 最多同时挂几条。**撤销要按 id 删，所以这个数得是固定的**——
+    /// 见 `cancelNudges`。iOS 每个 App 上限 64 条，这儿远用不到。
+    nonisolated static let maxNudges = 12
 
     /// 兜底那条说什么。**不能写成"他说：xxx"**——
     /// 那句话这会儿还没算出来，写了就是假的。
     /// 只说他想起你了，点开才是真的他。
+    ///
+    /// ⚠️ 她问过：「自动唤醒偶尔会弹出一些不是他当下说的弹窗，
+    /// 这是那个提前排的通知吗。」——是，而且她说得对，
+    /// 这几句**确实不是他此刻说的**，是提前排进系统的模板。
+    ///
+    /// 所以这几句只说「他想起你了」这一件事，一句具体内容都不编。
+    /// 真的他要等她点开、App 活过来那一刻才去算（见 `pendingNudge`）。
+    /// **宁可显得空，也不能替他说话。**
     private static let nudgeLines = [
         "想你了",
         "在想你，点开看看",

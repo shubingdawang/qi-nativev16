@@ -32,13 +32,18 @@ struct MemoryLibraryView: View {
                     letterCard
                     importCard
                     if !store.isEmpty { browseCard }
+                    // 这台机器周围跑着什么。她定的：放在这一页的最下面。
+                    BackendCard()
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 4)
                 .padding(.bottom, Layout.tabBarExpanded + 16)
             }
         }
-        .navigationTitle("记忆库")
+        // ⚠️ 叫**「本机」**，不叫「记忆库」（她定的）。
+        // 这一页除了记忆库还有本机心跳，现在又收了后端服务——
+        // 它是「这台手机上的那一套」，记忆库只是其中最大的一块。
+        .navigationTitle("本机")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         // ⚠️ 不能只认 .json：**identity 是 .txt**，

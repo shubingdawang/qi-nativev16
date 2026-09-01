@@ -75,7 +75,6 @@ struct SettingsView: View {
                         appearanceCard
                         generalCard
                         servicesCard
-                        backendCard
                         dataCard
                         aboutCard
                     }
@@ -807,8 +806,12 @@ struct SettingsView: View {
                 .buttonStyle(.plain)
                 SettingsDivider()
 
-                NavigationLink { VoiceInputSettingsView() } label: {
-                    SettingsRowLabel(title: "语音输入", value: app.settings.voiceInput.title, chevron: true)
+                // ⚠️ 「语音输入」和「语音服务」**并成了一条「语音」**。
+                // 她定的：「语音输入和语音服务合并，都是语音功能。」
+                // 一个是她说话转文字、一个是他说话出声，
+                // 分成两行摆在这儿，看着像两件不相干的事。
+                NavigationLink { VoiceSettingsView() } label: {
+                    SettingsRowLabel(title: "语音", value: voiceSummary, chevron: true)
                 }
                 .buttonStyle(.plain)
                 SettingsDivider()
@@ -822,20 +825,17 @@ struct SettingsView: View {
             SettingsDivider()
 
             Group {
-                NavigationLink { VoiceSettingsView() } label: {
-                    SettingsRowLabel(title: "语音服务", value: app.activeVoice?.name ?? "未启用", chevron: true)
-                }
-                .buttonStyle(.plain)
-                SettingsDivider()
-
                 NavigationLink { MCPListView() } label: {
                     SettingsRowLabel(title: "MCP", value: mcpSummary, chevron: true)
                 }
                 .buttonStyle(.plain)
                 SettingsDivider()
 
+                // ⚠️ 这一条叫**「本机」**，不叫「记忆库」（她定的）。
+                // 里面除了记忆库还有本机心跳，现在又收了后端服务那三个地址——
+                // 它是「这台手机上的那一套」，记忆库只是其中最大的一块。
                 NavigationLink { MemoryLibraryView() } label: {
-                    SettingsRowLabel(title: "记忆库",
+                    SettingsRowLabel(title: "本机",
                                      value: app.settings.localMemory
                                         ? MemoryStore.shared.summaryLine : "走 MCP",
                                      chevron: true)
@@ -860,28 +860,22 @@ struct SettingsView: View {
         }
     }
 
+    /// 语音那一条右边写什么。
+    ///
+    /// 两件事并成一行了，所以要**两边都说一句**：
+    /// 前半是她说话转文字用谁，后半是他说话用谁的嗓子。
+    private var voiceSummary: String {
+        let inp = app.settings.voiceInput.title
+        let out = app.activeVoice?.name ?? "未启用"
+        return inp + " · " + out
+    }
+
     /// 健康和待办现在给了哪几样
     private var healthSummary: String {
         var on: [String] = []
         if app.settings.healthAccess { on.append("健康") }
         if app.settings.todoAccess { on.append(app.settings.todoWrite ? "待办·可写" : "待办") }
         return on.isEmpty ? "都关着" : on.joined(separator: "、")
-    }
-
-    // MARK: 后端
-
-    private var backendCard: some View {
-        SettingsCard(title: "后端服务") {
-            SettingsField(title: "心跳引擎", placeholder: "http://…:8000",
-                          text: $app.settings.pulseBaseURL, mono: true)
-            SettingsDivider()
-            SettingsField(title: "主动消息", placeholder: "http://…:3000",
-                          text: $app.settings.adminBaseURL, mono: true)
-            SettingsDivider()
-            SettingsField(title: "网易云（可留空）", placeholder: "http://…:3000",
-                          text: $app.settings.neteaseBaseURL, mono: true)
-            SettingsNote("前两项为本地服务地址，支持局域网或 Tailscale 地址。服务不可达时，心跳页显示最后一次成功读取的数据。\n\n**网易云一项可留空。** 留空时直接调用网易云公开接口，可获取完整音频与歌词（含译文），无需本地服务或登录。\n\n该项仅用于获取 VIP 音源，需要登录态，须指向本地部署的 NeteaseCloudMusicApi（填写其地址，而非项目自带的 API server）。\n\n取源顺序：本地服务 → 公开接口 → iTunes 三十秒试听。")
-        }
     }
 
     // MARK: 数据

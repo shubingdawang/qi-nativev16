@@ -88,6 +88,26 @@ def main():
         print('--- 这一版没删掉任何声明')
         return 0
 
+    # ⚠️ **先确认它是真的没了。**
+    #
+    # 删掉一个 struct，它里面那句 `@EnvironmentObject var app` 也跟着是
+    # 一条「删掉的声明」——可 `app` 在这个项目里另有两百多处声明。
+    # 于是它会报「你删了 app，还有 2666 处在用」。
+    # **误报一次就够让人以后不看它了**（这已经是第二次了）。
+    #
+    # 判据很简单：现在的代码里**还有没有谁声明这个名字**。
+    # 还有 → 那只是搬了个地方，不关我们的事。
+    still = set()
+    for name in sorted(gone):
+        out = git('grep', '-lE',
+                  r'(func|var|let)\s+' + name + r'\b', '--', '*.swift')
+        if out.strip():
+            still.add(name)
+    gone -= still
+    if not gone:
+        print('--- 删掉的那几个名字，别处都还声明着')
+        return 0
+
     # 现在的代码里还有谁在叫它
     total = 0
     for name in sorted(gone):
