@@ -131,8 +131,8 @@ enum ClawdSprites {
 
     static let palette: [Character: Color] = [
         "p": Color(hexString: "F2715F")!,
-        "d": Color(hexString: "C9553F")!,
         "k": Color(hexString: "000000")!,
+        "u": Color(hexString: "7A2230")!,   // 嘴
         "G": Color(hexString: "0C1018")!,
         "g": Color(hexString: "23272F")!,
         "h": Color(hexString: "2F343D")!,   // 笔记本亮一档
@@ -142,7 +142,50 @@ enum ClawdSprites {
         "l": Color(hexString: "F1FA8C")!,   // 代码黄
         "m": Color(hexString: "FF79C6")!,   // 代码粉
         "w": Color(hexString: "F8F8F2")!,
-        "u": Color(hexString: "7A2230")!,   // 嘴
+        "a": Color(hexString: "3E5C8A")!,
+        "e": Color(hexString: "153F1B")!,
+        "f": Color(hexString: "6FB3C9")!,
+        "o": Color(hexString: "C2693F")!,
+        "q": Color(hexString: "473B59")!,
+        "s": Color(hexString: "6E8FC4")!,
+        "x": Color(hexString: "3F7FD0")!,
+        "z": Color(hexString: "6B4420")!,
+        "A": Color(hexString: "4A6FA5")!,
+        "B": Color(hexString: "E91E63")!,
+        "C": Color(hexString: "6A5AD0")!,
+        "D": Color(hexString: "F5E6C8")!,
+        "E": Color(hexString: "FF1744")!,
+        "F": Color(hexString: "4FB564")!,
+        "H": Color(hexString: "8FD0E2")!,
+        "I": Color(hexString: "C9A227")!,
+        "J": Color(hexString: "FFD14A")!,
+        "K": Color(hexString: "4AD5FF")!,
+        "L": Color(hexString: "8A5A2A")!,
+        "M": Color(hexString: "FF5C8D")!,
+        "N": Color(hexString: "2E7D32")!,
+        "O": Color(hexString: "4AD5FF")!,
+        "P": Color(hexString: "4AD5FF")!,
+        "Q": Color(hexString: "FF5C8D")!,
+        "R": Color(hexString: "2E7D32")!,
+        "d": Color(hexString: "C9553F")!,
+        "S": Color(hexString: "E2A08E")!,
+        "T": Color(hexString: "9172C1")!,
+        "U": Color(hexString: "BBA07D")!,
+        "V": Color(hexString: "A784DE")!,
+        "W": Color(hexString: "8B9258")!,
+        "X": Color(hexString: "AEC0E1")!,
+        "Y": Color(hexString: "EFC7BA")!,
+        "Z": Color(hexString: "3F9A52")!,
+        "0": Color(hexString: "9172C1")!,
+        "1": Color(hexString: "AE6B56")!,
+        "2": Color(hexString: "D98B6F")!,
+        "3": Color(hexString: "A784DE")!,
+        "4": Color(hexString: "304D58")!,
+        "5": Color(hexString: "388E3C")!,
+        "6": Color(hexString: "F7314D")!,
+        "7": Color(hexString: "DF886D")!,
+        "8": Color(hexString: "DF886E")!,
+        "9": Color(hexString: "5074A9")!,
         "y": Color(hexString: "F0C040")!,   // 头顶那点小闪光
         "b": Color(hexString: "4A90D9")!,   // 气泡里那个蓝点
         "c": Color(hexString: "8EC5FF")!,   // 眼泪
@@ -153,143 +196,122 @@ enum ClawdSprites {
 
     /// 睁着眼站着。这就是图纸原样，两只手各往外长了一格。
     static let idle = PixelSprite([
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....pppppkkpppppppppppppkkppppp........",
-        ".....pppppkkpppppppppppppkkppppp........",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................"
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
     ], palette)
 
     /// 哭：眼睛闭成一条，泪刚涌出来
     static let cry1 = PixelSprite([
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....pppppkkpppppppppppppkkppppp........",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................"
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
     ], palette)
 
     /// 哭：那滴泪往下掉了两格
     static let cry2 = PixelSprite([
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....pppppkkpppppppppppppkkppppp........",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "ppppppppppppppppuuuuuppppppppppppppppp..",
-        ".....pppppppppppuuuuuppppppppppp........",
-        ".....pppppppppppuuuuuppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................"
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppuuuuppppppppppppp....",
+        "......pppppppppuuuuppppppppp........",
+        "......pppppppppuuuuppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
     ], palette)
 
     // MARK: 扫地
@@ -323,802 +345,683 @@ enum ClawdSprites {
 
     /// 扫地：甩到左边，身子跟着往左倾
     static let sweep1 = PixelSprite([
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................"
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
     ], palette)
 
     /// 扫地：扫到中间，身子直起来
     static let sweep2 = PixelSprite([
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....pppppkkpppppppppppppkkppppp........",
-        ".....pppppkkpppppppppppppkkppppp........",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................"
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
     ], palette)
 
     /// 扫地：甩到右边，身子往右倾
     static let sweep3 = PixelSprite([
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................"
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
     ], palette)
 
     /// 扫地：收回中间。跟第二帧同一个姿势，所以一个来回是「左-中-右-中」，不是左右跳
     static let sweep4 = PixelSprite([
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....pppppkkpppppppppppppkkppppp........",
-        ".....pppppkkpppppppppppppkkppppp........",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................"
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
     ], palette)
 
     /// 甜：眯着眼笑，腮红。爱心是界面上飘的，不画进图纸
     static let sweet = PixelSprite([
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "...............................ddddddd..",
-        "...............................dppppddd.",
-        "...............................dpppppdd.",
-        "...............................dpppppdd.",
-        "...............................dpppppdd.",
-        "...............................ddpddddd.",
-        "...............................dddddddd.",
-        "................................dduu....",
-        "..................................hh....",
-        "...................................h....",
-        ".....................ppppppppppp..hh....",
-        ".....ppppppppppppppppppppppppppp.hhh....",
-        ".....ppppppppppppppppppppppppppphhhh....",
-        ".....ppppppppppppppppppppppppppp...h....",
-        ".....ppppppppppppppppppppppppppp...h....",
-        ".....pppppppppppppppppppdpddppppppphd...",
-        ".....pppddpddpppppppppppddddppppppphd...",
-        ".....pppdddddpppppppppppddddpppppppdd...",
-        "ppppppppdddddpppppppppppddddppppppppp...",
-        "ppppppppdddddpppppppppppdddpppppppppp...",
-        "pppppppppdddpppppppppppppppppppp........",
-        "pppppppppppppppppppppppppppppppp........",
-        "pppppppppppppppppppppppppppppppp........",
-        "ppp..ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....pppppppppppppppppppppppppppp.......",
-        ".....pppppppppppppppppppppppppppp.......",
-        ".....pppppppppppppppppppppppppppp.......",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp...pp..........",
-        "........pp...pp........pp...pp..........",
-        "........pp...pp........pp...pp..........",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................"
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "..............................BB....",
+        "..........................BBBBBBB...",
+        "..........................BBpppBB...",
+        "..........................BBpppBB...",
+        "..........................BBpppBB...",
+        "..........................BBBBBBB...",
+        "...........................BBBB.....",
+        "....................................",
+        "....................................",
+        "......ppppppppppppppppppppp.........",
+        "......pppppppppppppppppppppp........",
+        "......ppppppppppppppppppppp.........",
+        "......pppppppppppppppppppppp.p.p....",
+        "......pppEpEpppppppppEpEpppppp.p....",
+        "......pppEpEppppppppBEEEpppppppp....",
+        "..pppppppEEEpppppppppEEEpppppppp....",
+        "..pppppppEEEpppppppppEEEpppppppp....",
+        "..pppppppBBBpppppppppppppppp........",
+        "..pppppppppppppppppppppppppp........",
+        "..pp..pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
     ], palette)
 
     /// 呼吸：整只往下沉一格，腿跟着收短一截
     static let breathe = PixelSprite([
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....pppppkkpppppppppppppkkppppp........",
-        ".....pppppkkpppppppppppppkkppppp........",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................"
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
     ], palette)
 
     /// 眨眼：三格高的眼睛只剩最下面一格
     static let blink = PixelSprite([
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....pppppkkpppppppppppppkkppppp........",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................"
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
     ], palette)
 
     /// 开心：眼睛眯起来，只剩下面两格
     static let happy = PixelSprite([
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        ".....pppppkkpppppppppppppkkppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....pppppppppppuuuuuppppppppppp........",
-        ".....pppppppppppuuuuuppppppppppp........",
-        ".....pppppppppppuuuuuppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................"
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "..pppppppppppppppppppppppppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "......ppppkkppppppppppkkpppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppuuuuppppppppp........",
+        "......pppppppppuuuuppppppppp........",
+        "......pppppppppuuuuppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
     ], palette)
 
     /// 笑：眼睛留上下两道、中间亮着，像弯起来了
     static let smile = PixelSprite([
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....pppppkkpppppppppppppkkppppp........",
-        ".....pppppkkpppppppppppppkkppppp........",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "ppppppppppppppppuuuuuppppppppppppppppp..",
-        ".....pppppppppppuuuuuppppppppppp........",
-        ".....pppppppppppuuuuuppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................"
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppuuuuppppppppppppp....",
+        "......pppppppppuuuuppppppppp........",
+        "......pppppppppuuuuppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
     ], palette)
 
     /// 睡着：眼睛闭成一道暗色的缝
     static let sleep = PixelSprite([
-        "...................hhhhhhh..............",
-        "................hhhhhhhhhhhh............",
-        "..............hhhhhhhhhhhhhhhh.w........",
-        "............hhhhhhhhhhhhhhhhhwwwww......",
-        "...........hhhhhddddddddhhhhwwwwwww.....",
-        "..........hhhhdddddddddddhhvwwwwwww.....",
-        ".........hhhddddddhhhhhhhhhvwwwwwwww....",
-        "........hhdddh.............vwwwwwww.....",
-        "........hddh................wwwwwww.....",
-        "........dh...................wwwww......",
-        ".......hh......................w........",
-        ".......h................................",
-        ".......h................................",
-        ".....hhhhhhhhhhhhhhhhhhhhhhhhhhh........",
-        "....vvvvvvvvvvvvvvvvvvvvvvvvvvvvd.......",
-        "....hhhhhhhhhhhhhhhhhhhhhhhhhhhhh.......",
-        "....hhhhhhhhhhhhhhhhhhhhhhhhhhhhh.......",
-        ".....dddddddddddddddddddddddddddp.......",
-        ".....pppppppppppppppppppppppppppp.......",
-        ".....pppppppppppppppppppppppppppp.......",
-        ".....pppppppppppppppppppppppppppp.......",
-        ".....pppppppppppppppppppppppppppp.......",
-        ".....pppppppppppppppppppppppppppp.......",
-        "wwwwwppppdddddppppppppppddddpppppwwwwww.",
-        "pppppppppkkkkkppppppppppkkkkkpppppppppww",
-        "pppppppppuhhhhpppppppppphhhhdpppppppppww",
-        "ppppppppppppppppppppppppppppppppppppppww",
-        "ppppppppppppppppppppppppppppppppppppppww",
-        "ppppppppppppppppppppppppppppppppppppppww",
-        "wwwwwppppppppppppppppppppppppppppwwwwwww",
-        "wwwwwpppppppppppppvvpppppppppppppwwwwwww",
-        "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
-        "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
-        "vvvvvvvvddhhhhhhhhhhhhhhhhhddvvvvvvvvvvv",
-        "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
-        "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
-        "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
-        "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
-        "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
-        "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
-        "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
-        "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
-        "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh"
+        "....................................",
+        ".................AAAAAA.............",
+        ".............AAAAAAAAAAAA...........",
+        "............AAAAAAAAAAAAAwwww.......",
+        "...........AAAAAAAAAAAAAwwwwww......",
+        ".........AAAAAAAAAAAAAAAwwwwww......",
+        ".........AAAAAAA.....AAAwwwwww......",
+        "........AAAA............wwwwww......",
+        "........AA...............wwww.......",
+        "........A...........................",
+        ".......A............................",
+        "......AAAAAAAAAAAAAAAAAAAAA.........",
+        ".....AAAAAAAAAAAAAAAAAAAAAAA........",
+        ".....aaaaaaaaaaaaaaaaaaaaaaa........",
+        ".....aaaaaaaaaaaaaaaaaaaaaaa........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        ".wwwwwppppppppppppppppppppppwww.....",
+        "wwpppppppkkkkppppppppkkkkpppppppww..",
+        "wwppppppppppppppppppppppppppppppw...",
+        "wwppppppppppppppppppppppppppppppww..",
+        "wwppppppppppppppppppppppppppppppww..",
+        "wwwwwwppppppppppppppppppppppwwwwww..",
+        "wwwwwwppppppppppssppppppppppwwwwww..",
+        "ssssssssssssssssssssssssssssssssssss",
+        "sssssssssAAAAAaaaaaaAAAAAsssssssssss",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "qqqqqqqqaaaaaaaaaaaaaaaaaaqqqqqqqqqq",
+        "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
     ], palette)
 
     /// 在想事情：头顶冒小方块
     static let thinking = PixelSprite([
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....pppppkkpppppppppppppkkppppp........",
-        ".....pppppkkpppppppppppppkkppppp........",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................"
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
     ], palette)
 
     /// 想得更凶：小方块换个位置，看着像在冒
     static let thinking2 = PixelSprite([
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....pppppkkpppppppppppppkkppppp........",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................"
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
     ], palette)
 
     /// 干活：左手抬起来、右手压下去
     static let working = PixelSprite([
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        ".....pppppppppppppppppppppppppppp.......",
-        ".....pppppppppppppppppppppppppppp.......",
-        ".....pppppppppppppppppppppppppppp.......",
-        ".....pppppppppppppppppppppppppppp.......",
-        ".....pppppppppppppppppppppppppppp.......",
-        ".....pppppkkuppppppppppppkkuppppp.......",
-        ".....pppppkkuppppppppppppkkuppppp.......",
-        "ppppppppppkkuppppppppppppkkupppppppppp..",
-        "ppppppppppkkuppppppppppppkkupppppppppp..",
-        "pdddddddddGGhddddddddddddGGhddddddddpp..",
-        "pggggggggggggggggggggggggggggggggggghp..",
-        "pgggGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGgggp..",
-        ".ggGGhmmmmGGGGGGGiiiiiiigGGGGGGGGGggg...",
-        ".ggGGhmmmmGGGGGGGiiiiiiihGGGGGGGGGggg...",
-        ".ggGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGggg...",
-        ".ggGGGGGjjjjjjGGGGGGGGlllllhGGGGGGggg...",
-        ".ggGGGGGjjjjjjGGGGGGGGlllllhGGGGGGggg...",
-        ".ggGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGggg...",
-        ".ggGGhvvvvvvvvGwvGGGGGGGGGGGGGGGGGggg...",
-        ".ggGGghhhhhhhhGwvGGGGGGGGGGGGGGGGGggg...",
-        ".gggGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGggg...",
-        ".gggggggggggggggggggggggggggggggggggg...",
-        "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh...",
-        "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh..",
-        "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh...",
-        "........................................"
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..pggggggggggggggggggggggggggghp....",
+        "..pggGGGGGGGGGGGGGGGGGGGGGGGGggp....",
+        "...ggGmmmmGGGGGhiiiiigGGGGGGGgg.....",
+        "...ggGmmmmGGGGGjiiiiihGGGGGGGgg.....",
+        "...ggGGGhhhhhGGGGGGpppppGGGGGgg.....",
+        "...ggGGGjjjjjGGGGGGlllllGGGGGgg.....",
+        "...ggGGGGGGGGGGGGGGGGGGGGGGGGgg.....",
+        "...ggGvvvvvvvGlGGGGGGGGGGGGGGgg.....",
+        "...ggGGGGGGGGGhGGGGGGGGGGGGGGgg.....",
+        "...gggggggggggggggggggggggggggg.....",
+        ".hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh....",
+        ".hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh....",
+        "........gggggggggggggggggg..........",
+        "...................................."
     ], palette)
 
     /// 换只手。两帧来回切就是在忙活。
     static let working2 = PixelSprite([
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        ".....pppppppppppppppppppppppppppp.......",
-        ".....pppppppppppppppppppppppppppp.......",
-        ".....pppppppppppppppppppppppppppp.......",
-        ".....pppppppppppppppppppppppppppp.......",
-        ".....pppppppppppppppppppppppppppp.......",
-        ".....pppppkkuppppppppppppkkuppppp.......",
-        ".....pppppkkuppppppppppppkkuppppp.......",
-        "ppppppppppkkuppppppppppppkkupppppppppp..",
-        "ppppppppppkkuppppppppppppkkupppppppppp..",
-        "puhhhhhhhhggghhhhhhhhhhhhggghhhhhhhhpp..",
-        "pggggggggggggggggggggggggggggggggggggp..",
-        "pggGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGgggp..",
-        ".ggGGhmmmmGGGGGGGiiiiiiihGGGGGGGGGggg...",
-        ".ggGGhmmmmGGGGGGGiiiiiiigGGGGGGGGGggg...",
-        ".ggGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGggg...",
-        ".ggGGGGGjjjjjjjjjjjjGGlllllhGGGGGGggg...",
-        ".ggGGGGGjjjjjjjjjjjjGGlllllhGGGGGGggg...",
-        ".ggGGGggggggggGhhGGGGGGGGGGGGGGGGGggg...",
-        ".ggGGhvvvvvvvvGwvGGGGGGGGGGGGGGGGGggg...",
-        ".ggGGGGGGGGGGGGddGGGGGGGGGGGGGGGGGggg...",
-        ".gggggggggggggggggggggggggggggggggggg...",
-        ".gggggggggggggggggggggggggggggggggggg...",
-        "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh..",
-        "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh..",
-        "hhhhhhhhgggggggggggggggggggggghhhhhhh...",
-        "........................................"
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..pggggggggggggggggggggggggggggp....",
+        "..pggGGGGGGGGGGGGGGGGGGGGGGGGggp....",
+        "...ggGmmmmGGGGGfiiiiihGGGGGGGgg.....",
+        "...ggGmmmmGGGGGhfffffgGGGGGGGgg.....",
+        "...ggGGGjjjjjjjjjjGlllllGGGGGgg.....",
+        "...ggGGGjjjjjjjjjjGlllllGGGGGgg.....",
+        "...ggGgggggggGhGGGGGGGGGGGGGGgg.....",
+        "...ggGvvvvvvvGlGGGGGGGGGGGGGGgg.....",
+        "...ggGGGGGGGGGGGGGGGGGGGGGGGGgg.....",
+        "...gggggggggggggggggggggggggggg.....",
+        ".hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh....",
+        ".hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh....",
+        "....................................",
+        "...................................."
     ], palette)
 
     /// 走路第一步：左边那两条腿抬起来。跟 walk2 交替就是在迈步，
     /// 不是原地翻个身就瞬移过去。
     static let walk1 = PixelSprite([
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....pppppkkpppppppppppppkkppppp........",
-        ".....pppppkkpppppppppppppkkppppp........",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................"
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
     ], palette)
 
     /// 走路第二步：换右边那两条腿抬
     static let walk2 = PixelSprite([
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................"
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
     ], palette)
 
     /// 搬东西：两只手都放低到身前，像抱着一个箱子
     static let carry = PixelSprite([
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................"
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
     ], palette)
 
     // MARK: 探头（这一版：只画头）
@@ -1134,47 +1037,6 @@ enum ClawdSprites {
     // 只探出头，得**从图上就只画头**：下面这两张里没有身子也没有腿，
     // 只有一颗脑袋和一只扒着边／挥着的手。这样露出来的就只可能是头。
     // 空格是透明的，所以身子不是被挡住——是根本不存在。
-
-    /// 探头（一）：扒着边看
-    static let peekHead1 = PixelSprite([
-        "........................................",
-        "........................................",
-        "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "........pppkkkppppppppppppkkkppp........",
-        "........pppkkkppppppppppppkkkppp........",
-        "........pppkkkppppppppppppkkkppp........",
-        "........pppppppppppppppppppppppp........",
-        "......ddpppppppppppppppppppppppp........",
-        "......ddpppppppppppppppppppppppp........",
-        "......ddpppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "........pp..............................",
-        "........................................",
-        "........................................"
-    ], palette)
-
-    /// 探头（二）：手抬起来挥
-    static let peekHead2 = PixelSprite([
-        "......ddpp..............................",
-        "........pp..............................",
-        "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "........pppkkkppppppppppppkkkppp........",
-        "........pppkkkppppppppppppkkkppp........",
-        "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "........pppppppppppppppppppppppp........",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................"
-    ], palette)
-
     /// 探头（一）：探出来的那一下。
     ///
     /// **这张图跟别的一样是整整 40 格宽的一只完整的他**，一格都没少。
@@ -1187,101 +1049,810 @@ enum ClawdSprites {
     ///   · 只留靠外那一只眼睛（另一只在屏幕外，看不见也不用画）
     ///   · 那只手抬到高处，像扒着墙沿探身子
     static let peek1 = PixelSprite([
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....pppppkkpppppppppppppkkppppp........",
-        ".....pppppkkpppppppppppppkkppppp........",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "ppppppppppkkpppppppppppppkkppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................"
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
     ], palette)
 
     /// 探头（二）：探出来之后没站住，往下缩一格、手也放下来。
     /// 跟 peek1 来回换，配上位置上那一点点进退，看着就是在探头探脑，
     /// 不是一张钉死的静态图。
     static let peek2 = PixelSprite([
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....pppppkkpppppppppppppkkppppp........",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        "pppppppppppppppppppppppppppppppppppppp..",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        ".....ppppppppppppppppppppppppppp........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........pp..ppp........pp..ppp..........",
-        "........................................",
-        "........................................",
-        "........................................",
-        "........................................"
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
     ], palette)
 
     /// 头顶那个小气泡，说话的时候冒出来
+    // MARK: 从 gallery 扒来的
+
+    /// 打游戏时头顶上方那台显示器。**跟身体不连，所以不在主图纸里**
+    static let gameScreen = PixelSprite([
+        "....................................",
+        ".GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG.",
+        "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+        "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+        "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+        "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+        "GGGGGGGGGGGGKKGGGGGGGGGGGGGGgGGGGGGG",
+        "GGGGGGGGGGGGKKGGGGGGGGGGGGGgKKGGGGGG",
+        "GGGGGGGGGGGGGGGGGGGGGGGGGGGGgGGGGGGG",
+        "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+        "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+        "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+        "GGGGGGgKKKKGGGGGGGGGGGGGGGGGGGGGGGGG",
+        "GGGGGGgKKKKGGGGGGGGGGGGGGGGGGGGGGGGG",
+        "GGGGGGgKKKKGGGGGGGGGGGGGGGGGGGGGGGGG",
+        "GGGGGGgKKKKGGGGGGGGGGGGGGGGGGGGGGGGG",
+        "GGGeeeeeeeeeeeeeeeeeeeggggeeeeeeeGGG",
+        "GGGeeeeeeeeeeeeeeeeeeeggggeeeeeeeGGG",
+        "GGGeeeeeeeeeeeeeeeeeeeggggeeeeeeeGGG",
+        "GGGeeeeeeeeeeeeeeeeeeeggggeeeeeeeGGG",
+        "GGGeeeeeeeeeeeeeeeeeeeggggeeeeeeeGGG",
+        "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+        "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+        ".GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG.",
+        "................GGGGG...............",
+        "................GGGGG...............",
+        "................GGGGG...............",
+        "................GGGGG...............",
+        ".........GGGGGGGGGGGGGGGGGG.........",
+        "..........GGGGGGGGGGGGGGGGG........."
+    ], palette)
+
+    /// 举玫瑰（二）
+    static let sweet2 = PixelSprite([
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "............................BB......",
+        "............................BBBBBB..",
+        "............................BpppBB..",
+        "...........................BBpppBB..",
+        "...........................BBpppBB..",
+        "............................BBBBBB..",
+        "..............................BBB...",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppppppppppppppppppppppp.......",
+        "......ppBBpppppppppppppppppp........",
+        "......ppEEpEBppppppppEEpEEpppp.p....",
+        "......ppEEEEBppppppppEEBEEpppp.p....",
+        "..ppppppEEEEpppppppppEEEEEpppppp....",
+        "..pppppppEEBppppppppppBEEppppppp....",
+        "..ppppppppppppppppppppBEBppppppp....",
+        "....pppppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
+    ], palette)
+
+    /// 弹吉他（二）
+    static let guitar2 = PixelSprite([
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...z................................",
+        ".zzoz...............................",
+        "zzzpzz..............................",
+        "zppppp..............................",
+        "zppppp..............................",
+        ".pppppz.............................",
+        "..ppoozz............................",
+        ".....zzzz...........................",
+        "......zzzz..........................",
+        "......pzzooppppppppppppppppp........",
+        "......pozozzpppppppppppppppp........",
+        "......pppzzzzppppppppppppppp........",
+        "......pppozzozpppppppppppppp........",
+        "......ppppGpzzzpppppppkkpppp........",
+        "......ppppkGzzzpppppppkkpppp........",
+        "......ppppkkozpzzpppppkkpppp........",
+        "......ppppkkppzzzzpppoGkpppp........",
+        "......ppppppppozzzoooooooppp........",
+        "......pppppppppoooooooooooop........",
+        "......pppppppppoooopppppooop........",
+        "......pppppppppooozpppppoooo........",
+        "......ppppppppoooopppppooooo........",
+        "......ppppppppoooozppppooooo........",
+        "........pp..ppoooozGGzoooooo........",
+        "........pp..pp.ooooooooooooo........",
+        "........pp..pp.oooooozzzzoo.........",
+        "........pp..pp..ooooooooooo.........",
+        ".................zooooooo...........",
+        "...................Gzzz.............",
+        "....................................",
+        "...................................."
+    ], palette)
+
+    /// 弹吉他（一）
+    static let guitar = PixelSprite([
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "..zzz...............................",
+        ".zzpo...............................",
+        "zzpppp..............................",
+        "zppppp..............................",
+        ".zppppz.............................",
+        "..ppppzz............................",
+        ".....zzzz...........................",
+        "......zzzz..........................",
+        "......ozzzpppppppppppppppppp........",
+        "......pozpzzpppppppppppppppp........",
+        "......ppozzzoppppppppppppppp........",
+        "......pppozzpzpppppppppppppp........",
+        "......ppppzozzzpppppppkkpppp........",
+        "......ppppkzzzzpppppppkkpppp........",
+        "......ppppkkzzozopppppkkpppp........",
+        "......ppppkkpozzzoppppkkpppp........",
+        "......ppppooppzzzzoooooopppp........",
+        "......pppppppppzoooooooooopp........",
+        "......pppppppppoooooooooooop........",
+        "......pppppppppooozGGoooooop........",
+        "......ppppppppooooGGGzoppooo........",
+        "......ppppppppooooGGoppppooo........",
+        "........pp..ppooooGGoppppooo........",
+        "........pp..pp.ooooooppppooo........",
+        "........pp..pp.ooooooppozoo.........",
+        "........pp..pp.oooooozzzzoo.........",
+        "................zooooooooz..........",
+        "..................zoooook...........",
+        "....................................",
+        "...................................."
+    ], palette)
+
+    /// 打游戏（二）
+    static let gaming2 = PixelSprite([
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        ".......pppppppppppppppppppp.........",
+        "......ppppppppppppppppppppp.........",
+        "......ppppppppppppppppppppp.........",
+        "......ppppppppppppppppppppp.........",
+        "......pppppqpppppppppqkGpppppp......",
+        "...pp.pppqkGpppppppppqkGppppppp.....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        ".pppppppppkkppppppppppqqppppppp.....",
+        "...ppppppppppppppppppppppppppp......",
+        "....p.ppqhhhhhhhhhhhhhhhhhqp........",
+        "......phhhhqhhhhhhhqpphhhghp........",
+        "......pgggqqqhgggggppppJqhgp........",
+        "......pgggqqqhgggggqppJJJghp........",
+        "......pqgggqhgggggggggqJhhpp........",
+        "........phhhqqgg....pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
+    ], palette)
+
+    /// 打游戏（一）
+    static let gaming = PixelSprite([
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "....p.ppppggppppppppppggpppp.p......",
+        "...pppppppkkppppppppppkkppppppp.....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "...pppppppkkppppppppppkkppppppp.....",
+        "...ppppppppppppppppppppppppppp......",
+        "......pqhhhqqhhhhhhppphhhhqp........",
+        "......pqhhhqqhhhhhhppphhhhqp........",
+        "......pgggqqqqggggggqhpppggp........",
+        "......phgggqhgggggggggpppghp........",
+        "......ppggghhggggggggghphgpp........",
+        "........pqggqqggggggqqggqp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
+    ], palette)
+
+    /// 浇花（二）
+    static let watering2 = PixelSprite([
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...............................fff..",
+        "..............................ffffff",
+        ".............................ff.HHHH",
+        "............................ffHHHHHH",
+        "...........................HHHHHHHff",
+        "..........................HHHHffffff",
+        "...........................fffffffff",
+        "...........................fffffffff",
+        "......pppppppppppppppppppppfffffffff",
+        "......pppppppppppppppHpppppfffffffff",
+        "......pppppppppppppHHHppppppfffff...",
+        "......ppppkkpppppppHHHffffff........",
+        "......ppppkkppppppppHfffffff........",
+        "......ppppkkppppppppppkkpppp........",
+        "..ppppppppkkppppppppppfFpppppppp....",
+        "..ppppppppooppppppppppfFpppppppp....",
+        "..ppppppppppppppppppppmmpppppppp....",
+        "......pppppppppppppppmmpmppp........",
+        "......ppppppppppppFFFmppmpFF........",
+        "......pppppppppppFFFFmppmFFFF.......",
+        "......pppppppppppFFFFpmmpFFFF.......",
+        "......pppppppppppFFFppFFfpFFF.......",
+        "........pp..pp...ooooooooooooo......",
+        "........pp..pp...ooooooooooooo......",
+        "........pp..pp....ooooooooooo.......",
+        "........pp..pp....ooooooooooo.......",
+        "..................oooooooooo........",
+        "..................oooooooooo........",
+        "..................oooooooooo........",
+        "...................................."
+    ], palette)
+
+    /// 浇花（一）
+    static let watering = PixelSprite([
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        ".................................fff",
+        "................................ffff",
+        "...............................ff...",
+        ".............................HHHHHHH",
+        "............................HHHHHHHH",
+        ".............................fffffff",
+        "......pppppppppppppppppppppp.fffffff",
+        "......ppppppppppppppHHHppppp.fffffff",
+        "......ppppppppppppppHHHfpppp.fffffff",
+        "......pppppppppppppppHHfffffffffffff",
+        "......ppppkkpppppppppffffffff.f.....",
+        "......ppppkkppppppppppkkpppff.......",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppooppppppppppmmHppppppp....",
+        "..pppppppppppppppppppmpmmFFppppp....",
+        "......pppppppppppppFpmppmFFF........",
+        "......ppppppppppppFFFmppmFFFF.......",
+        "......pppppppppppFFFFpmmpFFFF.......",
+        "......pppppppppppFFFFfFFpppp........",
+        "........pp..pp..pooooooooooooo......",
+        "........pp..pp...ooooooooooooo......",
+        "........pp..pp....ooooooooooo.......",
+        "........pp..pp....ooooooooooo.......",
+        "..................oooooooooo........",
+        "..................oooooooooo........",
+        "..................oooooooooo........",
+        "...................................."
+    ], palette)
+
+    /// 听音乐（二）
+    static let listening2 = PixelSprite([
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        ".................g..................",
+        "............ggggggggggg.............",
+        ".........hggggggggggggggg...........",
+        "........gggggggg..hgggggggg.........",
+        "......gggggg...........ggggg........",
+        ".....ggggg..............ggggg.......",
+        "....ggggg.................gggg......",
+        "....hgg....................gggg.....",
+        "...hhhppppppppppppppp.......ggg.....",
+        "..hhhhhppppppppppppppppppppp.hhh....",
+        "..hCCChppppppppppppppppppppphhCCh...",
+        "..hCCChppppppppppppppppppppphCCCh...",
+        "..hCCChpppkkpppppppppppppppphCCCh...",
+        "..hCCChpppkkppppppppppkkpppphCCCh...",
+        "..hhhhppppkkppppppppppkkpppphCCCh...",
+        "..phhhppppkkppppppppppkkpppphhhhh...",
+        "..ppppppppppppppppppppphpppppppp....",
+        ".....pppppppppppppppppppppppppppp...",
+        "......pppppppppppppppppppppp.p......",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp.ppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        ".....................p..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
+    ], palette)
+
+    /// 听音乐（一）
+    static let listening = PixelSprite([
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        ".............ggggggg................",
+        "..........ggggggggggggg.............",
+        "........hgggggggggggggggg...........",
+        ".......gggggg.......hgggggg.........",
+        "......ggggg...........gggggg........",
+        "....ggggg...............gggggg......",
+        "...ggggg..................gggg......",
+        "...gggg....................gg.......",
+        "...gghppppppppppppppppppppphhhhh....",
+        ".hhhhpppppppppppppppppppppphCCCh....",
+        ".hhChhppppppppppppppppppppphCCCh....",
+        ".hCCChppppppppppppppppppppphCCCh....",
+        ".hCCChpppgkhpppppppppkkhppphCCCh....",
+        ".hCCChpppkkgpppppppppgkgppphCCCh....",
+        ".hCCChppphkgppppppppphkgpppphhhh....",
+        ".hhhhhppphkgppppppppphkgpppppppp....",
+        "..pppppppphppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppp........",
+        "..pppppppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppppp.pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........g...........................",
+        "....................................",
+        "....................................",
+        "...................................."
+    ], palette)
+
+    /// 画画（二）
+    static let painting2 = PixelSprite([
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "........................o...........",
+        ".......................oo...........",
+        ".......................o............",
+        "......................oo............",
+        "......................oo............",
+        "......pppppppppppppppooppppp........",
+        "......pppppppppppppppooppppp........",
+        "......pppppppppppppppopppppp........",
+        "......ppppkkppppppppookkpppp........",
+        "......ppppkkppppppppookkpppp........",
+        "......ppppkkpppppppoopkkpppp.ppp....",
+        "ppppppppppkkpppppppoopkkpppppppp....",
+        "pJJpppppppoopppppppoppoopppppppp....",
+        "JJJppppppppppppppppppppppppppppp....",
+        "pJpppppppppppppppppppppppppp........",
+        "kppppppppppppppppppppppppppp........",
+        "kppppppppppppppppppppppppppp........",
+        "opppp.pppppppppppppppppppppp........",
+        "pppp..pppppppppppppppppppppp........",
+        "ppp.....pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
+    ], palette)
+
+    /// 画画（一）
+    static let painting = PixelSprite([
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...............pp..oo...............",
+        "...............ppp.oo...............",
+        "......pppppppppppppooppppppp........",
+        "......pppppppppppppooppppppp........",
+        "......pppppppppppppooppppppp........",
+        "......pppppppppppppooppppppp........",
+        "......ppppkkpppppppoopkkpppp........",
+        "......ppppkkpppppppoopkkppppppp.....",
+        "..ppppppppkkpppppppoopkkpppppppp....",
+        "pJppppppppkkpppppppoopkkpppppppp....",
+        "JJJppppppppppppppppoopppppppppp.....",
+        "JJJppppppppppppppppooppppppp........",
+        "pppppppppppppppppppooppppppp........",
+        "kppppppppppppppppppooppppppp........",
+        "kppppppppppppppppppppppppppp........",
+        "ppppp.pppppppppppppppppppppp........",
+        "pppp....pp..pp......pp..pp..........",
+        "pp......pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
+    ], palette)
+
+    /// 吃东西（二）
+    static let eating2 = PixelSprite([
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "......pppDkkppppppppppkkpppppppp....",
+        "......pppDkkppppppppppkkpppppppp....",
+        "..pp..pppDpppppppppppppppppppppp....",
+        ".ppppppppDDwwwwDpppppppppppppp......",
+        ".ppppppDwwwwwwwwwwDpppppppppII......",
+        ".pppppDwwwwwwwwwwwwxpppppIIII.......",
+        "...pppxDwwwwwwwwwwxxpIIIIppp.II.....",
+        "....p.pxxxxDDDDxxxxIIIppppIII.......",
+        ".......xxxxxxxxxxxp.pp.III..........",
+        "........xxxxxxxxxx.III..pp..........",
+        "........ppxxxxxxpIIIpp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
+    ], palette)
+
+    /// 吃东西（一）
+    static let eating = PixelSprite([
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppppppDppppppppppppppp........",
+        "......ppppkkDpppppppppkkpppp........",
+        "......ppppkkDpppppppppkkpppp........",
+        "......ppppkkDpppppppppkkpppppppp....",
+        "......ppppkkppppppppppkkpppppppp....",
+        "......pppppppppppppppppppppppppp....",
+        "..ppp.pppppDDDDpppppppppppppppp.....",
+        ".pppppppwwwwwwwwwDpppppppppp.I......",
+        ".pppppDwwwwwwwwwwwwppppppppIII......",
+        "...pppxwwwwwwwwwwwwxpppIIIpp..I.....",
+        "....p.pxxDwwwwwwDxxppIIIpppIII......",
+        ".......xxxxxxxxxxxxIIp..pIII........",
+        "........xxxxxxxxxx..pIIIpp..........",
+        "........pxxxxxxxxp.III..pp..........",
+        "........pp..pp.pIIIIpp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
+    ], palette)
+
+    /// 看书（二）
+    static let reading2 = PixelSprite([
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppppppkGppppppppppkGpp........",
+        "......ppppppkGppppppppppkGpp........",
+        "..pp..ppppppkGppppppppppkGpp..pp....",
+        "..ppp.pzpDpppzzpzzpzzDDpzzzp.ppp....",
+        ".ppppppzDDDDDDDDzzDDDDDDzzzpppppp...",
+        ".pppppzpDDDDDpppzzpppDDDzzzpppppp...",
+        "...pppzDDppppDDDzzDDDppppzzzppp.....",
+        "....pppDDDDDDDDDzzDDDDDDpzzzpp......",
+        "......ppzzzzzzzzzzzzzzzzzzzz........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
+    ], palette)
+
+    /// 看书（一）
+    static let reading = PixelSprite([
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppkkppppppppppkkpppppp........",
+        "......ppkkppppppppppkkpppppp........",
+        "......ppkkppppppppppkkpppppp........",
+        "..pp..pozzooppppppppkkpozzzp..pp....",
+        "..pppppzDDDDDDDpzzppDDDDDDzppppp....",
+        ".pppppopDppDDDDDzzDDDDDppDopppppp...",
+        ".pppppzDDDDDDDDDzzDDDDDDDDDzppppp...",
+        "...pppoDDDDDDDppzzpDDDDDDDDzppp.....",
+        ".....zoppppDDDDDzzDDDppppppoz.......",
+        "......ppppppppoozzoopppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
+    ], palette)
+
+    /// 喝咖啡（二）
+    static let coffee2 = PixelSprite([
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        ".....................ppppp..........",
+        ".............pDppppppppppp..........",
+        "......ppppppppDppppppppppp..........",
+        "....ppppppppppDpppppppppppp.........",
+        "....ppppppppppppppppppzpppp.........",
+        ".....ppppppppppppppppkkpppp.........",
+        ".....ppppkkppppppppppkkpppp.........",
+        ".....ppppkkppppppppppkkpppp.p.......",
+        ".....ppppkkppppppppppkzppppppp......",
+        ".....ppppkkppzzzzzzzzpwDDDppppp.....",
+        "...ppppppppzzzzzzzzzzpwDDDDDppp.....",
+        "...ppppppwpzzzzzzzzzDwwDDDDDDp......",
+        "..pppppppwwwDDDDDDDDDDDDpppDD.......",
+        ".ppppppppDDDDDDDDDDDDDDDpppDD.......",
+        "...pp.pppDDDDDDDDDDDDDDDpp.DD.......",
+        "......ppppDDDDDDDDDDDDDDDDDD........",
+        "........ppDDDDDDDDDDDDD.DDD.........",
+        "........ppDDDDD.....pp..pp..........",
+        "........pp..pp......pp..............",
+        "........pp..pp......................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
+    ], palette)
+
+    /// 喝咖啡（一）
+    static let coffee = PixelSprite([
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......ppppppppppDppppppppppp........",
+        "......ppppppppppDppppppppppp........",
+        "......ppppppppppDppppppppppp........",
+        "......ppppppppppDppppppppppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "...pppppppppzzzzzzzzzppppppppp......",
+        "...pppppppwzzzzzzzzzzzzwDDDpppp.....",
+        "..ppppppppwwpzzzzzzzzDwwDDDDpppp....",
+        "...pppppppDDDDDDDDDDDDDDppDDDpp.....",
+        "....p.ppppDDDDDDDDDDDDDDppppDD......",
+        "......ppppDDDDDDDDDDDDDDppppDD......",
+        "........ppDDDDDDDDDDDDDDpp.DDw......",
+        "........ppDDDDDDDDDDDDDwDDDDD.......",
+        "........pp..pp......pp..DDD.........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
+    ], palette)
+    //
+    // ⚠️⚠️ **这一段整段是 `scripts/照抄表情.py` 生成的，别手改。**
+    // 手改一次，下次重跑就没了——而重跑是常态（换缩放、换调色板都要重跑）。
+    // 要改动作，改脚本里的 `PAIRS`；要改颜色，改脚本里数调色板那一段。
+    //
+    // 每个动作两帧，是**从他们的 gif 里挑出差得最多的那一对**——
+    // 取相邻两帧的话两张几乎一样，接进来就是一只僵在那儿的 clawd。
+
     static let bubble = PixelSprite([
         ".wwwww.",
         "wwwwwww",
@@ -1334,6 +1905,181 @@ enum ClawdMood: String, Codable {
     /// 扫地。**「做自己的事」里的一种**——
     /// 她指名要的那只扫地的 clawd 就是这个
     case sweeping
+
+    /// 喝咖啡。从 `clawd-emotes-skill` 的 gallery 扒来的
+    case coffee
+    /// 看书。从 `clawd-emotes-skill` 的 gallery 扒来的
+    case reading
+    /// 吃东西。从 `clawd-emotes-skill` 的 gallery 扒来的
+    case eating
+    /// 画画。从 `clawd-emotes-skill` 的 gallery 扒来的
+    case painting
+    /// 听音乐。从 `clawd-emotes-skill` 的 gallery 扒来的
+    case listening
+    /// 浇花。从 `clawd-emotes-skill` 的 gallery 扒来的
+    case watering
+    /// 打游戏。从 `clawd-emotes-skill` 的 gallery 扒来的
+    case gaming
+    /// 弹吉他。从 `clawd-emotes-skill` 的 gallery 扒来的
+    case guitar
+
+    /// 拍照
+    case photo
+    /// 唱歌
+    case singing
+    /// 举哑铃
+    case exercise
+    /// 洗澡
+    case shower
+
+    // ── 节日。**按日子出，不进随机池**（见 `festiveToday`）
+    /// 她生日（11 月 16 日）
+    case birthday
+    /// 元旦
+    case newYear
+    /// 春节
+    case springFestival
+    /// 元宵
+    case lantern
+    /// 端午
+    case dragonBoat
+    /// 七夕
+    case qixi
+    /// 中秋
+    case midAutumn
+    /// 圣诞
+    case christmas
+    /// 万圣夜
+    case halloween
+
+    /// 这一档直接播他们的哪个 gif（`Qi/Resources/clawd/`）。
+    ///
+    /// 她说的：「他怎么做的就直接拿过来就行了……你不会做就直接把他 zip 里的
+    /// 文件直接 copy 到我的 app 里。」
+    ///
+    /// 有 gif 的就播 gif——**道具、飘着的音符爱心、动作节奏全在里面**，
+    /// 一帧都不用我们重画。返回 `nil` 的那几档是我们自己的
+    ///（走路、抱东西、探头、哭），他们没有对应的动画。
+    var gif: String? {
+        switch self {
+        case .coffee:    return "clawd-coffee"
+        case .reading:   return "clawd-reading"
+        case .eating:    return "clawd-eating"
+        case .painting:  return "clawd-painting"
+        case .listening: return "clawd-listening"
+        case .watering:  return "clawd-watering"
+        case .gaming:    return "clawd-gaming"
+        case .guitar:    return "clawd-guitar"
+        case .working:   return "clawd-coding"
+        case .sleeping:  return "clawd-sleeping"
+        case .loving:    return "clawd-valentine"
+        // ⚠️ 这个 gif **还没有**——他们 gallery 里没有扫地，
+        // 是我照 skill 的规则新画的（`scripts/clawd-扫地.html`），
+        // 但这台机器导不出 gif（见交接）。名字先写在这儿：
+        // 文件一旦放进 `Qi/Resources/clawd/` 就自动生效，
+        // 没有的话 `ClawdGif.exists` 会挡住，照旧走我们的字符画。
+        case .sweeping:  return "clawd-sweeping"
+        case .photo:     return "clawd-photo"
+        case .singing:   return "clawd-singing"
+        case .exercise:  return "clawd-exercise"
+        case .shower:    return "clawd-shower"
+        case .birthday:       return "clawd-birthday"
+        case .newYear:        return "clawd-new-year"
+        case .springFestival: return "clawd-spring"
+        case .lantern:        return "clawd-lantern"
+        case .dragonBoat:     return "clawd-dragon-boat"
+        case .qixi:           return "clawd-qixi"
+        case .midAutumn:      return "clawd-mid-autumn"
+        case .christmas:      return "clawd-christmas"
+        case .halloween:      return "clawd-halloween"
+        default:         return nil
+        }
+    }
+
+    /// 今天是节日的话，是哪一档。
+    ///
+    /// 她说过：「节日那些该按日子出来，不该随机抽到，
+    /// 大夏天突然过年就出戏了。」
+    ///
+    /// ⚠️ 日子**不自己算**。农历节日在公历上年年都在挪，
+    /// 项目里 `Festivals` 已经拿 iOS 自带的中国农历现算好了，直接问它。
+    ///
+    /// ⚠️ 结果**按天缓存**：`Festivals.all` 要把一年扫一遍，
+    /// 而「他自己找点事做」十几秒就问一次，不缓存就是每十几秒扫一年。
+    private static var festiveCache: (day: Date, mood: ClawdMood?)?
+
+    static func festiveToday(_ now: Date = Date()) -> ClawdMood? {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: now)
+        if let c = festiveCache, c.day == today { return c.mood }
+
+        // ⚠️ **她的生日先判，压过所有公共节日。**
+        //
+        // 11 月 16 日是她的生日（她自己说的）。
+        // 这一天万一撞上别的日子，也是她的生日更要紧——
+        // 别的节日年年都有，她的生日一年就这一天，而且是**她的**。
+        let cal2 = Calendar.current
+        if cal2.component(.month, from: now) == 11,
+           cal2.component(.day, from: now) == 16 {
+            festiveCache = (today, .birthday)
+            return .birthday
+        }
+
+        var hit: ClawdMood?
+        for f in Festivals.all(year: cal.component(.year, from: now))
+        where cal.startOfDay(for: f.date) == today {
+            switch f.name {
+            case "春节", "除夕": hit = .springFestival
+            case "元宵":        hit = .lantern
+            case "端午":        hit = .dragonBoat
+            case "七夕":        hit = .qixi
+            case "中秋":        hit = .midAutumn
+            case "圣诞", "平安夜": hit = .christmas
+            case "万圣夜":      hit = .halloween
+            case "元旦":        hit = .newYear
+            default: continue
+            }
+            break
+        }
+        festiveCache = (today, hit)
+        return hit
+    }
+
+    /// **这一档至少要演多久**（秒）。演不满不许换下一个。
+    ///
+    /// 她说的：「这个表情跟阿晏的行为直接挂钩，阿晏打游戏他也打游戏、
+    /// 阿晏思考他也思考。如果阿晏一秒钟切换一个行为，app 一定会崩的。
+    /// 设置成一旦触发就等触发的结束再做下一个动作……
+    /// 所以动画时长要安排得不快不慢。」
+    ///
+    /// ⚠️ **不能拿「一轮帧长」当这个数。** 打游戏两帧各 0.3 秒，
+    /// 一轮才 0.6 秒——锁 0.6 秒等于没锁，他照样一秒换一个。
+    /// 这个数管的是「看得出他在干嘛」需要多久，跟帧速是两件事：
+    /// 帧速决定动作快慢，这个决定一件事做多久。
+    ///
+    /// 3.5 秒是按他们的节奏估的：打游戏一轮 0.6 秒，演五六轮；
+    /// 看书一轮 2.2 秒，演一轮半。都够读出在做什么，又不至于
+    /// 她说完话半天没反应。
+    var hold: Double {
+        switch self {
+        // 过渡态：本来就是"没在干别的"，不该占着位置挡别人
+        case .idle, .walking, .carrying, .hauling, .talking:
+            return 1.5
+        // 情绪和交互：她一说话就该立刻演，演完也不必赖着
+        case .happy, .crying, .loving, .upset, .flail, .peeking:
+            return 2.0
+        // 睡觉／犯困：本来就是长状态
+        case .sleeping, .drowsy:
+            return 6.0
+        // 节日：一年就这一天，让他演够一轮
+        case .birthday, .newYear, .springFestival, .lantern, .dragonBoat,
+             .qixi, .midAutumn, .christmas, .halloween:
+            return 6.0
+        // "他在做的事"——这一类才是需要演完的
+        default:
+            return 3.5
+        }
+    }
 
     /// 这个状态下轮播哪几帧、每帧停多久
     var frames: [(PixelSprite, Double)] {
@@ -1400,13 +2146,43 @@ enum ClawdMood: String, Codable {
             // 哭得太快看着像抽搐，不像难过
             return [(ClawdSprites.cry1, 0.8), (ClawdSprites.cry2, 0.7)]
         case .loving:
-            return [(ClawdSprites.sweet, 1.1), (ClawdSprites.happy, 0.5)]
+            // ⚠️ 她说「玫瑰花这个完全没在动」——原来这一档里
+            // 只有 `sweet` 一张图纸，换来换去都是同一张。
+            return [(ClawdSprites.sweet, 1.0), (ClawdSprites.sweet2, 1.0)]
+        case .photo, .singing, .exercise, .shower, .birthday,
+             .newYear, .springFestival, .lantern, .dragonBoat,
+             .qixi, .midAutumn, .christmas, .halloween:
+            // ⚠️ 这些档**只走 gif**（见 `gif`），这儿是 gif 读不到时的兜底。
+            // 她说过「你根本没有作画能力……按自己想法画出来的等同于屎」——
+            // 所以不给它们画字符画了，读不到就站着，别拿我画的糊弄。
+            return [
+                (ClawdSprites.idle, 1.4),
+                (ClawdSprites.breathe, 1.1),
+                (ClawdSprites.idle, 1.4),
+                (ClawdSprites.blink, 0.16)
+            ]
         case .sweeping:
             // 一个来回：左 → 中 → 右 → 中。
             // 中间那两帧短一点——扫把甩过中段本来就快，
             // 四帧等长会显得像节拍器。
             return [(ClawdSprites.sweep1, 0.22), (ClawdSprites.sweep2, 0.16),
                     (ClawdSprites.sweep3, 0.22), (ClawdSprites.sweep4, 0.16)]
+        case .coffee:
+            return [(ClawdSprites.coffee, 0.5), (ClawdSprites.coffee2, 0.5)]
+        case .reading:
+            return [(ClawdSprites.reading, 1.2), (ClawdSprites.reading2, 1.0)]
+        case .eating:
+            return [(ClawdSprites.eating, 0.42), (ClawdSprites.eating2, 0.42)]
+        case .painting:
+            return [(ClawdSprites.painting, 0.45), (ClawdSprites.painting2, 0.45)]
+        case .listening:
+            return [(ClawdSprites.listening, 0.4), (ClawdSprites.listening2, 0.4)]
+        case .watering:
+            return [(ClawdSprites.watering, 0.6), (ClawdSprites.watering2, 0.6)]
+        case .gaming:
+            return [(ClawdSprites.gaming, 0.3), (ClawdSprites.gaming2, 0.3)]
+        case .guitar:
+            return [(ClawdSprites.guitar, 0.32), (ClawdSprites.guitar2, 0.32)]
         }
     }
 }
@@ -1482,6 +2258,50 @@ struct ClawdView: View {
         }
     }
 
+    /// 头顶上方那台显示器（打游戏时）。
+    ///
+    /// ⚠️ **那个 -30 是算出来的，别调手感。**
+    ///
+    /// 显示器那张图纸盖住 svg y -13..2，主图纸盖住 -1..17，
+    /// 两张共用横向范围（-1..17），所以左右天然对齐，只需要往上挪。
+    ///
+    ///     主图纸第 0 行 = svg -1
+    ///     svg -1 落在显示器图纸的第 (−1+13)×2 = 24 行
+    ///     显示器图纸 30 行高，底对齐时往上推 30 格，
+    ///     它的第 24 行正好压在主图纸第 0 行上
+    ///
+    /// 改了任何一张图纸的范围，这个数要跟着重算。
+    private var gameScreen: some View {
+        ZStack(alignment: .bottom) {
+            PixelSpriteView(sprite: ClawdSprites.gameScreen, scale: scale)
+                .offset(y: -30 * scale)
+        }
+        .allowsHitTesting(false)
+    }
+
+    /// 头顶飘出来的音符。跟 `dataBits` 一个路子：
+    /// 各飘各的、错开周期、边飘边淡，齐步走就假了。
+    private var musicNotes: some View {
+        TimelineView(.animation) { ctx in
+            let now = ctx.date.timeIntervalSinceReferenceDate
+            ZStack(alignment: .bottom) {
+                ForEach(0..<3, id: \.self) { i in
+                    let period = 2.0 + Double(i) * 0.45
+                    let t = (now / period).truncatingRemainder(dividingBy: 1)
+                    // 左右各一串，中间一串——从耳机上方冒出来
+                    let fromX = [-8.0, 0.0, 7.0][i]
+                    Text(i == 1 ? "♫" : "♪")
+                        .font(.system(size: scale * 5, weight: .bold))
+                        .foregroundStyle(Color(hexString: "8B7BD8") ?? .purple)
+                        .offset(x: (fromX + sin(t * 6) * 1.5) * scale,
+                                y: -(10 + t * 16) * scale)
+                        .opacity(t < 0.12 ? 0 : (1 - t) * 0.9)
+                }
+            }
+            .allowsHitTesting(false)
+        }
+    }
+
     private var waving: some View {
         let body = sprites[min(frame, sprites.count - 1)].0
         let cols = CGFloat(body.width), rows = CGFloat(body.height)
@@ -1519,7 +2339,26 @@ struct ClawdView: View {
                     .allowsHitTesting(false)
             }
 
-            if pose == .none {
+            if let g = mood.gif, ClawdGif.exists(g), pose == .none, worn == nil {
+                // ⚠️ **播 gif 的时候，我们自己那套一件都不叠。**
+                //
+                // 道具、飘着的音符和爱心、动作的快慢，人家的 gif 里全都有。
+                // 再叠一层我们画的音符或者数据粒子，就是两份重影。
+                //
+                // ⚠️ 尺寸和位置是算出来的，别调手感：
+                // 他们的 viewBox 是 45×45 个单位，我们的图纸是 18 个单位宽，
+                // 所以 gif 要画成 `90×scale`（= 45 单位 × 2 格/单位 × scale），
+                // 这样**一个 SVG 单位在两边一样大**，切换动作时他不会忽大忽小。
+                // 底对齐之后他的脚比我们的图纸低 6 格，抬回去。
+                Color.clear
+                    .frame(width: 36 * scale, height: 36 * scale)
+                    .overlay(alignment: .bottom) {
+                        ClawdGifView(name: g, size: 90 * scale)
+                            .frame(width: 90 * scale, height: 90 * scale)
+                            .offset(y: -6 * scale)
+                            .allowsHitTesting(false)
+                    }
+            } else if pose == .none {
                 PixelSpriteView(sprite: sprites[min(frame, sprites.count - 1)].0, scale: scale)
             } else {
                 waving
@@ -1546,11 +2385,45 @@ struct ClawdView: View {
             // 一串 `#40C4FF` 的小方块，各自错开延迟往上飘、边飘边淡。
             //
             // ⚠️ 这不是装饰。**电脑只说明他坐在那儿，粒子才说明他正在动。**
-            if mood == .working {
+            if mood == .working, mood.gif == nil {
                 dataBits
             }
 
-            if mood == .loving {
+            // 打游戏时头顶上方那台显示器。
+            //
+            // 她说的：「打游戏依旧没有游戏屏幕。」
+            //
+            // ⚠️ **它不在主图纸里，是单独一张。** 量过所有 24 个动画，
+            // 只有这台显示器飘到了躯干顶上方十二个多单位，别的道具最高才
+            // 1.6，全在框里。为它一个把画布拉高到装得下，整只 clawd 就得
+            // 缩成一小块，二十多张图陪着一张受罪。
+            //
+            // 所以跟爱心、音符、数据粒子一个待遇：浮在图纸外面画。
+            // 它本来就跟身体不连——`only_body` 把它从主图纸里擦掉，
+            // `solo_prop` 单独扒一张（见 `scripts/照抄表情.py`）。
+            // ⚠️ 打游戏走 gif 了（屏幕就在人家画面里），这儿不再另画一台。
+            if mood == .gaming, mood.gif == nil {
+                gameScreen
+            }
+
+            // 听音乐时头顶飘出来的音符。
+            //
+            // 她说的：「听音乐没有音符吗，不太像听音乐。」
+            // ——耳机戴上了，可光戴着耳机跟发呆没区别，
+            // **是音符说明他在听**，就像数据粒子说明他在敲键盘。
+            //
+            // ⚠️ 音符**不进图纸**。他们原图里音符飘到躯干顶上方 25 个单位，
+            // 硬塞进图纸的话身子会被压得只剩一点点（量过：图纸留 6.6 单位
+            // 就够装下所有握在手里的东西了）。所以跟爱心、数据粒子一样，
+            // 单独浮在图纸外面画。
+            //
+            // 符号照他们的来（`anatomy.md` 的粒子那节写的就是 `<text>♪`）。
+            // ⚠️ 听音乐走 gif 了（音符就在人家画面里），别再叠一份。
+            if mood == .listening, mood.gif == nil {
+                musicNotes
+            }
+
+            if mood == .loving, mood.gif == nil {
                 ZStack {
                     ForEach(0..<3, id: \.self) { i in
                         JournalStickerShape(kind: "heart")

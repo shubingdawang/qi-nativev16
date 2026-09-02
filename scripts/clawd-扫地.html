@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Clawd 图鉴 · 扫地</title>
+<!--
+  扫地。**照 `clawd-emotes-skill` 的规矩画的，不是我自己发挥的。**
+
+  她说：「扫地你画吧，严格按照 skill 里教的画好吗，
+  你在画图方面太蠢了，别再自以为是了 ok？
+  它里面写了什么规则你就给我老老实实的照做。」
+
+  为什么要自己画这一个：他们 gallery 里 24 个动画**没有扫地**
+  （prop-recipes 里有筷子、画笔、洒水壶、吉他、话筒、哑铃、海绵，就是没扫帚），
+  而扫地那只 clawd 是她指名要的。
+
+  对着 SKILL.md 的五条逐条办：
+    1. 脚画在 `.sw-body` 组里 —— 脚在组外会跟身子脱开
+    2. 没有帽子，这条跳过
+    3. **扫把嵌在右臂那个 `<g>` 里**，绕肩膀 (13,10) 转 ——
+       道具跟手不在一个组里，手动了道具不动，看着就是脱手的
+    4. **长道具摆幅要小**：扫把从肩膀伸出去 7.6 个单位，
+       规则说 ±10~15°，这儿取 ±12°。角度大了末端会甩飞出去
+       （他们吃饭那只翻过这个车：筷子 −52°→24°，视觉上脱手了）
+    5. 前缀 `sw-`，class 和 keyframes 全带上 —— 一页里多张卡共用一份 CSS
+
+  画的顺序也照它的：影子（单独，在地上）→ 身体组（脚 → 躯干 → 眼 → 嘴
+  → 手臂+扫把）→ 灰尘粒子在道具后面。
+-->
+<style>
+  /* ---- shared scaffold: copy this whole block into every catalog page ---- */
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:#0d0d0d; color:#e0e0e0;
+    font-family:'Segoe UI',system-ui,sans-serif;
+    min-height:100vh; display:flex; flex-direction:column;
+    align-items:center; padding:48px 24px 64px; gap:40px;
+  }
+  h1 {
+    font-size:2rem; font-weight:700;
+    background:linear-gradient(135deg,#ff9500,#ff6b6b,#ffcc44);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+  }
+  .subtitle { color:#555; font-size:.85rem; margin-top:6px; }
+  .grid {
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+    gap:24px; width:100%; max-width:1180px;
+  }
+  .card {
+    background:#111; border:1px solid #1e1e1e; border-radius:18px;
+    overflow:hidden; transition:border-color .2s,transform .2s,box-shadow .2s;
+  }
+  .card-view {
+    display:flex; align-items:center; justify-content:center;
+    padding:20px 0; min-height:180px; background:var(--bg,#080808); position:relative;
+  }
+  .card-view svg { width:150px; height:150px; }
+  .card-info { padding:16px 18px 18px; border-top:1px solid #1a1a1a; }
+  .card-emoji { font-size:1.1rem; margin-bottom:4px; }
+  .card-name  { font-size:1rem; font-weight:700; }
+  .card-desc  { font-size:.72rem; color:#666; margin-top:5px; line-height:1.6; }
+  .tag {
+    display:inline-block; font-size:.65rem; padding:2px 8px; border-radius:10px;
+    margin-top:8px; font-family:monospace;
+    background:var(--tagbg,rgba(255,149,0,.12)); color:var(--tagfg,#ff9500);
+  }
+</style>
+</head>
+<body>
+
+<div style="text-align:center">
+  <h1>Clawd 图鉴</h1>
+  <p class="subtitle">纯 SVG + CSS keyframes · 像素螃蟹</p>
+</div>
+
+<div class="grid">
+
+<div class="card" data-name="sweeping"
+     style="--glow:rgba(160,130,70,.2);--bd:rgba(160,130,70,.5);--bg:linear-gradient(180deg,#12100a,#080808);--tagbg:rgba(160,130,70,.14);--tagfg:#c2a35a">
+  <div class="card-view">
+    <!-- ⚠️ `shape-rendering="crispEdges"`：关掉抗锯齿。
+         她说「眼睛和嘴巴下面有点奇怪的颜色，能消掉就消掉」——
+         那是抗锯齿糊出来的。`anatomy.md` 里嘴的坐标是 6.4/10.8/2.2
+         这种非整数，再加上圆角 rx，渲染器就在边上抹一圈半透明。
+         像素画的边本来就该是硬的，关掉它，杂色一起没。 -->
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="-15 -25 45 45"
+         shape-rendering="crispEdges">
+    <defs><style>
+      .sw-body{transform-origin:7.5px 13px;animation:sw-bob 1.9s infinite ease-in-out;}
+      .sw-shad{transform-origin:7.5px 15.5px;animation:sw-shadow 1.9s infinite ease-in-out;}
+      .sw-eye {transform-origin:7.5px 9px;animation:sw-blink 3.8s infinite;} /* 3.8 = 1.9×2：跟别的动画成整数倍，导出的 gif 首尾才接得上 */
+      .sw-arm {transform-origin:13px 10px;animation:sw-sweep 1.9s infinite ease-in-out;}
+      .sw-dust{opacity:0;animation:sw-dust 1.9s var(--sd,0s) infinite ease-out;}
+      @keyframes sw-bob{0%,100%{transform:translateY(0);}50%{transform:translateY(-.4px);}}
+      @keyframes sw-shadow{0%,100%{transform:scaleX(1);opacity:.5;}50%{transform:scaleX(.97);opacity:.46;}}
+      @keyframes sw-blink{0%,46%,54%,100%{transform:scaleY(1);}50%{transform:scaleY(.1);}}
+      @keyframes sw-sweep{0%,100%{transform:rotate(-12deg);}50%{transform:rotate(12deg);}}
+      @keyframes sw-dust{0%{opacity:0;transform:translate(0,0) scale(1);}25%{opacity:.5;}100%{opacity:0;transform:translate(var(--tx,-3px),-1.8px) scale(.6);}}
+    </style></defs>
+
+    <rect class="sw-shad" x="3" y="15" width="9" height="1" fill="#000" opacity=".5"/>
+    <g class="sw-body">
+      <!-- 脚：在身体组**里面**（规则 1） -->
+      <g fill="#DE886D">
+        <rect x="3" y="13" width="1" height="2"/><rect x="5" y="13" width="1" height="2"/>
+        <rect x="9" y="13" width="1" height="2"/><rect x="11" y="13" width="1" height="2"/>
+      </g>
+      <rect x="2" y="6" width="11" height="7" fill="#DE886D"/>
+      <g class="sw-eye" fill="#000"><rect x="4" y="8" width="1" height="2"/><rect x="10" y="8" width="1" height="2"/></g>
+      <!-- ⚠️ **扫地不画嘴。** 她说：「扫地不用嘴，嘴删掉，
+           不是要用嘴配合表情的就不用嘴。」
+           `anatomy.md` 里嘴本来也标着 optional。 -->
+      <!-- 左手：扶着，不动 -->
+      <rect x="0" y="9" width="2" height="2" fill="#DE886D"/>
+
+      <!-- 扬起来的灰尘。画在扫把**前面**（规则：粒子在道具后面） -->
+      <g fill="#b9a887">
+        <rect class="sw-dust" style="--sd:0s;--tx:-3px"    x="8.6" y="14.4" width=".5" height=".5"/>
+        <rect class="sw-dust" style="--sd:-.55s;--tx:-4px" x="9.6" y="14.8" width=".4" height=".4"/>
+        <rect class="sw-dust" style="--sd:-1.1s;--tx:-2px" x="7.8" y="14.9" width=".4" height=".4"/>
+      </g>
+
+      <!-- 右手 + 扫把：**扫把嵌在这个组里**，整组绕肩膀 (13,10) 摆（规则 3） -->
+      <g class="sw-arm">
+        <!-- ⚠️ 扫把画在手**前面**，手画在扫把**后面**（也就是压在杆上）。
+             反过来的话杆盖住手，看着不是「握着」，是「从肚子里长出来一根棍」。
+             斜 34°：竖直的杆顺时针转 34° 指向左下，
+             杆长 7 个单位正好让稻草落在脚边的地面上（y≈15.8）。 -->
+        <g transform="rotate(34,14,10)">
+          <rect x="13.6" y="10" width=".8" height="5.1" fill="#8B5E34"/>
+          <rect x="13.4" y="14.7" width="1.2" height=".5" fill="#6d4826"/>
+          <!-- ⚠️⚠️ **杆和刷头垂直成一个倒 T，是杆带着刷头走。**
+
+             她指出来的：「你有一个误区，真正不动的地方是杆和扫把连接的
+             那个地方。杆子和扫把的上方是呈一个倒着的 T。扫地实际上是
+             杆子带动扫把在动，并不是扫把自己固定在一个位置在旋转。」
+
+             我上一版给刷头加了一个反向旋转，让它**相对地面**永远水平——
+             那等于刷头自己在原地转，杆动它不动，连接处的关系就散了。
+             刷头本来就该垂直焊在杆头上：在杆自己的坐标系里它是横的，
+             杆斜 34° 它就跟着斜 34°，杆一摆它整根跟着扫过去。
+
+             所以这儿**不再有任何反向旋转**——杆和刷头在同一个组里，
+             一起绕肩膀 (13,10) 摆。杆下端往左时上端往右，刷头跟着下端走。 -->
+        <rect x="13" y="9" width="2" height="2" fill="#DE886D"/>
+      </g>
+    </g>
+    </svg>
+  </div>
+  <div class="card-info">
+    <div class="card-emoji">🧹</div><div class="card-name">扫地</div>
+    <div class="card-desc">一把扫帚左右来回 · 扬起细尘<br>做自己的事 · 家里干干净净</div>
+    <div class="tag">Sweeping</div>
+  </div>
+</div>
+
+</div><!-- /grid -->
+
+<p style="color:#2a2a2a;font-size:.7rem;padding-bottom:8px">纯 SVG + CSS · 像素螃蟹原创动画</p>
+
+</body>
+</html>

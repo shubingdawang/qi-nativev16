@@ -26,6 +26,12 @@ struct ClawdRoamer: View {
     @ObservedObject private var feel = EmotionEngine.shared
 
     @State private var mood: ClawdMood = .idle
+    /// 这一档是什么时候开始演的（配 `ClawdMood.hold` 用）
+    @State private var moodAt = Date()
+    /// 排队等着的下一个动作。**当前这个演完才轮到它。**
+    @State private var pending: ClawdMood?
+    /// 到点叫号的那个闹钟（见 `settleMood`）
+    @State private var pendTask: Task<Void, Never>?
     @State private var poked = false
     @State private var held = false
     @State private var facingLeft = false
@@ -69,6 +75,8 @@ struct ClawdRoamer: View {
     @State private var tookOutMyself = false
     /// 正躲在屏幕边上探头。躲着的时候不让别的地方改他的表情、也不让他自己走开。
     @State private var peeking = false
+    /// 探头时身体往屏幕里倾多少度（见 `ClawdRigView.tilt`）
+    @State private var peekTilt: Double = 0
     /// 这一页有多宽。**探头要算点数，不能算百分比**——
     /// 他只有三十几个点宽，"露出百分之几"在大屏小屏上差得远。
     @State private var pageWidth: CGFloat = 393
@@ -140,9 +148,14 @@ struct ClawdRoamer: View {
                              worn: room.wornKind?.sprite,
                              wornID: room.wearing ?? "",
                              pose: carryPose,
+                             // 探头时身体绕脚底往屏幕里倾（见 `ClawdRigView.tilt`）
+                             tilt: peekTilt,
                              scale: 1.1,
                              beat: rigBeat,
                              shadow: true)
+                    // 倾斜得有个过渡。外面那条 `.animation(value: clawdX)`
+                    // 只管横向位置，管不到 tilt——不加这句探头就是硬切一下。
+                    .animation(.easeOut(duration: 0.45), value: peekTilt)
                     .scaleEffect(held ? 1.2 : 1)
                     .scaleEffect(x: facingLeft ? -1 : 1, y: 1)
                     .shadow(color: .black.opacity(held ? 0.26 : 0), radius: 10, y: 8)
@@ -229,6 +242,7 @@ struct ClawdRoamer: View {
             sleepTask?.cancel()
             streakTask?.cancel()
             ownTask?.cancel()
+            pendTask?.cancel()
         }
         .onChange(of: busy) { was, now in
             // 一轮说完了。**刚干完活那一下要有点反应**——
@@ -241,6 +255,7 @@ struct ClawdRoamer: View {
             guard bad else { return }
             wake()
             mood = .upset
+            moodAt = Date()
             say(["……出错了", "唔", "怎么了"].randomElement() ?? "……出错了")
         }
         .onChange(of: feel.state.valence) { _, _ in sync() }
@@ -278,6 +293,7 @@ struct ClawdRoamer: View {
                     }
                     tookOutMyself = true
                     mood = .carrying
+                    moodAt = Date()
                     // 这件东西该怎么拿：大件双手举，小件一只手端着
                     carryPose = ClawdRig.poses(for: pick).first ?? .hold
                     say(takeOutLine(pick))
@@ -333,9 +349,12 @@ struct ClawdRoamer: View {
 
     // MARK: 躲到边上探头
 
-    // 他有多宽：图纸 32 格 × 每格 1.1 点。算探头必须用点数——
+    // 他有多宽：图纸 36 格 × 每格 1.1 点。算探头必须用点数——
     // "露出百分之几"在大屏小屏上差得远，她那台是大屏的。
-    private var halfWidth: CGFloat { 32 * 1.1 / 2 }
+    //
+    // ⚠️ **32 → 36**：图纸换成 2 格/单位之后是 36 格宽，这儿漏改过。
+    // 又是那条老毛病——「改一个尺寸，跟它有关系的全部要重算」。
+    private var halfWidth: CGFloat { 36 * 1.1 / 2 }
 
     /// 完全看不见的位置：整只挪到屏幕外面，再多给六个点保险
     private func hiddenX(right: Bool) -> Double {
@@ -387,11 +406,13 @@ struct ClawdRoamer: View {
         guard !held, !poked else { return }
 
         peeking = true
-        defer { peeking = false }
+        // ⚠️ 倾斜要跟着一起收。不清零的话他走回屏幕中间还歪着身子。
+        defer { peeking = false; peekTilt = 0 }
 
         // 朝屏幕里面看：在右边就朝左，在左边就朝右
         facingLeft = !right
         mood = .idle
+        moodAt = Date()
 
         // 溜出去。
         //
@@ -410,8 +431,16 @@ struct ClawdRoamer: View {
 
             // 探出来
             mood = .peeking
+            moodAt = Date()
             walkSeconds = 0.55
             liveX = peekX(right: right); settle()
+            // **探头的动作是「倾」，不是「挪」。**
+            // 她说 app 上这个是平移的、不对——`anatomy.md` 那张
+            // transform-origin 表里没有一处平移，全是绕自己的支点转。
+            // 位置只负责「他躲在边上」，探出去的姿态靠身体绕脚底倾过去。
+            //
+            // 在右边就往左倾（负角度＝逆时针，顶部朝左），在左边反过来。
+            peekTilt = right ? -14 : 14
             // 这儿**故意不说话**：气泡是跟他一起居中的，
             // 他人在屏幕外，气泡也就跟着出去了，只会在边上露半个白角。
             // 躲着的时候本来也该是安静的。
@@ -421,7 +450,9 @@ struct ClawdRoamer: View {
 
             // 缩回去
             mood = .idle
+            moodAt = Date()
             walkSeconds = 0.4
+            peekTilt = 0                 // 先站直，再缩回去
             liveX = hiddenX(right: right); settle()
             try? await Task.sleep(nanoseconds: UInt64.random(in: 900...2200) * 1_000_000)
         }
@@ -432,6 +463,7 @@ struct ClawdRoamer: View {
         // 看够了，自己走回来
         peeking = false
         mood = .walking
+        moodAt = Date()
         await walk(to: Double.random(in: 0.3...0.8), Double.random(in: top...bottom))
         sync()
     }
@@ -496,6 +528,7 @@ struct ClawdRoamer: View {
         let before = mood
         carryPose = .sip
         mood = .happy
+        moodAt = Date()
         await runBeat(seconds: 1.6)
         carryPose = .hold
         mood = before == .happy ? .carrying : before
@@ -613,6 +646,7 @@ struct ClawdRoamer: View {
             // 那时候他该去做自己的事，不该打哈欠（见 `bedtimeNow`）。
             guard bedtimeNow else { return }
             mood = .drowsy
+            moodAt = Date()
             say(["唔……有点困", "呼啊——", "眼睛睁不开了"].randomElement() ?? "有点困")
 
             try? await Task.sleep(nanoseconds: UInt64(sleepAfter * 1_000_000_000))
@@ -621,6 +655,7 @@ struct ClawdRoamer: View {
             asleep = true
             walkTask?.cancel()          // 睡着了就别走了
             mood = .sleeping
+            moodAt = Date()
             say("zzz")
         }
     }
@@ -632,12 +667,14 @@ struct ClawdRoamer: View {
         asleep = false
         if startled {
             mood = .flail
+            moodAt = Date()
             say(["呜哇！", "醒了醒了", "吓死我了"].randomElement() ?? "呜哇！")
             if app.settings.haptics {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             }
         } else {
             mood = .happy
+            moodAt = Date()
             say(["……嗯？", "你回来了", "醒了"].randomElement() ?? "嗯？")
         }
         Task { @MainActor in
@@ -653,6 +690,7 @@ struct ClawdRoamer: View {
     private func celebrate() {
         guard !asleep, !held, !peeking else { return }
         mood = .happy
+        moodAt = Date()
         say(["说完啦", "好了——", "哼哼"].randomElement() ?? "说完啦")
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_100_000_000)
@@ -685,19 +723,19 @@ struct ClawdRoamer: View {
         if upset { mood = .upset; return }
         guard busy else {
             // 手上抱着东西的时候，站着也得是抱着的样子
-            mood = room.carrying == nil ? .idle : .carrying
+            settleMood(room.carrying == nil ? .idle : .carrying)
             return
         }
         // ── 他在干活：**先看干的是什么**，那比情绪更具体 ──
         //
         // 她说的：「阿晏正在给我做游戏或者处理文件，他就在打电脑。」
         if activity.contains("想") {
-            mood = .thinking
+            settleMood(.thinking)
             return
         }
         if !activity.isEmpty && !activity.contains("说") {
             // 翻记忆、写日记、博弈、画图、动手做事，都算在打电脑
-            mood = .working
+            settleMood(.working)
             return
         }
 
@@ -709,7 +747,55 @@ struct ClawdRoamer: View {
         // 数据是现成的：`EmotionEngine` 那两个数本来就在算，
         // 这儿只是把它画出来。**不另外调模型判断情绪**——那要花钱，
         // 而且判出来的也未必比这两个数准。
-        mood = emotionMood() ?? ownThing
+        settleMood(emotionMood() ?? ownThing)
+    }
+
+    /// 换一个动作，**但要等当前这个演完**。
+
+    /// 她说的：「一旦触发，就等触发的结束再做下一个动作。
+    /// 比如阿晏正打游戏，触发打游戏的动画；下一秒阿晏思考，
+    /// 打游戏的动画没好，就还是打游戏；如果打游戏动画好了，
+    /// 就正常触发思考。」
+    ///
+    /// ⚠️ **根子在 `sync()` 挂着 `.onChange(of: activity)`。**
+    /// 我干什么，它就立刻改一次他的表情——我一秒钟换一个动作，
+    /// 他就一秒钟换一张脸，既看不出在做什么，也白白重画几十次。
+    ///
+    /// ⚠️ **不是所有切换都排队。** 戳他、拎起来、她说话让他醒——
+    /// 这些是她**当下的动作**，必须立刻有反应，排队就成了没反应。
+    /// 排队的只有「环境驱动」那几档：他在忙什么、他什么情绪、
+    /// 以及闲着时自己找的事。那几档晚个两三秒没人看得出来。
+    @MainActor
+    private func settleMood(_ next: ClawdMood) {
+        if next == mood {
+            pending = nil
+            return
+        }
+        let played = Date().timeIntervalSince(moodAt)
+        if played < mood.hold {
+            // 还没演完，排着——**并且给它上个闹钟**。
+            //
+            // ⚠️ 光排队不叫号等于把动作吞了：`sync()` 是被
+            // 「我在忙什么」「她情绪变了」这些事件推着走的，
+            // 我要是停下来不动了，就再没人来看一眼队里还有谁。
+            // 他会一直演着打游戏，我早就不打了。
+            //
+            // 用一次性延时而不是每秒轮询：他同时活在小屋、聊天页、
+            // 输入框上，多一个常驻的定时器就多一份重画。
+            pending = next
+            pendTask?.cancel()
+            let wait = mood.hold - played
+            pendTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+                guard !Task.isCancelled, let queued = pending else { return }
+                settleMood(queued)
+            }
+            return
+        }
+        pendTask?.cancel()
+        mood = next
+        moodAt = Date()
+        pending = nil
     }
 
     /// 他此刻的情绪该画成什么。**没到分寸就返回 nil**——
@@ -734,13 +820,13 @@ struct ClawdRoamer: View {
             while !Task.isCancelled {
                 // 手上抱着东西的时候就是抱着，别硬塞别的
                 if room.carrying == nil {
-                    ownThing = Self.ownThings.randomElement() ?? .idle
+                    ownThing = Self.todaysThings().randomElement() ?? .idle
                 } else {
                     ownThing = .carrying
                 }
                 if !busy, !asleep, !held, !peeking, !upset,
                    emotionMood() == nil {
-                    mood = ownThing
+                    settleMood(ownThing)
                 }
                 // 一件事做十几二十秒。太短了像多动症，太长了像卡住
                 let wait = Double.random(in: 14...26)
@@ -752,11 +838,28 @@ struct ClawdRoamer: View {
     /// 「自己的事」有哪些。**扫地是她指名要的那只**。
     /// 发呆占的份额最大——一只一直在忙的宠物看着很累。
     static let ownThings: [ClawdMood] = [
-        .idle, .idle, .idle,
+        .idle, .idle, .idle, .idle, .idle,
         .sweeping, .sweeping,
         .thinking,
-        .walking
+        .walking,
+        // 从他们 gallery 扒来的那八件（见 `scripts/照抄表情.py`）
+        .coffee, .reading, .eating, .painting,
+        .listening, .watering, .gaming, .guitar,
+        .photo, .singing, .exercise, .shower
     ]
+
+    /// 今天他可以做哪些事。
+    ///
+    /// ⚠️ **节日不进那张固定的池子。**
+    /// 她说过：「节日那些该按日子出来，不该随机抽到，
+    /// 大夏天突然过年就出戏了。」
+    ///
+    /// 所以节日是**当天临时加进来的**，而且给的份额大——
+    /// 一年就这一天，他该老想着这件事；过了今天自己就没了。
+    private static func todaysThings() -> [ClawdMood] {
+        guard let f = ClawdMood.festiveToday() else { return ownThings }
+        return ownThings + Array(repeating: f, count: 8)
+    }
 
     /// 戳他一下。
     ///
@@ -805,12 +908,14 @@ struct ClawdRoamer: View {
 
             if pokeStreak >= 4 {
                 mood = .flail
+                moodAt = Date()
                 say(["别戳啦！", "呜哇——", "会坏的！"].randomElement() ?? "别戳啦！")
                 if app.settings.haptics {
                     UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
                 }
             } else {
                 mood = .happy
+                moodAt = Date()
                 say(["唔", "干嘛呀", "在呢", "别戳了", "痒", "嗯？"].randomElement() ?? "唔")
                 if app.settings.haptics {
                     UIImpactFeedbackGenerator(style: .soft).impactOccurred()
@@ -832,6 +937,7 @@ struct ClawdRoamer: View {
         ClawdStore.clawdHeld = true
         walkTask?.cancel()
         mood = .happy
+        moodAt = Date()
         if app.settings.haptics {
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         }

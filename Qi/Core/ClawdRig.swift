@@ -22,7 +22,7 @@ import SwiftUI
 // 加新家具不用再画一帧。
 //
 // ⚠️ 拆的时候身子一格没动：手本来就长在身子外面
-// （图纸 40 格里，身子占第 8..31 格，手是 4..7 和 32..35，
+// （图纸 36 格里，身子占第 6..27 格，手是 2..5 和 28..31，
 //   最外面各留 4 格空——举手的时候手要往外张，得有地方张）。
 // 把那两块从身子那张图里抠掉、单独画，剪影跟原来一模一样。
 
@@ -61,6 +61,20 @@ struct ClawdRigView: View {
     /// 那件穿戴是什么（决定贴在身上哪儿，见 `ClawdRig.wearAt`）
     var wornID: String = ""
     var pose: CarryPose = .none
+    /// **绕脚底倾斜多少度**（正数往右倒）。探头用的就是它。
+    ///
+    /// ⚠️ 她说：「app 上的探头根本不对，app 上是平移的，
+    /// 好好看看这个 skill 是怎么探头的。」
+    ///
+    /// `anatomy.md` 那张 transform-origin 表里，**没有一处是平移**：
+    ///
+    ///     .XX-body { transform-origin: 7.5px 13px; }   /* 绕脚摇 */
+    ///     .XX-eye  { transform-origin: 7.5px 9px; }    /* 绕眼线眨 */
+    ///     .XX-larm { transform-origin: 2px 10px; }     /* 绕肩膀 */
+    ///
+    /// 每个零件都绕**自己的支点转**。探头也一样：脚钉在屏幕外，
+    /// 身体绕脚底那个点往屏幕里倾——不是整只横着滑进来。
+    var tilt: Double = 0
     /// 一格画多大
     var scale: CGFloat = 4
     /// 动作进度 0…1。喝、摇这类靠它
@@ -83,6 +97,45 @@ struct ClawdRigView: View {
     private var rows: CGFloat { CGFloat(frames[0].0.height) }
 
     var body: some View {
+        // ⚠️ 支点是**脚底**，不是中心。绕中心转的话他会像个陀螺原地打转；
+        // 绕脚底转才是「站着往一边探身子」。
+        // 脚底在图纸第 31 行、中线在第 17 列（36×36 的图纸）。
+        content.rotationEffect(.degrees(tilt),
+                               anchor: UnitPoint(x: 17.0 / 36, y: 31.0 / 36))
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        // 有 gif 的那几档直接播他们的（见 `ClawdMood.gif`）。
+        //
+        // ⚠️ **聊天页那只走的是这个 View，不是 `ClawdView`。**
+        // 两边都要接——只接一边的话，她在聊天页看到的还是老样子，
+        // 会以为我又没做。
+        //
+        // ⚠️ 手上拿着东西、身上穿着东西、或者正在招手举手时**不走 gif**：
+        // 那几件是我们自己的交互（她给他戴的帽子、他搬的家具），
+        // 人家的动画里没有这些。
+        if let g = mood.gif, ClawdGif.exists(g),
+           item == nil, worn == nil, pose == .none {
+            Color.clear
+                .frame(width: cols * scale, height: rows * scale)
+                .overlay(alignment: .bottom) {
+                    // ⚠️ 90 = 他们的 viewBox 45 个单位 × 2 格/单位。
+                    // 这样**一个 SVG 单位在 gif 和我们的图纸上一样大**，
+                    // 切换动作时他不会忽大忽小。底对齐后脚低 6 格，抬回去。
+                    ClawdGifView(name: g, size: 90 * scale)
+                        .frame(width: 90 * scale, height: 90 * scale)
+                        .offset(y: -6 * scale)
+                        .allowsHitTesting(false)
+                }
+        } else {
+            rigBody
+        }
+    }
+
+    /// 我们自己拼的那只：手臂能转、能举家具、能穿戴。
+    /// 他们的 gif 里没有这些，所以这套留着。
+    private var rigBody: some View {
         ZStack(alignment: .topLeading) {
             // ⚠️⚠️ **手在下、身子在上。顺序反了就前功尽弃。**
             //
@@ -276,8 +329,8 @@ enum ClawdRig {
     ///
     /// `midX`、`stripArms`、`wearAt`、`plan` 全是从这两个数算出来的，
     /// 所以改这两个就够——**但漏改，手和穿戴就会长在错的地方。**
-    static let bodyLeft = 8
-    static let bodyRight = 31
+    static let bodyLeft = 6
+    static let bodyRight = 27
     /// 手臂从第几行起。
     ///
     /// ⚠️⚠️ **6 → 10**：图纸从 23 行加高到 27 行（顶上补了四行空），
@@ -291,7 +344,7 @@ enum ClawdRig {
     /// 上移两格之后中线在第 10 行 = 往下 26%，落进上四分之一。
     ///
     /// **漏改这一个，手就会长在肚子上。**
-    static let armRow = 8
+    static let armRow = 20
 
     /// 一只手。**8 格长**：外面露 4 格，里面还有 4 格**埋在身子里**。
     ///
@@ -311,11 +364,10 @@ enum ClawdRig {
     /// 埋 4 格是算过的：最深只需要 2.4 格，留了余量。
     ///
     /// ⚠️ **露在外面那 4 格必须跟 `ClawdSprites.idle` 里那块一模一样**
-    /// （4 格宽、5 格高、第 8..12 行）。她说过「手臂太细而且位置靠上」——
+    /// （4 格宽、4 格高、第 20..23 行）。她说过「手臂太细而且位置靠上」——
     /// 根子就是这儿曾经只写了两行。改之前先把 `idle` 的
-    /// 第 4..7 列和第 32..35 列打出来对一遍，**别照着感觉调。**
+    /// 第 2..5 列和第 28..31 列打出来对一遍，**别照着感觉调。**
     static let arm = PixelSprite([
-        "pppppppp",
         "pppppppp",
         "pppppppp",
         "pppppppp",
@@ -346,7 +398,7 @@ enum ClawdRig {
     /// （`<rect ... fill="#333"/>`）。没有它手和手臂一整条同色，
     /// 看不出"握住"，东西像浮在手上面。
     static let armUp = PixelSprite(
-        ["kkkk"] + Array(repeating: "pppp", count: 11), ClawdSprites.palette)
+        ["kkkk"] + Array(repeating: "pppp", count: 9), ClawdSprites.palette)
 
     /// 手举起来时，**手掌高出头顶几格**。固定值。
     /// ⚠️ 3 → 2：她说「你的床和你的人是要避嫌吗」。
@@ -360,9 +412,9 @@ enum ClawdRig {
     /// 不靠转角度去凑，所以永远不会豁开她说的那个镂空。
     static let armUpOverlap = 2
     /// 身子顶在第几行
-    static let bodyTop = 4
+    static let bodyTop = 14
     /// 腿从第几行开始（`idle` 第 21 行起就有断口了）
-    static let legTop = 21
+    static let legTop = 28
 
     /// 弯腿：腿缩短 `n` 格，**整个上半身跟着往下沉**，脚底钉在原地。
     ///
@@ -561,7 +613,7 @@ enum ClawdRig {
             let t = sin(beat * .pi)                      // 0→1→0
             p.rightArm = 40 + 25 * t
             p.itemAt = CGPoint(x: midX + 1.5 - itemW / 2,
-                               y: handY - 2 - 2.5 * t)
+                               y: handY - 1.6 - 2 * t)
             p.itemTilt = -20 - 45 * t
 
         case .swirl:
@@ -569,8 +621,8 @@ enum ClawdRig {
             // **杯口始终朝上**（倾角很小），不然就是在泼酒了。
             let a = beat * .pi * 2
             p.rightArm = 34 + sin(a) * 8
-            p.itemAt = CGPoint(x: CGFloat(bodyRight) + 0.5 + cos(a) * 0.8 - itemW / 2,
-                               y: handY - 1.5 + sin(a) * 0.6 - itemH * 0.3)
+            p.itemAt = CGPoint(x: CGFloat(bodyRight) + 0.4 + cos(a) * 0.7 - itemW / 2,
+                               y: handY - 1.2 + sin(a) * 0.5 - itemH * 0.3)
             p.itemTilt = sin(a) * 12
         }
         return p
@@ -595,9 +647,9 @@ enum ClawdRig {
     ///
     /// ## 怎么定位
     ///
-    /// 图纸 **40 格宽、27 格高**（见 `ClawdSprites`；
-    /// 顶上四行、左右各四列都是留给举手的空）：
-    /// 身子 8..31 列，脸在第 9..12 行，脚在最底下几行。
+    /// 图纸 **36 格宽、36 格高**（见 `ClawdSprites`；一格 = 1/2 个 SVG 单位）：
+    /// 身子 6..27 列、14..27 行，眼睛在 18..21 行，脚在 28..31 行。
+    /// 顶上 14 行、底下 4 行是留给手里道具的空。
     /// 所以帽子在头顶偏上、眼镜压在眼睛那一行、围巾在下巴底下、
     /// 靴子贴着脚、背包挂在身后偏一侧。
     static func wearAt(_ id: String, itemW: CGFloat, itemH: CGFloat) -> CGPoint {
@@ -605,23 +657,24 @@ enum ClawdRig {
         switch id {
         case "hat", "beret":
             // 扣在头顶：横着居中，竖着**压住最上那一行**，别浮在头顶上方
-            return CGPoint(x: midX - itemW / 2, y: 4 - itemH + 3)
+            return CGPoint(x: midX - itemW / 2,
+                           y: CGFloat(bodyTop) - itemH + 3)
         case "glasses":
-            // 眼睛在第 5..7 行，镜框压在那一片上
-            return CGPoint(x: midX - itemW / 2, y: 9)
+            // 眼睛在第 18..21 行，镜框压在那一片上
+            return CGPoint(x: midX - itemW / 2, y: 18)
         case "bowtie":
-            return CGPoint(x: midX - itemW / 2, y: 15)
+            return CGPoint(x: midX - itemW / 2, y: 21)
         case "scarf":
             // 围巾绕在脖子那一圈——比领结低一点、宽一点
-            return CGPoint(x: midX - itemW / 2, y: 14)
+            return CGPoint(x: midX - itemW / 2, y: 20)
         case "bag":
             // 背包**挂在身后偏一侧**，露出一半才看得出是背着的
-            return CGPoint(x: CGFloat(bodyRight) - itemW * 0.55, y: 13)
+            return CGPoint(x: CGFloat(bodyRight) - itemW * 0.55, y: 19)
         case "boots":
-            // 贴着脚。图纸 23 行高，脚在最底下
-            return CGPoint(x: midX - itemW / 2, y: 27 - itemH)
+            // 贴着脚。脚底在第 31 行
+            return CGPoint(x: midX - itemW / 2, y: 32 - itemH)
         default:
-            return CGPoint(x: midX - itemW / 2, y: 12)
+            return CGPoint(x: midX - itemW / 2, y: 19)
         }
     }
 
