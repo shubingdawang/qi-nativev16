@@ -157,7 +157,6 @@ struct VoiceSettingsView: View {
     // **分组容器自己画的**，行背景压在它上面，白底照样透出来。
     //
     // 记一句：**`listRowBackground` 管的是「行」，管不了分组的底。**
-    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         ZStack {

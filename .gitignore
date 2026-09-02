@@ -8,3 +8,10 @@ xcuserdata/
 # 桥的密钥，绝不能进 git
 scripts/claude-bridge/bridge-token.txt
 scripts/claude-bridge/密钥.txt
+
+# 验收用的渲染图，不进仓库
+_看一眼/
+
+# Python 缓存
+__pycache__/
+*.pyc
