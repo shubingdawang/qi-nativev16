@@ -94,6 +94,38 @@ enum RoomFinish {
     // 只是旁边多了带配色的那些。两份并存的话，改了一份另一份就开始撒谎——
     // 这个项目里这种事已经栽过太多次。
 
+    // MARK: 记号怎么拆
+    //
+    // 一个记号有三种长相，**共用同一个字符串字段**：
+    //
+    //     UUID              她自己贴的那张图（文件名）
+    //     #wood             内置花纹，用花纹自带的配色
+    //     #wood@xmas        内置花纹 + 主题配色（`RoomTheme.id`）
+    //
+    // UUID 里既没有井号也没有 @，所以三者天然分得开——
+    // 不用加第二个字段、不用改存储、备份自动跟着走。
+
+    /// 记号里**花纹**那一段：`#wood@xmas` → `wood`
+    ///
+    /// ⚠️ 调用前先过 `isBuiltIn`。不是内置记号（她自己那张图）的话，
+    /// 这儿会把 UUID 的第一个字符当井号砍掉。
+    static func body(_ token: String) -> String {
+        let noHash = String(token.dropFirst())
+        guard let at = noHash.firstIndex(of: RoomTheme.mark) else { return noHash }
+        return String(noHash[noHash.startIndex..<at])
+    }
+
+    /// 记号里**主题**那一段：`#wood@xmas` → 圣诞那套。没带主题就是 nil。
+    ///
+    /// nil 的意思是「用花纹自带的配色」，也就是原来那五套的样子。
+    static func theme(_ token: String) -> RoomTheme? {
+        guard isBuiltIn(token) else { return nil }
+        let noHash = String(token.dropFirst())
+        guard let at = noHash.firstIndex(of: RoomTheme.mark) else { return nil }
+        let id = String(noHash[noHash.index(after: at)...])
+        return RoomTheme.find(id)
+    }
+
     /// 一个记号是哪一档墙。认不出来就算纯色。
     static func wall(_ token: String) -> Wall {
         guard isBuiltIn(token) else { return .plain }

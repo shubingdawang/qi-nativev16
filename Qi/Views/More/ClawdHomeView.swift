@@ -721,7 +721,9 @@ struct ClawdHomeView: View {
     // 现在他作为一条 `Drawable` 进那个深度排序，跟家具用同一把尺。
     // 手势、朝向、走路动画还留在这儿（搬过去要连着走路那一整套一起搬，不值），
     // `IsoRoomView` 只负责**把这块内容插在正确的位置**。
-    @ViewBuilder
+    // ⚠️ 这儿**没有 `@ViewBuilder`**，是故意的：底下是一句 `return`。
+    // 两个一起写编译器会警告「显式 return 把 result builder 关掉了」——
+    // 也就是说那个属性根本没起作用，留着只会让人以为它在起作用。
     private func clawdBody(_ size: CGSize) -> some View {
         // clawd 本人。长按能拎起来放到任何地方，
         // 没人管的时候他自己也会在屋里走来走去。
