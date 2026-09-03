@@ -70,7 +70,7 @@ struct FloorPlanView: View {
                 // 写一行「他在这儿」也行，但一眼扫过去认图比认字快得多。
                 if here {
                     HStack(spacing: 6) {
-                        ClawdView(mood: .idle, scale: 0.7)
+                        ClawdView(mood: .idle, scale: 1.05)   // 0.7 × 1.5
                         Text(store.clawdDoing.line)
                             .font(.app(10.5))
                             .foregroundStyle(app.settings.accentColor)
@@ -129,7 +129,7 @@ struct ClawdBadge: View {
     var body: some View {
         Button(action: onFollow) {
             VStack(spacing: 3) {
-                ClawdView(mood: .idle, scale: 0.9)
+                ClawdView(mood: .idle, scale: 1.35)   // 0.9 × 1.5
                     .frame(height: 26)
                 Text(store.clawdDoing.line)
                     .font(.app(9.5))

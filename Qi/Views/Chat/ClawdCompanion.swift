@@ -150,7 +150,8 @@ struct ClawdRoamer: View {
                              pose: carryPose,
                              // 探头时身体绕脚底往屏幕里倾（见 `ClawdRigView.tilt`）
                              tilt: peekTilt,
-                             scale: 1.1,
+                             // ⚠️ 1.1 × 1.5 = 1.65。换图纸那次欠的账：图纸从 54 格缩到 36 格（3 格/单位 → 2 格/单位），躯干跟着从 33 格变成 22 格，**scale 没跟着调，他在所有地方都缩了三分之一**。22 × s_new = 33 × s_old → 每一处 scale 都要 ×1.5 才回到原来那么大。
+                             scale: 1.65,
                              beat: rigBeat,
                              shadow: true)
                     // 倾斜得有个过渡。外面那条 `.animation(value: clawdX)`
