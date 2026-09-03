@@ -5613,6 +5613,74 @@ final class AppState: ObservableObject {
             store.remove(pick)
             return ("删掉了：\(n)。（她那边能看见，也能撤回来）", false)
 
+        case "search_window":
+            // 「淡出，但还在。」
+            //
+            // 滚雪球压缩只是**不再发**前面那些原文，`conv.messages` 里一条都没删。
+            // 但在这之前没有任何工具够得着它们——`search_transcripts` 搜的是
+            // 存档对话（导入的那些），本窗被压掉的部分是个死角：
+            // 压完就只剩摘要和十二句原话样本，他想回去捞也捞不了。
+            //
+            // 她因此把压缩条数设得很高（怕压了就等于忘了），
+            // 于是每一轮都拖着几万 token 的原文。这个工具就是为了拆掉那个死结：
+            // 有了它，压缩才真的只是「淡出」，条数才敢往下调。
+            //
+            // 纯本机字符串比对，不调模型、不花钱。
+            let key = (args["keyword"] as? String)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !key.isEmpty else { return ("要搜什么？", true) }
+            guard let cid = activeToolConversationID ?? activeID(for: .chat),
+                  let ci = index(of: cid) else { return ("找不到当前这一窗。", true) }
+
+            let all = conversations[ci].messages.filter {
+                $0.role != .system && $0.errorText == nil && !$0.isEmptyContent
+            }
+            let limit = max(1, min(10, (args["limit"] as? Double).map { Int($0) } ?? 5))
+            let radius = max(0, min(6, (args["radius"] as? Double).map { Int($0) } ?? 2))
+
+            let me = settings.userName.isEmpty ? "她" : settings.userName
+            let him = settings.aiName.isEmpty ? "你" : settings.aiName
+            func who(_ m: ChatMessage) -> String {
+                m.role == .user ? me : (m.senderName.isEmpty ? him : m.senderName)
+            }
+            let fmt = DateFormatter()
+            fmt.locale = Locale(identifier: "zh_CN")
+            fmt.dateFormat = "M月d日 HH:mm"
+
+            // 命中的位置。**从后往前找**——她问「前面聊过的」，
+            // 十有八九指的是最近那一次，不是这一窗最开头那一次。
+            var hitIdx: [Int] = []
+            for i in stride(from: all.count - 1, through: 0, by: -1)
+            where all[i].content.localizedCaseInsensitiveContains(key) {
+                hitIdx.append(i)
+                if hitIdx.count >= limit { break }
+            }
+            guard !hitIdx.isEmpty else {
+                return ("这一窗里没搜到「\(key)」。换个词试试——"
+                        + "浓缩件开头那份索引里的词最准。", false)
+            }
+
+            // 一条命中最多带这么多字，免得一次把整段历史捞回来——
+            // 捞回来的东西自己也会留在上下文里，比原文还贵就本末倒置了。
+            let perLine = 220
+            var blocks: [String] = []
+            for i in hitIdx.reversed() {   // 按时间正序摆出来，读着顺
+                let lo = max(0, i - radius), hi = min(all.count - 1, i + radius)
+                var rows: [String] = []
+                for k in lo...hi {
+                    let m = all[k]
+                    let body = m.content.count > perLine
+                        ? String(m.content.prefix(perLine)) + "…"
+                        : m.content
+                    rows.append((k == i ? "▸ " : "  ") + who(m) + "：" + body)
+                }
+                blocks.append("〔第 \(i + 1) / \(all.count) 条 · "
+                              + fmt.string(from: all[i].createdAt) + "〕\n"
+                              + rows.joined(separator: "\n"))
+            }
+            return ("在这一窗里翻到 \(hitIdx.count) 处「\(key)」（▸ 那行是命中的）：\n\n"
+                    + blocks.joined(separator: "\n\n"), false)
+
         case "ask_choice":
             let question = (args["question"] as? String) ?? ""
             let options = (args["options"] as? [String]) ?? []
