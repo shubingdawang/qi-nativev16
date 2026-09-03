@@ -85,6 +85,7 @@ final class ScreenPeek: ObservableObject {
         if let data = try? url.bookmarkData(
             options: [], includingResourceValuesForKeys: nil, relativeTo: nil) {
             bookmark = data
+            decoded = nil
             lastError = nil
         } else {
             lastError = "记不住这个文件夹，换个位置试试（放进「文件」App 里最稳）"
@@ -93,13 +94,21 @@ final class ScreenPeek: ObservableObject {
 
     func forget() {
         bookmark = nil
+        decoded = nil
         lastError = nil
     }
 
-    /// 文件夹里最新的那张图。
-    /// 返回图本身和它是什么时候截的——**时间必须一起给出去**，
-    /// 不然他会拿一张旧图当此刻。
-    func latest() -> (image: UIImage, at: Date)? {
+    /// 上一次解出来的那张。路径和修改时间都没变就直接复用——
+    /// 界面上那个预览是四秒一轮，绝大多数轮次图根本没换，
+    /// 没有这层缓存就是每四秒把一张全屏图重解一遍。
+    private var decoded: (url: URL, at: Date, image: UIImage)?
+
+    /// 文件夹里最新那张的位置和时间。**不解码。**
+    ///
+    /// ⚠️ 原来这一段是 `images.max { }`，而比较器里对左右两边**各取一次**
+    /// 磁盘修改时间——n 个文件就是 2n 次 `resourceValues`，全在主线程上。
+    /// 现在一次遍历、每个文件只取一次值。
+    private func newest() -> (url: URL, at: Date)? {
         guard let bookmark else { return nil }
         var stale = false
         guard let dir = try? URL(resolvingBookmarkData: bookmark,
@@ -113,57 +122,79 @@ final class ScreenPeek: ObservableObject {
         let granted = dir.startAccessingSecurityScopedResource()
         defer { if granted { dir.stopAccessingSecurityScopedResource() } }
 
+        let keys: Set<URLResourceKey> = [.contentModificationDateKey]
         guard let names = try? FileManager.default.contentsOfDirectory(
             at: dir,
-            includingPropertiesForKeys: [.contentModificationDateKey],
+            includingPropertiesForKeys: Array(keys),
             options: [.skipsHiddenFiles])
         else {
             lastError = "读不了那个文件夹"
             return nil
         }
 
-        let images = names.filter {
-            ["png", "jpg", "jpeg", "heic"].contains($0.pathExtension.lowercased())
+        var best: (url: URL, at: Date)?
+        for u in names {
+            guard ["png", "jpg", "jpeg", "heic"]
+                .contains(u.pathExtension.lowercased()) else { continue }
+            let t = (try? u.resourceValues(forKeys: keys))?
+                .contentModificationDate ?? .distantPast
+            if best == nil || t > best!.at { best = (u, t) }
         }
-        guard !images.isEmpty else {
-            lastError = "文件夹里还没有截图"
-            return nil
-        }
+        if best == nil { lastError = "文件夹里还没有截图" }
+        return best
+    }
 
-        // 挑最新的那张
-        let newest = images.max { a, b in
-            let ta = (try? a.resourceValues(forKeys: [.contentModificationDateKey]))?
-                .contentModificationDate ?? .distantPast
-            let tb = (try? b.resourceValues(forKeys: [.contentModificationDateKey]))?
-                .contentModificationDate ?? .distantPast
-            return ta < tb
+    /// 把那张读出来。同一张（路径 + 修改时间都没变）不重复解码。
+    private func decode(_ found: (url: URL, at: Date)) -> UIImage? {
+        if let d = decoded, d.url == found.url, d.at == found.at { return d.image }
+        // 解码要在权限范围之内
+        var stale = false
+        let dir = bookmark.flatMap {
+            try? URL(resolvingBookmarkData: $0, options: [],
+                     relativeTo: nil, bookmarkDataIsStale: &stale)
         }
-        guard let newest,
-              let data = try? Data(contentsOf: newest),
-              let image = UIImage(data: data)
-        else {
+        let granted = dir?.startAccessingSecurityScopedResource() ?? false
+        defer { if granted { dir?.stopAccessingSecurityScopedResource() } }
+
+        guard let data = try? Data(contentsOf: found.url),
+              let image = UIImage(data: data) else {
             lastError = "最新那张打不开"
             return nil
         }
-        let at = (try? newest.resourceValues(forKeys: [.contentModificationDateKey]))?
-            .contentModificationDate ?? Date()
+        decoded = (found.url, found.at, image)
+        return image
+    }
+
+    /// 文件夹里最新的那张图。
+    /// 返回图本身和它是什么时候截的——**时间必须一起给出去**，
+    /// 不然他会拿一张旧图当此刻。
+    func latest() -> (image: UIImage, at: Date)? {
+        guard let found = newest() else { return nil }
+        guard let image = decode(found) else { return nil }
         lastError = nil
-        return (image, at)
+        return (image, found.at)
     }
 
     /// 拿一张**够新的**。太旧的宁可不给，理由见 `staleMinutes`。
     /// 第二个返回值是拿不到时该说的话。
     func fresh() -> (shot: (image: UIImage, at: Date)?, why: String?) {
         if let why = blockedReason() { return (nil, why) }
-        guard let shot = latest() else {
+        // ⚠️ **先按文件时间判过期，再决定要不要解码。**
+        // 原来是先 `latest()` 把整张图解出来、然后才发现它太旧要丢掉——
+        // 白解一张全屏图，而且是在主线程上、四秒一轮。
+        guard let found = newest() else {
             return (nil, lastError ?? "现在没有截图可看。")
         }
-        let age = Date().timeIntervalSince(shot.at)
+        let age = Date().timeIntervalSince(found.at)
         if age > staleMinutes * 60 {
             return (nil, "共享开着，但最近 \(Int(staleMinutes)) 分钟里没有新的截图——"
-                       + "最新那张是\(Self.ageText(shot.at))的，太旧了，不拿它当现在。")
+                       + "最新那张是\(Self.ageText(found.at))的，太旧了，不拿它当现在。")
         }
-        return (shot, nil)
+        guard let image = decode(found) else {
+            return (nil, lastError ?? "最新那张打不开。")
+        }
+        lastError = nil
+        return ((image, found.at), nil)
     }
 
     /// 几分钟前截的。给他看的时候要说清楚新旧。

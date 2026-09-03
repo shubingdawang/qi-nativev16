@@ -190,12 +190,24 @@ struct ClawdRigView: View {
         .frame(width: cols * scale, height: rows * scale, alignment: .topLeading)
         .background(alignment: .bottom) {
             if shadow {
+                // ⚠️ 影子要落在**脚底**，不是画布底边。
+                // 脚底在图纸第 31 行（36 行的图纸），底对齐等于落到第 36 行——
+                // 再叠上原来那句 offset(+1.2)，影子飘在他脚下六格开外。
+                //
+                // 宽度也不能按整张图纸算：图纸两侧各有五六格空白，
+                // 取 0.9 出来的椭圆比他两条腿宽一倍多。腿在第 8..25 列，
+                // 按 20 格给，比脚略宽一点点就够。
+                //
+                // 渐变半径原来给的是 cols*scale*0.5，比椭圆高度大十几倍，
+                // 纵向根本衰减不掉，画出来是条硬边横杠。半径跟着自己的
+                // 半宽走，才是中间实、两头化开的接地影。
+                let shadowW = 20 * scale
                 Ellipse()
-                    .fill(RadialGradient(colors: [.black.opacity(0.22), .black.opacity(0)],
+                    .fill(RadialGradient(colors: [.black.opacity(0.20), .black.opacity(0)],
                                          center: .center, startRadius: 0,
-                                         endRadius: cols * scale * 0.5))
-                    .frame(width: cols * scale * 0.9, height: scale * 2.4)
-                    .offset(y: scale * 1.2)
+                                         endRadius: shadowW * 0.5))
+                    .frame(width: shadowW, height: scale * 3)
+                    .offset(y: -(rows - 31) * scale + scale * 0.5)
             }
         }
         .onAppear { start() }

@@ -276,7 +276,11 @@ struct ClawdRoamer: View {
         walkTask?.cancel()
         walkTask = Task { @MainActor in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64.random(in: 8...18) * 1_000_000_000)
+                // ⚠️ 走路和「自己找点事做」是**两条独立的循环**，
+                // 原来 8…18 秒配上那边的 14…26 秒，两条一叠，
+                // 平均六七秒他就动一下——她说的「动作太频繁」是这么来的。
+                // 两边一起放慢，走位比换动作更显眼，所以放得更开。
+                try? await Task.sleep(nanoseconds: UInt64.random(in: 20...45) * 1_000_000_000)
                 if Task.isCancelled { return }
                 guard !held, !poked, !busy, !peeking else { continue }
 
@@ -829,8 +833,9 @@ struct ClawdRoamer: View {
                    emotionMood() == nil {
                     settleMood(ownThing)
                 }
-                // 一件事做十几二十秒。太短了像多动症，太长了像卡住
-                let wait = Double.random(in: 14...26)
+                // 一件事做半分钟到一分钟。原来是 14…26 秒，跟走路那条循环
+                // 一叠就太密了（见 `startWalking` 里的注释）。
+                let wait = Double.random(in: 30...60)
                 try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
             }
         }

@@ -29,7 +29,41 @@ final class PhoneActivityStore: ObservableObject {
 
     static let shared = PhoneActivityStore()
 
-    @Published var events: [PhoneEvent] = []
+    @Published var events: [PhoneEvent] = [] { didSet { rebuildIndex() } }
+
+    // MARK: 按天的索引
+    //
+    // ⚠️ **这一层是「手机」页卡顿的解药，别拿掉。**
+    //
+    // 原来 `days`、`events(on:)`、`byApp(on:)`、`total(on:)`、`currentApp`
+    // 全是每次调用现算，而且都要把整个 `events` 扫一遍、
+    // 对每条记录调 `Calendar.startOfDay` 或 `isDate(_:inSameDayAs:)`——
+    // Calendar 的日期比较很贵，一万四千条扫一遍就是几十毫秒。
+    //
+    // 界面上一次 body 就要扫二十多遍：`shownDay` 里读一次 `days`，
+    // 翻页那排按钮的每个 disabled/颜色判断各读一次，页码那行读三次，
+    // 总时长、拿起次数、App 列表各一次，列表里每一行还要问一次 `currentApp`。
+    // 拖进度条是连续重绘，于是每一帧都在重算——这就是「一打开就很卡、
+    // 调进度条也卡」。
+    //
+    // 现在只在 `events` 变的时候建一次索引，上面那些全变成查表。
+    private var byDay: [Date: [PhoneEvent]] = [:]
+    private var sortedDays: [Date] = []
+    /// `byApp(on:)` 的结果按天缓存。它是这里面最贵的一个（要走一遍前台分段）。
+    private var byAppCache: [Date: [(app: String, seconds: TimeInterval, times: Int)]] = [:]
+
+    private func rebuildIndex() {
+        let cal = Calendar.current
+        var map: [Date: [PhoneEvent]] = [:]
+        for e in events { map[cal.startOfDay(for: e.time), default: []].append(e) }
+        // ⚠️ 每天的记录保持**新的在前**，跟 `events` 一致。
+        // `currentApp` 靠的就是这个顺序取「最后一次 open」，
+        // 顺序一反它会取到当天最早那次。
+        for k in map.keys { map[k]?.sort { $0.time > $1.time } }
+        byDay = map
+        sortedDays = map.keys.sorted(by: >)
+        byAppCache = [:]
+    }
     /// 那个 txt 在哪儿。用书签存，这样下次打开还能读到。
     @Published var bookmark: Data? {
         didSet { UserDefaults.standard.set(bookmark, forKey: "phoneActivityBookmark") }
@@ -163,16 +197,12 @@ final class PhoneActivityStore: ObservableObject {
     // 工具那边、给他看的那段话都还在用它们，签名一动就得跟着改一圈。
 
     /// 有记录的那些天，新的在前。翻页就是在这个数组里走。
-    var days: [Date] {
-        let cal = Calendar.current
-        var seen: Set<Date> = []
-        for e in events { seen.insert(cal.startOfDay(for: e.time)) }
-        return seen.sorted(by: >)
-    }
+    /// 查表，不现算（见 `rebuildIndex`）。
+    var days: [Date] { sortedDays }
 
+    /// 那天的记录，新的在前。查表，不现算。
     func events(on day: Date) -> [PhoneEvent] {
-        let cal = Calendar.current
-        return events.filter { cal.isDate($0.time, inSameDayAs: day) }
+        byDay[Calendar.current.startOfDay(for: day)] ?? []
     }
 
     func pickups(on day: Date) -> Int {
@@ -220,6 +250,9 @@ final class PhoneActivityStore: ObservableObject {
     /// 不同 App 的区间又互相重叠，加起来就成了 122 小时。
     /// 那不是数据脏，是算法把「没记到」当成了「一直在用」。
     func byApp(on day: Date) -> [(app: String, seconds: TimeInterval, times: Int)] {
+        let key = Calendar.current.startOfDay(for: day)
+        // 今天那一档不缓存：还挂着的那一段要算到「现在」，缓存下来时间就冻住了。
+        if !Calendar.current.isDateInToday(day), let hit = byAppCache[key] { return hit }
         let list = events(on: day).sorted { $0.time < $1.time }
         var seconds: [String: TimeInterval] = [:]
         var times: [String: Int] = [:]
@@ -273,10 +306,12 @@ final class PhoneActivityStore: ObservableObject {
                                                 to: cal.startOfDay(for: day)) ?? day)
         settle(at: edge, explicitClose: false)
 
-        return seconds.keys.map {
+        let out = seconds.keys.map {
             (app: $0, seconds: seconds[$0] ?? 0, times: times[$0] ?? 0)
         }
         .sorted { $0.seconds > $1.seconds }
+        if !cal.isDateInToday(day) { byAppCache[key] = out }
+        return out
     }
 
     func total(on day: Date) -> TimeInterval {

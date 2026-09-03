@@ -501,7 +501,9 @@ struct PhoneActivityView: View {
                     .font(.app(15, weight: .semibold))
                     .foregroundStyle(Theme.textMain(scheme))
                 if store.days.count > 1 {
-                    Text("有记录的第 \(min(dayOffset, store.days.count - 1) + 1) / \(store.days.count) 天")
+                    // days 是新的在前，dayOffset 0 就是今天。序号要从最早那天数起，
+                    // 所以是 count - offset，不是 offset + 1（那样今天永远显示第 1 天）。
+                    Text("有记录的第 \(store.days.count - min(dayOffset, store.days.count - 1)) / \(store.days.count) 天")
                         .font(.app(9))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
@@ -560,6 +562,9 @@ struct PhoneActivityView: View {
                     .foregroundStyle(Theme.textMuted(scheme))
             }
             let longest = list.first?.seconds ?? 1
+            // ⚠️ 在循环外问一次。原来是每一行都问 `store.currentApp`，
+            // 而它要翻一遍今天的记录——八行就是八遍。
+            let nowApp = isToday ? store.currentApp : nil
 
             ForEach(list.prefix(8), id: \.app) { item in
                 VStack(alignment: .leading, spacing: 4) {
@@ -567,7 +572,7 @@ struct PhoneActivityView: View {
                         Text(item.app)
                             .font(.app(13))
                             .foregroundStyle(Theme.textMain(scheme))
-                        if isToday, item.app == store.currentApp {
+                        if let nowApp, item.app == nowApp {
                             Text("使用中")
                                 .font(.app(9))
                                 .foregroundStyle(StatusTone.done.color)

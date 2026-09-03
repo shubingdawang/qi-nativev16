@@ -50,9 +50,18 @@ enum AttentionSet {
         let her = app.settings.userName.isEmpty ? "她" : app.settings.userName
 
         // ① 没做到的承诺。**排最前面**——答应了没做是所有事里最要紧的。
+        //
+        // ⚠️ **必须带上 ID。** 原来这里只写正文，而 `keep_promise` 要的是
+        // 承诺 ID 前 8 位、工具说明里还写着「从 list_promises 拿」——
+        // 于是划掉一条承诺要先多调一次工具去问 ID，他不会主动去问，
+        // 结果就是承诺记得进、销不掉，一直摆在那儿。
+        // 把 ID 和该怎么用直接写在这行里，做到了就是一次调用的事。
         let broken = MemoryStore.shared.promises.filter { !$0.done }
         for p in broken.prefix(4) {
-            out.append(.init(weight: 100, text: "你答应过：\(p.text)——还没做到。"))
+            var line = "你答应过：\(p.text)——还没做到"
+            if let due = p.due { line += "（说好 \(due) 之前）" }
+            line += "。做到了就用 keep_promise 销掉它，id=\(p.shortID)。"
+            out.append(.init(weight: 100, text: line))
         }
 
         // ② 压着的执念。念头池里沉下去的那些。

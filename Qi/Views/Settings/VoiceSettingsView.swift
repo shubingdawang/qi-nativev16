@@ -34,7 +34,7 @@ struct VoiceSettingsView: View {
                             Text(mode.title)
                                 .font(.app(15))
                                 .foregroundStyle(Theme.textMain(scheme))
-                            Text(mode.note)
+                            Text(MD.inline(mode.note))
                                 .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                                 .fixedSize(horizontal: false, vertical: true)
@@ -194,7 +194,7 @@ struct VoiceSettingsView: View {
                         .buttonStyle(.plain)
                         if let notice {
                             SettingsDivider()
-                            Text(notice)
+                            Text(MD.inline(notice))
                                 .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                                 .frame(maxWidth: .infinity, alignment: .leading)

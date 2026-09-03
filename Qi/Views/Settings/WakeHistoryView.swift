@@ -40,6 +40,13 @@ struct WakeHistoryDrawer: View {
         return log.entries(on: day)
     }
 
+    /// ⚠️ **卡片不给内容加边距，每一行自己加。**
+    /// `SettingsCard` 的 content 是裸的 `VStack(spacing: 0)`，页面上
+    /// 每一行（`statRow`、`SettingsNote`、语音页那几行）都各自写
+    /// `.padding(.horizontal, 16)`。这个抽屉一处都没写，所以整块顶到
+    /// 卡片边上，比同一张卡里的别的行左移 16 点。
+    private static let inset: CGFloat = 16
+
     var body: some View {
         VStack(spacing: 0) {
             Button {
@@ -60,6 +67,8 @@ struct WakeHistoryDrawer: View {
                         .foregroundStyle(Theme.textMuted(scheme))
                         .rotationEffect(.degrees(open ? 0 : -90))
                 }
+                // 行高跟 statRow 对齐（那边是 horizontal 16 / vertical 11）
+                .padding(.vertical, 11)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -70,13 +79,14 @@ struct WakeHistoryDrawer: View {
                         .font(.app(12))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 12)
+                        .padding(.bottom, 12)
                 } else {
-                    pager.padding(.top, 12)
-                    list
+                    pager
+                    list.padding(.bottom, 4)
                 }
             }
         }
+        .padding(.horizontal, Self.inset)
     }
 
     // MARK: 按日期翻页
