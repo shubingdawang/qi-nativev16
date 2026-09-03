@@ -1222,10 +1222,30 @@ final class AppState: ObservableObject {
         }
 
         let me = settings.userName.isEmpty ? "用户" : settings.userName
+        // 群聊这条路跟单聊同一个毛病：历史里每张图每轮都整张重发。
+        // 同样只留最近几张，更早的退成一行字（理由见 buildAPIMessages
+        // 里 `liveImages` 那段注释）。
+        var gShot = 0
+        var gLive: Set<UUID> = []
+        for m in history.reversed()
+        where m.role == .user && !m.imageNames.isEmpty {
+            gShot += m.imageNames.count
+            if gShot <= 6 { gLive.insert(m.id) } else { break }
+        }
         for m in history {
             if m.isEmptyContent { continue }
-            let urls = m.imageNames.compactMap { ImageStore.base64DataURL($0) }
+            let keepShot = m.imageNames.isEmpty || gLive.contains(m.id)
+            let urls = keepShot
+                ? m.imageNames.compactMap { ImageStore.base64DataURL($0) }
+                : []
             var text = m.content
+            if !keepShot {
+                text += (text.isEmpty ? "" : "
+")
+                    + "（这条带过 \(m.imageNames.count) 张图"
+                    + (m.imageNote.isEmpty ? "" : "：" + m.imageNote)
+                    + "。原图收起来了）"
+            }
             if !m.quotedText.isEmpty {
                 text = "（回应\(m.quotedName)那句「\(m.quotedText)」）\n" + text
             }
@@ -2108,6 +2128,20 @@ final class AppState: ObservableObject {
     没做到的每次醒来都会重新摆到你面前。
 
     别滥用。一天答应十件事的人，一件都不算数。
+    """
+
+    /// 她发了图，顺手记一句这张是什么
+    static let imageNoteHint = """
+    触发：她这一条里带了图，而你正在看它。
+    动机：图**不会一直摆在你眼前**。为了不让每一轮都背着十几张全尺寸的图，
+    旧图会退成一行字——退成的那行字里写的就是你现在记下的这一句。
+    你现在不记，以后她问起「还记得那张照片吗」，你手里就只剩一句「她发过一张图」。
+    行动：在这一条的正文后面加一个 [[img:白色RIMOWA铝箱压底，上面摞着牛仔布机车包和一个小钱包]]，
+    写清楚**画面上有什么**——不是你的感想，是她以后会拿来找它的那些词。
+    标记会被剥掉，她看到的还是你原来那句话。
+
+    她一条里发好几张就写成一句，把几张都概括进去。
+    真要再看原图，用 `show_image`。
     """
 
     static let actionHint = """
@@ -5613,6 +5647,57 @@ final class AppState: ObservableObject {
             store.remove(pick)
             return ("删掉了：\(n)。（她那边能看见，也能撤回来）", false)
 
+        case "show_image":
+            // 把一张已经淡出的图重新摆到他眼前。
+            //
+            // ⚠️ 工具返回值只能是文字，图给不了。所以走 `pendingToolImage`——
+            // 跑完工具那一步会把它作为一条 user 消息补进去（见 send 里
+            // `takePendingToolImage()` 那几行）。看屏幕走的也是这条路。
+            let kw = (args["keyword"] as? String)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let idx = (args["index"] as? Double).map { Int($0) } ?? 0
+
+            var picked: (name: String, note: String, at: Date)?
+            if idx > 0 {
+                let all = recentUserImages()
+                // 表情不走这条：它的文件在表情库里，不在 ImageStore；
+                // 而且表情本来就只发一张小缩略图，没有淡出这回事。
+                if idx <= all.count, !all[idx - 1].isSticker {
+                    let ref = all[idx - 1]
+                    picked = (ref.name, ref.caption, Date())
+                }
+            }
+            if picked == nil, !kw.isEmpty,
+               let cid2 = activeToolConversationID ?? activeID(for: .chat),
+               let ci2 = index(of: cid2) {
+                // 从新往旧找。描述和她当时说的那句话都算数——
+                // 他写的 [[img:...]] 未必每张都有，她的原话是兜底。
+                for m in conversations[ci2].messages.reversed()
+                where m.role == .user && !m.imageNames.isEmpty {
+                    let hay = m.imageNote + "\n" + m.content
+                    if hay.localizedCaseInsensitiveContains(kw), let n = m.imageNames.last {
+                        picked = (n, m.imageNote.isEmpty ? m.content : m.imageNote,
+                                  m.createdAt)
+                        break
+                    }
+                }
+            }
+            guard let shot = picked else {
+                return (kw.isEmpty && idx <= 0
+                        ? "要看哪张？给个 keyword 或者 index。"
+                        : "没找到那张图。换个词试试，或者用 search_window 先把当时那段话翻出来。",
+                        kw.isEmpty && idx <= 0)
+            }
+            guard let dataURL = ImageStore.base64DataURL(shot.name) else {
+                return ("那张图的文件读不出来了。", true)
+            }
+            pendingToolImage = dataURL
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "zh_CN")
+            f.dateFormat = "M月d日"
+            return ("找出来了" + (shot.note.isEmpty ? "" : "：" + shot.note)
+                    + "（\(f.string(from: shot.at))发的）。原图在下面。", false)
+
         case "search_window":
             // 「淡出，但还在。」
             //
@@ -5942,6 +6027,20 @@ final class AppState: ObservableObject {
             }
         }
 
+        // 他写的 [[img:...]] 抠出来，挂到**她最近那条带图的消息**上。
+        //
+        // 挂在她那条上而不是他这条上，是因为淡出的时候要替换的正是她那条：
+        // 那条消息里躺着真正的图片字节，退成一行字的也是它。
+        let noted = ImageNoteMarker.extract(conversations[ci].messages[mi].content)
+        if !noted.note.isEmpty {
+            conversations[ci].messages[mi].content = noted.clean
+            if let target = conversations[ci].messages.lastIndex(where: {
+                $0.role == .user && (!$0.imageNames.isEmpty || $0.stickerID != nil)
+            }) {
+                conversations[ci].messages[target].imageNote = noted.note
+            }
+        }
+
         // 动作／神态、心里话单独拎出来，显示在气泡上面。
         // **有几条抠几条**——只抠第一条的话，他写第二个动作的时候
         // 那一个会掉回正文里（她报的）。
@@ -6174,6 +6273,7 @@ final class AppState: ObservableObject {
         // ⚠️ `agencyRule`（那段「能力不是等她开口的菜单」）**不在这儿了**，
         // 挪到整段 system 的最末尾去了——理由见下面 `sys` 拼起来的地方。
         fixed.append(Self.actionHint)
+        fixed.append(Self.imageNoteHint)
         // 只在絮语这边给。工坊是干活的地方，那儿要的是配合，不是立场。
         if conv.space == ChatSpace.chat.rawValue {
             fixed.append(Self.conflictRule)
@@ -6423,20 +6523,39 @@ final class AppState: ObservableObject {
         //    这件事每天要发生很多次。限住之后，掉出这个窗口的那些
         //    编号一次之后就再也不动了。
         let tagLimit = 12
+        // 这一份**不封顶**，只用来判断某条消息里的图该不该淡出。
+        var imageOrder: [UUID: Int] = [:]      // 这条消息里最新那张排第几
         for m in history.reversed() where m.role == .user {
             if m.stickerID != nil {
                 counter += 1
                 if counter <= tagLimit { imageTags[m.id] = [counter] }
+                imageOrder[m.id] = min(imageOrder[m.id] ?? .max, counter)
             }
             if !m.imageNames.isEmpty {
                 var ns: [Int] = []
                 for _ in m.imageNames {
                     counter += 1
                     if counter <= tagLimit { ns.append(counter) }
+                    imageOrder[m.id] = min(imageOrder[m.id] ?? .max, counter)
                 }
                 if !ns.isEmpty { imageTags[m.id] = ns.reversed() }
             }
         }
+
+        // ⚠️ **只有最近这几张还发真图，再往前的退成一行字。**
+        //
+        // 图在每一轮里都是整张重新发一遍的：缩到长边 1280 之后，
+        // 一张竖屏截图约 590×1280，按 宽×高/750 算大约**一千 token**。
+        // 未压缩的窗口里躺着十几张，就是一两万 token 每轮重算一次，
+        // 而其中绝大多数她早就不会再提了。
+        //
+        // 退成的那行字里带着他第一次看到时自己写的那句 `[[img:...]]`
+        // （见 `ImageNoteMarker`）——所以他**照样说得出那张图是什么**，
+        // 只是不再每轮盯着原图看。真要再看就调 `show_image`。
+        let liveImages = 6
+        // 视频同理：一段视频要发好几帧。只有最近那一段还发帧，
+        // 更早的用它自己的 `videoNote` 顶上。
+        let latestVideoID = history.last(where: { !$0.videoName.isEmpty })?.id
 
         // 上一条是什么时候说的，用来算间隔
         var previousAt: Date?
@@ -6453,10 +6572,16 @@ final class AppState: ObservableObject {
             // 视频：**他拿到的是帧和那段说明**，她拿到的是能点开放的原件。
             // 两边看到的本来就不是同一样东西——他读不了视频。
             if !m.videoName.isEmpty {
-                let urls = m.videoFrames.compactMap { ImageStore.base64DataURL($0) }
+                let live = m.id == latestVideoID
+                let urls = live
+                    ? m.videoFrames.compactMap { ImageStore.base64DataURL($0) }
+                    : []
                 let said = m.content.trimmingCharacters(in: .whitespacesAndNewlines)
                 var text = m.videoNote
                 if !said.isEmpty { text = said + "\n" + text }
+                if !live, !m.videoFrames.isEmpty {
+                    text += "\n（这段视频的画面收起来了，上面这段说明是当时看过的）"
+                }
                 result.append(.init(role: m.role.rawValue,
                                     text: text, imageDataURLs: urls))
                 continue
@@ -6492,16 +6617,37 @@ final class AppState: ObservableObject {
                 continue
             }
 
-            let urls = m.imageNames.compactMap { ImageStore.base64DataURL($0) }
+            // 这条里的图还「活着」吗——只有最近 `liveImages` 张才发真图。
+            let rank = imageOrder[m.id] ?? .max
+            let liveShot = m.imageNames.isEmpty || rank <= liveImages
+            let urls = liveShot
+                ? m.imageNames.compactMap { ImageStore.base64DataURL($0) }
+                : []
             var text = m.content
             // 给图编号。**没有号他就是在瞎猜**——她一次发三张，
             // 他调 save_sticker 的时候只能填个 index，凭什么知道是第几张？
             // 号跟 recentUserImages 里那套完全一致：#1 永远是最新的一张。
             if let ns = imageTags[m.id], !ns.isEmpty {
                 let tag = ns.map { "#\($0)" }.joined(separator: " ")
+                if liveShot {
+                    text += (text.isEmpty ? "" : "\n")
+                        + "（这条带了 \(ns.count) 张图，从左到右是 \(tag)"
+                        + "——要存哪张、要发哪张，就用这个号）"
+                } else {
+                    text += (text.isEmpty ? "" : "\n")
+                        + "（这条带过 \(m.imageNames.count) 张图，号是 \(tag)"
+                        + (m.imageNote.isEmpty ? "" : "：" + m.imageNote)
+                        + "。原图收起来了——要再看就 `show_image`）"
+                }
+            } else if !m.imageNames.isEmpty {
+                // 连号都排到十二名开外了。**不给号**——给一个
+                // `recentUserImages` 解析不了的号，比不给更糟；
+                // 而且号会随着她每发一张新图整体后移，
+                // 那会把这条消息的正文改掉、连累整段历史的缓存。
                 text += (text.isEmpty ? "" : "\n")
-                    + "（这条带了 \(ns.count) 张图，从左到右是 \(tag)"
-                    + "——要存哪张、要发哪张，就用这个号）"
+                    + "（这条带过 \(m.imageNames.count) 张图"
+                    + (m.imageNote.isEmpty ? "" : "：" + m.imageNote)
+                    + "。原图收起来了——要再看就 `show_image` 拿关键词找）"
             }
             if !m.quotedText.isEmpty {
                 text = "（回应你那句「\(m.quotedText)」）\n" + text

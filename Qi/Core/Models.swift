@@ -129,6 +129,44 @@ extension ToolRun {
     }
 }
 
+
+/// 把他写的 `[[img:这是什么]]` 从正文里抠出来。
+///
+/// 跟 `PromiseMarker` 完全一套路子：让他在正文里写记号、后端解析出来落库、
+/// 再把记号从正文里剥干净——她看到的还是一句正常的话。
+///
+/// 为什么用记号而不是让他专门调一次工具：**调工具要多花一次钱。**
+/// 她是按次计费的，一次工具往返是两次请求（他先说要调，我们跑完再把
+/// 全部上下文发回去让他接着说）。而他这一轮本来就在看这张图，
+/// 顺手写一句话是零成本的。
+enum ImageNoteMarker {
+
+    private static let pattern =
+        #"\[{1,2}\s*(?:img|image|图)\s*[:：]\s*([^\]\n]{1,160})\s*\]{1,2}"#
+
+    /// 返回：剥干净的正文 + 抠出来的那句描述（可能有好几句，拼起来）
+    static func extract(_ text: String) -> (clean: String, note: String) {
+        guard let regex = try? NSRegularExpression(
+            pattern: pattern, options: [.caseInsensitive]) else { return (text, "") }
+        let ns = text as NSString
+        let matches = regex.matches(in: text, range: NSRange(location: 0, length: ns.length))
+        guard !matches.isEmpty else { return (text, "") }
+
+        var found: [String] = []
+        var clean = text
+        for m in matches.reversed() {
+            if m.numberOfRanges > 1 {
+                let one = ns.substring(with: m.range(at: 1))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !one.isEmpty { found.append(one) }
+            }
+            clean = (clean as NSString).replacingCharacters(in: m.range, with: "")
+        }
+        return (clean.trimmingCharacters(in: .whitespacesAndNewlines),
+                found.reversed().joined(separator: "；"))
+    }
+}
+
 struct ChatMessage: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
     var role: MessageRole
@@ -144,6 +182,16 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     var cotTitle: String = ""
     /// 附带的本地图片文件名（存在 Documents/Images 里）
     var imageNames: [String] = []
+    /// 他第一次看到这张（这几张）图时写下的一句话。
+    ///
+    /// 为什么要存：图在每一轮里都是**整张重新发一遍**的，一张缩到 1280
+    /// 的截图大约一千 token。窗口里躺十几张，就是一两万 token 只为了
+    /// 「他还记得这些图」。存下这一句之后，旧图可以退成一行字，
+    /// 他照样说得出那张图是什么；真要再看原图就调 `show_image`。
+    ///
+    /// 来源是他自己在正文里写的 `[[img:...]]`（跟 `[[promise:...]]` 一套机制，
+    /// 见 `ImageNoteMarker`）。他没写就退回她发图时说的那句话。
+    var imageNote: String = ""
     /// 附带的文件
     var files: [FileAttachment] = []
     /// 这条如果是表情，指向表情库里的那一张。
@@ -1012,5 +1060,6 @@ extension ChatMessage {
         reasoningTranslation = try? c.decodeIfPresent(String.self, forKey: .reasoningTranslation)
         isTranslatingReasoning = (try? c.decodeIfPresent(Bool.self, forKey: .isTranslatingReasoning)) ?? false
         widget = (try? c.decodeIfPresent(String.self, forKey: .widget)) ?? ""
+        imageNote = (try? c.decodeIfPresent(String.self, forKey: .imageNote)) ?? ""
     }
 }
