@@ -92,6 +92,24 @@ struct ClawdHomeView: View {
     /// **跟画屋子那边用的是同一个 `IsoRoom.fit`**，各算各的必然对不齐。
     @State private var roomSize: CGSize?
 
+    // ── 她的手（`ClawdTouch.swift`）
+    /// 现在选的是哪个手势
+    @State private var hand: HandTool = .pat
+    /// 拖出来的那只手在屋里的什么位置。nil = 没在拖
+    @State private var handAt: CGPoint?
+    /// 他的耐心。⚠️ **要活过一次次触碰**，所以是 @State 不是局部变量——
+    /// 每碰一次重新算的话，戳第二十下和第一下一样，那就只是个音效按钮。
+    @State private var patience = ClawdPatience()
+    /// 摸／戳／打的反应正演到什么时候为止。**没演完不让位**，
+    /// 跟 `ClawdMood.hold` 一个道理（见 `交接-clawd画法.md` 第三节）。
+    @State private var touchUntil = Date.distantPast
+    @State private var touchTask: Task<Void, Never>?
+    /// 正在捉迷藏：他藏起来了，屋里不画他
+    @State private var hiding = false
+    /// 藏在哪一件家具后面
+    @State private var hideSpot: UUID?
+    @State private var hideTask: Task<Void, Never>?
+
     /// 屋子这一页现在画的是哪一间。
     /// `viewing` 还没定下来的时候（刚进来那一帧）就跟着他。
     private var shownRoom: HomeRoom { viewing ?? store.clawdRoom }
@@ -196,6 +214,10 @@ struct ClawdHomeView: View {
         .onDisappear {
             walkTask?.cancel()
             bubbleTask?.cancel()
+            // 这两个也得停。⚠️ 藏起来的定时器留着的话，
+            // 她切走再回来，他会在毫无缘由的时候"被找到"一次。
+            touchTask?.cancel()
+            hideTask?.cancel()
             // 切走就停。**他只在这一页开着的时候说话**——
             // 不然她人在别处，钱在后台自己流。
             himTask?.cancel()
@@ -457,13 +479,31 @@ struct ClawdHomeView: View {
                             // **跟他自己走的那套是同一份几何**了
                             floorTop: band.top,
                             floorBottom: band.bottom,
-                            onTapFurniture: { acting = $0 },
+                            onTapFurniture: { f in
+                                // ⚠️ 藏着的时候点家具 = **找他**，不是开家具的菜单。
+                                // 两件事抢同一个点击，得让捉迷藏先。
+                                guard hiding else { acting = f; return }
+                                if f.id == hideSpot {
+                                    reveal(found: true)
+                                } else {
+                                    notice = "不在这儿…"
+                                    if app.settings.haptics {
+                                        UIImpactFeedbackGenerator(style: .rigid)
+                                            .impactOccurred()
+                                    }
+                                    Task { @MainActor in
+                                        try? await Task.sleep(nanoseconds: 1_400_000_000)
+                                        if notice == "不在这儿…" { notice = nil }
+                                    }
+                                }
+                            },
                             // ⚠️ **他不在这一间就不画他。**
                             //
                             // 她说的：「clawd 在哪个房间，我打开小屋就会呈现哪个房间。」
                             // 反过来也成立——她翻到别的房间的时候，
                             // 他不该也跟着出现在那儿。想知道他在哪儿，看左上角那个头像。
-                            clawdHere: shownRoom == store.clawdRoom) {
+                            // ⚠️ 捉迷藏藏着的时候也不画——藏起来还看得见就不叫藏
+                            clawdHere: shownRoom == store.clawdRoom && !hiding) {
                     // ⚠️ 他**画在 IsoRoomView 里面**，不再叠在它上面。
                     // 那样他永远压在所有家具前面；现在他进那个深度排序，
                     // 站在床里侧就被床挡住。见 `clawdBody`。
@@ -506,7 +546,14 @@ struct ClawdHomeView: View {
                         .foregroundStyle(Theme.textMuted(scheme))
                         .padding(8)
                 }
+
+                handLayer(geo.size)
             }
+            // ⚠️ **手的坐标要跟他的坐标是同一套。**
+            // 他是 `.position(x: clawdX * size.width, ...)` 摆的，
+            // 所以拖手的时候也报这一层的坐标，两边才能对上——
+            // 用 `.local` 报的是按钮自己那一小块的坐标，差着十万八千里。
+            .coordinateSpace(name: "room")
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             // 房间那一块有多大。**在 onAppear／onChange 里记**，
             // 不在 body 里直接写 @State——那会边画边改状态，SwiftUI 会警告，
@@ -688,13 +735,16 @@ struct ClawdHomeView: View {
                                      worn: store.wornKind?.sprite,
                                      wornID: store.wearing ?? "",
                                      pose: .lift,
-                                     scale: tile * 0.87 / 32,
+                                     scale: tile * 1.47 / 36,
                                      beat: beat,
                                      shadow: true)
                     }
                     .transition(.scale(scale: 0.5).combined(with: .opacity))
                 } else {
-                    ClawdView(mood: mood, scale: tile * 0.87 / 32, shadow: true,
+                    // ⚠️ **`/ 36` 不是 `/ 32`，`1.47` 不是 `0.87`。**
+                    // 除数是图纸宽度（现在 36 格），32 是它还叫 32 格那会儿的老账；
+                    // 系数 0.87 → 1.47 是 ×1.5，换图纸那次欠的账：图纸从 54 格缩到 36 格（3 格/单位 → 2 格/单位），躯干跟着从 33 格变成 22 格，**scale 没跟着调，他在所有地方都缩了三分之一**。22 × s_new = 33 × s_old → 每一处 scale 都要 ×1.5 才回到原来那么大。
+                    ClawdView(mood: mood, scale: tile * 1.47 / 36, shadow: true,
                               // 小屋里也要戴上。**两边都传**——只给一边的话，
                               // 她在这儿给他戴上帽子，切到聊天页就没了。
                               worn: store.wornKind?.sprite,
@@ -790,6 +840,164 @@ struct ClawdHomeView: View {
                 }
         )
 
+    }
+
+    // MARK: 她的手
+
+    /// 手势按钮 + 拖出来的那只手。
+    ///
+    /// 她说的：「有一个小手掌 ✋🏻 点击切换，然后我可以拖过来摸摸他的头 🫳🏻，
+    /// 可以戳他 👈🏻👉🏻，可以轻轻打他 🤜🏻🤛🏻，可以跟他捉迷藏用 👇🏻👆🏻 找他。」
+    ///
+    /// ⚠️ **点 = 换手势，拖 = 用这个手势碰他。两件事分开。**
+    /// 靠划动的方向去猜「这一下是摸还是打」，猜错一次就是
+    /// 「我明明在摸他他为什么哭」——而摸和打是这套里情绪差最远的两个。
+    @ViewBuilder
+    private func handLayer(_ size: CGSize) -> some View {
+        ZStack(alignment: .bottomTrailing) {
+            // 正拖着的那只手，跟着手指走
+            if let at = handAt {
+                Text(hand.emoji)
+                    .font(.system(size: 40))
+                    .position(at)
+                    .allowsHitTesting(false)
+                    .transition(.scale.combined(with: .opacity))
+            }
+
+            VStack(alignment: .trailing, spacing: 6) {
+                // 藏起来的时候换成一行提示 + 一个「不玩了」
+                if hiding {
+                    Button("不找了") { reveal(found: false) }
+                        .font(.app(11))
+                        .buttonStyle(.plain)
+                        .foregroundStyle(app.settings.accentColor)
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(Capsule().fill(Color.black.opacity(0.12)))
+                }
+
+                Text(hand.label)
+                    .font(.app(9.5))
+                    .foregroundStyle(Theme.textMuted(scheme))
+
+                Text(hand.emoji)
+                    .font(.system(size: 26))
+                    .frame(width: 46, height: 46)
+                    .background(
+                        Circle().fill(scheme == .dark
+                                      ? Color.white.opacity(0.14)
+                                      : Color.white.opacity(0.92))
+                    )
+                    .overlay(Circle().stroke(app.settings.accentColor.opacity(
+                        handAt == nil ? 0.25 : 0.7), lineWidth: 1.5))
+                    // ⚠️ **点和拖挂在同一块上，靠 minimumDistance 分开。**
+                    // 拖过 8 点才算拖；没拖动就是点，换下一个手势。
+                    .gesture(
+                        DragGesture(minimumDistance: 8, coordinateSpace: .named("room"))
+                            .onChanged { v in handAt = v.location }
+                            .onEnded { v in
+                                let p = v.location
+                                handAt = nil
+                                drop(p, in: size)
+                            }
+                    )
+                    .onTapGesture { cycleHand() }
+            }
+            .padding(.trailing, 14)
+            .padding(.bottom, 14)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(.easeOut(duration: 0.15), value: handAt == nil)
+    }
+
+    /// 换下一个手势
+    private func cycleHand() {
+        let all = HandTool.allCases
+        let i = all.firstIndex(of: hand) ?? 0
+        hand = all[(i + 1) % all.count]
+        if app.settings.haptics {
+            UISelectionFeedbackGenerator().selectionChanged()
+        }
+    }
+
+    /// 手松开的地方碰到他没有。
+    private func drop(_ p: CGPoint, in size: CGSize) {
+        // 他不在这一间、或者正藏着，就没得碰
+        guard shownRoom == store.clawdRoom, !hiding, !held else { return }
+        let tile = IsoRoom.fit(in: size).tileW
+        let him = CGPoint(x: clawdX * size.width, y: clawdY * size.height)
+        let dx = p.x - him.x, dy = p.y - him.y
+        // ⚠️ 半径按**他有多高**给，不是按一格多宽。他约 1.47 格高，
+        // 而且头顶还顶着说话的气泡，位置会往下挪半个身子。
+        // 差几个点就没碰到的话，她会以为这功能是坏的。
+        let reach = tile * 1.2
+        guard dx * dx + dy * dy < reach * reach else { return }
+
+        if hand == .seek { hide(in: size); return }
+
+        let r = patience.touch(hand)
+        touchTask?.cancel()
+        touchUntil = Date().addingTimeInterval(r.hold)
+        walkTask?.cancel()                  // 有反应的时候先别走
+        withAnimation(.spring(response: 0.26, dampingFraction: 0.7)) { mood = r.mood }
+        say(r.line)
+        if app.settings.haptics {
+            UIImpactFeedbackGenerator(style: r.haptic).impactOccurred()
+        }
+        touchTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(r.hold * 1_000_000_000))
+            if Task.isCancelled { return }
+            // ⚠️ 恼着的时候**不回 idle**，一直板着脸等她哄。
+            // 「生气」两秒就自己好了的话，那不叫生气，叫抽搐。
+            mood = patience.sulking ? .upset : .idle
+            startWalking()
+        }
+    }
+
+    // MARK: 捉迷藏
+
+    /// 他躲起来了，躲在某一件家具后面。点对了那件才算找到。
+    private func hide(in size: CGSize) {
+        let here = store.furniture(in: shownRoom).filter { $0.gx >= 0 }
+        guard let spot = here.randomElement() else {
+            say("这屋里没地方躲呀")
+            return
+        }
+        touchTask?.cancel()
+        walkTask?.cancel()
+        hideSpot = spot.id
+        // 先挪到那件家具那儿，找到的时候他就从那儿冒出来
+        let pt = IsoRoom.fit(in: size).point(Double(spot.gx), Double(spot.gy))
+        clawdX = pt.x / size.width
+        clawdY = pt.y / size.height
+        withAnimation(.easeOut(duration: 0.3)) { hiding = true }
+        say("数到十…… 来找我")
+        if app.settings.haptics {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+        // ⚠️ 得有个头。找不到就一直躲着的话，她就永远看不到他了。
+        hideTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 45_000_000_000)
+            if Task.isCancelled || !hiding { return }
+            reveal(found: false)
+        }
+    }
+
+    /// 找出来了（`found`）／她不玩了或者超时了。
+    private func reveal(found: Bool) {
+        hideTask?.cancel()
+        hideSpot = nil
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { hiding = false }
+        mood = found ? .happy : .peeking
+        say(found ? ["被找到啦", "嘿嘿", "你好厉害"].randomElement() ?? "被找到啦"
+                  : ["我在这儿…", "找不到我吗", "出来啦"].randomElement() ?? "我在这儿…")
+        if app.settings.haptics {
+            UIImpactFeedbackGenerator(style: found ? .medium : .soft).impactOccurred()
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            if mood == .happy || mood == .peeking { mood = .idle }
+            startWalking()
+        }
     }
 
     // MARK: 柜子
@@ -964,7 +1172,15 @@ struct ClawdHomeView: View {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64.random(in: 5...12) * 1_000_000_000)
                 if Task.isCancelled { return }
-                guard mood != .happy, !held else { continue }
+                patience.relax()        // 晾着的时候气自己消，见 relax 的注释
+                if !patience.sulking, mood == .upset, Date() >= touchUntil {
+                    mood = .idle        // 气消了，脸也松开
+                }
+                // ⚠️ **正在挨戳、正生着气、正藏着，都不许自己走开。**
+                // 她刚戳完他他就转身溜达，那一下反应等于没有；
+                // 藏起来的人会走的话，就更没法找了。
+                guard mood != .happy, !held, !hiding,
+                      Date() >= touchUntil, !patience.sulking else { continue }
 
                 // 隔一会儿换一间屋。
                 //
