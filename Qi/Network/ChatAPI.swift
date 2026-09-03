@@ -317,6 +317,33 @@ enum ChatAPI {
         let explicitCache = messages.contains { !$0.stablePrefix.isEmpty }
         let cacheAt = explicitCache ? nil : messages.lastIndex { $0.role == "system" }
 
+        // ⚠️ **第二个断点：打在对话历史上。**
+        //
+        // 上面那个只管到系统提示的稳定块为止。缓存缓的是「断点之前的前缀」，
+        // 所以工具表 + 身份 + 规矩确实进了缓存——**但历史一条都没进**。
+        // 一窗聊到十几万 token，被缓住的只有前面那三万，剩下的每一轮
+        // 全价重读一遍，首字就是这么慢的。
+        //
+        // Anthropic 最多认四个断点。第二个打在**最后一条之前**：
+        // 最后一条是她这次刚说的话（而且尾巴上还挂着「现在几点」，
+        // 每轮都在变），它前面的整段历史上一轮长什么样、这一轮还是什么样，
+        // 正好可以整段复用。下一轮这个断点自己往后挪一条，
+        // 于是每轮真正要新算的只有上一个来回。
+        //
+        // 跳过 tool 那几条：它们的 content 是一个裸字符串，
+        // 摊成 parts 会改变中转站看到的形状，不值得为一条冒这个险。
+        let historyCacheAt: Int? = {
+            guard messages.count >= 4 else { return nil }
+            var i = messages.count - 2
+            while i > 0 {
+                let m = messages[i]
+                if m.role != "tool", m.toolCalls.isEmpty,
+                   m.stablePrefix.isEmpty, m.role != "system" { return i }
+                i -= 1
+            }
+            return nil
+        }()
+
         for (i, m) in messages.enumerated() {
             var item: [String: Any] = ["role": m.role]
 
@@ -365,7 +392,7 @@ enum ChatAPI {
             // 这一条要缓的话，把内容摊成数组、在最后一块上盖章。
             // 兼容写法：OpenAI 那套接口原样透传这个字段给 Anthropic，
             // **不认它的中转会把它当成多余的键忽略掉**，不会报错。
-            if i == cacheAt {
+            if i == cacheAt || i == historyCacheAt {
                 var parts: [[String: Any]]
                 if let arr = item["content"] as? [[String: Any]] {
                     parts = arr

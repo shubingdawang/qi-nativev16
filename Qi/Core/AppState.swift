@@ -6341,15 +6341,32 @@ final class AppState: ObservableObject {
         // 一条里有好几张的话，最后一张更"新"，所以那条里从左到右是倒着数的。
         var imageTags: [UUID: [Int]] = [:]
         var counter = 0
+        // ⚠️ **只给最近这几张编号，跟 `recentUserImages` 的上限对齐。**
+        //
+        // 两件事：
+        //
+        // ① 超过这个数的号**没有任何工具解析得了**。`recentUserImages`
+        //    只往回取 12 张，`recentUserImageData` 拿 #13 只会返回 nil——
+        //    给他一个用不了的号，比不给号更糟。
+        //
+        // ② 编号是**从最后往前数的**（#1 永远是最新那张），所以她每发一张
+        //    新图，前面每一条带图消息的号全都 +1、那几条的正文跟着全变，
+        //    历史缓存从第一张图那儿整段作废。她是靠截图报 bug 的，
+        //    这件事每天要发生很多次。限住之后，掉出这个窗口的那些
+        //    编号一次之后就再也不动了。
+        let tagLimit = 12
         for m in history.reversed() where m.role == .user {
             if m.stickerID != nil {
                 counter += 1
-                imageTags[m.id] = [counter]
+                if counter <= tagLimit { imageTags[m.id] = [counter] }
             }
             if !m.imageNames.isEmpty {
                 var ns: [Int] = []
-                for _ in m.imageNames { counter += 1; ns.append(counter) }
-                imageTags[m.id] = ns.reversed()
+                for _ in m.imageNames {
+                    counter += 1
+                    if counter <= tagLimit { ns.append(counter) }
+                }
+                if !ns.isEmpty { imageTags[m.id] = ns.reversed() }
             }
         }
 
