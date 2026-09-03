@@ -1,23 +1,25 @@
 import SwiftUI
 
-/// 立体的小屋。
+/// 小屋。**立体和平面两种画法都走这一个 View。**
 ///
-/// 她要的：「小屋不仅仅是一个平面，是一个立体的小屋，家具放在上面有立体感……
-/// **不穿模不卡顿**。」
+/// 她先要的：「小屋不仅仅是一个平面，是一个立体的小屋，
+/// 家具放在上面有立体感……**不穿模不卡顿**。」
+/// 后来又说：「那个俯视图也不算是俯视，差不多就是平视，
+/// 效果图上不就是一个小人正面站着吗，可以试下换成那种。」
 ///
 /// ## 这一版做到了什么
 ///
-/// · 地板是 8×8 格的**等距**地砖，两面墙立起来
-/// · 家具**按格子摆**，占几格由 `FurnitureCatalog.shape` 说了算
-/// · **谁挡谁由 `格X + 格Y` 决定**——远的先画、近的压在上面。
+/// · 地板是 8×8 格，家具**按格子摆**，占几格由 `FurnitureCatalog.shape` 说了算
+/// · **谁挡谁由深度排序决定**——远的先画、近的压在上面。
 ///   穿模不是「修好了」，是**排序让它不可能发生**
-/// · clawd **这一版还没进这个排序**，他画在所有家具上面（理由见 `drawables`）
+/// · clawd **也在这个排序里**：站在床里侧就被床挡住（见 `drawables`）
+/// · 换画法**只换投影，不动数据**（见 `RoomProjection`）：
+///   立体是「gx + gy 都往下走 + 两面墙」，平面是「gx 横排、gy 只管前后 + 一面后墙」。
+///   她换来换去，家具还在原来那一格上
 ///
-/// ## 还没做（下一轮）
-///
-/// 家具还是现在这批**正面看的**像素图，摆进等距屋里会有点「立牌」感。
-/// 换成真正的等距素材是下一步——但那是**换图**，
-/// 几何、遮挡、摆放这一层不用再动。这正是先做这一层的意义。
+/// ⚠️ 平面那档**用正面的家具图**，不用等距图。
+/// 等距图摆进正面平视的屋子里才真成了立牌——
+/// 而「像立牌」正是当初画等距图要解决的那个毛病。
 struct IsoRoomView<Clawd: View>: View {
 
     @ObservedObject var store: ClawdStore
@@ -60,7 +62,7 @@ struct IsoRoomView<Clawd: View>: View {
             // `store.furniture(in: room)` 会把几何当房间传进去——
             // 编译器逮住了，但这已经是这一轮里第几次
             // **同一个名字两个意思**了。所以叫 `geoRoom`。
-            let geoRoom = IsoRoom.fit(in: geo.size)
+            let geoRoom = IsoRoom.fit(in: geo.size, as: store.projection)
 
             // ⚠️ 整块**裁进屋子的轮廓里**（见 `IsoRoom.roomPath`）。
             //
@@ -300,7 +302,12 @@ struct IsoRoomView<Clawd: View>: View {
             // 编译器会在这一行上卡到超时。
             let farX: Int = cell.gx + s.w - 1
             let farY: Int = cell.gy + s.d - 1
-            let depth = Double(farX + farY)
+            // ⚠️ **平面那档只按纵深排**（`gy`），不加 `gx`。
+            // 等距里 `gx + gy` 才是「离镜头多远」；平面里 `gx` 是横着的位置，
+            // 加进去的话，左边的家具会平白无故被右边的挡住。
+            let depth = geoRoom.projection == .flat
+                ? Double(farY) + Double(farX) * 0.001   // 同排的按左右定先后，稳定就行
+                : Double(farX + farY)
             out.append(Drawable(key: f.id.uuidString, depth: depth,
                                 tall: s.tall, item: f, kind: kind))
         }
@@ -342,7 +349,13 @@ struct IsoRoomView<Clawd: View>: View {
     private func clawdDepth(_ p: CGPoint, _ geoRoom: IsoRoom) -> Double {
         let span = max(0.0001, floorBottom - floorTop)
         let deep = min(1, max(0, (p.y - floorTop) / span))
-        return deep * Double(geoRoom.size * 2 - 2)
+        // ⚠️ 尺子要跟家具那边**同一把**（见 `drawables` 里的 depth）：
+        // 等距那档最深是 `2n-2`（gx+gy 都到头），平面那档只有纵深，最深是 `n-1`。
+        // 用错的话他会整间屋子都压在家具前面，或者整间屋子都被挡住。
+        let deepest = geoRoom.projection == .flat
+            ? Double(geoRoom.size - 1)
+            : Double(geoRoom.size * 2 - 2)
+        return deep * deepest
     }
 
     // MARK: 一件家具
@@ -359,7 +372,11 @@ struct IsoRoomView<Clawd: View>: View {
         // 三档：**她导的图 > 我画的等距版 > 老那张正面图**。
         // 一件一件换过去，中间任何一天她打开都不会缺东西。
         let mine = ImageStore.cached(item.imageName)
-        let iso = FurnitureCatalog.isoSprite(of: kind.id)
+        // ⚠️ **平面那档用正面图，不用等距图。**
+        // 等距图是按斜俯角画的，摆进正面平视的屋子里才真成了立牌——
+        // 而「像立牌」正是当初做等距图要解决的那个毛病，别把它换个方向再犯一遍。
+        let iso = geoRoom.projection == .flat
+            ? nil : FurnitureCatalog.isoSprite(of: kind.id)
         let sprite = iso ?? kind.sprite
 
         let scale: CGFloat
@@ -381,7 +398,9 @@ struct IsoRoomView<Clawd: View>: View {
             // 现在**画多宽就是它占多少格**。
             scale = geoRoom.tileW * CGFloat(max(1, s.w)) / CGFloat(max(6, sprite.width))
             // 正面图那批：底边贴着格子（地毯除外，它是摊在地上的）
-            lift = s.tall > 0 ? -CGFloat(sprite.height) * scale / 2 + geoRoom.tileH / 2 : 0
+            // ⚠️ 贴的是地砖的**下沿**，不是写死的 `tileH / 2`（见 `tileBottom`）。
+            lift = s.tall > 0
+                ? -CGFloat(sprite.height) * scale / 2 + geoRoom.tileBottom : 0
         }
         let lifted = item.id == dragging
 

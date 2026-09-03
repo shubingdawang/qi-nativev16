@@ -29,11 +29,43 @@ import SwiftUI
 ///
 /// 地板是 `size × size` 格。格子坐标 `(gx, gy)`：
 /// `gx` 往右后方增大，`gy` 往左后方增大——也就是屏幕上的「往里走」。
+/// 屋子怎么投影到屏幕上。
+///
+/// 她说的：「我的小屋目前是 p1-17 这种角度……你也可以做成 p18-19
+/// 这种平面的。」后来又说：「那个俯视图也不算是俯视，差不多就是平视，
+/// 效果图上不就是一个小人正面站着吗，可以试下换成那种。
+/// clawd 是正面没关系，在那个图里 clawd 并不需要转身。」
+///
+/// ## ⚠️ 两种投影，**一份数据**
+///
+/// 家具还是存 `gx / gy` 那一对格子坐标，两种画法只是把同一对坐标
+/// 换算到屏幕上的方式不同。所以：
+///   · 深度排序、摆放规则、拖拽、走路 **一行都不用改**——
+///     它们全都只调 `point` / `tile(at:)` / `clampToFloor`
+///   · 她换个画法，家具**还在原来的位置上**，不用重摆
+///
+/// 各存一份摆放的话，改了一边另一边就开始撒谎——
+/// 这个项目里这种事已经栽过太多次了。
+enum RoomProjection: String, CaseIterable, Codable, Identifiable {
+    /// 等距斜俯（原来那个）
+    case iso
+    /// 正面平视：一面后墙 + 一条地板，人正面站着
+    case flat
+
+    var id: String { rawValue }
+    var label: String { self == .iso ? "立体" : "平面" }
+    var note: String {
+        self == .iso ? "斜着往下看，能看见家具的顶面" : "正面平视，像一间剖开的屋子"
+    }
+}
+
 struct IsoRoom {
 
     /// 地板几格见方。八格是试出来的：再小摆不下几件家具，
     /// 再大每一格就细得点不准了。
     var size: Int = 8
+    /// 哪种投影。⚠️ **只影响换算，不影响存的数据**
+    var projection: RoomProjection = .iso
     /// 一格在屏幕上多宽多高。**必须是 2:1**——
     /// 等距像素画的传统比例，用别的比例现成素材全对不上。
     var tileW: CGFloat = 40
@@ -48,7 +80,11 @@ struct IsoRoom {
     /// ⚠️ **只此一份。** 画屋子的那边要用，
     /// 算「clawd 该站在凳子的哪个点上」也要用——
     /// 各算各的必然对不齐，家具和人就永远差半格。
-    static func fit(in size: CGSize) -> IsoRoom {
+    /// ⚠️ `as:` **没有默认值，是故意的。**
+    /// 给个默认值的话，漏传的那一处会悄悄按立体算——屋子画成平面、
+    /// 家具按立体落点，两边差半间屋，而且不报错。
+    /// 必填的话漏一处编译就过不去。
+    static func fit(in size: CGSize, as projection: RoomProjection) -> IsoRoom {
         let n = CGFloat(ClawdStore.roomSize)
         // ⚠️ 一格多大，**同时受宽和高两头管**。
         //
@@ -82,14 +118,23 @@ struct IsoRoom {
         // 家具缩在井底一小块。7 格之后墙和地大致对半，看着才像一间屋。
         // 下限还是 4.2 格——横屏或者小窗口的时候剩不下地方，
         // 至少得是间屋子的样子。
-        let floorH = tileH * n / 2 + tileH
+        // 地板竖着占多高。**平面那档只有等距的一半**：
+        // 等距是「gx + gy」两个方向一起往下走，平面只有纵深那一档在走。
+        let floorH = projection == .flat
+            ? tileH * n / 2
+            : tileH * n / 2 + tileH
         let room = size.height * 0.94 - floorH
-        let wallH = min(max(tileH * 4.2, room), tileH * 7)
+        // ⚠️ 平面的墙**可以更高**（上限 11 格）。它地板矮了一半，
+        // 按等距那个 7 格封顶的话，屋子只占屏幕一半，上下各空一大片——
+        // 那正是她当初说的「小屋太小了」。
+        let wallCap: CGFloat = projection == .flat ? 11 : 7
+        let wallH = min(max(tileH * 4.2, room), tileH * wallCap)
 
         // 整块（墙顶到地板最下）的高度，用来把屋子**竖着摆正中**
         let whole = wallH + floorH
         let top = (size.height - whole) / 2
         return IsoRoom(size: ClawdStore.roomSize,
+                       projection: projection,
                        tileW: tileW, tileH: tileH,
                        wallH: wallH,
                        origin: CGPoint(x: size.width / 2,
@@ -132,9 +177,11 @@ struct IsoRoom {
         let span = max(0.0001, bottom - top)
         // 0 = 最上那个尖，1 = 最下那个尖；中间最宽
         let t = min(1, max(0, (y - top) / span))
-        let wide = 1 - abs(2 * t - 1)                 // 三角形，中间是 1
+        // ⚠️ 平面的地板是**矩形**，每一排一样宽——不能套菱形那条收窄。
+        // 套了的话他在最里和最外那两排只能站在正中间一点点。
+        let wide = projection == .flat ? 1.0 : 1 - abs(2 * t - 1)
         let n = CGFloat(self.size)
-        // 菱形最宽处的半宽，再往里收一点点，别让他半只挂在边上
+        // 最宽处的半宽，再往里收一点点，别让他半只挂在边上
         let halfMax = tileW * n / 2 - tileW * 0.35
         let half = halfMax * CGFloat(wide)
         let cx = origin.x
@@ -156,17 +203,41 @@ struct IsoRoom {
 
     /// 一格的**中心**在屏幕上的位置
     func point(_ gx: Double, _ gy: Double) -> CGPoint {
-        CGPoint(x: origin.x + (gx - gy) * tileW / 2,
-                y: origin.y + (gx + gy) * tileH / 2)
+        if projection == .flat {
+            // 平面：`gx` 横着排，`gy` 是纵深——**越靠里越往上一点**。
+            //
+            // ⚠️ 纵深那一档给的位移很小（半格高），只够把前后分开，
+            // 不能给多。给多了地板就又斜起来了，那就是等距，不是平面。
+            let n = Double(size)
+            return CGPoint(x: origin.x + (gx - (n - 1) / 2) * tileW,
+                           y: origin.y + (gy - (n - 1) / 2) * tileH / 2
+                              + tileH * (n - 1) / 4)
+        }
+        return CGPoint(x: origin.x + (gx - gy) * tileW / 2,
+                       y: origin.y + (gx + gy) * tileH / 2)
     }
 
     /// 屏幕上一个点落在哪一格。**可能落在地板外面**，调用方自己判断
+    ///
+    /// ⚠️ 这是 `point` 的逆。**改了那边一定要跟着改这边**——
+    /// 两边对不上的话，她拖一件家具，家具会落在别处。
     func tile(at p: CGPoint) -> (gx: Double, gy: Double) {
         let dx = p.x - origin.x
         let dy = p.y - origin.y
+        if projection == .flat {
+            let n = Double(size)
+            return (gx: dx / tileW + (n - 1) / 2,
+                    gy: (dy - tileH * (n - 1) / 4) / (tileH / 2) + (n - 1) / 2)
+        }
         return (gx: dy / tileH + dx / tileW,
                 gy: dy / tileH - dx / tileW)
     }
+
+    /// 一格地砖从中心到**下沿**有多远。
+    ///
+    /// ⚠️ 家具是「底边贴着格子下沿」摆的，所以这个数不能写死成 `tileH / 2`——
+    /// 平面那档的地砖只有半格高，写死的话一屋子家具会往下沉半格。
+    var tileBottom: CGFloat { projection == .flat ? tileH / 4 : tileH / 2 }
 
     /// 这一格在不在地板上
     func inside(_ gx: Int, _ gy: Int) -> Bool {
@@ -178,9 +249,15 @@ struct IsoRoom {
         (min(size - 1, max(0, gx)), min(size - 1, max(0, gy)))
     }
 
-    /// 一格地砖的四个角（菱形）
+    /// 一格地砖。等距是菱形，平面是矩形。
     func tilePath(_ gx: Int, _ gy: Int) -> Path {
         let c = point(Double(gx), Double(gy))
+        if projection == .flat {
+            // ⚠️ 高度用 `tileH / 2` ——跟 `point` 里那一档纵深位移**同一个数**。
+            // 不一样的话地砖之间会露缝或者叠住。
+            return Path(CGRect(x: c.x - tileW / 2, y: c.y - tileH / 4,
+                               width: tileW, height: tileH / 2))
+        }
         var p = Path()
         p.move(to: CGPoint(x: c.x, y: c.y - tileH / 2))
         p.addLine(to: CGPoint(x: c.x + tileW / 2, y: c.y))
@@ -193,6 +270,12 @@ struct IsoRoom {
     /// 地板整块的轮廓
     var floorPath: Path {
         let n = Double(size)
+        if projection == .flat {
+            let a = point(0, 0), b = point(n - 1, n - 1)
+            return Path(CGRect(x: a.x - tileW / 2, y: a.y - tileH / 4,
+                               width: (b.x - a.x) + tileW,
+                               height: (b.y - a.y) + tileH / 2))
+        }
         var p = Path()
         p.move(to: point(0, 0).offsetBy(dy: -tileH / 2))
         p.addLine(to: point(n - 1, 0).offsetBy(dx: tileW / 2))
@@ -202,9 +285,14 @@ struct IsoRoom {
         return p
     }
 
-    /// 左边那面墙（`gy = 0` 那一侧往上立起来）
+    /// 左边那面墙（`gy = 0` 那一侧往上立起来）。
+    ///
+    /// ⚠️ **平面那档只有一面后墙**，就走这一个；`rightWallPath` 返回空。
+    /// 这么办是为了让画屋子那边一行都不用改——它照旧画两面，
+    /// 只是其中一面在平面下什么都没有。
     var leftWallPath: Path {
         let n = Double(size)
+        if projection == .flat { return backWallPath }
         let a = point(0, 0).offsetBy(dy: -tileH / 2)
         let b = point(0, n - 1).offsetBy(dx: -tileW / 2)
         var p = Path()
@@ -226,19 +314,39 @@ struct IsoRoom {
     /// 照着这条底边走，缝天然就是斜的、跟墙一个方向。
     var leftWallBase: (CGPoint, CGPoint) {
         let n = Double(size)
+        if projection == .flat { return backWallBase }
         return (point(0, 0).offsetBy(dy: -tileH / 2),
                 point(0, n - 1).offsetBy(dx: -tileW / 2))
     }
 
     var rightWallBase: (CGPoint, CGPoint) {
         let n = Double(size)
+        if projection == .flat { return backWallBase }
         return (point(0, 0).offsetBy(dy: -tileH / 2),
                 point(n - 1, 0).offsetBy(dx: tileW / 2))
+    }
+
+    // MARK: 平面那档的后墙
+
+    /// 后墙的底边：地板最里那一排的上沿，从左到右。
+    private var backWallBase: (CGPoint, CGPoint) {
+        let n = Double(size)
+        let y = point(0, 0).y - tileH / 4
+        return (CGPoint(x: point(0, 0).x - tileW / 2, y: y),
+                CGPoint(x: point(n - 1, 0).x + tileW / 2, y: y))
+    }
+
+    /// 后墙：一整块立起来的矩形。
+    private var backWallPath: Path {
+        let (a, b) = backWallBase
+        return Path(CGRect(x: a.x, y: a.y - wallH,
+                           width: b.x - a.x, height: wallH))
     }
 
     /// 右边那面墙（`gx = 0` 那一侧）
     var rightWallPath: Path {
         let n = Double(size)
+        if projection == .flat { return Path() }        // 平面没有第二面墙
         let a = point(0, 0).offsetBy(dy: -tileH / 2)
         let b = point(n - 1, 0).offsetBy(dx: tileW / 2)
         var p = Path()

@@ -836,6 +836,20 @@ final class ClawdStore: ObservableObject {
     @Published var coins: Int = 0 {
         didSet { if loaded { UserDefaults.standard.set(coins, forKey: "clawdCoins") } }
     }
+    /// 屋子画成立体的还是平面的。
+    ///
+    /// 她说的：「那个俯视图也不算是俯视，差不多就是平视，
+    /// 效果图上不就是一个小人正面站着吗，可以试下换成那种。」
+    ///
+    /// ⚠️ **两种画法共用同一份家具坐标**（见 `RoomProjection`），
+    /// 所以换来换去家具还在原位，不用重摆。
+    @Published var projection: RoomProjection = .iso {
+        didSet {
+            if loaded {
+                UserDefaults.standard.set(projection.rawValue, forKey: "clawdProjection")
+            }
+        }
+    }
     /// 买过的屋子主题（`RoomTheme.id`）。免费那几套不进这儿。
     @Published var ownedThemes: [String] = [] {
         didSet {
@@ -1037,6 +1051,9 @@ final class ClawdStore: ObservableObject {
         carrying = UserDefaults.standard.string(forKey: "clawdCarrying")
         wearing = UserDefaults.standard.string(forKey: "clawdWearing")
         ownedThemes = UserDefaults.standard.stringArray(forKey: "clawdThemes") ?? []
+        projection = RoomProjection(
+            rawValue: UserDefaults.standard.string(forKey: "clawdProjection") ?? "")
+            ?? .iso
         loaded = true
     }
 
@@ -1528,7 +1545,7 @@ extension ClawdStore {
         guard let i = owned.firstIndex(where: { $0.id == id }) else { return }
         owned[i].room = room.rawValue
         let s = FurnitureCatalog.shape(of: owned[i].kind)
-        let geo = IsoRoom(size: Self.roomSize)
+        let geo = IsoRoom(size: Self.roomSize, projection: projection)
         let taken = takenCells(in: room, except: id)
         if let spot = geo.nearestFree(owned[i].gx, owned[i].gy, w: s.w, d: s.d, taken: taken) {
             owned[i].gx = spot.0
@@ -1559,7 +1576,7 @@ extension ClawdStore {
         guard let i = owned.firstIndex(where: { $0.id == id }) else { return false }
         let s = FurnitureCatalog.shape(of: owned[i].kind)
         let room = HomeRoom(rawValue: owned[i].room) ?? .living
-        let geo = IsoRoom(size: Self.roomSize)
+        let geo = IsoRoom(size: Self.roomSize, projection: projection)
         guard let spot = geo.nearestFree(gx, gy, w: s.w, d: s.d,
                                          taken: takenCells(in: room, except: id))
         else { return false }

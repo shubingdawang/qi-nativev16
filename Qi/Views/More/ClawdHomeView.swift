@@ -134,14 +134,14 @@ struct ClawdHomeView: View {
         guard let s = roomSize, s.height > 1 else {
             return (ClawdHomeView.floorTop, ClawdHomeView.floorBottom)
         }
-        return IsoRoom.fit(in: s).walkBand(in: s)
+        return IsoRoom.fit(in: s, as: store.projection).walkBand(in: s)
     }
 
     /// 在竖直位置 y 上横着到哪儿。**地板是菱形，不是矩形**——
     /// 越靠上下两个尖越窄，一律 clamp 到 0.12…0.88 的话他会走到空气里。
     private func span(atY y: Double) -> (lo: Double, hi: Double) {
         guard let s = roomSize, s.width > 1 else { return (0.12, 0.88) }
-        return IsoRoom.fit(in: s).walkSpan(atY: y, in: s)
+        return IsoRoom.fit(in: s, as: store.projection).walkSpan(atY: y, in: s)
     }
 
     /// 把一个点夹回地板里
@@ -398,6 +398,24 @@ struct ClawdHomeView: View {
                     Menu("整套换") {
                         ForEach(RoomTheme.all) { t in
                             Button(themeMenuLabel(t)) { pickTheme(t, in: r) }
+                        }
+                    }
+                    // 立体／平面。⚠️ **摆在最上面这一层**，
+                    // 不塞进二级菜单——她要的是「试下换成那种」，
+                    // 埋两层深的话试一次都嫌麻烦。
+                    Menu("看的角度") {
+                        ForEach(RoomProjection.allCases) { p in
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    store.projection = p
+                                }
+                                notice = "换成" + p.label + "了"
+                            } label: {
+                                Text(ClawdHomeView.viewLabel(p))
+                                if store.projection == p {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
                         }
                     }
                     Menu("内置地面") {
@@ -713,7 +731,7 @@ struct ClawdHomeView: View {
         // 「连带的」就是这些：他本人、他手上举的、举多高。
         // 写死一个数的话，屋子每改一次就有一样东西悄悄跟不上，
         // 而跟不上要等她截图给我看才发现。
-        let tile = IsoRoom.fit(in: size).tileW
+        let tile = IsoRoom.fit(in: size, as: store.projection).tileW
         return VStack(spacing: 4) {
             if let bubble {
                 Text(bubble)
@@ -883,6 +901,14 @@ struct ClawdHomeView: View {
 
     // MARK: 屋子的主题皮肤
 
+    /// ⚠️ 拼好再给 `Text`。`Text(a + "（" + b + "）")` 那种一行三个 `+`，
+    /// 类型检查会在这一行上卡到超时（`查一遍.py` 的 slowexpr 那条查的就是它）。
+    static func viewLabel(_ p: RoomProjection) -> String {
+        let head = p.label
+        let tail = "（" + p.note + "）"
+        return head + tail
+    }
+
     /// 菜单里那一行怎么写。**没买的把价钱摆出来**——
     /// 点下去才发现要钱，比一开始就写着更让人不舒服。
     private func themeMenuLabel(_ t: RoomTheme) -> String {
@@ -984,7 +1010,7 @@ struct ClawdHomeView: View {
     private func drop(_ p: CGPoint, in size: CGSize) {
         // 他不在这一间、或者正藏着，就没得碰
         guard shownRoom == store.clawdRoom, !hiding, !held else { return }
-        let tile = IsoRoom.fit(in: size).tileW
+        let tile = IsoRoom.fit(in: size, as: store.projection).tileW
         let him = CGPoint(x: clawdX * size.width, y: clawdY * size.height)
         let dx = p.x - him.x, dy = p.y - him.y
         // ⚠️ 半径按**他有多高**给，不是按一格多宽。他约 1.47 格高，
@@ -1027,7 +1053,7 @@ struct ClawdHomeView: View {
         walkTask?.cancel()
         hideSpot = spot.id
         // 先挪到那件家具那儿，找到的时候他就从那儿冒出来
-        let pt = IsoRoom.fit(in: size).point(Double(spot.gx), Double(spot.gy))
+        let pt = IsoRoom.fit(in: size, as: store.projection).point(Double(spot.gx), Double(spot.gy))
         clawdX = pt.x / size.width
         clawdY = pt.y / size.height
         withAnimation(.easeOut(duration: 0.3)) { hiding = true }
@@ -1279,7 +1305,7 @@ struct ClawdHomeView: View {
                    let kind = FurnitureCatalog.kind(item.kind),
                    let chosen = RoomActs.acts(for: kind.id).randomElement() {
 
-                    let geo = IsoRoom.fit(in: size)
+                    let geo = IsoRoom.fit(in: size, as: store.projection)
                     let p = RoomActs.spot(of: item, kindID: kind.id,
                                           in: geo, act: chosen)
                     // 屏幕上那个点换回 0…1，走路那套还是老样子
