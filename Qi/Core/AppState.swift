@@ -1240,8 +1240,7 @@ final class AppState: ObservableObject {
                 : []
             var text = m.content
             if !keepShot {
-                text += (text.isEmpty ? "" : "
-")
+                text += (text.isEmpty ? "" : "\n")
                     + "（这条带过 \(m.imageNames.count) 张图"
                     + (m.imageNote.isEmpty ? "" : "：" + m.imageNote)
                     + "。原图收起来了）"
