@@ -253,6 +253,9 @@ struct DivinationRecord: Codable, Identifiable, Hashable {
         case "bazi":    return "八字"
         case "dream":   return "解梦"
         case "ball":    return "水晶球"
+        case "meihua":  return "梅花易数"
+        case "numerology": return "数字命理"
+        case "almanac": return "择日"
         default:        return kind
         }
     }

@@ -15,7 +15,10 @@ struct DivinationView: View {
         ("骰子",   "问得急、要一句痛快话的时候用"),
         ("八字",   "看一个人的底子。四柱是本机按干支算的，不联网"),
         ("水晶球", "问得含糊也行——它看的是氛围，不是条款"),
-        ("解梦",   "把梦原样讲出来，他来读")
+        ("解梦",   "把梦原样讲出来，他来读"),
+        ("梅花",   "按按下去的那一刻起卦。不摇钱，想清楚了再按"),
+        ("数字",   "只要生日，不要时辰。看生命路径数和今年在九年里的哪一档"),
+        ("择日",   "今天宜什么忌什么。建除十二神，本机按干支算的")
     ]
 
     @State private var mode = 0
@@ -28,9 +31,14 @@ struct DivinationView: View {
             // 一条分段控件顶在内容前面。原来钉在屏幕最底下，
             // 一是够不着，二是跟导航条挤在一起。
             VStack(spacing: 6) {
-                // 六套。**均分整行**——原来是横滑的一排，
-                // 右边空一小块，看着像少了点东西（她说的「显得很空」）。
-                HStack(spacing: 5) {
+                // 九套。原来六套均分一行，右边不空（她说过「显得很空」）；
+                // 加到九套之后一行塞不下，改成五列两行。
+                // ⚠️ **九套排两行，别再挤一行。**
+                // 原来六套均分一行正好；九套挤进去每个只剩三十几点宽，
+                // 「梅花易数」这种三个字的会被压到看不清——
+                // 而 `minimumScaleFactor` 只会让它更小，不会让它变清楚。
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 5),
+                                         count: 5), spacing: 5) {
                     ForEach(Array(DivinationView.modes.enumerated()), id: \.offset) { i, m in
                         Button {
                             withAnimation(.easeOut(duration: 0.16)) { mode = i }
@@ -67,7 +75,10 @@ struct DivinationView: View {
                     case 2: DicePane(question: $question)
                     case 3: BaziPane(question: $question)
                     case 4: CrystalPane(question: $question)
-                    default: DreamPane()
+                    case 5: DreamPane()
+                    case 6: MeihuaPane(question: $question)
+                    case 7: NumerologyPane()
+                    default: AlmanacPane(question: $question)
                     }
 
                     // 「紫微/奇门/星盘还没做」那段说明**撤了**。
