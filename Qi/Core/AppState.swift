@@ -4166,15 +4166,26 @@ final class AppState: ObservableObject {
             }
             let pts = (args["points"] as? Double).map { Int($0) }
                 ?? (args["points"] as? Int) ?? 1
+            // ⚠️ 200 那条线在 `QuestStore.give` 里再夹一次。
+            // 这儿夹是为了**回话里报的数就是真会给的数**——
+            // 只在里面夹的话，他填 500，回话说 500，她做完只到账 200。
+            let asked = (args["coins"] as? Double).map { Int($0) }
+                ?? (args["coins"] as? Int) ?? 0
+            let cs = max(0, min(200, asked))
             guard let q = QuestStore.shared.give(
                 kind: (args["kind"] as? String) ?? "daily",
                 title: title,
                 detail: (args["detail"] as? String) ?? "",
-                points: pts) else {
+                points: pts, coins: cs) else {
                 return ("这件已经在挂着了，没重复派。", false)
             }
-            return ("派出去了：「\(q.title)」（\(q.kindLabel)·\(q.points)分）。"
-                    + "她在「小事」那一页打卡；她交了之后 system 里会告诉你。", false)
+            var back = "派出去了：「\(q.title)」（\(q.kindLabel)·\(q.points)分"
+            if q.coins > 0 { back += "·做完给 \(q.coins) 币" }
+            back += "）。她在「小事」那一页打卡；她交了之后 system 里会告诉你。"
+            if asked > 200 {
+                back += "\n（你填了 \(asked)，一次最多 200，按 200 算。）"
+            }
+            return (back, false)
 
         case "list_tasks":
             let her = settings.userName.isEmpty ? "她" : settings.userName

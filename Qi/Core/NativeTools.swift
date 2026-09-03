@@ -319,7 +319,8 @@ enum NativeTools {
             ["kind": ["type": "string", "description": "daily 每天一次 / challenge 一次性的难事 / surprise 你忽然想到的"],
              "title": ["type": "string", "description": "一句话说清要做什么"],
              "detail": ["type": "string", "description": "为什么是这件、怎么做。可以不填"],
-             "points": ["type": "number", "description": "几分，1–10，默认 1"]],
+             "points": ["type": "number", "description": "几分，1–10，默认 1"],
+             "coins": ["type": "number", "description": "做完给她多少 clawd 小屋的金币，0–200，不填就不给。她拿这个买家具。跟 points 是两回事：points 是打卡的分和连击，coins 是钱。小事给 10–30，费劲的事给 50–150，别每件都顶格。"]],
             required: ["title"])
 
         add("list_tasks",

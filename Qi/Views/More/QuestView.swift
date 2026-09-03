@@ -14,6 +14,9 @@ struct QuestView: View {
     @ObservedObject private var store = QuestStore.shared
 
     @State private var checkingIn: Quest?
+    /// 刚到账多少币。⚠️ 只是**报一声**，币在 `QuestStore.checkIn` 里就发了，
+    /// 这儿不发第二遍。
+    @State private var justGot: Int?
     @State private var proofText = ""
     @State private var proofImage = ""
     @State private var photoItem: PhotosPickerItem?
@@ -53,6 +56,7 @@ struct QuestView: View {
         }
         .navigationTitle("小事")
         .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .top) { gotCoins }
         .photosPicker(isPresented: $pickingPhoto, selection: $photoItem, matching: .images)
         .onChange(of: photoItem) { _, item in loadPhoto(item) }
         .sheet(item: $checkingIn) { q in checkInSheet(q) }
@@ -137,6 +141,19 @@ struct QuestView: View {
                 Text("\(q.points) 分")
                     .font(.app(9.5))
                     .foregroundStyle(Theme.textMuted(scheme))
+                // 他给这件事挂了金币的话，**做之前就得看得见**——
+                // 做完才知道有奖励，那奖励就没起到它该起的作用。
+                if q.coins > 0 {
+                    HStack(spacing: 3) {
+                        Circle().fill(HomePalette.amber).frame(width: 6, height: 6)
+                        Text("\(q.coins)")
+                            .font(.app(9.5, weight: .medium))
+                    }
+                    .foregroundStyle(Theme.textMuted(scheme))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(HomePalette.amber.opacity(0.16)))
+                }
                 Spacer(minLength: 0)
                 if !open, let last = q.doneDays.last {
                     Text(last)
@@ -277,16 +294,45 @@ struct QuestView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("交了") {
-                        store.checkIn(q.id, text: proofText, image: proofImage)
+                        let ok = store.checkIn(q.id, text: proofText,
+                                               image: proofImage)
                         if app.settings.haptics {
                             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                         }
+                        // 币是 `checkIn` 里发的（见 QuestStore）。这儿只报一声——
+                        // ⚠️ **到账要当场看得见**，不然她得自己切去小屋对数。
+                        if ok, q.coins > 0 { justGot = q.coins }
                         checkingIn = nil
                     }
                 }
             }
         }
         .presentationDetents([.medium, .large])
+    }
+
+    /// 「+N 币」浮一下就走。
+    @ViewBuilder
+    private var gotCoins: some View {
+        if let n = justGot {
+            HStack(spacing: 5) {
+                Circle().fill(HomePalette.amber).frame(width: 8, height: 8)
+                Text("+\(n)")
+                    .font(.app(14, weight: .medium))
+                    .foregroundStyle(Theme.textMain(scheme))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Capsule().fill(Theme.softFillDeep))
+            .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+            .padding(.top, 8)
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .task(id: n) {
+                // ⚠️ 绑在 `id: n` 上。挂在 onAppear 上的话，
+                // 连着交两件，第二件不会重新计时，第一件的计时到点就把它抹了。
+                try? await Task.sleep(nanoseconds: 1_800_000_000)
+                withAnimation(.easeOut(duration: 0.25)) { justGot = nil }
+            }
+        }
     }
 
     // MARK: 换

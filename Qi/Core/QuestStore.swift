@@ -45,15 +45,26 @@ struct Quest: Codable, Identifiable, Hashable {
     var seen: Bool = false
     /// 她自己关掉的（不想做了）。**不删**——删了就看不出她拒绝过什么
     var dropped: Bool = false
+    /// 做完给多少 clawd 小屋的金币。**由他自己填**，一次最多 200。
+    ///
+    /// 她说的：「当我完成任务之后会给我一定量的金币奖励，
+    /// 这个金币的多少由阿晏自己填写，一次奖励不能超过两百。」
+    ///
+    /// ⚠️ 跟 `points` 是两回事：`points` 是「小事」那一页自己的分和连击，
+    /// `coins` 是花在小屋里买家具的钱。混成一个的话，
+    /// 她攒连击的记录会被买张床清零。
+    var coins: Int = 0
 
     init(id: UUID = UUID(), kind: String = "daily", title: String = "",
          detail: String = "", points: Int = 1, createdAt: Date = Date(),
          doneDays: [String] = [], proofText: String = "", proofImage: String = "",
-         hisNote: String = "", seen: Bool = false, dropped: Bool = false) {
+         hisNote: String = "", seen: Bool = false, dropped: Bool = false,
+         coins: Int = 0) {
         self.id = id; self.kind = kind; self.title = title; self.detail = detail
         self.points = points; self.createdAt = createdAt; self.doneDays = doneDays
         self.proofText = proofText; self.proofImage = proofImage
         self.hisNote = hisNote; self.seen = seen; self.dropped = dropped
+        self.coins = coins
     }
 
     var isDaily: Bool { kind == "daily" }
@@ -206,13 +217,17 @@ final class QuestStore: ObservableObject {
     // MARK: 他派
 
     @discardableResult
-    func give(kind: String, title: String, detail: String, points p: Int) -> Quest? {
+    func give(kind: String, title: String, detail: String,
+              points p: Int, coins c: Int = 0) -> Quest? {
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return nil }
         // 同一件事别派两遍：今天还挂着一件同名的就不重复派
         if quests.contains(where: { $0.title == t && $0.open(today) }) { return nil }
         let q = Quest(kind: ["daily", "challenge", "surprise"].contains(kind) ? kind : "daily",
-                      title: t, detail: detail, points: max(1, min(10, p)))
+                      title: t, detail: detail, points: max(1, min(10, p)),
+                      // ⚠️ **200 这条线夹在这儿，不是只写在工具说明里。**
+                      // 说明是给他看的，他能不照做；夹一道才是真的封顶。
+                      coins: max(0, min(200, c)))
         quests.insert(q, at: 0)
         return q
     }
@@ -255,6 +270,14 @@ final class QuestStore: ObservableObject {
         quests[i].seen = false      // 她做完了，他还没看见
 
         points += quests[i].points
+
+        // 他派这件事的时候写了多少币，做完就给多少。
+        //
+        // ⚠️ **daily 每天做完都给。** 那正是它跟 challenge 的区别；
+        // 想只给一次就别派成 daily。
+        if quests[i].coins > 0 {
+            ClawdStore.shared.coins += quests[i].coins
+        }
 
         let cal = Calendar.current
         let yesterday = Self.day(cal.date(byAdding: .day, value: -1, to: Date()) ?? Date())

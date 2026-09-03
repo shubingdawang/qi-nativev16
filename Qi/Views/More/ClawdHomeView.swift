@@ -109,6 +109,8 @@ struct ClawdHomeView: View {
     /// 藏在哪一件家具后面
     @State private var hideSpot: UUID?
     @State private var hideTask: Task<Void, Never>?
+    /// 金币作弊面板开着没有
+    @State private var cheating = false
 
     /// 屋子这一页现在画的是哪一间。
     /// `viewing` 还没定下来的时候（刚进来那一帧）就跟着他。
@@ -225,6 +227,11 @@ struct ClawdHomeView: View {
         .onChange(of: store.linked) { _, on in
             if on { startHim() } else { himTask?.cancel() }
         }
+        .sheet(isPresented: $cheating) {
+            CoinCheatSheet(store: store)
+                .presentationDetents([.height(300)])
+                .presentationDragIndicator(.visible)
+        }
         .confirmationDialog("在此房间启用自动发言？", isPresented: $askingLink,
                             titleVisibility: .visible) {
             Button("接入") {
@@ -241,17 +248,22 @@ struct ClawdHomeView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            HStack(spacing: 5) {
-                Circle()
-                    .fill(HomePalette.amber)
-                    .frame(width: 9, height: 9)
-                Text("\(store.coins)")
-                    .font(HomeType.number(14, weight: .medium))
-                    .foregroundStyle(Theme.textMain(scheme))
+            // 点金币栏 = 自己改金币。她要的：「再来一个作弊系统，
+            // 就是关于我的金币，点击目前的金币栏我可以随意增减我的金币数量。」
+            Button { cheating = true } label: {
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(HomePalette.amber)
+                        .frame(width: 9, height: 9)
+                    Text("\(store.coins)")
+                        .font(HomeType.number(14, weight: .medium))
+                        .foregroundStyle(Theme.textMain(scheme))
+                }
+                .padding(.horizontal, 11)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(Theme.softFillDeep))
             }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 6)
-            .background(Capsule().fill(Theme.softFillDeep))
+            .buttonStyle(.plain)
 
             if store.canCheckIn {
                 Button {
