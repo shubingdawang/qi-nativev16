@@ -836,6 +836,14 @@ final class ClawdStore: ObservableObject {
     @Published var coins: Int = 0 {
         didSet { if loaded { UserDefaults.standard.set(coins, forKey: "clawdCoins") } }
     }
+    /// 买过的屋子主题（`RoomTheme.id`）。免费那几套不进这儿。
+    @Published var ownedThemes: [String] = [] {
+        didSet {
+            if loaded {
+                UserDefaults.standard.set(ownedThemes, forKey: "clawdThemes")
+            }
+        }
+    }
     /// 上次签到是哪天
     @Published var lastCheckIn: Date? {
         didSet {
@@ -1028,6 +1036,7 @@ final class ClawdStore: ObservableObject {
         linked = UserDefaults.standard.bool(forKey: "clawdLinked")
         carrying = UserDefaults.standard.string(forKey: "clawdCarrying")
         wearing = UserDefaults.standard.string(forKey: "clawdWearing")
+        ownedThemes = UserDefaults.standard.stringArray(forKey: "clawdThemes") ?? []
         loaded = true
     }
 
@@ -1047,6 +1056,101 @@ final class ClawdStore: ObservableObject {
 
     func has(_ kindID: String) -> Bool {
         owned.contains { $0.kind == kindID }
+    }
+
+    // MARK: 屋子的主题皮肤
+
+    /// 这套主题能不能用。免费那几套一直能用。
+    func hasTheme(_ t: RoomTheme) -> Bool {
+        t.free || ownedThemes.contains(t.id)
+    }
+
+    /// 买一套。钱不够或者已经有了就 false。
+    @discardableResult
+    func buyTheme(_ t: RoomTheme) -> Bool {
+        guard !hasTheme(t), coins >= t.price else { return false }
+        coins -= t.price
+        ownedThemes.append(t.id)
+        return true
+    }
+
+    /// 到日子了就把节日那套换上，过了自己换回来。
+    ///
+    /// 她说的：「不同的风格根据主题／节日来变换。」
+    ///
+    /// ⚠️ **只动她本来那份的一个副本，换回来照原样还。**
+    /// 节日过了留着一屋子圣诞、或者干脆退回默认奶油色，
+    /// 都等于把她自己挑的配置弄丢了。所以换上之前先把原来那对记号存下来。
+    ///
+    /// ⚠️ **没买就什么都不做。** 买了才算她要过这个节——
+    /// 没买还硬换，那是把没卖出去的东西塞给她。
+    ///
+    /// 返回换上了哪一套（用来提示她一句），没换返回 nil。
+    @discardableResult
+    func syncFestivalTheme(_ now: Date = Date()) -> RoomTheme? {
+        let today = RoomTheme.dayKey(now)
+        let hit = RoomTheme.forToday(now)
+
+        // 今天该穿的那套 == 已经穿着的那套：什么都不用做
+        if let hit, hit.id == festivalWorn, festivalDay == today { return nil }
+
+        // 先把上一次换上的还回去（节日过了，或者换成了别的节）
+        if !festivalWorn.isEmpty, festivalDay != today {
+            for r in HomeRoom.allCases {
+                guard let saved = festivalBefore[r.rawValue] else { continue }
+                setWallpaper(saved.0, for: r)
+                setFlooring(saved.1, for: r)
+            }
+            festivalBefore = [:]
+            festivalWorn = ""
+        }
+
+        guard let hit, hasTheme(hit) else { return nil }
+
+        // 存下她原来那份，再换上
+        var keep: [String: (String, String)] = [:]
+        for r in HomeRoom.allCases {
+            keep[r.rawValue] = (wallpaper(of: r), flooring(of: r))
+            applyTheme(hit, to: r)
+        }
+        festivalBefore = keep
+        festivalWorn = hit.id
+        festivalDay = today
+        return hit
+    }
+
+    /// 换节日皮肤之前她原来那对记号（墙、地），按房间存
+    private var festivalBefore: [String: (String, String)] {
+        get {
+            let raw = UserDefaults.standard.dictionary(forKey: "clawdFestBefore")
+                as? [String: [String]] ?? [:]
+            return raw.compactMapValues { $0.count == 2 ? ($0[0], $0[1]) : nil }
+        }
+        set {
+            let raw = newValue.mapValues { [$0.0, $0.1] }
+            UserDefaults.standard.set(raw, forKey: "clawdFestBefore")
+        }
+    }
+
+
+    /// 现在穿着哪一套节日皮肤（空 = 没穿）
+    private var festivalWorn: String {
+        get { UserDefaults.standard.string(forKey: "clawdFestWorn") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "clawdFestWorn") }
+    }
+    /// 那是哪一天换上的
+    private var festivalDay: String {
+        get { UserDefaults.standard.string(forKey: "clawdFestDay") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "clawdFestDay") }
+    }
+
+    /// 把一整套换到某一间。
+    ///
+    /// ⚠️ **墙和地一起换。** 她要的是「整间换成那个样子」，
+    /// 不是「墙挑一次、地再挑一次」（见 `RoomTheme` 那段）。
+    func applyTheme(_ t: RoomTheme, to room: HomeRoom) {
+        setWallpaper(t.wallToken, for: room)
+        setFlooring(t.floorToken, for: room)
     }
 
     @discardableResult

@@ -133,6 +133,9 @@ struct FloorFinishView: View {
     let kind: RoomFinish.Floor
     let room: IsoRoom
     let scheme: ColorScheme
+    /// 套了主题皮肤的话，用它的配色盖掉花纹自带的那组。
+    /// nil = 花纹本来的颜色（也就是原来那五套）。
+    var theme: RoomTheme? = nil
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -252,7 +255,13 @@ struct FloorFinishView: View {
         case .terrazzo:
             hexes = scheme == .dark ? ["36353A"] : ["EAE7E0"]
         }
-        let h = hexes[min(i, hexes.count - 1)]
+        // ⚠️ 主题的配色**盖在最外面**，花纹的层数照旧：
+        // 木地板还是三档、榻榻米还是两档，只是颜色换了一组。
+        // 主题给的档数不够就用它最后一档顶上——
+        // 少给一档就整片塌成一个色，那不是"配色不同"，那是花纹没了。
+        let pal = theme?.floorColors(scheme) ?? []
+        let use = pal.isEmpty ? hexes : pal
+        let h = use[min(i, use.count - 1)]
         return Color(hexString: h) ?? .gray
     }
 

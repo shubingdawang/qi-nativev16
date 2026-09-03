@@ -158,7 +158,8 @@ struct IsoRoomView<Clawd: View>: View {
                 // （连色号都是同两个）。
                 // 同一件事只留一个算法——留两个的话，改了一个另一个就开始撒谎。
                 FloorFinishView(kind: RoomFinish.floor(token),
-                                room: geoRoom, scheme: scheme)
+                                room: geoRoom, scheme: scheme,
+                                theme: RoomFinish.theme(token))
             }
             // 正在拖的那一件，把它要落的几格点亮
             if let id = dragging,
@@ -240,10 +241,24 @@ struct IsoRoomView<Clawd: View>: View {
     // 两面墙**不能同一个色**——同色的两个面拼在一起就是一张折纸，
     // 差一档明暗才有「光从一边来」的立体感
     private var wallL: Color {
-        scheme == .dark ? Color(hexString: "2E2926")! : Color(hexString: "F1E9DB")!
+        if let hexes = wallTheme?.wallColors(scheme), let h = hexes.first,
+           let c = Color(hexString: h) { return c }
+        return scheme == .dark ? Color(hexString: "2E2926")! : Color(hexString: "F1E9DB")!
     }
     private var wallR: Color {
-        scheme == .dark ? Color(hexString: "262220")! : Color(hexString: "E3D9C7")!
+        // ⚠️ **右面墙照旧压暗一档。** 等距屋的立体感八成来自
+        // 「两个面不是同一个亮度」——主题换了颜色，这条不能跟着丢。
+        // 主题只给一档的时候就拿第一档压暗当第二档。
+        if let hexes = wallTheme?.wallColors(scheme), !hexes.isEmpty {
+            // ⚠️ 两个分支要写成同一个类型，别让三目去做 String / String? 的隐式提升
+            let h: String = hexes.count > 1 ? hexes[1] : RoomTheme.dim(hexes[0])
+            if let c = Color(hexString: h) { return c }
+        }
+        return scheme == .dark ? Color(hexString: "262220")! : Color(hexString: "E3D9C7")!
+    }
+    /// 这一间的墙套了哪套主题
+    private var wallTheme: RoomTheme? {
+        RoomFinish.theme(store.wallpaper(of: room))
     }
     /// 墙上砖缝／条纹那条线的颜色。
     /// 比墙深一档就够——深太多就成了黑线框，那是漫画不是墙

@@ -88,48 +88,21 @@ enum RoomFinish {
     }
 
     // MARK: 配套
-
-    /// **一整套。** 墙和地一起换。
-    ///
-    /// 她定的：「换成这种风格后小屋也记得换成这种风格。」
-    ///
-    /// 她说这句的时候在讲家具——自带那批 Kenney 是深色木头的书房风，
-    /// 摆进奶油色的屋子里会跳。但一件一件去挑「墙用木墙裙、地用木地板」
-    /// 太绕了：**她要的是「整间换成那个样子」，不是「墙和地各挑一次」。**
-    ///
-    /// ⚠️ 这儿一个新式样都没加——五档墙、五档地本来就都在。
-    /// 缺的只是**哪几档是一路的**这件事，而那件事以前只在我脑子里。
-    struct Suite: Identifiable {
-        let id: String
-        let label: String
-        /// 一句话说清它配什么，摆在菜单里
-        let note: String
-        let wall: Wall
-        let floor: Floor
-    }
-
-    static let suites: [Suite] = [
-        .init(id: "cream", label: "奶油", note: "原来那样",
-              wall: .plain, floor: .checker),
-        .init(id: "library", label: "书房", note: "配自带那批木家具",
-              wall: .wainscot, floor: .wood),
-        .init(id: "stone", label: "石屋", note: "砖墙配地砖",
-              wall: .brick, floor: .tile),
-        .init(id: "washitsu", label: "和室", note: "素墙配榻榻米",
-              wall: .plain, floor: .tatami),
-        .init(id: "studio", label: "素白", note: "条纹配水磨石",
-              wall: .stripe, floor: .terrazzo),
-    ]
+    //
+    // ⚠️ **原来的 `Suite` / `suites` 删掉了，别加回来。**
+    // 那五套现在是 `RoomTheme.all` 里价钱为 0 的前五个，一字不差，
+    // 只是旁边多了带配色的那些。两份并存的话，改了一份另一份就开始撒谎——
+    // 这个项目里这种事已经栽过太多次。
 
     /// 一个记号是哪一档墙。认不出来就算纯色。
     static func wall(_ token: String) -> Wall {
         guard isBuiltIn(token) else { return .plain }
-        return Wall(rawValue: String(token.dropFirst())) ?? .plain
+        return Wall(rawValue: body(token)) ?? .plain
     }
 
     /// 一个记号是哪一档地。认不出来就算棋盘格。
     static func floor(_ token: String) -> Floor {
         guard isBuiltIn(token) else { return .checker }
-        return Floor(rawValue: String(token.dropFirst())) ?? .checker
+        return Floor(rawValue: body(token)) ?? .checker
     }
 }

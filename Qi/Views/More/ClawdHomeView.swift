@@ -111,6 +111,8 @@ struct ClawdHomeView: View {
     @State private var hideTask: Task<Void, Never>?
     /// 金币作弊面板开着没有
     @State private var cheating = false
+    /// 正要买的那套主题、换到哪一间
+    @State private var buying: (theme: RoomTheme, room: HomeRoom)?
 
     /// 屋子这一页现在画的是哪一间。
     /// `viewing` 还没定下来的时候（刚进来那一帧）就跟着他。
@@ -206,6 +208,12 @@ struct ClawdHomeView: View {
             if viewing == nil, following { viewing = store.clawdRoom }
             startWalking()
             startHim()
+            // 到日子了自己换上节日那套（买了才换），过了自己换回来。
+            // ⚠️ **放在 onAppear 里就够。** 不用开定时器守着零点——
+            // 她开着这一页跨过零点的概率，比多一个常驻定时器的代价小得多。
+            if let t = store.syncFestivalTheme() {
+                notice = "今天" + t.festival + "，屋子换上「" + t.label + "」了"
+            }
         }
         // 他换屋了：她**跟着他**的时候画面才跟着换。
         // 她自己点去别间之后就不跟了——半路把她的视线拽走最讨厌。
@@ -226,6 +234,25 @@ struct ClawdHomeView: View {
         }
         .onChange(of: store.linked) { _, on in
             if on { startHim() } else { himTask?.cancel() }
+        }
+        .confirmationDialog(buying.map { "买「" + $0.theme.label + "」？" } ?? "",
+                            isPresented: Binding(get: { buying != nil },
+                                                 set: { if !$0 { buying = nil } }),
+                            titleVisibility: .visible) {
+            if let b = buying {
+                Button("花 \(b.theme.price) 币换上") {
+                    if store.buyTheme(b.theme) {
+                        store.applyTheme(b.theme, to: b.room)
+                        notice = b.room.rawValue + "换成「" + b.theme.label + "」了"
+                    } else {
+                        notice = "币不够，还差 \(b.theme.price - store.coins) 个"
+                    }
+                    buying = nil
+                }
+                Button("算了", role: .cancel) { buying = nil }
+            }
+        } message: {
+            Text(buying.map { $0.theme.note + "。买过之后所有房间都能用。" } ?? "")
         }
         .sheet(isPresented: $cheating) {
             CoinCheatSheet(store: store)
@@ -364,13 +391,13 @@ struct ClawdHomeView: View {
                     // ⚠️ **摆在最前面。** 她要的是「整间换成那个样子」，
                     // 不是「墙挑一次、地再挑一次」——
                     // 底下那两栏留给想单独调的时候。
+                    // ⚠️ **主题接管了原来那个「整套换」。**
+                    // `RoomFinish.suites` 那五套现在是 `RoomTheme.all`
+                    // 里价钱为 0 的前五个，一模一样，只是多了带配色的那些。
+                    // 两份并存的话，改了一份另一份就开始撒谎。
                     Menu("整套换") {
-                        ForEach(RoomFinish.suites) { st in
-                            Button(st.label + "（" + st.note + "）") {
-                                store.setWallpaper(st.wall.token, for: r)
-                                store.setFlooring(st.floor.token, for: r)
-                                notice = r.rawValue + "换成「" + st.label + "」了"
-                            }
+                        ForEach(RoomTheme.all) { t in
+                            Button(themeMenuLabel(t)) { pickTheme(t, in: r) }
                         }
                     }
                     Menu("内置地面") {
@@ -852,6 +879,28 @@ struct ClawdHomeView: View {
                 }
         )
 
+    }
+
+    // MARK: 屋子的主题皮肤
+
+    /// 菜单里那一行怎么写。**没买的把价钱摆出来**——
+    /// 点下去才发现要钱，比一开始就写着更让人不舒服。
+    private func themeMenuLabel(_ t: RoomTheme) -> String {
+        let head = t.label + "（" + t.note + "）"
+        return store.hasTheme(t) ? head : head + " · \(t.price) 币"
+    }
+
+    /// 挑了一套：有就换上，没有就问要不要买。
+    private func pickTheme(_ t: RoomTheme, in r: HomeRoom) {
+        if store.hasTheme(t) {
+            store.applyTheme(t, to: r)
+            notice = r.rawValue + "换成「" + t.label + "」了"
+            return
+        }
+        // ⚠️ **买之前问一声。** 这是要花她币的，
+        // 而菜单里手一滑就点到了——家具那边是有商店页可以看的，
+        // 主题只有这一个入口，没有第二道确认就等于误触即扣款。
+        buying = (t, r)
     }
 
     // MARK: 她的手
