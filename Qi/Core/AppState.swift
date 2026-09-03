@@ -3100,6 +3100,26 @@ final class AppState: ObservableObject {
         var nextMinutes: Double?
     }
 
+    /// 他这一次醒来的结果。
+    ///
+    /// ## ⚠️ 「他不想说」和「根本没问到」必须分开
+    ///
+    /// 她的原话：「最近上游大面积杀号了，昨天他醒了六次都没说话，
+    /// 我一问才发现上游 503 了。**不是他不想说话**……毕竟他真的没醒。」
+    ///
+    /// 以前这两种情况返回的都是 `nil`，于是 503 被记成
+    /// 「他醒了，看了一眼，决定什么都不说」——她看到的是六次沉默，
+    /// 而真相是六次根本没发出去。**这等于替他撒谎。**
+    enum WakeOutcome {
+        /// 问到了，他说了这句
+        case spoke(WakeSay)
+        /// 问到了，他看了一眼，决定什么都不说。**这才算他醒过。**
+        case silent
+        /// 根本没问成。`why` 是给她看的原因；`retryable` = 值不值得再试
+        /// （503／网断了值得，401／404 不值得——密钥不对再问一百次还是不对）
+        case failed(why: String, retryable: Bool)
+    }
+
     /// 他自己醒来这一次，**借用真实会话**，不另起炉灶（「影子路由」）。
     ///
     /// 出处：她给的《教程第五篇 · 影子推送》（Bunny & Elliott，2026.7），
@@ -3136,8 +3156,10 @@ final class AppState: ObservableObject {
     /// 我们的缓存点打在 `stablePrefix` 末尾，而那一段在聊天和影子之间
     /// 是**同一份**（身份、规矩、能力块、浓缩件）——它命中的是聊天那一轮建的缓存，
     /// 不是自己建一个没人用的。
-    func wakeUpAndDecide() async -> WakeSay? {
-        guard let conv = wakeTargetConversation() else { return nil }
+    func wakeUpAndDecide() async -> WakeOutcome {
+        guard let conv = wakeTargetConversation() else {
+            return .failed(why: "没有可用的对话窗口", retryable: false)
+        }
 
         // ⚠️ 用**聊天那个模型**，不是 `helperReach`。
         // 影子路由的整个要点就是「同样的他」——换个模型就换了个人。
@@ -3153,7 +3175,7 @@ final class AppState: ObservableObject {
         } else if let r = activeHim {
             reach = r          // 那个窗口还没选模型，退回原来那条路
         } else {
-            return nil
+            return .failed(why: "没有配置可用的模型", retryable: false)
         }
         let p = reach.provider, endpoint = reach.endpoint, model = reach.model
 
@@ -3235,21 +3257,36 @@ final class AppState: ObservableObject {
                 if case .usage(let u) = event { UsageStore.shared.record(u, source: .chat) }
             }
         } catch {
-            return nil
+            // ⚠️ **这儿不能再吞成 nil 了。** 把状态码带出去，
+            // 引擎要靠它决定「再试一次」还是「这次干脆不算他醒过」。
+            if let e = error as? ChatAPI.APIError, case .badStatus(let code, _) = e {
+                let hopeless = (code == 401 || code == 404)
+                return .failed(why: e.errorDescription ?? "接口返回 \(code)",
+                               retryable: !hopeless)
+            }
+            return .failed(why: error.localizedDescription, retryable: true)
         }
 
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         text = text.replacingOccurrences(of: "```json", with: "")
                    .replacingOccurrences(of: "```", with: "")
+        // 流跑完了却一个字都没有——那是没问到，不是他不想说。
+        guard !text.isEmpty else {
+            return .failed(why: "上游没有返回任何内容", retryable: true)
+        }
         guard let start = text.firstIndex(of: "{"),
               let end = text.lastIndex(of: "}"),
               let data = String(text[start...end]).data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let say = json["say"] as? Bool, say
-        else { return nil }
+        else {
+            // 他回了东西，只是没照格式、或者说了 say:false——**人是醒着的**，
+            // 所以算一次沉默，不算失败。
+            return .silent
+        }
 
         let out = (json["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !out.isEmpty else { return nil }
+        guard !out.isEmpty else { return .silent }
 
         // 他挑的下一次。夹在 5 分钟到 12 小时之间——
         // **不能让他把自己关掉**（填个 99999 就等于再也不醒），
@@ -3260,7 +3297,7 @@ final class AppState: ObservableObject {
         } else if let n = json["next"] as? Int, n > 0 {
             next = min(720, max(5, Double(n)))
         }
-        return WakeSay(text: out, nextMinutes: next)
+        return .spoke(WakeSay(text: out, nextMinutes: next))
     }
 
     /// 她**最后一条真的自己说的话**是什么时候。

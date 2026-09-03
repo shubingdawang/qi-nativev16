@@ -319,42 +319,102 @@ final class WakeEngine: ObservableObject {
         guard !app.spokeRecently(within: config.idleDelay) else { return }
 
         running = true
+        // ⚠️ **先记下改之前的样子。** 这一次要是根本没问成
+        // （上游 503、网断了），得原样退回去——她说的
+        // 「不是他不想说话……毕竟他真的没醒，就不算他醒过」。
+        let before = (fired: state.firedToday, last: state.lastFire)
         var s = state
         s.firedToday += 1
         s.lastFire = now
         state = s
 
         Task { @MainActor in
-            await self.run(app: app)
+            let woke = await self.run(app: app)
+            if !woke {
+                // 这一次不算。次数退回去、上次醒来的时间也退回去。
+                var back = self.state
+                back.firedToday = before.fired
+                back.lastFire = before.last
+                self.state = back
+            }
             self.running = false
-            self.noteRun()
+            // ⚠️ `noteRun` 会把 drive 压下去（"刚醒过，一会儿别急着再醒"）。
+            // 根本没醒成的话这一压是没道理的，所以也只在真醒了的时候记。
+            if woke { self.noteRun() }
         }
     }
 
-    private func run(app: AppState) async {
+    /// 跑一次。返回**他到底醒没醒成**——
+    /// `false` = 根本没问到上游，这一次不该记在他头上。
+    @discardableResult
+    private func run(app: AppState) async -> Bool {
         // 先问问电脑上那份服务：他刚才有没有留过话
         if config.useServer, !config.serverURL.isEmpty {
             if let said = await fetchFromServer() {
                 deliver(said, app: app, from: "服务端")
-                return
+                WakeLog.shared.add(.init(at: Date(), kind: .spoke,
+                                         text: said, from: "服务端"))
+                return true
             }
         }
-        // 没有就在这边让他自己决定
-        guard let said = await app.wakeUpAndDecide() else {
-            // 他醒了，看了一眼，决定什么都不说。这也是一次运行，记一笔。
-            var s = state
-            s.silentToday += 1
-            state = s
-            return
-        }
-        deliver(said.text, app: app, from: "本机")
 
-        // 他自己挑了下一次隔多久。**照他说的办。**
+        // ⚠️ **报错就再试两次。** 她说的：
+        // 「最近上游大面积杀号了……有报错返回的话就重复个两次，
+        // 确定是真的、不是偶尔的网络问题的话，就不算他醒过。」
         //
-        // 出处是她发我的那份「ChatGPT 官端自唤醒」——里面最实在的一条就是
-        // 「让 AI 在区间里自己选下一次」，而不是外面替他定死一个节奏。
-        // 这一条不额外花钱：那个数就夹在他刚才那次输出里。
-        if let m = said.nextMinutes { aimNext(afterMinutes: m) }
+        // 一共问三次，中间退避着等（8 秒、20 秒）——
+        // 503 多半是一阵一阵的，隔一会儿再问常常就通了；
+        // 连着抢反而更容易再撞上限流。
+        var why = "没问成"
+        var tries = 0
+
+        // 一共问三次（第一次 + 重试两次），中间退避着等 8 秒、20 秒。
+        // ⚠️ 连着抢反而更容易再撞上限流；503 多半是一阵一阵的，
+        // 隔一会儿再问常常就通了。
+        let backoff: [Double] = [0, 8, 20]
+        for attempt in 0..<3 {
+            if backoff[attempt] > 0 {
+                try? await Task.sleep(
+                    nanoseconds: UInt64(backoff[attempt] * 1_000_000_000))
+            }
+            tries = attempt + 1
+
+            switch await app.wakeUpAndDecide() {
+            case .spoke(let said):
+                deliver(said.text, app: app, from: "本机")
+                WakeLog.shared.add(.init(at: Date(), kind: .spoke,
+                                         text: said.text, from: "本机"))
+                // 他自己挑了下一次隔多久，照他说的办（见 `aimNext`）
+                if let m = said.nextMinutes { aimNext(afterMinutes: m) }
+                return true
+
+            case .silent:
+                // 他醒了，看了一眼，决定什么都不说。**这才算一次。**
+                var s = state
+                s.silentToday += 1
+                state = s
+                WakeLog.shared.add(.init(at: Date(), kind: .silent, from: "本机"))
+                return true
+
+            case .failed(let reason, let retryable):
+                why = reason
+                Console.log(.warn, "醒来没问成（第 \(tries) 次）", reason)
+                // 密钥不对、地址不对：再问一百次还是不对，不浪费她的钱和时间
+                guard retryable else { return noteFailed(why, tries: tries) }
+            }
+        }
+
+        // 三次都没问成 —— 那就是真的挂了，不是偶尔抖一下。
+        return noteFailed(why, tries: tries)
+
+    }
+
+    /// 这一次没问成：记一笔给她看，并且告诉外面**别算他醒过**。
+    private func noteFailed(_ why: String, tries: Int) -> Bool {
+        Console.log(.wake, "这次不算他醒过", why)
+        WakeLog.shared.add(.init(at: Date(), kind: .failed,
+                                 text: why, from: "本机", tries: tries))
+        return false
     }
 
     /// 把下一次醒的时间挪到 `afterMinutes` 分钟之后。

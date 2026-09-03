@@ -37,6 +37,7 @@ struct WakeSettingsView: View {
                     serverCard
                     bannerCard
                     statsCard
+                    historyCard
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 4)
@@ -268,6 +269,22 @@ struct WakeSettingsView: View {
             }
             SettingsDivider()
             SettingsNote("查看这些数值不产生费用。")
+        }
+    }
+
+    // MARK: 他说过的话
+
+    /// 抽屉式的历史记录，见 `WakeHistoryDrawer`。
+    ///
+    /// ⚠️ 里面**连没醒成的那几次一起记**。她这次的原话：
+    /// 「昨天他醒了六次都没说话，我一问才发现上游 503 了，
+    /// 不是他不想说话。」——只记他说过的话的话，
+    /// 下次上游再挂，她还是一样查不出来。
+    private var historyCard: some View {
+        SettingsCard {
+            WakeHistoryDrawer(tint: tint)
+            SettingsDivider()
+            SettingsNote("包含他醒来说过的话、醒了但没说话、以及没能连上上游的那几次。查看不产生费用。")
         }
     }
 
