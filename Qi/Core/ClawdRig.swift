@@ -160,7 +160,20 @@ struct ClawdRigView: View {
             // ⚠️ **画在手之后、手上那件之前**：
             // 帽子该压在身子和手上面，但他举起来的床该压在帽子上面——
             // 不然一张床会从帽檐底下钻出来。
-            if let worn {
+            // ⚠️ **睡着的时候不叠她给的穿戴件。**
+            //
+            // 她报的：「睡觉的动画帽子被吞掉了。」
+            //
+            // 病根在 `wearAt`：它算的是**站立那张图**的几何——
+            // 帽子扣在 `bodyTop - itemH + 3`。而睡觉那张图整个人是躺着的，
+            // 头在第 16..26 行、睡帽自己占着第 1..15 行。
+            // 于是她给的帽子正好落在睡帽上，把睡帽整个盖掉。
+            //
+            // 睡帽是这张图自带的，本来也不该再扣一顶——躺下就摘了。
+            //
+            // ⚠️ 别的「不是站着」的图有同样的隐患（`wearAt` 只认站姿），
+            // 但她报的是这一张，先只挡这一张：挡多了她买的帽子会莫名其妙消失。
+            if let worn, mood != .sleeping {
                 PixelSpriteView(sprite: worn, scale: scale)
                     .offset(x: ClawdRig.wearAt(wornID, itemW: CGFloat(worn.width),
                                                itemH: CGFloat(worn.height)).x * scale,

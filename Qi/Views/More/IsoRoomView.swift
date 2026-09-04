@@ -314,8 +314,39 @@ struct IsoRoomView<Clawd: View>: View {
 
         // clawd 也进来。**这就是「他站在床后面就该被床挡住」的全部。**
         if clawdHere {
-            out.append(Drawable(key: "clawd", depth: clawdDepth(
-                CGPoint(x: clawdX, y: clawdY), geoRoom),
+            var d = clawdDepth(CGPoint(x: clawdX, y: clawdY), geoRoom)
+
+            // ⚠️ **踩在一件东西上面 = 画在它上面。**
+            //
+            // 她报的：「clawd 应该保持在所有物品的上面，比如我将它拖动到床上，
+            // 他应该是上床的动画，而不是现在这样被拖到了床底。」
+            //
+            // 病根是两边的深度**不是同一个点算的**：家具取的是它
+            // 「最靠近镜头的那一格」（`farX + farY`，见上面），
+            // 而他取的是自己站的那一格。人站在床上时，他那一格永远
+            // 比床的远角小——于是床后画、他先画，看着就是钻到床底下去了。
+            //
+            // 判定不看深度，看**踩没踩在它的格子上**：踩上了就把他的
+            // 深度顶到那件东西之上。没踩上的照旧比深度——
+            // 站在高柜后面还是该被挡住，那一条没动。
+            // ⚠️ 尺寸还没量到的时候别算——`tile(at:)` 拿着假坐标
+            // 会一路 clamp 到 (0,0)，把他平白顶到左上角那件东西上面。
+            if let bs = boardSize, bs.width > 1, bs.height > 1 {
+                let here = geoRoom.tile(at: CGPoint(x: clawdX * bs.width,
+                                                    y: clawdY * bs.height))
+                let (hx, hy) = geoRoom.clamp(Int(here.gx.rounded()),
+                                             Int(here.gy.rounded()))
+                for one in out {
+                    guard let f = one.item else { continue }
+                    let s = FurnitureCatalog.shape(of: f.kind)
+                    let cell = (f.id == dragging) ? dragCell : (gx: f.gx, gy: f.gy)
+                    let onIt = hx >= cell.gx && hx < cell.gx + max(1, s.w)
+                        && hy >= cell.gy && hy < cell.gy + max(1, s.d)
+                    if onIt { d = max(d, one.depth + 0.5) }
+                }
+            }
+
+            out.append(Drawable(key: "clawd", depth: d,
                                 tall: 1, item: nil, kind: nil))
         }
 
@@ -526,6 +557,18 @@ struct IsoRoomView<Clawd: View>: View {
     /// 判定给得**比他本人宽一圈**：她是在拖一件家具，
     /// 手指被家具挡着看不见落点，卡太死会一直递不上。
     private func nearClawd(_ p: CGPoint) -> Bool {
+        // ⚠️⚠️ **他不在这一间就没有「递给他」这回事。**
+        //
+        // 她报的：「不管他在哪个房间，在其他房间将东西长按拖动，
+        // 只要放在他所在的地方就会被他举起，在视觉上就像突然不见了。」
+        //
+        // 病根是这个判定只算坐标、不问 `clawdHere`：`clawdX/clawdY` 是
+        // 他在**他那一间**里的位置，而这两个数照样传给了别的房间的画布。
+        // 于是她在客厅拖东西，拖到「他在卧室站的那个位置」，
+        // 东西就被交出去了——而画面上那儿空无一人，看着就是凭空消失。
+        //
+        // 藏起来的时候（捉迷藏）同理：`clawdHere` 已经把藏着算进去了。
+        guard clawdHere else { return false }
         guard let s = boardSize, s.width > 1, s.height > 1 else { return false }
         let cx = clawdX * s.width
         let cy = clawdY * s.height

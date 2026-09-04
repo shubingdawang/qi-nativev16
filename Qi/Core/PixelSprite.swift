@@ -142,15 +142,25 @@ enum ClawdSprites {
         "l": Color(hexString: "F1FA8C")!,   // 代码黄
         "m": Color(hexString: "FF79C6")!,   // 代码粉
         "w": Color(hexString: "F8F8F2")!,
-        "a": Color(hexString: "3E5C8A")!,
+        // 樱花粉三档。**只有 `sleep` 那张图用这三个**（全项目查过），
+        // 所以直接改值就行，不会连累别的图。
+        // 深浅关系保持原样：s 最浅（被子上沿）→ A 中（帽子、被子中段）
+        // → a 最深（帽檐、被子暗部）。她要的「深的地方就深一点」，
+        // 最深那档比等比例调出来的再压了一点。
+        "a": Color(hexString: "C9769A")!,   // 深樱花粉
         "e": Color(hexString: "153F1B")!,
         "f": Color(hexString: "6FB3C9")!,
         "o": Color(hexString: "C2693F")!,
         "q": Color(hexString: "473B59")!,
-        "s": Color(hexString: "6E8FC4")!,
+        // 原木色两档，给 `sleep` 那张床用。
+        // ⚠️ **不能直接改 `q`**——`gaming` / `gaming2` 那块深紫也是它，
+        // 改了游戏机会跟着变色。字母和数字在这张表里全占满了，只能用符号。
+        "@": Color(hexString: "B5804F")!,   // 原木 · 亮（床沿受光那道）
+        "#": Color(hexString: "8A5F39")!,   // 原木 · 暗（床身）
+        "s": Color(hexString: "F7CBD8")!,   // 浅樱花粉
         "x": Color(hexString: "3F7FD0")!,
         "z": Color(hexString: "6B4420")!,
-        "A": Color(hexString: "4A6FA5")!,
+        "A": Color(hexString: "EEA6BE")!,   // 樱花粉
         "B": Color(hexString: "E91E63")!,
         "C": Color(hexString: "6A5AD0")!,
         "D": Color(hexString: "F5E6C8")!,
@@ -739,8 +749,8 @@ enum ClawdSprites {
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "qqqqqqqqaaaaaaaaaaaaaaaaaaqqqqqqqqqq",
-        "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+        "@@@@@@@@aaaaaaaaaaaaaaaaaa@@@@@@@@@@",
+        "####################################"
     ], palette)
 
     /// 在想事情：头顶冒小方块
