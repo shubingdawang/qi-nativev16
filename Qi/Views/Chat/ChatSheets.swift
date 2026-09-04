@@ -270,10 +270,27 @@ struct SystemPromptView: View {
                     )) {
                         Text("与 claude.ai 互通")
                     }
+                    // 这个开关成不成立，全看小屋够不够得着——
+                    // 共用记忆库在电脑上，不在手机里。状态得看得见，
+                    // 不然开着开关也不知道到底有没有真的通上。
+                    if conv?.syncWithClaude == true {
+                        HStack {
+                            Text("共用记忆库")
+                            Spacer()
+                            Text(app.houseMemoryReachable ? "已连上" : "未连上")
+                                .foregroundStyle(app.houseMemoryReachable
+                                                 ? StatusTone.done.color : .orange)
+                        }
+                        if !app.houseMemoryReachable {
+                            Text("电脑上的小屋没连上，这一窗的记忆会写在手机里，claude.ai 端读不到。")
+                                .font(.footnote)
+                                .foregroundStyle(.orange)
+                        }
+                    }
                 } header: {
                     Text("两边接得上")
                 } footer: {
-                    Text("启用后，本窗口的对话写入共用记忆库，claude.ai 端可读取；该端的记录本窗口同样可读。额度耗尽后切换过来可直接接续。\n\n⚠️ 此项会开放记忆类工具，与「记忆合并」中的隔离开关作用相反：后者用于隔离，此项用于打通。")
+                    Text("启用后，本窗口的记忆读写一律走电脑上的共用记忆库，claude.ai 端可读取；该端的记录本窗口同样可读。额度耗尽后切换过来可直接接续。\n\n启用期间，手机本机的记忆库不参与本窗口——记忆只保留一份，避免两边各写各的。小屋未连上时自动退回本机。\n\n⚠️ 此项会开放记忆类工具，与「记忆合并」中的隔离开关作用相反：后者用于隔离，此项用于打通。")
                 }
                 // 滚雪球压缩。**放在这儿而不是设置页**——
                 // 浓缩件是每一窗自己的东西，不是全局的。
