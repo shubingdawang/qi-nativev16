@@ -6197,7 +6197,9 @@ final class AppState: ObservableObject {
             await drainPendingHouseWrites()
         } catch {
             guard let i2 = mcpServers.firstIndex(where: { $0.id == serverID }) else { return }
-            mcpServers[i2].lastError = error.localizedDescription
+            // ⚠️ 说清楚是**抓工具清单**这一步没成，而且把 DecodingError 拆开说。
+            // 光一句「The data couldn't be read…」她看不出是哪儿的问题。
+            mcpServers[i2].lastError = "抓工具清单没成功：" + ErrText.readable(error)
         }
     }
 
@@ -6397,7 +6399,8 @@ final class AppState: ObservableObject {
         guard let ci = index(of: conversationID),
               let mi = conversations[ci].messages.firstIndex(where: { $0.id == assistantID })
         else { return }
-        conversations[ci].messages[mi].errorText = error.localizedDescription
+        // 报错要说得出问题在哪，见 ErrText。
+        conversations[ci].messages[mi].errorText = ErrText.readable(error)
         conversations[ci].messages[mi].isStreaming = false
     }
 
