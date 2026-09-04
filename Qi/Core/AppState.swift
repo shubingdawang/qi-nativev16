@@ -90,6 +90,9 @@ final class AppState: ObservableObject {
         // 并不会把字色、配色、字号倍率推给 Theme——
         // 不补这一下，得等她进设置随便动一个开关，界面才对。
         syncTheme()
+        // 小屋断线期间攒下的补记。**要在抓工具之前读回来**——
+        // 抓完工具那一步会顺手补一次，读晚了那次就是空跑。
+        loadPendingHouseWrites()
         // 装好第一次打开时，自动去把工具清单抓下来
         Task { await self.refreshAllToolsIfNeeded() }
     }
@@ -1681,6 +1684,96 @@ final class AppState: ObservableObject {
         return MemoryTools.names
             .intersection(houseToolNames)
             .subtracting(Self.phoneOnlyTools)
+    }
+
+
+    // MARK: 小屋断线期间的补记
+
+    /// 小屋没连上的时候，本该写进小屋的那一笔先记在这儿，等它连上再补过去。
+    ///
+    /// 为什么由 App 来补、不让他调工具补：**一次工具往返是两次扣款。**
+    /// 她按次计费，让他挨个补一遍是纯浪费；而这些参数我们手里都有，
+    /// 直接替他发给小屋就行，一次模型调用都不用。
+    struct PendingHouseWrite: Codable, Identifiable {
+        var id = UUID()
+        var tool: String
+        /// 参数原样存成 JSON 字符串。存字符串是为了 Codable 好过——
+        /// [String: Any] 不是 Codable。
+        var argsJSON: String
+        var at: Date = Date()
+    }
+
+    /// ⚠️ **只补「加一笔」这种，不补带 id 的改和删。**
+    ///
+    /// 两边的 id 是各生成各的，手机上那条 `abc123` 在小屋里根本不存在——
+    /// 拿着本机 id 去小屋 update/delete/annotate，轻则失败，重则改错别的东西。
+    /// 所以只补这些「不认 id、补一笔就完事」的：
+    static let houseBackfillTools: Set<String> = [
+        "add_memory", "checkpoint", "end_of_day",
+        "record_emotional_event", "add_diary", "leave_message", "hand_off"
+    ]
+
+    private static let pendingHouseKey = "pendingHouseWrites"
+
+    /// 还没补过去的那几笔。数量要摆在设置面板上——
+    /// 不显示的话，她永远不知道有东西卡在半路。
+    @Published var pendingHouseWrites: [PendingHouseWrite] = [] {
+        didSet {
+            if let d = try? JSONEncoder().encode(pendingHouseWrites) {
+                UserDefaults.standard.set(d, forKey: Self.pendingHouseKey)
+            }
+        }
+    }
+
+    func loadPendingHouseWrites() {
+        guard let d = UserDefaults.standard.data(forKey: Self.pendingHouseKey),
+              let v = try? JSONDecoder().decode([PendingHouseWrite].self, from: d)
+        else { return }
+        pendingHouseWrites = v
+    }
+
+    /// 这一笔本该进小屋、但小屋没连上——先记下来。
+    func queueHouseWrite(_ tool: String, args: [String: Any], in conv: Conversation?) {
+        guard conv?.syncWithClaude == true, !houseMemoryReachable else { return }
+        guard Self.houseBackfillTools.contains(tool) else { return }
+        guard let d = try? JSONSerialization.data(withJSONObject: args),
+              let j = String(data: d, encoding: .utf8) else { return }
+        pendingHouseWrites.append(.init(tool: tool, argsJSON: j))
+    }
+
+    /// 小屋连上了，把攒下的补过去。**一次模型调用都不花。**
+    private var drainingHouse = false
+    func drainPendingHouseWrites() async {
+        guard !drainingHouse, !pendingHouseWrites.isEmpty, houseMemoryReachable else { return }
+        drainingHouse = true
+        defer { drainingHouse = false }
+        var left: [PendingHouseWrite] = []
+        for item in pendingHouseWrites {
+            guard let d = item.argsJSON.data(using: .utf8),
+                  let args = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any]
+            else { continue }   // 参数都读不出来了，留着也没用
+            // ⚠️ **原样发过去，一个字段都不加。**
+            // 本来想塞一个「这是什么时候的事」进去，但小屋那边的 schema
+            // 是服务器定的、我们改不了——多一个它不认的字段，
+            // 轻则被忽略，重则整笔校验失败。宁可少一点信息，
+            // 也不能让每一笔补记都卡住。
+            let r = await callHouseTool(item.tool, args: args)
+            if r.failed { left.append(item) }   // 没成功就留着，下次再补
+        }
+        pendingHouseWrites = left
+    }
+
+    /// 直接走小屋，**不走 `callTool` 里那条「本机优先」的近路**——
+    /// 补记的整个意义就是把东西送到小屋去。
+    func callHouseTool(_ toolName: String, args: [String: Any]) async -> (text: String, failed: Bool) {
+        guard let server = mcpServers.first(where: { s in
+            s.enabled && s.tools.contains { $0.name == toolName && $0.enabled }
+        }) else { return ("小屋没连上", true) }
+        do {
+            return (try await client(for: server).callTool(name: toolName, arguments: args), false)
+        } catch {
+            return (error.localizedDescription, true)
+        }
     }
 
     /// 把所有打开的 MCP 工具，翻译成接口认识的格式
@@ -4219,6 +4312,11 @@ final class AppState: ObservableObject {
         }
         if MemoryTools.handles(name, memory: settings.localMemory,
                                pulse: settings.localPulse) {
+            // 这一窗说好了跟 claude.ai 通，但小屋这会儿没连上——
+            // 先在本机办了，同时记一笔，等电脑开了自己补过去
+            // （见 `drainPendingHouseWrites`）。
+            queueHouseWrite(name, args: args,
+                            in: conversation(activeToolConversationID ?? activeID(for: .chat)))
             // wake_up 要看上一窗最后那十几个回合的原话。
             // 这份东西只有 App 这边有——MCP 那版当年拿不到，
             // 所以换窗只能靠摘要接，接不住语气。现在把它塞进去。
@@ -6095,6 +6193,8 @@ final class AppState: ObservableObject {
                 return t
             }
             mcpServers[i2].lastError = nil
+            // 刚连上，把断线期间攒的那几笔补过去
+            await drainPendingHouseWrites()
         } catch {
             guard let i2 = mcpServers.firstIndex(where: { $0.id == serverID }) else { return }
             mcpServers[i2].lastError = error.localizedDescription

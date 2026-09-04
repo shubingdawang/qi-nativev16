@@ -282,9 +282,22 @@ struct SystemPromptView: View {
                                                  ? StatusTone.done.color : .orange)
                         }
                         if !app.houseMemoryReachable {
-                            Text("电脑上的小屋没连上，这一窗的记忆会写在手机里，claude.ai 端读不到。")
+                            Text("电脑上的小屋没连上，这一窗的记忆先写在手机里。等小屋连上会自动补过去，不用手动操作。")
                                 .font(.footnote)
                                 .foregroundStyle(.orange)
+                        }
+                        // 卡在半路的那几笔要看得见——不显示的话，
+                        // 她永远不知道有东西还没送到电脑上。
+                        if !app.pendingHouseWrites.isEmpty {
+                            HStack {
+                                Text("等着补过去")
+                                Spacer()
+                                Text("\(app.pendingHouseWrites.count) 笔")
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text("小屋一连上就自动补，补的是「加一笔」那类；带 id 的修改和删除不补——两边的 id 各生成各的，拿手机的 id 去改电脑上的会改错东西。")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 } header: {
