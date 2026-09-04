@@ -1378,8 +1378,14 @@ struct ClawdHomeView: View {
                         : "搁这儿了")
                 }
 
-                // 走到谁旁边了
-                let near = store.owned.filter { !$0.hidden && !$0.carried }
+                // 走到谁旁边了。
+                //
+                // ⚠️ **只看他这一间的**。原来这儿是 store.owned——整个家的家具，
+                // 而 x/y 是每间屋子各自的 0…1 坐标：书房里 (0.5, 0.5) 的书架，
+                // 跟他站在客厅 (0.5, 0.5) 就算「挨着」。
+                // 她报的「他在客厅、在厨房，也会说抽一本出来看看」就是这么来的。
+                let near = store.furniture(in: store.clawdRoom)
+                    .filter { !$0.hidden && !$0.carried }
                     .min { a, b in
                         let da = abs(a.x - clawdX) + abs(a.y - clawdY)
                         let db = abs(b.x - clawdX) + abs(b.y - clawdY)

@@ -1631,12 +1631,24 @@ final class AppState: ObservableObject {
         "delete_transcript", "clear_checkpoint"
     ]
 
-    /// 这一窗的记忆该写在哪儿：`true` = 写小屋（电脑上那份，claude.ai 读得到的）。
+    /// 这一窗要不要把记忆**镜像**一份到小屋。
     ///
-    /// 只有「跟 claude.ai 同步」的窗口才让位，而且必须小屋真的连着——
-    /// 电脑关着的时候还硬让位，他就一件记忆工具都没有了。
-    func memoryLivesInHouse(for conversation: Conversation?) -> Bool {
-        conversation?.syncWithClaude == true && houseMemoryReachable
+    /// ⚠️ 上一版做反了：那时是「同步窗口里本机记忆让位给小屋」。
+    /// 她一句话点破了——「现在这样要改一个另一个就不能参与，太鸡肋了」。
+    /// 她说得对：札记页、承诺页、唤醒提醒读的**全是本机那份**，
+    /// 记忆一搬去小屋，App 自己这半边就空了。
+    ///
+    /// 现在改成 **本机为准 + 自动镜像**：
+    ///   · 记忆照旧写本机（界面、离线、他用惯的那套说明都不动）
+    ///   · 小屋那份同名工具在这一窗**收起来**，免得他两边各写各的
+    ///     （这正是她猜的「是不是要把电脑的小屋的工具关掉」——
+    ///      是，但不用她手动关，App 自己收）
+    ///   · 每一笔「加一笔」型的写入，App 再替他往小屋补一份，
+    ///     claude.ai 那边就看得到了。小屋没连上就攒着，连上自己补。
+    ///
+    /// 一次模型调用都不多花：镜像是 App 直接发的，不经过他。
+    func mirrorsToHouse(_ conversation: Conversation?) -> Bool {
+        conversation?.syncWithClaude == true
     }
 
     /// 小屋那边的记忆库现在够不够得着（电脑开着、MCP 连着、记忆那几件是开的）。
@@ -1656,34 +1668,17 @@ final class AppState: ObservableObject {
         return out
     }
 
-    /// **这几件永远留在手机上，哪怕小屋也有同名的。**
+    /// 这一窗里，小屋那边哪几件工具要**收起来不给他看**。
     ///
-    /// 判断标准只有一条：**App 自己的界面读的是哪一份**。
-    /// 读本机的那些一旦让位，功能当场就断了——
+    /// 同名的两份工具同时摆着，他就会两边各写各的——这正是她最早报的
+    /// 「跟 claude.ai 并没有连着」的病根。本机那份留着（界面读的是它），
+    /// 小屋那份收起来，写进本机之后由 App 镜像过去。
     ///
-    /// · 承诺 —— 承诺页和「醒来时摆在你面前」读的都是本机 `MemoryStore.promises`；
-    ///   让位之后这一窗记的承诺不会出现在承诺页，也再划不掉一条
-    /// · 经期 —— 经期页同理
-    /// · get_phone_activity —— 数据本来就只在这台手机上
-    /// · wake_up —— 要带上这一窗最近十几个回合的原话（`recentTurns`），
-    ///   小屋那份拿不到，接不住语气
-    static let phoneOnlyTools: Set<String> = [
-        "make_promise", "list_promises", "keep_promise",
-        "log_period", "period_status", "add_period_note",
-        "get_phone_activity", "wake_up"
-    ]
-
-    /// 这一窗里，本机哪几件记忆工具要让位给小屋。
-    ///
-    /// **按小屋此刻真的提供了什么来算**，不写死一张表——
-    /// 写死的表会漏（`memoryToolNames` 是为「隔离窗口」定的，
-    /// 里面没有 `surface_memories`、`recall_entity` 这些，
-    /// 拿它当边界就会变成「搜小屋、浮现手机」，两份记忆各说各话）。
-    func localMemoryToolsYielding(for conversation: Conversation?) -> Set<String> {
-        guard memoryLivesInHouse(for: conversation) else { return [] }
-        return MemoryTools.names
-            .intersection(houseToolNames)
-            .subtracting(Self.phoneOnlyTools)
+    /// ⚠️ 本机记忆库总开关关着的时候**一件都不收**：那时候本机没有工具，
+    /// 再把小屋的也收了，他就一件记忆工具都没有了。
+    func houseToolsHiddenBySync(for conversation: Conversation?) -> Set<String> {
+        guard mirrorsToHouse(conversation), settings.localMemory else { return [] }
+        return MemoryTools.names.intersection(houseToolNames)
     }
 
 
@@ -1732,13 +1727,20 @@ final class AppState: ObservableObject {
         pendingHouseWrites = v
     }
 
-    /// 这一笔本该进小屋、但小屋没连上——先记下来。
-    func queueHouseWrite(_ tool: String, args: [String: Any], in conv: Conversation?) {
-        guard conv?.syncWithClaude == true, !houseMemoryReachable else { return }
+    /// 本机刚写了一笔，镜像一份到小屋。
+    ///
+    /// 连着就当场发，没连上就攒进队列等它上线——两条路都不经过他，
+    /// 一次模型调用都不多花。
+    func mirrorToHouse(_ tool: String, args: [String: Any], in conv: Conversation?) {
+        guard mirrorsToHouse(conv) else { return }
         guard Self.houseBackfillTools.contains(tool) else { return }
         guard let d = try? JSONSerialization.data(withJSONObject: args),
               let j = String(data: d, encoding: .utf8) else { return }
         pendingHouseWrites.append(.init(tool: tool, argsJSON: j))
+        // 连着就别攒，立刻送过去
+        if houseMemoryReachable {
+            Task { @MainActor in await self.drainPendingHouseWrites() }
+        }
     }
 
     /// 小屋连上了，把攒下的补过去。**一次模型调用都不花。**
@@ -1803,7 +1805,7 @@ final class AppState: ObservableObject {
         //
         // ⚠️ 前提是小屋真的连着。电脑关着的时候把本机那份也撤了，
         // 他就一件记忆工具都没有了——那比存错地方更糟。
-        let yielding = localMemoryToolsYielding(for: conversation)
+        let hiddenHouse = houseToolsHiddenBySync(for: conversation)
         // 他能直接在这台手机上动手的那些。
         // 总开关关了就一件都不给；单独关掉的那几件也挑出去。
         var out: [[String: Any]] = []
@@ -1815,19 +1817,10 @@ final class AppState: ObservableObject {
                 workshop: conversation?.space == ChatSpace.workshop.rawValue)
             // 本机记忆库和本机心跳。各自有各自的开关，
             // 关着的话对应的那几个还是走原来那条路（小屋 MCP / 电脑上的 PulseEngine）。
+            // 本机那份**原样给**。同步窗口收的是小屋那份（见下面的循环）。
             if settings.localMemory || settings.localPulse {
-                var mem = MemoryTools.definitions(memory: settings.localMemory,
+                native += MemoryTools.definitions(memory: settings.localMemory,
                                                   pulse: settings.localPulse)
-                // 让位哪几件见 `localMemoryToolsYielding`。共用的是「记忆」，
-                // 不是「手机上的一切」——承诺、经期这些照旧走本机。
-                if !yielding.isEmpty {
-                    mem = mem.filter { item in
-                        guard let fn = item["function"] as? [String: Any],
-                              let raw = fn["name"] as? String else { return true }
-                        return !yielding.contains(NativeTools.shortName(raw))
-                    }
-                }
-                native += mem
             }
             // 健康和待办。**三个开关都默认关着**，她开了才给。
             if settings.healthAccess || settings.todoAccess {
@@ -1844,6 +1837,8 @@ final class AppState: ObservableObject {
         for server in mcpServers where server.enabled {
             for tool in server.enabledTools {
                 if blockMemory && Self.memoryToolNames.contains(tool.name) { continue }
+                // 同步窗口：跟本机重名的那几件收起来，只留本机那一份。
+                if hiddenHouse.contains(tool.name) { continue }
                 // 她报的第 6 条：「工具主动性目前只有 app 自带的工具修改了，
                 // 所以 app 自带的工具他用得很勤，其他的他就不用了」。
                 //
@@ -4297,26 +4292,13 @@ final class AppState: ObservableObject {
             return await HealthTools.run(name, args: args)
         }
 
-        // ⚠️ 同步窗口里，记忆那一半归小屋管（见 `memoryLivesInHouse`）。
-        //
-        // 工具表里本来就不会给他本机那份了，这一道是兜底：
-        // 他可能拿着上一轮的工具表调过来（同一次对话里工具表不重算），
-        // 那也不能悄悄写进手机——写进去就等于 claude.ai 那边看不见，
-        // 而她以为两边是通的。
-        // 拦的只有让位的那几件；承诺、经期、叫醒照旧走本机（理由见 `phoneOnlyTools`）。
-        let yieldingHere = localMemoryToolsYielding(
-            for: conversation(activeToolConversationID ?? activeID(for: .chat)))
-        if yieldingHere.contains(name) {
-            return ("这一窗跟 claude.ai 是通着的，记忆要写在小屋那边才两边都看得到。"
-                    + "用不带 app__ 前缀的那个同名工具（比如 `checkpoint`），别用本机这份。", true)
-        }
         if MemoryTools.handles(name, memory: settings.localMemory,
                                pulse: settings.localPulse) {
-            // 这一窗说好了跟 claude.ai 通，但小屋这会儿没连上——
-            // 先在本机办了，同时记一笔，等电脑开了自己补过去
-            // （见 `drainPendingHouseWrites`）。
-            queueHouseWrite(name, args: args,
-                            in: conversation(activeToolConversationID ?? activeID(for: .chat)))
+            // 本机办完，**再镜像一份到小屋**——claude.ai 那边读的是小屋。
+            // 小屋连着就当场发过去，没连上就攒着等它上线
+            // （见 drainPendingHouseWrites）。整个过程不经过他，不多花一次调用。
+            mirrorToHouse(name, args: args,
+                          in: conversation(activeToolConversationID ?? activeID(for: .chat)))
             // wake_up 要看上一窗最后那十几个回合的原话。
             // 这份东西只有 App 这边有——MCP 那版当年拿不到，
             // 所以换窗只能靠摘要接，接不住语气。现在把它塞进去。

@@ -1121,8 +1121,8 @@ enum ClawdSprites {
         "......pppppppppppppppppppppp........",
         "......pppppppppppppppppppppp........",
         "......pppppppppppppppppppppp........",
-        "..pppppppppppppppppppppppppppppp....",
-        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppkkkkppppppppkkkkppppppp....",
+        "..pppppppkkkkppppppppkkkkppppppp....",
         "..pppppppppppppppppppppppppppppp....",
         "..pppppppppppppppppppppppppppppp....",
         "......pppppppppppppppppppppp........",
@@ -1978,7 +1978,16 @@ enum ClawdMood: String, Codable {
         case .painting:  return "clawd-painting"
         case .listening: return "clawd-listening"
         case .watering:  return "clawd-watering"
-        case .gaming:    return "clawd-gaming"
+        // ⚠️ **打游戏这一档不走他们的 gif。**
+        //
+        // 她报的：「打游戏第二帧脸会变成灰色。」查了那个 gif：56 帧里有三段
+        // 共 21 帧，身体的珊瑚色掉到只剩三分之一——那是他们烘进 gif 里的
+        // 「屏幕光照在脸上」的配色，是别人的素材，改不了原文。
+        //
+        // 她给的备选是「如果颜色很难，干脆就不要照亮了」。那就走我们自己
+        // 那两帧（gaming / gaming2），颜色是对的。
+        // 代价：少了他们那台显示器，只剩手柄。
+        case .gaming:    return nil
         case .guitar:    return "clawd-guitar"
         case .working:   return "clawd-coding"
         case .sleeping:  return "clawd-sleeping"
