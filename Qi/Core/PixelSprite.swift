@@ -1978,16 +1978,18 @@ enum ClawdMood: String, Codable {
         case .painting:  return "clawd-painting"
         case .listening: return "clawd-listening"
         case .watering:  return "clawd-watering"
-        // ⚠️ **打游戏这一档不走他们的 gif。**
+        // ⚠️ 这个 gif 的**素材本身改过一次**，别拿原版覆盖回来。
         //
-        // 她报的：「打游戏第二帧脸会变成灰色。」查了那个 gif：56 帧里有三段
-        // 共 21 帧，身体的珊瑚色掉到只剩三分之一——那是他们烘进 gif 里的
-        // 「屏幕光照在脸上」的配色，是别人的素材，改不了原文。
+        // 她报的：「打游戏第二帧脸会变成灰色。」查下来是他们烘进 gif 里的
+        // 「屏幕光照在脸上」——56 帧里有三段共 21 帧，身体从 #ED8071
+        // 变成 #B89C92 一类的灰褐（四个量化变体，合计 32083 个像素）。
+        // 本意是照亮，做出来却是压暗。
         //
-        // 她给的备选是「如果颜色很难，干脆就不要照亮了」。那就走我们自己
-        // 那两帧（gaming / gaming2），颜色是对的。
-        // 代价：少了他们那台显示器，只剩手柄。
-        case .gaming:    return nil
+        // 她要的是「显示器留着，把脸上灰的改掉」，所以改的是**素材**：
+        // 那 32083 个像素换成 #FF9C88（比常态身体色更亮的珊瑚），
+        // 其余一个像素没动。改素材而不是在运行时逐帧改色，是因为
+        // 这是固定资源——运行时改要每次开 App 都跑一遍 320 万次像素运算。
+        case .gaming:    return "clawd-gaming"
         case .guitar:    return "clawd-guitar"
         case .working:   return "clawd-coding"
         case .sleeping:  return "clawd-sleeping"
