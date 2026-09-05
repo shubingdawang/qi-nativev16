@@ -275,6 +275,27 @@ struct SideMenuPanel: View {
                     .foregroundStyle(Theme.textMuted(scheme))
             }
 
+            // 中转站探针。**摆在抬头脚下**（她指的位置），
+            // 不排进底下那个转盘——它不是日常会去的地方，
+            // 是「这个中转站到底怎么了」的时候来查一次的。
+            Button {
+                onSelect(.init(id: "probe", title: "探针", icon: "waveform.path.ecg"))
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "waveform.path.ecg")
+                        .font(.app(10))
+                    Text("探针")
+                        .font(.app(11, weight: .medium))
+                }
+                .foregroundStyle(Theme.textMuted(scheme))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(Theme.softFillDeep))
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 8)
+
             // 抬头和底下那一列之间横一道淡出去的线。
             // 没有它，名字和第一个菜单项是"挨着"的；有了它，
             // 上面这一块才成为"抬头"。
