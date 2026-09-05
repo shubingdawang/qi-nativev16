@@ -1417,12 +1417,27 @@ struct ClawdHomeView: View {
             try? await Task.sleep(nanoseconds: UInt64.random(in: 25...50) * 1_000_000_000)
             while !Task.isCancelled {
                 guard store.linked else { return }
-                let near = store.owned.filter { !$0.hidden && !$0.carried }
+                // ⚠️ **只看他这一间的**，跟走路那儿同一个理由（见上面那段注释）。
+                //
+                // 她又报了一次：「即使他在客厅、在厨房，书房有书架，
+                // 他就会触发『抽一本出来看看』的台词，但他根本不在书房。」
+                // 上一次只修了走路那条路，这一条（接他进来之后隔几分钟问他一句）
+                // 漏了——`store.owned` 是整个家的家具，而 x/y 是每间屋子
+                // **各自的** 0…1 坐标，书房里 (0.5,0.5) 的书架跟他站在
+                // 客厅 (0.5,0.5) 算出来就是「挨着」。
+                let near = store.furniture(in: store.clawdRoom)
+                    .filter { !$0.hidden && !$0.carried }
                     .min { a, b in
                         abs(a.x - clawdX) + abs(a.y - clawdY)
                             < abs(b.x - clawdX) + abs(b.y - clawdY)
                     }
-                let nearName = (near.flatMap { FurnitureCatalog.kind($0.kind)?.name }) ?? ""
+                // 还得**真的挨着**才算。`min` 只挑出最近的一件，
+                // 屋里就一件家具、他站在对角，也会被算成「走到它旁边」。
+                // 阈值跟走路那条一致。
+                let reallyNear = near.flatMap {
+                    (abs($0.x - clawdX) < 0.16 && abs($0.y - clawdY) < 0.20) ? $0 : nil
+                }
+                let nearName = (reallyNear.flatMap { FurnitureCatalog.kind($0.kind)?.name }) ?? ""
                 let said = await app.clawdSays(
                     room: store.roomBrief(),
                     near: nearName,
