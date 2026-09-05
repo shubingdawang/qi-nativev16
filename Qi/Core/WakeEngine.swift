@@ -372,6 +372,12 @@ final class WakeEngine: ObservableObject {
         // ⚠️ 连着抢反而更容易再撞上限流；503 多半是一阵一阵的，
         // 隔一会儿再问常常就通了。
         let backoff: [Double] = [0, 8, 20]
+        // 岛上开一条「他醒来了」（她要的）。
+        // ⚙️ 三次都包在里面：重试那两次中间要等 8 秒、20 秒，
+        // 每次重开一条的话岛上会闪三下，而她看到的应该是
+        // 「他从刚才到现在一直在弄这件事」。
+        IslandController.shared.beginWake(
+            name: app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName)
         for attempt in 0..<3 {
             if backoff[attempt] > 0 {
                 try? await Task.sleep(
@@ -382,6 +388,7 @@ final class WakeEngine: ObservableObject {
             switch await app.wakeUpAndDecide() {
             case .spoke(let said):
                 deliver(said.text, app: app, from: "本机")
+                IslandController.shared.finishWake(said: said.text)
                 WakeLog.shared.add(.init(at: Date(), kind: .spoke,
                                          text: said.text, from: "本机"))
                 // 他自己挑了下一次隔多久，照他说的办（见 `aimNext`）
@@ -390,6 +397,8 @@ final class WakeEngine: ObservableObject {
 
             case .silent:
                 // 他醒了，看了一眼，决定什么都不说。**这才算一次。**
+                // 岛上那条撤掉：什么都没发生就不该给她一个勾。
+                IslandController.shared.cancelWake()
                 var s = state
                 s.silentToday += 1
                 state = s
@@ -412,6 +421,7 @@ final class WakeEngine: ObservableObject {
     /// 这一次没问成：记一笔给她看，并且告诉外面**别算他醒过**。
     private func noteFailed(_ why: String, tries: Int) -> Bool {
         Console.log(.wake, "这次不算他醒过", why)
+        IslandController.shared.cancelWake()
         WakeLog.shared.add(.init(at: Date(), kind: .failed,
                                  text: why, from: "本机", tries: tries))
         return false

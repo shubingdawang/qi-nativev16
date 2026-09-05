@@ -4,6 +4,19 @@ import Foundation
 import ActivityKit
 #endif
 
+/// 岛上这一条讲的是哪件事。
+///
+/// ⚠️ 摆在 `#if canImport(ActivityKit)` **外面**：
+/// `begin` 的签名要用它，而签名是任何平台都要编译的。
+/// 用 `QiActivityAttributes.ContentState.Kind` 的话，
+/// 没有 ActivityKit 的地方连函数声明都编不过。
+enum IslandKind {
+    /// 她说了话，他在回
+    case reply
+    /// 没人叫他，他自己醒过来了（她要的那条「XX 醒来了」）
+    case wake
+}
+
 /// 管灵动岛那条的开、更、关。
 ///
 /// 用途只有一个：**他开始回话的时候，让你在 App 外面也看得见。**
@@ -44,15 +57,17 @@ final class IslandController {
 
     // MARK: 开
 
-    func begin(name: String, conversationID: UUID) {
+    func begin(name: String, conversationID: UUID, kind: IslandKind = .reply) {
         #if canImport(ActivityKit)
         guard #available(iOS 16.1, *), available else { return }
         // 已经有一条在跑就别再开——先把旧的收掉
         if activity != nil { end(immediately: true) }
 
         let state = QiActivityAttributes.ContentState(
-            activity: "醒着", preview: "", done: false, startedAt: Date(),
-            pulse: LocalPulse.shared.snapshot().heartRate)
+            activity: kind == .wake ? "醒来了" : "醒着",
+            preview: "", done: false, startedAt: Date(),
+            pulse: LocalPulse.shared.snapshot().heartRate,
+            kind: kind == .wake ? .wake : .reply)
         do {
             activity = try Activity.request(
                 attributes: QiActivityAttributes(name: name),
@@ -66,6 +81,39 @@ final class IslandController {
             owner = nil
         }
         #endif
+    }
+
+    // MARK: 他自己醒过来了
+    //
+    // 她要的：「别人的自动唤醒灵动岛，抄一下。」
+    // 参考图上两条：「余衍醒来了 0:15」→「余衍做完自己的事了」＋一行
+    // 他干了什么＋一个勾。
+    //
+    // ⚠️ 跟「她说话他回话」**不是一回事**。回话的时候她在等，
+    // 岛上要的是「还要多久、说到哪儿了」；自己醒来的时候她根本不知道
+    // 有这回事，岛上要的是「他自己动了一下，动完了，动的是这个」。
+    //
+    // ⚠️ 自己醒来那一下**还不知道会落在哪个窗口**（要等他真说了话
+    // 才决定落在哪儿，见 `wakeTargetConversation`），所以借一个固定的
+    // 假 owner。真拿某个窗口的 id 去开，落点一变这条就再也收不掉了，
+    // 会在岛上挂满八小时。
+
+    private static let wakeOwner = UUID()
+
+    /// 他开始自己醒来这一趟了
+    func beginWake(name: String) {
+        begin(name: name, conversationID: Self.wakeOwner, kind: .wake)
+    }
+
+    /// 他说了话，这一趟有结果
+    func finishWake(said: String) {
+        finish(preview: said, conversationID: Self.wakeOwner)
+    }
+
+    /// 他看了一眼什么都没说，或者压根没问成——**撤掉，别留一条空的**。
+    func cancelWake() {
+        guard owner == Self.wakeOwner else { return }
+        end(immediately: true)
     }
 
     // MARK: 更新
@@ -87,7 +135,10 @@ final class IslandController {
             done: false,
             startedAt: started,
             // 心跳每次都重取。它一直在变，钉在开始那一刻的数没有意义。
-            pulse: LocalPulse.shared.snapshot().heartRate)
+            pulse: LocalPulse.shared.snapshot().heartRate,
+            // ⚠️ **把原来那个 kind 带过来。** 不带的话它会退回默认的
+            // `.reply`，于是「他自己醒来」那条更新一次就变成了「他在回话」。
+            kind: current.content.state.kind)
         Task {
             await current.update(.init(state: state,
                                        staleDate: Date().addingTimeInterval(60 * 10)))
@@ -104,12 +155,16 @@ final class IslandController {
         guard owner == conversationID else { return }
 
         let started = current.content.state.startedAt
+        let was = current.content.state.kind
         let state = QiActivityAttributes.ContentState(
-            activity: "说完了",
+            // 自己醒来那条收尾的话不一样：她根本不知道他动过，
+            // 所以这一句要说的是「他自己做完了一件事」，不是「他说完了」。
+            activity: was == .wake ? "做完自己的事了" : "说完了",
             preview: String(preview.suffix(90)),
             done: true,
             startedAt: started,
-            pulse: LocalPulse.shared.snapshot().heartRate)
+            pulse: LocalPulse.shared.snapshot().heartRate,
+            kind: was)
         activity = nil
         owner = nil
         Task {

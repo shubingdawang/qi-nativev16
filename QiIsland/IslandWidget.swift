@@ -34,21 +34,48 @@ struct IslandWidget: Widget {
                 DynamicIslandExpandedRegion(.leading) {
                     HStack(spacing: 7) {
                         ClawdMark(size: 24)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(context.attributes.name)
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(.white)
-                            Text(context.state.activity)
-                                .font(.system(size: 10))
-                                .foregroundStyle(.white.opacity(0.6))
-                                .lineLimit(1)
+                        // 自己醒来那一档：**名字和在干嘛掰成一句**。
+                        //
+                        // 她给的参考图上就是一句话：「余衍醒来了」、
+                        // 「余衍做完自己的事了」。拆成上下两行的话，
+                        // 上面一个名字、下面三个字，反而看不出是一件事。
+                        // 回话那一档继续分两行：那儿的「在干嘛」是一直在变的
+                        // （在想 / 在翻记忆 / 在写日记），掰进名字里会跳。
+                        if context.state.kind == .wake {
+                            HStack(spacing: 5) {
+                                Circle()
+                                    .fill(context.state.done
+                                          ? Color(red: 0.42, green: 0.83, blue: 0.53)
+                                          : Color(red: 1.0, green: 0.72, blue: 0.30))
+                                    .frame(width: 6, height: 6)
+                                Text(context.attributes.name + context.state.activity)
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(context.state.done
+                                                     ? Color(red: 0.42, green: 0.83, blue: 0.53)
+                                                     : Color(red: 1.0, green: 0.72, blue: 0.30))
+                                    .lineLimit(1)
+                            }
+                        } else {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(context.attributes.name)
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                Text(context.state.activity)
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.white.opacity(0.6))
+                                    .lineLimit(1)
+                            }
                         }
                     }
                     .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     VStack(alignment: .trailing, spacing: 2) {
-                        if context.state.pulse > 0 {
+                        // 自己醒来那一档不摆心跳。
+                        // 心跳常驻是为了「她在等他回话」那一档；
+                        // 这一条就一件事：他弄了多久、弄完了没。
+                        // 参考图上右边就只有一个 0:15 和一个勾。
+                        if context.state.kind != .wake, context.state.pulse > 0 {
                             HStack(spacing: 3) {
                                 Image(systemName: "heart.fill")
                                     .font(.system(size: 9))
@@ -61,8 +88,10 @@ struct IslandWidget: Widget {
                         }
                         if context.state.done {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(.white.opacity(0.75))
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(context.state.kind == .wake
+                                                 ? Color(red: 0.42, green: 0.83, blue: 0.53)
+                                                 : .white.opacity(0.75))
                         } else {
                             // 计时交给系统走，不用我们每秒推一次
                             // ——推得越勤越费电，而且系统本来就限流。
@@ -133,38 +162,71 @@ struct IslandWidget: Widget {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(context.attributes.name)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                    Text(context.state.activity)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.6))
-                    Spacer(minLength: 0)
-                    if context.state.pulse > 0 {
-                        HStack(spacing: 3) {
-                            Image(systemName: "heart.fill")
-                                .font(.system(size: 9))
-                                .foregroundStyle(Color(red: 0.949, green: 0.443, blue: 0.373))
-                            Text("\(context.state.pulse)")
+                    // 自己醒来那一档按她给的参考图排：
+                    // 一个小圆点 + 「XX 醒来了」一整句，没弄完是橙的，
+                    // 弄完了是绿的；右边计时或者一个勾。
+                    if context.state.kind == .wake {
+                        Circle()
+                            .fill(context.state.done
+                                  ? Color(red: 0.42, green: 0.83, blue: 0.53)
+                                  : Color(red: 1.0, green: 0.72, blue: 0.30))
+                            .frame(width: 7, height: 7)
+                        Text(context.attributes.name + context.state.activity)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(context.state.done
+                                             ? Color(red: 0.42, green: 0.83, blue: 0.53)
+                                             : Color(red: 1.0, green: 0.72, blue: 0.30))
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        if context.state.done {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(Color(red: 0.42, green: 0.83, blue: 0.53))
+                        } else {
+                            Text(context.state.startedAt, style: .timer)
+                                .font(.system(size: 15, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(.white.opacity(0.55))
+                                .frame(maxWidth: 56, alignment: .trailing)
+                        }
+                    } else {
+                        Text(context.attributes.name)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white)
+                        Text(context.state.activity)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.6))
+                        Spacer(minLength: 0)
+                        if context.state.pulse > 0 {
+                            HStack(spacing: 3) {
+                                Image(systemName: "heart.fill")
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(Color(red: 0.949, green: 0.443, blue: 0.373))
+                                Text("\(context.state.pulse)")
+                                    .font(.system(size: 11, design: .rounded))
+                                    .monospacedDigit()
+                                    .foregroundStyle(.white.opacity(0.8))
+                            }
+                        }
+                        if !context.state.done {
+                            Text(context.state.startedAt, style: .timer)
                                 .font(.system(size: 11, design: .rounded))
                                 .monospacedDigit()
-                                .foregroundStyle(.white.opacity(0.8))
+                                .foregroundStyle(.white.opacity(0.55))
+                                .frame(maxWidth: 48)
                         }
                     }
-                    if !context.state.done {
-                        Text(context.state.startedAt, style: .timer)
-                            .font(.system(size: 11, design: .rounded))
-                            .monospacedDigit()
-                            .foregroundStyle(.white.opacity(0.55))
-                            .frame(maxWidth: 48)
-                    }
                 }
-                Text(context.state.preview.isEmpty
-                     ? "还没开口" : context.state.preview)
-                    .font(.system(size: 14))
-                    .foregroundStyle(.white.opacity(context.state.preview.isEmpty ? 0.45 : 0.95))
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
+                // 自己醒来还没弄完的时候不摆「还没开口」——
+                // 她本来就不知道他在干嘛，报一句「还没开口」是废话。
+                if !(context.state.kind == .wake && context.state.preview.isEmpty) {
+                    Text(context.state.preview.isEmpty
+                         ? "还没开口" : context.state.preview)
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white.opacity(context.state.preview.isEmpty ? 0.45 : 0.95))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
             }
         }
         .padding(14)
