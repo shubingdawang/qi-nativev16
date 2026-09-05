@@ -152,6 +152,31 @@ final class StickerStore: ObservableObject {
 
     func sticker(id: UUID) -> Sticker? { stickers.first { $0.id == id } }
 
+    /// 库里已经有一模一样的这张了吗。**按字节比，不按名字比。**
+    ///
+    /// 她报的：「他存表情时不知道自己已经有什么表情，就直接存图了，
+    /// 导致一样的图有两个。」
+    ///
+    /// 靠他自己记是靠不住的：目录里几十张，名字还是他当时随手起的，
+    /// 隔几窗就认不出「这张我存过」。**判重要放在存的那一步**，
+    /// 而且只能按内容判——同一张图他这次叫「捂脸」，下次叫「社死」。
+    ///
+    /// ⚠️ 先比文件大小、再比字节。整库逐字节读一遍是几十兆的活；
+    /// 两张不一样的图大小正好一致的概率很低，一筛就只剩一两个候选。
+    func matching(data: Data, owner: String? = nil) -> Sticker? {
+        let n = data.count
+        guard n > 0 else { return nil }
+        for s in stickers where owner == nil || s.owner == owner {
+            let u = url(of: s)
+            guard let attrs = try? FileManager.default.attributesOfItem(atPath: u.path),
+                  let size = attrs[.size] as? Int, size == n else { continue }
+            if let d = try? Data(contentsOf: u, options: .mappedIfSafe), d == data {
+                return s
+            }
+        }
+        return nil
+    }
+
     /// 只有我能往库里加东西——文档里写明 AI 只有发送权限
     @discardableResult
     func add(data: Data, ext: String, owner: String) -> Sticker? {

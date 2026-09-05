@@ -5670,6 +5670,20 @@ final class AppState: ObservableObject {
             guard let raw = recentUserImageData(offset: index) else {
                 return ("没找到第 \(index) 张图。\n" + imageMenu(), true)
             }
+            // ⚠️ **同一张图不存第二份。**
+            //
+            // 她报的：「他存表情时不知道自己已经有什么表情，就直接存图了，
+            // 导致一样的图有两个。」——挡在这一步，而不是指望他记得住：
+            // 目录里几十张，名字还是他当时随手起的，隔几窗就认不出来了。
+            // 挡回去的时候**把原来那张叫什么、写的什么描述一起告诉他**，
+            // 他才知道该拿哪一张去发，而不是换个名字再试一次。
+            if let dup = store.matching(data: raw.data) {
+                let who = dup.owner == "assistant" ? "你的表情包里" : "她的表情包里"
+                let desc = dup.description.isEmpty ? "" : "，描述是「\(dup.description)」"
+                return ("这张已经在\(who)了：「\(dup.name)」\(desc)。没有再存一份——"
+                        + "要发就直接发那张（find_sticker / list_my_stickers 都找得到它）。"
+                        + "想改名字或者补描述是另一回事，跟她说一声。", true)
+            }
             guard var made = store.add(data: raw.data, ext: raw.ext, owner: "assistant")
             else { return ("存不进去，可能空间不够了。", true) }
             made.name = (args["name"] as? String) ?? "没起名"

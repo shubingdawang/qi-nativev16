@@ -79,6 +79,16 @@ struct MessageBubbleView: View {
                 //
                 // 挪出来之后，不管他那一轮说的是话、贴的是表情、还是发的语音，
                 // 「他刚才干了什么」都摆在同一个位置。
+                // ⚠️ **动作／心理排在 thinking 上面。**
+                //
+                // 她说的：「心理和动作的显示应该在 thinking 的上面。」
+                //
+                // 原来这几行写在 `content` 里面（气泡那个 VStack 的第一块），
+                // 而 `processBlock` 在 `content` 前面，所以顺序反了：
+                // 先「想了 12 秒」再「他挑了挑眉」。
+                // 幕外那几行是**这一刻发生的事**，思考是他怎么想的——
+                // 事在前，想在后。
+                beatsBlock
                 processBlock
                 content
                     // ⚠️⚠️ 长按和多选**挂在这儿**，不挂在某一个分支里。
@@ -306,21 +316,7 @@ struct MessageBubbleView: View {
             // 这样整屏看下来所有气泡的缝都是一样宽的，不会有的挤有的松
             VStack(alignment: isUser ? .trailing : .leading, spacing: 10) {
 
-                // 幕外那几行：动作／神态 + 心里话。气泡上方淡淡地摞着，
-                // 不带气泡也不带底。**有几条摆几条**，按他写的先后。
-                if !shownBeats.isEmpty {
-                    VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
-                        // ⚠️ 按**位置**认，不按 id 认。
-                        // 现抠出来的那几条每重画一次就是一批新 UUID，
-                        // 按 id 认的话 SwiftUI 会当成「整批换了」，
-                        // 流式的时候这几行会一直闪。
-                        ForEach(Array(shownBeats.enumerated()), id: \.offset) { _, beat in
-                            BeatLine(beat: beat, isUser: isUser)
-                        }
-                    }
-                    .padding(.leading, 2)
-                    .padding(.bottom, 1)
-                }
+                // （幕外那几行搬到 `processBlock` 上面去了，见 `beatsBlock`）
 
                 // 说话的人不在这儿标了——上面那行头像已经写着名字，
                 // 再标一次是同一句话说两遍
@@ -1170,6 +1166,25 @@ struct MessageBubbleView: View {
         // 只留末尾这么些字。整段塞进来的话，`lineLimit(1)` 虽然只画一行，
         // 但排版仍旧要量完整段——一秒十几次，那是白花的力气。
         return String(r.suffix(60))
+    }
+
+    /// 幕外那几行：动作／神态 + 心里话。
+    /// 气泡上方淡淡地摞着，不带气泡也不带底。**有几条摆几条**，按他写的先后。
+    @ViewBuilder
+    private var beatsBlock: some View {
+        if !shownBeats.isEmpty {
+            VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
+                // ⚠️ 按**位置**认，不按 id 认。
+                // 现抠出来的那几条每重画一次就是一批新 UUID，
+                // 按 id 认的话 SwiftUI 会当成「整批换了」，
+                // 流式的时候这几行会一直闪。
+                ForEach(Array(shownBeats.enumerated()), id: \.offset) { _, beat in
+                    BeatLine(beat: beat, isUser: isUser)
+                }
+            }
+            .padding(.leading, 2)
+            .padding(.bottom, 1)
+        }
     }
 
     @ViewBuilder

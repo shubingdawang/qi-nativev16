@@ -1888,6 +1888,21 @@ struct MessageListView: View {
                     // ⚠️ 而且**只在布尔翻转的时候才写 state**。
                     // 每滚一像素写一次的话，就是每一帧重建整个列表——
                     // 那正是她报过好几次的那种卡。
+                    // ⚠️⚠️ **输入栏那段留白要在锚点上面，不能挂成容器的
+                    // `.padding(.bottom)`。**
+                    //
+                    // 她报的：「输入框透明后，他说话时自动滚到底部，
+                    // 就滚到输入框下面了，隔着输入框很难看清。」
+                    //
+                    // `scrollTo("__bottom", anchor: .bottom)` 做的是
+                    // **把锚点这一格的下沿对齐到可视区的下沿**。
+                    // 留白要是挂在整个 VStack 的 `.padding(.bottom)` 上，
+                    // 它就排在锚点**后面**——滚到底之后整段留白被推到屏幕外，
+                    // 最后一条正好停在屏幕最底下，也就是输入栏那块玻璃背后。
+                    //
+                    // 排成一格实实在在的空视图、摆在锚点**前面**，
+                    // 滚到底那一下它就顶在输入栏上方，最后一条稳稳露在上面。
+                    Color.clear.frame(height: bottomInset)
                     Color.clear.frame(height: 1).id("__bottom")
                         .background {
                             GeometryReader { g -> Color in
@@ -1906,10 +1921,9 @@ struct MessageListView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 100)
-                // 底下留出输入栏那么高的空。
-                // 消息现在会**铺到输入栏背后**（它是浮在上面的一块玻璃），
-                // 不留这一段的话最后一条会永远压在它底下。
-                .padding(.bottom, bottomInset)
+                // ⚠️ 输入栏那段留白**不在这儿**了，挪进列表里排在锚点前面
+                // （见上面那段）。挂在这儿的话滚到底会把它推出屏幕。
+                .padding(.bottom, 8)
             }
             .scrollDismissesKeyboard(.interactively)
             // 回到底部。她要的：「一个圈圈上面一个↓就行，跟着玻璃变换。」
