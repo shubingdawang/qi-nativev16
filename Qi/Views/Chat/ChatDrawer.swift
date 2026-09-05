@@ -9,7 +9,6 @@ struct ChatDrawer: View {
     var onEditPrompt: () -> Void = {}
     var onOpenSearch: () -> Void = {}
     var onOpenGroup: () -> Void = {}
-    var onOpenMemoryLink: () -> Void = {}
 
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
@@ -185,34 +184,11 @@ struct ChatDrawer: View {
             // 「群成员」那一项删了。群里固定就是阿晏和工坊两位，
             // 加别的模型进来没有意义——它在这个群里没有记忆，谁都不是。
 
-            Button {
-                close()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) { onOpenMemoryLink() }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "link")
-                    Text("记忆合并")
-                    Spacer()
-                    if let id = app.activeID(for: space) {
-                        let n = app.memoryPeers(of: id).count
-                        if n > 0 {
-                            Text("\(n)")
-                                .font(.app(11))
-                                .padding(.horizontal, 7).padding(.vertical, 2)
-                                .background(Capsule().fill(app.settings.accentColor.opacity(0.25)))
-                        }
-                    }
-                }
-                .font(.app(14))
-                .foregroundStyle(Theme.textSoft(scheme))
-                .padding(.horizontal, 18)
-                .padding(.vertical, 14)
-                // ⚠️ 整行都要能点。`buttonStyle(.plain)` 下能点的只有
-                // 真画出来的字和图标——Spacer 和 padding 是透明的。
-                // 她报的：「判定区域太小了，必须要点到字才能进入。」
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+            // ⚠️ 「记忆合并」这一条**删了**，并进「对话设定」里了。
+            //
+            // 她说的：「记忆合并和这个对话的设定其实可以合并起来。」
+            // 两者说的是同一件事：这一窗的他知道什么。
+            // 入口在抽屉里、设定在另一张表里，她每次都得先想一下哪件在哪儿。
 
             Button {
                 close()

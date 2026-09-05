@@ -27,7 +27,6 @@ enum ChatPanel: Identifiable {
     case prompt
     case tools
     case poke
-    case memory
     case group
     /// 「他刚才干了什么」——带上是哪一条消息
     case process(ChatMessage)
@@ -40,7 +39,6 @@ enum ChatPanel: Identifiable {
         case .prompt:  return "prompt"
         case .tools:   return "tools"
         case .poke:    return "poke"
-        case .memory:  return "memory"
         case .group:   return "group"
         // ⚠️ 带上消息的 id：换一条消息看过程，`id` 变了 SwiftUI 才会
         // 把里面的内容换掉。都返回 "process" 的话，

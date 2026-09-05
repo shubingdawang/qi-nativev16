@@ -7,6 +7,15 @@ struct MemoryLinkView: View {
 
     let space: ChatSpace
     let conversationID: UUID
+    /// 已经在别人的导航里了（从「对话设定」推进来的）。
+    ///
+    /// 她说的：「记忆合并和这个对话的设定其实可以合并起来。」
+    /// ——两者讴的是同一件事：这一窗的他知道什么。
+    ///
+    /// ⚠️ 嵌进去的时候**不能再套一层 NavigationStack**，
+    /// 套了会出两条导航栏；那个「完成」也不能留——
+    /// 它 dismiss 的是外面整张 sheet，而她只是想退回上一层。
+    var embedded = false
 
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
@@ -19,7 +28,11 @@ struct MemoryLinkView: View {
     private var current: Conversation? { app.conversation(conversationID) }
 
     var body: some View {
-        NavigationStack {
+        if embedded { inner } else { NavigationStack { inner } }
+    }
+
+    private var inner: some View {
+        Group {
             ZStack {
                 WallpaperBackground()
 
@@ -130,8 +143,10 @@ struct MemoryLinkView: View {
             .navigationTitle("记忆合并")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("完成") { dismiss() }
+                if !embedded {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("完成") { dismiss() }
+                    }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     if current?.memoryGroupID != nil {

@@ -344,8 +344,7 @@ struct ChatView: View {
             ChatDrawer(space: space, isOpen: $drawerOpen,
                        onEditPrompt: { panel = .prompt },
                        onOpenSearch: { showingSearch = true },
-                       onOpenGroup: { panel = .group },
-                       onOpenMemoryLink: { panel = .memory })
+                       onOpenGroup: { panel = .group })
             }
 
             // 菜单开着的时候，点别处就把它关掉
@@ -460,10 +459,6 @@ struct ChatView: View {
             case .tools:  ToolToggleView()
             case .poke:
                 if let id = app.activeID(for: space) { PokeSheet(conversationID: id) }
-            case .memory:
-                if let id = app.activeID(for: space) {
-                    MemoryLinkView(space: space, conversationID: id)
-                }
             case .group:
                 if let id = app.activeID(for: space) {
                     GroupSetupView(conversationID: id)

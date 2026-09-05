@@ -70,7 +70,6 @@ struct ConversationListView: View {
                     }
                 }
             }
-            .transparentList()
             .searchable(text: $search, prompt: "搜索对话")
             .transparentList()
             .listRowBackground(GlassRowBackground())
@@ -255,10 +254,17 @@ struct SystemPromptView: View {
                     TextEditor(text: $text)
                         .frame(minHeight: 220)
                         .font(.body)
+                    // ⚠️ 说明收进「说明 ›」，不再摊在 footer 上。
+                    // 她说的：「这个对话的设定说明都在外面，收起来变成说明>。」
+                    // 这一页真正要动的是那个输入框和两个开关，
+                    // 三段 footer 加起来比它们还长。
+                    HelpNote {
+                        Text("每次发消息都会带上这段话，用来设定对方的身份、语气和规矩。只对当前这个对话生效。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 } header: {
                     Text("系统提示词")
-                } footer: {
-                    Text("每次发消息都会带上这段话，用来设定对方的身份、语气和规矩。只对当前这个对话生效。")
                 }
 
                 Section {
@@ -302,11 +308,45 @@ struct SystemPromptView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    HelpNote {
+                        Text("启用后，本窗口写入的记忆在手机本机保存的同时，自动镜像一份到电脑上的共用记忆库，claude.ai 端可读取。小屋未连上时先记在手机，连上后自动补齐。\n\n启用期间，小屋端与本机同名的记忆工具在本窗口内隐藏，避免两边各写各的；本机记忆库始终为准，札记与承诺页读取的也是它。\n\n镜像由 App 直接完成，不额外消耗对话次数。\n\n⚠️ 仅镜像新增类记录；带 id 的修改与删除不镜像——两端 id 各自生成，互不对应。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 } header: {
                     Text("两边接得上")
-                } footer: {
-                    Text("启用后，本窗口写入的记忆在手机本机保存的同时，自动镜像一份到电脑上的共用记忆库，claude.ai 端可读取。小屋未连上时先记在手机，连上后自动补齐。\n\n启用期间，小屋端与本机同名的记忆工具在本窗口内隐藏，避免两边各写各的；本机记忆库始终为准，札记与承诺页读取的也是它。\n\n镜像由 App 直接完成，不额外消耗对话次数。\n\n⚠️ 仅镜像新增类记录；带 id 的修改与删除不镜像——两端 id 各自生成，互不对应。")
                 }
+                // 记忆合并。**并进这一页**（她要的：
+                // 「记忆合并和这个对话的设定其实可以合并起来」）。
+                //
+                // 她说得对，两者讲的是同一件事：**这一窗的他知道什么**。
+                // 系统提示词定他是谁，claude.ai 那个开关定记忆写到哪儿，
+                // 记忆合并定他还能看见哪几扇窗——三件事本来就该在一处，
+                // 分成两个入口的时候她得记住哪件在哪儿。
+                Section {
+                    if let id = app.activeID(for: space) {
+                        NavigationLink {
+                            MemoryLinkView(space: space, conversationID: id,
+                                           embedded: true)
+                        } label: {
+                            HStack {
+                                Text("记忆合并")
+                                Spacer()
+                                let n = app.memoryPeers(of: id).count
+                                Text(n > 0 ? "并了 \(n) 个窗口" : "只记得这一窗")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    HelpNote {
+                        Text("合并后，所选窗口共享同一份记忆；拆分后各窗口仅保留自身的记录，可用于隔离不同话题。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("他还看得见哪几扇窗")
+                }
+
                 // 滚雪球压缩。**放在这儿而不是设置页**——
                 // 浓缩件是每一窗自己的东西，不是全局的。
                 Section {
@@ -347,10 +387,13 @@ struct SystemPromptView: View {
                         }
                     }
                     .disabled(compacting)
+                    HelpNote {
+                        Text(MD.inline("对话超过阈值时，将较早的消息压缩为一份浓缩件。再次压缩以「上一份浓缩件 + 新增消息」为输入，始终只保留一份。\n\n浓缩件之外另保留一份原文摘录，由本机按规则选取，不调用模型、不产生费用。摘要保留事件，原文保留措辞。\n\n每次压缩额外产生一次请求。压缩间隔在「设置 → 通用」中调整，也可关闭。"))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 } header: {
                     Text("滚雪球压缩")
-                } footer: {
-                    Text(MD.inline("对话超过阈值时，将较早的消息压缩为一份浓缩件。再次压缩以「上一份浓缩件 + 新增消息」为输入，始终只保留一份。\n\n浓缩件之外另保留一份原文摘录，由本机按规则选取，不调用模型、不产生费用。摘要保留事件，原文保留措辞。\n\n每次压缩额外产生一次请求。压缩间隔在「设置 → 通用」中调整，也可关闭。"))
                 }
             }
             .transparentList()

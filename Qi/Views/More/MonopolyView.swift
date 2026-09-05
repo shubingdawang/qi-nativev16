@@ -233,6 +233,7 @@ struct MonopolyView: View {
                     Text("引擎全程避开这些；卡上标漏了的，还会按内容再挡一道。")
                 }
             }
+            .transparentList()
             .navigationTitle("开一局")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
