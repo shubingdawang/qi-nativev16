@@ -22,6 +22,23 @@ struct MCPServer: Codable, Hashable, Identifiable {
     var tools: [MCPTool] = []
     var lastError: String? = nil
 
+    /// **从什么时候起就够不着了。** nil = 现在是通的。
+    ///
+    /// 她报的：「即使显示『未能找到使用指定主机名的服务器』，
+    /// MCP 依旧是连上的，只是不能使用。连不上的话应该断掉吧。」
+    ///
+    /// 她说得对，而且这不只是个绿点的事：够不着的时候工具照旧摆给模型看，
+    /// 他就会去调，调一次是**一次扣款**，回来一句「找不到主机」，
+    /// 他还得再想一遍怎么办。所以够不着的服务器，工具整个不往上送。
+    ///
+    /// ⚠️ 只有**网络层**的失败才算够不着（`URLError`）。
+    /// 服务器好好地回了一句「参数不对」是它活着的证据，不能算断线——
+    /// 那样的话一次参数写错就把整台服务器判死了。
+    var offlineSince: Date? = nil
+
+    /// 摆得出来给模型用吗
+    var usable: Bool { enabled && offlineSince == nil }
+
     var enabledTools: [MCPTool] { tools.filter { $0.enabled } }
 
     var endpoint: URL? {

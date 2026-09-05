@@ -70,6 +70,7 @@ struct ConversationListView: View {
                     }
                 }
             }
+            .glassSheet()
             .searchable(text: $search, prompt: "搜索对话")
             .transparentList()
             .listRowBackground(GlassRowBackground())
@@ -200,6 +201,7 @@ struct ModelPickerView: View {
                     }
                 }
             }
+            .glassSheet()
             .searchable(text: $search, prompt: "搜索模型")
             .transparentList()
             .listRowBackground(GlassRowBackground())
@@ -351,6 +353,7 @@ struct SystemPromptView: View {
                     Text(MD.inline("对话超过阈值时，将较早的消息压缩为一份浓缩件。再次压缩以「上一份浓缩件 + 新增消息」为输入，始终只保留一份。\n\n浓缩件之外另保留一份原文摘录，由本机按规则选取，不调用模型、不产生费用。摘要保留事件，原文保留措辞。\n\n每次压缩额外产生一次请求。压缩间隔在「设置 → 通用」中调整，也可关闭。"))
                 }
             }
+            .glassSheet()
             .transparentList()
             .listRowBackground(GlassRowBackground())
             .navigationTitle("对话设定")
@@ -414,6 +417,7 @@ struct DigestReaderView: View {
             }
             .padding(18)
         }
+        .glassSheet()
         .navigationTitle("第 \(digest.rounds) 次浓缩")
         .navigationBarTitleDisplayMode(.inline)
     }

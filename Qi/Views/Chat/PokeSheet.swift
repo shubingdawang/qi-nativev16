@@ -78,6 +78,7 @@ struct PokeSheet: View {
                 }
                 .padding(16)
             }
+            .glassSheet()
             .navigationTitle("戳一戳")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

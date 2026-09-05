@@ -943,6 +943,11 @@ final class AppState: ObservableObject {
         // 攒着的那条已经在记录里了，这一条发出去的时候它会跟着一起带上，
         // 所以这儿只要把倒计时掐掉就行，不用再单独跑一轮
         flushPending(conversationID, run: false)
+        // 上次断线的 MCP，在这个当口去敲一次门。
+        // ⚠️ **不开定时器**：常驻定时器会在她根本没打开 App 的时候
+        // 一直去连一台关着的电脑。她要的「等能连上电脑了再镜像」，
+        // 那个「等」的时机就是她又来说话这一下。
+        Task { @MainActor in await self.retryOfflineServers() }
         // 刚说完话，让「自己醒来」那边短期内安静一点——她人就在这儿呢
         WakeEngine.shared.noteRun()
         // 她来说话了，「想她」和「压着」这两维自然会落一点。
@@ -1655,7 +1660,7 @@ final class AppState: ObservableObject {
     /// 「与 claude.ai 互通」那个开关成不成立，全看这一条。
     var houseMemoryReachable: Bool {
         mcpServers.contains { s in
-            s.enabled && s.enabledTools.contains { Self.memoryToolNames.contains($0.name) }
+            s.usable && s.enabledTools.contains { Self.memoryToolNames.contains($0.name) }
         }
     }
 
@@ -1834,7 +1839,9 @@ final class AppState: ObservableObject {
                 return !settings.disabledNativeTools.contains(NativeTools.shortName(raw))
             }
         }
-        for server in mcpServers where server.enabled {
+        // ⚠️ `usable` 不是 `enabled`：够不着的那台整台不往上送。
+        // 摆着他就会去调，调一次是一次扣款，回来一句「找不到主机」。
+        for server in mcpServers where server.usable {
             for tool in server.enabledTools {
                 if blockMemory && Self.memoryToolNames.contains(tool.name) { continue }
                 // 同步窗口：跟本机重名的那几件收起来，只留本机那一份。
@@ -1862,6 +1869,63 @@ final class AppState: ObservableObject {
         let c = MCPClient(server: server)
         mcpClients[server.id] = c
         return c
+    }
+
+    // MARK: 够不够得着
+
+    /// 这一次跟服务器打交道的结果，记在那台服务器上。
+    ///
+    /// ⚠️ **只有网络层的失败才算断线。** 服务器好好地回一句「参数不对」
+    /// 是它活着的证据；把那种也算断线的话，他一次参数写错就能把整台
+    /// 服务器判死，剩下这一窗全部工具都没了。
+    private func noteMCP(_ serverID: UUID, error: Error?) {
+        guard let i = mcpServers.firstIndex(where: { $0.id == serverID }) else { return }
+        guard let error else {
+            // 通了。顺手把断线期间攒的那几笔补过去。
+            if mcpServers[i].offlineSince != nil {
+                mcpServers[i].offlineSince = nil
+                mcpServers[i].lastError = nil
+                Task { @MainActor in await self.drainPendingHouseWrites() }
+            }
+            return
+        }
+        guard Self.isOffline(error) else { return }
+        // 已经记过就不要把时间往后推——`offlineSince` 是「从什么时候起」，
+        // 每失败一次刷新一次的话，下面那个「隔多久重试一回」永远也到不了点。
+        if mcpServers[i].offlineSince == nil { mcpServers[i].offlineSince = Date() }
+        mcpServers[i].lastError = "连不上：" + ErrText.readable(error)
+        mcpClients[serverID] = nil        // 会话多半也废了，下次换一条新的
+    }
+
+    /// 这个错是「够不着」还是「它回了但不满意」
+    static func isOffline(_ error: Error) -> Bool {
+        let ns = error as NSError
+        guard ns.domain == NSURLErrorDomain else { return false }
+        switch ns.code {
+        case NSURLErrorCannotFindHost, NSURLErrorCannotConnectToHost,
+             NSURLErrorNotConnectedToInternet, NSURLErrorNetworkConnectionLost,
+             NSURLErrorTimedOut, NSURLErrorDNSLookupFailed,
+             NSURLErrorSecureConnectionFailed, NSURLErrorCannotLoadFromNetwork:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// 断线的那几台，隔一阵自己去敲一次门。
+    ///
+    /// ⚠️ **不开定时器。** 在「她又发了一句话」这个当口顺手试一次就够了——
+    /// 常驻定时器会在她根本没在用 App 的时候一直去连一台关着的电脑。
+    /// 她自己也说过想要的是「等能连接上电脑了再直接镜像」，
+    /// 那个「等」的时机就是这儿。
+    static let retryOfflineAfter: TimeInterval = 120
+    func retryOfflineServers() async {
+        let due = mcpServers.filter {
+            $0.enabled && ($0.offlineSince.map {
+                Date().timeIntervalSince($0) > Self.retryOfflineAfter
+            } ?? false)
+        }
+        for s in due { await refreshTools(for: s.id) }
     }
 
     /// 真正去调一次工具
@@ -1903,7 +1967,7 @@ final class AppState: ObservableObject {
         }
 
         guard let server = mcpServers.first(where: { s in
-            s.enabled && s.enabledTools.contains { $0.name == call.name }
+            s.usable && s.enabledTools.contains { $0.name == call.name }
         }) else {
             run.serverName = "—"
             run.result = "找不到叫「\(call.name)」的工具，可能是 MCP 没连上或者这个工具被关掉了。"
@@ -1915,8 +1979,17 @@ final class AppState: ObservableObject {
         run.serverName = server.name
         do {
             run.result = try await client(for: server).callTool(name: call.name, arguments: args)
+            noteMCP(server.id, error: nil)
         } catch {
-            run.result = error.localizedDescription
+            // ⚠️ 拆开说是哪一步、什么原因（`ErrText`）。
+            // 光一句「The data couldn't be read…」他和她都看不出问题在哪。
+            run.result = ErrText.readable(error)
+            if Self.isOffline(error) {
+                run.result = "「\(server.name)」现在够不着（\(run.result)）。"
+                    + "这台服务器已经从工具表里摘下来了，别再试它上面的工具；"
+                    + "有本机的同类工具就用本机那份。"
+            }
+            noteMCP(server.id, error: error)
             run.failed = true
         }
         run.finished = true
@@ -4065,9 +4138,11 @@ final class AppState: ObservableObject {
         }
         do {
             let text = try await client(for: server).callTool(name: toolName, arguments: args)
+            noteMCP(server.id, error: nil)
             return (text, false)
         } catch {
-            return (error.localizedDescription, true)
+            noteMCP(server.id, error: error)
+            return (ErrText.readable(error), true)
         }
     }
 
@@ -4076,6 +4151,8 @@ final class AppState: ObservableObject {
         for server in mcpServers where server.enabled && server.tools.isEmpty {
             await refreshTools(for: server.id)
         }
+        // 上次断线的那几台，隔够时间了就再敲一次门
+        await retryOfflineServers()
     }
 
     // MARK: 一本书的前情
@@ -6189,6 +6266,7 @@ final class AppState: ObservableObject {
                 return t
             }
             mcpServers[i2].lastError = nil
+            mcpServers[i2].offlineSince = nil        // 抓到清单 = 通了
             // 刚连上，把断线期间攒的那几笔补过去
             await drainPendingHouseWrites()
         } catch {
@@ -6196,6 +6274,7 @@ final class AppState: ObservableObject {
             // ⚠️ 说清楚是**抓工具清单**这一步没成，而且把 DecodingError 拆开说。
             // 光一句「The data couldn't be read…」她看不出是哪儿的问题。
             mcpServers[i2].lastError = "抓工具清单没成功：" + ErrText.readable(error)
+            noteMCP(serverID, error: error)
         }
     }
 

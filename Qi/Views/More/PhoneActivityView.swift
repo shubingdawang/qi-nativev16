@@ -15,7 +15,7 @@ struct PhoneActivityView: View {
     @State private var peekShot: UIImage?
     @State private var peekAt: Date?
     @State private var peekWhy: String?
-    @State private var showHelp = false
+    // （「快捷指令怎么配」的开合归 HelpNote 自己管了）
     /// 往回翻了几天。0 是今天。
     @State private var dayOffset = 0
 
@@ -40,19 +40,18 @@ struct PhoneActivityView: View {
                         .foregroundStyle(.orange)
                 }
 
-                Button {
-                    showHelp.toggle()
-                } label: {
-                    Text(showHelp ? "收起说明" : "快捷指令怎么配")
-                        .font(.app(12))
-                        .foregroundStyle(app.settings.accentColor)
-                }
-                .buttonStyle(.plain)
+                // ⚠️ **摊开的那一段就跟在按钮底下**，不再甩到整页最后。
+                //
+                // 她报的：「手机使用时间的说明打开后在最下面，
+                // 不在原来的位置。」——原来是按钮在这儿，
+                // `if showHelp { help }` 却写在 `screenPeekCard` /
+                // `checkInCard` 后面，于是点开之后字长在两屏之外，
+                // 她看见的是「点了没反应」。
+                HelpNote(title: "快捷指令怎么配") { help }
+                    .padding(.bottom, 2)
 
                 screenPeekCard
                 checkInCard
-
-                if showHelp { help }
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -156,8 +155,6 @@ struct PhoneActivityView: View {
     /// **不走那个教程里的邮件绕圈**——那是给官方客户端用的，
     /// 因为那种 App 没法自己触发手机做事，只能借邮件当信号线。
     /// 我们是她自己的 App，读本地文件夹就行，截图一个字节都不出这台手机。
-    @State private var showPeekHow = false
-    @State private var showCheckInHow = false
     @ObservedObject private var here = WhereaboutsService.shared
     @AppStorage("checkInPrecision") private var precision = "coarse"
 
@@ -176,9 +173,14 @@ struct PhoneActivityView: View {
                     .tint(app.settings.accentColor)
             }
 
-            Text(MD.inline("启用后，模型可读取当前处境信息：屏幕上的内容、所在城市、当地天气、今日手机使用时长。\n\n默认关闭。三项数据一并授权。"))
-                .font(.app(11))
-                .foregroundStyle(Theme.textMuted(scheme))
+            // ⚠️ 说明**收在「说明 ›」里面**，不摊在外面（她要的）。
+            // 这张卡真正要动的是那个开关和「位置给到」那一排，
+            // 十几行字摆在中间，每次进来都得先划过去。
+            HelpNote {
+                Text(MD.inline("启用后，模型可读取当前处境信息：屏幕上的内容、所在城市、当地天气、今日手机使用时长。\n\n默认关闭。三项数据一并授权。"))
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
 
             if app.settings.checkInEnabled {
                 HStack {
@@ -231,16 +233,7 @@ struct PhoneActivityView: View {
                     .padding(.top, 2)
                 }
 
-                Button {
-                    withAnimation(.easeInOut(duration: 0.18)) { showCheckInHow.toggle() }
-                } label: {
-                    Text(showCheckInHow ? "收起说明" : "它到底会拿走什么")
-                        .font(.app(12))
-                        .foregroundStyle(app.settings.accentColor)
-                }
-                .buttonStyle(.plain)
-
-                if showCheckInHow {
+                HelpNote(title: "它到底会拿走什么") {
                     Text(MD.inline("""
                     **只有他调那个工具的时候才会拿一次**，不是一直跟着你。
 
@@ -298,6 +291,10 @@ struct PhoneActivityView: View {
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    // ⚠️ 横竖两头都要留白。她说的：「『他会看到』里的文字
+                    // 太靠左了有点奇怪。」——原来只给了 `.vertical`，
+                    // 字就直接顶在那块底的左边沿上。
+                    .padding(.horizontal, 12)
                     .padding(.vertical, 14)
                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(Theme.softFill))
@@ -341,9 +338,12 @@ struct PhoneActivityView: View {
                 }
             }
 
-            Text(MD.inline("指定一个文件夹，由快捷指令将截图存入。模型调用「看一眼屏幕」时读取其中最新的一张。\n\n⚠️ **非实时**：iOS 不允许 App 主动截取其他 App 的画面，读取到的始终是上一次保存的截图，返回结果中标注其时间。"))
-                .font(.app(11))
-                .foregroundStyle(Theme.textMuted(scheme))
+            // 说明收进「说明 ›」，理由同查岗那张卡。
+            HelpNote {
+                Text(MD.inline("指定一个文件夹，由快捷指令将截图存入。模型调用「看一眼屏幕」时读取其中最新的一张。\n\n⚠️ **非实时**：iOS 不允许 App 主动截取其他 App 的画面，读取到的始终是上一次保存的截图，返回结果中标注其时间。"))
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
 
             if peek.ready {
                 Divider().padding(.vertical, 2)
@@ -388,16 +388,7 @@ struct PhoneActivityView: View {
 
             // 她说「我并不知道该怎么使用」——只写「挑个文件夹」确实不够，
             // 真正要做的是**在快捷指令里配一条**，这儿把步骤写全。
-            Button {
-                withAnimation(.easeInOut(duration: 0.18)) { showPeekHow.toggle() }
-            } label: {
-                Text(showPeekHow ? "收起步骤" : "具体怎么弄")
-                    .font(.app(12))
-                    .foregroundStyle(app.settings.accentColor)
-            }
-            .buttonStyle(.plain)
-
-            if showPeekHow {
+            HelpNote(title: "具体怎么弄") {
                 Text(MD.inline("""
                 一共两步，五分钟。
 

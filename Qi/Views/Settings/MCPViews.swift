@@ -72,8 +72,16 @@ struct MCPListView: View {
             editing = server
         } label: {
             HStack(spacing: 10) {
+                // ⚠️ 绿点说的是「**现在**能用」，不是「这一项没关」。
+                //
+                // 她报的：「即使显示未能找到使用指定主机名的服务器，
+                // MCP 依旧是连上的，只是不能使用。连不上的话应该断掉吧。」
+                //
+                // 三档：通着（绿）／开着但够不着（橙）／关着（灰）。
                 Circle()
-                    .fill(server.enabled ? Color.green : Color.gray.opacity(0.4))
+                    .fill(server.enabled
+                          ? (server.offlineSince == nil ? Color.green : Color.orange)
+                          : Color.gray.opacity(0.4))
                     .frame(width: 8, height: 8)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(server.name.isEmpty ? "未命名" : server.name)
@@ -91,9 +99,18 @@ struct MCPListView: View {
                     }
                 }
                 Spacer(minLength: 8)
-                Text("\(server.enabledTools.count)/\(server.tools.count) 个工具")
-                    .font(.app(11))
-                    .foregroundStyle(Theme.textMuted(scheme))
+                // 够不着的时候**说的是这件事**，不是还剩几个工具——
+                // 那时候一个都用不上，报数字只会让人以为它还在干活。
+                if server.enabled, server.offlineSince != nil {
+                    Text("连不上，工具已摘下")
+                        .font(.app(11))
+                        .foregroundStyle(.orange)
+                        .multilineTextAlignment(.trailing)
+                } else {
+                    Text("\(server.enabledTools.count)/\(server.tools.count) 个工具")
+                        .font(.app(11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
                 Image(systemName: "chevron.right")
                     .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
@@ -200,6 +217,7 @@ struct MCPFormView: View {
                     }
                 }
             }
+            .glassSheet()
             .navigationTitle(isNew ? "新增 MCP" : "编辑 MCP")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
