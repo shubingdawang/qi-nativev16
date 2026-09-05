@@ -75,6 +75,22 @@ struct IsoRoom {
     /// 地板最上面那个尖在屏幕上的位置
     var origin: CGPoint = .zero
 
+    /// 平面那档：**一排地砖竖着占多高**（乘 `tileH`）。
+    ///
+    /// ⚠️⚠️ **这个数只此一份。** 落点、反查、地砖轮廓、地板整块、
+    /// 家具贴地那一条，全从它算。以前它以 `tileH / 2` 的形式抄在五个地方，
+    /// 想调深浅就得五处一起改，漏一处就是「家具落在别的格子里」。
+    ///
+    /// 她报的：「家具推到最里面的格子，反而悬浮在上面。」
+    /// 根子就是这个数太小（原来 0.5）：八排地板一共才两格宽那么深，
+    /// 最里面那一排几乎贴着墙根，摆件东西上去，脚下看不见地，
+    /// 整件就像挂在墙上。0.8 之后八排摊开有三格多深，最里面那排底下
+    /// 还剩得出地板来。
+    static let flatRowPitch: CGFloat = 0.8
+
+    /// 平面那档一排多高（点）
+    var rowPitch: CGFloat { tileH * Self.flatRowPitch }
+
     /// 在这么大的地方里，屋子摆在哪儿、一格多大。
     ///
     /// ⚠️ **只此一份。** 画屋子的那边要用，
@@ -96,7 +112,14 @@ struct IsoRoom {
         let byWidth = (size.width * 0.985) / n
         // ⚠️ 这一条按**最矮的墙**算：先保证「地板 + 一堵矮墙」一定塞得下，
         // 墙具体多高留到下面再定。
-        let byHeight = (size.height * 0.94) / (n / 2 + 4.2 + 1)
+        // ⚠️ 分母里那一截是**地板占几个 tileH**，两种投影不一样：
+        // 立体是 n/2 + 1，平面是 n × `flatRowPitch`。
+        // 抄成同一个数的话，平面那档按立体的深度去挑格子大小，
+        // 地板会比算出来的深，屋子被顶出屏幕。
+        let floorInTiles = projection == .flat
+            ? n * IsoRoom.flatRowPitch
+            : n / 2 + 1
+        let byHeight = (size.height * 0.94) / (floorInTiles + 4.2)
         let tileW = min(byWidth, byHeight)
         let tileH = tileW / 2
 
@@ -118,16 +141,17 @@ struct IsoRoom {
         // 家具缩在井底一小块。7 格之后墙和地大致对半，看着才像一间屋。
         // 下限还是 4.2 格——横屏或者小窗口的时候剩不下地方，
         // 至少得是间屋子的样子。
-        // 地板竖着占多高。**平面那档只有等距的一半**：
+        // 地板竖着占多高。**平面那档比等距的浅**：
         // 等距是「gx + gy」两个方向一起往下走，平面只有纵深那一档在走。
         let floorH = projection == .flat
-            ? tileH * n / 2
+            ? tileH * n * IsoRoom.flatRowPitch
             : tileH * n / 2 + tileH
         let room = size.height * 0.94 - floorH
-        // ⚠️ 平面的墙**可以更高**（上限 11 格）。它地板矮了一半，
-        // 按等距那个 7 格封顶的话，屋子只占屏幕一半，上下各空一大片——
-        // 那正是她当初说的「小屋太小了」。
-        let wallCap: CGFloat = projection == .flat ? 11 : 7
+        // 平面的墙比等距的稍高一点：它地板铺得浅，按等距那个 7 格封顶的话，
+        // 屋子只占屏幕一半，上下各空一大片——那正是她当初说的「小屋太小了」。
+        // ⚠️ 上限从 11 降到了 8：地板加深之后（见 `flatRowPitch`）
+        // 还按 11 封顶，墙加地板比屋子还宽，看着像口井。
+        let wallCap: CGFloat = projection == .flat ? 8 : 7
         let wallH = min(max(tileH * 4.2, room), tileH * wallCap)
 
         // 整块（墙顶到地板最下）的高度，用来把屋子**竖着摆正中**
@@ -206,12 +230,13 @@ struct IsoRoom {
         if projection == .flat {
             // 平面：`gx` 横着排，`gy` 是纵深——**越靠里越往上一点**。
             //
-            // ⚠️ 纵深那一档给的位移很小（半格高），只够把前后分开，
-            // 不能给多。给多了地板就又斜起来了，那就是等距，不是平面。
+            // 纵深一排一排往下走，一排 `rowPitch` 高。
+            // ⚠️ 原来这儿写的是 `(gy - (n-1)/2) * tileH/2 + tileH*(n-1)/4`，
+            // 两截前后抵消，化开就是 `gy * 一排的高度`。抵消掉的写法只是
+            // 让人以为这儿有什么讲究，改的时候还得先化简一遍。
             let n = Double(size)
             return CGPoint(x: origin.x + (gx - (n - 1) / 2) * tileW,
-                           y: origin.y + (gy - (n - 1) / 2) * tileH / 2
-                              + tileH * (n - 1) / 4)
+                           y: origin.y + CGFloat(gy) * rowPitch)
         }
         return CGPoint(x: origin.x + (gx - gy) * tileW / 2,
                        y: origin.y + (gx + gy) * tileH / 2)
@@ -227,7 +252,7 @@ struct IsoRoom {
         if projection == .flat {
             let n = Double(size)
             return (gx: dx / tileW + (n - 1) / 2,
-                    gy: (dy - tileH * (n - 1) / 4) / (tileH / 2) + (n - 1) / 2)
+                    gy: dy / rowPitch)
         }
         return (gx: dy / tileH + dx / tileW,
                 gy: dy / tileH - dx / tileW)
@@ -237,7 +262,7 @@ struct IsoRoom {
     ///
     /// ⚠️ 家具是「底边贴着格子下沿」摆的，所以这个数不能写死成 `tileH / 2`——
     /// 平面那档的地砖只有半格高，写死的话一屋子家具会往下沉半格。
-    var tileBottom: CGFloat { projection == .flat ? tileH / 4 : tileH / 2 }
+    var tileBottom: CGFloat { projection == .flat ? rowPitch / 2 : tileH / 2 }
 
     /// 这一格在不在地板上
     func inside(_ gx: Int, _ gy: Int) -> Bool {
@@ -255,8 +280,8 @@ struct IsoRoom {
         if projection == .flat {
             // ⚠️ 高度用 `tileH / 2` ——跟 `point` 里那一档纵深位移**同一个数**。
             // 不一样的话地砖之间会露缝或者叠住。
-            return Path(CGRect(x: c.x - tileW / 2, y: c.y - tileH / 4,
-                               width: tileW, height: tileH / 2))
+            return Path(CGRect(x: c.x - tileW / 2, y: c.y - rowPitch / 2,
+                               width: tileW, height: rowPitch))
         }
         var p = Path()
         p.move(to: CGPoint(x: c.x, y: c.y - tileH / 2))
@@ -272,9 +297,9 @@ struct IsoRoom {
         let n = Double(size)
         if projection == .flat {
             let a = point(0, 0), b = point(n - 1, n - 1)
-            return Path(CGRect(x: a.x - tileW / 2, y: a.y - tileH / 4,
+            return Path(CGRect(x: a.x - tileW / 2, y: a.y - rowPitch / 2,
                                width: (b.x - a.x) + tileW,
-                               height: (b.y - a.y) + tileH / 2))
+                               height: (b.y - a.y) + rowPitch))
         }
         var p = Path()
         p.move(to: point(0, 0).offsetBy(dy: -tileH / 2))
@@ -331,7 +356,7 @@ struct IsoRoom {
     /// 后墙的底边：地板最里那一排的上沿，从左到右。
     private var backWallBase: (CGPoint, CGPoint) {
         let n = Double(size)
-        let y = point(0, 0).y - tileH / 4
+        let y = point(0, 0).y - rowPitch / 2
         return (CGPoint(x: point(0, 0).x - tileW / 2, y: y),
                 CGPoint(x: point(n - 1, 0).x + tileW / 2, y: y))
     }

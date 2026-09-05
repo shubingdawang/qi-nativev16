@@ -117,6 +117,13 @@ struct ClawdBadge: View {
     var viewing: HomeRoom?
     /// 点头像 = 跳到他那一间
     var onFollow: () -> Void
+    /// 排成横的一条，塞进房间名那一行。
+    ///
+    /// ⚠️ **屋子里不再叠这块牌子。** 她说的：「左上的 clawd 有点挡住了，
+    /// 把那行去掉就不会挡到了。」——竖着那版浮在屋子左上角，
+    /// 平铺视角下正好压住最里面那一格。信息不能丢（不然她不知道他在哪间），
+    /// 所以换成横的一条，跟「整个家」排在同一行里。
+    var compact = false
 
     @EnvironmentObject private var app: AppState
     @Environment(\.colorScheme) private var scheme
@@ -127,6 +134,31 @@ struct ClawdBadge: View {
     }
 
     var body: some View {
+        if compact { compactBody } else { fullBody }
+    }
+
+    private var compactBody: some View {
+        Button(action: onFollow) {
+            HStack(spacing: 5) {
+                ClawdView(mood: .idle, scale: 1.0)
+                    .frame(height: 18)
+                Text(elsewhere
+                     ? store.clawdDoing.line + " · 在" + store.clawdRoom.rawValue
+                     : store.clawdDoing.line)
+                    .font(.app(10))
+                    .foregroundStyle(elsewhere
+                                     ? app.settings.accentColor
+                                     : Theme.textSoft(scheme))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .glassBackground(radius: 10, strength: app.settings.glassOpacity * 0.9)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var fullBody: some View {
         Button(action: onFollow) {
             VStack(spacing: 3) {
                 ClawdView(mood: .idle, scale: 1.35)   // 0.9 × 1.5

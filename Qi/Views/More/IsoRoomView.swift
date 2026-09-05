@@ -461,7 +461,11 @@ struct IsoRoomView<Clawd: View>: View {
         }
         // 她的图是**贴边裁过**的（导入时裁的），
         // 所以底边就是这件东西的落脚线：往上抬半张图，再压回格子上
-        .offset(y: mine == nil ? lift : -mineH(mine!, width: mineW) / 2 + geoRoom.tileH / 2)
+        // ⚠️ 她的图那一支贴的也是**地砖下沿**（`tileBottom`），
+        // 不是写死的 `tileH / 2`。上面画的那批早就改过了，这一支漏了——
+        // 平面那档地砖只有 `rowPitch` 高，写死半格的话她自己导的家具
+        // 会比画的那批低半格，同一格里两件东西脚不在一条线上。
+        .offset(y: mine == nil ? lift : -mineH(mine!, width: mineW) / 2 + geoRoom.tileBottom)
         .scaleEffect(lifted ? 1.06 : 1)
         .shadow(color: .black.opacity(lifted ? 0.28 : 0.12),
                 radius: lifted ? 10 : 3, y: lifted ? 8 : 2)

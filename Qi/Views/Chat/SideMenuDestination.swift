@@ -4,7 +4,6 @@ import SwiftUI
 struct SideMenuDestination: View {
 
     let item: SideMenuItem
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
@@ -12,11 +11,13 @@ struct SideMenuDestination: View {
                 WallpaperBackground()
                 content
             }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("关上") { dismiss() }
-                }
-            }
+            // ⚠️ **这儿以前有个「关上」。已经删了，别再加回来。**
+            //
+            // 她说的：「删掉『关上』按钮 让文字居中 反正可以下滑关闭
+            // 其他的没有功能的按钮也删掉。」
+            //
+            // 这一层是 sheet，下滑就关；那个按钮做的是系统已经做了的事，
+            // 只是把标题挤得不居中、还在顶上多占一行。
         }
     }
 

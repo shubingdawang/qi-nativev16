@@ -97,6 +97,9 @@ struct ClawdHomeView: View {
     @State private var hand: HandTool = .pat
     /// 拖出来的那只手在屋里的什么位置。nil = 没在拖
     @State private var handAt: CGPoint?
+    /// 这只手**此刻**是不是压在他身上。
+    /// 进去的那一刻算一次，出来再进去算下一次——见 `handLayer` 里那段。
+    @State private var handOnHim = false
     /// 他的耐心。⚠️ **要活过一次次触碰**，所以是 @State 不是局部变量——
     /// 每碰一次重新算的话，戳第二十下和第一下一样，那就只是个音效按钮。
     @State private var patience = ClawdPatience()
@@ -197,8 +200,14 @@ struct ClawdHomeView: View {
             default: shop
             }
         }
-        .navigationTitle("clawd")
-        .navigationBarTitleDisplayMode(.inline)
+        // ⚠️ **这一页自己画标题，不用导航栏。**
+        //
+        // 她说的：「金币在按钮下面的就是之前的，现在没有在按钮下面，
+        // 所以改回去。」——中间隔出来的那一行就是导航栏：
+        // 它自己占 44 点，上下还各留一截，金币于是被顶下去六十多点。
+        // 「关上」删掉之后那一行只剩一个「clawd」，不值一整行；
+        // 标题挪进 `header` 的正中间，金币就又贴回最顶上了。
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             // 老家具分屋。**得在这儿分**——户型图上那几个数字要用，
             // 只在进了某一间之后才分的话，户型图第一眼全是「还空着」
@@ -274,6 +283,22 @@ struct ClawdHomeView: View {
     // MARK: 顶上那条
 
     private var header: some View {
+        headerRow
+            // 标题**叠在这一行正中间**，不排进 HStack。
+            // 排进去的话它会被两边按钮的宽度推得偏一边，
+            // 而两边的宽度是会变的（签到只在没签到时才有）。
+            .overlay {
+                Text("clawd")
+                    .heading(16)
+                    .foregroundStyle(Theme.textMain(scheme))
+                    .allowsHitTesting(false)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 6)
+            .padding(.bottom, 10)
+    }
+
+    private var headerRow: some View {
         HStack(spacing: 10) {
             // 点金币栏 = 自己改金币。她要的：「再来一个作弊系统，
             // 就是关于我的金币，点击目前的金币栏我可以随意增减我的金币数量。」
@@ -339,8 +364,6 @@ struct ClawdHomeView: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 10)
     }
 
 
@@ -369,6 +392,12 @@ struct ClawdHomeView: View {
                         .foregroundStyle(app.settings.accentColor)
                 }
                 .buttonStyle(.plain)
+
+                // 「他在干嘛 · 在哪间」。原来是竖着一块浮在屋子左上角的，
+                // 会压住最里面那一格，所以横过来排进这一行。
+                ClawdBadge(store: store, viewing: r, onFollow: {
+                    enter(store.clawdRoom)
+                }, compact: true)
 
                 Spacer(minLength: 4)
 
@@ -503,15 +532,9 @@ struct ClawdHomeView: View {
                 //
                 // 记一句：**尺寸要问一个稳定的东西要，别问「还剩多少」。**
                 .containerRelativeFrame(.vertical) { h, _ in max(320, h - 200) }
-                .overlay(alignment: .topLeading) {
-                    // 左上角那个头像 + 一行「他在干嘛」（她要的）。
-                    // 点它 = 跳到他那一间。
-                    ClawdBadge(store: store, viewing: r) {
-                        enter(store.clawdRoom)
-                    }
-                    .padding(.leading, 18)
-                    .padding(.top, 4)
-                }
+                // ⚠️ **屋子上面不再叠「他在干嘛」那块牌子。**
+                // 她说的：「左上的 clawd 有点挡住了，把那行去掉就不会挡到了。」
+                // 它挪到上面那条房间名里了（横着的一小条，见 `roomBar`）。
         }
     }
 
@@ -980,13 +1003,37 @@ struct ClawdHomeView: View {
                         handAt == nil ? 0.25 : 0.7), lineWidth: 1.5))
                     // ⚠️ **点和拖挂在同一块上，靠 minimumDistance 分开。**
                     // 拖过 8 点才算拖；没拖动就是点，换下一个手势。
+                    // ⚠️⚠️ **碰到就算，不用松手。**
+                    //
+                    // 她说的：「手势必须拖到他身上再放掉才能触发，
+                    // 　修改成我拖着不放在他身上就触发。比如我用戳戳的
+                    // 　那个手势，拖到他身上一下算是戳一下，我移开再拖到
+                    // 　他身上等于戳第二下。」
+                    //
+                    // 所以判定改成**进入他的范围那一刻**触发一次，
+                    // 出去再进来算下一次。`handOnHim` 记着现在在不在里面——
+                    // 没有它的话每一帧 onChanged 都会算一下，
+                    // 手指在他身上停半秒就是几十次戳。
                     .gesture(
                         DragGesture(minimumDistance: 8, coordinateSpace: .named("room"))
-                            .onChanged { v in handAt = v.location }
+                            .onChanged { v in
+                                handAt = v.location
+                                let over = touching(v.location, in: size)
+                                if over, !handOnHim {
+                                    handOnHim = true
+                                    contact(in: size)
+                                } else if !over {
+                                    handOnHim = false
+                                }
+                            }
                             .onEnded { v in
-                                let p = v.location
+                                // 一路滑进去再松手的，进去那一下已经算过了；
+                                // 这儿只兜住「一帧都没落在里面就松手」的那种
+                                if !handOnHim, touching(v.location, in: size) {
+                                    contact(in: size)
+                                }
                                 handAt = nil
-                                drop(p, in: size)
+                                handOnHim = false
                             }
                     )
                     .onTapGesture { cycleHand() }
@@ -1008,10 +1055,10 @@ struct ClawdHomeView: View {
         }
     }
 
-    /// 手松开的地方碰到他没有。
-    private func drop(_ p: CGPoint, in size: CGSize) {
+    /// 这个点落在他身上没有。
+    private func touching(_ p: CGPoint, in size: CGSize) -> Bool {
         // 他不在这一间、或者正藏着，就没得碰
-        guard shownRoom == store.clawdRoom, !hiding, !held else { return }
+        guard shownRoom == store.clawdRoom, !hiding, !held else { return false }
         let tile = IsoRoom.fit(in: size, as: store.projection).tileW
         let him = CGPoint(x: clawdX * size.width, y: clawdY * size.height)
         let dx = p.x - him.x, dy = p.y - him.y
@@ -1019,8 +1066,11 @@ struct ClawdHomeView: View {
         // 而且头顶还顶着说话的气泡，位置会往下挪半个身子。
         // 差几个点就没碰到的话，她会以为这功能是坏的。
         let reach = tile * 1.2
-        guard dx * dx + dy * dy < reach * reach else { return }
+        return dx * dx + dy * dy < reach * reach
+    }
 
+    /// 碰到他了：给一次反应。
+    private func contact(in size: CGSize) {
         if hand == .seek { hide(in: size); return }
 
         let r = patience.touch(hand)

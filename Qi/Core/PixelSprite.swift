@@ -132,7 +132,12 @@ enum ClawdSprites {
     static let palette: [Character: Color] = [
         "p": Color(hexString: "F2715F")!,
         "k": Color(hexString: "000000")!,
-        "u": Color(hexString: "7A2230")!,   // 嘴
+        // 嘴。⚠️ **现在一张图纸都不用它了，是故意的。**
+        // 她说的：「点击 clawd 会张嘴，删掉嘴，clawd 非必要的时候不需要嘴，
+        // 其他有的话也删掉。」——`happy` / `smile` / `cry2` 三张里那块
+        // 四格宽的深色嘴已经填回身体色。留着这一格只是为了万一以后
+        // 真有「张嘴」那一档（吃东西之类）时还有得用；**别再往常态表情里加**。
+        "u": Color(hexString: "7A2230")!,
         "G": Color(hexString: "0C1018")!,
         "g": Color(hexString: "23272F")!,
         "h": Color(hexString: "2F343D")!,   // 笔记本亮一档
@@ -309,9 +314,9 @@ enum ClawdSprites {
         "..pppppppppppppppppppppppppppppp....",
         "..pppppppppppppppppppppppppppppp....",
         "..pppppppppppppppppppppppppppppp....",
-        "..pppppppppppppuuuuppppppppppppp....",
-        "......pppppppppuuuuppppppppp........",
-        "......pppppppppuuuuppppppppp........",
+        "..pppppppppppppppppppppppppppppp....",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
         "......pppppppppppppppppppppp........",
         "......pppppppppppppppppppppp........",
         "........pp..pp......pp..pp..........",
@@ -658,9 +663,9 @@ enum ClawdSprites {
         "..ppppppppkkppppppppppkkpppppppp....",
         "......ppppkkppppppppppkkpppp........",
         "......pppppppppppppppppppppp........",
-        "......pppppppppuuuuppppppppp........",
-        "......pppppppppuuuuppppppppp........",
-        "......pppppppppuuuuppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
         "......pppppppppppppppppppppp........",
         "......pppppppppppppppppppppp........",
         "........pp..pp......pp..pp..........",
@@ -698,9 +703,9 @@ enum ClawdSprites {
         "..ppppppppkkppppppppppkkpppppppp....",
         "..ppppppppkkppppppppppkkpppppppp....",
         "..pppppppppppppppppppppppppppppp....",
-        "..pppppppppppppuuuuppppppppppppp....",
-        "......pppppppppuuuuppppppppp........",
-        "......pppppppppuuuuppppppppp........",
+        "..pppppppppppppppppppppppppppppp....",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
         "......pppppppppppppppppppppp........",
         "......pppppppppppppppppppppp........",
         "........pp..pp......pp..pp..........",
@@ -2447,9 +2452,9 @@ struct ClawdView: View {
             if mood == .loving, mood.gif == nil {
                 ZStack {
                     ForEach(0..<3, id: \.self) { i in
-                        JournalStickerShape(kind: "heart")
-                            .fill(Color(hexString: "FF6B81") ?? .pink)
-                            .frame(width: scale * 3.5, height: scale * 3.5)
+                        PixelHeart()
+                            .fill(Color(hexString: "FF5470") ?? .pink)
+                            .frame(width: scale * 4, height: scale * 3.5)
                             .offset(x: CGFloat(i - 1) * scale * 5,
                                     y: hearts ? -scale * 11 : -scale * 5)
                             .opacity(hearts ? 0 : 0.9)
@@ -2522,6 +2527,47 @@ struct SpriteHitShape: Shape {
                                  width: cw * CGFloat(run),
                                  height: ch))
                 x += run
+            }
+        }
+        return p
+    }
+}
+
+/// 他甜的时候头顶冒的那颗心。
+///
+/// ⚠️ **是像素心，不是贝塞尔曲线。**
+///
+/// 她说的：「这个冒爱心的表情需要改一下，爱心太不标准了，
+/// 边上这个红圈是什么东西也看不懂。」
+///
+/// 原来借的是手帐贴纸那套 `JournalStickerShape(kind: "heart")`。
+/// 那条路径是给几十点大的贴纸画的：两段 `addCurve` 加两段 `addArc`，
+/// 缩到十来点之后两个圆弧几乎叠在一起，非零环绕数一填就成了一圈红边、
+/// 中间反而空着——她看见的「红圈」就是那个。
+///
+/// 8×7 的方块心不会有这个问题：多小都还是一颗心，
+/// 而且跟整屋子的像素图是同一种画法。
+struct PixelHeart: Shape {
+
+    private static let rows = [
+        ".##..##.",
+        "########",
+        "########",
+        ".######.",
+        ".######.",
+        "..####..",
+        "...##..."
+    ]
+
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        let w = r.width / 8, h = r.height / CGFloat(Self.rows.count)
+        for (y, row) in Self.rows.enumerated() {
+            for (x, ch) in row.enumerated() where ch == "#" {
+                // 各格多画半个点，免得缩放之后格与格之间透出细缝
+                p.addRect(CGRect(x: r.minX + CGFloat(x) * w,
+                                 y: r.minY + CGFloat(y) * h,
+                                 width: w + 0.5, height: h + 0.5))
             }
         }
         return p

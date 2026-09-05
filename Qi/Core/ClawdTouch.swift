@@ -52,6 +52,17 @@ struct ClawdPatience {
     private(set) var annoy = 0
     private var lastTouch = Date.distantPast
 
+    /// 连着碰了几下（每下间隔不到 `rapidGap` 才算连）。
+    ///
+    /// 她要的：「有快速连续戳的特殊反应。」
+    /// ⚠️ 跟 `annoy` **不是一回事**：`annoy` 是攒起来的气，晾一会儿会消；
+    /// 这个只管「这一串是不是一口气戳下来的」，手一停就归零。
+    /// 慢慢戳五下和一秒内戳五下，他该有不一样的反应。
+    private var rapid = 0
+    static let rapidGap: TimeInterval = 0.8
+    /// 到这个数就是被连戳到炸毛了
+    static let frantic = 5
+
     static let boiling = 4
 
     /// 恼到不想理她了
@@ -81,6 +92,11 @@ struct ClawdPatience {
 
     /// 碰他一下，返回该有的反应。
     mutating func touch(_ tool: HandTool, now: Date = Date()) -> TouchReply {
+        // ⚠️ **先记住这一下离上一下多久，再让 `cool` 去改 `lastTouch`。**
+        // 顺序反了的话 `rapid` 永远算不出来。
+        let quick = now.timeIntervalSince(lastTouch) < Self.rapidGap
+        rapid = quick ? rapid + 1 : 1
+
         cool(now)
         defer { lastTouch = now }
 
@@ -100,12 +116,24 @@ struct ClawdPatience {
                                   line: ["……好吧", "原谅你了", "哼，就这一次"].pick("好吧"),
                                   haptic: .soft)
             }
-            return TouchReply(mood: .loving, hold: 2.0,
+            // ⚠️ **摸摸给的是 `.happy`，不是 `.loving`。**
+            // 她说的：「摸摸不要这个表情了，就改成开心或者是撒娇的表情，
+            // 这个爱心的表情留着做亲密事的时候。」
+            // 冒爱心那一档现在只留给真的亲密的时候。
+            return TouchReply(mood: .happy, hold: 2.0,
                               line: ["舒服……", "嘿嘿", "再摸摸", "唔~"].pick("嘿嘿"),
                               haptic: .soft)
 
         case .poke:
             annoy += 1
+            // 一口气戳到第五下：炸毛。**排在 `sulking` 前面**——
+            // 连戳本来就是要盖过慢慢攒起来那一档，不然她永远看不到这个。
+            if rapid >= Self.frantic {
+                return TouchReply(mood: .flail, hold: 2.6,
+                                  line: ["啊啊啊别戳了！", "你够了！", "我要被戳穿了"]
+                                      .pick("啊啊啊别戳了！"),
+                                  haptic: .heavy)
+            }
             if sulking {
                 return TouchReply(mood: .upset, hold: 1.6,
                                   line: ["……", "不要戳了啦", "生气了"].pick("……"),
