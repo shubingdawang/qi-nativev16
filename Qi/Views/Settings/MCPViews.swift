@@ -217,7 +217,7 @@ struct MCPFormView: View {
                     }
                 }
             }
-            .glassSheet()
+            .transparentList()
             .navigationTitle(isNew ? "新增 MCP" : "编辑 MCP")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

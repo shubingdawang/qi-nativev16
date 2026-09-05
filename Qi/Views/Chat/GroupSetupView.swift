@@ -81,7 +81,6 @@ struct GroupSetupView: View {
                     Text("按这个顺序轮流说话，后说的人能看到前面刚说完的。左滑删除，长按可以拖着换顺序。")
                 }
             }
-            .glassSheet()
             .transparentList()
             .listRowBackground(GlassRowBackground())
             .navigationTitle("群聊")
@@ -163,7 +162,6 @@ struct GroupMemberFormView: View {
                     Text("只对这一位生效，会接在群聊说明后面。不填就只按群里的公共设定来。")
                 }
             }
-            .glassSheet()
             .transparentList()
             .listRowBackground(GlassRowBackground())
             .navigationTitle(member.name.isEmpty ? "新成员" : member.name)

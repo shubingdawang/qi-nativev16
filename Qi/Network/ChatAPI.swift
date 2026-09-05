@@ -286,6 +286,36 @@ enum ChatAPI {
             || t.contains("unknown parameter") || t.contains("extra fields")
     }
 
+    // MARK: 缓存保温一小时
+
+    /// 打上去的那个缓存标记长什么样。
+    ///
+    /// ## 她报的
+    ///
+    /// > 缓存命中率很低（39%）。
+    ///
+    /// ## 去看那几个数就明白了
+    ///
+    /// 那天：**6 次调用**、未命中 383.1k、命中 245.4k。
+    /// 平均每次有 64k 是全价重读的——断点明明打对了（工具+身份一个断点、
+    /// 历史一个断点），可它们**根本没等到下一次请求**。
+    ///
+    /// Anthropic 的缓存默认只活 **5 分钟**。她一天说六次话，
+    /// 两次之间隔着几十分钟到几小时——**几乎每一次都是冷的**，
+    /// 缓存建好、五分钟后过期、下一句再从头建一遍。
+    /// 那 245k 命中是同一阵里连着说几句攒出来的。
+    ///
+    /// 所以断点不用再改，要改的是**它能活多久**：`ttl: "1h"`。
+    ///
+    /// ⚠️ 一小时那档的**写入**贵一点（基础价的 2 倍，5 分钟那档是 1.25 倍）。
+    /// 但她是**按次计费**的：写入多少 token 跟她要付的钱没有关系，
+    /// 而首字快不快、他记不记得住上下文，是她每天都在感受的。
+    /// 换句话说这一档对她**只有好处没有代价**。
+    ///
+    /// ⚠️ 中转站不认这个字段的话，多半是当成多余的键忽略掉——
+    /// 那就退回五分钟那档，跟改之前一模一样，不会报错。
+    static let cacheMark: [String: Any] = ["type": "ephemeral", "ttl": "1h"]
+
     private static func buildBody(
         model: String,
         messages: [OutgoingMessage],
@@ -372,7 +402,7 @@ enum ChatAPI {
             if !m.stablePrefix.isEmpty {
                 item["content"] = [
                     ["type": "text", "text": m.stablePrefix,
-                     "cache_control": ["type": "ephemeral"]] as [String: Any],
+                     "cache_control": cacheMark] as [String: Any],
                     ["type": "text", "text": m.text] as [String: Any]
                 ]
                 payload.append(item)
@@ -400,7 +430,7 @@ enum ChatAPI {
                     parts = [["type": "text", "text": (item["content"] as? String) ?? ""]]
                 }
                 if !parts.isEmpty {
-                    parts[parts.count - 1]["cache_control"] = ["type": "ephemeral"]
+                    parts[parts.count - 1]["cache_control"] = cacheMark
                     item["content"] = parts
                 }
             }

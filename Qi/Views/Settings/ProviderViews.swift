@@ -54,7 +54,6 @@ struct ProviderListView: View {
                 }
             }
         }
-        .glassSheet()
         .transparentList()
         .listRowBackground(GlassRowBackground())
         .safeAreaInset(edge: .bottom) {
@@ -188,7 +187,6 @@ struct ProviderFormView: View {
                     }
                 }
             }
-            .glassSheet()
             .transparentList()
             .listRowBackground(GlassRowBackground())
             .navigationTitle(isNew ? "新增供应商" : "编辑供应商")

@@ -211,6 +211,7 @@ struct ChatView: View {
                         },
                         onRetry: { msg in app.retry(msg.id, in: conv.id) },
                         onOpenProcess: { msg in panel = .process(msg) },
+                        onOpenShape: { panel = .shape },
                         onOpenLibrary: { place in
                             // 存到哪儿决定开哪一栏：动图 → GIF，
                             // 表情包 → 表情包，别的（相册文件夹）→ 图片
@@ -469,6 +470,8 @@ struct ChatView: View {
                 }
             case .process(let msg):
                 ProcessSheet(message: msg)
+            case .shape:
+                PromptShapeView()
             }
         }
         .sheet(isPresented: $showingSearch) {
@@ -1802,6 +1805,7 @@ struct MessageListView: View {
     var onRetry: (ChatMessage) -> Void = { _ in }
     /// 点了「过程」那条。弹窗归聊天页挂，不挂在气泡上。
     var onOpenProcess: (ChatMessage) -> Void = { _ in }
+    var onOpenShape: () -> Void = {}
     var onOpenLibrary: (String) -> Void = { _ in }
     /// 长按头像 @ 这个人
     var onMention: (String) -> Void = { _ in }
@@ -1862,6 +1866,7 @@ struct MessageListView: View {
                             onOpenMenu: { page in onOpenMenu(message, page) },
                             onRetry: { onRetry(message) },
                             onOpenProcess: { onOpenProcess(message) },
+                            onOpenShape: onOpenShape,
                             onOpenLibrary: { place in onOpenLibrary(place) },
                             onCloseMenu: onCloseMenu,
                             showsHeader: showsHeader(at: index),

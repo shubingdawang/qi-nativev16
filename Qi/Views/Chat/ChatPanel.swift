@@ -31,6 +31,8 @@ enum ChatPanel: Identifiable {
     case group
     /// 「他刚才干了什么」——带上是哪一条消息
     case process(ChatMessage)
+    /// 「这一份都花在哪儿」——点那行 tokens 进来的
+    case shape
 
     var id: String {
         switch self {
@@ -44,6 +46,7 @@ enum ChatPanel: Identifiable {
         // 把里面的内容换掉。都返回 "process" 的话，
         // 关掉再点另一条，弹出来的还是上一条的内容。
         case .process(let m): return "process-" + m.id.uuidString
+        case .shape:   return "shape"
         }
     }
 }

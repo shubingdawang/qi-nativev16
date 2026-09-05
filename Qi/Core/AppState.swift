@@ -67,6 +67,15 @@ final class AppState: ObservableObject {
     private var streamTasks: [UUID: Task<Void, Never>] = [:]
     private var mcpClients: [UUID: MCPClient] = [:]
 
+    /// 上一次真发出去的那份请求，分块量了一遍。见 `PromptShape`。
+    /// 点聊天最底下那行 tokens 就能看见（`PromptShapeView`）。
+    ///
+    /// ⚠️ **不是 `@Published`，是故意的。** 每发一句话就换一次，
+    /// 而 `AppState` 是整个 App 都订阅着的——标成 @Published 等于
+    /// 每一轮多一次全局重画，只为了一页她偶尔才点开的仪表。
+    /// 那一页打开的时候它早就写好了，读得到。
+    var lastPromptShape: PromptShape?
+
     // MARK: 初始化
 
     init() {
@@ -1376,6 +1385,12 @@ final class AppState: ObservableObject {
                 // 不然底下那条流式占位气泡会一直转着下不来。
                 let latest = self.index(of: conversationID).map { self.conversations[$0] } ?? conv
                 var apiMessages = self.buildAPIMessages(from: latest)
+                // 量一下这一份都花在哪儿（给「都花在哪儿」那一页看）。
+                // ⚠️ 量的是**真要发出去的这两个数组**，不照着 `buildAPIMessages`
+                // 再拼一遍——照着拼就是第二份真相，那边改了这边不改，
+                // 仪表就开始撒谎，而撒谎的仪表比没有仪表更糟。
+                self.lastPromptShape = PromptShape.measure(tools: toolDefs,
+                                                           messages: apiMessages)
                 // 模型可能要调工具、看完结果再接着说，所以要来回好几轮。
                 // 上限 8 轮，防止它自己跟自己没完没了。
                 var round = 0

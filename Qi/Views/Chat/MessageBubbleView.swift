@@ -27,6 +27,8 @@ struct MessageBubbleView: View {
     var onRetry: () -> Void = {}
     /// 点了那条「过程」——弹窗由聊天页去开，见上面按钮那儿的说明。
     var onOpenProcess: () -> Void = {}
+    /// 点那行 tokens：「这一份都花在哪儿」
+    var onOpenShape: () -> Void = {}
     /// 点他存图那张卡 → 打开相册。参数是存到哪儿（表情包 / 动图 / 文件夹名）
     var onOpenLibrary: (String) -> Void = { _ in }
     var onCloseMenu: () -> Void = {}
@@ -416,9 +418,23 @@ struct MessageBubbleView: View {
                 }
 
                 if let tokens = message.totalTokens, !isUser {
-                    Text("\(tokens) tokens")
+                    // 点它 = 「这一份都花在哪儿」。
+                    // 她问过好几次「12 万都花在哪儿」「是注入太多了吗」，
+                    // 这个数字本来就是她盯着看的地方，答案就挂在它身上最顺手。
+                    // ⚠️ **弹窗不挂在这儿**（理由见 `processBlock` 里那一大段：
+                    // 气泡是几百条里的一条，挂在这儿就是几百个弹窗宿主
+                    // 同时装在列表里，整个 App 会点哪儿都没反应）。
+                    // 跟「他刚才干了什么」走同一条路：交给聊天页去挂。
+                    Button { onOpenShape() } label: {
+                        HStack(spacing: 3) {
+                            Text("\(tokens) tokens")
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 7, weight: .semibold))
+                        }
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
 
