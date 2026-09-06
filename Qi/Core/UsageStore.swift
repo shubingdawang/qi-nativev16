@@ -26,6 +26,28 @@ struct TokenUsage: Codable, Hashable {
     /// 调用了几次
     var calls: Int = 0
 
+    // MARK: 这次的缓存落在哪个档
+    //
+    // Anthropic 的回包里除了一个总数 `cache_creation_input_tokens`，
+    // 还有一个 `cache_creation` 把它**拆成两个桶**：
+    //
+    //     "cache_creation": {
+    //       "ephemeral_5m_input_tokens": 0,
+    //       "ephemeral_1h_input_tokens": 1234
+    //     }
+    //
+    // ⚠️ 这是**唯一能当场知道 `ttl: "1h"` 有没有被认**的办法。
+    // 光比两次的 cache_read 是分不出来的——两次挨着发，
+    // 五分钟档也照样命中。原来探针那儿只能写一句
+    // 「得隔一小时再发一次才知道」，现在不用了。
+    //
+    // ⚠️ 两个都是 0 也**不代表被降档了**：不少中转根本不转这个字段。
+    // 分不清「没降档」和「没告诉我」，所以得分三种说法。
+    /// 写进一小时档的
+    var cache1h: Int = 0
+    /// 写进五分钟档的
+    var cache5m: Int = 0
+
     var total: Int { input + cacheRead + cacheWrite + output }
     var inputAll: Int { input + cacheRead + cacheWrite }
 
@@ -45,7 +67,9 @@ struct TokenUsage: Codable, Hashable {
             cacheWrite: a.cacheWrite + b.cacheWrite,
             output: a.output + b.output,
             reasoning: a.reasoning + b.reasoning,
-            calls: a.calls + b.calls
+            calls: a.calls + b.calls,
+            cache1h: a.cache1h + b.cache1h,
+            cache5m: a.cache5m + b.cache5m
         )
     }
 
@@ -74,6 +98,12 @@ struct TokenUsage: Codable, Hashable {
         u.cacheWrite = (usage["cache_creation_input_tokens"] as? Int)
             ?? (promptDetails?["cache_creation_tokens"] as? Int)
             ?? 0
+
+        // 拆开的那两个桶。没有这个字段就都留 0（见上面那段注释）。
+        if let split = usage["cache_creation"] as? [String: Any] {
+            u.cache1h = (split["ephemeral_1h_input_tokens"] as? Int) ?? 0
+            u.cache5m = (split["ephemeral_5m_input_tokens"] as? Int) ?? 0
+        }
 
         if let prompt = usage["prompt_tokens"] as? Int {
             // OpenAI 口径：prompt 里已经含了命中的缓存

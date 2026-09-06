@@ -331,8 +331,23 @@ enum RelayProbeRunner {
                     + "或者上游根本不支持。App 这边标得再对也没用。"
             }
             if probe.key == "ttl1h", r.tone == .good {
-                r.verdict += "\n⚠️ 这一项只证明它**没被这个字段噎住**。"
-                    + "真的活没活满一小时，得隔一小时再发一次才知道。"
+                // ⚠️ **不用等一小时了。** 回包里 `cache_creation` 会把写入
+                // 拆成 1h / 5m 两个桶，落在哪个桶就是哪个档。
+                // 出处：《别让缓存睡着》那篇里的自查办法。
+                if a.cache1h > 0 {
+                    r.verdict += "\n✅ 回包说这 \(a.cache1h) 个写进了**一小时档**"
+                        + "（`cache_creation.ephemeral_1h_input_tokens`）。"
+                        + "这个中转是真认 `ttl` 的。"
+                } else if a.cache5m > 0 {
+                    r.verdict += "\n⚠️ 回包说这 \(a.cache5m) 个写进了**五分钟档**"
+                        + "（`cache_creation.ephemeral_5m_input_tokens`）。"
+                        + "\n→ 它收下了 `ttl: \"1h\"` 却**没照办**，"
+                        + "悄悄降回了五分钟。隔十几分钟不说话，缓存就凉了。"
+                } else {
+                    r.verdict += "\n⚠️ 这一项只证明它**没被这个字段噎住**。"
+                        + "回包里没有 `cache_creation` 那两个桶，"
+                        + "所以分不清是真活一小时还是被降回了五分钟。"
+                }
             }
             r.verdict += "\n\n两次分别：新输入 \(a.input)/\(b.input)，"
                 + "命中 \(a.cacheRead)/\(b.cacheRead)，"
