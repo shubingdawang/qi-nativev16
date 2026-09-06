@@ -119,7 +119,7 @@ struct ThoughtPoolView: View {
                     if showResolved {
                         ForEach(pool.resolvedOnes.prefix(20)) { t in
                             HStack(spacing: 8) {
-                                Text(t.text)
+                                Text(MD.inline(t.text))
                                     .font(.app(12))
                                     .foregroundStyle(Theme.textMuted(scheme))
                                     .strikethrough()
@@ -183,7 +183,7 @@ struct ThoughtPoolView: View {
                        height: t.isObsession ? 8 : 6)
                 .scaleEffect(t.isObsession && breathing ? 1.25 : 1)
 
-            Text(t.text)
+            Text(MD.inline(t.text))
                 .font(.app(size, weight: t.isObsession ? .medium : .regular))
                 .foregroundStyle(Theme.textMain(scheme).opacity(opacity))
                 .lineLimit(2)

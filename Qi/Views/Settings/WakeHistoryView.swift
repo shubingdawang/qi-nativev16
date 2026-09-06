@@ -156,7 +156,7 @@ struct WakeHistoryDrawer: View {
             switch e.kind {
             case .spoke:
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(e.text)
+                    Text(MD.inline(e.text))
                         .font(.app(13))
                         .foregroundStyle(Theme.textMain(scheme))
                         .fixedSize(horizontal: false, vertical: true)
@@ -178,7 +178,7 @@ struct WakeHistoryDrawer: View {
                     Text("没醒成 · 试了 \(e.tries) 次")
                         .font(.app(12, weight: .medium))
                         .foregroundStyle(Color.orange)
-                    Text(e.text)
+                    Text(MD.inline(e.text))
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)

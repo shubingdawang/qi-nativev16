@@ -303,7 +303,7 @@ struct MediaGridView: View {
                             }
                             .contextMenu {
                                 if !item.note.isEmpty {
-                                    Text(item.note)
+                                    Text(MD.inline(item.note))
                                 }
                                 Button {
                                     preview = item

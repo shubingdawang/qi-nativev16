@@ -168,7 +168,7 @@ struct QuestView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             if !q.detail.isEmpty {
-                Text(q.detail)
+                Text(MD.inline(q.detail))
                     .font(.app(11.5))
                     .foregroundStyle(Theme.textSoft(scheme))
                     .fixedSize(horizontal: false, vertical: true)

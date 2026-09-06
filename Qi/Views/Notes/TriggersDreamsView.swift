@@ -66,7 +66,7 @@ struct TriggersDreamsView: View {
                                     .foregroundStyle(app.settings.accentColor)
                             }
                             if !w.note.isEmpty {
-                                Text(w.note)
+                                Text(MD.inline(w.note))
                                     .font(.app(10))
                                     .foregroundStyle(Theme.textMuted(scheme))
                                     .fixedSize(horizontal: false, vertical: true)

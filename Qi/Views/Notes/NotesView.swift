@@ -1217,7 +1217,7 @@ struct PeriodPane: View {
                                                     .font(.app(10))
                                                     .foregroundStyle(Theme.textMuted(scheme))
                                             }
-                                            Text(n.text)
+                                            Text(MD.inline(n.text))
                                                 .font(.app(13))
                                                 .foregroundStyle(Theme.textSoft(scheme))
                                                 .fixedSize(horizontal: false, vertical: true)

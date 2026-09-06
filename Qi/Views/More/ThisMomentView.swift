@@ -218,7 +218,7 @@ struct ThisMomentView: View {
                 Text(title)
                     .font(.app(13))
                     .foregroundStyle(Theme.textMain(scheme))
-                Text(note)
+                Text(MD.inline(note))
                     .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
             }

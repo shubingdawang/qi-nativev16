@@ -173,7 +173,7 @@ struct MemoryLibraryView: View {
             ForEach(Array(store.candidates.enumerated()), id: \.element.id) { idx, c in
                 if idx > 0 { SettingsDivider() }
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(c.content)
+                    Text(MD.inline(c.content))
                         .font(.app(15))
                         .foregroundStyle(Theme.textMain(scheme))
                         .fixedSize(horizontal: false, vertical: true)
@@ -612,7 +612,7 @@ struct MemoryTranscriptListView: View {
                                         .font(.app(10))
                                         .foregroundStyle(Theme.textMuted(scheme))
                                 }
-                                Text(t.summary ?? "还没写摘要")
+                                Text(MD.inline(t.summary ?? "还没写摘要"))
                                     .font(.app(11))
                                     .foregroundStyle(Theme.textMuted(scheme))
                                     .lineLimit(3)
@@ -661,7 +661,7 @@ struct MemoryTranscriptReader: View {
                             Text("\(i)  \(msg.role)")
                                 .font(.app(10))
                                 .foregroundStyle(Theme.textMuted(scheme))
-                            Text(msg.text)
+                            Text(MD.inline(msg.text))
                                 .font(.app(13))
                                 .foregroundStyle(Theme.textMain(scheme))
                                 .fixedSize(horizontal: false, vertical: true)
@@ -700,7 +700,7 @@ struct LetterReaderView: View {
                         Text("\(letter.by ?? "他") · \(String(letter.updated_at.prefix(10)))")
                             .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme))
-                        Text(letter.text)
+                        Text(MD.inline(letter.text))
                             .font(.app(14))
                             .foregroundStyle(Theme.textMain(scheme))
                             .fixedSize(horizontal: false, vertical: true)

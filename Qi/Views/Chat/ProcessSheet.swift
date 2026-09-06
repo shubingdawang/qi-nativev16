@@ -249,7 +249,7 @@ struct ProcessSheet: View {
                                        design: s.icon == nil ? .default : .monospaced))
                             .foregroundStyle(Theme.textMain(scheme))
                         if !s.note.isEmpty {
-                            Text(s.note)
+                            Text(MD.inline(s.note))
                                 .font(.app(9.5))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
@@ -277,7 +277,7 @@ struct ProcessSheet: View {
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    Text(oneLine(s.body))
+                    Text(MD.inline(oneLine(s.body)))
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .lineLimit(1)

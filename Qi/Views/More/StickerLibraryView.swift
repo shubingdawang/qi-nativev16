@@ -367,7 +367,7 @@ struct StickerLibraryView: View {
                         }
                         .contextMenu {
                             if !sticker.description.isEmpty {
-                                Text(sticker.description)
+                                Text(MD.inline(sticker.description))
                             }
                             Button {
                                 editing = sticker

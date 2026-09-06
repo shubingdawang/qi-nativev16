@@ -68,7 +68,7 @@ struct LocalBodyCard: View {
                         eventRemaining)
                 }
 
-                Text(s.cycle.note)
+                Text(MD.inline(s.cycle.note))
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .fixedSize(horizontal: false, vertical: true)
@@ -170,7 +170,7 @@ struct LocalBodyCard: View {
                                         }
                                         .buttonStyle(.plain)
                                     }
-                                    Text(e.line)
+                                    Text(MD.inline(e.line))
                                         .font(.app(11, design: .rounded))
                                         .foregroundStyle(app.settings.accentColor)
                                     if !e.why.isEmpty {

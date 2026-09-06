@@ -134,7 +134,7 @@ struct PromiseView: View {
             .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(p.text)
+                Text(MD.inline(p.text))
                     .font(.app(14))
                     .foregroundStyle(p.done ? Theme.textMuted(scheme) : Theme.textMain(scheme))
                     .strikethrough(p.done, color: Theme.textMuted(scheme))

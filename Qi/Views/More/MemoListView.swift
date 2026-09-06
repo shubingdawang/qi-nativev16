@@ -325,7 +325,7 @@ struct MemoEditor: View {
                                     .foregroundStyle(Theme.textMain(scheme))
                                 ForEach(memo.notes) { n in
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(n.text)
+                                        Text(MD.inline(n.text))
                                             .font(.app(13))
                                             .foregroundStyle(Theme.textSoft(scheme))
                                         Text(n.author)

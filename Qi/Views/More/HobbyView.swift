@@ -266,7 +266,7 @@ struct HobbyView: View {
                 Image(systemName: h.like ? "heart.fill" : "leaf.fill")
                     .font(.app(11))
                     .foregroundStyle(h.like ? HomePalette.bodyPink : HomePalette.sage)
-                Text(h.text)
+                Text(MD.inline(h.text))
                     .font(.app(15, weight: .medium))
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer(minLength: 4)
@@ -285,7 +285,7 @@ struct HobbyView: View {
                 .foregroundStyle(Theme.textMuted(scheme))
 
             if !h.reason.isEmpty {
-                Text(h.reason)
+                Text(MD.inline(h.reason))
                     .font(.app(12))
                     .foregroundStyle(Theme.textSoft(scheme))
                     .fixedSize(horizontal: false, vertical: true)
@@ -389,7 +389,7 @@ struct HobbyView: View {
                 Image(systemName: like ? "heart.fill" : "leaf.fill")
                     .font(.app(9))
                     .foregroundStyle(like ? HomePalette.bodyPink : HomePalette.sage)
-                Text(h.text)
+                Text(MD.inline(h.text))
                     .font(.app(13, weight: .medium))
                     .foregroundStyle(Theme.textMain(scheme))
                 if h.hits > 1 {
@@ -457,7 +457,7 @@ struct HobbyView: View {
                 Text("你俩同时\(a.like ? "喜欢" : "讨厌")上了")
                     .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
-                Text(a.text)
+                Text(MD.inline(a.text))
                     .font(.app(15, weight: .medium))
                     .foregroundStyle(HomePalette.bodyPink)
                 Button {

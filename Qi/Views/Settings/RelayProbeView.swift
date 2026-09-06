@@ -149,7 +149,7 @@ struct RelayProbeView: View {
                 .disabled(running != nil)
             }
 
-            Text(probe.why)
+            Text(MD.inline(probe.why))
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)

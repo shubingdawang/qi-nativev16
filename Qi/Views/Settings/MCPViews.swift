@@ -206,7 +206,7 @@ struct MCPFormView: View {
                                     Text(server.tools[i].name)
                                         .font(.app(14, weight: .medium, design: .monospaced))
                                     if !server.tools[i].description.isEmpty {
-                                        Text(server.tools[i].description)
+                                        Text(MD.inline(server.tools[i].description))
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
                                             .lineLimit(2)

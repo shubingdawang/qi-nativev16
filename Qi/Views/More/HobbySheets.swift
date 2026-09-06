@@ -310,7 +310,7 @@ struct HobbyHistorySheet: View {
                                 Text(stamp(c.at))
                                     .font(HomeType.number(11))
                                     .foregroundStyle(Theme.textMuted(scheme))
-                                Text(c.text)
+                                Text(MD.inline(c.text))
                                     .font(.app(13))
                                     .foregroundStyle(Theme.textSoft(scheme))
                             }
@@ -409,7 +409,7 @@ struct HobbyMatchesSheet: View {
                                          : HomePalette.amber)
                         .padding(.top, 2)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(pair.mine.text)
+                        Text(MD.inline(pair.mine.text))
                             .font(.app(15, weight: .medium))
                             .foregroundStyle(Theme.textMain(scheme))
                         Text("\(me) · \(pair.mine.like ? "喜欢" : "讨厌") · \(pair.mine.stage.rawValue)")

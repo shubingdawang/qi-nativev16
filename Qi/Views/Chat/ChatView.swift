@@ -923,7 +923,7 @@ struct ChatView: View {
                          : (q.senderName.isEmpty ? app.settings.aiName : q.senderName))
                         .font(.app(10, weight: .medium))
                         .foregroundStyle(Theme.textMuted(scheme))
-                    Text(q.content)
+                    Text(MD.inline(q.content))
                         .font(.app(12))
                         .foregroundStyle(Theme.textSoft(scheme))
                         .lineLimit(1)

@@ -114,7 +114,7 @@ struct ShareCardView: View {
                 }
 
                 if !message.content.isEmpty {
-                    Text(message.content)
+                    Text(MD.inline(message.content))
                         .font(.app(15))
                         .foregroundStyle(Color.black.opacity(0.82))
                         .fixedSize(horizontal: false, vertical: true)

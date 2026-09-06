@@ -60,7 +60,7 @@ struct MessageBubbleView: View {
         // **那句话不是她说的，是那件事发生了**。
         // 摆在整行正中，跟两边的对话分开。
         if message.narration {
-            Text(message.content)
+            Text(MD.inline(message.content))
                 .font(.app(12))
                 .italic()
                 .foregroundStyle(Theme.textMuted(scheme))
@@ -603,7 +603,7 @@ struct MessageBubbleView: View {
                 RoundedRectangle(cornerRadius: 4)
                     .fill(Theme.textMuted(scheme).opacity(pulse ? 0.14 : 0.07))
                     .frame(width: 160, height: 10)
-                Text(message.noteHint)
+                Text(MD.inline(message.noteHint))
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .padding(.top, 2)
@@ -973,7 +973,7 @@ struct MessageBubbleView: View {
     private var choiceBlock: some View {
         VStack(alignment: .leading, spacing: 7) {
             if !message.choiceQuestion.isEmpty {
-                Text(message.choiceQuestion)
+                Text(MD.inline(message.choiceQuestion))
                     .font(.app(14))
                     .foregroundStyle(Theme.textMain(scheme))
             }
@@ -1550,7 +1550,7 @@ struct MessageBubbleView: View {
                         .font(.app(12, weight: .medium, design: .monospaced))
                         .foregroundStyle(Theme.textMain(scheme))
                     if !note.isEmpty {
-                        Text(note)
+                        Text(MD.inline(note))
                             .font(.app(9.5))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }

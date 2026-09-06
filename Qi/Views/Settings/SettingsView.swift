@@ -1469,7 +1469,7 @@ struct SettingsView: View {
                             .buttonStyle(.plain)
                         }
                         if !t.summary.isEmpty {
-                            Text(t.summary)
+                            Text(MD.inline(t.summary))
                                 .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                                 .lineLimit(3)

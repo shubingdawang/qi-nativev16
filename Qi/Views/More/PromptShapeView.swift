@@ -23,9 +23,9 @@ struct PromptShapeView: View {
                         ForEach(s.blocks) { b in row(b, of: s.total) }
                         cacheNote(s)
                         if !s.fattestTools.isEmpty { tools(s) }
-                        Text("这儿的数是**估的**——真正的 token 数只有对面知道，"
+                        Text(MD.inline("这儿的数是**估的**——真正的 token 数只有对面知道，"
                              + "就是每条底下那个。这一页是用来看**哪一块占大头**的，"
-                             + "谁比谁大三倍，估着也看得出来。")
+                             + "谁比谁大三倍，估着也看得出来。"))
                             .font(.app(10.5))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }

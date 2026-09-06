@@ -334,7 +334,7 @@ struct ReaderView: View {
                                 .font(.app(10.5))
                                 .foregroundStyle(Theme.textMuted(scheme).opacity(0.8))
                         } else {
-                            Text(v.note)
+                            Text(MD.inline(v.note))
                                 .font(.app(12))
                                 .foregroundStyle(Theme.textSoft(scheme))
                         }
@@ -464,6 +464,9 @@ struct ReaderView: View {
         let aimed = aiming == text
 
         HStack(alignment: .top, spacing: 3) {
+            // ⚠️ 书正文**不走 markdown**。
+            // 她读的书里出现一个星号就是真的有个星号，
+            // 当成粗体记号会把它吃掉、还把后面一段变粗。
             Text(text)
                 .font(.system(size: app.settings.readerFont, design: .serif))
                 .foregroundStyle(Theme.textMain(scheme))

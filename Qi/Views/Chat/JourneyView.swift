@@ -143,7 +143,7 @@ struct JourneyCard: View {
             .onDisappear { dwell?.cancel() }
 
             if !journey.quote.isEmpty {
-                Text(journey.quote)
+                Text(MD.inline(journey.quote))
                     .font(.app(11, design: .serif))
                     .italic()
                     .foregroundStyle(Theme.textMuted(scheme))
@@ -217,7 +217,7 @@ struct JourneyPlayerView: View {
                                 .italic()
                                 .foregroundStyle(.white)
                             if !stop.caption.isEmpty {
-                                Text(stop.caption)
+                                Text(MD.inline(stop.caption))
                                     .font(.app(11))
                                     .tracking(2)
                                     .foregroundStyle(.white.opacity(0.7))

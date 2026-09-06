@@ -66,7 +66,7 @@ struct MessageReaderView: View {
                                         .fill(Theme.textMuted(scheme).opacity(0.28))
                                         .frame(width: 2)
                                 }
-                                Text(beat.text)
+                                Text(MD.inline(beat.text))
                                     .font(.app(14))
                                     .italic(!beat.isMind)
                                     .foregroundStyle(Theme.textMuted(scheme))
@@ -82,7 +82,7 @@ struct MessageReaderView: View {
                                 picking = false
                             }
                         } else {
-                            Text(message.content)
+                            Text(MD.inline(message.content))
                                 .font(.system(size: app.settings.fontSize + 1))
                                 .foregroundStyle(Theme.textMain(scheme))
                                 .lineSpacing(7)
