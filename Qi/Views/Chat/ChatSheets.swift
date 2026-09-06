@@ -308,8 +308,27 @@ struct SystemPromptView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    // 反方向那一半。**得让她看得见它在动**——
+                    // 「跟 claude.ai 互通」这句话之前只兑现了一半
+                    // （写过去了，读不回来），她问过一次才发现。
+                    if conv?.syncWithClaude == true {
+                        HStack {
+                            Text("从小屋拉回来的")
+                            Spacer()
+                            let got = HouseSync.lastPulled
+                            Text(got.memories + got.diaries > 0
+                                 ? "记忆 \(got.memories) · 日记 \(got.diaries)"
+                                 : "这次没有新的")
+                                .foregroundStyle(.secondary)
+                        }
+                        if let err = HouseSync.lastError {
+                            Text("上次没拉成：" + err)
+                                .font(.footnote)
+                                .foregroundStyle(.orange)
+                        }
+                    }
                     HelpNote {
-                        Text("启用后，本窗口写入的记忆在手机本机保存的同时，自动镜像一份到电脑上的共用记忆库，claude.ai 端可读取。小屋未连上时先记在手机，连上后自动补齐。\n\n启用期间，小屋端与本机同名的记忆工具在本窗口内隐藏，避免两边各写各的；本机记忆库始终为准，札记与承诺页读取的也是它。\n\n镜像由 App 直接完成，不额外消耗对话次数。\n\n⚠️ 仅镜像新增类记录；带 id 的修改与删除不镜像——两端 id 各自生成，互不对应。")
+                        Text("启用后，本窗口写入的记忆在手机本机保存的同时，自动镜像一份到共用记忆库，claude.ai 端可读取。小屋未连上时先记在手机，连上后自动补齐。\n\n反方向也通：在 claude.ai 上新增的记忆和日记，会在 App 启动时、以及你发消息时（最短间隔 10 分钟）拉回本机。按正文认重，同一条不会拉进来两遍。\n\n启用期间，小屋端与本机同名的记忆工具在本窗口内隐藏，避免两边各写各的；本机记忆库始终为准，札记与承诺页读取的也是它。\n\n镜像与拉取都由 App 直接完成，不额外消耗对话次数。\n\n⚠️ 仅同步新增类记录；带 id 的修改与删除不同步——两端 id 各自生成，互不对应。")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }

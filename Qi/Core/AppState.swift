@@ -102,8 +102,14 @@ final class AppState: ObservableObject {
         // 小屋断线期间攒下的补记。**要在抓工具之前读回来**——
         // 抓完工具那一步会顺手补一次，读晚了那次就是空跑。
         loadPendingHouseWrites()
-        // 装好第一次打开时，自动去把工具清单抓下来
-        Task { await self.refreshAllToolsIfNeeded() }
+        // 装好第一次打开时，自动去把工具清单抓下来；
+        // 抓完再把小屋那边新增的记忆拉回本机（她在 claude.ai 上写的那些）。
+        // ⚠️ **顺序不能反**：拉取要先知道小屋在哪儿、通不通，
+        // 那是抓工具那一步定下来的。
+        Task { @MainActor in
+            await self.refreshAllToolsIfNeeded()
+            await HouseSync.pull(app: self)
+        }
     }
 
     /// 一次性把默认值扳到「本地优先」。
@@ -956,7 +962,13 @@ final class AppState: ObservableObject {
         // ⚠️ **不开定时器**：常驻定时器会在她根本没打开 App 的时候
         // 一直去连一台关着的电脑。她要的「等能连上电脑了再镜像」，
         // 那个「等」的时机就是她又来说话这一下。
-        Task { @MainActor in await self.retryOfflineServers() }
+        //
+        // 顺手把小屋那边新增的拉回来（她在 claude.ai 上聊出来的东西）。
+        // `HouseSync` 自己管间隔，外面放心每次都叫。
+        Task { @MainActor in
+            await self.retryOfflineServers()
+            await HouseSync.pull(app: self)
+        }
         // 刚说完话，让「自己醒来」那边短期内安静一点——她人就在这儿呢
         WakeEngine.shared.noteRun()
         // 她来说话了，「想她」和「压着」这两维自然会落一点。
