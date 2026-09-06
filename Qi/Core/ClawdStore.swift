@@ -842,7 +842,7 @@ enum FurnitureCatalog {
             "nccnnccn",
             "nnnnnnnn",
             ".ss..ss."
-        ], p), category: .wear, reaction: "套上踏两下"),
+        ], p), category: .wear, reaction: "套上踩两下"),
 
         .init(id: "tissue", name: "纸巾盒", price: 28, sprite: PixelSprite([
             "...cc...",

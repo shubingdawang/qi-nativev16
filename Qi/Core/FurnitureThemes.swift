@@ -13,7 +13,7 @@ import SwiftUI
 // 这一批八十多件，它们**件件有真图**，字符画只是图读不到时的兜底——
 // 所以按「像什么」共用十来张站位图纸，不一件一张。
 //
-// ⚠️ 这一批是 `scripts/gen_themes.py` 生成的。
+// ⚠️ 这一批是 `scratchpad/gen_themes.py` 生成的。
 // 要改改那边的表，别在这里改完又被下一次生成盖掉。
 
 extension FurnitureCatalog {
@@ -146,7 +146,7 @@ extension FurnitureCatalog {
         .init(id: "vanity", name: "梳妆台", price: 150,
               sprite: sp_table, category: .furniture, reaction: "对着镜子摆弄"),
         .init(id: "stove", name: "灶台", price: 140,
-              sprite: sp_tall, category: .gadget, reaction: "学着烒一锅"),
+              sprite: sp_tall, category: .gadget, reaction: "学着炒一锅"),
         .init(id: "kitchensink", name: "厨房水槽", price: 120,
               sprite: sp_tall, category: .furniture, reaction: "洗个盘子"),
         .init(id: "coatrack", name: "衣帽架", price: 75,
@@ -224,7 +224,7 @@ extension FurnitureCatalog {
         .init(id: "jp_lantern", name: "和风·提灯", price: 110,
               sprite: sp_lamp, category: .themed, reaction: "提着晚一晚"),
         .init(id: "lolita_bed", name: "洛丽塔·公主床", price: 240,
-              sprite: sp_bed, category: .themed, reaction: "麻到纱帐里"),
+              sprite: sp_bed, category: .themed, reaction: "躲进纱帐里"),
         .init(id: "lolita_vanity", name: "洛丽塔·梳妆台", price: 180,
               sprite: sp_table, category: .themed, reaction: "摆弄头顶"),
         .init(id: "lolita_wardrobe", name: "洛丽塔·衣柜", price: 200,
@@ -252,10 +252,14 @@ extension FurnitureCatalog {
         .init(id: "xmas_snowman", name: "圣诞·雪人", price: 100,
               sprite: sp_small, category: .themed, reaction: "把围巾分它一半"),
         .init(id: "xmas_house", name: "圣诞·姜饼屋", price: 120,
-              sprite: sp_small, category: .themed, reaction: "偷吻一口"),
+              sprite: sp_small, category: .themed, reaction: "偷咬一口"),
         .init(id: "xmas_advent", name: "圣诞·倒数日历", price: 95,
               sprite: sp_small, category: .themed, reaction: "每天拆一格"),
-        .init(id: "ny_bed", name: "新年·园床", price: 230,
+        .init(id: "xmas_chair", name: "圣诞·扶手椅", price: 170,
+              sprite: sp_chair, category: .themed, reaction: "窝进去听铃铛"),
+        .init(id: "xmas_shelf", name: "圣诞·书柜", price: 190,
+              sprite: sp_tall, category: .themed, reaction: "抽一本绘本"),
+        .init(id: "ny_bed", name: "新年·架子床", price: 230,
               sprite: sp_bed, category: .themed, reaction: "滚进红被子"),
         .init(id: "ny_sofa", name: "新年·红沙发", price: 200,
               sprite: sp_sofa, category: .themed, reaction: "坐得很正式"),
@@ -267,7 +271,7 @@ extension FurnitureCatalog {
               sprite: sp_screen, category: .themed, reaction: "绕到后面去"),
         .init(id: "ny_lantern", name: "新年·红灯笼", price: 110,
               sprite: sp_lamp, category: .themed, reaction: "抬头看红光"),
-        .init(id: "ny_firecracker", name: "新年·鞭炮灯", price: 70,
+        .init(id: "ny_firecracker", name: "新年·鞭炮", price: 70,
               sprite: sp_small, category: .themed, reaction: "捂着耳朵"),
         .init(id: "ny_envelope", name: "新年·红包", price: 60,
               sprite: sp_small, category: .themed, reaction: "握得紧紧的"),
@@ -278,7 +282,11 @@ extension FurnitureCatalog {
         .init(id: "ny_couplet", name: "新年·对联", price: 65,
               sprite: sp_screen, category: .themed, reaction: "贴正一点"),
         .init(id: "ny_knot", name: "新年·中国结", price: 55,
-              sprite: sp_small, category: .themed, reaction: "拨得晦来晦去"),
+              sprite: sp_small, category: .themed, reaction: "拨得晃来晃去"),
+        .init(id: "ny_chair", name: "新年·太师椅", price: 175,
+              sprite: sp_chair, category: .themed, reaction: "坐得很有辈分"),
+        .init(id: "ny_tea", name: "新年·茶几", price: 150,
+              sprite: sp_table, category: .themed, reaction: "摆一盘瓜子"),
         .init(id: "painting", name: "挂画", price: 85,
               sprite: sp_screen, category: .decor, reaction: "扭头看一会儿"),
         .init(id: "wallclock", name: "挂钟", price: 75,
@@ -290,7 +298,7 @@ extension FurnitureCatalog {
         .init(id: "ramen", name: "拉面", price: 38,
               sprite: sp_food, category: .food, reaction: "吹凉了再吃"),
         .init(id: "hotpot", name: "小火锅", price: 55,
-              sprite: sp_food, category: .food, reaction: "涶一筷"),
+              sprite: sp_food, category: .food, reaction: "涮一筷"),
         .init(id: "bubbletea", name: "奶茶", price: 32,
               sprite: sp_food, category: .drink, reaction: "吸珠子"),
         .init(id: "cookies", name: "曲奇牛奶", price: 30,
@@ -302,13 +310,13 @@ extension FurnitureCatalog {
         .init(id: "pancakes", name: "松饼", price: 28,
               sprite: sp_food, category: .food, reaction: "淋一圈糖浆"),
         .init(id: "pizza", name: "披萨", price: 42,
-              sprite: sp_food, category: .food, reaction: "拉出一条苊"),
+              sprite: sp_food, category: .food, reaction: "拉出一条丝"),
         .init(id: "sandwich", name: "三明治", price: 30,
               sprite: sp_food, category: .food, reaction: "张大嘴咬"),
         .init(id: "salad", name: "沙拉", price: 28,
-              sprite: sp_food, category: .food, reaction: "挠几下"),
+              sprite: sp_food, category: .food, reaction: "拌几下"),
         .init(id: "redlantern", name: "红灯笼", price: 65,
-              sprite: sp_lamp, category: .decor, reaction: "括得一摆一摆"),
+              sprite: sp_lamp, category: .decor, reaction: "晃得一摆一摆"),
         .init(id: "fucouplet", name: "福字", price: 45,
               sprite: sp_screen, category: .decor, reaction: "贴倒了又正回来"),
         .init(id: "jackolantern", name: "南瓜灯", price: 70,
@@ -387,6 +395,8 @@ extension FurnitureCatalog {
         "xmas_snowman":   Art(flat: "fu_xmas_snowman",           iso: nil),
         "xmas_house":     Art(flat: "fu_xmas_gingerbread_house", iso: nil),
         "xmas_advent":    Art(flat: "fu_xmas_advent_calendar",   iso: nil),
+        "xmas_chair":     Art(flat: "fu_xmas_armchair",          iso: "iso_xmas_armchair"),
+        "xmas_shelf":     Art(flat: "fu_xmas_bookshelf",         iso: "iso_xmas_bookshelf"),
         "ny_bed":         Art(flat: "fu_ny_traditional_bed",     iso: "iso_ny_bed"),
         "ny_sofa":        Art(flat: "fu_ny_red_sofa",            iso: "iso_ny_sofa"),
         "ny_table":       Art(flat: "fu_ny_hotpot_table",        iso: "iso_ny_dining_table"),
@@ -399,6 +409,8 @@ extension FurnitureCatalog {
         "ny_plum":        Art(flat: "fu_ny_plum_vase",           iso: nil),
         "ny_couplet":     Art(flat: "fu_ny_couplets",            iso: nil),
         "ny_knot":        Art(flat: "fu_ny_chinese_knot",        iso: nil),
+        "ny_chair":       Art(flat: "fu_ny_armchair",            iso: "iso_ny_armchair"),
+        "ny_tea":         Art(flat: "fu_ny_coffee_table",        iso: "iso_ny_coffee_table"),
         "painting":       Art(flat: "it_decor_painting",         iso: nil),
         "wallclock":      Art(flat: "it_decor_wall_clock",       iso: nil),
         "flowervase":     Art(flat: "it_decor_vase_flowers",     iso: nil),
@@ -433,7 +445,8 @@ extension FurnitureCatalog {
              "gothic_bed", "jp_bed", "lolita_bed", "ny_bed":
             return IsoShape(w: 2, d: 2, tall: 1.1,
                             actions: ["躺下", "打滚", "坐边上", "钻被窝"])
-        case "armchair", "bench", "gothic_chair", "lolita_chair":
+        case "armchair", "bench", "gothic_chair", "lolita_chair", "xmas_chair",
+             "ny_chair":
             return IsoShape(w: 1, d: 1, tall: 1.0,
                             actions: ["坐下", "瘫着"])
         case "gothic_fire", "xmas_fire":
@@ -472,11 +485,11 @@ extension FurnitureCatalog {
             return IsoShape(w: 2, d: 1, tall: 1.0,
                             actions: ["坐下", "瘫着", "趴扶手"])
         case "dining", "vanity", "nordic_table", "jp_table", "lolita_vanity",
-             "lolita_table", "xmas_dining", "ny_table":
+             "lolita_table", "xmas_dining", "ny_table", "ny_tea":
             return IsoShape(w: 2, d: 1, tall: 0.9, surface: true,
                             actions: ["趴桌上", "在桌边站着", "把东西放上去"])
         case "nightstand", "stove", "kitchensink", "nordic_shelf",
-             "gothic_shelf", "lolita_wardrobe", "ny_cabinet":
+             "gothic_shelf", "lolita_wardrobe", "xmas_shelf", "ny_cabinet":
             return IsoShape(w: 1, d: 1, tall: 2.0, surface: true,
                             actions: ["抽一本", "踮脚够", "把东西放上去"])
         default: return nil
