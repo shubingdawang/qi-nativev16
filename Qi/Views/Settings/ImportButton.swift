@@ -69,6 +69,20 @@ struct ImportButton: View {
             // 但她常常是拿着记忆库那一堆 json 过来的。
             allowsMultipleSelection: multiple
         ) { result in
+            // ⚠️ 这一笔是**分界线**。
+            //
+            // 她报了三次「选中文件，点打开没反应」。日志里有这一行，
+            // 说明选择器把结果交出来了，问题在后面；
+            // 没有这一行，说明这一下点击根本没到 App 这儿——
+            // 那是选择器自己的事（重签名、文件来源、系统权限），
+            // 再怎么改后面的代码都没用。
+            switch result {
+            case .success(let urls):
+                Console.log(.app, "选了 \(urls.count) 个文件",
+                            urls.map(\.lastPathComponent).joined(separator: " · "))
+            case .failure(let e):
+                Console.log(.warn, "选文件失败", e.localizedDescription)
+            }
             onPick(result)
         }
     }

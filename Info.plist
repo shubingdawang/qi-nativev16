@@ -79,8 +79,24 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- ⚠️ **这一项不能是空 dict。**
+
+	     空的 `<dict/>` 在 Xcode 里是合法的、也一直好用。可重签名的工具
+	     为了改 CFBundleIdentifier 会把整个 plist 重新序列化一遍，
+	     有些库会把空字典当成"没有值"直接丢掉。
+
+	     这一项一旦没了，iOS 就认为这是个远古 App，
+	     **把它塞进一个 4 英寸的兼容窗口里再拉伸**——
+	     界面会挤在屏幕上半截，输入框浮在半空。
+	     她报的「输入框都飞起来了」就是这个样子。
+
+	     所以给它一个真的键值。内容是什么不重要，
+	     重要的是这个 dict 非空、抹不掉。 -->
 	<key>UILaunchScreen</key>
-	<dict/>
+	<dict>
+		<key>UIImageRespectsSafeAreaInsets</key>
+		<true/>
+	</dict>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
 		<string>arm64</string>

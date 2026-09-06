@@ -152,6 +152,8 @@ final class RestoreBox: ObservableObject {
     func hand(_ url: URL) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
             self?.file = url
+            Console.log(.app, "已请求弹出「这份怎么放？」",
+                        "没看到这句问话的话，是它被撤掉了")
         }
     }
 }
