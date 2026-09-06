@@ -56,7 +56,10 @@ enum RoomActs {
         switch name {
 
         case "躺下", "钻被窝":
-            return RoomAct(name: name, spot: .onTop, mood: .sleeping, seconds: 9,
+            // ⚠️ 演的是 `.lying` 不是 `.sleeping`。
+            // `.sleeping` 那个 gif **自带一张床和一床被子**——
+            // 躺在她自己摆的床上就成了两张床叠在一起。
+            return RoomAct(name: name, spot: .onTop, mood: .lying, seconds: 9,
                            lines: ["躺一会儿", "唔……软的", "就眯一小会儿"])
         case "打滚":
             return RoomAct(name: name, spot: .onTop, mood: .flail, seconds: 3.5,

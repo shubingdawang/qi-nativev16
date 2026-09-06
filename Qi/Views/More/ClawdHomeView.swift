@@ -916,6 +916,24 @@ struct ClawdHomeView: View {
                 .onEnded { _ in
                     guard held else { return }
                     held = false
+                    // 放在能躺的东西上（床）就躺下，别站在床上发呆。
+                    // 她要的：「我将它拖动到床上，他应该是上床的动画。」
+                    if let act = layDownAct() {
+                        mood = .lying
+                        store.clawdDoing = .idling
+                        say(act)
+                        // ⚠️ **躺一会儿再起来溜达。** 立刻 `startWalking()`
+                        // 的话他刚躺下就爬起来走了，等于没躺。
+                        touchTask?.cancel()
+                        touchUntil = Date().addingTimeInterval(9)
+                        touchTask = Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 9_000_000_000)
+                            if Task.isCancelled { return }
+                            mood = .idle
+                            startWalking()
+                        }
+                        return
+                    }
                     mood = .idle
                     say(["就待这儿吧", "好", "这儿也不错"].randomElement() ?? "好")
                     startWalking()              // 放下之后重新开始自己溜达
@@ -1053,6 +1071,30 @@ struct ClawdHomeView: View {
         if app.settings.haptics {
             UISelectionFeedbackGenerator().selectionChanged()
         }
+    }
+
+    /// 他现在站的那一格上有没有能躺的东西（床）。有就返回一句台词。
+    ///
+    /// ⚠️ **判定靠 `IsoShape.actions`，不靠家具的名字。**
+    /// 按名字认的话（`kind.hasPrefix("bed")`），她以后加一张沙发床、
+    /// 或者从整版图里切一件新的躺具，就得回来改这儿。
+    /// `actions` 那张表本来就写着「这件东西能拿它干什么」——
+    /// 加新家具的时候顺手写上「躺下」，这儿自动就认。
+    private func layDownAct() -> String? {
+        guard let size = roomSize, size.width > 1, size.height > 1 else { return nil }
+        let geo = IsoRoom.fit(in: size, as: store.projection)
+        let here = geo.tile(at: CGPoint(x: clawdX * size.width,
+                                        y: clawdY * size.height))
+        let (hx, hy) = geo.clamp(Int(here.gx.rounded()), Int(here.gy.rounded()))
+        for f in store.furniture(in: shownRoom) where f.gx >= 0 {
+            let s = FurnitureCatalog.shape(of: f.kind)
+            guard hx >= f.gx, hx < f.gx + max(1, s.w),
+                  hy >= f.gy, hy < f.gy + max(1, s.d) else { continue }
+            guard s.actions.contains(where: { $0 == "躺下" || $0 == "钻被窝" })
+            else { continue }
+            return ["躺一会儿", "唔……软的", "就眯一小会儿"].randomElement() ?? "躺一会儿"
+        }
+        return nil
     }
 
     /// 这个点落在他身上没有。

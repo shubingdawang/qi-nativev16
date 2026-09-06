@@ -171,9 +171,13 @@ struct ClawdRigView: View {
             //
             // 睡帽是这张图自带的，本来也不该再扣一顶——躺下就摘了。
             //
-            // ⚠️ 别的「不是站着」的图有同样的隐患（`wearAt` 只认站姿），
-            // 但她报的是这一张，先只挡这一张：挡多了她买的帽子会莫名其妙消失。
-            if let worn, mood != .sleeping {
+            // ⚠️ 同样道理，`.lying`（躺在她摆的那张床上）也得挡：
+            // 那张图里人也是横着的，而 `wearAt` 只会按站姿算位置，
+            // 帽子会浮在他上方半空中。
+            //
+            // 别的「不是站着」的图还有同样的隐患，但她只报过这两张：
+            // 挡多了她买的帽子会莫名其妙消失。
+            if let worn, mood != .sleeping, mood != .lying {
                 PixelSpriteView(sprite: worn, scale: scale)
                     .offset(x: ClawdRig.wearAt(wornID, itemW: CGFloat(worn.width),
                                                itemH: CGFloat(worn.height)).x * scale,
