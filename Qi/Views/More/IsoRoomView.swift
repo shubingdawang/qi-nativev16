@@ -367,7 +367,19 @@ struct IsoRoomView<Clawd: View>: View {
         return IsoRoom.order(out, depth: { $0.depth }, height: { $0.tall }, tie: { $0.key })
     }
 
-    /// 她那张图按这个宽度画出来会有多高
+    /// 落脚线。
+    ///
+    /// 画出来的那批（`lift`）跟图片那批算法不一样：前者按图的高度算，
+    /// 后者是**贴边裁过**的，底边就是它的落脚线——往上抬半张图，
+    /// 再压回地砖下沿。她导的图和资产包那批都属于后者。
+    private func groundOffset(mine: UIImage?, packed: UIImage?,
+                              lift: CGFloat, width: CGFloat,
+                              bottom: CGFloat) -> CGFloat {
+        guard let img = mine ?? packed else { return lift }
+        return -mineH(img, width: width) / 2 + bottom
+    }
+
+    /// 一张图按这个宽度画出来会有多高
     private func mineH(_ img: UIImage, width: CGFloat) -> CGFloat {
         guard img.size.width > 0 else { return width }
         return width * img.size.height / img.size.width
@@ -403,6 +415,15 @@ struct IsoRoomView<Clawd: View>: View {
         // 三档：**她导的图 > 我画的等距版 > 老那张正面图**。
         // 一件一件换过去，中间任何一天她打开都不会缺东西。
         let mine = ImageStore.cached(item.imageName)
+        // 资产包那张。她自己导的图排在它前面——**她挑的永远第一**。
+        //
+        // ⚠️ 等距屋里只认等距那张，没有就退回下面 `iso` 那一支
+        //（我画的等距积木），**不拿正面图顶**：顶上去就是个立牌，
+        // 而立牌正是当初做等距图要解决的那件事。
+        let packed = mine == nil
+            ? FurnitureCatalog.artImage(of: kind.id,
+                                        flat: geoRoom.projection == .flat)
+            : nil
         // ⚠️ **平面那档用正面图，不用等距图。**
         // 等距图是按斜俯角画的，摆进正面平视的屋子里才真成了立牌——
         // 而「像立牌」正是当初做等距图要解决的那个毛病，别把它换个方向再犯一遍。
@@ -455,6 +476,13 @@ struct IsoRoomView<Clawd: View>: View {
                     .interpolation(.none)          // 像素图**不许插值**，糊了就不是像素画了
                     .aspectRatio(contentMode: .fit)
                     .frame(width: mineW)
+            } else if let packed {
+                // ⚠️ 这一批**不关插值**：是画出来的图不是像素画，
+                // 192 像素缩到屋里那么小，关了插值满是锯齿。
+                Image(uiImage: packed)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: mineW)
             } else {
                 PixelSpriteView(sprite: sprite, scale: scale)
             }
@@ -465,7 +493,8 @@ struct IsoRoomView<Clawd: View>: View {
         // 不是写死的 `tileH / 2`。上面画的那批早就改过了，这一支漏了——
         // 平面那档地砖只有 `rowPitch` 高，写死半格的话她自己导的家具
         // 会比画的那批低半格，同一格里两件东西脚不在一条线上。
-        .offset(y: mine == nil ? lift : -mineH(mine!, width: mineW) / 2 + geoRoom.tileBottom)
+        .offset(y: groundOffset(mine: mine, packed: packed, lift: lift,
+                                width: mineW, bottom: geoRoom.tileBottom))
         .scaleEffect(lifted ? 1.06 : 1)
         .shadow(color: .black.opacity(lifted ? 0.28 : 0.12),
                 radius: lifted ? 10 : 3, y: lifted ? 8 : 2)

@@ -491,8 +491,16 @@ struct AppSettings: Codable {
     var fontSize: Double = 16
     /// 气泡不透明度（配壁纸用）
     var bubbleOpacity: Double = 1.0
-    /// 壁纸文件名，存在 Documents/Images 里
+    /// 壁纸文件名，存在 Documents/Images 里。**浅色模式用这张。**
     var wallpaperName: String? = nil
+    /// 深色模式单独用的壁纸。
+    ///
+    /// 为空时深色模式沿用 `wallpaperName`——所以只设一张的人
+    /// 行为跟以前完全一样，两张都设了才分开。
+    ///
+    /// ⚠️ 取的时候一律走 `wallpaper(_:)`，别在各处自己判空：
+    /// 「深色没设就退回浅色」这条规矩散在四五个地方迟早长歪。
+    var wallpaperNameDark: String? = nil
     /// 用过的壁纸都留着，想换回哪张就换回哪张
     var wallpaperHistory: [String] = []
     /// 壁纸上盖一层暗色的浓度 0~0.6
@@ -802,6 +810,12 @@ struct AppSettings: Codable {
         return Color(hexString: accentHex) ?? Color.accentColor
     }
 
+    /// 这个明暗下该铺哪张壁纸。深色没单独设就用浅色那张。
+    func wallpaper(_ scheme: ColorScheme) -> String? {
+        if scheme == .dark, let dark = wallpaperNameDark { return dark }
+        return wallpaperName
+    }
+
     var preferredColorScheme: ColorScheme? {
         switch appearance {
         case .auto: return nil
@@ -876,6 +890,7 @@ extension AppSettings {
         fontSize = (try? c.decodeIfPresent(Double.self, forKey: .fontSize)) ?? 16
         bubbleOpacity = (try? c.decodeIfPresent(Double.self, forKey: .bubbleOpacity)) ?? 1.0
         wallpaperName = try? c.decodeIfPresent(String.self, forKey: .wallpaperName)
+        wallpaperNameDark = try? c.decodeIfPresent(String.self, forKey: .wallpaperNameDark)
         wallpaperHistory = (try? c.decodeIfPresent([String].self, forKey: .wallpaperHistory)) ?? []
         wallpaperDim = (try? c.decodeIfPresent(Double.self, forKey: .wallpaperDim)) ?? 0
         aiName = (try? c.decodeIfPresent(String.self, forKey: .aiName)) ?? "阿晏"

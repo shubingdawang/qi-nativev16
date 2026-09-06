@@ -477,7 +477,8 @@ struct AuroraLayer: View {
     private var overPhoto: Bool {
         guard !app.settings.preset.usesGradient,
               !app.settings.preset.ownsBackground else { return false }
-        return app.settings.wallpaperMode != "solid" && app.settings.wallpaperName != nil
+        return app.settings.wallpaperMode != "solid"
+            && app.settings.wallpaper(scheme) != nil
     }
 
     /// 光的浓度。照片上要更浓一点才看得见。

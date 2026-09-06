@@ -468,7 +468,7 @@ struct WallpaperBackground: View {
                     case "solid":
                         if let c = Color(hexString: app.settings.solidHex) { c }
                     default:
-                        if let name = app.settings.wallpaperName,
+                        if let name = app.settings.wallpaper(scheme),
                            let image = ImageStore.cached(name) {
                             Image(uiImage: image)
                                 .resizable()
@@ -520,7 +520,7 @@ struct WallpaperBackground: View {
         switch app.settings.wallpaperMode {
         case "gradient": return true
         case "solid":    return Color(hexString: app.settings.solidHex) != nil
-        default:         return app.settings.wallpaperName != nil
+        default:         return app.settings.wallpaper(scheme) != nil
         }
     }
 

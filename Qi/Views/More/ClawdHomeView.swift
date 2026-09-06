@@ -1313,8 +1313,7 @@ struct ClawdHomeView: View {
                 ForEach(store.owned) { item in
                     if let kind = FurnitureCatalog.kind(item.kind) {
                         VStack(spacing: 6) {
-                            PixelSpriteView(sprite: kind.sprite, scale: 2.4)
-                                .frame(height: 60)
+                            FurnitureThumb(kind: kind, height: 60, scale: 2.4)
                                 .opacity(item.hidden ? 0.35 : 1)
                             Text(kind.name)
                                 .font(.app(10))
@@ -1401,8 +1400,7 @@ struct ClawdHomeView: View {
             }
         } label: {
             VStack(spacing: 5) {
-                PixelSpriteView(sprite: kind.sprite, scale: 2.2)
-                    .frame(height: 54)
+                FurnitureThumb(kind: kind, height: 54, scale: 2.2)
                 Text(kind.name)
                     .font(.app(10))
                     .foregroundStyle(Theme.textMain(scheme))

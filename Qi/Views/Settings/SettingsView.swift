@@ -61,6 +61,8 @@ struct SettingsView: View {
     @State private var alertMessage: String?
     @State private var showingClearConfirm = false
     @State private var wallpaperItem: PhotosPickerItem?
+    /// 「背景」那格现在在编辑深色那张还是浅色那张
+    @State private var editingDark = false
     @State private var userAvatarItem: PhotosPickerItem?
     @State private var aiAvatarItem: PhotosPickerItem?
 
@@ -232,6 +234,19 @@ struct SettingsView: View {
                     .font(.app(15))
                     .foregroundStyle(Theme.textMain(scheme))
 
+                // ── 浅色一张、深色一张 ────────────────────────
+                //
+                // 一张图很难同时在浅色和深色下都成立：亮的图在深色模式下
+                // 会把整屏点亮，暗的图在浅色模式下会把玻璃压成灰。
+                // 所以两档各存各的（`wallpaperName` / `wallpaperNameDark`）。
+                //
+                // 深色那格空着时深色模式沿用浅色那张，
+                // 所以只设一张的行为跟以前完全一致。
+                HStack(spacing: 10) {
+                    wallpaperSlot(dark: false)
+                    wallpaperSlot(dark: true)
+                }
+
                 // ⚠️ 颜色**先取出来再进闭包**。
                 //
                 // `PhotosPicker` 那个 label 闭包是 `@Sendable` 的，
@@ -240,9 +255,11 @@ struct SettingsView: View {
                 // Swift 6 下就是错。
                 // 取成一个 `Color` 局部量之后闭包捕的是个值，跟 actor 无关了。
                 let tint = app.settings.accentColor
+                // 同理，这个也得先取成局部量再进闭包
+                let slotName = editingDark ? "换深色那张" : "换浅色那张"
                 HStack(spacing: 10) {
                     PhotosPicker(selection: $wallpaperItem, matching: .images) {
-                        Text("换张图片")
+                        Text(slotName)
                             .font(.app(14, weight: .medium))
                             .foregroundStyle(Theme.textMain(scheme))
                             .frame(maxWidth: .infinity)
@@ -253,12 +270,12 @@ struct SettingsView: View {
                     .buttonStyle(.plain)
 
                     Button {
-                        if let name = app.settings.wallpaperName,
+                        if let name = currentWallpaper,
                            !app.settings.wallpaperHistory.contains(name) {
                             app.settings.wallpaperHistory.insert(name, at: 0)
                         }
-                        app.settings.wallpaperName = nil
-                        app.settings.wallpaperDim = 0
+                        setWallpaper(nil)
+                        if !editingDark { app.settings.wallpaperDim = 0 }
                     } label: {
                         Text("恢复默认")
                             .font(.app(14, weight: .medium))
@@ -269,8 +286,8 @@ struct SettingsView: View {
                                 .fill(Theme.softFillDeep))
                     }
                     .buttonStyle(.plain)
-                    .disabled(app.settings.wallpaperName == nil)
-                    .opacity(app.settings.wallpaperName == nil ? 0.5 : 1)
+                    .disabled(currentWallpaper == nil)
+                    .opacity(currentWallpaper == nil ? 0.5 : 1)
                 }
 
                 // 换过的那些不删，随时点回去
@@ -308,7 +325,8 @@ struct SettingsView: View {
                     }
                 }
 
-                if app.settings.wallpaperName != nil {
+                if app.settings.wallpaperName != nil
+                    || app.settings.wallpaperNameDark != nil {
                     // ⚠️ 走 `SettingsSlider`，**不要写成 `Slider(value: $app.settings.…)`**。
                     //
                     // 这一条以前就是裸的 `Slider` 直接绑全局设置：手指划一下
@@ -395,6 +413,58 @@ struct SettingsView: View {
         }
     }
 
+    /// 正在编辑的是哪一格的壁纸。
+    private var currentWallpaper: String? {
+        editingDark ? app.settings.wallpaperNameDark : app.settings.wallpaperName
+    }
+
+    private func setWallpaper(_ name: String?) {
+        if editingDark {
+            app.settings.wallpaperNameDark = name
+        } else {
+            app.settings.wallpaperName = name
+        }
+    }
+
+    /// 一格壁纸的缩略图。点一下切到编辑这一格。
+    @ViewBuilder
+    private func wallpaperSlot(dark: Bool) -> some View {
+        let name = dark ? app.settings.wallpaperNameDark : app.settings.wallpaperName
+        let picked = editingDark == dark
+        Button {
+            editingDark = dark
+        } label: {
+            VStack(spacing: 5) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(dark ? Color.black.opacity(0.55) : Theme.softFillDeep)
+                    if let name, let img = ImageStore.cached(name) {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Image(systemName: dark ? "moon" : "sun.max")
+                            .font(.system(size: 17))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
+                }
+                .frame(height: 74)
+                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .strokeBorder(picked ? app.settings.accentColor
+                                             : Color.white.opacity(0.28),
+                                      lineWidth: picked ? 2 : 0.8)
+                )
+                Text(dark ? (name == nil ? "深色 · 同浅色" : "深色") : "浅色")
+                    .font(.app(11))
+                    .foregroundStyle(picked ? Theme.textMain(scheme)
+                                            : Theme.textMuted(scheme))
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
     /// 现在用的是哪个预设色，摆在「自定义主题」那行后面当提示
     private var currentAccentName: String {
         AppearanceView.accentPresets
@@ -402,8 +472,8 @@ struct SettingsView: View {
     }
 
     private func useWallpaper(_ name: String) {
-        let current = app.settings.wallpaperName
-        app.settings.wallpaperName = name
+        let current = currentWallpaper
+        setWallpaper(name)
         app.settings.wallpaperHistory.removeAll { $0 == name }
         if let current, !app.settings.wallpaperHistory.contains(current) {
             app.settings.wallpaperHistory.insert(current, at: 0)
@@ -1047,11 +1117,11 @@ struct SettingsView: View {
             else { return }
             await MainActor.run {
                 // 旧的不删，收进历史里，随时能换回去
-                if let old = app.settings.wallpaperName,
+                if let old = currentWallpaper,
                    !app.settings.wallpaperHistory.contains(old) {
                     app.settings.wallpaperHistory.insert(old, at: 0)
                 }
-                app.settings.wallpaperName = name
+                setWallpaper(name)
                 app.settings.wallpaperHistory.removeAll { $0 == name }
                 wallpaperItem = nil
             }

@@ -892,7 +892,7 @@ enum BackupBundle {
     /// ⚠️ 这三个名字是**照着 `AppSettings` 核对过的**，不是想当然写的。
     /// 写错一个就是默默地什么都不补，而且不报错。
     static let fillOnMerge = [
-        "wallpaperName", "userAvatarName", "aiAvatarName"
+        "wallpaperName", "wallpaperNameDark", "userAvatarName", "aiAvatarName"
     ]
 
     /// 本机那份算不算「空」。
