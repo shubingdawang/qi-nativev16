@@ -145,11 +145,19 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     private static func handle(_ task: BGAppRefreshTask) {
         scheduleRefresh()   // 先把下一次排上，不然只会跑这一次
         let work = Task { @MainActor in
+            // ⚠️ 小屋那一趟**跟下面那段等待并排跑**，不排在它前后。
+            //
+            // `BGAppRefreshTask` 一共只有三十秒上下，而下面那个
+            // 「等他把话说完」已经占了二十五秒。串着跑就是超时——
+            // 超时的下场不只是这次没做完：系统会记住这个 App 爱超时，
+            // 以后给的机会越来越少。
+            let house = Task { @MainActor in await pullHouse() }
             // 先收信：电脑那边写的话不该等手机自然醒才看得见
             await WakeEngine.shared.pullInbox()
             WakeEngine.shared.advance()
             // 万一这次真的醒了，给它一点时间把话说完
             try? await Task.sleep(nanoseconds: 25_000_000_000)
+            await house.value
             // 这次拿到机会了，顺手把往后那批兜底通知重排一遍
             WakeEngine.shared.planNudges()
             task.setTaskCompleted(success: true)
@@ -161,13 +169,53 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     private static func handleProcessing(_ task: BGProcessingTask) {
         scheduleProcessing()
         let work = Task { @MainActor in
+            let house = Task { @MainActor in await pullHouse() }
             // 先收信：电脑那边写的话不该等手机自然醒才看得见
             await WakeEngine.shared.pullInbox()
             WakeEngine.shared.advance()
             try? await Task.sleep(nanoseconds: 40_000_000_000)
+            await house.value
             WakeEngine.shared.planNudges()
             task.setTaskCompleted(success: true)
         }
         task.expirationHandler = { work.cancel() }
+    }
+
+    /// 后台醒来的时候去小屋捞一趟。
+    ///
+    /// ## 为什么要有这一趟
+    ///
+    /// `HouseSync` 原来只在两个当口跑：App 起来、她又说话。
+    /// 也就是说，她在 claude.ai 上跟他聊出来的东西，
+    /// **要等她下次打开 App 才会出现**——而她打开 App 的时候，
+    /// 本来就要跟他说话了，那条同步来的记忆晚不晚都一样。
+    ///
+    /// 真正有用的是反过来：她没在看手机的时候捞回来，
+    /// 有东西就弹一条。这才叫「两边通着」。
+    ///
+    /// ## 不强拉
+    ///
+    /// 走的是 `HouseSync` 自己那个十分钟的间隔（`force: false`）。
+    /// 她前脚刚在 App 里同步过、后脚系统给了一次后台机会，
+    /// 那十分钟内小屋不会有新东西——白跑一趟网络。
+    @MainActor
+    private static func pullHouse() async {
+        guard let app = WakeEngine.shared.app else { return }
+        let got = await HouseSync.pull(app: app)
+        guard got.memories + got.diaries > 0 else { return }
+
+        // 勿扰开着就只同步、不出声。
+        //
+        // ⚠️ 这一条跟「他醒过来说话」是同一个规矩（见 `WakeEngine.opportunity`）。
+        // 同步是后台的事，她没理由为它半夜被吵醒。
+        guard !app.dndOn else { return }
+        // 她正拿着手机看着 App，横幅是多余的——东西已经在页面上了
+        guard UIApplication.shared.applicationState != .active else { return }
+
+        var parts: [String] = []
+        if got.memories > 0 { parts.append("记忆 \(got.memories) 条") }
+        if got.diaries > 0 { parts.append("日记 \(got.diaries) 篇") }
+        Notifier.shared.banner(title: "小屋有新内容",
+                               body: parts.joined(separator: " · ") + "，已同步至本机。")
     }
 }
