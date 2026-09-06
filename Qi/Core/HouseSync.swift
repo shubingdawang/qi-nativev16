@@ -36,6 +36,14 @@ import Foundation
 // 解析那段话就是把措辞当接口用，他哪天改一个 emoji 这边就全崩。
 // `/api/memories` 直接给 JSON，字段名跟本机这边一模一样
 // （`memory-mcp.js` 里那句注释写着「跟手机 App 那边字段一模一样」）。
+/// ⚠️ **整个标 `@MainActor`。**
+///
+/// 里面每一处都只在主线程用：读 `app.mcpServers`、写 `MemoryStore`、
+/// 那几个 `lastPulled` / `lastError` 又是给 SwiftUI 的 body 看的。
+/// 一个一个函数去标的话，漏一个就是一条
+/// 「main actor-isolated property can not be referenced」——
+/// 第一版就是漏了 `endpoint` 那一个。
+@MainActor
 enum HouseSync {
 
     /// 两次拉取至少隔这么久。
@@ -75,7 +83,6 @@ enum HouseSync {
     // MARK: 拉
 
     /// 拉一次。`force` 为真就不看间隔（她手动点的时候用）。
-    @MainActor
     @discardableResult
     static func pull(app: AppState, force: Bool = false) async -> (memories: Int, diaries: Int) {
         guard force || Date().timeIntervalSince(lastAt) > gap else { return (0, 0) }
@@ -102,7 +109,6 @@ enum HouseSync {
         return (gotM, gotD)
     }
 
-    @MainActor
     private static func pullMemories(base: URL, token: String) async throws -> Int {
         let list: [HouseMemory] = try await get(base, "/api/memories", token)
         let m = MemoryStore.shared
@@ -124,7 +130,6 @@ enum HouseSync {
         return added
     }
 
-    @MainActor
     private static func pullDiaries(base: URL, token: String) async throws -> Int {
         let list: [HouseDiary] = try await get(base, "/api/diaries", token)
         let m = MemoryStore.shared
