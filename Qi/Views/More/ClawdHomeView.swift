@@ -97,8 +97,14 @@ struct ClawdHomeView: View {
     @State private var hand: HandTool = .pat
     /// 拖出来的那只手在屋里的什么位置。nil = 没在拖
     @State private var handAt: CGPoint?
+    /// 屋子在外层（“roomPage”）里的左上角。
+    ///
+    /// ⚠️ 手势条搬到屋子底下之后才需要它：
+    /// 拖手那个手势发生在外层，而他站在哪儿是屋子内部的坐标。
+    /// 两边差的就是这个原点（见 `toRoom`）。
+    @State private var roomOrigin: CGPoint = .zero
     /// 这只手**此刻**是不是压在他身上。
-    /// 进去的那一刻算一次，出来再进去算下一次——见 `handLayer` 里那段。
+    /// 进去的那一刻算一次，出来再进去算下一次——见 `handChip` 里那段。
     @State private var handOnHim = false
     /// 他的耐心。⚠️ **要活过一次次触碰**，所以是 @State 不是局部变量——
     /// 每碰一次重新算的话，戳第二十下和第一下一样，那就只是个音效按钮。
@@ -508,6 +514,31 @@ struct ClawdHomeView: View {
                 }
             }
 
+            roomAndHands
+        }
+        // ⚠️ 坐标系挂在**屋子和手势条外面这一层**。
+        //
+        // 手势条搬到屋子底下之后，拖手这件事发生在这一层；
+        // 而他站在哪儿是按屋子内部的坐标算的。
+        // 两边差着一个屋子的原点，`toRoom` 负责换算。
+        .coordinateSpace(name: "roomPage")
+        // 正拖着的那只手，跟着手指走。**画在这一层**——
+        // 画在屋子里面的话，手指还没进屋那一段它是看不见的。
+        .overlay {
+            if let at = handAt {
+                Text(hand.emoji)
+                    .font(.system(size: 40))
+                    .position(at)
+                    .allowsHitTesting(false)
+                    .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: handAt == nil)
+    }
+
+    /// 屋子 + 底下那排手势。
+    private var roomAndHands: some View {
+        VStack(spacing: 0) {
             room
                 // ⚠️⚠️ **屋子的高度问屏幕要，不要「上面排完剩多少算多少」。**
                 //
@@ -531,11 +562,17 @@ struct ClawdHomeView: View {
                 // 三个档、房间名）占的地方。
                 //
                 // 记一句：**尺寸要问一个稳定的东西要，别问「还剩多少」。**
-                .containerRelativeFrame(.vertical) { h, _ in max(320, h - 200) }
+                // 减 290：顶上那几样（标题、币、三个档、房间名）约 200，
+                // 再加底下那排手势约 90。不给它让地方的话，
+                // 手势条会被顶到标签栏底下去。
+                .containerRelativeFrame(.vertical) { h, _ in max(300, h - 290) }
                 // ⚠️ **屋子上面不再叠「他在干嘛」那块牌子。**
                 // 她说的：「左上的 clawd 有点挡住了，把那行去掉就不会挡到了。」
                 // 它挪到上面那条房间名里了（横着的一小条，见 `roomBar`）。
+
+            handBar
         }
+        .padding(.bottom, Layout.tabBarExpanded + 12)
     }
 
     // MARK: 房间
@@ -627,22 +664,32 @@ struct ClawdHomeView: View {
                         .padding(8)
                 }
 
-                handLayer(geo.size)
             }
-            // ⚠️ **手的坐标要跟他的坐标是同一套。**
-            // 他是 `.position(x: clawdX * size.width, ...)` 摆的，
-            // 所以拖手的时候也报这一层的坐标，两边才能对上——
-            // 用 `.local` 报的是按钮自己那一小块的坐标，差着十万八千里。
-            .coordinateSpace(name: "room")
+            // ⚠️⚠️ **手势那一排不在屋里了**，搬到屋子底下去了
+            // （见 `handBar`）。她说的：「手势位置在房子中间，很碍事。」
+            //
+            // 搬出去之后有一件事必须跟着改：**坐标系**。
+            // 拖手那个手势现在发生在外面那一层（“roomPage”），
+            // 而他是按**屋子内部**的坐标摆的。两边差着一个屋子的原点，
+            // 所以这儿把屋子在外层里的位置也记下来（`roomOrigin`），
+            // 拖到哪儿先减掉它再跟他比（见 `toRoom`）。
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            // 房间那一块有多大。**在 onAppear／onChange 里记**，
-            // 不在 body 里直接写 @State——那会边画边改状态，SwiftUI 会警告，
-            // 严重的时候还会来回重画停不下来。
-            .onAppear { roomSize = geo.size }
-            .onChange(of: geo.size) { _, v in roomSize = v }
+            // 房间那一块有多大、在外层的什么位置。
+            // **在 onAppear／onChange 里记**，不在 body 里直接写 @State——
+            // 那会边画边改状态，SwiftUI 会警告，严重的时候还会来回重画停不下来。
+            .onAppear {
+                roomSize = geo.size
+                roomOrigin = geo.frame(in: .named("roomPage")).origin
+            }
+            .onChange(of: geo.size) { _, v in
+                roomSize = v
+                roomOrigin = geo.frame(in: .named("roomPage")).origin
+            }
         }
         .padding(.horizontal, 16)
-        .padding(.bottom, Layout.tabBarExpanded + 12)
+        // ⚠️ 底下那条给标签栏的留白**不在这儿**了：
+        // 屋子底下现在还有一排手势，留在这里会把两者隔开一大截。
+        // 挑到 `roomAndHands` 整块的底下去了。
         // 家具的小菜单挂在房间这一层，不跟外面「接他进来」那个挤在同一个 View 上。
         // 两个 confirmationDialog 叠在同一处，SwiftUI 只认得住一个。
         .confirmationDialog(
@@ -982,96 +1029,138 @@ struct ClawdHomeView: View {
     /// ⚠️ **点 = 换手势，拖 = 用这个手势碰他。两件事分开。**
     /// 靠划动的方向去猜「这一下是摸还是打」，猜错一次就是
     /// 「我明明在摸他他为什么哭」——而摸和打是这套里情绪差最远的两个。
-    @ViewBuilder
-    private func handLayer(_ size: CGSize) -> some View {
-        ZStack(alignment: .bottomTrailing) {
-            // 正拖着的那只手，跟着手指走
-            if let at = handAt {
-                Text(hand.emoji)
-                    .font(.system(size: 40))
-                    .position(at)
-                    .allowsHitTesting(false)
-                    .transition(.scale.combined(with: .opacity))
-            }
-
-            VStack(alignment: .trailing, spacing: 6) {
-                // 藏起来的时候换成一行提示 + 一个「不玩了」
-                if hiding {
-                    Button("不找了") { reveal(found: false) }
-                        .font(.app(11))
-                        .buttonStyle(.plain)
-                        .foregroundStyle(app.settings.accentColor)
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(Capsule().fill(Color.black.opacity(0.12)))
+    /// 屋子底下那一排手势。
+    ///
+    /// ⚠️ **四个一次全摆出来，不是一个按钮循环切。**
+    ///
+    /// 原来是一个按钮，点一下换下一个。想用「轻轻打」得先点三下，
+    /// 而且点之前根本不知道下一个是什么 —— 她说的「ui 太简单」是这个意思：
+    /// 不是不好看，是**看不见自己有什么**。
+    ///
+    /// ⚠️ **点 = 选，拖 = 用这个手势碰他。两件事分开。**
+    /// 靠划动的方向去猜「这一下是摸还是打」，猜错一次就是
+    /// 「我明明在摸他他为什么哭」——而摸和打是这套里情绪差最远的两个。
+    private var handBar: some View {
+        VStack(spacing: 7) {
+            // 藏起来的时候顶上多一行「不找了」
+            if hiding {
+                Button {
+                    reveal(found: false)
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "eye.slash")
+                            .font(.app(10))
+                        Text("他藏起来了 · 不找了")
+                            .font(.app(11, weight: .medium))
+                    }
+                    .foregroundStyle(app.settings.accentColor)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(app.settings.accentColor.opacity(0.14)))
                 }
-
-                Text(hand.label)
-                    .font(.app(9.5))
-                    .foregroundStyle(Theme.textMuted(scheme))
-
-                Text(hand.emoji)
-                    .font(.system(size: 26))
-                    .frame(width: 46, height: 46)
-                    .background(
-                        Circle().fill(scheme == .dark
-                                      ? Color.white.opacity(0.14)
-                                      : Color.white.opacity(0.92))
-                    )
-                    .overlay(Circle().stroke(app.settings.accentColor.opacity(
-                        handAt == nil ? 0.25 : 0.7), lineWidth: 1.5))
-                    // ⚠️ **点和拖挂在同一块上，靠 minimumDistance 分开。**
-                    // 拖过 8 点才算拖；没拖动就是点，换下一个手势。
-                    // ⚠️⚠️ **碰到就算，不用松手。**
-                    //
-                    // 她说的：「手势必须拖到他身上再放掉才能触发，
-                    // 　修改成我拖着不放在他身上就触发。比如我用戳戳的
-                    // 　那个手势，拖到他身上一下算是戳一下，我移开再拖到
-                    // 　他身上等于戳第二下。」
-                    //
-                    // 所以判定改成**进入他的范围那一刻**触发一次，
-                    // 出去再进来算下一次。`handOnHim` 记着现在在不在里面——
-                    // 没有它的话每一帧 onChanged 都会算一下，
-                    // 手指在他身上停半秒就是几十次戳。
-                    .gesture(
-                        DragGesture(minimumDistance: 8, coordinateSpace: .named("room"))
-                            .onChanged { v in
-                                handAt = v.location
-                                let over = touching(v.location, in: size)
-                                if over, !handOnHim {
-                                    handOnHim = true
-                                    contact(in: size)
-                                } else if !over {
-                                    handOnHim = false
-                                }
-                            }
-                            .onEnded { v in
-                                // 一路滑进去再松手的，进去那一下已经算过了；
-                                // 这儿只兜住「一帧都没落在里面就松手」的那种
-                                if !handOnHim, touching(v.location, in: size) {
-                                    contact(in: size)
-                                }
-                                handAt = nil
-                                handOnHim = false
-                            }
-                    )
-                    .onTapGesture { cycleHand() }
+                .buttonStyle(.plain)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
-            .padding(.trailing, 14)
-            .padding(.bottom, 14)
+
+            HStack(spacing: 8) {
+                ForEach(HandTool.allCases) { tool in
+                    handChip(tool)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
+            .glassBackground(radius: 20, strength: app.settings.glassOpacity)
+
+            Text(hiding ? "点家具找他" : "按住拖到他身上")
+                .font(.app(9.5))
+                .foregroundStyle(Theme.textMuted(scheme))
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(.easeOut(duration: 0.15), value: handAt == nil)
+        .padding(.top, 10)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: hiding)
     }
 
-    /// 换下一个手势
-    private func cycleHand() {
-        let all = HandTool.allCases
-        let i = all.firstIndex(of: hand) ?? 0
-        hand = all[(i + 1) % all.count]
+    /// 一个手势。选中的那个亮起来，拖它就是用它碰他。
+    private func handChip(_ tool: HandTool) -> some View {
+        let on = hand == tool
+        return VStack(spacing: 3) {
+            Text(tool.emoji)
+                .font(.system(size: 24))
+            Text(tool.label)
+                .font(.app(9.5, weight: on ? .semibold : .regular))
+                .foregroundStyle(on ? app.settings.accentColor : Theme.textMuted(scheme))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(on ? app.settings.accentColor.opacity(0.18) : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(on ? app.settings.accentColor.opacity(0.45) : Color.clear,
+                              lineWidth: 1)
+        )
+        .scaleEffect(on ? 1.0 : 0.94)
+        .animation(.spring(response: 0.26, dampingFraction: 0.75), value: on)
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        // ⚠️⚠️ **碰到就算，不用松手。**
+        //
+        // 她说的：「手势必须拖到他身上再放掉才能触发，
+        // 　修改成我拖着不放在他身上就触发。比如我用戳戳的
+        // 　那个手势，拖到他身上一下算是戳一下，我移开再拖到
+        // 　他身上等于戳第二下。」
+        //
+        // 所以判定是**进入他的范围那一刻**触发一次，出去再进来算下一次。
+        // `handOnHim` 记着现在在不在里面 —— 没有它的话每一帧 onChanged
+        // 都会算一下，手指在他身上停半秒就是几十次戳。
+        .gesture(
+            DragGesture(minimumDistance: 8, coordinateSpace: .named("roomPage"))
+                .onChanged { v in
+                    // 拖哪个就用哪个，不用先点一下选中
+                    if hand != tool { hand = tool }
+                    handAt = v.location
+                    guard let size = roomSize else { return }
+                    let over = touching(toRoom(v.location), in: size)
+                    if over, !handOnHim {
+                        handOnHim = true
+                        contact(in: size)
+                    } else if !over {
+                        handOnHim = false
+                    }
+                }
+                .onEnded { v in
+                    // 一路滑进去再松手的，进去那一下已经算过了；
+                    // 这儿只兜住「一帧都没落在里面就松手」的那种
+                    if !handOnHim, let size = roomSize,
+                       touching(toRoom(v.location), in: size) {
+                        contact(in: size)
+                    }
+                    handAt = nil
+                    handOnHim = false
+                }
+        )
+        .onTapGesture { pickHand(tool) }
+    }
+
+    /// 选一个手势
+    private func pickHand(_ tool: HandTool) {
+        guard hand != tool else { return }
+        hand = tool
         if app.settings.haptics {
             UISelectionFeedbackGenerator().selectionChanged()
         }
     }
+
+    /// 外面那一层（"roomPage"）的点，换算成屋子内部的点。
+    ///
+    /// ⚠️ 手势条搬到屋子外面之后**必须过这一道**。
+    /// 不换算的话拖到屋子上半截才碰得到他 —— 差的正好是屋子的原点。
+    private func toRoom(_ p: CGPoint) -> CGPoint {
+        CGPoint(x: p.x - roomOrigin.x, y: p.y - roomOrigin.y)
+    }
+
 
     /// 他现在站的那一格上有没有能躺的东西（床）。有就返回一句台词。
     ///
