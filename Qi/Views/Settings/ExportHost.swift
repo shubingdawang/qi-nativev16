@@ -131,6 +131,67 @@ struct ShareHost: View {
     }
 }
 
+// MARK: - 导入备份那句「这份怎么放？」
+//
+// 她报的：「可以选中备份文件，但是点击打开按钮没有反应，无法导入。」
+//
+// 选文件那个弹窗早就拎进 `ImportButton` 了，它没问题——她选得中。
+// 出事的是**它后面那一句问话**：那个 `confirmationDialog` 还挂在
+// `SettingsView` 上，而她按「打开」的那一刻，
+// 选文件弹窗正在关、这一页正在重建，新的问话一出来就被撤掉。
+//
+// 从她那边看就是：选完了，按打开，什么都没发生。
+
+@MainActor
+final class RestoreBox: ObservableObject {
+
+    @Published var file: URL?
+
+    /// ⚠️ 这一拍等的是**选文件那个弹窗关完**。
+    /// 不等的话，两个 presentation 在同一层上打架，后来的输。
+    func hand(_ url: URL) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
+            self?.file = url
+        }
+    }
+}
+
+struct RestoreHost: View {
+
+    @ObservedObject var box: RestoreBox
+    /// 她选了怎么放。**取消的话不叫这个闭包**，文件交给外面自己清。
+    var onChoose: (URL, BackupBundle.Mode) -> Void
+    var onCancel: (URL) -> Void
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .allowsHitTesting(false)
+            .confirmationDialog("这份备份怎么放？", isPresented: Binding(
+                get: { box.file != nil },
+                set: { if !$0 { box.file = nil } }
+            ), titleVisibility: .visible) {
+                // ⚠️ **先把 url 取出来再清 box。** 清了再读就是 nil，
+                // 她按了「只补没有的」却什么都没发生——
+                // 那正是这次要修的那个毛病，别在修它的路上又犯一次。
+                Button("只补没有的（推荐）") {
+                    if let u = box.file { box.file = nil; onChoose(u, .merge) }
+                }
+                Button("整个盖掉", role: .destructive) {
+                    if let u = box.file { box.file = nil; onChoose(u, .overwrite) }
+                }
+                Button("取消", role: .cancel) {
+                    if let u = box.file { box.file = nil; onCancel(u) }
+                }
+            } message: {
+                Text("「只补没有的」：保留现有全部内容，仅将备份中多出的记录并入。"
+                     + "同一窗口两端各有记录时，按时间合并。\n\n"
+                     + "「整个盖掉」：还原至备份时点的状态，其后新增的记录将丢失。"
+                     + "换手机、重装才需要它。")
+            }
+    }
+}
+
 /// 「文件」里选个文件夹存下去。
 ///
 /// ⚠️ `asCopy: true`：交出去的是 tmp 里那一份，

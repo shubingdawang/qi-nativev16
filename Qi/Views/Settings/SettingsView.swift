@@ -30,10 +30,16 @@ struct SettingsView: View {
     /// 正在「查一遍图」（`MediaAudit`）
     @State private var auditing = false
 
-    /// 选好了、还没决定怎么放的那份备份
-    /// 选好的那份备份**放在临时目录里的一个副本**，不是整包读进内存。
-    /// 她说「导入备份有点卡」——卡在把几百兆读成一个 Data 上。
-    @State private var pendingBackup: URL?
+    /// 选好了、还没决定怎么放的那份备份。
+    ///
+    /// 副本放在临时目录里，**不是整包读进内存**——
+    /// 她说「导入备份有点卡」，卡的就是把几百兆读成一个 Data。
+    ///
+    /// ⚠️ 那句「这份怎么放？」**不挂在这一页上**（见 `ExportHost.swift`）。
+    /// 她报的：「可以选中备份文件，但是点击打开按钮没有反应。」
+    /// 病根是它挂在这儿，而她按「打开」那一刻选文件弹窗正在关、
+    /// 这一页正在重建，新问出来的话当场被撤掉。
+    @StateObject private var restoreBox = RestoreBox()
     /// 正在打包／还原，界面上压一层，别让她以为死机了。
     ///
     /// ⚠️ **这个不能是 `@State`。** 打包跑在后台线程上，
@@ -139,24 +145,14 @@ struct SettingsView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: chore.line)
-            .confirmationDialog("这份备份怎么放？", isPresented: Binding(
-                get: { pendingBackup != nil },
-                set: { if !$0 { pendingBackup = nil } }
-            ), titleVisibility: .visible) {
-                Button("只补没有的（推荐）") {
-                    if let u = pendingBackup { applyBackup(u, mode: .merge) }
-                    pendingBackup = nil
+            .overlay {
+                RestoreHost(box: restoreBox) { url, mode in
+                    applyBackup(url, mode: mode)
+                } onCancel: { url in
+                    // 取消了就把副本删掉。留着的话临时目录里
+                    // 会攒下一堆几百兆的「待还原-xxx.json」。
+                    try? FileManager.default.removeItem(at: url)
                 }
-                Button("整个盖掉", role: .destructive) {
-                    if let u = pendingBackup { applyBackup(u, mode: .overwrite) }
-                    pendingBackup = nil
-                }
-                Button("取消", role: .cancel) { pendingBackup = nil }
-            } message: {
-                Text("「只补没有的」：保留现有全部内容，仅将备份中多出的记录并入。"
-                     + "同一窗口两端各有记录时，按时间合并。\n\n"
-                     + "「整个盖掉」：还原至备份时点的状态，其后新增的记录将丢失。"
-                     + "换手机、重装才需要它。")
             }
             .alert("提示", isPresented: Binding(
                 get: { alertMessage != nil },
@@ -1589,48 +1585,75 @@ struct SettingsView: View {
 
             // ① 只选了一个、而且真是整包备份 → 走还原那条路
             if urls.count == 1 {
-                let needsStop = url.startAccessingSecurityScopedResource()
-                defer { if needsStop { url.stopAccessingSecurityScopedResource() } }
-
-                // **先复制到临时目录，不读进内存。**
+                // **拷贝和判型搬到后台。**
                 //
-                // 两个理由：
-                //   ① 她选的那个 URL 是有安全作用域的，出了这个闭包就作废了，
-                //      而还原要跑好一会儿——必须先拿到一份自己的
-                //   ② 一份几百兆的备份读成 Data 就是几百兆内存，
-                //      而复制文件是文件系统的事，一个字节都不进内存
+                // 她报的「点击打开按钮没有反应」有两半，这是第二半：
+                // 她的备份有几百兆，`copyItem` 在主线程上跑就是**界面整个冻住**——
+                // 从她那边看，跟「没反应」一模一样。
+                //
+                // ⚠️ 安全作用域那一下**必须在主线程、在这个闭包里开**：
+                // 那个 URL 出了 `fileImporter` 的回调就作废了。
+                // 开好之后把「拷贝」这件重活丢给后台，拷完再关。
+                chore.line = "正在读取…"
                 let copy = FileManager.default.temporaryDirectory
                     .appendingPathComponent("待还原-" + UUID().uuidString + ".json")
-                try? FileManager.default.removeItem(at: copy)
-                guard (try? FileManager.default.copyItem(at: url, to: copy)) != nil else {
-                    alertMessage = "这份文件读不出来。"
-                    return
+                let needsStop = url.startAccessingSecurityScopedResource()
+                Task {
+                    let kind = await Task.detached(priority: .userInitiated) {
+                        () -> ImportKind in
+                        let fm = FileManager.default
+                        try? fm.removeItem(at: copy)
+                        guard (try? fm.copyItem(at: url, to: copy)) != nil else {
+                            return .unreadable
+                        }
+                        // 只看开头那几 KB 就够认出它是不是整包——**不用全读**
+                        if BackupBundle.looksLikeBundle(fileAt: copy) { return .bundle }
+                        // 不是整包，但也可能是老备份
+                        //（只有 providers/conversations/settings）。老备份都很小。
+                        if let data = try? Data(contentsOf: copy),
+                           (try? JSONDecoder().decode(Backup.self, from: data)) != nil {
+                            return .bundle
+                        }
+                        try? fm.removeItem(at: copy)
+                        return .notBundle
+                    }.value
+                    if needsStop { url.stopAccessingSecurityScopedResource() }
+                    chore.line = nil
+                    switch kind {
+                    case .unreadable:
+                        alertMessage = "这份文件读不出来。"
+                    case .bundle:
+                        restoreBox.hand(copy)
+                    case .notBundle:
+                        importAsMemory(urls)
+                    }
                 }
-                // 只看开头那几 KB 就够认出它是不是整包——**不用全读**
-                if BackupBundle.looksLikeBundle(fileAt: copy) {
-                    pendingBackup = copy
-                    return
-                }
-                // 不是整包，但也可能是老备份（只有 providers/conversations/settings）。
-                // 老备份都很小，读进来无所谓。
-                if let data = try? Data(contentsOf: copy),
-                   (try? JSONDecoder().decode(Backup.self, from: data)) != nil {
-                    pendingBackup = copy
-                    return
-                }
-                try? FileManager.default.removeItem(at: copy)
+                return
             }
 
-            // ② 其余一律**转给记忆库那套**。
-            //
-            // 她拿 `memories.json` / `identity.txt` 这些走到这个口来，
-            // 以前只会得到一句「没有 files 也没有 conversations」——
-            // 那句话没错，但它把她堵在这儿了。
-            // 同一个「导入」按钮，两种都收才对。
-            let report = MemoryStore.shared.importFiles(urls)
-            alertMessage = "以下文件非完整备份，已按**记忆库文件**导入：\n\n"
-                + report.text
+            importAsMemory(urls)
         }
+    }
+
+    /// 认不出是整包的，一律**转给记忆库那套**。
+    ///
+    /// 她拿 `memories.json` / `identity.txt` 这些走到这个口来，
+    /// 以前只会得到一句「没有 files 也没有 conversations」——
+    /// 那句话没错，但它把她堵在这儿了。同一个「导入」按钮，两种都收才对。
+    private func importAsMemory(_ urls: [URL]) {
+        let report = MemoryStore.shared.importFiles(urls)
+        alertMessage = "以下文件非完整备份，已按**记忆库文件**导入：\n\n"
+            + report.text
+    }
+
+    /// 选进来那份文件是什么
+    private enum ImportKind {
+        /// 整包备份（新的或老的都算）
+        case bundle
+        /// 不是整包，转给记忆库
+        case notBundle
+        /// 连拷贝都没成功
+        case unreadable
     }
 
     /// 真正动手那一下。
