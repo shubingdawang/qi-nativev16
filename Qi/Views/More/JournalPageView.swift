@@ -1215,7 +1215,7 @@ struct QuotePickerSheet: View {
                     LazyVStack(spacing: 10) {
                         if items.isEmpty {
                             Text(keyword.isEmpty
-                                 ? "还没有收藏的句子。在聊天里长按一句话就能收藏。"
+                                 ? "尚无收藏的句子。在聊天中长按消息即可收藏。"
                                  : "没搜到")
                                 .font(.app(12))
                                 .foregroundStyle(Theme.textMuted(scheme))

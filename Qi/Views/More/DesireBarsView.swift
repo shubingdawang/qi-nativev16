@@ -8,7 +8,6 @@ struct DesireBars: View {
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
 
-    @State private var explain = false
 
     var body: some View {
         let scores = desire.scores()
@@ -73,8 +72,8 @@ struct DesireBars: View {
                         .font(.app(13))
                         .foregroundStyle(Theme.textMain(scheme))
                     Text(desire.driven
-                         ? "开着：他自己醒来之前会看见这一条"
-                         : "关着：他能查（read_desire），但不会自动送到他眼前")
+                         ? "启用：自动唤醒前读取该条目"
+                         : "关闭：仍可主动查询（read_desire），但不自动读取")
                         .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
@@ -87,26 +86,25 @@ struct DesireBars: View {
                     .foregroundStyle(Theme.textMuted(scheme))
             }
 
-            DisclosureGroup(isExpanded: $explain) {
+            HelpNote {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach([
-                        "八条随时间自己涨——久不说话「想她」会顶上来，久没查过东西「好奇」会顶上来。这一层是纯算术，一分钱不花。",
-                        "念头池里的执念会加进召唤力：条子值 + 0.35 × 关联执念强度。所以池子底下压着的事，真的会把某一维顶高。",
-                        "「累」不算召唤力，它是闸——过 0.72 就不硬找事，直接歇着。",
-                        "做完一件事那一维会乘着落下去（他调 satisfied，或者你在这儿看着它落）。不落的话会一直卡在同一个欲望上。",
-                        "她来说话，「想她」和「压着」会轻轻落一点——她在这儿本身就是缓解。",
-                        "带❤的那几维读的是**身体**（渴←热度、想她←占有欲、累←疲惫、压着←压抑感），不在这儿单独算：同一件事只留一个数，两套各算各的会打架。身体关掉的话它们就退回这儿自己算。"
+                        "八项数值随时间自行增长：长时间无对话时「想她」上升，长时间未检索时「好奇」上升。该层为本机算术，不产生费用。",
+                        "念头池中的执念计入召唤力，公式为：条目值 + 0.35 × 关联执念强度。因此池中积压的事项会抬高对应维度。",
+                        "「累」不计入召唤力，作为阈值使用：超过 0.72 时不再主动发起行为。",
+                        "完成一项后该维度按倍率回落（由模型调用 satisfied 触发，也可在此页观察）。不回落将导致长期停留在同一欲望上。",
+                        "发起对话时「想她」与「压着」小幅回落。",
+                        "标有 ❤ 的维度取自**身体**数值（渴←热度、想她←占有欲、累←疲惫、压着←压抑感），不在本层单独计算，以避免同一指标存在两套数值。关闭身体模块后，这些维度回退至本层自行计算。"
                     ], id: \.self) { line in
-                        Text("· " + line)
+                        // ⬇ 过一道 markdown：这几条里带着 `**重点**`。
+                        // `Text(一个 String 变量)` 不认 markdown，
+                        // 不套的话那两对星号是原样显示出来的。
+                        Text(MD.inline("· " + line))
                             .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                 }
                 .padding(.top, 6)
-            } label: {
-                Text("这八条怎么动的")
-                    .font(.app(12))
-                    .foregroundStyle(app.settings.accentColor)
             }
         }
         .glassCard()

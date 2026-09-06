@@ -75,7 +75,7 @@ struct WakeHistoryDrawer: View {
 
             if open {
                 if days.isEmpty {
-                    Text("还没有记录。他自己醒来说的话会记在这儿。")
+                    Text("尚无记录。自动唤醒产生的发言会记录于此。")
                         .font(.app(12))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .frame(maxWidth: .infinity, alignment: .leading)

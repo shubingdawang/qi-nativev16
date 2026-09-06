@@ -115,7 +115,7 @@ struct ProviderFormView: View {
                 } header: {
                     Text("接口路径")
                 } footer: {
-                    Text("一般不用改。地址填到 /v1 为止，路径保持 /chat/completions 就对了。")
+                    Text("通常无需修改。地址填写至 /v1，路径保持 /chat/completions。")
                 }
 
                 Section {
@@ -144,7 +144,7 @@ struct ProviderFormView: View {
                 } header: {
                     Text("模型")
                 } footer: {
-                    Text("拉不到列表也没关系，手动填模型名一样能用。")
+                    Text("无法获取列表时，手动填写模型名同样可用。")
                 }
 
                 if !provider.models.isEmpty {
@@ -162,7 +162,7 @@ struct ProviderFormView: View {
                     } header: {
                         Text("已打开 \(provider.enabledModels.count) / \(provider.models.count)")
                     } footer: {
-                        Text("在这里打开的模型，才会出现在聊天页的「选择模型」里。左滑可以删掉不需要的。")
+                        Text("仅在此处启用的模型会出现在聊天页的「选择模型」中。左滑可删除。")
                     }
 
                     ForEach(brandGroups, id: \.brand) { group in
@@ -250,7 +250,7 @@ struct ProviderFormView: View {
                         // 拉回来的默认不打开，免得列表里塞满几百个用不上的
                         provider.models.append(AIModel(id: m.id, enabled: false))
                     }
-                    if remote.isEmpty { loadError = "服务器没返回模型列表，手动填一个吧。" }
+                    if remote.isEmpty { loadError = "服务器未返回模型列表，请手动填写。" }
                     loadingModels = false
                 }
             } catch {

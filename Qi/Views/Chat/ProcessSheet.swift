@@ -68,7 +68,7 @@ struct ProcessSheet: View {
                             row(s, isLast: i == all.count - 1)
                         }
                         if all.isEmpty {
-                            Text("这一轮他什么都没想、也什么都没做。")
+                            Text("本轮无思考内容，也未执行任何操作。")
                                 .font(.app(12))
                                 .foregroundStyle(Theme.textMuted(scheme))
                                 .padding(.top, 24)

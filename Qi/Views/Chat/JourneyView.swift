@@ -151,7 +151,7 @@ struct JourneyCard: View {
                     .padding(.horizontal, 14)
             }
 
-            Text("滑一滑，停一下就进去")
+            Text("滑动选择，停顿后进入")
                 .font(.app(10))
                 .foregroundStyle(app.settings.accentColor.opacity(0.7))
                 .padding(.bottom, 14)

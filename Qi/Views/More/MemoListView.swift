@@ -312,7 +312,7 @@ struct MemoEditor: View {
                                         }
                                     }
                                 }
-                                Text("只管挂在外面那个浮窗。备忘页里的字跟着深浅色走，不受这个影响。")
+                                Text("仅作用于聊天页的浮窗。备忘页内的文字跟随深浅色模式，不受此项影响。")
                                     .font(.app(11))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }

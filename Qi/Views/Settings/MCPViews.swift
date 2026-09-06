@@ -179,7 +179,7 @@ struct MCPFormView: View {
                             .foregroundStyle(messageIsError ? .red : .green)
                     }
                 } footer: {
-                    Text("要先连一次把工具清单抓下来，模型才知道自己能干什么。地址改了记得重新抓。")
+                    Text("需先连接一次以获取工具清单，模型据此识别可用工具。修改地址后需重新获取。")
                 }
 
                 if !server.tools.isEmpty {
@@ -196,7 +196,7 @@ struct MCPFormView: View {
                     } header: {
                         Text("已打开 \(server.enabledTools.count) / \(server.tools.count)")
                     } footer: {
-                        Text("工具开得越多，每次对话要带的说明就越长，也就越费 token。用不上的可以关掉。")
+                        Text("启用的工具越多，每轮对话携带的说明越长，token 消耗越高。不需要的可关闭。")
                     }
 
                     Section {
@@ -267,7 +267,7 @@ struct MCPFormView: View {
                         return t
                     }
                     server.lastError = nil
-                    message = "连上了，拿到 \(tools.count) 个工具。别忘了点右上角保存。"
+                    message = "已连接，获取到 \(tools.count) 个工具。请点击右上角保存。"
                     messageIsError = false
                     testing = false
                 }

@@ -92,7 +92,7 @@ struct LogoStudioView: View {
     private var progress: some View {
         HStack(spacing: 8) {
             ProgressView().scaleEffect(0.8)
-            Text("画着呢，几秒钟")
+            Text("生成中，需数秒")
                 .font(.app(12))
                 .foregroundStyle(Theme.textMuted(scheme))
             Spacer()
@@ -214,7 +214,7 @@ struct LogoStudioView: View {
         }), let model = painter.enabledModels
             .first(where: { $0.id.lowercased().contains("image") })?.id
         else {
-            notice = "还没有能画图的模型。去「设置 → 供应商」开一个带 image 的。"
+            notice = "无可用的图像生成模型。请在「设置 → 供应商」中启用带 image 的模型。"
             return
         }
         // **不清空已经画出来的**——她按「再来一张」是想比一比，

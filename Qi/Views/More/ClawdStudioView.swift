@@ -310,7 +310,7 @@ struct ClawdStudioView: View {
                     if !picked.isEmpty {
                         movePad
                     } else {
-                        Text("点一件选中它，才能挪位置、改大小。")
+                        Text("点击选中后方可移动与缩放。")
                             .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
@@ -640,7 +640,7 @@ struct ClawdStudioView: View {
 
                         field("叫什么", text: $name, hint: "比如：探头")
                         field("画面写什么", text: $desc,
-                              hint: "写画面内容和动作，不是写它好不好看")
+                              hint: "填写画面内容与动作，不作画面质量评价")
 
                         Text("画面描述为必填项。模型不读取图像本身，仅依据该描述判断使用时机。")
                             .font(.app(11))
@@ -713,7 +713,7 @@ struct ClawdStudioView: View {
             s.description = about
             StickerStore.shared.update(s)
             saving = false
-            notice = "存好了，在表情库里。（动的那些只留下了按下这一刻的样子）"
+            notice = "已保存至表情库。动态内容仅保留点击时刻的画面。"
         }
     }
 }

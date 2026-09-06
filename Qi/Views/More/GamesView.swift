@@ -108,7 +108,7 @@ struct GamesView: View {
         }
 
         if store.games.isEmpty {
-            Text("阿晏写的网页游戏放进来就能玩，长按可以改分类。")
+            Text("导入网页游戏后即可运行，长按条目可修改分类。")
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
         }
@@ -137,7 +137,7 @@ struct GamesView: View {
                 row(title: "涩涩大富翁",
                     sub: mono.s.live
                          ? "开着局 · 回合 \(mono.s.turnCount)/\(mono.s.totalRounds) · 该 \(mono.s.turn) 掷"
-                         : "两个人的棋盘 · 引擎在手机里，不用开电脑",
+                         : "双人棋盘 · 引擎位于本机，不依赖电脑",
                     icon: "dice")
             }
             .buttonStyle(.plain)
@@ -148,7 +148,7 @@ struct GamesView: View {
                 row(title: "飞行棋",
                     sub: flight.hasBoards
                          ? (flight.board?.name ?? "") + " · 你第 \(flight.state.herPos + 1) 格"
-                         : "走法在手机里，格子上写什么你自己导一副",
+                         : "走法逻辑在本机，格子内容需自行导入",
                     icon: "dice")
             }
             .buttonStyle(.plain)
@@ -165,13 +165,13 @@ struct GamesView: View {
                 openingHuman = true
             } label: {
                 row(title: "CEDAR TOY",
-                    sub: "他在玩的那些，有些能在这儿实时看见",
+                    sub: "部分对局可在此实时查看",
                     icon: "person.2")
             }
             .buttonStyle(.plain)
 
             Text("点击后以全屏网页打开。模型在对话中操作，此处同步显示。"
-                 + "有人类显示屏的那些游戏，能看见他这一步走了哪儿。")
+                 + "带显示界面的游戏可查看模型的每一步操作。")
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
 

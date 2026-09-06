@@ -60,7 +60,7 @@ struct JournalView: View {
             }
             Button("算了", role: .cancel) { confirmDelete = nil }
         } message: {
-            Text("这一页上贴的照片也会一起没掉。")
+            Text("该页上的照片将一并删除。")
         }
     }
 

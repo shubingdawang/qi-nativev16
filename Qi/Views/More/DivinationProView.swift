@@ -26,7 +26,7 @@ struct MeihuaPane: View {
         VStack(alignment: .leading, spacing: 12) {
             QuestionBox(question: $question, hint: "想问什么")
 
-            Text("不摇钱不抽牌——**按你按下去的那一刻起卦**。所以想清楚了再按。")
+            Text("不使用摇钱与抽牌动画，**以点击时刻起卦**。请确认后再点击。")
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -100,7 +100,7 @@ struct NumerologyPane: View {
                 .font(.app(14))
                 .datePickerStyle(.compact)
 
-            Text("只用到年月日，**不需要时辰**——这一套跟八字不是一回事。")
+            Text("仅使用年月日，**无需时辰**。本项与八字为不同体系。")
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .frame(maxWidth: .infinity, alignment: .leading)

@@ -5,7 +5,7 @@ import SwiftUI
 ///
 /// · **先上屏，再发请求。** 点下去立刻关掉这一页，让她看着那句话落进聊天里。
 /// · **他忙的时候要说人话。** 正在回上一句就把按钮按灭，
-///   老老实实写「他这会儿在忙，这一下先欠着」——
+///   老老实实写「模型正在处理中，这一下先欠着」——
 ///   千万别假装成功，戳了没反应比不能戳伤人得多。
 struct PokeSheet: View {
 
@@ -55,7 +55,7 @@ struct PokeSheet: View {
                         guard app.poke(action, at: part, in: conversationID) else { return }
                         dismiss()
                     } label: {
-                        Text(busy ? "他这会儿在忙" : "戳")
+                        Text(busy ? "模型正在处理中" : "戳")
                             .font(.app(15, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
@@ -71,8 +71,8 @@ struct PokeSheet: View {
                     .disabled(busy)
 
                     Text(busy
-                         ? "他正在回上一句。这一下先欠着——等他说完再戳。"
-                         : "这一下会先动他的身体，他的话是之后才到的。")
+                         ? "模型正在回复上一条消息。本次操作暂不生效，请在回复完成后重试。"
+                         : "该操作先改变身体数值，模型的回应在其后到达。")
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }

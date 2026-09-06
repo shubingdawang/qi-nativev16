@@ -224,9 +224,9 @@ struct PhoneActivityView: View {
                             .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
                                 .fill(Theme.softFillDeep))
                         Text(MD.inline("留空时使用系统自带的地理编码，精度至省市区。填写后地名精度更高。"
-                             + "**「只到城市」那一档照样只给城市**，这条线是你的，不是接口的。"
-                             + "只有选「精确」的时候才会给街道和「靠近哪儿」。"
-                             + "\nkey 只存在这台手机上，**一个字都不进仓库**（那个仓库是公开的）。导出备份的时候它会跟供应商密钥一起在包里，所以那份备份别乱发。"))
+                             + "**选择「只到城市」时始终仅提供城市**，该限制由本机执行，与接口无关。"
+                             + "仅在选择「精确」时提供街道与就近地点。"
+                             + "\n密钥仅保存在本机，**不写入代码仓库**。导出备份时该密钥与供应商密钥一并打包，请勿外传该备份。"))
                             .font(.app(10))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
@@ -357,8 +357,8 @@ struct PhoneActivityView: View {
                             .font(.app(14))
                             .foregroundStyle(Theme.textMain(scheme))
                         Text(peek.sharing
-                             ? "他现在可以看这个文件夹里最新的那张。"
-                             : "关着的时候他看不了，会被告知你没开。")
+                             ? "模型可读取该文件夹中最新的一张截图。"
+                             : "关闭时模型无法读取，并被告知该功能未启用。")
                             .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
@@ -376,7 +376,7 @@ struct PhoneActivityView: View {
                 }
                 Slider(value: $peek.staleMinutes, in: 2...60, step: 1)
                     .tint(app.settings.accentColor)
-                Text(MD.inline("⚠️ **一张过期的图比没有图更坏**：没有图他会问你，有旧图他会拿它当此刻讲。超过这个时间就直接不给，只告诉他「最近没有新的」。"))
+                Text(MD.inline("⚠️ **过期截图的危害大于没有截图**：无截图时模型会主动询问，有过期截图时会将其当作当前画面描述。超过该时限直接不提供，仅告知无最新截图。"))
                     .font(.app(10.5))
                     .foregroundStyle(Theme.textMuted(scheme))
 
@@ -598,17 +598,17 @@ struct PhoneActivityView: View {
                 .font(.app(12, weight: .medium))
                 .foregroundStyle(Theme.textMain(scheme))
             ForEach([
-                "1. 自动化 → 新建 → 打开 App → 挑你想记的那些",
+                "1. 自动化 → 新建 → 打开 App → 选择需要记录的 App",
                 "2. 加动作「文本」，内容写成：当前日期|App名字|open",
                 "3. 加动作「追加到文件」，存成 phone-activity.txt",
-                "4. 关掉「运行前询问」，不然每次都要点一下",
+                "4. 关闭「运行前询问」，否则每次均需手动确认",
                 "5. 回到这里，选那个 txt"
             ], id: \.self) { line in
                 Text(line)
                     .font(.app(11))
                     .foregroundStyle(Theme.textSoft(scheme))
             }
-            Text("想要更准的时长，就再建一组「关闭 App」的自动化，把 open 换成 close。只有 open 也能用，那样时长是按相邻两次打开的间隔估的。")
+            Text("如需更精确的时长，可另建一组「关闭 App」自动化，将 open 改为 close。仅有 open 时亦可使用，时长按相邻两次打开的间隔估算。")
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .padding(.top, 4)

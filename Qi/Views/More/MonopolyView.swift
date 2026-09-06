@@ -65,7 +65,7 @@ struct MonopolyView: View {
                         }
                         .padding(.top, 6)
                     } label: {
-                        Text("这局都发生了什么")
+                        Text("对局记录")
                             .font(.app(12))
                             .foregroundStyle(app.settings.accentColor)
                     }
@@ -100,16 +100,16 @@ struct MonopolyView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.bottom, 6)
 
-            Text("两个人轮流掷骰，绕 20 格走，踩到哪儿做哪儿的事。")
+            Text("双方轮流掷骰，沿 20 格棋盘行进，按落点执行对应任务。")
                 .font(.app(13))
                 .foregroundStyle(Theme.textMain(scheme))
             ForEach([
-                "任务库 933 张，全在手机里——不联网、不用开电脑、不花钱。",
-                "阿晏不只是发牌的：轮到他那道，他自己演。",
+                "任务库含 933 张卡，全部存于本机，不联网、不依赖电脑、不产生费用。",
+                "模型不仅负责发牌，轮到其回合时自行执行。",
                 "安全词 404：谁说都立刻停，不问理由。",
-                "红线在开局设，引擎全程避开；卡漏标的按内容再挡一道。",
-                "后庭默认关着，要玩得逐个人打开。",
-                "不想做的任务随时跳过，免费，不用给理由。"
+                "禁忌项在开局设定，引擎全程规避；卡面标注遗漏的另按内容二次拦截。",
+                "相关项默认关闭，需逐项手动开启。",
+                "任务可随时跳过，不消耗次数，无需说明原因。"
             ], id: \.self) { line in
                 Text("· " + line)
                     .font(.app(11))
@@ -217,7 +217,7 @@ struct MonopolyView: View {
                 } header: {
                     Text("这局玩到哪一步")
                 } footer: {
-                    Text("开局先把这一段说清楚，知情再开。中途想换档就重开一局。")
+                    Text("开局前请阅读以下说明。中途变更档位需重开一局。")
                 }
                 Section {
                     ForEach(Mono.redlineLabels, id: \.key) { item in
@@ -230,7 +230,7 @@ struct MonopolyView: View {
                 } header: {
                     Text("红线（打开＝这局完全不出）")
                 } footer: {
-                    Text("引擎全程避开这些；卡上标漏了的，还会按内容再挡一道。")
+                    Text("引擎全程规避以上项；卡面标注遗漏的另按内容二次拦截。")
                 }
             }
             .transparentList()

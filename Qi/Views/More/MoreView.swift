@@ -41,7 +41,7 @@ struct FootprintView: View {
         VStack(alignment: .leading, spacing: 10) {
             cardTitle("这些天")
             HeatmapView(counts: dailyCounts, picked: $picked)
-            Text("点一个方块，看那天都说了什么、花了多少。")
+            Text("点击方块查看当日的对话与用量。")
                 .font(.caption)
                 .foregroundStyle(Theme.textMuted(scheme))
         }
@@ -122,7 +122,7 @@ struct FootprintView: View {
                     }
                 }
             } else {
-                Text("这天还没有记录。用量是从这版开始记的，之前的补不回来。")
+                Text("当日无记录。用量统计自本版本起启用，此前数据无法补录。")
                     .font(.caption)
                     .foregroundStyle(Theme.textMuted(scheme))
             }
@@ -187,13 +187,13 @@ struct FootprintView: View {
             // 两个都是 0，那就是这条链路根本没在缓（或者没把数报回来）。
             if u.calls >= 3 && u.inputAll > 20_000
                 && u.cacheRead == 0 && u.cacheWrite == 0 {
-                Text(MD.inline("**这条链路没有缓存数据。** 命中和写入同时为 0，"
-                    + "通常是中转不支持缓存标记、或者不把缓存用量报回来。"
-                    + "换直连的官方接口才会有这两个数。"))
+                Text(MD.inline("**该链路无缓存数据。** 命中与写入均为 0，"
+                    + "通常为中转不支持缓存标记，或未回报缓存用量。"
+                    + "改用官方直连接口后方可获得这两项数值。"))
                     .font(.caption2)
                     .foregroundStyle(Theme.textMuted(scheme))
             } else {
-                Text("命中的部分只按很低的价钱算，所以这条越长越好。")
+                Text("命中部分按较低费率计费，占比越高越好。")
                     .font(.caption2)
                     .foregroundStyle(Theme.textMuted(scheme))
             }
@@ -266,7 +266,7 @@ struct FootprintView: View {
     private var pricingCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             cardTitle("计费设置")
-            Text("花费只是按这个单价估算的，不是真实账单。")
+            Text("费用为按该单价估算所得，非实际账单。")
                 .font(.caption)
                 .foregroundStyle(Theme.textMuted(scheme))
 
@@ -281,7 +281,7 @@ struct FootprintView: View {
 
             if app.settings.pricing.mode == .perCall {
                 priceField("每次回复", keyPath: \.perCall, unit: "元 / 次")
-                Text("有些中转是一次调用一个价，不分输入输出。")
+                Text("部分中转按次计费，不区分输入与输出。")
                     .font(.caption2)
                     .foregroundStyle(Theme.textMuted(scheme))
             } else {
@@ -339,7 +339,7 @@ struct FootprintView: View {
         VStack(alignment: .leading, spacing: 10) {
             cardTitle("存储")
             statRow("占用空间", storageText)
-            Text("图片和聊天记录都存在这台手机上，不上传任何服务器。卸载 App 才会清空。")
+            Text("图片与聊天记录均保存在本机，不上传至任何服务器。卸载 App 后清空。")
                 .font(.caption)
                 .foregroundStyle(Theme.textMuted(scheme))
         }

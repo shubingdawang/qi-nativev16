@@ -109,7 +109,7 @@ struct ClawdGridEditor: View {
                     }
                     Spacer()
                     Text(mode == .paint ? "拖着画，再拖一遍擦掉"
-                                        : "点空地摆一个，摁住已有的能拖着挪")
+                                        : "点击空白处放置，长按已有元素可拖动")
                         .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
@@ -322,9 +322,9 @@ struct ClawdGridEditor: View {
             }
 
             Text(panning
-                 ? "现在是挪画布：拖一下换个地方看。要接着画就再点一下那只手。"
-                 : "「细」格子小一倍，适合画细节；换粗细的时候画好的会跟着换算，"
-                   + "由细变粗会丢一点。关掉「装在身上」，预览里就只有你画的这一张。")
+                 ? "当前为移动画布模式：拖动可改变视图位置。再次点击手形图标返回绘制模式。"
+                 : "「细」的格子尺寸减半，适用于细节绘制。切换粗细时已有内容按比例换算，"
+                   + "由细转粗存在精度损失。关闭「装在身上」后，预览仅显示当前绘制的图层。")
                 .font(.app(10))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -573,7 +573,7 @@ struct ClawdGridEditor: View {
                     emit()
                 }
             } else {
-                Text("点画布摆一个上去；点已经摆好的那个，就能翻转、放大缩小、挪位置、删掉。")
+                Text("点击画布放置元素；点击已放置的元素可进行翻转、缩放、移动与删除。")
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
             }

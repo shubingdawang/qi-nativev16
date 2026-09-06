@@ -39,7 +39,7 @@ struct SearchSettingsView: View {
                 } header: {
                     Text("密钥")
                 } footer: {
-                    Text("去 tavily.com 注册就能拿到，每月一千次免费，够用很久了。密钥只存在这台手机上。")
+                    Text("在 tavily.com 注册后获取，每月一千次免费额度。密钥仅保存在本机。")
                 }
             }
         }

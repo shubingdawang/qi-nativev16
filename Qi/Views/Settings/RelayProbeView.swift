@@ -58,7 +58,7 @@ struct RelayProbeView: View {
             VStack(alignment: .leading, spacing: 14) {
                 head
                 if provider?.chatEndpoint == nil || modelID.isEmpty {
-                    Text("先在「设置 → 供应商」里配一个地址和模型，再回来探。")
+                    Text("请先在「设置 → 供应商」中配置地址与模型，再执行探测。")
                         .font(.app(12))
                         .foregroundStyle(.orange)
                         .glassCard()
@@ -101,13 +101,13 @@ struct RelayProbeView: View {
             }
             HelpNote {
                 Text(MD.inline(
-                    "办法很简单：**同一份请求发两次**。第一次写缓存，第二次读缓存，"
+                    "方法为**将同一请求发送两次**：首次写入缓存，第二次读取缓存，"
                     + "看第二次的 cache_read 是不是大于 0。\n\n"
-                    + "垫底那段废话是**故意堆到五千个 token** 的——"
+                    + "填充内容**固定为约五千 token**，"
                     + "Anthropic 那边低于门槛（Sonnet 1024、Opus 4096）"
                     + "就算标了 cache_control 也不会真建缓存，"
                     + "那时候读到 0 跟中转站没关系。\n\n"
-                    + "⚠️ **每一项都是真的调用，会算进你的次数。**"
+                    + "⚠️ **每一项均为真实调用，计入调用次数。**"
                     + "按钮上写着这一项要花几次。"))
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))

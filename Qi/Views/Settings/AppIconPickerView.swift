@@ -95,9 +95,9 @@ struct AppIconPickerView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("更换后 iOS 会弹出系统提示，该提示无法关闭。桌面图标可能延迟数秒刷新。")
                     if mine.isEmpty {
-                        Text("往仓库根目录的 AppIcons 文件夹里丢图片，文件名就是这里显示的名字，推上去重新构建，这儿就会多出来几张。放几张显示几张。\n\niOS 规定备用图标必须打包时就在，不给 App 运行时新增，所以没法直接从相册选。")
+                        Text("将图片放入仓库根目录的 AppIcons 文件夹，文件名即此处显示的名称，推送后重新构建即可增加可选图标，数量不限。\n\niOS 要求备用图标在打包时确定，不支持运行时新增，因此无法直接从相册选取。")
                     } else {
-                        Text("除了「原来的」，这 \(mine.count) 张全是 AppIcons 文件夹里的。想加想删，改那个文件夹再构建一次。")
+                        Text("除了「原来的」，这 \(mine.count) 张全是 AppIcons 文件夹里的。如需增删，请修改该文件夹后重新构建。")
                     }
                 }
                 .font(.app(11))
@@ -114,7 +114,7 @@ struct AppIconPickerView: View {
                             Text("做一个自己的")
                                 .font(.app(14))
                                 .foregroundStyle(Theme.textMain(scheme))
-                            Text("一次画一张，满意为止。做出来的要放进下次构建才能当图标")
+                            Text("每次生成一张，可重复生成。生成结果需纳入下次构建方可作为图标")
                                 .font(.app(10))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }

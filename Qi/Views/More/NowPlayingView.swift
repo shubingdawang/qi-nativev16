@@ -320,7 +320,7 @@ struct NowPlayingView: View {
             ZStack {
                 WallpaperBackground()
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("粘 LRC 或者纯文字都行。带 `[00:12.34]` 时间戳的会跟着歌走，没有时间戳的就一句句排着。")
+                    Text("支持粘贴 LRC 或纯文本。含 `[00:12.34]` 时间戳的按时间同步显示，无时间戳的按行依次排列。")
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                     TextEditor(text: $draftLyrics)
@@ -427,7 +427,7 @@ struct SongMarkSheet: View {
                                 }
                             }
                             if fresh.notes.isEmpty {
-                                Text("还没说什么。这一句为什么停下来了？")
+                                Text("尚无批注。可记录停在这一句的原因。")
                                     .font(.app(12))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
@@ -446,7 +446,7 @@ struct SongMarkSheet: View {
                                 }
                                 .buttonStyle(.plain)
                                 if jumpFailed {
-                                    Text("那一轮的记录找不着了（可能被清过）。")
+                                    Text("该轮记录不存在，可能已被清除。")
                                         .font(.app(11))
                                         .foregroundStyle(.orange)
                                 }

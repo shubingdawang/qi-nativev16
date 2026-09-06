@@ -125,8 +125,8 @@ struct TerminalView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 2) {
                         if shellLines.isEmpty {
-                            Text("在电脑上跑命令，输出显示在这里。\n"
-                                 + "目录是桥所在的那个项目；桥的窗口关了就连不上。")
+                            Text("在电脑上执行命令，输出显示于此。\n"
+                                 + "工作目录为桥所在的项目。桥的窗口关闭后无法连接。")
                                 .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                                 .padding(.top, 24)

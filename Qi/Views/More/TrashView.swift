@@ -130,7 +130,7 @@ struct TrashView: View {
                 store.drop(item.id)
                 notice = "「\(item.name)」放回去了。"
             } else {
-                notice = "放不回去了——原来那个窗口可能也不在了。"
+                notice = "无法还原：原窗口可能已不存在。"
             }
         } else if store.restore(item.id) {
             notice = "「\(item.name)」放回去了。"

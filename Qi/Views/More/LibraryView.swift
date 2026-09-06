@@ -84,7 +84,7 @@ struct AnnotationSheet: View {
                                 }
                                 .buttonStyle(.plain)
                                 if jumpFailed {
-                                    Text("那一轮的记录找不着了（可能被清过）。")
+                                    Text("该轮记录不存在，可能已被清除。")
                                         .font(.app(11))
                                         .foregroundStyle(.orange)
                                 }

@@ -76,26 +76,21 @@ struct ThoughtPoolView: View {
                     }
                 }
 
-                // 说明。这套机制不写清楚，看到的人只会觉得是一堆气泡。
-                DisclosureGroup {
+                HelpNote {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach([
-                            "闪念从 0.5 起步，没人理它每一拍衰减到 0.82 倍，散掉就没了。",
-                            "同一桩事被反复点到，强度会叠上去——聊到、或者他自己又想起来，都算。",
-                            "涨过 0.8 就升级成执念。执念不衰减，反而每拍自己长 1.1 倍。",
-                            "长到 0.85 会反过来推欲望。推够三次就想透了，出池——那时它不再是念头，是行动力。",
-                            "这跟记忆不一样：记忆是已经落下来的沉淀物，这里是还在转的活水。"
+                            "闪念初始强度为 0.5，未被提及时每拍衰减至 0.82 倍，归零后移出池。",
+                            "同一事项被反复提及时强度累加，对话提及与模型自行想起均计入。",
+                            "强度超过 0.8 升级为执念。执念不衰减，每拍自增至 1.1 倍。",
+                            "强度达到 0.85 后反向推动欲望，累计三次后移出池，转为行动力。",
+                            "本页与记忆库不同：记忆库存放已沉淀的内容，本页为仍在变动的中间状态。"
                         ], id: \.self) { line in
-                            Text("· " + line)
+                            Text(MD.inline("· " + line))
                                 .font(.app(11))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
                     }
                     .padding(.top, 6)
-                } label: {
-                    Text("这池子怎么转的")
-                        .font(.app(12))
-                        .foregroundStyle(app.settings.accentColor)
                 }
 
                 DesireBars()
@@ -158,7 +153,7 @@ struct ThoughtPoolView: View {
                 pool.stir(draft)
             }
         } message: {
-            Text("刚丢进去的是闪念，没人再提就自己散了。")
+            Text("新加入的为闪念，未被再次提及即自行消散。")
         }
         .onAppear {
             pool.settle()

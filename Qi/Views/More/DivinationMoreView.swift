@@ -87,7 +87,7 @@ struct DicePane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             QuestionBox(question: $question,
-                        hint: "问一件具体的事。骰子答得直，不绕弯。")
+                        hint: "适用于具体问题，结果直接给出结论。")
 
             HStack(spacing: 12) {
                 ForEach(Array(dice.enumerated()), id: \.offset) { _, d in
@@ -214,7 +214,7 @@ struct BaziPane: View {
                 .datePickerStyle(.compact)
 
             QuestionBox(question: $question,
-                        hint: "想问哪一块？事业、感情、这几年的走势都行。")
+                        hint: "可选取事业、感情或近年走势等方向。")
 
             Button {
                 排盘()
@@ -328,7 +328,7 @@ struct CrystalPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            QuestionBox(question: $question, hint: "问得含糊也行。球看的是氛围，不是条款。")
+            QuestionBox(question: $question, hint: "问题可不具体，解读依据整体氛围。")
 
             // 球
             ZStack {
@@ -443,7 +443,7 @@ struct ReadingBox: View {
                 .buttonStyle(.plain)
                 .disabled(asking)
                 // 这一步是**要花钱的**，所以写明白，别让她误按
-                Text("这一步会调一次模型（花钱）。盘面本身是本机算的，不花钱。")
+                Text("本步骤调用一次模型，产生一次费用。盘面由本机推算，不产生费用。")
                     .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
             } else {

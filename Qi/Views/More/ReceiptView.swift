@@ -694,7 +694,7 @@ struct ReceiptView: View {
             let result = await app.makeDigest(for: day)
             busy = false
             if result == nil {
-                failed = "写不出来——今天可能还没说过话，或者模型没配好。"
+                failed = "无法生成：当日可能尚无对话，或模型未正确配置。"
             }
         }
     }

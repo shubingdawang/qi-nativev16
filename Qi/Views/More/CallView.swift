@@ -432,7 +432,7 @@ struct CallView: View {
                         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
                     }
                     if handsFree {
-                        notice = "免提开着——说完停一下就送出去，不用按"
+                        notice = "免提已开启：说完停顿后自动发送，无需按键"
                         resumeListening()
                     } else {
                         notice = nil

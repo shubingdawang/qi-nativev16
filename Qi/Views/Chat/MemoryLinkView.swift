@@ -164,7 +164,7 @@ struct MemoryLinkView: View {
 
     private var summary: String {
         let peers = app.memoryPeers(of: conversationID)
-        if peers.isEmpty { return "现在只记得这个窗口里聊过的" }
+        if peers.isEmpty { return "当前仅读取本窗口内的对话" }
         return "已经和 \(peers.count) 个窗口并在一起：" + peers.map { $0.title }.joined(separator: "、")
     }
 }

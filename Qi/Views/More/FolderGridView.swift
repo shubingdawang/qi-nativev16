@@ -144,7 +144,7 @@ struct FolderGridView: View {
             Button("算了", role: .cancel) { deletingFolder = nil }
         } message: {
             let n = deletingFolder.map { store.list(kind, folder: $0).count } ?? 0
-            Text("里面有 \(n) 张。删掉就找不回来了，也可以只删文件夹、把图片退回「未归类」。")
+            Text("里面有 \(n) 张。删除后不可恢复；也可仅删除文件夹，将图片退回「未归类」。")
         }
         .alert("新建文件夹", isPresented: $creating) {
             TextField("起个名字", text: $newName)

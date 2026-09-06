@@ -68,7 +68,7 @@ struct QuestView: View {
                 newReward = ""
             }
         } message: {
-            Text("要多少分在下面那个滑块上调，现在是 \(newCost) 分。")
+            Text("所需分数在下方滑块中调整，当前为 \(newCost) 分。")
         }
     }
 
@@ -107,8 +107,8 @@ struct QuestView: View {
                 .foregroundStyle(Theme.textMain(scheme))
             Text(MD.inline("此页记录由模型指派的小任务，区别于备忘（自行记录）、"
                  + "承诺（他欠你的）都不是一回事。\n"
-                 + "他会在说话的时候顺手派一件，小、具体、今天做得完那种。"
-                 + "你做完了在这儿打个卡，他下次说话就知道了。"))
+                 + "模型在对话中派发，任务范围小、内容具体、当日可完成。"
+                 + "完成后在此标记，模型在下一次对话中读取。"))
                 .font(.app(11.5))
                 .foregroundStyle(Theme.textMuted(scheme))
         }
@@ -279,7 +279,7 @@ struct QuestView: View {
                 .buttonStyle(.plain)
 
                 Text(MD.inline("提交后，模型在下一次对话中即可读取完成状态。"
-                     + "**不会自动跳出一句夸你的话**，那种一眼就看得出是流水线。"))
+                     + "**不自动生成回应文案。**"))
                     .font(.app(10.5))
                     .foregroundStyle(Theme.textMuted(scheme))
 
@@ -354,7 +354,7 @@ struct QuestView: View {
 
             if store.rewards.isEmpty {
                 Text("暂无，可添加自定义条目。"
-                     + "「换他讲一个睡前故事」「换一次通话」那种。他也能加。")
+                     + "例如兑换一次睡前故事或一次通话。模型亦可添加条目。")
                     .font(.app(10.5))
                     .foregroundStyle(Theme.textMuted(scheme))
             }

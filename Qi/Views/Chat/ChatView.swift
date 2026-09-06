@@ -1107,7 +1107,7 @@ struct ChatView: View {
                 Button {
                     hideKeyboard()
                     guard app.activeHim != nil else {
-                        notice = "还没选模型，这通电话没人接。去输入框上那颗胶囊选一个。"
+                        notice = "尚未选择模型，无法发起通话。请在输入框上方选择一个模型。"
                         return
                     }
                     if app.settings.haptics {
@@ -1481,7 +1481,7 @@ struct ChatView: View {
     /// 录音那条提示写什么
     private var listeningHint: String {
         if transcribing { return "在听你说什么…" }
-        return String(format: "录着呢 %.1f 秒，松手就认", recorder.seconds)
+        return String(format: "录音中 %.1f 秒，松手结束", recorder.seconds)
     }
 
     private func startListening() {
@@ -1528,7 +1528,7 @@ struct ChatView: View {
             // 本机认，不花钱也不上传
             let text = await SpeechRecognizer.recognizeFile(url)
             if text.isEmpty {
-                notice = "没认出来说了什么，语音还是能发的"
+                notice = "未识别出文字内容，语音仍可发送"
             } else {
                 draft = draft.isEmpty ? text : draft + " " + text
             }

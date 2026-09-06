@@ -313,7 +313,7 @@ struct ReaderView: View {
             List {
                 let list = store.vocab(for: bookID)
                 if list.isEmpty {
-                    Text("还没记过词。选句模式下点一句，再点一次，"
+                    Text("尚无词条。在选句模式下点击句子两次，"
                          + "在那个弹窗里选「记个词」。")
                         .font(.app(12))
                         .foregroundStyle(Theme.textMuted(scheme))
@@ -369,7 +369,7 @@ struct ReaderView: View {
     private var vocabWhy: String {
         var s = ""
         if let c = vocabContext { s = "「\(c.prefix(40))」\n" }
-        s += "记下来之后他会写注解——什么意思、在这句里是哪个意思。"
+        s += "记录后由模型生成注解，说明词义及其在该句中的具体含义。"
         return s
     }
 
@@ -429,7 +429,7 @@ struct ReaderView: View {
                 .buttonStyle(.plain)
 
                 Text(MD.inline("每章调用一次模型，**产生费用**。生成后模型即可回答前文内容；"
-                     + "而且只补到你读到的这一章，后面的他还是不知道，剧透不了。"))
+                     + "生成范围截至当前章节，后续内容不纳入，不会剧透。"))
                     .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
@@ -562,7 +562,7 @@ struct ReaderView: View {
     private var settingsPanel: some View {
         VStack(alignment: .leading, spacing: 14) {
             if picking {
-                Text("点一句 → 再点一次画起来。已经画过的点开能看聊过什么。")
+                Text("点击句子后再次点击即可划线。已划线的句子可展开查看相关对话。")
                     .font(.app(11))
                     .foregroundStyle(app.settings.accentColor)
             }

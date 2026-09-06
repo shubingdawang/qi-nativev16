@@ -23,15 +23,15 @@ struct PromptShapeView: View {
                         ForEach(s.blocks) { b in row(b, of: s.total) }
                         cacheNote(s)
                         if !s.fattestTools.isEmpty { tools(s) }
-                        Text(MD.inline("这儿的数是**估的**——真正的 token 数只有对面知道，"
-                             + "就是每条底下那个。这一页是用来看**哪一块占大头**的，"
+                        Text(MD.inline("此处数值为**估算**。实际 token 数以接口返回为准，"
+                             + "即每条消息下方标注的数值。本页用于查看**各部分的占比**，"
                              + "谁比谁大三倍，估着也看得出来。"))
                             .font(.app(10.5))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                     .padding(16)
                 } else {
-                    Text("还没发过请求。跟他说句话再回来看。")
+                    Text("尚无请求记录。发送一条消息后再查看。")
                         .font(.app(12))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .padding(32)
@@ -109,11 +109,11 @@ struct PromptShapeView: View {
                 .font(.app(13.5, weight: .medium))
                 .foregroundStyle(Theme.textMain(scheme))
             Text(MD.inline(
-                "这一份里有 **\(k(s.cachedTotal))** 是排在缓存断点前面的，"
+                "其中 **\(k(s.cachedTotal))** 是排在缓存断点前面的，"
                 + "也就是 **\(pct(s.cachedTotal, s.total))** 的内容"
-                + "只在**第一次**算全价，后面每一轮都便宜很多。\n\n"
-                + "⚠️ 前提是**上一次的缓存还活着**。Anthropic 那边默认只留 5 分钟——"
-                + "隔半小时再说一句话，缓存早凉了，这一整块又要从头建一遍。"
+                + "仅**首次**按全价计费，其后每轮大幅降低。\n\n"
+                + "⚠️ 前提是**上一次的缓存尚未过期**。Anthropic 默认保留 5 分钟，"
+                + "间隔超过该时长后缓存失效，需重新建立。"
                 + "所以现在标的是 **1 小时**那一档：她一天说几次话，中间隔着几十分钟，"
                 + "5 分钟那档几乎每次都是冷的。"))
                 .font(.app(11))
@@ -129,8 +129,8 @@ struct PromptShapeView: View {
             Text("最占地方的几件工具")
                 .font(.app(13.5, weight: .medium))
                 .foregroundStyle(Theme.textMain(scheme))
-            Text("用不上的可以在「设置 → MCP」里关掉。关一件省一件——"
-                 + "不过它们都在缓存里，省的是上下文，不是每轮的钱。")
+            Text("不需要的可在「设置 → MCP」中关闭。关闭后相应部分不再计入，"
+                 + "但此部分位于缓存内，节省的是上下文占用，而非每轮费用。")
                 .font(.app(10.5))
                 .foregroundStyle(Theme.textMuted(scheme))
             ForEach(Array(s.fattestTools.enumerated()), id: \.offset) { _, t in

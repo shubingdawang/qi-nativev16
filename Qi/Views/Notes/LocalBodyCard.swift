@@ -56,7 +56,7 @@ struct LocalBodyCard: View {
             }
 
             if !app.settings.bodyEnabled {
-                Text("身体那一套关着。去「设置 → 通用设置」打开。")
+                Text("身体模块已关闭。可在「设置 → 通用设置」中启用。")
                     .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
             } else {
@@ -188,7 +188,7 @@ struct LocalBodyCard: View {
                         // 流水里还看得见以前那些，所以这句说明得跟着开关变。
                         Text(MD.inline(app.settings.bodyByKeyword
                             ? "此层基于关键词匹配，判定精度有限。**仅影响身体数值，不影响好感**，好感只能由模型自行调整。判定有误时点击「撤掉」即可还原，身体数值本身也会随时间回落。"
-                            : "关键词判定已关闭，现在由**模型自行判定**这一下对身体的影响。上面列出的是历史记录。要换回关键词，在设置里改。"))
+                            : "关键词判定已关闭，当前由**模型自行判定**每轮对身体数值的影响。上方为历史记录。如需切回关键词判定，请在设置中修改。"))
                             .font(.app(10))
                             .foregroundStyle(Theme.textMuted(scheme))
                             .fixedSize(horizontal: false, vertical: true)

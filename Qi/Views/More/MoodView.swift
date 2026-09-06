@@ -168,7 +168,7 @@ struct MoodView: View {
                 // 搜索框在收起的抽屉上是够不着结果的
                 EmptyView()
             } else if days.isEmpty {
-                Text(loading ? "在读…" : "还没记过什么日子。点右上角加一个。")
+                Text(loading ? "在读…" : "尚无记录。点击右上角添加。")
                     .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
             } else {

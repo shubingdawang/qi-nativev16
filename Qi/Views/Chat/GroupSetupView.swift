@@ -78,7 +78,7 @@ struct GroupSetupView: View {
                 } header: {
                     Text("群里有谁")
                 } footer: {
-                    Text("按这个顺序轮流说话，后说的人能看到前面刚说完的。左滑删除，长按可以拖着换顺序。")
+                    Text("按此顺序轮流发言，靠后的成员可读取此前的发言。左滑删除，长按拖动可调整顺序。")
                 }
             }
             .transparentList()
@@ -159,7 +159,7 @@ struct GroupMemberFormView: View {
                 } header: {
                     Text("单独的设定")
                 } footer: {
-                    Text("只对这一位生效，会接在群聊说明后面。不填就只按群里的公共设定来。")
+                    Text("仅对该成员生效，附加在群聊说明之后。留空时仅按群聊公共设定执行。")
                 }
             }
             .transparentList()

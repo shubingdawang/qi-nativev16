@@ -106,7 +106,7 @@ struct BookshelfView: View {
             Button("取消", role: .cancel) {}
             Button("建好了") { store.createShelf(newShelf); newShelf = "" }
         } message: {
-            Text("书架就是分类。有几个架子，书房里就摆几排。")
+            Text("书架即分类，书房中按书架数量分排显示。")
         }
         .alert("书房", isPresented: Binding(
             get: { notice != nil }, set: { if !$0 { notice = nil } }

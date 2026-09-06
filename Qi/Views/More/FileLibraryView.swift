@@ -179,7 +179,7 @@ struct FileLibraryView: View {
                                 .font(.app(13))
                                 .foregroundStyle(Theme.textMuted(scheme))
                             if keyword.isEmpty {
-                                Text("点右上角把文件放进来，按日期排好")
+                                Text("点击右上角导入文件，按日期排序")
                                     .font(.app(11))
                                     .foregroundStyle(Theme.textMuted(scheme).opacity(0.8))
                             }

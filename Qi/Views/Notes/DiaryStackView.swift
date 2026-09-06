@@ -107,7 +107,7 @@ struct DiaryStackView: View {
                 .frame(maxWidth: .infinity)
 
                 HStack(spacing: 10) {
-                    Text("这一天写了 \(day.items.count) 条 · 点开看全文 · 长按能挪")
+                    Text("这一天写了 \(day.items.count) 条 · 点击查看全文 · 长按可拖动")
                         .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                     if day.items.contains(where: { layout.spot($0.id) != nil }) {

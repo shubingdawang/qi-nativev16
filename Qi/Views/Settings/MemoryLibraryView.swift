@@ -78,7 +78,7 @@ struct MemoryLibraryView: View {
             Button("清空", role: .destructive) { store.wipe() }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("记忆、日记、经期、存档对话全都会删掉，删了找不回来。电脑上那份不受影响。")
+            Text("记忆、日记、经期与存档对话将一并删除，且不可恢复。远程小屋中的数据不受影响。")
         }
     }
 
@@ -407,7 +407,7 @@ struct MemoryLibraryView: View {
                             by: app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName)
                         store.saveLetter()
                         pasting = false
-                        report = "收好了。从下一句话起，他就是带着这封信在说话。"
+                        report = "已保存。模型自下一轮对话起读取该信件。"
                     }
                     .fontWeight(.semibold)
                     .disabled(pasted.trimmingCharacters(in: .whitespaces).isEmpty)

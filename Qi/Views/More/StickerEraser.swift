@@ -61,7 +61,7 @@ struct StickerEraser: View {
             ZStack {
                 WallpaperBackground()
                 VStack(spacing: 14) {
-                    Text("一根手指抹过去就擦掉，两根手指捏着放大。擦坏了点「撤一步」。")
+                    Text("单指涂抹即可擦除，双指捏合缩放。操作有误时点击「撤一步」。")
                         .font(.app(12))
                         .foregroundStyle(Theme.textMuted(scheme))
 

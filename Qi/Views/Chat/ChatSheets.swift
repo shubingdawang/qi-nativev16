@@ -290,7 +290,7 @@ struct SystemPromptView: View {
                                                  ? StatusTone.done.color : .orange)
                         }
                         if !app.houseMemoryReachable {
-                            Text("电脑上的小屋没连上。记忆照常写在手机里，等小屋连上会自动补一份过去，不用手动操作。")
+                            Text("小屋服务未连接。记忆正常写入本机，服务恢复后自动补传，无需手动操作。")
                                 .font(.footnote)
                                 .foregroundStyle(.orange)
                         }
@@ -303,7 +303,7 @@ struct SystemPromptView: View {
                                 Text("\(app.pendingHouseWrites.count) 笔")
                                     .foregroundStyle(.secondary)
                             }
-                            Text("小屋一连上就自动补，补的是「加一笔」那类；带 id 的修改和删除不补——两边的 id 各生成各的，拿手机的 id 去改电脑上的会改错东西。")
+                            Text("服务恢复后自动补传新增类记录；带 id 的修改与删除不补传——两端 id 各自生成，互不对应。")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
@@ -397,7 +397,7 @@ struct SystemPromptView: View {
                         Task {
                             let ok = await ContextCompactor.compactNow(id, app: app)
                             compacting = false
-                            compactNote = ok ? "压好了。" : "没压——要么还没攒够（最少要 7 条），要么模型没回话。"
+                            compactNote = ok ? "压好了。" : "未生成浓缩件：条数未达下限（7 条），或模型未返回内容。"
                         }
                     } label: {
                         HStack(spacing: 8) {

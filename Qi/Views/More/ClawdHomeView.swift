@@ -737,7 +737,7 @@ struct ClawdHomeView: View {
             }
             Button("算了", role: .cancel) { }
         } message: {
-            Text("长按可以把它搬到屋里任何地方")
+            Text("长按可移动至房间内任意位置")
         }
         // ⚠️ 「从整版图里取家具」那个 sheet **不在这儿**，挂在按钮自己身上
         // （见 `sheetEntry`）。它以前挂在这一层，而这一层是**房间那一档**——

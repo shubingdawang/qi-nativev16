@@ -10,15 +10,15 @@ struct DivinationView: View {
 
     /// 六套占法。名字 + 一句「它管什么」。
     static let modes: [(String, String)] = [
-        ("塔罗",   "看心境、看关系、看一件事的来龙去脉"),
-        ("六爻",   "断具体的事：成不成、在哪儿、什么时候"),
+        ("塔罗",   "适用于心境、关系与事件脉络"),
+        ("六爻",   "适用于具体问题：成否、方位、时间"),
         ("骰子",   "问得急、要一句痛快话的时候用"),
-        ("八字",   "看一个人的底子。四柱是本机按干支算的，不联网"),
-        ("水晶球", "问得含糊也行——它看的是氛围，不是条款"),
+        ("八字",   "个人命理分析。四柱由本机按干支推算，不联网"),
+        ("水晶球", "问题可不具体，解读依据整体氛围"),
         ("解梦",   "把梦原样讲出来，他来读"),
-        ("梅花",   "按按下去的那一刻起卦。不摇钱，想清楚了再按"),
-        ("数字",   "只要生日，不要时辰。看生命路径数和今年在九年里的哪一档"),
-        ("择日",   "今天宜什么忌什么。建除十二神，本机按干支算的")
+        ("梅花",   "以点击时刻起卦，不使用摇钱动画。请确认后再点击"),
+        ("数字",   "仅需出生日期，无需时辰。给出生命路径数与本年所处的九年周期位置"),
+        ("择日",   "当日宜忌。依建除十二神，由本机按干支推算")
     ]
 
     @State private var mode = 0
@@ -216,7 +216,7 @@ struct TarotPane: View {
                     Text(shuffling ? "在洗…" : "挑 \(spread.count) 张（已挑 \(picked.count)）")
                         .font(.app(14, weight: .semibold))
                         .foregroundStyle(Theme.textMain(scheme))
-                    Text("牌已经洗好了，正反都在里面。凭手感挑，不用想。")
+                    Text("牌已洗好，含正逆位。直接选取即可。")
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
 
@@ -505,7 +505,7 @@ struct LiuyaoPane: View {
                     Text("想问什么")
                         .font(.app(14, weight: .semibold))
                         .foregroundStyle(Theme.textMain(scheme))
-                    TextField("六爻断具体的事，问得越具体越准", text: $question, axis: .vertical)
+                    TextField("六爻适用于具体问题，问题越明确结果越可用", text: $question, axis: .vertical)
                         .lineLimit(1...3)
                         .padding(11)
                         .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))

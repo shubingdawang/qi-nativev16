@@ -17,7 +17,6 @@ struct FeelingCard: View {
     @Environment(\.colorScheme) private var scheme
 
     @State private var showAll = false
-    @State private var explain = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
@@ -101,15 +100,15 @@ struct FeelingCard: View {
                 }
             }
 
-            DisclosureGroup(isExpanded: $explain) {
+            HelpNote {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach([
-                        "**这个数只有他能动。** 没有钉死的「夸 +1、凶 -2.3」那种表——他觉得该动多少就是多少（一次最多 5），他不动就不动。",
-                        "App 这边只做一件事：读你那句话像夸／像凶／像撒娇，把**此刻的情绪**（上面那个「亮着／有点闷」）带一下。情绪几分钟就散回中性，读错了也不留疤。",
-                        "读的时候会认撒娇：带语气词（啦、嘛、呀、哼、波浪号、颜文字）或者跟「抱抱／想你／哄」一起说的凶话，**不算凶**。",
-                        "读完会在他眼前摆一句「这是关键词读的，可能读拧」，**要不要动好感、动多少，他自己判**（调 feel）。这不额外花钱，就在他那次回话里。",
-                        "**判错了你随手撤**：每一笔后面都有「撤掉」，撤了总数当场还回来。",
-                        "他判着往下掉的时候，你那句话里引号引着的东西会被记成一条线索，摆在爱好页「试出来的」里——你点了才进爱好库。"
+                        "**该数值仅由模型调整。** 不存在固定的加减规则表，调整幅度由模型判定，单次上限为 5，也可不作调整。",
+                        "App 侧仅执行一项操作：按关键词判定输入语句的语气（称赞／责备／撒娇），据此调整**当前情绪**（上方显示项）。情绪在数分钟内回归中性，判定有误不留存影响。",
+                        "判定时识别撒娇语气：含语气词（啦、嘛、呀、哼、波浪号、颜文字），或与「抱抱／想你／哄」同时出现的责备语句，**不计为责备**。",
+                        "判定结果附带「由关键词得出，可能有误」的提示交由模型参考，**是否调整好感及调整幅度由模型决定**（调用 feel）。该过程不产生额外费用。",
+                        "**判定有误可撤销**：每条记录后附「撤掉」，撤销后总数立即还原。",
+                        "好感下调时，语句中引号内的内容记为线索，列于爱好页「试出来的」一栏，需手动确认后方才计入爱好库。"
                     ], id: \.self) { line in
                         Text(.init("· " + line))
                             .font(.app(11))
@@ -117,10 +116,6 @@ struct FeelingCard: View {
                     }
                 }
                 .padding(.top, 6)
-            } label: {
-                Text("这个数怎么来的")
-                    .font(.app(12))
-                    .foregroundStyle(app.settings.accentColor)
             }
         }
         .glassCard()

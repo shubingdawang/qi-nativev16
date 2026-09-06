@@ -508,7 +508,7 @@ struct AnnotateSheet: View {
                                 .fill(Theme.softFillDeep))
 
                         Text(picked.isEmpty
-                             ? "没挑句子的话，这条批注就挂在整条上。"
+                             ? "未选择句子时，该批注挂在整条记录上。"
                              : "「\(picked.prefix(18))…」会划掉，你写的标红跟在后面。原文一个字不改。")
                             .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme))
@@ -947,7 +947,7 @@ struct PeriodPane: View {
             calendar
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("点日历上的某一天，可以记下开始，或者写点当天的情况。")
+                Text("点击日历中的日期可记录周期开始，或补充当日情况。")
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
                 HStack(spacing: 14) {
@@ -1636,7 +1636,7 @@ struct StatusPane: View {
             }
 
             if base.isEmpty {
-                Text("去「设置 → 后端服务」填上主动消息服务的地址，才能读到身体状况。")
+                Text("请在「设置 → 后端服务」中填写主动消息服务地址，方可读取身体状况。")
                     .font(.footnote).foregroundStyle(.secondary)
                     .glassCard()
             } else if let st = body_ {

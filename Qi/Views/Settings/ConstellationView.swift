@@ -184,7 +184,7 @@ struct ConstellationView: View {
             Text("还连不成一张图")
                 .font(.app(13))
                 .foregroundStyle(Theme.textMuted(scheme))
-            Text(MD.inline("星星是记忆里提到过的人和东西，**至少被提过两次**才上图。\n再攒一阵子就有了。"))
+            Text(MD.inline("星点为记忆中出现过的人与事物，**被提及至少两次**方才显示。\n记录累积后即会出现。"))
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme).opacity(0.85))
                 .multilineTextAlignment(.center)

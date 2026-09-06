@@ -61,7 +61,7 @@ struct MemoFloatingView: View {
             }
             Button("算了", role: .cancel) {}
         } message: {
-            Text("收起来只是不挂在聊天页了，备忘页里还在。")
+            Text("收起后仅不在聊天页显示，备忘页中仍保留。")
         }
     }
 

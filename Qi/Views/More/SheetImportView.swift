@@ -70,7 +70,7 @@ struct SheetImportView: View {
 
                         if pieces.isEmpty && !working {
                             EmptyNote(icon: "scissors",
-                                      title: "导一整版进来就行",
+                                      title: "导入整版素材图即可",
                                       hint: "导入白底的整版等距家具图，"
                                           + "系统自动将每件分割为独立素材。\n"
                                           + "你只需为每件标注名称。")
@@ -85,11 +85,11 @@ struct SheetImportView: View {
                                     piece(i)
                                 }
                             }
-                            Text(MD.inline("**点一下**任意一块，选它对应哪件家具。"
+                            Text(MD.inline("**点击**任一分块，指定其对应的家具。"
                                  + "同一个菜单里还有「**拆开这一块**」——"
-                                 + "两件挨得太近被切成一块的时候用它。\n"
-                                 + "**没指定的不用管**——它们不会进屋，也不占地方。"
-                                 + "指定错了，点同一块重选一次就行。"))
+                                 + "适用于两件家具距离过近被切为同一块的情况。\n"
+                                 + "**未指定的分块无需处理**，不会进入房间，也不占用空间。"
+                                 + "指定有误时，再次点击该分块重新选择。"))
                                 .font(.app(10.5))
                                 .foregroundStyle(Theme.textMuted(scheme))
                                 .padding(.leading, 4)
@@ -154,8 +154,8 @@ struct SheetImportView: View {
                 }
                 Button("算了", role: .cancel) { assigning = nil }
             } message: {
-                Text("选一件，那件在屋里就用这张图。随时能在屋里长按换回来。\n\n"
-                     + "要是这一块里其实有好几件东西挤在一起，选「拆开这一块」。")
+                Text("选定后该家具在房间中使用此图。可在房间中长按恢复原图。\n\n"
+                     + "若该分块内包含多件家具，选择「拆开这一块」。")
             }
         }
     }
@@ -213,7 +213,7 @@ struct SheetImportView: View {
         let src = pieces[i]
         let parts = SpriteSheet.slice(src, grow: 0)
         guard parts.count > 1 else {
-            note = "这一块拆不开了——它本来就是连在一起的一整块"
+            note = "该分块无法继续拆分，其本身为一个整体"
             return
         }
         pieces.replaceSubrange(i...i, with: parts)

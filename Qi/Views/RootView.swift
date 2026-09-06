@@ -67,7 +67,7 @@ struct RootView: View {
             Button("这次别", role: .cancel) { app.answerToolConfirm(false) }
         } message: { ask in
             Text("将调用「\(ask.name)」。\n\(ask.args)"
-                 + "\n\n这几件做了不好收拾，所以问一句。"
+                 + "\n\n以上操作不可撤销，需确认后执行。"
                  + "不想每次都问，去「设置 → 通用」关掉。")
         }
         // ⚠️ `!calls.minimized`：收起来的时候不摆全屏，**但电话还通着**。

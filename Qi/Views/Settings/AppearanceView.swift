@@ -253,7 +253,7 @@ struct AppearanceView: View {
                     Text("背景里的光")
                         .font(.app(15))
                         .foregroundStyle(Theme.textMain(scheme))
-                    Text("三团很淡的光，跟着主题色，四十秒漂一个来回")
+                    Text("三处低透明度光斑，取主题色，四十秒循环一次")
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
@@ -500,14 +500,14 @@ struct AppearanceView: View {
                    value: $app.settings.fontSize,
                    range: 13...22, step: 1,
                    readout: "\(Int(app.settings.fontSize))",
-                   note: "**整个 App 一起变**：设置页、侧边栏、札记、游戏里的字都跟着走，不只是聊天气泡。",
+                   note: "作用于全 App：设置页、侧边栏、札记与游戏内文字一并生效，不限于聊天气泡。",
                    live: true)
             SettingsDivider()
             slider(title: "模糊程度",
                    value: $app.settings.glassOpacity,
                    range: 0...1, step: nil,
                    readout: "\(Int(app.settings.glassOpacity * 100))%",
-                   note: "往右越糊，背后的壁纸化成色块，玻璃看着越实；往左越清楚，能看出壁纸原来是什么。\n\n这根滑块以前调的是整层的透明度——往左只是让玻璃越来越淡、直到快没了，那不是玻璃变了，是玻璃不见了。",
+                   note: "向右模糊程度提高，背景壁纸化为色块，玻璃质感更实；向左模糊程度降低，可辨认壁纸原貌。\n\n本项调整的是模糊半径，不改变图层透明度。",
                    )
             // ⚠️ **不给 `onDraft`。**
             //
@@ -539,7 +539,7 @@ struct AppearanceView: View {
                    range: 0...1, step: nil,
                    readout: app.settings.bubbleTint < 0.01
                         ? "纯玻璃" : "\(Int(app.settings.bubbleTint * 100))%",
-                   note: "默认纯玻璃，跟对方的一样透，靠左右位置区分。")
+                   note: "默认为纯玻璃，透明度与对方一致，通过左右位置区分。")
             SettingsDivider()
             slider(title: "气泡不透明度",
                    value: $app.settings.bubbleOpacity,
@@ -576,9 +576,9 @@ struct AppearanceView: View {
                 sampleTile("深色", dark: true)
             }
             // 她说「底下那个深色浅色的预览其实我没懂是什么作用」——那就写清楚。
-            Text("这两块是上面两根滑块的样品：左边钉死浅色、右边钉死深色。"
-                 + "「压暗」只在深色下生效，所以拉它的时候只有右边那块会沉下去——"
-                 + "你要是正用着浅色，屏幕上看不出变化，看这儿就行。")
+            Text("以下两块为上方滑块的效果样例：左侧固定浅色，右侧固定深色。"
+                 + "「压暗」仅在深色模式下生效，调整时只有右侧样例变化。"
+                 + "当前为浅色模式时界面本身无变化，以样例为准。")
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
         }

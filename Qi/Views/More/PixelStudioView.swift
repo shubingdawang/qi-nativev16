@@ -44,7 +44,7 @@ struct PixelStudioView: View {
             VStack(alignment: .leading, spacing: 14) {
 
                 if painter == nil {
-                    Text("没找到能画图的模型。去「设置 → 供应商」里把带 image 的模型打开，比如 gemini-image 或 gpt-image-2。")
+                    Text("未找到可生成图像的模型。请在「设置 → 供应商」中启用带 image 的模型，例如 gemini-image 或 gpt-image-2。")
                         .font(.app(12))
                         .foregroundStyle(.orange)
                         .padding(12)
@@ -146,7 +146,7 @@ struct PixelStudioView: View {
             .pickerStyle(.segmented)
 
             Text(backdrop == 0
-                 ? "深色底 —— 没有黑方块就说明透明是真的"
+                 ? "深色底 —— 未出现黑色方块即表示透明通道有效"
                  : (backdrop == 1 ? "花色底 —— 看边缘有没有毛边" : "浅色底 —— 看细节够不够"))
                 .font(.app(10))
                 .foregroundStyle(Theme.textMuted(scheme))
@@ -181,7 +181,7 @@ struct PixelStudioView: View {
 
             if revising {
                 VStack(alignment: .leading, spacing: 8) {
-                    TextField("哪儿不对？比如「耳朵再尖一点」「换成蓝眼睛」", text: $revision, axis: .vertical)
+                    TextField("填写修改要求，例如「耳朵再尖一点」「换成蓝眼睛」", text: $revision, axis: .vertical)
                         .lineLimit(1...3)
                         .padding(10)
                         .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
@@ -251,7 +251,7 @@ struct PixelStudioView: View {
                         }
                     }
                 }
-                Text("两家价钱不一样，按需要挑。有参考图的话，擅长照图改的那个更合适。")
+                Text("两者计费不同，按需选择。提供参考图时，建议选择擅长图生图的一项。")
                     .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
@@ -319,7 +319,7 @@ struct PixelStudioView: View {
                     .foregroundStyle(.orange)
             }
 
-            Text("给参考图的话，可以说「照这张画成像素的」「把图里这只画成开心的」。生成的是透明底，能直接当表情包发。")
+            Text("提供参考图时，可填写「照这张画成像素的」「把图中角色画成开心的」等要求。生成结果为透明底，可直接作为表情发送。")
                 .font(.app(10))
                 .foregroundStyle(Theme.textMuted(scheme))
         }

@@ -181,7 +181,7 @@ struct StickerLibraryView: View {
             }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("删掉的会进回收站，三十天内还能捞回来。")
+            Text("删除的内容进入回收站，三十日内可还原。")
         }
         .sheet(item: $editing) { s in
             StickerEditorView(sticker: s)
@@ -258,7 +258,7 @@ struct StickerLibraryView: View {
                                 tagging = false
                                 tagNote = n > 0
                                     ? "他看完写好了 \(n) 张。"
-                                    : "一张都没写成——检查一下模型是不是能看图。"
+                                    : "未生成任何描述，请确认所选模型支持图像输入。"
                             }
                         } label: {
                             HStack(spacing: 4) {
@@ -454,9 +454,9 @@ struct StickerLibraryView: View {
     private var emptyText: String {
         if !keyword.isEmpty { return "没找到" }
         if owner == "assistant" {
-            return "他这儿还没有表情。\n加进来的表情他才能在聊天里主动发。"
+            return "模型库中尚无表情。\n仅加入该库的表情可由模型主动发送。"
         }
-        return tab == 2 ? "还没有会动的表情\n点右上角从文件里选 GIF 或 WebP" : "还没有表情\n点右上角从相册选"
+        return tab == 2 ? "尚无动态表情\n点击右上角从文件中选择 GIF 或 WebP" : "还没有表情\n点右上角从相册选"
     }
 }
 

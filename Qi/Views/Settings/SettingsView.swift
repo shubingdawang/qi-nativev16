@@ -150,9 +150,9 @@ struct SettingsView: View {
                 }
                 Button("取消", role: .cancel) { pendingBackup = nil }
             } message: {
-                Text("「只补没有的」：现在有的一个字都不动，只把这份备份里多出来的加进来。"
-                     + "同一个窗口两边各聊了一段的话，两段会按时间并到一起。\n\n"
-                     + "「整个盖掉」：回到备份那一天的样子，这之后聊的会没掉。"
+                Text("「只补没有的」：保留现有全部内容，仅将备份中多出的记录并入。"
+                     + "同一窗口两端各有记录时，按时间合并。\n\n"
+                     + "「整个盖掉」：还原至备份时点的状态，其后新增的记录将丢失。"
                      + "换手机、重装才需要它。")
             }
             .alert("提示", isPresented: Binding(
@@ -184,7 +184,7 @@ struct SettingsView: View {
                 }
                 Button("取消", role: .cancel) {}
             } message: {
-                Text("聊天记录和里面的图片都会删掉，删了找不回来。建议先导出一份备份。")
+                Text("聊天记录及其中图片将一并删除，且不可恢复。建议先导出备份。")
             }
         }
     }
@@ -509,12 +509,12 @@ struct SettingsView: View {
                                          : Theme.textMuted(scheme))
                 }
                 Text(MD.inline("无需手动操作：每次按住说话时自动采样——"
-                     + "音量、语速、停顿有多长。攒够 \(VoiceBaseline.shared.progress.need) 条之后，"
-                     + "再说话就会跟你自己的平时比一比，明显偏了才在那条语音上标一句"
+                     + "采集音量、语速与停顿时长。累计满 \(VoiceBaseline.shared.progress.need) 条之后，"
+                     + "后续语音与个人基线比对，偏差显著时在该条语音上附一行标注"
                      + "「比平时轻」「比平时快」，他看得见。\n\n"
-                     + "攒够之前它一个字都不说——那会儿说什么都是瞎猜。"
-                     + "全程在这台手机上算，不花钱、不上传。"
-                     + "换了麦克风、感冒一周之后不准了，可以让它重新认识你。"))
+                     + "未达样本量前不作任何标注。"
+                     + "全程在本机计算，不联网、不产生费用。"
+                     + "更换麦克风或嗓音状态变化导致比对失准时，可重新采集基线。"))
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
                 // ⚠️ 要先问一句。
@@ -544,14 +544,14 @@ struct SettingsView: View {
                     }
                     Button("算了", role: .cancel) {}
                 } message: {
-                    Text("已经攒下的样本会清空，要重新说满八条才会再开始比对。")
+                    Text("已采集的样本将清空，需重新录满八条后恢复比对。")
                 }
                 .alert("清好了", isPresented: $voiceResetDone) {
                     Button("好") { voiceResetDone = false }
                 } message: {
                     // 做完了要**说一声**——上一版就是做了不吭声，
                     // 她以为没反应，回头才发现已经清了。
-                    Text("样本已清空，重新说满八条语音后会再开始比对。")
+                    Text("样本已清空，重新录满八条语音后恢复比对。")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -652,10 +652,10 @@ struct SettingsView: View {
                     Text("我分段发")
                         .font(.app(15))
                         .foregroundStyle(Theme.textMain(scheme))
-                    Text(MD.inline("输入框旁边多一个「暂存」键：按它把这一条攒进这一轮，"
+                    Text(MD.inline("输入框旁增加「暂存」键：点击后将当前内容并入本轮，"
                          + "按发送键把攒着的一起发出。"
                          + "图、文件、语音、表情**都能攒**，"
-                         + "所以「先说一句再发语音」和「先发语音再补一句」都行。"
+                         + "文字与语音的先后顺序不限。"
                          + "**不限时**，攒多久都行"))
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
@@ -974,7 +974,7 @@ struct SettingsView: View {
                                       ? .medium : .regular))
                         .foregroundStyle(Theme.textMain(scheme))
                     if BackupClock.overdue {
-                        Text("包七天就到期，过期得重装。导一份出来放网盘里。")
+                        Text("安装包七日后失效，过期需重新安装。建议导出备份另行保存。")
                             .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
@@ -1046,7 +1046,7 @@ struct SettingsView: View {
                     Text(Storage.salvaged.joined(separator: "\n"))
                         .font(.app(10, design: .monospaced))
                         .foregroundStyle(Theme.textMuted(scheme))
-                    Text("原件已经改名留在 App 的文稿目录里，没有被覆盖。")
+                    Text("原文件已重命名保留在 App 文稿目录中，未被覆盖。")
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
@@ -1180,8 +1180,8 @@ struct SettingsView: View {
                         .font(.app(10.5))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
-                Text("图片是最能长的那一摊。回收站里那些三十天后自己清；"
-                     + "想早点腾出来，去「相册 → 回收站」里清。")
+                Text("图片占用增长最快。回收站内容三十日后自动清除；"
+                     + "需提前释放空间可在「相册 → 回收站」中手动清除。")
                     .font(.app(10.5))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
@@ -1267,7 +1267,7 @@ struct SettingsView: View {
 
             chore.line = nil
             guard report.bytes > 0 else {
-                alertMessage = "导出失败，一个字节都没写出来。"
+                alertMessage = "导出失败，未写出任何数据。"
                 return
             }
             // ⚠️ 这儿**不再直接设 `exportURL`**，理由见函数末尾那段。
@@ -1291,7 +1291,7 @@ struct SettingsView: View {
             // 喂个 Swift 的 Int 进去在 64 位上是要出岔子的。插值最省事。
             var msg = String(format: "打好了，%.1f MB。", mb)
                 + "\n\n· \(report.files) 份数据"
-                + "\n· **\(report.verified) 个图片语音**（写完数过一遍的）"
+                + "\n· **\(report.verified) 个图片语音**（写入完成后重新统计所得）"
             // ⚠️ **拆开摆出来。**
             //
             // 她说「相册里就一个文件夹一个 gif，数字却从 6 变 8 变 10」。
@@ -1314,21 +1314,21 @@ struct SettingsView: View {
                 }
             }
             if report.writeFailed {
-                msg += "\n\n⚠️ **中途有写不进去的地方，这份包不能当数。**"
-                    + "多半是手机没空间了——腾一点出来再导一次，"
+                msg += "\n\n⚠️ **打包过程中存在写入失败，该备份不完整。**"
+                    + "通常为设备存储空间不足，释放后重新导出，"
                     + "导完对一下上面那个数。"
             } else if report.verified < report.blobs {
-                msg += "\n\n⚠️ **本来要装 \(report.blobs) 个，成品里只数出 \(report.verified) 个。**"
-                    + "这份包是残的，别拿它当备份——跟我说一声。"
+                msg += "\n\n⚠️ **应打包 \(report.blobs) 个，成品中实际统计到 \(report.verified) 个。**"
+                    + "该备份不完整，不可用于还原。"
             } else if report.verified == 0 {
-                msg += "\n\n⚠️ **一张图都没装进去。**"
-                    + "要么这台手机上确实还没有图，要么就是出问题了——跟我说一声。"
+                msg += "\n\n⚠️ **未打包任何图片。**"
+                    + "或本机确无图片，或打包过程出错。"
             }
             if !report.skipped.isEmpty {
                 msg += "\n\n有 \(report.skipped.count) 个太大了没装（单个超过 20 MB，"
                     + "一般是视频）。"
             }
-            msg += "\n\n存到「文件」里最稳，微信传大文件容易截断。"
+            msg += "\n\n建议保存至「文件」App。经聊天软件传输大文件可能被截断。"
             alertMessage = msg
             // ⚠️⚠️ **分享面板等这张结果弹窗关掉之后再出来。**
             //
@@ -1624,7 +1624,7 @@ struct SettingsView: View {
             // 那句话没错，但它把她堵在这儿了。
             // 同一个「导入」按钮，两种都收才对。
             let report = MemoryStore.shared.importFiles(urls)
-            alertMessage = "这些不是整包备份，当成**记忆库的文件**导了：\n\n"
+            alertMessage = "以下文件非完整备份，已按**记忆库文件**导入：\n\n"
                 + report.text
         }
     }
@@ -1673,29 +1673,29 @@ struct SettingsView: View {
                 if already > 0 { picNote += "（另有 \(already) 个这边本来就有，没动）" }
                 picNote += "。"
                 if pics == 0 && already == 0 && failed == 0 {
-                    picNote = "。\n\n⚠️ **这份备份里一个图片语音都没有**"
+                    picNote = "。\n\n⚠️ **该备份内不含任何图片与音频**"
                         + "（多半是没带图的旧版备份）。"
                 }
                 if failed > 0 {
-                    picNote += "\n\n⚠️ **有 \(failed) 个图片语音没能放回去**"
-                        + "（解不开或者写不进去）。要是相册里空着一片，就是这些。"
-                        + "先看看手机还有没有空间，再导一次。"
+                    picNote += "\n\n⚠️ **有 \(failed) 个图片与音频未能还原**"
+                        + "（无法解压或写入失败）。相册中缺失的内容即为此部分。"
+                        + "请确认设备存储空间充足后重新导入。"
                 }
                 alertMessage = (mode == .merge ? "补进来了 " : "还原了 ") + "\(count) 份数据"
                     + picNote
                     + (mode == .merge
-                       ? "\n\n**只补了这边没有的**，你现在的聊天记录一条都没动。"
-                         + "同一个窗口两边各聊了一段的话，两段会按时间并到一起。"
+                       ? "\n\n**仅补入本机缺少的记录**，现有聊天记录未作改动。"
+                         + "同一窗口两端各有记录时，按时间合并。"
                        : "\n\n整个盖过去了。")
-                    + "\n\n小屋、表情工坊那几处是开 App 那会儿读进内存的，"
-                    + "**保险起见还是把 App 完全关掉再打开一次**。"
+                    + "\n\n小屋与表情工坊的数据在 App 启动时读入内存，"
+                    + "**建议完全退出 App 后重新启动**。"
             case .legacy:
                 // 她手里可能还留着以前导出的老备份，照样认。
                 // **老备份只有三样，没法按 id 合并**（那时候还没有整包结构），
                 // 所以这一支只在「整个盖掉」的时候才真的写进去。
                 guard mode == .overwrite else {
-                    alertMessage = "这是很老的那种备份（只有供应商、聊天记录和设置），"
-                        + "它没法只挑没有的补——要用它就得选「整个盖掉」。"
+                    alertMessage = "该备份为早期格式（仅含供应商、聊天记录与设置），"
+                        + "不支持增量补入，只能选择「整个盖掉」。"
                     return
                 }
                 // 老备份只有三样，都很小，整个读进来无所谓
@@ -1711,13 +1711,13 @@ struct SettingsView: View {
                 app.settings = backup.settings
                 app.saveNow()
                 alertMessage = "导入成功。\n\n"
-                    + "这是旧版的备份，里面只有供应商、聊天记录和设置，"
-                    + "记忆库、备忘、通话记录那些不在里面。"
+                    + "该备份为旧版格式，仅含供应商、聊天记录与设置，"
+                    + "不含记忆库、备忘与通话记录。"
             case .unreadable(let why):
                 alertMessage = why
             }
         } catch {
-            alertMessage = "这个文件读不了，可能不是本 App 导出的备份。\n\(error.localizedDescription)"
+            alertMessage = "该文件无法读取，可能并非本 App 导出的备份。\n\(error.localizedDescription)"
         }
     }
 }

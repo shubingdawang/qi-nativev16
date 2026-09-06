@@ -58,10 +58,10 @@ struct MusicLibraryView: View {
         let br = "\n\n"
         var s = player.missingFile ?? ""
         s += br
-        s += "两种可能：一是这首超过 20 MB，备份本来就不带"
+        s += "可能原因有二：其一为该曲目超过 20 MB，备份不含此类文件"
         s += "（整包会大到导不出来）；"
-        s += "二是它是被 v112 之前那个备份路径 bug 弄丢的。"
-        s += "从「文件」重新导一次就行。"
+        s += "其二为 v112 之前的备份路径缺陷导致丢失。"
+        s += "从「文件」重新导入即可。"
         return s
     }
 
@@ -243,7 +243,7 @@ struct MusicLibraryView: View {
                             Text("有 \(library.orphans.count) 首的音频文件不在了")
                                 .font(.app(12))
                                 .foregroundStyle(Theme.textSoft(scheme))
-                            Text("先藏起来了。音频找回来它们自己会回来；不想等就清掉。")
+                            Text("已隐藏。音频恢复后自动重新显示，也可直接清除。")
                                 .font(.app(10.5))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
@@ -468,7 +468,7 @@ struct MusicLibraryView: View {
         do {
             webResults = try await MusicSearch.search(keyword, limit: 8)
             if notice == nil, !webResults.isEmpty {
-                notice = "网易云没搜到能放的，这些是 iTunes 的三十秒试听"
+                notice = "网易云无可播放结果，以下为 iTunes 三十秒试听"
             }
         } catch {
             notice = error.localizedDescription
