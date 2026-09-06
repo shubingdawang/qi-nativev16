@@ -115,7 +115,9 @@ struct ChatView: View {
     @State private var notice: String?
     @State private var selecting = false
     @State private var selected: Set<UUID> = []
-    @State private var shareImage: ShareImage?
+    /// 「分享这张图」那个面板**不挂在这一页上**（见 `ExportHost.swift`）。
+    /// 这一页订阅着 `app`，一重建就把正要弹的系统界面撤掉。
+    @StateObject private var shareBox = ShareBox()
     @State private var quoting: ChatMessage?
     @State private var menuOpenID: UUID?
     /// 菜单打开那一刻，她翻在第几页（0 = 现在这版）
@@ -492,9 +494,7 @@ struct ChatView: View {
                 jumpTo = msgID
             }
         }
-        .sheet(item: $shareImage) { item in
-            ShareSheet(items: [item.image])
-        }
+        .overlay { ShareHost(box: shareBox) }
         .onChange(of: pickedVideo) { _, items in loadVideo(items) }
         // ⚠️⚠️ 照片／视频／文件那三个弹窗**不挂在这儿了**，见 `ChatPickers`。
         //
@@ -1418,7 +1418,7 @@ struct ChatView: View {
                 let picked = app.messages(selected, in: conv.id)
                 guard !picked.isEmpty else { return }
                 if let img = ShareCardRenderer.render(messages: picked, settings: app.settings) {
-                    shareImage = ShareImage(image: img)
+                    shareBox.hand([img])
                 }
                 selecting = false; selected = []
             }

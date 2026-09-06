@@ -14,7 +14,8 @@ struct MemoryLibraryView: View {
 
     @State private var importing = false
     @State private var report: String?
-    @State private var exportURL: URL?
+    /// 「导出整包」那个面板**不挂在这一页上**（见 `ExportHost.swift`）。
+    @StateObject private var shareBox = ShareBox()
     @State private var confirmWipe = false
     @State private var writing = false
     @State private var pasting = false
@@ -60,12 +61,7 @@ struct MemoryLibraryView: View {
             }
         }
         .sheet(isPresented: $pasting) { pasteSheet }
-        .sheet(item: Binding(
-            get: { exportURL.map { Folder(url: $0) } },
-            set: { _ in exportURL = nil }
-        )) { f in
-            ShareSheet(items: [f.url])
-        }
+        .overlay { ShareHost(box: shareBox) }
         .alert("记忆库", isPresented: Binding(
             get: { report != nil }, set: { if !$0 { report = nil } }
         )) {
@@ -305,7 +301,7 @@ struct MemoryLibraryView: View {
             SettingsDivider()
 
             Button {
-                exportURL = store.exportBundle()
+                if let u = store.exportBundle() { shareBox.hand([u]) }
             } label: {
                 SettingsRowLabel(title: "导出", icon: "square.and.arrow.up")
             }
@@ -416,10 +412,6 @@ struct MemoryLibraryView: View {
         }
     }
 
-    private struct Folder: Identifiable {
-        let url: URL
-        var id: String { url.absoluteString }
-    }
 }
 
 // MARK: - 记忆列表

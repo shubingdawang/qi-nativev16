@@ -30,15 +30,41 @@
   · `@EnvironmentObject` 声明
   · 顶层 body 上挂着 `fileImporter` / `photosPicker`
 
-⚠️ 只查这两种「选东西」的弹窗。`sheet`/`alert` 也有同样的毛病，
-但那两个在项目里到处都是、绝大多数没出过事——
-**一个总在报警的检查等于没有检查**，所以只盯最常出事的这两种。
+⚠️ 普通的 `sheet`/`alert` 不查。它们在项目里到处都是、
+绝大多数没出过事——**一个总在报警的检查等于没有检查**。
+
+但有一种 `sheet` 要查：**里头装的是系统界面**
+（`UIViewControllerRepresentable`，比如分享面板、文件选择器）。
+那种跟 fileImporter 是同一回事——UIKit 那边正在做弹出动画，
+这边一重建就把它撤了。
+
+⑤ 导出备份的分享面板——她说「清单之后不会自动进入文件
+   让我选择文件夹保存」。上一版检查放它过去了，就因为它是 `sheet`。
+   而它比别的都危险：**打包刚结束那一瞬，
+   正是这一页一天里最爱重建的时候**。
 
 用法：python presentcheck.py 文件.swift ...
 """
-import io, re, sys
+import io, os, re, sys
 
 PICKER = re.compile(r'^\s*\.(fileImporter|photosPicker)\(')
+# 「sheet 里装的是系统界面」那一种。
+#
+# ⚠️ 名单是**扫出来的**，不是写死的：仓库里新加一个
+# `UIViewControllerRepresentable`，这个检查自动就认得它。
+# 写死的话，下一个人加一个新的系统界面，检查照样放它过去。
+SHEET = re.compile(r'^\s*\.(sheet|fullScreenCover)\(')
+# 下一个修饰符。用来给上面那个 sheet 的内容划个边。
+NEXT = re.compile(r'^\s{0,12}\.[a-zA-Z]\w*\(')
+
+
+def system_views(root):
+    import glob
+    names = set()
+    for f in glob.glob(root + '/**/*.swift', recursive=True):
+        s = io.open(f, encoding='utf-8').read()
+        names |= set(re.findall(r'struct\s+(\w+)\s*:\s*UIViewControllerRepresentable', s))
+    return names
 # ⚠️ 认**声明**，不认注释里提到的那个词。
 # 头一版把 `ImportButton` 自己也报了——它注释里写着
 # 「而那一整页订阅着 @EnvironmentObject app」，正是在解释这个坑。
@@ -63,8 +89,28 @@ def check(path):
             subscribed = True
             continue
         if PICKER.match(line) and subscribed:
-            out.append((i + 1, cur or '?'))
+            out.append((i + 1, cur or '?', 'picker'))
+        elif SHEET.match(line) and subscribed:
+            # 往下看，里头有没有搭一个系统界面。
+            #
+            # ⚠️ **看到下一个修饰符就停。** 一口气看十几行的话，
+            # 会把下一个 sheet 的内容算到这一个头上——
+            # ChatView 那儿本来只有两个，头一版报了四个。
+            blob = []
+            for line2 in lines[i + 1:i + 26]:
+                if NEXT.match(line2):
+                    break
+                blob.append(line2)
+            blob = '\n'.join(blob)
+            for name in SYS:
+                if re.search(r'\b' + name + r'\s*\(', blob):
+                    out.append((i + 1, cur or '?', name))
+                    break
     return out
+
+
+SYS = system_views(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                '..', 'Qi'))
 
 
 # 分两级报。
@@ -89,15 +135,19 @@ for path in sys.argv[1:]:
     if not hits:
         continue
     per = collections.defaultdict(list)
-    for ln, name in hits:
-        per[name].append(ln)
+    for ln, name, what in hits:
+        per[name].append((ln, what))
     for name, lns in per.items():
         if len(lns) >= 2:
             print('BAD %s:%d  `%s` 订阅了 app，身上却叠着 %d 个弹窗——'
                   '它们会互相抢，而且 AppState 一变就整层被撤掉。'
                   '拆进 PickHosts.swift 里那几个宿主，一个宿主管一个。'
-                  % (path, lns[0], name, len(lns)))
+                  % (path, lns[0][0], name, len(lns)))
             bad += 1
         else:
+            ln, what = lns[0]
+            print('    %s:%d  `%s` 订阅了 app，身上挂着一个 %s。'
+                  '页面刷得凶的时候会被撤掉。'
+                  % (path, ln, name, what))
             lonely += 1
 print('--- %d 处要拆；另有 %d 处是单挂一个（有风险，暂不拦）' % (bad, lonely))

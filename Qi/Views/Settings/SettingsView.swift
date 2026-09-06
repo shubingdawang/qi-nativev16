@@ -47,12 +47,17 @@ struct SettingsView: View {
     /// ⚠️ 要观察它：抓的时候那句「在找…」和池子里的条数都得跟着变，
     /// 只读 `TopicPool.shared` 不订阅的话这一段是死的。
     @ObservedObject private var topics = TopicPool.shared
-    @State private var exportURL: URL?
+    /// 「存到哪儿」那个弹窗**不在这一页上**，在 `ExportHost` 里。
+    ///
+    /// 她报的：「清单之后不会自动进入文件让我选择文件夹保存。」
+    /// 病根跟「导入备份点五次才成功」是同一个——这一页订阅着 `app`，
+    /// 一重建就把正要弹的东西撤掉了。理由见 `ExportHost.swift`。
+    @StateObject private var exportBox = ExportBox()
     /// 刚导好、**还没交出去**的那份。
     ///
-    /// 她按掉「打好了…」那张结果弹窗之后，才把它挪进 `exportURL`
-    /// 去弹分享面板——两张同时弹的话，后来的会把先来的顶掉，
-    /// 那就是她说的「第一次点击弹窗就自动收回了」。见 `exportBackup()`。
+    /// 她按掉「打好了…」那张结果弹窗之后才交出去——
+    /// 两张同时弹的话后来的会把先来的顶掉，
+    /// 那就是她说的「第一次点击弹窗就自动收回了」。
     @State private var pendingExport: URL?
 
     /// 换行走这个常量。反斜杠经脚本改动会被吃掉一层、字符串就跨行了——
@@ -106,12 +111,10 @@ struct SettingsView: View {
             // 而重建那一下就把正在弹的选择器撤掉了。
             //
             // 而且这一层一口气挂了五个 presentation，它们之间还会抢。
-            .sheet(item: Binding(
-                get: { exportURL.map { ExportFile(url: $0) } },
-                set: { _ in exportURL = nil }
-            )) { file in
-                ShareSheet(items: [file.url])
-            }
+            // ⚠️ **这儿只放一块零尺寸的空白**，弹窗长在它身上。
+            // 挂回这一页的话，`AppState` 一有动静就把它撤掉——
+            // 而打包刚结束那一瞬，正是这一页一天里最爱重建的时候。
+            .overlay { ExportHost(box: exportBox) }
             // 打包／还原都要跑一会儿（她的图多的时候是几十秒）。
             // **得让她看得见它在动**，不然跟死机没有区别——
             // 而且这一层还挡住了误触：这中间点别的地方会把事情搅乱。
@@ -168,9 +171,7 @@ struct SettingsView: View {
                     // 新的 presentation 会被当场丢掉。
                     if let url = pendingExport {
                         pendingExport = nil
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                            exportURL = url
-                        }
+                        exportBox.hand(url)
                     }
                 }
             } message: {
@@ -1223,12 +1224,17 @@ struct SettingsView: View {
         var settings: AppSettings
     }
 
-    private struct ExportFile: Identifiable {
-        let url: URL
-        var id: String { url.absoluteString }
-    }
-
     private func exportBackup() {
+        // 这一趟已经打过一份、而且还在盘上，就直接拿它去弹。
+        //
+        // ⚠️ 她的图多的时候打一次包要几十秒。弹窗要是没出来、
+        // 或者她在「文件」里按了取消，**再等一遍那是白等**——
+        // 文件明明还躺在那儿。
+        // 这一条同时是个安全网：万一还有别处能把弹窗撤掉，她再点一下就是了。
+        if let again = exportBox.reusable {
+            exportBox.hand(again)
+            return
+        }
         // 先把内存里攒着没落盘的都写下去，再整个目录扫一遍。
         //
         // **不再手写要带哪几样。** 上一版只装了 providers / conversations /
@@ -1270,7 +1276,7 @@ struct SettingsView: View {
                 alertMessage = "导出失败，未写出任何数据。"
                 return
             }
-            // ⚠️ 这儿**不再直接设 `exportURL`**，理由见函数末尾那段。
+            // ⚠️ 这儿**不直接弹弹窗**，理由见函数末尾那段。
             BackupClock.markDone()
 
             // ⚠️ **图片的数目一定要报给她看。**
@@ -1335,14 +1341,12 @@ struct SettingsView: View {
             // 她报的：「导出备份第一次点击弹窗就自动收回了，
             // 第二次点击才可以真正的存文件。」
             //
-            // 病根：上面 `exportURL = url` 和这儿的 `alertMessage = msg`
-            // 是**同一拍**里设的，于是「分享面板」和「打好了…」那张
-            // alert 在同一层上同时要弹。SwiftUI 同一时刻只给一个，
+            // 病根：开弹窗和这儿的 `alertMessage = msg` 是**同一拍**里设的，
+            // 于是两张在同一层上同时要弹。SwiftUI 同一时刻只给一个，
             // 后来的把先来的顶掉——她看到的就是「弹一下自己收回去了」。
-            // 第二次点的时候 alert 已经关了，才轮到分享面板。
             //
             // 现在先只留 alert，把文件记在一边；她按「好」之后
-            // 才把 `exportURL` 交出去（见 `pendingExport`）。
+            // 才交给 `exportBox`（见 `ExportHost.swift`）。
             pendingExport = url
         }
     }
