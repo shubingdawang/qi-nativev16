@@ -76,6 +76,17 @@ enum HomeRoom: String, Codable, CaseIterable, Identifiable, Sendable {
         case "washer", "toilet", "bathtub", "sink":
             return .bath
         default:
+            // 主题那一批的 id 是「套装_件」（`sakura_bed`、`ny_table`），
+            // 件那一半就说明了它是什么。不看的话一屋子主题家具
+            // 会**全堆进客厅**——她买一张哥特四柱床，它落在沙发旁边。
+            if let part = kind.id.split(separator: "_").last.map(String.init) {
+                switch part {
+                case "bed", "vanity", "nightstand": return .bedroom
+                case "shelf", "wardrobe":           return .study
+                case "table", "tea", "dining":      return .dining
+                default:                            break
+                }
+            }
             switch kind.category {
             case .food, .drink: return .dining
             case .plant:        return .living

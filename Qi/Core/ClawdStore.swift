@@ -986,6 +986,13 @@ final class ClawdStore: ObservableObject {
         switch kind.category {
         case .furniture, .plant, .gadget: return true
         case .drink, .food, .toy, .wear, .decor: return false
+        // ⚠️「主题」那一栏里什么都有：四柱床、沙发，也有花环、红包、中国结。
+        // **分类问不出来大小**，所以问它占几格、有多高——
+        // 归到 `.furniture` 会让他把一个红包举过头顶，
+        // 归到 `.decor` 会让他拎着一张双人床走。
+        case .themed:
+            let s = FurnitureCatalog.shape(of: kind.id)
+            return s.w > 1 || s.d > 1 || s.tall >= 1.0
         }
     }
 
