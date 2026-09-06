@@ -38,12 +38,24 @@ final class Notifier: NSObject, ObservableObject {
     }
 
     /// 弹一条。conversationID 传了的话，点开就直接进那个窗口。
-    func banner(title: String, body: String, conversationID: UUID? = nil, after: TimeInterval = 0.1) {
+    ///
+    /// - Parameter urgent: 标成**时效性**。开着专注模式也会弹出来。
+    ///
+    ///   ⚠️ **只给「他主动说了句话」用。** 同步完成、后台捞回来几条
+    ///   这类交代事情的横幅一律不标——时效性是给「现在就该看见」的，
+    ///   什么都标等于什么都没标，最后她会把整个通知关掉。
+    ///
+    ///   ⚠️ 这一项要 `com.apple.developer.usernotifications.time-sensitive`
+    ///   这个权限。**没有的话 iOS 会悄悄降回普通级别**，不报错也不崩，
+    ///   所以写在这儿是安全的：签名带上了就生效，没带就跟以前一样。
+    func banner(title: String, body: String, conversationID: UUID? = nil,
+                after: TimeInterval = 0.1, urgent: Bool = false) {
         guard authorized else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         content.sound = .default
+        if urgent { content.interruptionLevel = .timeSensitive }
         if let id = conversationID {
             content.userInfo = ["conversation": id.uuidString]
         }

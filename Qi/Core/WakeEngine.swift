@@ -455,7 +455,10 @@ final class WakeEngine: ObservableObject {
         Notifier.shared.banner(
             title: app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName,
             body: text.count > 60 ? String(text.prefix(60)) + "…" : text,
-            conversationID: id
+            conversationID: id,
+            // ⚠️ 他自己开口这一下才配得上时效性——
+            // 专注模式里她也该看得见。见 `Notifier.banner`。
+            urgent: true
         )
     }
 
