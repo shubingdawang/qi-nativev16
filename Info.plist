@@ -97,6 +97,55 @@
 		<key>UIImageRespectsSafeAreaInsets</key>
 		<true/>
 	</dict>
+	<!-- ⚠️ 这三项一起，是**导入备份的第二道门**。
+
+	     她第五次报「选中文件、点打开没反应」了。日志显示
+	     `documentPickerWasCancelled` 通得过、`didPickDocumentsAt` 通不过——
+	     差别在于后者要系统把那份文件的沙盒访问权授给这个 App，
+	     而授权认的是签名里的 `application-identifier`。重签名之后
+	     bundle id 和描述文件里那个对不上，这一步就悄悄下不来。
+
+	     所以给它开第二条路：**在「文件」里长按备份 →「共享」→ 选「栖」**。
+	     那条路是系统把文件送进来（`onOpenURL`），不需要那份授权。
+
+	     · UIFileSharingEnabled：栖的文件夹在「文件」App 里看得见，
+	       她也可以直接把备份拖进去
+	     · LSSupportsOpeningDocumentsInPlace：原地打开，不必先拷一份
+	     · CFBundleDocumentTypes：声明收哪些类型，栖才会出现在共享菜单里
+
+	     ⚠️ `public.data` 那一条的 `LSHandlerRank` 是 `Alternate`：
+	     它让栖对任何文件都出现在共享菜单里（有些来源认不出类型），
+	     但**不去抢默认打开方式**。写 `Owner` 的话，她点开任何一个
+	     不认识的文件都会跳进栖。 -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>栖的备份</string>
+			<key>LSHandlerRank</key>
+			<string>Default</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.json</string>
+				<string>public.plain-text</string>
+				<string>public.text</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>任意文件</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.data</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
 		<string>arm64</string>

@@ -29,6 +29,15 @@ struct QiApp: App {
                 .environmentObject(app)
                 .tint(app.settings.accentColor)
                 .preferredColorScheme(app.settings.preferredColorScheme)
+                // ⚠️ **导入备份的第二道门。**
+                //
+                // 「文件」里长按备份 →「共享」→ 选「栖」，
+                // 系统就把这份文件送到这儿来。走的是完全另一套机制，
+                // 不需要文档选择器那份沙盒授权——
+                // 而她那台机器上，卡住的正是那份授权（见 `BackupInbox`）。
+                .onOpenURL { url in
+                    BackupInbox.shared.take(url)
+                }
                 .onAppear {
                     // 导航栏标题换成宋体。全 App 八十多处一次到位。
                     Look.applyNavBar(style: app.settings.glassStyle,
