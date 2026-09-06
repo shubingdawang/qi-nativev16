@@ -851,8 +851,37 @@ struct ClawdRoamer: View {
         // 从他们 gallery 扒来的那八件（见 `scripts/照抄表情.py`）
         .coffee, .reading, .eating, .painting,
         .listening, .watering, .gaming, .guitar,
-        .photo, .singing, .exercise, .shower
+        .photo, .singing, .exercise, .shower,
+        // 新那包里的十一件日常（`scratchpad/shoot/`）。
+        // 跟季节走的五件不在这儿，见 `seasonThings`。
+        .sushi, .ramen, .hotpot, .bubbletea, .baking,
+        .piano, .dancing, .bubbles, .catpetting,
+        .fishing, .gardening
     ]
+
+    /// 这个月他还会做的事。
+    ///
+    /// ⚠️ 跟节日一样，**不进那张固定的池子**——
+    /// 大夏天堆雪人跟大夏天过年一样出戏。
+    /// 但也不该细到某一天：夏天整个夏天都能抱西瓜。
+    ///
+    /// 烟花是例外，只在跨年那两天，所以份额也给得大。
+    private static func seasonThings(_ now: Date = Date()) -> [ClawdMood] {
+        let cal = Calendar.current
+        let m = cal.component(.month, from: now)
+        let d = cal.component(.day, from: now)
+        var out: [ClawdMood] = []
+        switch m {
+        case 6, 7, 8:   out = [.watermelon, .watermelon, .bubbles]
+        case 12, 1, 2:  out = [.snowman, .skiing]
+        case 3, 4, 5:   out = [.umbrella, .gardening]
+        default:        out = []
+        }
+        if (m == 12 && d == 31) || (m == 1 && d <= 2) {
+            out += Array(repeating: .fireworks, count: 6)
+        }
+        return out
+    }
 
     /// 今天他可以做哪些事。
     ///
@@ -863,8 +892,9 @@ struct ClawdRoamer: View {
     /// 所以节日是**当天临时加进来的**，而且给的份额大——
     /// 一年就这一天，他该老想着这件事；过了今天自己就没了。
     private static func todaysThings() -> [ClawdMood] {
-        guard let f = ClawdMood.festiveToday() else { return ownThings }
-        return ownThings + Array(repeating: f, count: 8)
+        let base = ownThings + seasonThings()
+        guard let f = ClawdMood.festiveToday() else { return base }
+        return base + Array(repeating: f, count: 8)
     }
 
     /// 戳他一下。

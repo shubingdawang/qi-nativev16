@@ -2043,6 +2043,48 @@ enum ClawdMood: String, Codable {
     /// 洗澡
     case shower
 
+    // ── 新那包里全新的十七款（`scratchpad/shoot/`）
+    //
+    // 她发的资产包里有 26 款，其中 9 款是现有的同名重画版——
+    // **那 9 款一个都没动**，等她看完对比图再定。这儿只加全新的。
+    /// 吃寿司
+    case sushi
+    /// 吃拉面
+    case ramen
+    /// 吃火锅
+    case hotpot
+    /// 喝奶茶
+    case bubbletea
+    /// 烤东西
+    case baking
+    /// 弹钢琴
+    case piano
+    /// 跳舞
+    case dancing
+    /// 吹泡泡
+    case bubbles
+    /// 撸猫
+    case catpetting
+    /// 钓鱼
+    case fishing
+    /// 侍弄花草
+    case gardening
+    /// 冒爱心。**`.loving` 播的就是这个**——
+    /// 原来那档借的是情人节的图，现在情人节有自己的日子了。
+    case hearts
+
+    // ── 跟季节走的四款。不按日子，按月份（见 `seasonThings`）
+    /// 抱西瓜（夏）
+    case watermelon
+    /// 打伞（春天雨季）
+    case umbrella
+    /// 堆雪人（冬）
+    case snowman
+    /// 滑雪（冬）
+    case skiing
+    /// 放烟花（跨年那两天）
+    case fireworks
+
     // ── 节日。**按日子出，不进随机池**（见 `festiveToday`）
     /// 她生日（11 月 16 日）
     case birthday
@@ -2062,6 +2104,10 @@ enum ClawdMood: String, Codable {
     case christmas
     /// 万圣夜
     case halloween
+    /// 情人节（公历 2 月 14）。
+    /// ⚠️ 跟 `.hearts` 分开：冒爱心是随时会有的情绪，
+    /// 这一档一年只有一天。
+    case valentine
 
     /// 这一档直接播他们的哪个 gif（`Qi/Resources/clawd/`）。
     ///
@@ -2094,7 +2140,9 @@ enum ClawdMood: String, Codable {
         case .guitar:    return "clawd-guitar"
         case .working:   return "clawd-coding"
         case .sleeping:  return "clawd-sleeping"
-        case .loving:    return "clawd-valentine"
+        // ⚠️ 原来这儿借的是情人节那张图。新包里有一张**专门冒爱心**的，
+        // 情人节那张就还给 2 月 14 了（见 `.valentine`）。
+        case .loving:    return "clawd-hearts"
         // ⚠️ 这个 gif **还没有**——他们 gallery 里没有扫地，
         // 是我照 skill 的规则新画的（`scripts/clawd-扫地.html`），
         // 但这台机器导不出 gif（见交接）。名字先写在这儿：
@@ -2105,6 +2153,22 @@ enum ClawdMood: String, Codable {
         case .singing:   return "clawd-singing"
         case .exercise:  return "clawd-exercise"
         case .shower:    return "clawd-shower"
+        case .sushi:      return "clawd-sushi"
+        case .ramen:      return "clawd-ramen"
+        case .hotpot:     return "clawd-hotpot"
+        case .bubbletea:  return "clawd-bubbletea"
+        case .baking:     return "clawd-baking"
+        case .piano:      return "clawd-piano"
+        case .dancing:    return "clawd-dancing"
+        case .bubbles:    return "clawd-bubbles"
+        case .catpetting: return "clawd-catpetting"
+        case .fishing:    return "clawd-fishing"
+        case .gardening:  return "clawd-gardening"
+        case .watermelon: return "clawd-watermelon"
+        case .umbrella:   return "clawd-umbrella"
+        case .snowman:    return "clawd-snowman"
+        case .skiing:     return "clawd-skiing"
+        case .fireworks:  return "clawd-fireworks"
         case .birthday:       return "clawd-birthday"
         case .newYear:        return "clawd-new-year"
         case .springFestival: return "clawd-spring"
@@ -2114,6 +2178,7 @@ enum ClawdMood: String, Codable {
         case .midAutumn:      return "clawd-mid-autumn"
         case .christmas:      return "clawd-christmas"
         case .halloween:      return "clawd-halloween"
+        case .valentine:      return "clawd-valentine"
         default:         return nil
         }
     }
@@ -2159,6 +2224,7 @@ enum ClawdMood: String, Codable {
             case "圣诞", "平安夜": hit = .christmas
             case "万圣夜":      hit = .halloween
             case "元旦":        hit = .newYear
+            case "情人节":      hit = .valentine
             default: continue
             }
             break
@@ -2195,7 +2261,7 @@ enum ClawdMood: String, Codable {
             return 6.0
         // 节日：一年就这一天，让他演够一轮
         case .birthday, .newYear, .springFestival, .lantern, .dragonBoat,
-             .qixi, .midAutumn, .christmas, .halloween:
+             .qixi, .midAutumn, .christmas, .halloween, .valentine:
             return 6.0
         // "他在做的事"——这一类才是需要演完的
         default:
@@ -2276,7 +2342,10 @@ enum ClawdMood: String, Codable {
             return [(ClawdSprites.sweet, 1.0), (ClawdSprites.sweet2, 1.0)]
         case .photo, .singing, .exercise, .shower, .birthday,
              .newYear, .springFestival, .lantern, .dragonBoat,
-             .qixi, .midAutumn, .christmas, .halloween:
+             .qixi, .midAutumn, .christmas, .halloween, .valentine,
+             .sushi, .ramen, .hotpot, .bubbletea, .baking, .piano,
+             .dancing, .bubbles, .catpetting, .fishing, .gardening,
+             .hearts, .watermelon, .umbrella, .snowman, .skiing, .fireworks:
             // ⚠️ 这些档**只走 gif**（见 `gif`），这儿是 gif 读不到时的兜底。
             // 她说过「你根本没有作画能力……按自己想法画出来的等同于屎」——
             // 所以不给它们画字符画了，读不到就站着，别拿我画的糊弄。
