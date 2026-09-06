@@ -525,13 +525,13 @@ enum ClawdSprites {
         "....................................",
         "....................................",
         "....................................",
-        "..............................BB....",
+        "...........................BB.BB....",
         "..........................BBBBBBB...",
-        "..........................BBpppBB...",
-        "..........................BBpppBB...",
-        "..........................BBpppBB...",
         "..........................BBBBBBB...",
-        "...........................BBBB.....",
+        "..........................BBBBBBB...",
+        "...........................BBBBB....",
+        "............................BBB.....",
+        ".............................B......",
         "....................................",
         "....................................",
         "......ppppppppppppppppppppp.........",
@@ -1189,13 +1189,13 @@ enum ClawdSprites {
         "....................................",
         "....................................",
         "....................................",
-        "............................BB......",
-        "............................BBBBBB..",
-        "............................BpppBB..",
-        "...........................BBpppBB..",
-        "...........................BBpppBB..",
-        "............................BBBBBB..",
-        "..............................BBB...",
+        "............................BB.BB...",
+        "...........................BBBBBBB..",
+        "...........................BBBBBBB..",
+        "...........................BBBBBBB..",
+        "............................BBBBB...",
+        ".............................BBB....",
+        "..............................B.....",
         "....................................",
         "......pppppppppppppppppppppp........",
         "......pppppppppppppppppppppp........",
@@ -2240,8 +2240,6 @@ struct ClawdView: View {
 
     @State private var frame = 0
     @State private var ticker: Task<Void, Never>?
-    /// 爱心飘起来没有
-    @State private var hearts = false
 
     private var sprites: [(PixelSprite, Double)] { mood.frames }
 
@@ -2449,26 +2447,15 @@ struct ClawdView: View {
                 musicNotes
             }
 
-            if mood == .loving, mood.gif == nil {
-                ZStack {
-                    ForEach(0..<3, id: \.self) { i in
-                        PixelHeart()
-                            .fill(Color(hexString: "FF5470") ?? .pink)
-                            .frame(width: scale * 4, height: scale * 3.5)
-                            .offset(x: CGFloat(i - 1) * scale * 5,
-                                    y: hearts ? -scale * 11 : -scale * 5)
-                            .opacity(hearts ? 0 : 0.9)
-                            .animation(
-                                .easeOut(duration: 1.6)
-                                    .repeatForever(autoreverses: false)
-                                    .delay(Double(i) * 0.5),
-                                value: hearts)
-                    }
-                }
-                .allowsHitTesting(false)
-                .onAppear { hearts = true }
-                .onDisappear { hearts = false }
-            }
+            // ⚠️ 这儿原来浮着三颗心。**删了，别加回来。**
+            //
+            // 两个理由：
+            // 一、那段的条件是 `mood.gif == nil`，而 `.loving` 有 gif
+            //    （clawd-valentine）——**那一支永远进不去**，是死代码。
+            // 二、心本来就画在图纸里（`sweet` / `sweet2` 第五行起）。
+            //    她说的「边上这个红圈是什么东西也看不懂」就是那颗：
+            //    外面一圈 B、中间填身体色，缩小之后就是个圈。
+            //    那七行已经改成实心的了，再叠一层就是两份重影。
         }
             .onAppear { start() }
             .onDisappear { ticker?.cancel() }
@@ -2527,47 +2514,6 @@ struct SpriteHitShape: Shape {
                                  width: cw * CGFloat(run),
                                  height: ch))
                 x += run
-            }
-        }
-        return p
-    }
-}
-
-/// 他甜的时候头顶冒的那颗心。
-///
-/// ⚠️ **是像素心，不是贝塞尔曲线。**
-///
-/// 她说的：「这个冒爱心的表情需要改一下，爱心太不标准了，
-/// 边上这个红圈是什么东西也看不懂。」
-///
-/// 原来借的是手帐贴纸那套 `JournalStickerShape(kind: "heart")`。
-/// 那条路径是给几十点大的贴纸画的：两段 `addCurve` 加两段 `addArc`，
-/// 缩到十来点之后两个圆弧几乎叠在一起，非零环绕数一填就成了一圈红边、
-/// 中间反而空着——她看见的「红圈」就是那个。
-///
-/// 8×7 的方块心不会有这个问题：多小都还是一颗心，
-/// 而且跟整屋子的像素图是同一种画法。
-struct PixelHeart: Shape {
-
-    private static let rows = [
-        ".##..##.",
-        "########",
-        "########",
-        ".######.",
-        ".######.",
-        "..####..",
-        "...##..."
-    ]
-
-    func path(in r: CGRect) -> Path {
-        var p = Path()
-        let w = r.width / 8, h = r.height / CGFloat(Self.rows.count)
-        for (y, row) in Self.rows.enumerated() {
-            for (x, ch) in row.enumerated() where ch == "#" {
-                // 各格多画半个点，免得缩放之后格与格之间透出细缝
-                p.addRect(CGRect(x: r.minX + CGFloat(x) * w,
-                                 y: r.minY + CGFloat(y) * h,
-                                 width: w + 0.5, height: h + 0.5))
             }
         }
         return p
