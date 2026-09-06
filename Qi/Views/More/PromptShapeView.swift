@@ -14,8 +14,22 @@ struct PromptShapeView: View {
 
     private var shape: PromptShape? { app.lastPromptShape }
 
+    // ⚠️ **这一页自己不带导航栈。**
+    //
+    // 原来它把自己包在 `NavigationStack` 里。从聊天页的 sheet 弹出来时
+    // 那样是对的（sheet 里没有现成的栈），可从「足迹」推进去的时候，
+    // 外面**已经有一个栈了**——两层套在一起，页面被挤成中间一条，
+    // 两边露出白边，壁纸也铺不满。她报的「壁纸问题需要修一下」就是这个。
+    //
+    // 现在栈交给用它的人去套：sheet 那边自己包一层，
+    // push 进来的这边什么都不用做。
+    //
+    // ⚠️ 记一句：**一个页面不该假设自己是怎么被打开的。**
     var body: some View {
-        NavigationStack {
+        ZStack {
+            // 别的页都铺着壁纸，就它是块灰底——看着像另一个 App。
+            WallpaperBackground()
+
             ScrollView {
                 if let s = shape {
                     VStack(alignment: .leading, spacing: 14) {
@@ -38,9 +52,10 @@ struct PromptShapeView: View {
                 }
             }
             .transparentList()
-            .navigationTitle("都花在哪儿")
-            .navigationBarTitleDisplayMode(.inline)
         }
+        .navigationTitle("都花在哪儿")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
     }
 
     private func total(_ s: PromptShape) -> some View {

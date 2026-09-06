@@ -465,7 +465,9 @@ struct ChatView: View {
             case .process(let msg):
                 ProcessSheet(message: msg)
             case .shape:
-                PromptShapeView()
+                // sheet 里没有现成的导航栈，这一层得自己套
+                //（见 `PromptShapeView` 开头那段）。
+                NavigationStack { PromptShapeView() }
             }
         }
         .sheet(isPresented: $showingSearch) {
