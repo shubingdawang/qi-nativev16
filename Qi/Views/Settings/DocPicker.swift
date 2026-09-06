@@ -53,8 +53,12 @@ final class DocPicker: NSObject {
     /// - Parameters:
     ///   - types: 收哪些类型
     ///   - multiple: 能不能多选
-    ///   - onPick: 选完了。**给的是带安全作用域的原始 URL**，
-    ///     调用方要自己 `startAccessingSecurityScopedResource`。
+    ///   - onPick: 选完了。
+    ///
+    /// ⚠️ 给出来的 URL 分两种，调用方**都要能应付**：
+    /// 选文件那一档（`asCopy: true`）给的是**我们沙盒里一份现成的副本**，
+    /// 不用安全作用域、也不用再拷一遍；选文件夹那一档给的是**原地的 URL**，
+    /// 带安全作用域，用之前要 `startAccessingSecurityScopedResource`。
     func present(types: [UTType],
                  multiple: Bool,
                  onPick: @escaping ([URL]) -> Void,
@@ -66,17 +70,29 @@ final class DocPicker: NSObject {
         self.onPick = onPick
         self.onCancel = onCancel
 
-        // ⚠️ `asCopy: false`（也就是「打开」而不是「导入」）。
+        // ⚠️⚠️ **默认走「导入」（`asCopy: true`），不是「打开」。**
         //
-        // 拷贝那一档拿到的是 tmp 里一份现成的副本，用起来更省事——
-        // 但它**不能选文件夹**，而「查岗」那儿要挑的正是一个文件夹，
-        // 还要把它存成长期书签。两处共用一个入口，就按要求高的那个来。
+        // 她那张文件列表的截图上，每个文件都带着一朵云和一句「↑ 错误」——
+        // **那些文件在 iCloud 上，一个都没下载到手机里**，而且同步是坏的。
+        //
+        // 「打开」这一档要求文件**当场就在本地**。不在的话，
+        // 她按「打开」，系统既下不下来、也不报错，就那么杵着——
+        // 正是她说的「可以点、可以选，就是打不开」。
+        //
+        // 「导入」这一档不一样：**系统自己负责去把文件拉下来**，
+        // 拉的时候有进度，拉不动会给她一句人话，成功了直接放一份到我们的
+        // 沙盒里。对「挑一份备份进来」这件事，这一档从头到尾都更对。
+        //
+        // ⚠️ **唯独选文件夹不能用它**（文件夹没法「拷贝进来」），
+        // 而「查岗」那儿要挑的正是一个文件夹、还要存成长期书签。
+        // 所以按类型分：带 `.folder` 的走「打开」，其余走「导入」。
+        let wantsFolder = types.contains(.folder)
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: types,
-                                                    asCopy: false)
+                                                    asCopy: !wantsFolder)
         picker.allowsMultipleSelection = multiple
         picker.shouldShowFileExtensions = true
         picker.delegate = self
-        Console.log(.app, "打开文件选择器",
+        Console.log(.app, wantsFolder ? "打开文件夹选择器" : "打开文件选择器",
                     types.map(\.identifier).joined(separator: " · "))
         host.present(picker, animated: true)
     }

@@ -1621,17 +1621,27 @@ struct SettingsView: View {
                 // 开好之后把「拷贝」这件重活丢给后台，拷完再关。
                 Console.log(.app, "开始读备份", url.lastPathComponent)
                 chore.line = "正在读取…"
-                let copy = FileManager.default.temporaryDirectory
+                // ⚠️ 选文件那一档（`DocPicker` 走的是「导入」）给回来的
+                // **已经是我们沙盒里的一份副本**了，不用再拷一遍——
+                // 几百兆的东西拷两遍纯属白等。
+                let mine = url.path.hasPrefix(NSTemporaryDirectory())
+                    || url.path.contains("/Documents/")
+                    || url.path.contains("/tmp/")
+                let copy = mine ? url : FileManager.default.temporaryDirectory
                     .appendingPathComponent("待还原-" + UUID().uuidString + ".json")
-                let needsStop = url.startAccessingSecurityScopedResource()
+                let needsStop = mine ? false
+                    : url.startAccessingSecurityScopedResource()
                 Task {
                     let kind = await Task.detached(priority: .userInitiated) {
                         () -> ImportKind in
                         let fm = FileManager.default
-                        try? fm.removeItem(at: copy)
-                        guard (try? fm.copyItem(at: url, to: copy)) != nil else {
-                            return .unreadable
+                        if !mine {
+                            try? fm.removeItem(at: copy)
+                            guard (try? fm.copyItem(at: url, to: copy)) != nil else {
+                                return .unreadable
+                            }
                         }
+                        guard fm.fileExists(atPath: copy.path) else { return .unreadable }
                         // 只看开头那几 KB 就够认出它是不是整包——**不用全读**
                         if BackupBundle.looksLikeBundle(fileAt: copy) { return .bundle }
                         // 不是整包，但也可能是老备份
@@ -1640,7 +1650,10 @@ struct SettingsView: View {
                            (try? JSONDecoder().decode(Backup.self, from: data)) != nil {
                             return .bundle
                         }
-                        try? fm.removeItem(at: copy)
+                        // ⚠️ **`mine` 的时候不能删。** 那一档 `copy` 就是
+                        // 系统给我们的那份导入件，下面还要拿它当记忆库文件读；
+                        // 删了的话「转给记忆库」那条路会拿到一个不存在的文件。
+                        if !mine { try? fm.removeItem(at: copy) }
                         return .notBundle
                     }.value
                     if needsStop { url.stopAccessingSecurityScopedResource() }
