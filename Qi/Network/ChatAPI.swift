@@ -128,6 +128,8 @@ enum ChatAPI {
                     }
 
                     let began = Date()
+                    // 这一趟中转到底给没给 usage。见循环后面那一段。
+                    var sawUsage = false
                     let bytes: URLSession.AsyncBytes
                     // 这个地址上一次就说过它不认，别再白发一遍
                     let ask = !rejectsThinking(endpoint)
@@ -155,7 +157,10 @@ enum ChatAPI {
 
                         if let usage = json["usage"] as? [String: Any] {
                             let parsed = TokenUsage.parse(usage)
-                            if !parsed.isEmpty { continuation.yield(.usage(parsed)) }
+                            if !parsed.isEmpty {
+                                sawUsage = true
+                                continuation.yield(.usage(parsed))
+                            }
                         }
                         // 走桥那条路会在最后一帧搭上额度。
                         // 普通供应商没这一项，缺就缺了。
@@ -210,6 +215,23 @@ enum ChatAPI {
                                 ))
                             }
                         }
+                    }
+                    // ⚠️⚠️ **中转一个 usage 都没给的话，也要记下这一次调用。**
+                    //
+                    // 她报的：「足迹里设置了每次金额也不计算了。」
+                    // 病根在这儿：`UsageStore.record` 只在收到 usage 时才叫，
+                    // 中转不返回 usage 就**一次都不记**——于是「调用次数 0」、
+                    // 「这天大概花了 0 元」，而**按次计价算的正是这个次数**
+                    //（`calls × perCall`）。她明明说了那么多句，账单上是空的。
+                    //
+                    // 补一条只带次数、不带 token 的记录。这是**如实的**：
+                    // 这一次调用确实发生了，只是那边没告诉我们用了多少 token。
+                    // 按 token 计价的那一档照样算不出钱来——那也对，
+                    // 不知道就是不知道，不能编一个数出来。
+                    if !sawUsage {
+                        Console.log(.cost, "这个中转没返回 usage → " + model,
+                                    "只记了一次调用，token 数拿不到")
+                        continuation.yield(.usage(TokenUsage(calls: 1)))
                     }
                     Console.log(.net, "回完了 → " + model,
                                 String(format: "用了 %.1f 秒", Date().timeIntervalSince(began)))

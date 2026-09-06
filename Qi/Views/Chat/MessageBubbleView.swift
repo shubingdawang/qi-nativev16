@@ -427,7 +427,10 @@ struct MessageBubbleView: View {
                     // 跟「他刚才干了什么」走同一条路：交给聊天页去挂。
                     Button { onOpenShape() } label: {
                         HStack(spacing: 3) {
-                            Text("\(tokens) tokens")
+                            // ⚠️ 0 不是「这一句没花 token」，是**这个中转没告诉我们**。
+                            // 照直写「0 tokens」她会以为是白嫖了一句，
+                            // 或者以为这个数坏了——两种都不是实话。
+                            Text(tokens > 0 ? "\(tokens) tokens" : "用量未知")
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 7, weight: .semibold))
                         }

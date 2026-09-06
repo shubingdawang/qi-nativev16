@@ -127,6 +127,33 @@ struct FootprintView: View {
                     .foregroundStyle(Theme.textMuted(scheme))
             }
 
+            // ⚠️ **第二个入口。**
+            //
+            // 「都花在哪儿」原来只能从聊天里那行「N tokens」点进去，
+            // 而那行字**要中转返回 usage 才会出现**。她这个中转不返回，
+            // 于是那一页她根本进不去——她的原话：「探针里并没有这个都花在哪儿」。
+            //
+            // 一个只在某些中转上才找得到的入口，等于没有入口。
+            NavigationLink { PromptShapeView() } label: {
+                HStack {
+                    Image(systemName: "chart.pie")
+                    Text("这一份都花在哪儿")
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.caption)
+                }
+                .font(.app(15, weight: .medium))
+                .foregroundStyle(Theme.textMain(scheme))
+                .padding(.vertical, 11)
+                .padding(.horizontal, 14)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Theme.softFill)
+                )
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 2)
+
             Button {
                 showReceipt = true
             } label: {
