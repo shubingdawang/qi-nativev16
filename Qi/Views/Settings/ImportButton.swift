@@ -30,6 +30,19 @@ import UniformTypeIdentifiers
 ///
 /// ⚠️ 记一句：**presentation 要挂在一个不会被频繁重建的 View 上。**
 /// 挂在整页上，那一页有多爱刷新，弹窗就有多爱自己关掉。
+///
+/// ## 后来发现这还不够
+///
+/// 她第四次报同一件事的时候补了两句：**「依旧在文件页面，
+/// 还可以继续选择其他文件」**，而且日志一条都没有。
+///
+/// 那是另一种坏法：选择器**没被撤掉**，是**没人接**了。
+/// `.fileImporter` 的 delegate 藏在 Coordinator 里，Coordinator 的命
+/// 跟着 View 走——这个小 View 自己再稳，它也是长在设置页 body 里的，
+/// 那一页重建时 SwiftUI 未必认得出这还是同一个它。
+///
+/// 所以选择器整个交给 `DocPicker`（一个永不释放的单例）去端。
+/// 这个 View 现在只剩一个按钮。
 struct ImportButton: View {
 
     var title: String
@@ -38,8 +51,6 @@ struct ImportButton: View {
     var types: [UTType] = [.json, .text, .plainText, .data]
     var multiple: Bool = true
     var onPick: (Result<[URL], Error>) -> Void
-
-    @State private var showing = false
 
     /// 自己给个长相。给了就不用设置页那种一整行的样子。
     ///
@@ -51,7 +62,25 @@ struct ImportButton: View {
     var label: AnyView? = nil
 
     var body: some View {
-        Button { showing = true } label: {
+        Button {
+            // ⚠️ **不走 `.fileImporter` 了。**
+            //
+            // 她第四次报「点击打开没反应」时补了两句关键的：
+            // 「依旧在文件页面，还可以继续选择其他文件」——**选择器自己不关**，
+            // 而且日志里一条都没有。
+            //
+            // 那说明按「打开」那一下**谁都没接住**：
+            // `.fileImporter` 的 delegate 藏在一个 Coordinator 里，
+            // 而 Coordinator 的命跟着 View 走；View 一没，delegate 就是 nil。
+            // 选择器本身挂在还活着的视图控制器上，不会自己消失——
+            // 于是框还在、能点、能选，就是没人应。
+            //
+            // `DocPicker` 是个永不释放的单例，它自己当 delegate。
+            // 界面刷多少次都跟它无关。理由写在 `DocPicker.swift` 开头。
+            DocPicker.shared.present(types: types, multiple: multiple) { urls in
+                onPick(.success(urls))
+            }
+        } label: {
             if let label {
                 label
             } else {
@@ -59,31 +88,5 @@ struct ImportButton: View {
             }
         }
         .buttonStyle(.plain)
-        .fileImporter(
-            isPresented: $showing,
-            // 只写 .json 的话，从微信/QQ 存下来的那份会是灰的选不中——
-            // 那些文件系统认不出类型，只当成一坨 data。所以几种都收。
-            // ⚠️ 记忆库那些 txt 也得选得中（`identity.txt`）
-            allowedContentTypes: types,
-            // **能多选**（她报的）。整包备份本来只有一个文件，
-            // 但她常常是拿着记忆库那一堆 json 过来的。
-            allowsMultipleSelection: multiple
-        ) { result in
-            // ⚠️ 这一笔是**分界线**。
-            //
-            // 她报了三次「选中文件，点打开没反应」。日志里有这一行，
-            // 说明选择器把结果交出来了，问题在后面；
-            // 没有这一行，说明这一下点击根本没到 App 这儿——
-            // 那是选择器自己的事（重签名、文件来源、系统权限），
-            // 再怎么改后面的代码都没用。
-            switch result {
-            case .success(let urls):
-                Console.log(.app, "选了 \(urls.count) 个文件",
-                            urls.map(\.lastPathComponent).joined(separator: " · "))
-            case .failure(let e):
-                Console.log(.warn, "选文件失败", e.localizedDescription)
-            }
-            onPick(result)
-        }
     }
 }

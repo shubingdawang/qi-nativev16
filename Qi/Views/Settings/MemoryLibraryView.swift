@@ -12,10 +12,7 @@ struct MemoryLibraryView: View {
     @Environment(\.colorScheme) private var scheme
     @ObservedObject private var store = MemoryStore.shared
 
-    @State private var importing = false
     @State private var report: String?
-    /// 「导出整包」那个面板**不挂在这一页上**（见 `ExportHost.swift`）。
-    @StateObject private var shareBox = ShareBox()
     @State private var confirmWipe = false
     @State private var writing = false
     @State private var pasting = false
@@ -52,16 +49,7 @@ struct MemoryLibraryView: View {
         // `.text` 把 txt / md 这些都包进来了；`.data` 兜最后一层——
         // 有些来源给的 UTI 是 public.data，照样得让她选得中，
         // 读进来认不认得出是 importFiles 的事，不该在选文件这一步就把她拦住。
-        .fileImporter(isPresented: $importing,
-                      allowedContentTypes: [.json, .text, .plainText, .data],
-                      allowsMultipleSelection: true) { result in
-            switch result {
-            case .failure(let e): report = "选文件失败：\(e.localizedDescription)"
-            case .success(let urls): report = store.importFiles(urls).text
-            }
-        }
         .sheet(isPresented: $pasting) { pasteSheet }
-        .overlay { ShareHost(box: shareBox) }
         .alert("记忆库", isPresented: Binding(
             get: { report != nil }, set: { if !$0 { report = nil } }
         )) {
@@ -294,14 +282,25 @@ struct MemoryLibraryView: View {
 
     private var importCard: some View {
         SettingsCard(title: "导入导出") {
-            Button { importing = true } label: {
+            Button {
+                // ⚠️ 不能只认 `.json`：**identity 是 .txt**，
+                // 只挂 json 的话那个文件在选择器里是灰的，根本选不中。
+                // `.text` 把 txt / md 都包进来；`.data` 兜最后一层——
+                // 有些来源给的 UTI 是 public.data，照样得让她选得中。
+                // 读进来认不认得出是 `importFiles` 的事，
+                // 不该在选文件这一步就把她拦住。
+                DocPicker.shared.present(types: [.json, .text, .plainText, .data],
+                                         multiple: true) { urls in
+                    report = store.importFiles(urls).text
+                }
+            } label: {
                 SettingsRowLabel(title: "从电脑导入", icon: "square.and.arrow.down")
             }
             .buttonStyle(.plain)
             SettingsDivider()
 
             Button {
-                if let u = store.exportBundle() { shareBox.hand([u]) }
+                if let u = store.exportBundle() { DocPicker.shared.share([u]) }
             } label: {
                 SettingsRowLabel(title: "导出", icon: "square.and.arrow.up")
             }

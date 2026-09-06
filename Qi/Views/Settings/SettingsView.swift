@@ -30,16 +30,6 @@ struct SettingsView: View {
     /// 正在「查一遍图」（`MediaAudit`）
     @State private var auditing = false
 
-    /// 选好了、还没决定怎么放的那份备份。
-    ///
-    /// 副本放在临时目录里，**不是整包读进内存**——
-    /// 她说「导入备份有点卡」，卡的就是把几百兆读成一个 Data。
-    ///
-    /// ⚠️ 那句「这份怎么放？」**不挂在这一页上**（见 `ExportHost.swift`）。
-    /// 她报的：「可以选中备份文件，但是点击打开按钮没有反应。」
-    /// 病根是它挂在这儿，而她按「打开」那一刻选文件弹窗正在关、
-    /// 这一页正在重建，新问出来的话当场被撤掉。
-    @StateObject private var restoreBox = RestoreBox()
     /// 正在打包／还原，界面上压一层，别让她以为死机了。
     ///
     /// ⚠️ **这个不能是 `@State`。** 打包跑在后台线程上，
@@ -53,12 +43,13 @@ struct SettingsView: View {
     /// ⚠️ 要观察它：抓的时候那句「在找…」和池子里的条数都得跟着变，
     /// 只读 `TopicPool.shared` 不订阅的话这一段是死的。
     @ObservedObject private var topics = TopicPool.shared
-    /// 「存到哪儿」那个弹窗**不在这一页上**，在 `ExportHost` 里。
+    /// 上一份打好的备份。**留着是为了重来一次不用再打一遍。**
     ///
-    /// 她报的：「清单之后不会自动进入文件让我选择文件夹保存。」
-    /// 病根跟「导入备份点五次才成功」是同一个——这一页订阅着 `app`，
-    /// 一重建就把正要弹的东西撤掉了。理由见 `ExportHost.swift`。
-    @StateObject private var exportBox = ExportBox()
+    /// 她的图多的时候打一次包要几十秒。弹窗要是没出来、或者她在「文件」里
+    /// 按了取消，再等一遍那是白等——文件明明还躺在临时目录里。
+    ///
+    /// ⚠️ 临时目录**系统腾地方的时候会清**，所以用之前得真去问一句在不在。
+    @State private var lastExport: URL?
     /// 刚导好、**还没交出去**的那份。
     ///
     /// 她按掉「打好了…」那张结果弹窗之后才交出去——
@@ -117,10 +108,6 @@ struct SettingsView: View {
             // 而重建那一下就把正在弹的选择器撤掉了。
             //
             // 而且这一层一口气挂了五个 presentation，它们之间还会抢。
-            // ⚠️ **这儿只放一块零尺寸的空白**，弹窗长在它身上。
-            // 挂回这一页的话，`AppState` 一有动静就把它撤掉——
-            // 而打包刚结束那一瞬，正是这一页一天里最爱重建的时候。
-            .overlay { ExportHost(box: exportBox) }
             // 打包／还原都要跑一会儿（她的图多的时候是几十秒）。
             // **得让她看得见它在动**，不然跟死机没有区别——
             // 而且这一层还挡住了误触：这中间点别的地方会把事情搅乱。
@@ -145,15 +132,6 @@ struct SettingsView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: chore.line)
-            .overlay {
-                RestoreHost(box: restoreBox) { url, mode in
-                    applyBackup(url, mode: mode)
-                } onCancel: { url in
-                    // 取消了就把副本删掉。留着的话临时目录里
-                    // 会攒下一堆几百兆的「待还原-xxx.json」。
-                    try? FileManager.default.removeItem(at: url)
-                }
-            }
             .alert("提示", isPresented: Binding(
                 get: { alertMessage != nil },
                 set: { if !$0 { alertMessage = nil } }
@@ -167,7 +145,12 @@ struct SettingsView: View {
                     // 新的 presentation 会被当场丢掉。
                     if let url = pendingExport {
                         pendingExport = nil
-                        exportBox.hand(url)
+                        // ⚠️ 隔一拍。同一拍里「关 alert」和「弹选择器」
+                        // 还是会撞——UIKit 那边的关闭动画没跑完，
+                        // 新的 presentation 会被当场丢掉。
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                            DocPicker.shared.export(url)
+                        }
                     }
                 }
             } message: {
@@ -1267,8 +1250,9 @@ struct SettingsView: View {
         // 或者她在「文件」里按了取消，**再等一遍那是白等**——
         // 文件明明还躺在那儿。
         // 这一条同时是个安全网：万一还有别处能把弹窗撤掉，她再点一下就是了。
-        if let again = exportBox.reusable {
-            exportBox.hand(again)
+        if let again = lastExport,
+           FileManager.default.fileExists(atPath: again.path) {
+            DocPicker.shared.export(again)
             return
         }
         // 先把内存里攒着没落盘的都写下去，再整个目录扫一遍。
@@ -1382,8 +1366,9 @@ struct SettingsView: View {
             // 后来的把先来的顶掉——她看到的就是「弹一下自己收回去了」。
             //
             // 现在先只留 alert，把文件记在一边；她按「好」之后
-            // 才交给 `exportBox`（见 `ExportHost.swift`）。
+            // 才叫 DocPicker 把「存到哪儿」端出来（见 ExportHost.swift）。
             pendingExport = url
+            lastExport = url
         }
     }
 
@@ -1666,7 +1651,13 @@ struct SettingsView: View {
                         alertMessage = "这份文件读不出来。"
                     case .bundle:
                         Console.log(.app, "认出是整包备份", "准备问怎么放")
-                        restoreBox.hand(copy)
+                        DocPicker.shared.askRestore(copy) { file, mode in
+                            applyBackup(file, mode: mode)
+                        } onCancel: { file in
+                            // 取消了就把副本删掉。留着的话临时目录里
+                            // 会攒下一堆几百兆的「待还原-xxx.json」。
+                            try? FileManager.default.removeItem(at: file)
+                        }
                     case .notBundle:
                         Console.log(.app, "不是整包", "转给记忆库")
                         importAsMemory(urls)
