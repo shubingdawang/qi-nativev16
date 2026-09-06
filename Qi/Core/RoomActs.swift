@@ -55,7 +55,10 @@ enum RoomActs {
     static func act(_ name: String) -> RoomAct {
         switch name {
 
-        case "躺下", "钻被窝":
+        // ⚠️「躺一会儿」是地毯那件用的名字，以前**不在这张表里**——
+        // 于是在地毯上「躺一会儿」他只会站着说一句「……」。
+        // 是 `scripts/artcheck.py` 对出来的，不是看出来的。
+        case "躺下", "钻被窝", "躺一会儿":
             // ⚠️ 演的是 `.lying` 不是 `.sleeping`。
             // `.sleeping` 那个 gif **自带一张床和一床被子**——
             // 躺在她自己摆的床上就成了两张床叠在一起。
@@ -120,6 +123,17 @@ enum RoomActs {
         case "戳一下":
             return RoomAct(name: name, spot: .beside, mood: .happy, seconds: 3,
                            lines: ["戳戳", "硬的", "会动吗"])
+
+        // v9 那四件的动作
+        case "靠上去":
+            return RoomAct(name: name, spot: .onTop, mood: .drowsy, seconds: 7,
+                           lines: ["软的", "靠一会儿", "不想起来了"])
+        case "撑开":
+            return RoomAct(name: name, spot: .beside, mood: .happy, seconds: 4,
+                           lines: ["唰——", "这下淋不到了"])
+        case "撞一下":
+            return RoomAct(name: name, spot: .beside, mood: .flail, seconds: 3,
+                           lines: ["咚", "晃了两下"])
 
         // MARK: 厨房和浴室那几件
         //

@@ -1,23 +1,27 @@
 import SwiftUI
 import UIKit
 
-// MARK: - 资产包那 172 张图，哪张对哪件
+// MARK: - 资产包那 315 张图，哪张对哪件
 //
-// 她发的资产包（v7）里有 172 张 PNG：平铺正面家具 90、正面小物 30、
-// 等距家具 48。原图是 1024×1024 白底、一张两百多 KB，
-// 全塞进来是 44MB——所以进包之前统一过了一道
+// 资产包 v9 里有 315 张 PNG：正面家具 90、正面小物 73、
+// 等距 152。原图是 1024×1024 白底、一张两百多 KB，
+// 全塞进来是 一百多 MB——所以进包之前统一过了一道
 //（`scratchpad/prep_furn.py`）：
 //
 //   ① 抠白底。⚠️ **不是「白的就透明」**：马桶、被子、冰箱本身就是白的。
 //      走的是从外圈往里漫填，只有连着画面外的白才算底——
 //      跟 `FurnitureImage` 那一份**同一套规矩**，不能各写各的。
 //   ② 裁紧。不裁每件都带一圈看不见的边，摆到格子上会各偏各的。
-//   ③ 缩到最长边 192、量化到 127 色。172 张合计 6.5MB。
+//   ③ 缩到最长边 192、量化到 127 色。
+//
+// ⚙️ `isometric/top_front_right` 那 70 张**没进包**。
+// 屋子的朝向是定死的，只用得上 `top_front_left`；
+// 两边都塞就是白多一半体积。进包的 245 张合计 9.3MB。
 //
 // ## 为什么是一张表，不是给每件家具加两个字段
 //
-// `FurnitureCatalog.all` 里那 65 个 `.init(...)` 是手写的，
-// 加两个参数就要动 65 处。而「哪张图对哪件」是**一件独立的事**，
+// `FurnitureCatalog.all` 里那 69 个 `.init(...)` 是手写的，
+// 加两个参数就要动 69 处。而「哪张图对哪件」是**一件独立的事**，
 // 以后换素材包只改这一张表，一件家具的价钱、格数、反应一个字不用碰。
 //
 // ## 为什么分平面和等距两栏
@@ -38,51 +42,84 @@ extension FurnitureCatalog {
 
     /// ⚠️ 这张表是**一件件核对过的**，不是照名字猜的。
     ///
-    /// 没写在这儿的那些（游戏机、汽水、纸飞机、毛线球、月亮灯、地球仪、
-    /// 微波炉、面包架、洗衣机、马桶、自动贩卖机、窗帘、风筝、小机器人、
-    /// 加湿器、拍立得、风铃、香薰蜡烛、贝雷帽、小靴子、小帽子、小领结、
-    /// 小眼镜、小皮球、书桌、饭团、向日葵、小蘑菇、咖啡、吊兰、小凳子、
-    /// 小风扇）**资产包里没有对得上的**——
-    /// 硬塞一张相近的比没有还糟：她一眼就看得出那不是那件东西。
+    /// v9 那包（315 张）之后，**69 件商品全都有正面图**，
+    /// 其中 62 件还有等距图。差的七件是帽子、围巾、背包这类穿戴，
+    /// 它们戴在他身上、不落地，等距版本来也用不着。
+    ///
+    /// ⚠️ **平面那栏不只是商城封面。**
+    /// 屋子切到「平面」那一档时，屋里摆的就是这一张（见 `IsoRoomView.piece`）——
+    /// 平面屋**同样是一间有纵深的屋子**（八行八列的地板，
+    /// 只是投影换成了正面平视），不是一面墙。
     static let artTable: [String: Art] = [
-        // ── 大件。这些等距、正面两版都有 ──────────────────
-        "bed":      Art(flat: "fu_day_bed",            iso: "iso_l_bed"),
-        "sofa":     Art(flat: "fu_day_sofa",           iso: "iso_l_sofa"),
-        "table":    Art(flat: "fu_day_coffee_table",   iso: "iso_l_coffee_table"),
-        "shelf":    Art(flat: "fu_day_bookshelf",      iso: "iso_l_bookshelf"),
-        "rug":      Art(flat: "fu_day_rug",            iso: "iso_l_rug"),
-        "plant":    Art(flat: "fu_day_potted_plant",   iso: "iso_l_potted_plant"),
-        "tv":       Art(flat: "fu_day_tv_stand",       iso: "iso_l_tv_stand"),
-        "fridge":   Art(flat: "fu_day_fridge",         iso: "iso_l_fridge"),
-        "bathtub":  Art(flat: "fu_day_bathtub",        iso: "iso_l_bathtub"),
-        "sink":     Art(flat: "fu_day_bathroom_sink",  iso: "iso_l_bathroom_sink"),
-        "wardrobe": Art(flat: "fu_day_wardrobe",       iso: "iso_l_wardrobe"),
-        // 圣诞小床是整套圣诞里的一件，等距版也有
-        "bed_xmas": Art(flat: "fu_xmas_bed",           iso: "iso_xmas_bed"),
-
-        // ── 只有正面那张 ────────────────────────────────
-        // 草莓小床走樱花那张：粉、带花，是这批里最贴近「草莓」的一件
-        "bed_berry": Art(flat: "fu_sakura_bed",        iso: nil),
-        "cactus":    Art(flat: "fu_day_succulent",     iso: nil),
-        "mirror":    Art(flat: "fu_day_full_mirror",   iso: nil),
-        "shoerack":  Art(flat: "fu_day_shoe_rack",     iso: nil),
-        "tank":      Art(flat: "fu_day_fish_tank",     iso: nil),
-        "lamp":      Art(flat: "it_decor_table_lamp",  iso: nil),
-        "frame":     Art(flat: "it_decor_painting",    iso: nil),
-        "teapot":    Art(flat: "it_decor_teapot_set",  iso: nil),
-        "sakura":    Art(flat: "fu_sakura_vase",       iso: nil),
-        "bonsai":    Art(flat: "fu_jp_pine_bonsai",    iso: nil),
-        "stars":     Art(flat: "fu_xmas_string_lights", iso: nil),
-        "bear":      Art(flat: "it_toy_teddy_bear",    iso: nil),
-        "blocks":    Art(flat: "it_toy_building_blocks", iso: nil),
-        "horse":     Art(flat: "it_toy_rocking_horse", iso: nil),
-        "speaker":   Art(flat: "it_app_radio",         iso: nil),
-        "record":    Art(flat: "it_app_record_player", iso: nil),
-        "cake":      Art(flat: "it_food_birthday_cake", iso: nil),
-        "donut":     Art(flat: "it_food_donut",        iso: nil),
-        "icecream":  Art(flat: "it_food_ice_cream_sundae", iso: nil),
-        "scarf":     Art(flat: "it_wear_scarf",        iso: nil),
-        "bag":       Art(flat: "it_wear_backpack",     iso: nil)
+        "bed":      Art(flat: "fu_day_bed",             iso: "iso_l_bed"),
+        "bed_berry":Art(flat: "it_misc_bed_berry",      iso: "iso_l_bed_berry"),
+        "bed_xmas": Art(flat: "fu_xmas_bed",            iso: "iso_xmas_bed"),
+        "sofa":     Art(flat: "fu_day_sofa",            iso: "iso_l_sofa"),
+        "table":    Art(flat: "fu_day_coffee_table",    iso: "iso_l_coffee_table"),
+        "desk":     Art(flat: "it_misc_desk",           iso: "iso_l_desk"),
+        "stool":    Art(flat: "it_misc_stool",          iso: "iso_l_stool"),
+        "shelf":    Art(flat: "fu_day_bookshelf",       iso: "iso_l_bookshelf"),
+        "wardrobe": Art(flat: "fu_day_wardrobe",        iso: "iso_l_wardrobe"),
+        "shoerack": Art(flat: "fu_day_shoe_rack",       iso: "iso_l_shoe_rack"),
+        "breadrack":Art(flat: "it_misc_breadrack",      iso: "iso_l_breadrack"),
+        "mirror":   Art(flat: "fu_day_full_mirror",     iso: "iso_l_mirror"),
+        "curtain":  Art(flat: "it_misc_curtains",       iso: "iso_l_curtains"),
+        "rug":      Art(flat: "fu_day_rug",             iso: "iso_l_rug"),
+        "lamp":     Art(flat: "it_decor_table_lamp",    iso: "iso_l_lamp"),
+        "fridge":   Art(flat: "fu_day_fridge",          iso: "iso_l_fridge"),
+        "microwave":Art(flat: "it_misc_microwave",      iso: "iso_l_microwave"),
+        "washer":   Art(flat: "it_misc_washing_machine",iso: "iso_l_washing_machine"),
+        "toilet":   Art(flat: "it_misc_toilet",         iso: "iso_l_toilet"),
+        "bathtub":  Art(flat: "fu_day_bathtub",         iso: "iso_l_bathtub"),
+        "sink":     Art(flat: "fu_day_bathroom_sink",   iso: "iso_l_bathroom_sink"),
+        "vending":  Art(flat: "it_misc_vending_machine",iso: "iso_l_vending_machine"),
+        "tv":       Art(flat: "fu_day_tv_stand",        iso: "iso_l_tv_stand"),
+        "fan":      Art(flat: "it_misc_small_fan",      iso: "iso_l_small_fan"),
+        "humid":    Art(flat: "it_misc_humidifier",     iso: "iso_l_humidifier"),
+        "polaroid": Art(flat: "it_misc_polaroid",       iso: "iso_l_polaroid"),
+        "record":   Art(flat: "it_app_record_player",   iso: "iso_l_record_player"),
+        "speaker":  Art(flat: "it_app_radio",           iso: "iso_l_speaker"),
+        "plant":    Art(flat: "fu_day_potted_plant",    iso: "iso_l_potted_plant"),
+        "cactus":   Art(flat: "it_misc_cactus",         iso: "iso_l_cactus"),
+        "sunflower":Art(flat: "it_misc_sunflower",      iso: "iso_l_sunflower"),
+        "mushroom": Art(flat: "it_misc_mushroom",       iso: "iso_l_mushroom"),
+        "hanging":  Art(flat: "it_misc_hanging_plant",  iso: "iso_l_hanging_plant"),
+        "sakura":   Art(flat: "fu_sakura_vase",         iso: "iso_l_sakura"),
+        "bonsai":   Art(flat: "fu_jp_pine_bonsai",      iso: "iso_l_bonsai"),
+        "console":  Art(flat: "it_misc_game_console",   iso: "iso_l_game_console"),
+        "ball":     Art(flat: "it_misc_ball",           iso: "iso_l_ball"),
+        "bear":     Art(flat: "it_toy_teddy_bear",      iso: "iso_l_teddy"),
+        "blocks":   Art(flat: "it_toy_building_blocks", iso: "iso_l_blocks"),
+        "horse":    Art(flat: "it_toy_rocking_horse",   iso: "iso_l_rocking_horse"),
+        "plane":    Art(flat: "it_misc_paper_airplane", iso: "iso_l_paper_airplane"),
+        "yarn":     Art(flat: "it_misc_yarn",           iso: "iso_l_yarn"),
+        "kite":     Art(flat: "it_misc_kite",           iso: "iso_l_kite"),
+        "robot":    Art(flat: "it_misc_robot",          iso: "iso_l_robot"),
+        "frame":    Art(flat: "it_misc_frame",          iso: "iso_l_frame"),
+        "moon":     Art(flat: "it_misc_moon_lamp",      iso: "iso_l_moon_lamp"),
+        "globe":    Art(flat: "it_misc_globe",          iso: "iso_l_globe"),
+        "chime":    Art(flat: "it_misc_wind_chime",     iso: "iso_l_wind_chime"),
+        "candle":   Art(flat: "it_misc_scented_candle", iso: "iso_l_scented_candle"),
+        "tank":     Art(flat: "fu_day_fish_tank",       iso: "iso_l_fishbowl"),
+        "stars":    Art(flat: "fu_xmas_string_lights",  iso: "iso_l_star_lights"),
+        "coffee":   Art(flat: "it_misc_coffee",         iso: "iso_l_coffee"),
+        "soda":     Art(flat: "it_misc_soda",           iso: "iso_l_soda"),
+        "teapot":   Art(flat: "it_decor_teapot_set",    iso: "iso_l_teapot"),
+        "cake":     Art(flat: "it_food_birthday_cake",  iso: "iso_l_cake"),
+        "donut":    Art(flat: "it_food_donut",          iso: "iso_l_donut"),
+        "riceball": Art(flat: "it_misc_rice_ball",      iso: "iso_l_rice_ball"),
+        "icecream": Art(flat: "it_food_ice_cream_sundae",iso: "iso_l_ice_cream"),
+        "hat":      Art(flat: "it_misc_hat",            iso: nil),
+        "beret":    Art(flat: "it_misc_beret",          iso: nil),
+        "bowtie":   Art(flat: "it_misc_bowtie",         iso: nil),
+        "scarf":    Art(flat: "it_wear_scarf",          iso: nil),
+        "glasses":  Art(flat: "it_misc_glasses",        iso: nil),
+        "bag":      Art(flat: "it_wear_backpack",       iso: nil),
+        "boots":    Art(flat: "it_misc_boots",          iso: nil),
+        "pillow":   Art(flat: "it_misc_pillow",         iso: "iso_l_pillow"),
+        "slippers": Art(flat: "it_misc_slippers",       iso: "iso_l_slippers"),
+        "tissue":   Art(flat: "it_misc_tissue_box",     iso: "iso_l_tissue_box"),
+        "umbrella": Art(flat: "it_misc_umbrella",       iso: "iso_l_umbrella")
     ]
 
     /// 这件家具在这种屋子里该用哪张图。没有就返回 nil。

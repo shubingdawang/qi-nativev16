@@ -815,7 +815,49 @@ enum FurnitureCatalog {
             ".dd..dd.",
             ".ddd.ddd",
             "kkkkkkkk"
-        ], p), category: .wear, reaction: "踩两下试试")
+        ], p), category: .wear, reaction: "踩两下试试"),
+
+        // ── v9 那包里多画的四件 ──────────────────────
+        //
+        // 正面图和等距图都齐（见 `FurnitureArt.artTable`），
+        // 所以直接开成商品。下面这几张字符画是
+        // **图读不到时的兜底**，平时不会用到。
+
+        .init(id: "pillow", name: "抱枕", price: 45, sprite: PixelSprite([
+            ".nnnnnn.",
+            "nnccccnn",
+            "nccnnccn",
+            "nccnnccn",
+            "nnccccnn",
+            ".nnnnnn."
+        ], p), category: .decor, reaction: "靠上去"),
+
+        .init(id: "slippers", name: "小拖鞋", price: 35, sprite: PixelSprite([
+            ".nn..nn.",
+            "nnnnnnnn",
+            "nccnnccn",
+            "nnnnnnnn",
+            ".ss..ss."
+        ], p), category: .wear, reaction: "套上踏两下"),
+
+        .init(id: "tissue", name: "纸巾盒", price: 28, sprite: PixelSprite([
+            "...cc...",
+            "..cccc..",
+            "bbbbbbbb",
+            "bccccccb",
+            "bbbbbbbb"
+        ], p), category: .decor, reaction: "抽一张"),
+
+        .init(id: "umbrella", name: "小伞", price: 50, sprite: PixelSprite([
+            "...rr...",
+            "..rrrr..",
+            ".rrrrrr.",
+            "rrrrrrrr",
+            "...ww...",
+            "...ww...",
+            "...ww...",
+            "..www..."
+        ], p), category: .decor, reaction: "撞开来遮一遮")
     ]
 
     static func kind(_ id: String) -> FurnitureKind? {
@@ -1377,6 +1419,13 @@ extension FurnitureCatalog {
 
         case "bear":
             return IsoShape(w: 1, d: 1, tall: 0.9, actions: ["抱一下", "摆正", "说悄悄话"])
+
+        case "pillow":
+            return IsoShape(w: 1, d: 1, tall: 0.5, actions: ["靠上去", "抱一下", "摆正"])
+
+        // 伞竖着，比别的小摆件高
+        case "umbrella":
+            return IsoShape(w: 1, d: 1, tall: 1.4, actions: ["撑开", "撞一下", "拿起来"])
 
         default:
             // 小摆件：一格、矮、能摸能拿
