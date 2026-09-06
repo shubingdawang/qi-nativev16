@@ -42,15 +42,17 @@ extension FurnitureCatalog {
 
     /// ⚠️ 这张表是**一件件核对过的**，不是照名字猜的。
     ///
-    /// v9 那包（315 张）之后，**69 件商品全都有正面图**，
-    /// 其中 62 件还有等距图。差的七件是帽子、围巾、背包这类穿戴，
-    /// 它们戴在他身上、不落地，等距版本来也用不着。
+    /// v9 那包（315 张）之后，**商城里 163 件全都有正面图**
+    ///（手写的 69 件在这张表里，生成的 94 件在 `themedArt`），
+    /// 其中 78 件还有等距图——差的那些多是穿戴和主题小件，
+    /// 包里本来就只出了正面版。
     ///
     /// ⚠️ **平面那栏不只是商城封面。**
     /// 屋子切到「平面」那一档时，屋里摆的就是这一张（见 `IsoRoomView.piece`）——
     /// 平面屋**同样是一间有纵深的屋子**（八行八列的地板，
     /// 只是投影换成了正面平视），不是一面墙。
-    static let artTable: [String: Art] = [
+    /// 手写那一批的图。**对外看的是 `artTable`**。
+    static let coreArt: [String: Art] = [
         "bed":      Art(flat: "fu_day_bed",             iso: "iso_l_bed"),
         "bed_berry":Art(flat: "it_misc_bed_berry",      iso: "iso_l_bed_berry"),
         "bed_xmas": Art(flat: "fu_xmas_bed",            iso: "iso_xmas_bed"),
@@ -110,17 +112,23 @@ extension FurnitureCatalog {
         "riceball": Art(flat: "it_misc_rice_ball",      iso: "iso_l_rice_ball"),
         "icecream": Art(flat: "it_food_ice_cream_sundae",iso: "iso_l_ice_cream"),
         "hat":      Art(flat: "it_misc_hat",            iso: nil),
-        "beret":    Art(flat: "it_misc_beret",          iso: nil),
+        "beret":    Art(flat: "it_misc_beret",          iso: "iso_l_beret"),
         "bowtie":   Art(flat: "it_misc_bowtie",         iso: nil),
         "scarf":    Art(flat: "it_wear_scarf",          iso: nil),
         "glasses":  Art(flat: "it_misc_glasses",        iso: nil),
         "bag":      Art(flat: "it_wear_backpack",       iso: nil),
-        "boots":    Art(flat: "it_misc_boots",          iso: nil),
+        "boots":    Art(flat: "it_misc_boots",          iso: "iso_l_boots"),
         "pillow":   Art(flat: "it_misc_pillow",         iso: "iso_l_pillow"),
         "slippers": Art(flat: "it_misc_slippers",       iso: "iso_l_slippers"),
         "tissue":   Art(flat: "it_misc_tissue_box",     iso: "iso_l_tissue_box"),
         "umbrella": Art(flat: "it_misc_umbrella",       iso: "iso_l_umbrella")
     ]
+
+    /// 哪张图对哪件。两批合起来。
+    ///
+    /// ⚠️ 撞名的话以手写那份为准——生成的那批是后添的，
+    /// 不该改掉已经在用的对应关系。
+    static let artTable: [String: Art] = coreArt.merging(themedArt) { core, _ in core }
 
     /// 这件家具在这种屋子里该用哪张图。没有就返回 nil。
     ///

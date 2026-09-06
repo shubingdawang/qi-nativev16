@@ -21,12 +21,24 @@ RES = os.path.join(ROOT, "Qi", "Resources", "furniture")
 store = io.open(STORE, encoding="utf-8").read()
 art = io.open(ART, encoding="utf-8").read()
 
+themes = io.open(os.path.join(ROOT, "Qi", "Core", "FurnitureThemes.swift"),
+                 encoding="utf-8").read()
+
+# 商品和图各有两批：手写的（ClawdStore / coreArt）和生成的（FurnitureThemes）。
+# 两边都要对——只对一边的话，另一边全变积木也看不出来。
+store += themes
 ids = re.findall(r'\.init\(id: "([a-z0-9_]+)"', store)
-a = art.index("static let artTable")
-b = art.index("\n    ]\n", a)
-rows = re.findall(
-    r'"([a-z0-9_]+)":\s*Art\(flat:\s*"([a-z0-9_]+)",\s*iso:\s*("[a-z0-9_]+"|nil)\)',
-    art[a:b])
+
+
+def table(src, name):
+    a = src.index("static let %s" % name)
+    b = src.index("\n    ]\n", a)
+    return re.findall(
+        r'"([a-z0-9_]+)":\s*Art\(flat:\s*"([a-z0-9_]+)",\s*iso:\s*("[a-z0-9_]+"|nil)\)',
+        src[a:b])
+
+
+rows = table(art, "coreArt") + table(themes, "themedArt")
 have = set(f[:-4] for f in os.listdir(RES) if f.endswith(".png"))
 
 bad = 0

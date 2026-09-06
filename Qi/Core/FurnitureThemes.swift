@@ -1,0 +1,485 @@
+import SwiftUI
+
+// MARK: - 主题套装和那批单件
+//
+// 她说的：「全部开了吧，主题套装也要。」
+//
+// 资产包里本来就画好、却一直没人认领的那一批。
+// 图早就在 `Qi/Resources/furniture/` 里了，缺的只是商城里的一条记录。
+//
+// ## 为什么单开一个文件
+//
+// `ClawdStore.swift` 里那份是一件一件手写的（每件都配了字符画）。
+// 这一批八十多件，它们**件件有真图**，字符画只是图读不到时的兜底——
+// 所以按「像什么」共用十来张站位图纸，不一件一张。
+//
+// ⚠️ 这一批是 `scripts/gen_themes.py` 生成的。
+// 要改改那边的表，别在这里改完又被下一次生成盖掉。
+
+extension FurnitureCatalog {
+
+    /// 站位图纸用的色。跟 `ClawdStore` 里那份一样。
+    private static let tp: [Character: Color] = [
+        "w": Color(hexString: "8B6F47")!, "d": Color(hexString: "5E4A31")!,
+        "c": Color(hexString: "F5F0E6")!, "b": Color(hexString: "A8C4D8")!,
+        "g": Color(hexString: "96B08F")!, "r": Color(hexString: "C96442")!,
+        "y": Color(hexString: "E3A13A")!, "k": Color(hexString: "2B2A27")!,
+        "n": Color(hexString: "E8A0B4")!, "s": Color(hexString: "C4B9A0")!
+    ]
+
+    // MARK: 站位图纸
+    //
+    // 只在真图读不到时顶上去。形状对上就行，不必像。
+    private static let sp_bed = PixelSprite([
+        "ddd...................",
+        "dddccccccccccccccccccc",
+        "dddccccccccccccccccccc",
+        "wwwwwwwwwwwwwwwwwwwwww",
+        "..dd..............dd.."
+    ], tp)
+
+    private static let sp_chair = PixelSprite([
+        "dcccccccd",
+        "dcccccccd",
+        "ddddddddd",
+        "dcccccccd",
+        ".ww...ww."
+    ], tp)
+
+    private static let sp_fire = PixelSprite([
+        "wwwwwwwwww",
+        "wkkkkkkkkw",
+        "wk..rr..kw",
+        "wk.rryr.kw",
+        "wkrryyrrkw",
+        "wwwwwwwwww"
+    ], tp)
+
+    private static let sp_food = PixelSprite([
+        "..cccc..",
+        ".cyyyyc.",
+        "cyrrrryc",
+        ".cyyyyc.",
+        "..cccc.."
+    ], tp)
+
+    private static let sp_lamp = PixelSprite([
+        "..yyyy..",
+        ".yyyyyy.",
+        "yyyyyyyy",
+        "...ss...",
+        "...ss...",
+        "...ss...",
+        "..ssss.."
+    ], tp)
+
+    private static let sp_plant = PixelSprite([
+        "..gg..gg..",
+        ".gggggggg.",
+        "gg.gggg.gg",
+        "..gggggg..",
+        "...gggg...",
+        "..wwwwww..",
+        "..wwwwww.."
+    ], tp)
+
+    private static let sp_rug = PixelSprite([
+        ".cccccccc.",
+        "ccnnnnnncc",
+        "ccnccccncc",
+        "ccnnnnnncc",
+        ".cccccccc."
+    ], tp)
+
+    private static let sp_screen = PixelSprite([
+        "wwwwwwww",
+        "wccwccww",
+        "wccwccww",
+        "wccwccww",
+        "wccwccww",
+        "wwwwwwww",
+        "w......w"
+    ], tp)
+
+    private static let sp_small = PixelSprite([
+        "..rrrr..",
+        ".rccccr.",
+        "rccrrccr",
+        ".rccccr.",
+        "..rrrr.."
+    ], tp)
+
+    private static let sp_sofa = PixelSprite([
+        "dcccccccccccccccd",
+        "dcccccccccccccccd",
+        "ddddddddddddddddd",
+        "dcccccccccccccccd",
+        ".ww...........ww."
+    ], tp)
+
+    private static let sp_table = PixelSprite([
+        "wwwwwwwwwwwwww",
+        "wwwwwwwwwwwwww",
+        ".dd........dd.",
+        ".dd........dd."
+    ], tp)
+
+    private static let sp_tall = PixelSprite([
+        "wwwwwwwwww",
+        "wccbbggyyw",
+        "wwwwwwwwww",
+        "wbbrryynnw",
+        "wwwwwwwwww",
+        "d........d"
+    ], tp)
+
+    /// 这一批商品。接在 `base` 后面（见 `all`）。
+    static let themed: [FurnitureKind] = [
+        .init(id: "armchair", name: "单人沙发", price: 160,
+              sprite: sp_chair, category: .furniture, reaction: "窝进去"),
+        .init(id: "dining", name: "餐桌", price: 170,
+              sprite: sp_table, category: .furniture, reaction: "爬上去坐好"),
+        .init(id: "nightstand", name: "床头柜", price: 90,
+              sprite: sp_tall, category: .furniture, reaction: "拉开抽屉看看"),
+        .init(id: "floorlamp", name: "落地灯", price: 95,
+              sprite: sp_lamp, category: .furniture, reaction: "站到灯下"),
+        .init(id: "vanity", name: "梳妆台", price: 150,
+              sprite: sp_table, category: .furniture, reaction: "对着镜子摆弄"),
+        .init(id: "stove", name: "灶台", price: 140,
+              sprite: sp_tall, category: .gadget, reaction: "学着烒一锅"),
+        .init(id: "kitchensink", name: "厨房水槽", price: 120,
+              sprite: sp_tall, category: .furniture, reaction: "洗个盘子"),
+        .init(id: "coatrack", name: "衣帽架", price: 75,
+              sprite: sp_screen, category: .furniture, reaction: "把围巾挂上去"),
+        .init(id: "bench", name: "玄关凳", price: 70,
+              sprite: sp_chair, category: .furniture, reaction: "坐着换鞋"),
+        .init(id: "succulent", name: "多肉", price: 38,
+              sprite: sp_plant, category: .plant, reaction: "戳戳胖叶子"),
+        .init(id: "sakura_bed", name: "樱花·小床", price: 200,
+              sprite: sp_bed, category: .themed, reaction: "滚进花瓣里"),
+        .init(id: "sakura_sofa", name: "樱花·沙发", price: 190,
+              sprite: sp_sofa, category: .themed, reaction: "坐下发一会儿呆"),
+        .init(id: "sakura_rug", name: "樱花·地毯", price: 90,
+              sprite: sp_rug, category: .themed, reaction: "满地打滚"),
+        .init(id: "sakura_lantern", name: "樱花·石灯", price: 110,
+              sprite: sp_lamp, category: .themed, reaction: "蹲下看灯"),
+        .init(id: "sakura_bonsai", name: "樱花·盆景", price: 130,
+              sprite: sp_plant, category: .themed, reaction: "绕着转一圈"),
+        .init(id: "nordic_bed", name: "北欧·小床", price: 190,
+              sprite: sp_bed, category: .themed, reaction: "摊开四肢"),
+        .init(id: "nordic_sofa", name: "北欧·沙发", price: 185,
+              sprite: sp_sofa, category: .themed, reaction: "靠着扶手"),
+        .init(id: "nordic_table", name: "北欧·茶几", price: 120,
+              sprite: sp_table, category: .themed, reaction: "把杯子放好"),
+        .init(id: "nordic_shelf", name: "北欧·挂架", price: 100,
+              sprite: sp_tall, category: .themed, reaction: "踮脚够上面"),
+        .init(id: "nordic_lamp", name: "北欧·落地灯", price: 105,
+              sprite: sp_lamp, category: .themed, reaction: "站在光里"),
+        .init(id: "nordic_plant", name: "北欧·虎尾兰", price: 85,
+              sprite: sp_plant, category: .themed, reaction: "比一比高"),
+        .init(id: "ocean_bed", name: "海洋·小床", price: 195,
+              sprite: sp_bed, category: .themed, reaction: "听海浪声"),
+        .init(id: "ocean_sofa", name: "海洋·沙发", price: 185,
+              sprite: sp_sofa, category: .themed, reaction: "瘫成一摊"),
+        .init(id: "ocean_palm", name: "海洋·棕榈", price: 120,
+              sprite: sp_plant, category: .themed, reaction: "躲到叶子下"),
+        .init(id: "ocean_net", name: "海洋·渔网", price: 80,
+              sprite: sp_screen, category: .themed, reaction: "被网缠住"),
+        .init(id: "ocean_board", name: "海洋·冲浪板", price: 130,
+              sprite: sp_screen, category: .themed, reaction: "爬上去站好"),
+        .init(id: "ocean_light", name: "海洋·灯塔", price: 160,
+              sprite: sp_lamp, category: .themed, reaction: "盯着光转"),
+        .init(id: "autumn_bed", name: "秋日·小床", price: 195,
+              sprite: sp_bed, category: .themed, reaction: "裹紧一点"),
+        .init(id: "autumn_sofa", name: "秋日·沙发", price: 185,
+              sprite: sp_sofa, category: .themed, reaction: "窝进毛毯里"),
+        .init(id: "autumn_maple", name: "秋日·枫树", price: 140,
+              sprite: sp_plant, category: .themed, reaction: "接一片叶子"),
+        .init(id: "autumn_wheat", name: "秋日·麦穗瓶", price: 75,
+              sprite: sp_plant, category: .themed, reaction: "闻一闻麦香"),
+        .init(id: "autumn_pumpkin", name: "秋日·南瓜", price: 60,
+              sprite: sp_small, category: .themed, reaction: "抱不动"),
+        .init(id: "autumn_wreath", name: "秋日·花环", price: 70,
+              sprite: sp_small, category: .themed, reaction: "套在头上"),
+        .init(id: "gothic_bed", name: "哥特·四柱床", price: 240,
+              sprite: sp_bed, category: .themed, reaction: "拉上帐子"),
+        .init(id: "gothic_chair", name: "哥特·扶手椅", price: 170,
+              sprite: sp_chair, category: .themed, reaction: "坐得很端正"),
+        .init(id: "gothic_shelf", name: "哥特·书柜", price: 200,
+              sprite: sp_tall, category: .themed, reaction: "抽一本厚的"),
+        .init(id: "gothic_candle", name: "哥特·烛台", price: 120,
+              sprite: sp_lamp, category: .themed, reaction: "吹不灭"),
+        .init(id: "gothic_mirror", name: "哥特·镜子", price: 150,
+              sprite: sp_screen, category: .themed, reaction: "对着镜子发呆"),
+        .init(id: "gothic_fire", name: "哥特·壁炉", price: 210,
+              sprite: sp_fire, category: .themed, reaction: "烤火"),
+        .init(id: "jp_bed", name: "和风·铺盖", price: 180,
+              sprite: sp_bed, category: .themed, reaction: "钻进被窝"),
+        .init(id: "jp_table", name: "和风·矮桌", price: 130,
+              sprite: sp_table, category: .themed, reaction: "趴在桌上"),
+        .init(id: "jp_door", name: "和风·障子门", price: 160,
+              sprite: sp_screen, category: .themed, reaction: "推开又合上"),
+        .init(id: "jp_vase", name: "和风·插花", price: 95,
+              sprite: sp_plant, category: .themed, reaction: "把花摆正"),
+        .init(id: "jp_lantern", name: "和风·提灯", price: 110,
+              sprite: sp_lamp, category: .themed, reaction: "提着晚一晚"),
+        .init(id: "lolita_bed", name: "洛丽塔·公主床", price: 240,
+              sprite: sp_bed, category: .themed, reaction: "麻到纱帐里"),
+        .init(id: "lolita_vanity", name: "洛丽塔·梳妆台", price: 180,
+              sprite: sp_table, category: .themed, reaction: "摆弄头顶"),
+        .init(id: "lolita_wardrobe", name: "洛丽塔·衣柜", price: 200,
+              sprite: sp_tall, category: .themed, reaction: "钻进去躲着"),
+        .init(id: "lolita_table", name: "洛丽塔·茶桌", price: 150,
+              sprite: sp_table, category: .themed, reaction: "倒一杯"),
+        .init(id: "lolita_mirror", name: "洛丽塔·蝶结镜", price: 130,
+              sprite: sp_screen, category: .themed, reaction: "照一照"),
+        .init(id: "lolita_chair", name: "洛丽塔·小椅", price: 140,
+              sprite: sp_chair, category: .themed, reaction: "坐得很乖"),
+        .init(id: "xmas_tree", name: "圣诞·圣诞树", price: 220,
+              sprite: sp_plant, category: .themed, reaction: "挂一个球上去"),
+        .init(id: "xmas_sofa", name: "圣诞·沙发", price: 190,
+              sprite: sp_sofa, category: .themed, reaction: "窝着等天亮"),
+        .init(id: "xmas_fire", name: "圣诞·壁炉", price: 210,
+              sprite: sp_fire, category: .themed, reaction: "烤手"),
+        .init(id: "xmas_dining", name: "圣诞·长桌", price: 180,
+              sprite: sp_table, category: .themed, reaction: "小声摆好盘子"),
+        .init(id: "xmas_gifts", name: "圣诞·礼物堆", price: 90,
+              sprite: sp_small, category: .themed, reaction: "摇一摇听声"),
+        .init(id: "xmas_wreath", name: "圣诞·花环", price: 80,
+              sprite: sp_small, category: .themed, reaction: "套在脖子上"),
+        .init(id: "xmas_nutcracker", name: "圣诞·胡桃夹", price: 110,
+              sprite: sp_small, category: .themed, reaction: "跟它立正"),
+        .init(id: "xmas_snowman", name: "圣诞·雪人", price: 100,
+              sprite: sp_small, category: .themed, reaction: "把围巾分它一半"),
+        .init(id: "xmas_house", name: "圣诞·姜饼屋", price: 120,
+              sprite: sp_small, category: .themed, reaction: "偷吻一口"),
+        .init(id: "xmas_advent", name: "圣诞·倒数日历", price: 95,
+              sprite: sp_small, category: .themed, reaction: "每天拆一格"),
+        .init(id: "ny_bed", name: "新年·园床", price: 230,
+              sprite: sp_bed, category: .themed, reaction: "滚进红被子"),
+        .init(id: "ny_sofa", name: "新年·红沙发", price: 200,
+              sprite: sp_sofa, category: .themed, reaction: "坐得很正式"),
+        .init(id: "ny_table", name: "新年·火锅桌", price: 190,
+              sprite: sp_table, category: .themed, reaction: "盯着锅等开"),
+        .init(id: "ny_cabinet", name: "新年·漆柜", price: 200,
+              sprite: sp_tall, category: .themed, reaction: "拉开看一眼"),
+        .init(id: "ny_screen", name: "新年·屏风", price: 170,
+              sprite: sp_screen, category: .themed, reaction: "绕到后面去"),
+        .init(id: "ny_lantern", name: "新年·红灯笼", price: 110,
+              sprite: sp_lamp, category: .themed, reaction: "抬头看红光"),
+        .init(id: "ny_firecracker", name: "新年·鞭炮灯", price: 70,
+              sprite: sp_small, category: .themed, reaction: "捂着耳朵"),
+        .init(id: "ny_envelope", name: "新年·红包", price: 60,
+              sprite: sp_small, category: .themed, reaction: "握得紧紧的"),
+        .init(id: "ny_ingot", name: "新年·金元宝", price: 90,
+              sprite: sp_small, category: .themed, reaction: "抱着不放"),
+        .init(id: "ny_plum", name: "新年·梅瓶", price: 100,
+              sprite: sp_plant, category: .themed, reaction: "闻梅花"),
+        .init(id: "ny_couplet", name: "新年·对联", price: 65,
+              sprite: sp_screen, category: .themed, reaction: "贴正一点"),
+        .init(id: "ny_knot", name: "新年·中国结", price: 55,
+              sprite: sp_small, category: .themed, reaction: "拨得晦来晦去"),
+        .init(id: "painting", name: "挂画", price: 85,
+              sprite: sp_screen, category: .decor, reaction: "扭头看一会儿"),
+        .init(id: "wallclock", name: "挂钟", price: 75,
+              sprite: sp_small, category: .decor, reaction: "盯着秒针"),
+        .init(id: "flowervase", name: "花瓶", price: 70,
+              sprite: sp_plant, category: .plant, reaction: "插正一点"),
+        .init(id: "sushi", name: "寿司", price: 40,
+              sprite: sp_food, category: .food, reaction: "一口一个"),
+        .init(id: "ramen", name: "拉面", price: 38,
+              sprite: sp_food, category: .food, reaction: "吹凉了再吃"),
+        .init(id: "hotpot", name: "小火锅", price: 55,
+              sprite: sp_food, category: .food, reaction: "涶一筷"),
+        .init(id: "bubbletea", name: "奶茶", price: 32,
+              sprite: sp_food, category: .drink, reaction: "吸珠子"),
+        .init(id: "cookies", name: "曲奇牛奶", price: 30,
+              sprite: sp_food, category: .food, reaction: "泡着吃"),
+        .init(id: "croissant", name: "可颂", price: 26,
+              sprite: sp_food, category: .food, reaction: "掰一层下来"),
+        .init(id: "fruitbowl", name: "果盘", price: 35,
+              sprite: sp_food, category: .food, reaction: "挑最红的那颗"),
+        .init(id: "pancakes", name: "松饼", price: 28,
+              sprite: sp_food, category: .food, reaction: "淋一圈糖浆"),
+        .init(id: "pizza", name: "披萨", price: 42,
+              sprite: sp_food, category: .food, reaction: "拉出一条苊"),
+        .init(id: "sandwich", name: "三明治", price: 30,
+              sprite: sp_food, category: .food, reaction: "张大嘴咬"),
+        .init(id: "salad", name: "沙拉", price: 28,
+              sprite: sp_food, category: .food, reaction: "挠几下"),
+        .init(id: "redlantern", name: "红灯笼", price: 65,
+              sprite: sp_lamp, category: .decor, reaction: "括得一摆一摆"),
+        .init(id: "fucouplet", name: "福字", price: 45,
+              sprite: sp_screen, category: .decor, reaction: "贴倒了又正回来"),
+        .init(id: "jackolantern", name: "南瓜灯", price: 70,
+              sprite: sp_lamp, category: .decor, reaction: "躲在后面吓人"),
+        .init(id: "bdaydecor", name: "生日布置", price: 80,
+              sprite: sp_small, category: .decor, reaction: "吹气球"),
+        .init(id: "minitree", name: "桌上圣诞树", price: 75,
+              sprite: sp_plant, category: .decor, reaction: "摆正树尖"),
+        .init(id: "doorwreath", name: "门上花环", price: 60,
+              sprite: sp_small, category: .decor, reaction: "踮脚挂上去"),
+        .init(id: "guitar_item", name: "吉他", price: 150,
+              sprite: sp_screen, category: .toy, reaction: "拨两下"),
+        .init(id: "hoodie", name: "小卫衣", price: 85,
+              sprite: sp_small, category: .wear, reaction: "套头上卡住")
+    ]
+
+    /// 这一批的图。合进 `artTable`。
+    static let themedArt: [String: Art] = [
+        "armchair":       Art(flat: "fu_day_armchair",           iso: "iso_l_armchair"),
+        "dining":         Art(flat: "fu_day_dining_table",       iso: "iso_l_dining_table"),
+        "nightstand":     Art(flat: "fu_day_nightstand",         iso: "iso_l_nightstand"),
+        "floorlamp":      Art(flat: "fu_day_floor_lamp",         iso: "iso_l_floor_lamp"),
+        "vanity":         Art(flat: "fu_day_vanity",             iso: "iso_l_vanity"),
+        "stove":          Art(flat: "fu_day_stove",              iso: "iso_l_stove"),
+        "kitchensink":    Art(flat: "fu_day_kitchen_sink",       iso: "iso_l_kitchen_sink"),
+        "coatrack":       Art(flat: "fu_day_coat_rack",          iso: nil),
+        "bench":          Art(flat: "fu_day_entry_bench",        iso: nil),
+        "succulent":      Art(flat: "fu_day_succulent",          iso: nil),
+        "sakura_bed":     Art(flat: "fu_sakura_bed",             iso: nil),
+        "sakura_sofa":    Art(flat: "fu_sakura_sofa",            iso: nil),
+        "sakura_rug":     Art(flat: "fu_sakura_rug",             iso: nil),
+        "sakura_lantern": Art(flat: "fu_sakura_lantern",         iso: nil),
+        "sakura_bonsai":  Art(flat: "fu_sakura_bonsai",          iso: nil),
+        "nordic_bed":     Art(flat: "fu_nordic_bed",             iso: nil),
+        "nordic_sofa":    Art(flat: "fu_nordic_sofa",            iso: nil),
+        "nordic_table":   Art(flat: "fu_nordic_coffee_table",    iso: nil),
+        "nordic_shelf":   Art(flat: "fu_nordic_floating_shelves",iso: nil),
+        "nordic_lamp":    Art(flat: "fu_nordic_floor_lamp",      iso: nil),
+        "nordic_plant":   Art(flat: "fu_nordic_snake_plant",     iso: nil),
+        "ocean_bed":      Art(flat: "fu_ocean_bed",              iso: nil),
+        "ocean_sofa":     Art(flat: "fu_ocean_sofa",             iso: nil),
+        "ocean_palm":     Art(flat: "fu_ocean_palm",             iso: nil),
+        "ocean_net":      Art(flat: "fu_ocean_fishing_net",      iso: nil),
+        "ocean_board":    Art(flat: "fu_ocean_surfboard",        iso: nil),
+        "ocean_light":    Art(flat: "fu_ocean_lighthouse",       iso: nil),
+        "autumn_bed":     Art(flat: "fu_autumn_bed",             iso: nil),
+        "autumn_sofa":    Art(flat: "fu_autumn_sofa",            iso: nil),
+        "autumn_maple":   Art(flat: "fu_autumn_maple_tree",      iso: nil),
+        "autumn_wheat":   Art(flat: "fu_autumn_wheat_vase",      iso: nil),
+        "autumn_pumpkin": Art(flat: "fu_autumn_pumpkin",         iso: nil),
+        "autumn_wreath":  Art(flat: "fu_autumn_wreath",          iso: nil),
+        "gothic_bed":     Art(flat: "fu_gothic_four_poster_bed", iso: nil),
+        "gothic_chair":   Art(flat: "fu_gothic_armchair",        iso: nil),
+        "gothic_shelf":   Art(flat: "fu_gothic_bookshelf",       iso: nil),
+        "gothic_candle":  Art(flat: "fu_gothic_candelabra",      iso: nil),
+        "gothic_mirror":  Art(flat: "fu_gothic_mirror",          iso: nil),
+        "gothic_fire":    Art(flat: "fu_gothic_fireplace",       iso: nil),
+        "jp_bed":         Art(flat: "fu_jp_futon_bed",           iso: nil),
+        "jp_table":       Art(flat: "fu_jp_chabudai_table",      iso: nil),
+        "jp_door":        Art(flat: "fu_jp_shoji_door",          iso: nil),
+        "jp_vase":        Art(flat: "fu_jp_ikebana_vase",        iso: nil),
+        "jp_lantern":     Art(flat: "fu_jp_chochin_lantern",     iso: nil),
+        "lolita_bed":     Art(flat: "fu_lolita_canopy_bed",      iso: nil),
+        "lolita_vanity":  Art(flat: "fu_lolita_vanity",          iso: nil),
+        "lolita_wardrobe":Art(flat: "fu_lolita_rose_wardrobe",   iso: nil),
+        "lolita_table":   Art(flat: "fu_lolita_tea_party_table", iso: nil),
+        "lolita_mirror":  Art(flat: "fu_lolita_bow_mirror",      iso: nil),
+        "lolita_chair":   Art(flat: "fu_lolita_armchair",        iso: nil),
+        "xmas_tree":      Art(flat: "fu_xmas_tree",              iso: nil),
+        "xmas_sofa":      Art(flat: "fu_xmas_sofa",              iso: "iso_xmas_sofa"),
+        "xmas_fire":      Art(flat: "fu_xmas_fireplace",         iso: "iso_xmas_fireplace"),
+        "xmas_dining":    Art(flat: "fu_xmas_dining_table",      iso: "iso_xmas_dining_table"),
+        "xmas_gifts":     Art(flat: "fu_xmas_gifts",             iso: nil),
+        "xmas_wreath":    Art(flat: "fu_xmas_wreath",            iso: nil),
+        "xmas_nutcracker":Art(flat: "fu_xmas_nutcracker",        iso: nil),
+        "xmas_snowman":   Art(flat: "fu_xmas_snowman",           iso: nil),
+        "xmas_house":     Art(flat: "fu_xmas_gingerbread_house", iso: nil),
+        "xmas_advent":    Art(flat: "fu_xmas_advent_calendar",   iso: nil),
+        "ny_bed":         Art(flat: "fu_ny_traditional_bed",     iso: "iso_ny_bed"),
+        "ny_sofa":        Art(flat: "fu_ny_red_sofa",            iso: "iso_ny_sofa"),
+        "ny_table":       Art(flat: "fu_ny_hotpot_table",        iso: "iso_ny_dining_table"),
+        "ny_cabinet":     Art(flat: "fu_ny_lacquered_cabinet",   iso: "iso_ny_display_cabinet"),
+        "ny_screen":      Art(flat: "fu_ny_folding_screen",      iso: nil),
+        "ny_lantern":     Art(flat: "fu_ny_lantern",             iso: nil),
+        "ny_firecracker": Art(flat: "fu_ny_firecrackers",        iso: nil),
+        "ny_envelope":    Art(flat: "fu_ny_red_envelopes",       iso: nil),
+        "ny_ingot":       Art(flat: "fu_ny_gold_ingot",          iso: nil),
+        "ny_plum":        Art(flat: "fu_ny_plum_vase",           iso: nil),
+        "ny_couplet":     Art(flat: "fu_ny_couplets",            iso: nil),
+        "ny_knot":        Art(flat: "fu_ny_chinese_knot",        iso: nil),
+        "painting":       Art(flat: "it_decor_painting",         iso: nil),
+        "wallclock":      Art(flat: "it_decor_wall_clock",       iso: nil),
+        "flowervase":     Art(flat: "it_decor_vase_flowers",     iso: nil),
+        "sushi":          Art(flat: "it_food_sushi",             iso: nil),
+        "ramen":          Art(flat: "it_food_ramen",             iso: nil),
+        "hotpot":         Art(flat: "it_food_hotpot",            iso: nil),
+        "bubbletea":      Art(flat: "it_food_bubble_tea",        iso: nil),
+        "cookies":        Art(flat: "it_food_cookies_milk",      iso: nil),
+        "croissant":      Art(flat: "it_food_croissant",         iso: nil),
+        "fruitbowl":      Art(flat: "it_food_fruit_bowl",        iso: nil),
+        "pancakes":       Art(flat: "it_food_pancakes",          iso: nil),
+        "pizza":          Art(flat: "it_food_pizza",             iso: nil),
+        "sandwich":       Art(flat: "it_food_sandwich",          iso: nil),
+        "salad":          Art(flat: "it_food_salad",             iso: nil),
+        "redlantern":     Art(flat: "it_holiday_red_lantern",    iso: nil),
+        "fucouplet":      Art(flat: "it_holiday_fu_couplet",     iso: nil),
+        "jackolantern":   Art(flat: "it_holiday_jack_o_lantern", iso: nil),
+        "bdaydecor":      Art(flat: "it_holiday_birthday_decor", iso: nil),
+        "minitree":       Art(flat: "it_holiday_christmas_tree", iso: nil),
+        "doorwreath":     Art(flat: "it_holiday_christmas_wreath",iso: nil),
+        "guitar_item":    Art(flat: "it_inst_guitar",            iso: nil),
+        "hoodie":         Art(flat: "it_wear_hoodie",            iso: nil)
+    ]
+
+    /// 这一批占几格、能做什么。
+    ///
+    /// ⚠️ 动作名**只用 `RoomActs.act` 里已经有的**。
+    /// 写一个没有的不报错，只会让他跑过去站着说一句「……」。
+    static func themedShape(of id: String) -> IsoShape? {
+        switch id {
+        case "sakura_bed", "nordic_bed", "ocean_bed", "autumn_bed",
+             "gothic_bed", "jp_bed", "lolita_bed", "ny_bed":
+            return IsoShape(w: 2, d: 2, tall: 1.1,
+                            actions: ["躺下", "打滚", "坐边上", "钻被窝"])
+        case "armchair", "bench", "gothic_chair", "lolita_chair":
+            return IsoShape(w: 1, d: 1, tall: 1.0,
+                            actions: ["坐下", "瘫着"])
+        case "gothic_fire", "xmas_fire":
+            return IsoShape(w: 1, d: 1, tall: 1.6,
+                            actions: ["凑近看", "开灯"])
+        case "sushi", "ramen", "hotpot", "bubbletea", "cookies", "croissant",
+             "fruitbowl", "pancakes", "pizza", "sandwich", "salad":
+            return IsoShape(w: 1, d: 1, tall: 0.5,
+                            actions: ["闻一闻", "摸一下", "拿起来"])
+        case "floorlamp", "sakura_lantern", "nordic_lamp", "ocean_light",
+             "gothic_candle", "jp_lantern", "ny_lantern", "redlantern",
+             "jackolantern":
+            return IsoShape(w: 1, d: 1, tall: 1.6,
+                            actions: ["开灯", "凑到灯下"])
+        case "succulent", "sakura_bonsai", "nordic_plant", "ocean_palm",
+             "autumn_maple", "autumn_wheat", "jp_vase", "xmas_tree", "ny_plum",
+             "flowervase", "minitree":
+            return IsoShape(w: 1, d: 1, tall: 1.2,
+                            actions: ["浇水", "闻一闻", "戳一下"])
+        case "sakura_rug":
+            return IsoShape(w: 3, d: 3, tall: 0.0,
+                            actions: ["打滚", "躺一会儿"])
+        case "coatrack", "ocean_net", "ocean_board", "gothic_mirror", "jp_door",
+             "lolita_mirror", "ny_screen", "ny_couplet", "painting",
+             "fucouplet", "guitar_item":
+            return IsoShape(w: 1, d: 1, tall: 2.2,
+                            actions: ["凑近看", "摸一下"])
+        case "autumn_pumpkin", "autumn_wreath", "xmas_gifts", "xmas_wreath",
+             "xmas_nutcracker", "xmas_snowman", "xmas_house", "xmas_advent",
+             "ny_firecracker", "ny_envelope", "ny_ingot", "ny_knot",
+             "wallclock", "bdaydecor", "doorwreath", "hoodie":
+            return IsoShape(w: 1, d: 1, tall: 0.6,
+                            actions: ["摸一下", "拿起来"])
+        case "sakura_sofa", "nordic_sofa", "ocean_sofa", "autumn_sofa",
+             "xmas_sofa", "ny_sofa":
+            return IsoShape(w: 2, d: 1, tall: 1.0,
+                            actions: ["坐下", "瘫着", "趴扶手"])
+        case "dining", "vanity", "nordic_table", "jp_table", "lolita_vanity",
+             "lolita_table", "xmas_dining", "ny_table":
+            return IsoShape(w: 2, d: 1, tall: 0.9, surface: true,
+                            actions: ["趴桌上", "在桌边站着", "把东西放上去"])
+        case "nightstand", "stove", "kitchensink", "nordic_shelf",
+             "gothic_shelf", "lolita_wardrobe", "ny_cabinet":
+            return IsoShape(w: 1, d: 1, tall: 2.0, surface: true,
+                            actions: ["抽一本", "踮脚够", "把东西放上去"])
+        default: return nil
+        }
+    }
+}

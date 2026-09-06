@@ -91,6 +91,9 @@ struct FurnitureKind: Identifiable {
         case gadget = "电器"
         case decor = "摆设"
         case wear = "穿戴"
+        /// 主题套装。**单占一栏**——樱花床、哥特床、新年床
+        /// 混在「家具」里的话，一屏十几张床，挑都没法挑。
+        case themed = "主题"
 
         var id: String { rawValue }
     }
@@ -116,7 +119,8 @@ enum FurnitureCatalog {
     //   有主题的小床比如圣诞配色的（带圣诞元素、袜子铃铛之类的）可以是 150 金币，
     //   越精细越贵。」
     // 所以床有三张：素的 80、草莓的 140、圣诞的 150。别的大件以后照这个加。
-    static let all: [FurnitureKind] = [
+    /// 手写的那一批。**对外看的是 `all`**（它后面接上 `themed`）。
+    static let base: [FurnitureKind] = [
         .init(id: "bed", name: "小床", price: 80, sprite: PixelSprite([
             "ddd...................",
             "ddd...................",
@@ -860,6 +864,12 @@ enum FurnitureCatalog {
         ], p), category: .decor, reaction: "撞开来遮一遮")
     ]
 
+    /// 商城里的全部。
+    ///
+    /// 后半截在 `FurnitureThemes.swift`（生成的）——
+    /// 那一批件件有真图，不需要一件一张字符画。
+    static let all: [FurnitureKind] = base + themed
+
     static func kind(_ id: String) -> FurnitureKind? {
         all.first { $0.id == id }
     }
@@ -1335,6 +1345,10 @@ extension FurnitureCatalog {
     ///
     /// 没填的按小摆件算（一格、能摸一下），**不会因为漏填就崩**。
     static func shape(of id: String) -> IsoShape {
+        // 主题那一批在自己那张表里（`FurnitureThemes.swift`）。
+        // 不先问的话它们会全掉进最底下那个 default，
+        // 一张双人床变成一格小摆件。
+        if let s = themedShape(of: id) { return s }
         switch id {
 
         // 床：占两格宽两格深，能躺、能滚、能坐边上
