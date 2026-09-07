@@ -39,7 +39,33 @@ enum MemoryRecall {
     static let linkThreshold = 0.70
 
     /// 相关度低于这个就当没搜到。omnimemory 的 `RECALL_THRESHOLD`，0.3。
+    ///
+    /// ⚠️ **这是一道绝对阈值，不是「取前几条」。** 小克Cat 那份文档里
+    /// 报过一个很贵的教训：他们接上真 embedding 之后，「库里明明没有这件事」
+    /// 的查询命中率从近乎完美掉到 0——因为任意查询都能找到几条沾边的，
+    /// 而系统又被要求不能说「没有记录」。**那就是一条通往编造的流水线。**
+    /// 修法正是把门槛从相对阈值换成绝对阈值。我们这儿一直是绝对的，
+    /// 别改成「相关度最高的前 N 条」。
     static let recallFloor = 0.30
+
+    // MARK: 用进废退
+
+    /// 每条记忆的「被用上」系数，`shortID → 倍数`。
+    ///
+    /// 出处是小克Cat 那份记忆层：**权重不靠时间自动衰减，
+    /// 而是由"是否被真实调用"决定升降。** 越常被用上的越靠前，
+    /// 不常被用到的自然靠后——交给使用行为决定谁重要，
+    /// 而不是一刀切地假设"新的就比旧的重要"。
+    ///
+    /// 数从哪儿来：`MemoryHits`（他每轮在回合末尾报的那一笔账）。
+    ///
+    /// ⚠️ **快照，不是实时读。** `MemoryHits` 是 `@MainActor` 的，
+    /// 而这儿的排序函数到处都在调。让 `MemoryHits` 每次变动之后
+    /// 往这儿推一份，两边都不用等对方。
+    ///
+    /// ⚠️ **压得很轻**（0.75…1.3）。它只该在同一档里重排先后，
+    /// 不该盖过她自己标的星级——星级是她的判断，这个只是统计。
+    nonisolated(unsafe) static var useScore: [String: Double] = [:]
 
     /// 核心信念最多这么多条。Ombre 原话是「稀缺才逼出重要」。
     static let pinLimit = 20
@@ -97,6 +123,8 @@ enum MemoryRecall {
         var w = Double(max(1, min(5, item.level))) / 5.0
         if item.pinned == true { w *= 2.0 }        // 钉住的永远在最前面
         if item.resolved == false { w *= unresolvedBoost }
+        // 用进废退。见 `useScore`。
+        w *= useScore[item.shortID] ?? 1.0
         return w
     }
 

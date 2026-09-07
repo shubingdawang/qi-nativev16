@@ -58,9 +58,33 @@ final class MemoryHits: ObservableObject {
 
     private init() {
         book = Storage.load(MemoryHitBook.self, from: Self.file) ?? MemoryHitBook()
+        pushWeights()
     }
 
-    private func save() { Storage.saveAsync(book, to: Self.file) }
+    private func save() {
+        Storage.saveAsync(book, to: Self.file)
+        pushWeights()
+    }
+
+    /// 把「被用上」折成一个倍数推给 `MemoryRecall`。
+    ///
+    /// ⚠️ **压得很轻**：用上过的最多 ×1.3，白占位置的 ×0.75。
+    /// 它只该在同一档里重排先后，不该盖过她自己标的星级——
+    /// 星级是她的判断，这个只是统计。
+    ///
+    /// ⚠️ 「白占位置」要**注入过四次以上才算数**。注入一两次没被用上，
+    /// 可能只是那两轮碰巧聊的是别的，不构成证据。
+    private func pushWeights() {
+        var out: [String: Double] = [:]
+        for (id, r) in book.rows {
+            if r.used > 0 {
+                out[id] = 1.0 + min(0.3, 0.1 * Double(r.used))
+            } else if r.injected >= 4 {
+                out[id] = 0.75
+            }
+        }
+        MemoryRecall.useScore = out
+    }
 
     /// 这几条被塞进他眼前了
     func noteInjected(_ ids: [String]) {
