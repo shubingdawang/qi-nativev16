@@ -139,9 +139,16 @@ struct ClawdBadge: View {
 
     private var compactBody: some View {
         Button(action: onFollow) {
+            // ⚠️ 小 clawd 跟旁边那行字**按中线对齐会显得偏低**：
+            // 他的字符画底下留着一截空（脚和影子那儿），
+            // 而那截空也算进 18 点里。她说的
+            // 「状态上的小 clawd 有点低于气泡了，往上移一点」就是这个。
+            //
+            // 抬 1.5 点，不改高度——改高度会把整条撑高。
             HStack(spacing: 5) {
                 ClawdView(mood: .idle, scale: 1.0)
                     .frame(height: 18)
+                    .offset(y: -1.5)
                 Text(elsewhere
                      ? store.clawdDoing.line + " · 在" + store.clawdRoom.rawValue
                      : store.clawdDoing.line)

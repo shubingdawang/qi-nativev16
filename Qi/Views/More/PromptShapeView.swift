@@ -26,10 +26,16 @@ struct PromptShapeView: View {
     //
     // ⚠️ 记一句：**一个页面不该假设自己是怎么被打开的。**
     var body: some View {
-        ZStack {
-            // 别的页都铺着壁纸，就它是块灰底——看着像另一个 App。
-            WallpaperBackground()
-
+        // ⚠️ **壁纸只铺一层。**
+        //
+        // 她圈出来那两条竖线就是铺了两层的缝：
+        // 上一版我在外面套了一个 `ZStack` 再放一张 `WallpaperBackground()`，
+        // 而底下那句 `.transparentList()` **自己就带着一张**。
+        // 两张图的尺寸对不齐，就在交界处显出两条淡淡的竖线。
+        //
+        // ⚠️ 记一句：**`.transparentList()` 已经管了底**，
+        // 别再在外面套一层。
+        Group {
             ScrollView {
                 if let s = shape {
                     VStack(alignment: .leading, spacing: 14) {
