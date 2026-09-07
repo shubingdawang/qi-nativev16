@@ -1523,16 +1523,53 @@ extension ClawdStore {
     /// ⚠️ `nonisolated`：`IsoRoom.fit(in:)` 是纯几何、不在主线程上，
     /// 不标的话它读这个常数会报「跨 actor」——Swift 6 里是错误。
     /// 一个写死的 8，本来也没有线程安全可言。
-    nonisolated static let roomSize = 8
+    /// 屋子纵深几格。
+    ///
+    /// ⚠️⚠️ **8 → 16。格子数翻倍 = 一格小一半。**
+    ///
+    /// 她说的：「家具太大了，地板的格子也太大了，根本放不了多少。
+    /// 所有家具缩小至少两倍，所有格子缩小一倍，
+    /// 这样格子和家具也能对齐，放的也能更多。」
+    ///
+    /// 这一个数就把三件事一起办了：
+    ///   · 格子小一半（同样大的屋子里格子多一倍）
+    ///   · **家具跟着小一半**——一张床还是占 2×2 格，
+    ///     而现在一格只有原来一半宽，画出来自然就是原来的一半
+    ///   · 对齐是白来的：家具画多宽 = 它占几格（见 `IsoRoomView.piece`）
+    ///
+    /// ⚠️ 老数据的格子坐标要**乘 2** 搬一次（见 `migrateFiner`），
+    /// 不然一屋子东西全挤在左上角那四分之一里。
+    nonisolated static let roomSize = 16
 
     /// 平面屋横着几格。
     ///
     /// 18 = 看得见的 8 列 + 左右各 5 列。她要的：
     /// 「可以拖动往最左右分别移动五格的」。
-    nonisolated static let flatCols = 18
+    nonisolated static let flatCols = 36
 
     /// 平面屋一屏里看得见几列。一格多大按它算（见 `IsoRoom.fit`）。
-    nonisolated static let flatVisibleCols = 8
+    nonisolated static let flatVisibleCols = 16
+
+    /// 格子从 8 变 16 那一次，老坐标**乘 2** 搬过来。
+    ///
+    /// ⚠️ **只搬一次**，靠这个记号记着。不记的话每次启动都乘 2，
+    /// 一屋子东西一天之内就飞到屋外去了。
+    ///
+    /// ⚠️ 平面屋那一对（`fx / fy`）也要一起搬——
+    /// 只搬一半的话，同一件家具在两个视角里差着一倍。
+    private static let finerKey = "clawdRoomFiner16"
+
+    func migrateFiner() {
+        guard !UserDefaults.standard.bool(forKey: Self.finerKey) else { return }
+        UserDefaults.standard.set(true, forKey: Self.finerKey)
+        guard !owned.isEmpty else { return }
+        for i in owned.indices {
+            if owned[i].gx >= 0 { owned[i].gx = min(Self.roomSize - 1, owned[i].gx * 2) }
+            if owned[i].gy >= 0 { owned[i].gy = min(Self.roomSize - 1, owned[i].gy * 2) }
+            if owned[i].fx >= 0 { owned[i].fx = min(Self.flatCols - 1, owned[i].fx * 2) }
+            if owned[i].fy >= 0 { owned[i].fy = min(Self.roomSize - 1, owned[i].fy * 2) }
+        }
+    }
 
     /// 老数据搬进格子。**只搬一次**，搬完写回去。
     /// （写盘不用自己叫：`owned` 的 didSet 会存。）

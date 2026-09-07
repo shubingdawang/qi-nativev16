@@ -219,6 +219,8 @@ struct ClawdHomeView: View {
             // 只在进了某一间之后才分的话，户型图第一眼全是「还空着」
             store.migrateRoom()
             store.migrateRooms()
+            // 格子从 8 变 16 那一次，老坐标乘 2 搬过来。只跑一次。
+            store.migrateFiner()
             // 进来就落在他待着的那一间（她要的）
             if viewing == nil, following { viewing = store.clawdRoom }
             startWalking()
