@@ -597,7 +597,7 @@ final class MemoryStore: ObservableObject {
     @Published var transcripts: [TranscriptMeta] = []
     /// 等她点头的候选记忆（Aelios 那套的本机版）
     @Published var candidates: [MemoryCandidate] = []
-    /// 他俩之间的黑话
+    /// 他俩之间的专有词条（以前叫「黑话」）
     @Published var glossary: [GlossaryEntry] = []
 
     private init() { reload() }
@@ -1081,7 +1081,7 @@ final class MemoryStore: ObservableObject {
             case "glossary.json":
                 if let v = try? dec.decode([GlossaryEntry].self, from: data) {
                     glossary = v; saveGlossary()
-                    report.lines.append("黑话 \(v.count) 个")
+                    report.lines.append("专有词条 \(v.count) 条")
                 } else { report.failed.append(name) }
 
             case "memories_log.json":

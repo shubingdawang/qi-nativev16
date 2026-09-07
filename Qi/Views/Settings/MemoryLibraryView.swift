@@ -134,14 +134,19 @@ struct MemoryLibraryView: View {
                 }
                 .buttonStyle(.plain)
             }
-            if !store.glossary.isEmpty {
-                SettingsDivider()
-                NavigationLink { GlossaryListView() } label: {
-                    SettingsRowLabel(title: "专有词条",
-                                     value: "\(store.glossary.count) 个", chevron: true)
-                }
-                .buttonStyle(.plain)
+            // ⚠️ **空的时候也要露出来。**
+            //
+            // 她报的：「每次备份我都看到黑话 0，
+            // 我根本不知道是哪个功能里的。」
+            //
+            // 备份清单里报了一个数，界面里却因为「是空的」
+            // 整行不显示——那就成了一个只在备份里存在的东西。
+            SettingsDivider()
+            NavigationLink { GlossaryListView() } label: {
+                SettingsRowLabel(title: "专有词条",
+                                 value: "\(store.glossary.count) 条", chevron: true)
             }
+            .buttonStyle(.plain)
         }
     }
 
@@ -715,7 +720,7 @@ struct LetterReaderView: View {
     }
 }
 
-// MARK: - 黑话表
+// MARK: - 专有词条
 
 /// 出处：Aelios 的 glossary。
 /// 「小屋」「换窗」「札记」这种词从来不作为一件事被记下来，
@@ -731,6 +736,13 @@ struct GlossaryListView: View {
             WallpaperBackground()
             ScrollView {
                 LazyVStack(spacing: 10) {
+                    if store.glossary.isEmpty {
+                        EmptyNote(icon: "character.book.closed",
+                                  title: "暂无专有词条",
+                                  hint: "模型在对话中遇到只有你们两人懂的说法时，"
+                                      + "可通过工具将词条与含义记在这里，"
+                                      + "以便日后直接理解。需先启用记忆库工具。")
+                    }
                     ForEach(store.glossary) { g in
                         VStack(alignment: .leading, spacing: 5) {
                             Text(g.term)

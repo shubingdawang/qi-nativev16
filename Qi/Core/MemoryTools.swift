@@ -524,8 +524,8 @@ enum MemoryTools {
             let term = s("term")
             let meaning = s("meaning")
             if term.isEmpty {
-                if m.glossary.isEmpty { return ("黑话表还是空的。", false) }
-                return ("你俩的黑话：\n" + m.glossary.map {
+                if m.glossary.isEmpty { return ("专有词条为空。", false) }
+                return ("专有词条：\n" + m.glossary.map {
                     "· \($0.term)：\($0.meaning)"
                 }.joined(separator: "\n"), false)
             }
@@ -1149,7 +1149,7 @@ enum MemoryTools {
 
         // 黑话。不知道「小屋」是什么，接话就会露馅。
         if !m.glossary.isEmpty {
-            parts.append("【你俩的黑话】\n" + m.glossary.map {
+            parts.append("【专有词条】\n" + m.glossary.map {
                 "· \($0.term)：\($0.meaning)"
             }.joined(separator: "\n"))
         }

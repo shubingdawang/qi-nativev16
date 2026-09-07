@@ -240,10 +240,12 @@ struct TarotPane: View {
 
                     // 摊开的一排，扇形铺开。
                     //
-                    // 她要的选法：「长按移动，手放在哪张牌上就弹出哪张，
-                    // 再次点击才抽出，3s 没有点击就收回。」
-                    // 所以这儿是**手指扫过去 → 那张抬起来**，
-                    // 再点那张抬起来的才真的抽走；三秒不碰它自己落回去。
+                    // 选法：**点一下抬起来，再点一下才抽走**；
+                    // 三秒不碰它自己落回去。横滑是翻牌堆，不挑牌。
+                    //
+                    // 她最早要的是「长按移动，手放在哪张牌上就弹出哪张」。
+                    // 那个做不了——见下面那段：只要牌堆上挂拖拽，
+                    // 横滑就死，后面那些牌永远够不着。两件事只能留一件。
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: -26) {
                             ForEach(deck.indices, id: \.self) { i in
@@ -263,41 +265,23 @@ struct TarotPane: View {
                         // 全都是空的，手指扫到那儿就断了。
                         // 补一块实心的感应区，这一条才是连续的。
                         .contentShape(Rectangle())
-                        .coordinateSpace(name: "fan")
-                        // 按住再扫：扫到谁谁抬起来。
+                        // ⚠️⚠️ **牌堆上不能再挂任何拖拽手势。**
                         //
-                        // ⚠️ **必须先长按**（她报的第 5 条：只能选前几张）。
-                        // 上一版这儿是 `DragGesture(minimumDistance: 0)` 直接挂着，
-                        // 它把横滑整个吃掉了——牌是一排扇形铺在横向 ScrollView 里的，
-                        // 滑不动就等于后面那些牌永远够不着，只剩露在外面的头几张能选。
+                        // 她报了三轮。最后一轮说清楚了：
+                        // 「现在就是我的手势对塔罗牌并没有用，
+                        // 我只能点击选择塔罗牌。」
                         //
-                        // 加一道 0.22 秒的长按当门槛之后：**随手横滑 = 翻牌堆**，
-                        // **按住再滑 = 挑牌**。两件事不再抢同一个动作。
-                        // （单点某张也照样能把它抬起来，见 cardBack 里那个 onTapGesture。）
-                        .simultaneousGesture(
-                            LongPressGesture(minimumDuration: 0.22)
-                                .sequenced(before: DragGesture(minimumDistance: 0,
-                                                               coordinateSpace: .named("fan")))
-                                .onChanged { value in
-                                    guard case .second(_, let drag?) = value else { return }
-                                    // 一张 62 宽、叠着 -26，所以每张往右挪 36
-                                    //
-                                    // ⚠️ 越界的**夹回两头**，不是直接不理。
-                                    // 手指扫到最左边那张再往外一点就返回 nil 的话，
-                                    // 头尾两张最难选中——而她多半正想选那两张。
-                                    guard !deck.isEmpty else { return }
-                                    let raw = Int((drag.location.x - 30) / 36)
-                                    let i = min(deck.count - 1, max(0, raw))
-                                    if hovering != i {
-                                        hovering = i
-                                        if app.settings.haptics {
-                                            UIImpactFeedbackGenerator(style: .soft)
-                                                .impactOccurred()
-                                        }
-                                    }
-                                    scheduleCollapse()
-                                }
-                        )
+                        // 上一版这儿是 `LongPressGesture(0.22)` 串
+                        // `DragGesture(minimumDistance: 0)`，我以为长按当门槛
+                        // 就能让横滑和挑牌各走各的。**不成立。**
+                        // 只要有一个 `minimumDistance: 0` 的拖拽挂在横向
+                        // ScrollView 的内容上，滚动就再也起不来——
+                        // 前面串没串长按都一样。
+                        //
+                        // 所以整个摘掉。现在：
+                        //   横滑 = 翻牌堆（系统自己的滚动，一定好使）
+                        //   挑牌 = 点一下抬起来、再点一下抽走
+                        //          （`cardBack` 里那个 `onTapGesture`）
                     }
                     .frame(height: 190)
                     // ⚠️ 牌堆**不套框**。她定的：「我希望塔罗不要被框起来，
