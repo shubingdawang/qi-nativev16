@@ -55,10 +55,27 @@ struct PromptShapeView: View {
                         .font(.app(12))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .padding(32)
+                        // 空态那一行也要撞满，不然 ScrollView 会跟着它缩
+                        .frame(maxWidth: .infinity)
                 }
             }
+            // ⚠️⚠️ **宽高都钉死，不能让它自己去猜。**
+            //
+            // 她报了两轮「上下文构成又变成这样」：页面缩成中间一条，
+            // 两边露白，壁纸只有中间那一竖。
+            //
+            // 第一轮的病根是嵌套导航栈（已经拆了）。这一轮不是——
+            // 是这一页**没给自己定宽高**：`.transparentList()` 的底
+            // 是贴着这个 `ScrollView` 画的，`ScrollView` 拿到多宽它就多宽。
+            // 空态那一支里内容只有一行字，某些容器下它就按内容去要宽度，
+            // 于是底跟着缩成一条。
+            //
+            // ⚠️ 记一句：**背景铺不满，先看被它贴着的那个 View 有多大**，
+            // 别急着去改背景本身。
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .transparentList()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("上下文构成")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
