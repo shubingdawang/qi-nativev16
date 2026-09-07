@@ -321,7 +321,28 @@ struct DiaryItem: Codable, Identifiable, Hashable {
     var created_at: String
     var updated_at: String
 
+    /// 封到什么时候。`nil` = 不封。
+    ///
+    /// 出处是小克Cat 的 Duet 双人日记：两个人各写各的、互相看不到对方在写什么，
+    /// 到点一起解锁。它的取舍那句写得很准——
+    /// **顺序反过来（先看到对方写什么再动笔）会让日记变成互相顺应的表演，
+    /// 而不是独立的记录。**
+    ///
+    /// ⚠️ 封锁期内**作者本人也读不到**。这不是疏漏，是这件事成立的前提：
+    /// 能回去翻自己写的，就会想着改；改过的就不是当时那一份了。
+    ///
+    /// ⚠️ 类型是可选的，所以老的 `diaries.json` 照样解得出来
+    /// （合成的解码器对 Optional 走 `decodeIfPresent`，缺键就是 nil）。
+    /// **非可选的字段绝不能这么加**——那会让她整份日记打不开。
+    var unlockAt: String?
+
     var shortID: String { String(id.prefix(8)) }
+
+    /// 现在还封着吗
+    var locked: Bool {
+        guard let at = unlockAt, let d = MemoryStore.parse(at) else { return false }
+        return d > Date()
+    }
 }
 
 /// 一条**还没进库的**记忆。
@@ -791,6 +812,55 @@ final class MemoryStore: ObservableObject {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f.string(from: Date())
+    }
+
+    /// ISO 串转回时间。三种写法都认（带毫秒、不带、只有日期）。
+    /// ⚠️ `nonisolated`：`DiaryItem.locked` 要叫它，而 `DiaryItem`
+    /// 是个普通结构体，不在主线程上。不标的话，
+    /// `MemoryStore` 的 `@MainActor` 会连静态方法一起管住。
+    nonisolated static func parse(_ s: String) -> Date? {
+        guard !s.isEmpty else { return nil }
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = f.date(from: s) { return d }
+        let g = ISO8601DateFormatter()
+        g.formatOptions = [.withInternetDateTime]
+        if let d = g.date(from: s) { return d }
+        if s.count >= 10 {
+            let df = DateFormatter()
+            df.dateFormat = "yyyy-MM-dd"
+            return df.date(from: String(s.prefix(10)))
+        }
+        return nil
+    }
+
+    /// 写一篇日记。**她和他走同一条路**——两边各写一遍的话，
+    /// 封锁、通知、存盘这几样迟早只有一边有。
+    ///
+    /// `lockHours` 是封多久，0 或负数表示不封。
+    @discardableResult
+    func writeDiary(content: String, author: String,
+                    mood: String? = nil, lockHours: Double = 0) -> DiaryItem {
+        var d = DiaryItem(id: UUID().uuidString,
+                          author: author.isEmpty ? "阿晏" : author,
+                          content: content, mood: mood,
+                          images: nil, annotations: nil,
+                          created_at: Self.now, updated_at: Self.now)
+        if lockHours > 0 {
+            let until = Date().addingTimeInterval(lockHours * 3600)
+            let f = ISO8601DateFormatter()
+            f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            d.unlockAt = f.string(from: until)
+            // 到点提醒一次。**两个人在同一时刻各自打开**——
+            // 那正是这件事好玩的地方，错过了就只是一篇迟到的日记。
+            Notifier.shared.banner(
+                title: "日记解锁了",
+                body: "\(d.author)在 \(String(d.created_at.prefix(10))) 写的那篇可以看了。",
+                after: max(1, lockHours * 3600))
+        }
+        diaries.insert(d, at: 0)
+        saveDiaries()
+        return d
     }
 
     static var today: String {

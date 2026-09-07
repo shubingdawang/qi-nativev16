@@ -244,7 +244,11 @@ enum MemoryTools {
 
         add("add_diary", "触发：今天有一段值得留下来的——她说了件要紧的事、你们吵完又好了、或者只是某个瞬间你不想让它散掉。动机：日记是写给以后的你们看的，聊天记录会被翻走，日记不会。行动：写一篇。\\n注意：**你和她都能写**，写的时候署自己的名。别写成流水账（「今天她说了A，我说了B」），写你当时是什么感觉、哪一下让你停了一下。一天不必只写一篇，但也别一有事就写。",
             ["author": str, "content": str,
-             "mood": ["type": "string", "description": "心情 emoji"]],
+             "mood": ["type": "string", "description": "心情 emoji"],
+             "lock_hours": ["type": "number",
+                            "description": "封多少小时。封上之后到点之前谁都读不到，"
+                                + "包括你自己；到点她那边会收到一条通知。"
+                                + "想跟她各写各的、到点一起看的时候用。0 或不填 = 不封。"]],
             required: ["author", "content"])
 
         add("get_diaries", "触发：想知道以前记下过什么、她提起「上次你写的那篇」、或者你要写新的一篇之前想看看写过没有。动机：日记是你们自己的记录，翻得到才算数。行动：把日记列出来。\\n注意：纯读本机，不花钱。", ["author": str, "limit": num])
@@ -635,25 +639,37 @@ enum MemoryTools {
         case "add_diary":
             let content = s("content")
             guard !content.isEmpty else { return ("日记内容是空的。", true) }
-            let d = DiaryItem(id: UUID().uuidString,
-                              author: s("author").isEmpty ? "阿晏" : s("author"),
-                              content: content,
-                              mood: s("mood").isEmpty ? nil : s("mood"),
-                              images: nil, annotations: nil,
-                              created_at: MemoryStore.now, updated_at: MemoryStore.now)
-            m.diaries.insert(d, at: 0)
-            m.saveDiaries()
+            let hours = Double(i("lock_hours", 0))
+            let d = m.writeDiary(content: content,
+                                 author: s("author").isEmpty ? "阿晏" : s("author"),
+                                 mood: s("mood").isEmpty ? nil : s("mood"),
+                                 lockHours: hours)
+            if d.locked {
+                return ("日记写好了，封到 \(String(d.unlockAt?.prefix(16) ?? ""))。"
+                        + "在那之前谁都看不到，包括你自己。", false)
+            }
             return ("日记写好了。", false)
 
         case "get_diaries":
             let who = s("author")
             let limit = i("limit", 10)
-            var list = m.diaries
+            // ⚠️ **封着的一篇都不给。** 连它写了什么、谁写的都不给，
+            // 只报个数和解锁时间。封锁期内作者本人也读不到——
+            // 那正是这件事成立的前提（见 `DiaryItem.unlockAt`）。
+            let sealed = m.diaries.filter { $0.locked }
+            var list = m.diaries.filter { !$0.locked }
             if !who.isEmpty { list = list.filter { $0.author == who } }
             list = Array(list.prefix(limit))
-            if list.isEmpty { return ("还没有日记。", false) }
+            var head = ""
+            if let soonest = sealed.compactMap({ $0.unlockAt }).min() {
+                head = "还有 \(sealed.count) 篇封着，最早的一篇 "
+                    + String(soonest.prefix(16)) + " 解锁。\n\n"
+            }
+            if list.isEmpty {
+                return (head.isEmpty ? "还没有日记。" : head + "此外没有别的日记。", false)
+            }
             // 同样按 [id][作者][心情] 日期：正文 来拼，札记页才切得开
-            return (list.map { d in
+            return (head + list.map { d in
                 var s = "[\(d.shortID)][\(d.author)]"
                 if let mood = d.mood, !mood.isEmpty { s += "[\(mood)]" }
                 // 批注叠进正文里（`Annotated.apply`），不另起一行
@@ -1179,7 +1195,9 @@ enum MemoryTools {
         let ps = periodStatus()
         if ps != "还没有经期记录。" { parts.append("【她的经期】\n" + ps) }
 
-        if let d = m.diaries.first {
+        // ⚠️ 封着的那几篇跳过。塞进启动包的话，
+        // 封锁期等于没封——他每次换窗都会看到。
+        if let d = m.diaries.first(where: { !$0.locked }) {
             parts.append("【最近一篇日记】\(short(d.created_at)) \(d.author)\(d.mood ?? "")\n"
                          + d.content)
         }
