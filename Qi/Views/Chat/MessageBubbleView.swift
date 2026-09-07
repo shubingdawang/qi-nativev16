@@ -401,8 +401,11 @@ struct MessageBubbleView: View {
                     EmptyView()
                 } else if !message.content.isEmpty {
                     // 一段一段分开发，跟原来那样，不是糊成一大坨
-                    ForEach(Array(contentSegments.enumerated()), id: \.offset) { _, seg in
-                        bubble(seg)
+                    ForEach(contentPieces) { piece in
+                        switch piece {
+                        case .text(_, let seg): bubble(seg)
+                        case .beat(_, let b): BeatLine(beat: b, isUser: isUser)
+                        }
                     }
                 } else if message.isStreaming {
                     TypingIndicator()
@@ -1152,12 +1155,69 @@ struct MessageBubbleView: View {
 
     private var contentSegments: [String] {
         let shownContent = parsed.clean
-        guard app.settings.segmentAssistant || isUser else { return [shownContent] }
+        // ⚠️ **有中段独白就一定要切段**，哪怕她关了分段发送。
+        //
+        // 那几条心里话记的位置是「第几段之后」（见 `MessageBeat.at`）。
+        // 不切段的话整条正文只有一段，它们就全都被挤到末尾，
+        // 停顿的位置没了——变成「他说完一整段，然后想了几件事」。
+        guard app.settings.segmentAssistant || isUser || hasMidBeats
+        else { return [shownContent] }
         let parts = shownContent
             .components(separatedBy: "\n\n")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         return parts.isEmpty ? [shownContent] : parts
+    }
+
+    private var hasMidBeats: Bool { shownBeats.contains { $0.at > 0 } }
+
+    /// 气泡区要画的东西，**按他写出来的先后**：一段正文、一句走神、再一段正文。
+    ///
+    /// ## 为什么值得为它改渲染
+    ///
+    /// 他可以在正文写到一半就地停下来走神一句，再接着说。
+    /// 流式显示下那个停顿是**物理真实的**——他写走神那几秒，
+    /// 正文的打字实打实停住。而且因为是自回归生成，
+    /// 中途插进去的念头会真的改变后文。
+    ///
+    /// 全都摞到气泡上面的话，这件事就没了：
+    /// 看上去像「他先想了一堆，然后说了一段话」，
+    /// 而真相是「他说到一半，忽然想起什么，于是后半段改了口」。
+    enum Piece: Identifiable {
+        case text(Int, String)
+        case beat(Int, MessageBeat)
+
+        var id: String {
+            switch self {
+            case .text(let i, _): return "t\(i)"
+            case .beat(let i, _): return "b\(i)"
+            }
+        }
+    }
+
+    private var contentPieces: [Piece] {
+        let segs = contentSegments
+        let mid = shownBeats.filter { $0.at > 0 }
+        guard !mid.isEmpty else {
+            return segs.enumerated().map { Piece.text($0.offset, $0.element) }
+        }
+        var out: [Piece] = []
+        var bi = 0
+        for (i, seg) in segs.enumerated() {
+            out.append(.text(i, seg))
+            // 这一段之后该插的那几句（`at` 正好等于已经画完的段数）
+            while bi < mid.count, mid[bi].at <= i + 1 {
+                out.append(.beat(bi, mid[bi]))
+                bi += 1
+            }
+        }
+        // ⚠️ 剩下的**一定要兜住**。`at` 比段数还大的时候（正文末尾那句走神、
+        // 或者段数因为剥标记少了一段）不兜就直接丢了——她那边是一句话凭空消失。
+        while bi < mid.count {
+            out.append(.beat(bi, mid[bi]))
+            bi += 1
+        }
+        return out
     }
 
     /// 思考卡片上的那行字。
@@ -1228,15 +1288,21 @@ struct MessageBubbleView: View {
 
     /// 幕外那几行：动作／神态 + 心里话。
     /// 气泡上方淡淡地摞着，不带气泡也不带底。**有几条摆几条**，按他写的先后。
+    /// 摞在气泡**上面**的那几条：正文一个字都还没开始就写下的。
+    ///
+    /// 写在正文中间的那些不在这儿——它们画在自己发生的位置上，
+    /// 见 `contentPieces`。
+    private var headBeats: [MessageBeat] { shownBeats.filter { $0.at <= 0 } }
+
     @ViewBuilder
     private var beatsBlock: some View {
-        if !shownBeats.isEmpty {
+        if !headBeats.isEmpty {
             VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
                 // ⚠️ 按**位置**认，不按 id 认。
                 // 现抠出来的那几条每重画一次就是一批新 UUID，
                 // 按 id 认的话 SwiftUI 会当成「整批换了」，
                 // 流式的时候这几行会一直闪。
-                ForEach(Array(shownBeats.enumerated()), id: \.offset) { _, beat in
+                ForEach(Array(headBeats.enumerated()), id: \.offset) { _, beat in
                     BeatLine(beat: beat, isUser: isUser)
                 }
             }

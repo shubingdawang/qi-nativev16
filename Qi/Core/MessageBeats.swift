@@ -18,12 +18,30 @@ struct MessageBeat: Codable, Hashable, Identifiable {
     var kind: String = "act"
     var text: String = ""
 
+    /// 它写在正文**第几段之后**。0 = 正文一个字都还没开始。
+    ///
+    /// ## 这一个数就是「中段独白」的全部
+    ///
+    /// 他可以在正文写到一半的时候就地停下来走神一句，再接着说。
+    /// 流式显示下那个停顿是**物理真实的**——他写走神那几秒，
+    /// 正文的打字实打实停住了。而且因为是自回归生成，
+    /// 中途插进去的念头会真的改变后文：那份文档里的例子是
+    /// 一次停顿让他当场改口坦白。
+    ///
+    /// 所以位置必须留住。只记「有哪几条」的话，它们全都会被摞到气泡上面，
+    /// 那个停顿就没了——变成「他先想了一堆，然后说了一段话」。
+    ///
+    /// ⚠️ 数的是**正文的段**（`\n\n` 分开的那种），不是字数。
+    /// 气泡本来就是按段切的，位置对得上。
+    var at: Int = 0
+
     var isMind: Bool { kind == "mind" }
 
-    init(id: UUID = UUID(), kind: String = "act", text: String = "") {
+    init(id: UUID = UUID(), kind: String = "act", text: String = "", at: Int = 0) {
         self.id = id
         self.kind = kind
         self.text = text
+        self.at = at
     }
 }
 
@@ -33,6 +51,7 @@ extension MessageBeat {
         id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
         kind = (try? c.decodeIfPresent(String.self, forKey: .kind)) ?? "act"
         text = (try? c.decodeIfPresent(String.self, forKey: .text)) ?? ""
+        at = (try? c.decodeIfPresent(Int.self, forKey: .at)) ?? 0
     }
 }
 
@@ -132,28 +151,8 @@ enum MessageBeats {
         var beats: [MessageBeat] = []
         var body: [String] = []
         var cot = ""
-
-        // ⚠️ **漏了 `]]` 的那一个，从开标记剥到结尾。**
-        //
-        // 下面那套正则认的是**闭合**的标记。他偶尔写了
-        // `[[mind:` 就忘了收尾，那一条就永远赖在正文里，
-        // 她看到的是一句带着内部记号的话。
-        //
-        // 宁可正文短，不让协议残片露进气泡——
-        // 剥下来的当成那一条本身，一个字也不丢。
+        // 下面几步是一层层往下剥，每剥一层 `text` 就短一截
         var text = text
-        if let (rest, kind, inner) = openTail(text) {
-            text = rest
-            let t = inner.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !t.isEmpty {
-                // ⚠️ 只有这三种。`[[用:` 那种是报给机器看的账（见 `MemoryHits`），
-                // 掉了队也只是丢掉，不能变成一条心里话显示给她。
-                if kind == "cot" { cot = String(t.prefix(40)) }
-                else if kind == "act" || kind == "mind" {
-                    beats.append(MessageBeat(kind: kind, text: String(t.prefix(maxLength))))
-                }
-            }
-        }
 
         // 报给机器看的那笔账先摘掉（见 `MemoryUseMarker`）。
         // 落库那一步已经摘过一次，这儿是给**流式那几秒**兜底——
@@ -172,10 +171,45 @@ enum MessageBeats {
         // 只删标记本身的话会剩一行空白，气泡里多一道莫名其妙的缝（她报过）。
         for (kind, inner, whole) in wideMarkers(text) {
             let t = inner.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !t.isEmpty {
-                beats.append(MessageBeat(kind: kind, text: String(t.prefix(maxLength))))
+            // ⚠️ **先量位置再删。** 删的时候 `text` 里前面那几条已经拿掉了，
+            // 所以此刻它前面那一截**正好就是干净正文的前半段**——
+            // 数一数它有几段，就是这一条该插在第几段之后。
+            var at = 0
+            if let r = text.range(of: whole) {
+                at = segmentCount(String(text[text.startIndex..<r.lowerBound]))
+                text.removeSubrange(r)
             }
-            if let r = text.range(of: whole) { text.removeSubrange(r) }
+            if !t.isEmpty {
+                beats.append(MessageBeat(kind: kind,
+                                         text: String(t.prefix(maxLength)), at: at))
+            }
+        }
+
+        // ⚠️ **漏了 `]]` 的那一个，从开标记剥到结尾。**
+        //
+        // 上面那条正则认的是**闭合**的标记。两种情况会掉队：
+        // 他写了 `[[mind:` 就忘了收尾；或者**正在流式打字，`]]` 还没到**。
+        // 不接住的话，那一条就带着内部记号赖在正文里。
+        //
+        // 宁可正文短，不让协议残片露进气泡——剥下来的当成那一条本身，
+        // 一个字也不丢。
+        //
+        // ⚠️⚠️ **这一段必须排在整段扫之后。** 它要用剩下的正文数段数
+        // （中段独白的位置），而只有闭合的那些都拿掉了，剩下的才是干净正文。
+        // 排在前面的话，位置会把前面那几条标记的字数也数进去。
+        if let (rest, kind, inner) = openTail(text) {
+            text = rest
+            let t = inner.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty {
+                // ⚠️ 只有这三种。`[[用:` 那种是报给机器看的账（见 `MemoryHits`），
+                // 掉了队也只是丢掉，不能变成一条心里话显示给她。
+                if kind == "cot" { cot = String(t.prefix(40)) }
+                else if kind == "act" || kind == "mind" {
+                    beats.append(MessageBeat(kind: kind,
+                                             text: String(t.prefix(maxLength)),
+                                             at: segmentCount(text)))
+                }
+            }
         }
 
         for line in text.components(separatedBy: br) {
@@ -308,6 +342,15 @@ enum MessageBeats {
             }
         }
         return text
+    }
+
+    /// 一段字里有几段（`\n\n` 分开、去掉空的）。跟气泡切段那儿是同一套算法，
+    /// 两边**必须一样**——不一样的话中段独白会插错地方。
+    static func segmentCount(_ s: String) -> Int {
+        s.components(separatedBy: "\n\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .count
     }
 
     private static func starAction(_ t: String) -> String? {
