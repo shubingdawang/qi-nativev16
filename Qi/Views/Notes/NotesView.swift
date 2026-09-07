@@ -597,9 +597,19 @@ struct DiaryPane: View {
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
     @StateObject private var model = PaneModel()
+    /// 封着的那几篇直接读本机（工具那条路一个字都不给），
+    /// 所以这儿要真的盯着它，不然写完不刷新
+    @ObservedObject private var mem = MemoryStore.shared
     @State private var author = "饼饼"
     @State private var content = ""
     @State private var mood = ""
+    /// 封多少小时。0 = 不封。见 `DiaryItem.unlockAt`。
+    @State private var lock: Double = 0
+
+    private static let locks: [(String, Double)] = [
+        ("不封锁", 0), ("1 小时", 1), ("6 小时", 6),
+        ("1 天", 24), ("1 周", 168), ("1 月", 720),
+    ]
     @State private var keyword = ""
     /// 看法：0 一条条列着 · 1 日历 · 2 一叠叠摊着。
     /// 点右上角那个图标轮着换，图标画的就是**当前**这种。
@@ -638,12 +648,34 @@ struct DiaryPane: View {
                     .padding(10)
                     .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
 
+                // 封锁时长。**各写各的，到点一起看。**
+                //
+                // 出处是小克Cat 的 Duet：先看到对方写什么再动笔的话，
+                // 日记就变成互相顺应的表演了。
+                //
+                // ⚠️ 封锁期内正文一个字都不显示，**作者本人也一样**——
+                // 能回去翻自己写的就会想改，改过的就不是当时那一份了。
+                HStack {
+                    Text("封锁").font(.app(13)).foregroundStyle(Theme.textSoft(scheme))
+                    Spacer()
+                    Picker("", selection: $lock) {
+                        ForEach(Self.locks, id: \.1) { Text($0.0).tag($0.1) }
+                    }
+                    .tint(app.settings.accentColor)
+                }
+                if lock > 0 {
+                    Text("到期前正文不显示，双方均不可读；到期后发送一次通知。")
+                        .font(.app(11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+
                 Button {
                     Task {
                         var args: [String: Any] = ["author": author, "content": content]
                         if !mood.isEmpty { args["mood"] = mood }
+                        if lock > 0 { args["lock_hours"] = lock }
                         await model.run(app, tool: "add_diary", args: args)
-                        content = ""; mood = ""
+                        content = ""; mood = ""; lock = 0
                         await model.run(app, tool: "get_diaries", args: ["limit": 20])
                     }
                 } label: {
@@ -657,6 +689,33 @@ struct DiaryPane: View {
                 .disabled(content.isEmpty || model.loading)
             }
             .glassCard()
+
+            // 封着的那几篇。**工具那条路一个字都不给**（连谁写的都不给），
+            // 所以这儿直接读本机那份，只画一张封条。
+            let sealed = mem.diaries.filter { $0.locked }
+            if !sealed.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("封存中").heading(15)
+                    ForEach(sealed) { d in
+                        HStack(spacing: 10) {
+                            Image(systemName: "lock.fill")
+                                .font(.app(13))
+                                .foregroundStyle(app.settings.accentColor.opacity(0.7))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(String(d.created_at.prefix(10)) + " 写的")
+                                    .font(.app(13))
+                                    .foregroundStyle(Theme.textSoft(scheme))
+                                Text(String((d.unlockAt ?? "").prefix(16))
+                                        .replacingOccurrences(of: "T", with: " ") + " 解锁")
+                                    .font(.app(11))
+                                    .foregroundStyle(Theme.textMuted(scheme))
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+                .glassCard()
+            }
 
             SectionHeader(title: "最近的日记") {
                 // 一条条看是查东西用的，一叠叠看是回味用的

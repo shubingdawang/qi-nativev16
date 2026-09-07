@@ -14,8 +14,9 @@ struct MemoryLibraryView: View {
     @ObservedObject private var hits = MemoryHits.shared
 
     @State private var report: String?
-    @State private var confirmWipe = false
+    /// 正在让他写一封信
     @State private var writing = false
+    @State private var confirmWipe = false
     @State private var pasting = false
     @State private var pasted = ""
 
@@ -552,7 +553,6 @@ struct MemoryDiaryListView: View {
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
     @ObservedObject private var store = MemoryStore.shared
-    @State private var writing = false
 
     var body: some View {
         ZStack {
@@ -569,12 +569,10 @@ struct MemoryDiaryListView: View {
         }
         .navigationTitle("日记")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { writing = true } label: { Image(systemName: "square.and.pencil") }
-            }
-        }
-        .sheet(isPresented: $writing) { DiaryComposeView() }
+        // ⚠️ **这一页不放「写一篇」。** 写日记的地方在 札记 → 日记，
+        // 她本来就有一个（`DiaryPane`，还能选署谁的名）。
+        // 我上一版在这儿又做了一个——两个入口一定会长歪：
+        // 封锁、通知、草稿这几样迟早只有一边有。
     }
 
     private func opened(_ d: DiaryItem) -> some View {
@@ -623,83 +621,6 @@ struct MemoryDiaryListView: View {
         }
         .padding(13)
         .glassBackground(radius: 16, strength: app.settings.glassOpacity)
-    }
-}
-
-// MARK: - 她写一篇
-
-/// 她这边写日记的入口。以前只有他能写（走 `add_diary` 工具），
-/// 她想写一篇没有地方下笔。
-///
-/// 封锁时长是 Duet 那套的核心：**各写各的，到点一起看。**
-/// 先看到对方写什么再动笔的话，日记就变成互相顺应的表演了。
-struct DiaryComposeView: View {
-
-    @EnvironmentObject var app: AppState
-    @Environment(\.colorScheme) private var scheme
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var text = ""
-    @State private var mood = ""
-    /// 封多少小时。0 = 不封。
-    @State private var lock: Double = 0
-
-    private static let locks: [(String, Double)] = [
-        ("不封锁", 0), ("1 小时", 1), ("6 小时", 6),
-        ("1 天", 24), ("1 周", 168), ("1 月", 720),
-    ]
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("今天想留下点什么", text: $text, axis: .vertical)
-                        .lineLimit(6...20)
-                        .font(.app(14))
-                    TextField("心情（一个 emoji，可不填）", text: $mood)
-                        .font(.app(14))
-                }
-                .listRowBackground(GlassRowBackground())
-
-                Section {
-                    Picker("封锁时长", selection: $lock) {
-                        ForEach(Self.locks, id: \.1) { Text($0.0).tag($0.1) }
-                    }
-                } footer: {
-                    HelpNote {
-                        Text("封锁期内正文不显示，包括本人。到期后发送一次通知，"
-                             + "双方在同一时刻各自打开。适用于双方就同一段时间"
-                             + "各自记录、互不参考的情形。")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .listRowBackground(GlassRowBackground())
-            }
-            .transparentList()
-            .navigationTitle("写一篇")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("取消") { dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("保存") {
-                        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !t.isEmpty else { return }
-                        MemoryStore.shared.writeDiary(
-                            content: t,
-                            author: app.settings.userName.isEmpty
-                                ? "我" : app.settings.userName,
-                            mood: mood.isEmpty ? nil : mood,
-                            lockHours: lock)
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
-                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-        }
     }
 }
 
