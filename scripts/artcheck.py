@@ -70,6 +70,10 @@ def right_of(left):
         return "iso_r_" + left[len("iso_l_"):]
     if left.startswith("iso_vic_"):
         return "iso_vicr_" + left[len("iso_vic_"):]
+    if left.startswith("iso_xmas_"):
+        return "iso_xmasr_" + left[len("iso_xmas_"):]
+    if left.startswith("iso_ny_"):
+        return "iso_nyr_" + left[len("iso_ny_"):]
     return None
 
 

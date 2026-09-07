@@ -1,10 +1,10 @@
 import SwiftUI
 import UIKit
 
-// MARK: - 资产包那 315 张图，哪张对哪件
+// MARK: - 进包的那 385 张图，哪张对哪件
 //
-// 资产包 v9 里有 315 张 PNG：正面家具 90、正面小物 73、
-// 等距 152。原图是 1024×1024 白底、一张两百多 KB，
+// v9 那包 315 张，后来又补了维多利亚 54 张、
+// 节日右视角 12 张。原图是 1024×1024 白底、一张两百多 KB，
 // 全塞进来是 一百多 MB——所以进包之前统一过了一道
 //（`scratchpad/prep_furn.py`）：
 //
@@ -12,7 +12,7 @@ import UIKit
 //      走的是从外圈往里漫填，只有连着画面外的白才算底——
 //      跟 `FurnitureImage` 那一份**同一套规矩**，不能各写各的。
 //   ② 裁紧。不裁每件都带一圈看不见的边，摆到格子上会各偏各的。
-//   ③ 缩到最长边 192、量化到 127 色。
+//   ③ 缩到最长边 192、量化到 127 色。进包的 385 张合计 16MB。
 //
 // ⚠️ 右视角那一批**又进包了**（上一版被我删掉过）。
 //
@@ -146,11 +146,14 @@ extension FurnitureCatalog {
     /// 而那一栏的内容**百分之百可以从左边那个算出来**——
     /// 手抄一遍只是多一百个打错字的机会。
     ///
-    /// 节日那两套（圣诞、新年）只出了左视角，这儿返回 nil，
-    /// 取图那边会自己退回左边那张。
+    /// ⚠️ 圣诞和新年那两套一开始只有左视角，她后来补上了。
+    /// 那一阵它们返回 nil，取图那边会退回左边那张——
+    /// **那条退路留着**：以后新加的套装也未必一上来就两面都齐。
     static func isoRightName(_ left: String) -> String? {
         if left.hasPrefix("iso_l_") { return "iso_r_" + left.dropFirst(6) }
         if left.hasPrefix("iso_vic_") { return "iso_vicr_" + left.dropFirst(8) }
+        if left.hasPrefix("iso_xmas_") { return "iso_xmasr_" + left.dropFirst(9) }
+        if left.hasPrefix("iso_ny_") { return "iso_nyr_" + left.dropFirst(7) }
         return nil
     }
 
