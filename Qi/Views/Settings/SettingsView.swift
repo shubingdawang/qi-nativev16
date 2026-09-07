@@ -1046,8 +1046,7 @@ struct SettingsView: View {
                     Text("已恢复 \(Storage.rescued.count) 份早前未读入的数据")
                         .font(.app(13, weight: .medium))
                         .foregroundStyle(StatusTone.done.color)
-                    Text(Storage.rescued.joined(separator: "
-"))
+                    Text(Storage.rescued.joined(separator: br))
                         .font(.app(10, design: .monospaced))
                         .foregroundStyle(Theme.textMuted(scheme))
                     Text("早前被重命名保留的副本本次已能正常解析，已自动还原。副本仍保留在文稿目录中。")
