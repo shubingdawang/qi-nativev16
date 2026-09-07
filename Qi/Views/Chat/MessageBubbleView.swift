@@ -464,6 +464,20 @@ struct MessageBubbleView: View {
     /// 那段被切掉的代述展开了没有
     @State private var fakeOpen = false
 
+    /// 这一条真的落下了什么。**去重，按他做的先后**。
+    ///
+    /// ⚠️ 只认 `finished && !failed`：她这一行是「真的落下了什么」，
+    /// 不是「他尝试了什么」。失败的在「过程」里看得见。
+    private var leftMarks: [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        for run in message.toolRuns where run.finished && !run.failed {
+            guard let mark = AppState.leftMark(for: run.toolName) else { continue }
+            if seen.insert(mark).inserted { out.append(mark) }
+        }
+        return out
+    }
+
     private func bubble(_ text: String) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             // fillWidth: false —— 气泡跟着字数走，不再一律撑成最长的那行
@@ -483,6 +497,24 @@ struct MessageBubbleView: View {
                 Text(t)
                     .font(.system(size: max(11, app.settings.fontSize - 2)))
                     .foregroundStyle(Theme.textMuted(scheme))
+            }
+
+            // ⚠️ **他这一条里真的落下了什么。**
+            //
+            // 由 `toolRuns` 说了算，不由他在正文里说。他写「我记下了」
+            // 那只是一句话；这一行只在**真的调用成功**的时候出现。
+            //
+            // 出处见 `AppState.leftMark(for:)` 那一段。
+            if !isUser, !leftMarks.isEmpty {
+                Button { onOpenProcess() } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.seal")
+                        Text(leftMarks.joined(separator: " · "))
+                    }
+                    .font(.system(size: max(10, app.settings.fontSize - 4)))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                }
+                .buttonStyle(.plain)
             }
 
             // 他替她说话的那一段被切掉了（见 `FakeUserCut`）。

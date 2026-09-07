@@ -2600,6 +2600,66 @@ final class AppState: ObservableObject {
     """
 
     /// 工具名 → 一句人话
+/// 这件工具**留下了什么**。读一读、查一查那种返回 nil——它们没落下东西。
+    ///
+    /// ## 为什么只认写入类
+    ///
+    /// 出处是她发我的那份「卡片留痕」，最要紧的是这一句：
+    ///
+    /// > 活动由后端回查数据决定，不由模型自己宣布。
+    /// > 模型说「我记下了」不算数。只有接口真的写成功，才出现活动留痕。
+    ///
+    /// 我们这边已经有一半了：`toolTrace` 会把「这一条里你真的动手了：X 成功、
+    /// Y 失败了」贴回**他自己**的历史里（那治的是他的主动性——
+    /// 说一句和真做一次在他眼里得有区别）。
+    ///
+    /// 缺的是另一半：**她这边看不见**。他在正文里写「我记下了」，
+    /// 跟他真的调用成功，在她眼里长得一模一样。
+    ///
+    /// ⚠️ 所以这张表**只列写入类**。搜索、翻记忆、看心跳都不算留痕——
+    /// 那些没在任何地方留下东西，摆出来只是噪声。
+    ///
+    /// ⚠️ 而且只有 `finished && !failed` 的那几件才会显示。
+    /// 失败的不显示（他的历史里照旧看得见，见 `toolTrace`）——
+    /// **她这一行是「真的落下了什么」，不是「他尝试了什么」。**
+    static func leftMark(for tool: String) -> String? {
+        switch tool {
+        case "add_memory":                    return "记了一条记忆"
+        case "update_memory", "annotate_memory", "mark_memory":
+            return "改了一条记忆"
+        case "delete_memory":                 return "删了一条记忆"
+        case "propose_memory":                return "提了一条待你点头的记忆"
+        case "add_diary":                     return "写了一篇日记"
+        case "annotate_diary":                return "给日记加了批注"
+        case "delete_diary":                  return "删了一篇日记"
+        case "make_promise":                  return "记下一个承诺"
+        case "keep_promise":                  return "兑现了一个承诺"
+        case "checkpoint":                    return "记了进度"
+        case "clear_checkpoint":              return "清了进度"
+        case "end_of_day":                    return "收了这一天"
+        case "leave_message":                 return "留了话"
+        case "set_mood":                      return "记了心情"
+        case "log_period", "add_period_note": return "记了经期"
+        case "glossary":                      return "记了一条专有词条"
+        case "record_emotional_event":        return "记了一件情绪上的事"
+        case "stir_thought":                  return "丢了一个念头进池子"
+        case "satisfied":                     return "放下了一个念头"
+        case "write_letter":                  return "写了一封信"
+        case "hand_off":                      return "交了班"
+        case "set_rules":                     return "改了说好的规矩"
+        case "add_memo":                      return "记了一条待办"
+        case "complete_memo":                 return "划掉了一条待办"
+        case "give_task":                     return "派了一件事"
+        case "praise_task":                   return "夸了一件做完的事"
+        case "post_moment":                   return "发了一条动态"
+        case "mark_line", "talked_about_line": return "划了一句"
+        case "annotate_vocab":                return "记了一个词"
+        case "send_file":                     return "递了一份文件"
+        case "moment_patch":                  return "改了此刻"
+        default:                              return nil
+        }
+    }
+
     static func activityText(for tool: String) -> String {
         switch tool {
         case "play", "list_games", "get_guide", "account":
