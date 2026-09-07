@@ -57,6 +57,60 @@ enum MessageBeats {
     /// 超了就整条不认，等于白写。
     static let maxLength = 400
 
+    // MARK: 记住抠过的那些
+    //
+    // ⚠️⚠️ **这是打字卡顿的一大半。**
+    //
+    // 她报的：「有点卡顿，打字和出字的时候，App 不够顺滑。」
+    // 模糊已经拉到最低、终端里也没有日志在刷，所以不是那两处。
+    //
+    // 病根在这儿：`MessageBubbleView` 里那个 `parsed` 是**计算属性**，
+    // 一次重画会被读**五遍**（幕外那几行、正文分段、思考链有没有、
+    // 思考链正文、分享卡），每一遍都从头跑一次 `extract`。
+    // 而她每敲一个字，整页重画一次，一屏十来个气泡——
+    // **一秒钟能跑上几百次**。
+    //
+    // 记住结果之后，同一段字只抠一次。
+    //
+    // ⚠️ 键用哈希，但**把原文一起存着比一遍**。
+    // 光比哈希的话，撞一次就是把另一条消息的正文显示到这一条上——
+    // 那种错极少见、但一旦发生根本查不出来。
+    //
+    // ⚠️ 上限 400 条，超了从最早的开始扔。流式的时候每一帧的正文都不一样，
+    // 不设上限的话它会跟着一句话的长度无限涨。
+    // ⚠️ 不标 `@MainActor`，改用锁。
+    //
+    // 标了的话，所有读它的计算属性也得跟着标，
+    // 一路传到 `MessageBubbleView` 里十几处——而这东西
+    // 并不真的只属于主线程，它只是一张表。
+    nonisolated(unsafe) private static var memo: [Int: (raw: String, out: Parsed)] = [:]
+    nonisolated(unsafe) private static var memoAge: [Int] = []
+    private static let memoLock = NSLock()
+
+    typealias Parsed = (clean: String, beats: [MessageBeat], cot: String)
+
+    static func cached(_ text: String) -> Parsed {
+        let key = text.hashValue
+        memoLock.lock()
+        if let hit = memo[key], hit.raw == text {
+            memoLock.unlock()
+            return hit.out
+        }
+        memoLock.unlock()
+
+        let out = extract(text)
+
+        memoLock.lock()
+        memo[key] = (text, out)
+        memoAge.append(key)
+        if memoAge.count > 400 {
+            let old = memoAge.removeFirst()
+            if old != key { memo.removeValue(forKey: old) }
+        }
+        memoLock.unlock()
+        return out
+    }
+
     static func extract(_ text: String) -> (clean: String, beats: [MessageBeat], cot: String) {
         var beats: [MessageBeat] = []
         var body: [String] = []

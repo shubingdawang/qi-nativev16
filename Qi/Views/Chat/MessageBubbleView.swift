@@ -1075,13 +1075,20 @@ struct MessageBubbleView: View {
     /// 三种她都截到了。**摆出来之前先抠，比在落库那边补分支稳。**
     ///
     /// 抠干净的正文和抠出来的东西都从这儿走，底下不再直接用 `shownContent`。
-    /// ⚠️ 这个属性**每次重画都会跑**，而流式的时候一秒重画好多次。
-    /// 所以先拿 `contains` 挡一道：没有标记就原样退回去，
-    /// 别为了一条没有标记的长消息把正则跑上几百遍。
+    /// ⚠️ 这个属性**每次重画都会跑**，而且一次重画会被读**五遍**
+    /// （幕外那几行、正文分段、思考链有没有、思考链正文、分享卡）。
+    ///
+    /// 两道防线：
+    ///   ① 先拿 `mightHaveMarkers` 挡一道——没有标记的原样退回去
+    ///   ② 真要抠的走 `MessageBeats.cached`，同一段字只抠一次
+    ///
+    /// 她报的「打字和出字的时候卡」，一大半在这儿：
+    /// 她每敲一个字整页重画一次，一屏十来个气泡 × 五遍，
+    /// 一秒钟能跑上几百次正则。
     private var parsed: (clean: String, beats: [MessageBeat], cot: String) {
         let raw = shownContent
         guard Self.mightHaveMarkers(raw) else { return (raw, [], "") }
-        return MessageBeats.extract(raw)
+        return MessageBeats.cached(raw)
     }
 
     /// 这段字里**有可能**藏着标记吗。快速挣一眼，宁可误报。
