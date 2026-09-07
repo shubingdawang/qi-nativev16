@@ -246,6 +246,23 @@ final class AppState: ObservableObject {
     /// 她「导入备份并没有加载出聊天记录」就是这么来的。
     /// 顺序很重要：**先关掉存盘**再换，不然换的过程中每一次赋值
     /// 都会触发 didSet 把半新半旧的东西写出去。
+    /// 还原完之后，把**要系统授权那几个开关一律关掉**。
+    ///
+    /// 她报的：「健康待办的按钮，导入备份后就会默认打开，
+    /// 其实没有去要授权。」
+    ///
+    /// 备份里存的是「她在那台手机上点开过」，可**授权是跟着这一次安装走的**，
+    /// 不跟着备份走。开关亮着、系统那边一个都没授——
+    /// 那个开关就是在撒谎，而且她不会想到要去关掉再开一次。
+    ///
+    /// 健康页上原本还印着一句「升级与还原备份均不会开启该权限」。
+    /// 那句话是**错的**，这一段是把它变成真话。
+    private func closePermissionSwitchesAfterRestore() {
+        settings.healthAccess = false
+        settings.todoAccess = false
+        settings.todoWrite = false
+    }
+
     func reloadAfterRestore() {
         saveEnabled = false
         providers = Storage.load([Provider].self, from: "providers.json") ?? providers
@@ -272,6 +289,7 @@ final class AppState: ObservableObject {
         ImageStore.forgetAll()
         saveEnabled = true
         syncTheme()
+        closePermissionSwitchesAfterRestore()
     }
 
     /// ⚠️ 这一条**故意是同步的**，跟 `scheduleSave` 那条不一样。
@@ -5781,8 +5799,20 @@ final class AppState: ObservableObject {
             // 目录里几十张，名字还是他当时随手起的，隔几窗就认不出来了。
             // 挡回去的时候**把原来那张叫什么、写的什么描述一起告诉他**，
             // 他才知道该拿哪一张去发，而不是换个名字再试一次。
-            if let dup = store.matching(data: raw.data) {
-                let who = dup.owner == "assistant" ? "你的表情包里" : "她的表情包里"
+            // ⚠⚠ **只跟他自己那一库查重。**
+            //
+            // 她报的：「他看自己有没有这张表情包看的是我的相册，
+            // 我的相册跟他的相册不互通，他看我的没用。」
+            //
+            // 她说得对，而且这个错比看上去严重：
+            // 上一版拦回去的时候还跟他说「find_sticker 都找得到它」——
+            // **那是句假话**。`find_sticker` 和 `list_my_stickers`
+            // 都只看 owner == "assistant"，她库里那张他根本发不了。
+            // 于是他既存不进去、也拿不出来，而提示词还告诉他去拿。
+            //
+            // ⚠️ 一句“已经有了”背后得真的能拿到，否则它就不是去重，是堵路。
+            if let dup = store.matching(data: raw.data, owner: "assistant") {
+                let who = "你的表情包里"
                 let desc = dup.description.isEmpty ? "" : "，描述是「\(dup.description)」"
                 return ("这张已经在\(who)了：「\(dup.name)」\(desc)。没有再存一份——"
                         + "要发就直接发那张（find_sticker / list_my_stickers 都找得到它）。"

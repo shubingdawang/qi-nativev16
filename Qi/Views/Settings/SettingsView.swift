@@ -1044,52 +1044,12 @@ struct SettingsView: View {
             // 摆两行只会让人以为它们不一样。
             SettingsRowLabel(title: "这一版打包于", value: buildDate)
             SettingsDivider()
-            SettingsRowLabel(title: "窗口", value: windowSize)
-            SettingsDivider()
             SettingsRowLabel(title: "絮语窗口", value: "\(chatCount)")
             SettingsDivider()
             SettingsRowLabel(title: "消息总数", value: "\(messageCount)")
 
-            if !fullScreen {
-                Text("⚠️ 当前运行于兼容窗口，界面按较小机型排布，"
-                     + "输入框等控件位置会明显偏移。\n\n"
-                     + "成因：安装包被重新签名时 Info.plist 中的 "
-                     + "UILaunchScreen 项丢失。重新构建并安装即可恢复。")
-                    .font(.app(11.5))
-                    .foregroundStyle(Theme.textMain(scheme))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-            }
-
             SettingsNote("上方的打包时间用于确认当前安装的构建版本。\n\n清空全部对话后「絮语窗口」计数为 1 而非 0：群聊窗口常驻、工坊有一个固定窗口，另加一个新建的空窗口，均为空壳。判断内容是否清除应查看「消息总数」。")
         }
-    }
-
-    // MARK: 这一版跑在多大的窗口里
-    //
-    // ⚠️ 加这一行是因为她报了「输入框都飞起来了」，
-    // 而那张截图上界面只占了屏幕上半截。
-    //
-    // 那是 **iOS 的兼容窗口**：`UILaunchScreen` 那一项丢了之后，
-    // 系统认为这是个远古 App，给它一个 4 英寸的画布再拉伸。
-    // 重签名工具改 bundle id 时重写 plist，就可能把它抹掉。
-    //
-    // 光看截图分不清是兼容窗口还是布局写错了。这一行能一口咬定：
-    // **点数 × 缩放 应该正好等于物理像素数**，对不上就是被拉伸过。
-
-    /// 现在是不是真的全屏
-    private var fullScreen: Bool {
-        let s = UIScreen.main
-        return abs(s.bounds.height * s.nativeScale - s.nativeBounds.height) < 2
-    }
-
-    private var windowSize: String {
-        let s = UIScreen.main
-        let b = s.bounds
-        return "\(Int(b.width))×\(Int(b.height)) 点 · "
-            + "\(Int(s.nativeBounds.width))×\(Int(s.nativeBounds.height)) 像素"
-            + (fullScreen ? "" : " ⚠️")
     }
 
     /// 只数絮语里的普通窗口。群聊和工坊是常驻的壳子，

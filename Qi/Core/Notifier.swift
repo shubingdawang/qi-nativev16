@@ -21,7 +21,23 @@ final class Notifier: NSObject, ObservableObject {
 
     func bootstrap() {
         center.delegate = self
-        Task { await refreshStatus() }
+        Task {
+            await refreshStatus()
+            // ⚠️ **第一次打开就问。**
+            //
+            // 她说的：「横幅通知改成第一次打开 app 自动要授权。」
+            //
+            // 原来只有她走到「自动唤醒」那一页、亲手打开开关时才问。
+            // 可这个 App 里会弹横幅的地方不止那一处——他自己醒过来说话、
+            // 小屋捞回来新东西、兜底的那批「想你了」，
+            // **哪一条都得先有授权**。等她哪天翻到那一页才问，
+            // 中间所有该出声的时候都是哑的，而她不会知道为什么。
+            //
+            // ⚠️ 只在**还没问过**的时候问（`notDetermined`）。
+            // 她要是拒过，就不再烦她——系统那边本来也只弹一次。
+            let status = await center.notificationSettings().authorizationStatus
+            if status == .notDetermined { await request() }
+        }
     }
 
     func refreshStatus() async {

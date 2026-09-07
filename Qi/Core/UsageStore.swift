@@ -452,6 +452,33 @@ enum UsageFormat {
 // 而 private 在 Swift 里是文件作用域，换个文件就看不见了。
 // 也**必须写在 extension 里**，不能写进结构体本体，否则 `Pricing()` 会没。
 
+// ⚠️⚠️ **这一份是补的，而且是补一次已经造成的损失。**
+//
+// 上一版给 `TokenUsage` 加了 `cache1h` / `cache5m` 两个字段。
+// 加带默认值的属性看着无害——**可 Swift 合成出来的解码器不认默认值**：
+// 旧的 `usage.json` 里没有这两个键，解码当场抛错，
+// 整份用量记录读不进来。她那边看到的是
+// 「有 1 份数据这次没读进来 · usage.json 坏了-1788740295」。
+//
+// 文件没丢（改名留着了），但那一刻她的账就断了。
+//
+// ⚠️ 记一句：**给一个会落盘的结构加字段，必须同时给它容错解码。**
+// 这件事这个文件开头早就写着了——写着的是 `Pricing`，
+// 而 `TokenUsage` 一直没有。加字段的时候我没往上看一眼。
+extension TokenUsage {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        input = (try? c.decodeIfPresent(Int.self, forKey: .input)) ?? 0
+        cacheRead = (try? c.decodeIfPresent(Int.self, forKey: .cacheRead)) ?? 0
+        cacheWrite = (try? c.decodeIfPresent(Int.self, forKey: .cacheWrite)) ?? 0
+        output = (try? c.decodeIfPresent(Int.self, forKey: .output)) ?? 0
+        reasoning = (try? c.decodeIfPresent(Int.self, forKey: .reasoning)) ?? 0
+        calls = (try? c.decodeIfPresent(Int.self, forKey: .calls)) ?? 0
+        cache1h = (try? c.decodeIfPresent(Int.self, forKey: .cache1h)) ?? 0
+        cache5m = (try? c.decodeIfPresent(Int.self, forKey: .cache5m)) ?? 0
+    }
+}
+
 extension Pricing {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
