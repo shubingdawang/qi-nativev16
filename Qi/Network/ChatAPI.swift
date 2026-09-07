@@ -158,6 +158,19 @@ enum ChatAPI {
                         if let usage = json["usage"] as? [String: Any] {
                             let parsed = TokenUsage.parse(usage)
                             if !parsed.isEmpty {
+                                // ⚠️ **原样打一份出来。**
+                                //
+                                // 她问「缓存命中掉了，是不是跟中转不显示那个
+                                // 箭头有关」。要答得准，得先排除
+                                // 「其实转了，只是字段名我没认出来」——
+                                // 而解析后的数字**看不出这一点**：
+                                // 认不出来和真的是 0，都长成 0。
+                                //
+                                // 只在头一次打，不然一轮流式几十帧全是它。
+                                if !sawUsage {
+                                    Console.log(.cost, "中转返回的 usage",
+                                                Self.brief(usage))
+                                }
                                 sawUsage = true
                                 continuation.yield(.usage(parsed))
                             }
@@ -246,6 +259,24 @@ enum ChatAPI {
             }
             continuation.onTermination = { _ in task.cancel() }
         }
+    }
+
+    /// 把 usage 那个字典压成一行，好打进终端。
+    ///
+    /// ⚠️ **不用 JSONSerialization**：它会把键排成随机顺序，
+    /// 两次日志摆在一起没法比。按键名排序，看着才像同一份东西。
+    static func brief(_ usage: [String: Any]) -> String {
+        usage.keys.sorted().map { k -> String in
+            let v = usage[k]
+            if let n = v as? Int { return "\(k)=\(n)" }
+            if let d = v as? [String: Any] {
+                let inner = d.keys.sorted()
+                    .map { "\($0)=\(d[$0].map { "\($0)" } ?? "-")" }
+                    .joined(separator: ",")
+                return "\(k){\(inner)}"
+            }
+            return "\(k)=\(v.map { "\($0)" } ?? "-")"
+        }.joined(separator: " · ")
     }
 
     /// 这一小段 delta 里的思考，有多少抠多少。

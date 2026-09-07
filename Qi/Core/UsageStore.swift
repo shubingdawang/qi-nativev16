@@ -91,12 +91,30 @@ struct TokenUsage: Codable, Hashable {
         let promptDetails = usage["prompt_tokens_details"] as? [String: Any]
         let inputDetails = usage["input_tokens_details"] as? [String: Any]
 
+        // ⚠️ **命中数的字段名各家不一样，认得越全越好。**
+        //
+        // 认不出来的后果不是报错，是**静静地记成 0**——
+        // 而 0 和「这家不做缓存」长得一模一样。
+        // 她问「缓存命中掉了是不是跟这个有关」，我要能答得准，
+        // 就得先保证不是我自己没认出来。
+        //
+        // 收的这几种：
+        //   · Anthropic 原生   cache_read_input_tokens
+        //   · OpenAI 兼容      prompt_tokens_details.cached_tokens
+        //   · 有的中转          input_tokens_details.cached_tokens
+        //   · DeepSeek 那一派   prompt_cache_hit_tokens
+        //   · 少数中转平铺在顶层 cached_tokens / cache_read_tokens
         u.cacheRead = (usage["cache_read_input_tokens"] as? Int)
             ?? (promptDetails?["cached_tokens"] as? Int)
             ?? (inputDetails?["cached_tokens"] as? Int)
+            ?? (usage["prompt_cache_hit_tokens"] as? Int)
+            ?? (usage["cached_tokens"] as? Int)
+            ?? (usage["cache_read_tokens"] as? Int)
             ?? 0
         u.cacheWrite = (usage["cache_creation_input_tokens"] as? Int)
             ?? (promptDetails?["cache_creation_tokens"] as? Int)
+            ?? (usage["cache_creation_tokens"] as? Int)
+            ?? (usage["cache_write_tokens"] as? Int)
             ?? 0
 
         // 拆开的那两个桶。没有这个字段就都留 0（见上面那段注释）。
