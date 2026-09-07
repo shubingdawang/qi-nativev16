@@ -246,6 +246,26 @@ ITEMS = [
     ("ny_chair", "新年·太师椅", 175, T, "chair", "fu_ny_armchair", "iso_ny_armchair", "坐得很有辈分"),
     ("ny_tea", "新年·茶几", 150, T, "table", "fu_ny_coffee_table", "iso_ny_coffee_table", "摆一盘瓜子"),
 
+    # ── 维多利亚。18 件，正面和等距都齐（她单独发的那一包）
+    ("vic_bed",      "维多利亚·大床", 250, T, "bed", "fu_vic_bed", "iso_vic_bed", "陷进厚被子里"),
+    ("vic_chair",    "维多利亚·扶手椅", 180, T, "chair", "fu_vic_armchair", "iso_vic_armchair", "坐得腰背笔直"),
+    ("vic_loveseat", "维多利亚·双人沙发", 210, T, "sofa", "fu_vic_loveseat", "iso_vic_loveseat", "占了整整一头"),
+    ("vic_ottoman",  "维多利亚·脚凳", 95, T, "chair", "fu_vic_ottoman", "iso_vic_ottoman", "踩上去够高处"),
+    ("vic_tea",      "维多利亚·茶几", 150, T, "table", "fu_vic_tea_table", "iso_vic_tea_table", "摆一套杯子"),
+    ("vic_desk",     "维多利亚·书桌", 200, T, "table", "fu_vic_writing_desk", "iso_vic_writing_desk", "趴着写点什么"),
+    ("vic_vanity",   "维多利亚·梳妆台", 190, T, "table", "fu_vic_vanity", "iso_vic_vanity", "照着镜子理头顶"),
+    ("vic_night",    "维多利亚·床头柜", 110, T, "tall", "fu_vic_nightstand", "iso_vic_nightstand", "拉开抽屉翻一翻"),
+    ("vic_wardrobe", "维多利亚·衣柜", 220, T, "tall", "fu_vic_wardrobe", "iso_vic_wardrobe", "钻进去躲着"),
+    ("vic_shelf",    "维多利亚·书柜", 210, T, "tall", "fu_vic_bookshelf", "iso_vic_bookshelf", "抽一本烫金的"),
+    ("vic_sideboard", "维多利亚·餐边柜", 190, T, "tall", "fu_vic_sideboard", "iso_vic_sideboard", "把杯盘摆整齐"),
+    ("vic_piano",    "维多利亚·三角钢琴", 330, T, "table", "fu_vic_grand_piano", "iso_vic_grand_piano", "按两个音就跑"),
+    ("vic_chandelier", "维多利亚·吊灯", 170, T, "lamp", "fu_vic_chandelier", "iso_vic_chandelier", "抬头数水晶"),
+    ("vic_lamp",     "维多利亚·落地灯", 130, T, "lamp", "fu_vic_floor_lamp", "iso_vic_floor_lamp", "坐进那圈光里"),
+    ("vic_rug",      "维多利亚·地毯", 120, T, "rug", "fu_vic_rug", "iso_vic_rug", "在花纹上打滚"),
+    ("vic_vase",     "维多利亚·花瓶", 85, T, "plant", "fu_vic_flower_vase", "iso_vic_flower_vase", "把花摆正"),
+    ("vic_plant",    "维多利亚·盆栽", 95, T, "plant", "fu_vic_potted_plant", "iso_vic_potted_plant", "浇两滴水"),
+    ("vic_frame",    "维多利亚·相框", 80, T, "small", "fu_vic_picture_frame", "iso_vic_picture_frame", "擦一擦玻璃"),
+
     # ── 摆设 ────────────────────────────────────────
     ("painting",  "挂画",   85, D, "screen", "it_decor_painting", None, "扭头看一会儿"),
     ("wallclock", "挂钟",   75, D, "small", "it_decor_wall_clock", None, "盯着秒针"),

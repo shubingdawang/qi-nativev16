@@ -287,6 +287,42 @@ extension FurnitureCatalog {
               sprite: sp_chair, category: .themed, reaction: "坐得很有辈分"),
         .init(id: "ny_tea", name: "新年·茶几", price: 150,
               sprite: sp_table, category: .themed, reaction: "摆一盘瓜子"),
+        .init(id: "vic_bed", name: "维多利亚·大床", price: 250,
+              sprite: sp_bed, category: .themed, reaction: "陷进厚被子里"),
+        .init(id: "vic_chair", name: "维多利亚·扶手椅", price: 180,
+              sprite: sp_chair, category: .themed, reaction: "坐得腰背笔直"),
+        .init(id: "vic_loveseat", name: "维多利亚·双人沙发", price: 210,
+              sprite: sp_sofa, category: .themed, reaction: "占了整整一头"),
+        .init(id: "vic_ottoman", name: "维多利亚·脚凳", price: 95,
+              sprite: sp_chair, category: .themed, reaction: "踩上去够高处"),
+        .init(id: "vic_tea", name: "维多利亚·茶几", price: 150,
+              sprite: sp_table, category: .themed, reaction: "摆一套杯子"),
+        .init(id: "vic_desk", name: "维多利亚·书桌", price: 200,
+              sprite: sp_table, category: .themed, reaction: "趴着写点什么"),
+        .init(id: "vic_vanity", name: "维多利亚·梳妆台", price: 190,
+              sprite: sp_table, category: .themed, reaction: "照着镜子理头顶"),
+        .init(id: "vic_night", name: "维多利亚·床头柜", price: 110,
+              sprite: sp_tall, category: .themed, reaction: "拉开抽屉翻一翻"),
+        .init(id: "vic_wardrobe", name: "维多利亚·衣柜", price: 220,
+              sprite: sp_tall, category: .themed, reaction: "钻进去躲着"),
+        .init(id: "vic_shelf", name: "维多利亚·书柜", price: 210,
+              sprite: sp_tall, category: .themed, reaction: "抽一本烫金的"),
+        .init(id: "vic_sideboard", name: "维多利亚·餐边柜", price: 190,
+              sprite: sp_tall, category: .themed, reaction: "把杯盘摆整齐"),
+        .init(id: "vic_piano", name: "维多利亚·三角钢琴", price: 330,
+              sprite: sp_table, category: .themed, reaction: "按两个音就跑"),
+        .init(id: "vic_chandelier", name: "维多利亚·吊灯", price: 170,
+              sprite: sp_lamp, category: .themed, reaction: "抬头数水晶"),
+        .init(id: "vic_lamp", name: "维多利亚·落地灯", price: 130,
+              sprite: sp_lamp, category: .themed, reaction: "坐进那圈光里"),
+        .init(id: "vic_rug", name: "维多利亚·地毯", price: 120,
+              sprite: sp_rug, category: .themed, reaction: "在花纹上打滚"),
+        .init(id: "vic_vase", name: "维多利亚·花瓶", price: 85,
+              sprite: sp_plant, category: .themed, reaction: "把花摆正"),
+        .init(id: "vic_plant", name: "维多利亚·盆栽", price: 95,
+              sprite: sp_plant, category: .themed, reaction: "浇两滴水"),
+        .init(id: "vic_frame", name: "维多利亚·相框", price: 80,
+              sprite: sp_small, category: .themed, reaction: "擦一擦玻璃"),
         .init(id: "painting", name: "挂画", price: 85,
               sprite: sp_screen, category: .decor, reaction: "扭头看一会儿"),
         .init(id: "wallclock", name: "挂钟", price: 75,
@@ -411,6 +447,24 @@ extension FurnitureCatalog {
         "ny_knot":        Art(flat: "fu_ny_chinese_knot",        iso: nil),
         "ny_chair":       Art(flat: "fu_ny_armchair",            iso: "iso_ny_armchair"),
         "ny_tea":         Art(flat: "fu_ny_coffee_table",        iso: "iso_ny_coffee_table"),
+        "vic_bed":        Art(flat: "fu_vic_bed",                iso: "iso_vic_bed"),
+        "vic_chair":      Art(flat: "fu_vic_armchair",           iso: "iso_vic_armchair"),
+        "vic_loveseat":   Art(flat: "fu_vic_loveseat",           iso: "iso_vic_loveseat"),
+        "vic_ottoman":    Art(flat: "fu_vic_ottoman",            iso: "iso_vic_ottoman"),
+        "vic_tea":        Art(flat: "fu_vic_tea_table",          iso: "iso_vic_tea_table"),
+        "vic_desk":       Art(flat: "fu_vic_writing_desk",       iso: "iso_vic_writing_desk"),
+        "vic_vanity":     Art(flat: "fu_vic_vanity",             iso: "iso_vic_vanity"),
+        "vic_night":      Art(flat: "fu_vic_nightstand",         iso: "iso_vic_nightstand"),
+        "vic_wardrobe":   Art(flat: "fu_vic_wardrobe",           iso: "iso_vic_wardrobe"),
+        "vic_shelf":      Art(flat: "fu_vic_bookshelf",          iso: "iso_vic_bookshelf"),
+        "vic_sideboard":  Art(flat: "fu_vic_sideboard",          iso: "iso_vic_sideboard"),
+        "vic_piano":      Art(flat: "fu_vic_grand_piano",        iso: "iso_vic_grand_piano"),
+        "vic_chandelier": Art(flat: "fu_vic_chandelier",         iso: "iso_vic_chandelier"),
+        "vic_lamp":       Art(flat: "fu_vic_floor_lamp",         iso: "iso_vic_floor_lamp"),
+        "vic_rug":        Art(flat: "fu_vic_rug",                iso: "iso_vic_rug"),
+        "vic_vase":       Art(flat: "fu_vic_flower_vase",        iso: "iso_vic_flower_vase"),
+        "vic_plant":      Art(flat: "fu_vic_potted_plant",       iso: "iso_vic_potted_plant"),
+        "vic_frame":      Art(flat: "fu_vic_picture_frame",      iso: "iso_vic_picture_frame"),
         "painting":       Art(flat: "it_decor_painting",         iso: nil),
         "wallclock":      Art(flat: "it_decor_wall_clock",       iso: nil),
         "flowervase":     Art(flat: "it_decor_vase_flowers",     iso: nil),
@@ -442,11 +496,11 @@ extension FurnitureCatalog {
     static func themedShape(of id: String) -> IsoShape? {
         switch id {
         case "sakura_bed", "nordic_bed", "ocean_bed", "autumn_bed",
-             "gothic_bed", "jp_bed", "lolita_bed", "ny_bed":
+             "gothic_bed", "jp_bed", "lolita_bed", "ny_bed", "vic_bed":
             return IsoShape(w: 2, d: 2, tall: 1.1,
                             actions: ["躺下", "打滚", "坐边上", "钻被窝"])
         case "armchair", "bench", "gothic_chair", "lolita_chair", "xmas_chair",
-             "ny_chair":
+             "ny_chair", "vic_chair", "vic_ottoman":
             return IsoShape(w: 1, d: 1, tall: 1.0,
                             actions: ["坐下", "瘫着"])
         case "gothic_fire", "xmas_fire":
@@ -457,16 +511,16 @@ extension FurnitureCatalog {
             return IsoShape(w: 1, d: 1, tall: 0.5,
                             actions: ["闻一闻", "摸一下", "拿起来"])
         case "floorlamp", "sakura_lantern", "nordic_lamp", "ocean_light",
-             "gothic_candle", "jp_lantern", "ny_lantern", "redlantern",
-             "jackolantern":
+             "gothic_candle", "jp_lantern", "ny_lantern", "vic_chandelier",
+             "vic_lamp", "redlantern", "jackolantern":
             return IsoShape(w: 1, d: 1, tall: 1.6,
                             actions: ["开灯", "凑到灯下"])
         case "succulent", "sakura_bonsai", "nordic_plant", "ocean_palm",
              "autumn_maple", "autumn_wheat", "jp_vase", "xmas_tree", "ny_plum",
-             "flowervase", "minitree":
+             "vic_vase", "vic_plant", "flowervase", "minitree":
             return IsoShape(w: 1, d: 1, tall: 1.2,
                             actions: ["浇水", "闻一闻", "戳一下"])
-        case "sakura_rug":
+        case "sakura_rug", "vic_rug":
             return IsoShape(w: 3, d: 3, tall: 0.0,
                             actions: ["打滚", "躺一会儿"])
         case "coatrack", "ocean_net", "ocean_board", "gothic_mirror", "jp_door",
@@ -477,19 +531,21 @@ extension FurnitureCatalog {
         case "autumn_pumpkin", "autumn_wreath", "xmas_gifts", "xmas_wreath",
              "xmas_nutcracker", "xmas_snowman", "xmas_house", "xmas_advent",
              "ny_firecracker", "ny_envelope", "ny_ingot", "ny_knot",
-             "wallclock", "bdaydecor", "doorwreath", "hoodie":
+             "vic_frame", "wallclock", "bdaydecor", "doorwreath", "hoodie":
             return IsoShape(w: 1, d: 1, tall: 0.6,
                             actions: ["摸一下", "拿起来"])
         case "sakura_sofa", "nordic_sofa", "ocean_sofa", "autumn_sofa",
-             "xmas_sofa", "ny_sofa":
+             "xmas_sofa", "ny_sofa", "vic_loveseat":
             return IsoShape(w: 2, d: 1, tall: 1.0,
                             actions: ["坐下", "瘫着", "趴扶手"])
         case "dining", "vanity", "nordic_table", "jp_table", "lolita_vanity",
-             "lolita_table", "xmas_dining", "ny_table", "ny_tea":
+             "lolita_table", "xmas_dining", "ny_table", "ny_tea", "vic_tea",
+             "vic_desk", "vic_vanity", "vic_piano":
             return IsoShape(w: 2, d: 1, tall: 0.9, surface: true,
                             actions: ["趴桌上", "在桌边站着", "把东西放上去"])
         case "nightstand", "stove", "kitchensink", "nordic_shelf",
-             "gothic_shelf", "lolita_wardrobe", "xmas_shelf", "ny_cabinet":
+             "gothic_shelf", "lolita_wardrobe", "xmas_shelf", "ny_cabinet",
+             "vic_night", "vic_wardrobe", "vic_shelf", "vic_sideboard":
             return IsoShape(w: 1, d: 1, tall: 2.0, surface: true,
                             actions: ["抽一本", "踮脚够", "把东西放上去"])
         default: return nil

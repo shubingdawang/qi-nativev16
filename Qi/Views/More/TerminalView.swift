@@ -24,8 +24,17 @@ struct TerminalView: View {
     @State private var toBottom = true
     @State private var copied = false
 
+    /// 要显示的那些，**新的排在最上**。
+    ///
+    /// 她说的：「终端是旧的在最上，改成旧的在最下。」
+    ///
+    /// 她打开这一页十有八九是为了看**刚刚发生了什么**——
+    /// 旧的在上意味着每次都要先滑到底。而这份日志攒到几百条是常事。
     private var shown: [Console.Line] {
-        picked.isEmpty ? console.lines : console.lines.filter { picked.contains($0.kind) }
+        let all = picked.isEmpty
+            ? console.lines
+            : console.lines.filter { picked.contains($0.kind) }
+        return all.reversed()
     }
 
     var body: some View {
@@ -59,17 +68,22 @@ struct TerminalView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(shown) { row($0) }
+                            // ⚠️ 倒过来之后，「最新那条」在**最上面**，
+                            // 所以这个锚点也得挪到最上面来。
+                            // 留在底下的话，新日志一来就滑到最老那一条去了。
                             Color.clear.frame(height: 1).id("底")
+                            ForEach(shown) { row($0) }
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                     }
                     .onChange(of: console.lines.count) { _, _ in
                         guard toBottom else { return }
-                        withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("底", anchor: .bottom) }
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            proxy.scrollTo("底", anchor: .top)
+                        }
                     }
-                    .onAppear { proxy.scrollTo("底", anchor: .bottom) }
+                    .onAppear { proxy.scrollTo("底", anchor: .top) }
                 }
             }
             }
