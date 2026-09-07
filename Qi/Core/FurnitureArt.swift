@@ -14,9 +14,12 @@ import UIKit
 //   ② 裁紧。不裁每件都带一圈看不见的边，摆到格子上会各偏各的。
 //   ③ 缩到最长边 192、量化到 127 色。
 //
-// ⚙️ `isometric/top_front_right` 那 70 张**没进包**。
-// 屋子的朝向是定死的，只用得上 `top_front_left`；
-// 两边都塞就是白多一半体积。进包的 245 张合计 9.3MB。
+// ⚠️ 右视角那一批**又进包了**（上一版被我删掉过）。
+//
+// 当时写的理由是「屋子的朝向是定死的」——**那是错的**。
+// 她说：「等距又不是只有一面墙，两面墙都应该可以放东西才对。」
+// 一件靠左墙画的东西直接摆到右墙边，透视是反的。
+// 现在每件家具存一个 `facing`，她能逐件改（见 `Furniture.facing`）。
 //
 // ## 为什么是一张表，不是给每件家具加两个字段
 //
@@ -130,6 +133,27 @@ extension FurnitureCatalog {
     /// 不该改掉已经在用的对应关系。
     static let artTable: [String: Art] = coreArt.merging(themedArt) { core, _ in core }
 
+    /// 同一件东西**贴右墙**那张叫什么。
+    ///
+    /// ⚠️ **按名字推，不再单开一栏。**
+    ///
+    /// 资产包里左右两版是成对出的，名字只差一个前缀：
+    ///
+    ///     iso_l_bed    ↔  iso_r_bed
+    ///     iso_vic_bed  ↔  iso_vicr_bed
+    ///
+    /// 单开一栏意味着一百多行表里每行都要多写一个名字，
+    /// 而那一栏的内容**百分之百可以从左边那个算出来**——
+    /// 手抄一遍只是多一百个打错字的机会。
+    ///
+    /// 节日那两套（圣诞、新年）只出了左视角，这儿返回 nil，
+    /// 取图那边会自己退回左边那张。
+    static func isoRightName(_ left: String) -> String? {
+        if left.hasPrefix("iso_l_") { return "iso_r_" + left.dropFirst(6) }
+        if left.hasPrefix("iso_vic_") { return "iso_vicr_" + left.dropFirst(8) }
+        return nil
+    }
+
     /// 这件家具在这种屋子里该用哪张图。没有就返回 nil。
     ///
     /// ⚠️ **等距屋里没有等距图就返回 nil**，不拿正面图顶——
@@ -147,8 +171,22 @@ extension FurnitureCatalog {
     /// ⚠️ 走 `Bundle.url(forResource:)` 而不是 `UIImage(named:)`：
     /// 这批是**散文件**，不在 Asset Catalog 里（跟 `clawd/` 那批 gif 一样）。
     @MainActor
-    static func artImage(of id: String, flat: Bool) -> UIImage? {
+    static func artImage(of id: String, flat: Bool,
+                         facesRight: Bool = false) -> UIImage? {
         guard let name = artName(of: id, flat: flat) else { return nil }
+        // 贴右墙先找右视角那张；这一套没出右视角就退回左边那张。
+        //
+        // ⚠️ **退回去而不是不画。** 圣诞、新年那两套只有左视角，
+        // 她把一件新年家具改成靠右墙，总不能让它当场消失——
+        // 透视差一点看得出来，东西没了她只会以为坏了。
+        if !flat, facesRight, let r = isoRightName(name), let img = load(r) {
+            return img
+        }
+        return load(name)
+    }
+
+    @MainActor
+    private static func load(_ name: String) -> UIImage? {
         if let hit = artCache[name] { return hit }
         guard let url = Bundle.main.url(forResource: name, withExtension: "png"),
               let img = UIImage(contentsOfFile: url.path) else { return nil }

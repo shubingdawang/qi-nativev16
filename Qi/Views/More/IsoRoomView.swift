@@ -422,7 +422,8 @@ struct IsoRoomView<Clawd: View>: View {
         // 而立牌正是当初做等距图要解决的那件事。
         let packed = mine == nil
             ? FurnitureCatalog.artImage(of: kind.id,
-                                        flat: geoRoom.projection == .flat)
+                                        flat: geoRoom.projection == .flat,
+                                        facesRight: item.facesRight)
             : nil
         // ⚠️ **平面那档用正面图，不用等距图。**
         // 等距图是按斜俯角画的，摆进正面平视的屋子里才真成了立牌——

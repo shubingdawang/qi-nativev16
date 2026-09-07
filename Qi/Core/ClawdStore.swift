@@ -33,7 +33,21 @@ struct Furniture: Codable, Identifiable, Hashable {
     var carried: Bool = false
     var boughtAt: Date = Date()
 
-    /// 老数据没有 `carried`，不补容错解码器整间屋子会读不出来
+    /// 这一件**贴着哪面墙**。`"left"`（默认）或 `"right"`。
+    ///
+    /// 等距屋里有两面墙。资产包每件都出了左右两个视角，
+    /// 一件靠左墙画的东西直接摆到右墙边，透视是反的，看着就歪。
+    ///
+    /// 她说的：「等距又不是只有一面墙，两面墙都应该可以放东西才对。
+    /// 本身靠左墙放的转方向之后就可以放在右墙不突兀了。」
+    ///
+    /// ⚠️ 存在**这一件**上，不是存在种类上——同一种买两张椅子，
+    /// 一张靠左墙、一张靠右墙是常事。
+    var facing: String = "left"
+
+    var facesRight: Bool { facing == "right" }
+
+    /// 老数据没有 `carried` / `facing`，不补容错解码器整间屋子会读不出来
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
@@ -47,6 +61,7 @@ struct Furniture: Codable, Identifiable, Hashable {
         gy = (try? c.decodeIfPresent(Int.self, forKey: .gy)) ?? -1
         room = (try? c.decodeIfPresent(String.self, forKey: .room)) ?? ""
         imageName = (try? c.decodeIfPresent(String.self, forKey: .imageName)) ?? ""
+        facing = (try? c.decodeIfPresent(String.self, forKey: .facing)) ?? "left"
     }
 
     /// 格子坐标。老数据没有就**由平面坐标换算一次**，
@@ -65,10 +80,12 @@ struct Furniture: Codable, Identifiable, Hashable {
 
     init(id: UUID = UUID(), kind: String = "", x: Double = 0.5, y: Double = 0.5,
          gx: Int = -1, gy: Int = -1, room: String = "", imageName: String = "",
-         hidden: Bool = false, carried: Bool = false, boughtAt: Date = Date()) {
+         hidden: Bool = false, carried: Bool = false, boughtAt: Date = Date(),
+         facing: String = "left") {
         self.id = id; self.kind = kind; self.x = x; self.y = y
         self.gx = gx; self.gy = gy; self.room = room; self.imageName = imageName
         self.hidden = hidden; self.carried = carried; self.boughtAt = boughtAt
+        self.facing = facing
     }
 }
 
@@ -1263,6 +1280,16 @@ final class ClawdStore: ObservableObject {
     func toggleHidden(_ id: UUID) {
         guard let i = owned.firstIndex(where: { $0.id == id }) else { return }
         owned[i].hidden.toggle()
+    }
+
+    /// 把这一件换到另一面墙。
+    ///
+    /// ⚠️ 只改 `facing`，**不动它在哪一格**。
+    /// 贴哪面墙是看的事，在哪一格是摆的事，
+    /// 一块改的话她改个朝向家具就自己跑了。
+    func flipFacing(_ id: UUID) {
+        guard let i = owned.firstIndex(where: { $0.id == id }) else { return }
+        owned[i].facing = owned[i].facesRight ? "left" : "right"
     }
 
     func sell(_ id: UUID) {

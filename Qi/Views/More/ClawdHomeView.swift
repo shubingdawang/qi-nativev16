@@ -738,6 +738,21 @@ struct ClawdHomeView: View {
                 if !item.imageName.isEmpty {
                     Button("换回画的这版") { store.undress(item.id) }
                 }
+                // 贴哪面墙。
+                //
+                // 她说的：「等距又不是只有一面墙，两面墙都应该可以放东西才对。
+                // 本身靠左墙放的转方向之后就可以放在右墙不突兀了。」
+                //
+                // ⚠️ 字面写**改完是什么样**，不写「转方向」——
+                // 她定的规矩：前端只说作用和用法。
+                // 一个只有两档的东西，直接拿另一档当按钮名最清楚。
+                //
+                // 平面屋里不摆这一条：那一档用的是正面图，本来就不分左右。
+                if store.projection == .iso {
+                    Button(item.facesRight ? "改为靠左墙" : "改为靠右墙") {
+                        store.flipFacing(item.id)
+                    }
+                }
                 Button("收起来") { store.toggleHidden(item.id) }
                 Button("卖掉，退一半的币", role: .destructive) {
                     store.sell(item.id)

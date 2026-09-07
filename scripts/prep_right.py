@@ -23,8 +23,8 @@ WHITE = 228
 SPAN = 18
 
 JOBS = [
-    ("flat_furniture/victorian", "fu_vic"),
-    ("isometric/victorian", "iso_vic"),
+    ("isometric/top_front_right", "iso_r"),
+    ("isometric/victorian_right", "iso_vicr"),
 ]
 
 
@@ -73,11 +73,6 @@ for folder, prefix in JOBS:
         # 文件名都带着 victorian_ 前缀，前缀那一半已经在 prefix 里了
         if stem.startswith("victorian_"):
             stem = stem[len("victorian_"):]
-        # ⚠️ 还有一批带着 `01_` 这种序号（v7 那批）。
-        # 不剥的话出来的是 `iso_r_01_bed`，而左视角叫 `iso_l_bed`——
-        # 两边名字对不上，按名字推右视角那一步就全空了。
-        if len(stem) > 3 and stem[:2].isdigit() and stem[2] == "_":
-            stem = stem[3:]
         name = prefix + "_" + stem
 
         im = strip(Image.open(d + "/" + f))

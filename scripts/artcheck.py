@@ -62,11 +62,28 @@ for i, flat, iso in rows:
         bad += 1
         print("⚠️ %s 的等距图不在包里：%s" % (i, iso))
 
+# 贴右墙那张**不在表里**，是按名字从左边那张推出来的
+# （见 `FurnitureCatalog.isoRightName`）。这儿照同一条规矩推一遍，
+# 免得它们被当成「没人认领的图」报出来。
+def right_of(left):
+    if left.startswith("iso_l_"):
+        return "iso_r_" + left[len("iso_l_"):]
+    if left.startswith("iso_vic_"):
+        return "iso_vicr_" + left[len("iso_vic_"):]
+    return None
+
+
 used = set()
+righted = 0
 for _, flat, iso in rows:
     used.add(flat)
     if iso != "nil":
-        used.add(iso.strip('"'))
+        name = iso.strip('"')
+        used.add(name)
+        r = right_of(name)
+        if r and r in have:
+            used.add(r)
+            righted += 1
 spare = sorted(have - used)
 
 # 动作名也对一遍：`IsoShape.actions` 里写了、`RoomActs.act` 里没有的，
@@ -84,9 +101,10 @@ if dumb:
     bad += len(dumb)
     print("⚠️ 这些动作名 RoomActs 里没有（他会站着说「……」）：", " ".join(dumb))
 
-print("商品 %d 件 · 对照表 %d 条（%d 条带等距）· 包里 %d 张（闲置 %d）"
+print("商品 %d 件 · 对照表 %d 条（%d 条带等距，其中 %d 条有右视角）· "
+      "包里 %d 张（闲置 %d）"
       % (len(ids), len(rows),
-         sum(1 for r in rows if r[2] != "nil"), len(have), len(spare)))
+         sum(1 for r in rows if r[2] != "nil"), righted, len(have), len(spare)))
 if bad:
     print("--- %d 处对不上" % bad)
     sys.exit(1)
