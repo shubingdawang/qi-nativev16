@@ -37,6 +37,7 @@ struct PromptShapeView: View {
                         ForEach(s.blocks) { b in row(b, of: s.total) }
                         cacheNote(s)
                         if !s.fattestTools.isEmpty { tools(s) }
+                        perCallNote
                         Text(MD.inline("此处数值为**估算**。实际 token 数以接口返回为准，"
                              + "即每条消息下方标注的数值。本页用于查看**各部分的占比**，"
                              + "谁比谁大三倍，估着也看得出来。"))
@@ -116,6 +117,43 @@ struct PromptShapeView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard()
+    }
+
+    /// 按次计价的话，**这一整页跟钱没关系**。
+    ///
+    /// ⚠️ 这一条非说不可。她盯着「12 万 token」问了好几轮
+    /// 「怎么才能少一点」，而她的账单是
+    /// 「每次调用 0.24 元」——**token 多少一分钱都不影响**。
+    /// 少了只是快一点。
+    ///
+    /// 真正花钱的是**调用次数**：一次工具往返是两次调用，
+    /// 后台那些提炼、抓话题、唤醒也各算一次。那笔账在「足迹」里
+    /// 按来源分好了。
+    ///
+    /// 一个把力气引向错地方的仪表，比没有仪表更糟。
+    @ViewBuilder
+    private var perCallNote: some View {
+        if app.settings.pricing.mode == .perCall {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("你现在是按次计价的")
+                    .font(.app(13.5, weight: .medium))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Text(MD.inline("每次调用固定 "
+                     + UsageFormat.money(app.settings.pricing.perCall)
+                     + " 元，**与 token 数无关**。"
+                     + "本页的占比只影响响应快慢，不影响费用。\n\n"
+                     + "按次计价下真正花钱的是**调用次数**："
+                     + "一次工具往返算两次，后台的提炼、话题抓取、"
+                     + "唤醒也各算一次。该项统计见「足迹」，按来源分列。"))
+                    .font(.app(11.5))
+                    .foregroundStyle(Theme.textSoft(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Theme.softFill))
+        }
     }
 
     private func cacheNote(_ s: PromptShape) -> some View {
