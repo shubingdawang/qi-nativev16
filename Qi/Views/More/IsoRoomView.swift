@@ -45,6 +45,14 @@ struct IsoRoomView<Clawd: View>: View {
 
     @State private var dragging: UUID?
     @State private var dragCell: (gx: Int, gy: Int) = (0, 0)
+
+    /// 平面屋横着拖了多远。立体屋不用它。
+    ///
+    /// 她要的：「平面视角的房间有点太小了不够放太多家具，
+    /// 改为可以拖动往最左右分别移动五格的。」
+    @State private var panX: CGFloat = 0
+    /// 这一次拖之前停在哪儿
+    @State private var panFrom: CGFloat = 0
     /// 正拖着的这一件此刻悬在 clawd 身上
     @State private var onClawd = false
     /// 这一块画布多大。判「拖到他身上了没有」要用——
@@ -62,7 +70,8 @@ struct IsoRoomView<Clawd: View>: View {
             // `store.furniture(in: room)` 会把几何当房间传进去——
             // 编译器逮住了，但这已经是这一轮里第几次
             // **同一个名字两个意思**了。所以叫 `geoRoom`。
-            let geoRoom = IsoRoom.fit(in: geo.size, as: store.projection)
+            let geoRoom = IsoRoom.fit(in: geo.size, as: store.projection,
+                                      panX: store.projection == .flat ? panX : 0)
 
             // ⚠️ 整块**裁进屋子的轮廓里**（见 `IsoRoom.roomPath`）。
             //
@@ -76,6 +85,27 @@ struct IsoRoomView<Clawd: View>: View {
             ZStack(alignment: .topLeading) {
                 walls(geoRoom)
                 floor(geoRoom)
+                    // ⚠️ **拖动挂在地板这一层，不挂在整块上。**
+                    //
+                    // 挂在整块上的话，它会跟「长按拎起一件家具」抢同一下手指。
+                    // 家具画在地板**上面**，手指落在家具上就先归家具管，
+                    // 落在空地上才轮到这儿——两件事各归各的。
+                    //
+                    // ⚠️ `minimumDistance: 18`：轻轻一点不算拖。
+                    // 不设的话她想点一下空地都会把屋子挪走一点。
+                    // ⚠️ 手势总是挂着，**在里头判断**。
+                    // `\.gesture(条件 ? 手势 : nil)` 编译不过——
+                    // 那个参数不收可选的手势。
+                    .gesture(
+                        DragGesture(minimumDistance: 18)
+                            .onChanged { v in
+                                guard store.projection == .flat else { return }
+                                let cap = geoRoom.maxPan
+                                let want = panFrom + v.translation.width
+                                panX = min(cap, max(-cap, want))
+                            }
+                            .onEnded { _ in panFrom = panX }
+                    )
 
                 // ⚠️ 这一句就是「不穿模」的全部：**按离镜头的远近排好再画**。
                 ForEach(drawables(geoRoom), id: \.key) { d in
@@ -307,7 +337,7 @@ struct IsoRoomView<Clawd: View>: View {
         for f in store.furniture(in: room) {
             guard let kind = FurnitureCatalog.kind(f.kind) else { continue }
             let s = FurnitureCatalog.shape(of: f.kind)
-            let cell = (f.id == dragging) ? dragCell : (gx: f.gx, gy: f.gy)
+            let cell = (f.id == dragging) ? dragCell : store.cell(of: f)
             // 一件占好几格的东西，**按它最靠近镜头的那一格算深度**——
             // 按中心算的话，一张床的床尾会被站在床尾旁边的人盖住
             // ⚠️ 拆成三步。写成一长串加减混着 `Double(...)`，
@@ -351,7 +381,7 @@ struct IsoRoomView<Clawd: View>: View {
                 for one in out {
                     guard let f = one.item else { continue }
                     let s = FurnitureCatalog.shape(of: f.kind)
-                    let cell = (f.id == dragging) ? dragCell : (gx: f.gx, gy: f.gy)
+                    let cell = (f.id == dragging) ? dragCell : store.cell(of: f)
                     let onIt = hx >= cell.gx && hx < cell.gx + max(1, s.w)
                         && hy >= cell.gy && hy < cell.gy + max(1, s.d)
                     if onIt { d = max(d, one.depth + 0.5) }
@@ -418,7 +448,7 @@ struct IsoRoomView<Clawd: View>: View {
     private func piece(_ item: Furniture, _ kind: FurnitureKind,
                        _ geoRoom: IsoRoom) -> some View {
         let s = FurnitureCatalog.shape(of: kind.id)
-        let cell = (item.id == dragging) ? dragCell : (gx: item.gx, gy: item.gy)
+        let cell = (item.id == dragging) ? dragCell : store.cell(of: item)
         // 落脚点：它盖住那几格的正中间
         let c = geoRoom.point(Double(cell.gx) + Double(s.w - 1) / 2,
                            Double(cell.gy) + Double(s.d - 1) / 2)
@@ -565,7 +595,7 @@ struct IsoRoomView<Clawd: View>: View {
         LongPressGesture(minimumDuration: 0.28)
             .onEnded { _ in
                 dragging = item.id
-                dragCell = (item.gx, item.gy)
+                dragCell = store.cell(of: item)
                 if app.settings.haptics {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 }

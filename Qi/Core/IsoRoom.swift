@@ -63,7 +63,23 @@ struct IsoRoom {
 
     /// 地板几格见方。八格是试出来的：再小摆不下几件家具，
     /// 再大每一格就细得点不准了。
+    /// 地板**纵深**几格。两种投影都是这个数。
     var size: Int = 8
+
+    /// 地板**横着**几格。
+    ///
+    /// ⚠️ 立体屋里横竖必须一样（那是个菱形，两条边就是同一条边的两头），
+    /// 所以它默认等于 `size`。
+    ///
+    /// 平面屋不受这个限制：那是一面正对着的墙加一块地板，
+    /// 横着想多宽就多宽。她要的正是这个——
+    /// 「平面视角的房间有点太小了不够放太多家具，
+    /// 　改为可以拖动往最左右分别移动五格的」。
+    ///
+    /// ⚠️ 她挑了「两种视角各存各的位置」这条路（见 `Furniture.fx`）。
+    /// 所以放宽横向**不会**把立体屋里的东西挤出界——
+    /// 它们根本不共用同一对坐标。
+    var cols: Int = 8
     /// 哪种投影。⚠️ **只影响换算，不影响存的数据**
     var projection: RoomProjection = .iso
     /// 一格在屏幕上多宽多高。**必须是 2:1**——
@@ -102,6 +118,16 @@ struct IsoRoom {
     /// 漏一处就是「家具落在别的格子里」或者「他走出地板外面」。
     static let flatBackNarrow: CGFloat = 0.30
 
+    /// 横着最多能拖多远（点）。左右各这么多。
+    ///
+    /// 看不见的那几列一共 `cols - flatVisibleCols` 列，左右平分。
+    /// 立体屋不拖，返回 0。
+    var maxPan: CGFloat {
+        guard projection == .flat else { return 0 }
+        let hidden = max(0, cols - ClawdStore.flatVisibleCols)
+        return CGFloat(hidden) / 2 * tileW
+    }
+
     /// 第 `gy` 排在横向上还剩多宽（1 = 最外那排的宽度）。
     ///
     /// 越靠里越窄，见 `flatBackNarrow`。传进来的 `gy` 允许是
@@ -125,7 +151,17 @@ struct IsoRoom {
     /// 给个默认值的话，漏传的那一处会悄悄按立体算——屋子画成平面、
     /// 家具按立体落点，两边差半间屋，而且不报错。
     /// 必填的话漏一处编译就过不去。
-    static func fit(in size: CGSize, as projection: RoomProjection) -> IsoRoom {
+    /// - Parameter panX: 平面屋横着拖了多远（点）。
+    ///
+    /// ⚠️ **拖动做在几何这一层，不是在界面上加一个 `offset`。**
+    ///
+    /// 加 `offset` 的话，画出来挪了，可**算出来没挪**：
+    /// 她点屏幕正中，几何还以为那是没拖之前的那一格——
+    /// 家具会落在别处，屋子的裁剪边界也会错位。
+    /// 挪原点就没有这个问题：落点、反查、地砖、地板、墙、
+    /// 他能站到哪儿，全都跟着一起走。
+    static func fit(in size: CGSize, as projection: RoomProjection,
+                    panX: CGFloat = 0) -> IsoRoom {
         let n = CGFloat(ClawdStore.roomSize)
         // ⚠️ 一格多大，**同时受宽和高两头管**。
         //
@@ -134,7 +170,15 @@ struct IsoRoom {
         //
         // 整间屋子竖着一共占：墙(4.2 格高) + 地板(n 格 × 半格高)。
         // 两头各算一次取小的，屋子就一定塞得进去。
-        let byWidth = (size.width * 0.985) / n
+        // ⚠️ 平面屋**按看得见几列算格子多大**，不按总列数。
+        //
+        // 按总列数算的话，18 列全塞进一屏，一格就细成一条——
+        // 那等于把屋子横着压扁，而她要的是「屋子更宽、可以拖着看」。
+        // 所以一格照 `flatVisibleCols` 列铺满一屏来定，
+        // 剩下的列自然落在屏幕外，靠拖动去看（见 `IsoRoomView` 里那个横向偏移）。
+        let acrossNow = projection == .flat
+            ? CGFloat(ClawdStore.flatVisibleCols) : n
+        let byWidth = (size.width * 0.985) / acrossNow
         // ⚠️ 这一条按**最矮的墙**算：先保证「地板 + 一堵矮墙」一定塞得下，
         // 墙具体多高留到下面再定。
         // ⚠️ 分母里那一截是**地板占几个 tileH**，两种投影不一样：
@@ -186,10 +230,12 @@ struct IsoRoom {
         let whole = wallH + floorH
         let top = (size.height - whole) / 2
         return IsoRoom(size: ClawdStore.roomSize,
+                       cols: projection == .flat
+                           ? ClawdStore.flatCols : ClawdStore.roomSize,
                        projection: projection,
                        tileW: tileW, tileH: tileH,
                        wallH: wallH,
-                       origin: CGPoint(x: size.width / 2,
+                       origin: CGPoint(x: size.width / 2 + panX,
                                        y: top + wallH + tileH / 2))
     }
 
@@ -237,7 +283,7 @@ struct IsoRoom {
         let wide = projection == .flat
             ? Double(1 - Self.flatBackNarrow * CGFloat(1 - t))
             : 1 - abs(2 * t - 1)
-        let n = CGFloat(self.size)
+        let n = CGFloat(projection == .flat ? self.cols : self.size)
         // 最宽处的半宽，再往里收一点点，别让他半只挂在边上
         let halfMax = tileW * n / 2 - tileW * 0.35
         let half = halfMax * CGFloat(wide)
@@ -267,7 +313,7 @@ struct IsoRoom {
             // ⚠️ 原来这儿写的是 `(gy - (n-1)/2) * tileH/2 + tileH*(n-1)/4`，
             // 两截前后抵消，化开就是 `gy * 一排的高度`。抵消掉的写法只是
             // 让人以为这儿有什么讲究，改的时候还得先化简一遍。
-            let n = Double(size)
+            let n = Double(cols)
             return CGPoint(x: origin.x
                             + (gx - (n - 1) / 2) * tileW * flatWide(gy),
                            y: origin.y + CGFloat(gy) * rowPitch)
@@ -284,7 +330,7 @@ struct IsoRoom {
         let dx = p.x - origin.x
         let dy = p.y - origin.y
         if projection == .flat {
-            let n = Double(size)
+            let n = Double(cols)
             // ⚠️ **先算 gy 再算 gx。** 横向的宽度是随纵深变的，
             // 不先知道在第几排，就不知道那一排一格有多宽。
             let gy = Double(dy / rowPitch)
@@ -303,12 +349,12 @@ struct IsoRoom {
 
     /// 这一格在不在地板上
     func inside(_ gx: Int, _ gy: Int) -> Bool {
-        gx >= 0 && gy >= 0 && gx < size && gy < size
+        gx >= 0 && gy >= 0 && gx < cols && gy < size
     }
 
     /// 把落点收进地板里
     func clamp(_ gx: Int, _ gy: Int) -> (Int, Int) {
-        (min(size - 1, max(0, gx)), min(size - 1, max(0, gy)))
+        (min(cols - 1, max(0, gx)), min(size - 1, max(0, gy)))
     }
 
     /// 一格地砖。等距是菱形，平面是矩形。
@@ -345,9 +391,10 @@ struct IsoRoom {
     var floorPath: Path {
         let n = Double(size)
         if projection == .flat {
-            let a = point(0, 0), b = point(n - 1, n - 1)
-            let up = tileW * flatWide(-0.5) / 2
-            let down = tileW * flatWide(n - 0.5) / 2
+            let a = point(0, 0), b = point(0, n - 1)
+            let w = CGFloat(cols)
+            let up = tileW * w * flatWide(-0.5) / 2
+            let down = tileW * w * flatWide(n - 0.5) / 2
             let top = a.y - rowPitch / 2
             let bottom = b.y + rowPitch / 2
             var p = Path()
@@ -417,7 +464,7 @@ struct IsoRoom {
         // ⚠️ 后墙的宽度要跟**地板最里那条边**一样宽，
         // 不然墙比地板宽出一截，看着像地板缩在墙里面。
         let y = point(0, 0).y - rowPitch / 2
-        let half = tileW * flatWide(-0.5) * CGFloat(size) / 2
+        let half = tileW * flatWide(-0.5) * CGFloat(cols) / 2
         return (CGPoint(x: origin.x - half, y: y),
                 CGPoint(x: origin.x + half, y: y))
     }

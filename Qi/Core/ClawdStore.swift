@@ -45,6 +45,24 @@ struct Furniture: Codable, Identifiable, Hashable {
     /// 一张靠左墙、一张靠右墙是常事。
     var facing: String = "left"
 
+    /// **平面屋里**摆在哪一格。`-1` = 还没摆过，头一次进平面屋时
+    /// 由立体屋那一对换算过来（见 `flatCell`）。
+    ///
+    /// ⚠️ **为什么要单独存一份。**
+    ///
+    /// 她问：「格子一大小屋不变不就变少了吗……小屋一共就那么大。」
+    /// ——对。想让平面屋放得下更多，只能把它横着放宽（18 列），
+    /// 而立体屋是个菱形，横竖必须一样，放不宽。
+    ///
+    /// 两边格子数不一样，就没法共用一对坐标：
+    /// 平面屋第 12 列的东西，在 8×8 的立体屋里根本不存在那一格。
+    ///
+    /// 她挑的是「两种视角各存各的位置」——**谁都不将就**。
+    /// 代价是同一件家具在两个视角里位置可以不同，
+    /// 那也正是她要的：一间屋两种摆法。
+    var fx: Int = -1
+    var fy: Int = -1
+
     var facesRight: Bool { facing == "right" }
 
     /// 老数据没有 `carried` / `facing`，不补容错解码器整间屋子会读不出来
@@ -62,6 +80,8 @@ struct Furniture: Codable, Identifiable, Hashable {
         room = (try? c.decodeIfPresent(String.self, forKey: .room)) ?? ""
         imageName = (try? c.decodeIfPresent(String.self, forKey: .imageName)) ?? ""
         facing = (try? c.decodeIfPresent(String.self, forKey: .facing)) ?? "left"
+        fx = (try? c.decodeIfPresent(Int.self, forKey: .fx)) ?? -1
+        fy = (try? c.decodeIfPresent(Int.self, forKey: .fy)) ?? -1
     }
 
     /// 格子坐标。老数据没有就**由平面坐标换算一次**，
@@ -81,11 +101,26 @@ struct Furniture: Codable, Identifiable, Hashable {
     init(id: UUID = UUID(), kind: String = "", x: Double = 0.5, y: Double = 0.5,
          gx: Int = -1, gy: Int = -1, room: String = "", imageName: String = "",
          hidden: Bool = false, carried: Bool = false, boughtAt: Date = Date(),
-         facing: String = "left") {
+         facing: String = "left", fx: Int = -1, fy: Int = -1) {
         self.id = id; self.kind = kind; self.x = x; self.y = y
         self.gx = gx; self.gy = gy; self.room = room; self.imageName = imageName
         self.hidden = hidden; self.carried = carried; self.boughtAt = boughtAt
         self.facing = facing
+        self.fx = fx; self.fy = fy
+    }
+
+    /// 这一件在平面屋里摆在哪一格。
+    ///
+    /// 还没摆过就从立体屋那一对换算一次：**横着摊开、居中**。
+    /// 立体屋 8 格宽，平面屋 18 格宽，所以往右让出 5 列，
+    /// 正好落在中间那 8 列里——也就是她一进平面屋就看得见的地方。
+    ///
+    /// ⚠️ 只算不写。写回去是 `migrateFlat` 干的事，
+    /// 而它只在真的进了平面屋之后才跑——没进过的人不该被改数据。
+    func flatCell(cols: Int) -> (gx: Int, gy: Int) {
+        if fx >= 0 && fy >= 0 { return (fx, fy) }
+        let pad = max(0, (cols - ClawdStore.roomSize) / 2)
+        return (min(cols - 1, max(0, gx)) + pad, max(0, gy))
     }
 }
 
@@ -1490,6 +1525,15 @@ extension ClawdStore {
     /// 一个写死的 8，本来也没有线程安全可言。
     nonisolated static let roomSize = 8
 
+    /// 平面屋横着几格。
+    ///
+    /// 18 = 看得见的 8 列 + 左右各 5 列。她要的：
+    /// 「可以拖动往最左右分别移动五格的」。
+    nonisolated static let flatCols = 18
+
+    /// 平面屋一屏里看得见几列。一格多大按它算（见 `IsoRoom.fit`）。
+    nonisolated static let flatVisibleCols = 8
+
     /// 老数据搬进格子。**只搬一次**，搬完写回去。
     /// （写盘不用自己叫：`owned` 的 didSet 会存。）
     func migrateRoom() {
@@ -1642,11 +1686,21 @@ extension ClawdStore {
         guard let i = owned.firstIndex(where: { $0.id == id }) else { return }
         owned[i].room = room.rawValue
         let s = FurnitureCatalog.shape(of: owned[i].kind)
-        let geo = IsoRoom(size: Self.roomSize, projection: projection)
+        let geo = IsoRoom(size: Self.roomSize,
+                          cols: projection == .flat ? Self.flatCols : Self.roomSize,
+                          projection: projection)
         let taken = takenCells(in: room, except: id)
-        if let spot = geo.nearestFree(owned[i].gx, owned[i].gy, w: s.w, d: s.d, taken: taken) {
-            owned[i].gx = spot.0
-            owned[i].gy = spot.1
+        let here = cell(of: owned[i])
+        if let spot = geo.nearestFree(here.gx, here.gy, w: s.w, d: s.d, taken: taken) {
+            // 换屋只挡当前这个视角那一对。
+            // 另一个视角里它本来就摆在别处，不该被连坐。
+            if projection == .flat {
+                owned[i].fx = spot.0
+                owned[i].fy = spot.1
+            } else {
+                owned[i].gx = spot.0
+                owned[i].gy = spot.1
+            }
         }
     }
 
@@ -1660,7 +1714,8 @@ extension ClawdStore {
             && f.room == room.rawValue && f.id != except {
             let s = FurnitureCatalog.shape(of: f.kind)
             guard s.tall > 0 else { continue }
-            for (x, y) in IsoRoom.cells(f.gx, f.gy, s.w, s.d) {
+            let c = cell(of: f)
+            for (x, y) in IsoRoom.cells(c.gx, c.gy, s.w, s.d) {
                 out.insert("\(x),\(y)")
             }
         }
@@ -1673,13 +1728,33 @@ extension ClawdStore {
         guard let i = owned.firstIndex(where: { $0.id == id }) else { return false }
         let s = FurnitureCatalog.shape(of: owned[i].kind)
         let room = HomeRoom(rawValue: owned[i].room) ?? .living
-        let geo = IsoRoom(size: Self.roomSize, projection: projection)
+        let geo = IsoRoom(size: Self.roomSize,
+                          cols: projection == .flat ? Self.flatCols : Self.roomSize,
+                          projection: projection)
         guard let spot = geo.nearestFree(gx, gy, w: s.w, d: s.d,
                                          taken: takenCells(in: room, except: id))
         else { return false }
-        owned[i].gx = spot.0
-        owned[i].gy = spot.1
+        // ⚠️ **写回当前这个视角那一对。**
+        //
+        // 两种视角各存各的位置（见 `Furniture.fx`）——
+        // 在平面屋里挪一件东西，不该把它在立体屋里的位置也改了。
+        // 她要的就是「一间屋两种摆法」。
+        if projection == .flat {
+            owned[i].fx = spot.0
+            owned[i].fy = spot.1
+        } else {
+            owned[i].gx = spot.0
+            owned[i].gy = spot.1
+        }
         return true
+    }
+
+    /// 这一件在**当前视角**里摆在哪一格。
+    ///
+    /// ⚠️ 屋里所有「它在哪儿」的问题都要走这儿，
+    /// 别再直接读 `f.gx / f.gy`——那是立体屋专用的那一对。
+    func cell(of f: Furniture) -> (gx: Int, gy: Int) {
+        projection == .flat ? f.flatCell(cols: Self.flatCols) : (f.gx, f.gy)
     }
 
     /// 给某一件换成她自己的图。
