@@ -192,6 +192,11 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     /// 来源是他自己在正文里写的 `[[img:...]]`（跟 `[[promise:...]]` 一套机制，
     /// 见 `ImageNoteMarker`）。他没写就退回她发图时说的那句话。
     var imageNote: String = ""
+    /// 他替她说了话，被切下来的那一段（见 `FakeUserCut`）。
+    ///
+    /// ⚠️ **切下来不销毁。** 误伤了她得看得见我切了什么；
+    /// 出现得多不多也才变得可数。气泡底下一行小字，点开是原文。
+    var fakeCut: String = ""
     /// 附带的文件
     var files: [FileAttachment] = []
     /// 这条如果是表情，指向表情库里的那一张。
@@ -1076,5 +1081,6 @@ extension ChatMessage {
         isTranslatingReasoning = (try? c.decodeIfPresent(Bool.self, forKey: .isTranslatingReasoning)) ?? false
         widget = (try? c.decodeIfPresent(String.self, forKey: .widget)) ?? ""
         imageNote = (try? c.decodeIfPresent(String.self, forKey: .imageNote)) ?? ""
+        fakeCut = (try? c.decodeIfPresent(String.self, forKey: .fakeCut)) ?? ""
     }
 }

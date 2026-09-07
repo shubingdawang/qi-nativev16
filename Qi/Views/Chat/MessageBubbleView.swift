@@ -458,6 +458,9 @@ struct MessageBubbleView: View {
 
     // MARK: 组件
 
+    /// 那段被切掉的代述展开了没有
+    @State private var fakeOpen = false
+
     private func bubble(_ text: String) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             // fillWidth: false —— 气泡跟着字数走，不再一律撑成最长的那行
@@ -477,6 +480,35 @@ struct MessageBubbleView: View {
                 Text(t)
                     .font(.system(size: max(11, app.settings.fontSize - 2)))
                     .foregroundStyle(Theme.textMuted(scheme))
+            }
+
+            // 他替她说话的那一段被切掉了（见 `FakeUserCut`）。
+            //
+            // ⚠️ **不能不声不响地切。** 切下来的东西她得能看见——
+            // 判定万一误伤，她点开就知道我切了什么。
+            if !message.fakeCut.isEmpty {
+                DashedLine()
+                    .stroke(style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                    .foregroundStyle(Theme.textMuted(scheme).opacity(0.45))
+                    .frame(height: 1)
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) { fakeOpen.toggle() }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "scissors")
+                        Text(fakeOpen ? "已移除代述内容" : "已移除代述内容，点击查看")
+                        Image(systemName: fakeOpen ? "chevron.up" : "chevron.down")
+                    }
+                    .font(.system(size: max(10, app.settings.fontSize - 4)))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                }
+                .buttonStyle(.plain)
+                if fakeOpen {
+                    Text(message.fakeCut)
+                        .font(.system(size: max(10, app.settings.fontSize - 3)))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
         .padding(.horizontal, 13)

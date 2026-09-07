@@ -6425,6 +6425,17 @@ final class AppState: ObservableObject {
             }
         }
 
+        // ⚠️ **先切「他替她说话」那一段，再抠动作／心里话。**
+        //
+        // 顺序反了的话，幻觉那一段里夹的 [[act:]] / [[mind:]] 会先被抠成
+        // 真的动作和心里话——那是他替她编的，不该进他自己的幕外。
+        let faked = FakeUserCut.cut(conversations[ci].messages[mi].content,
+                                    userName: settings.userName)
+        if let bad = faked.cut {
+            conversations[ci].messages[mi].content = faked.clean
+            conversations[ci].messages[mi].fakeCut = bad
+        }
+
         // 动作／神态、心里话单独拎出来，显示在气泡上面。
         // **有几条抠几条**——只抠第一条的话，他写第二个动作的时候
         // 那一个会掉回正文里（她报的）。
