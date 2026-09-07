@@ -53,9 +53,15 @@ extension MessageBeat {
 /// （她报的那条）。
 enum MessageBeats {
 
-    /// 一条最多抠这么长。以前是 60 字——动作写细一点就超了，
-    /// 超了就整条不认，等于白写。
-    static let maxLength = 400
+    /// 一条最多抠这么长。
+    ///
+    /// 60 → 400 → 1200。头两次都是「写细一点就超了，超了整条不认，等于白写」。
+    ///
+    /// 这次抬到 1200 是有依据的：那份《带内标记 + 服务端剥离》里实测过，
+    /// 模型**贴着契约里的数字锚点写**——契约写「两三句就够」，独白 125-389 字；
+    /// 改成「平常两三百字、重要的五六百字不嫌多」，就变成 286-642 字，
+    /// 工具轮上千。上限卡在 400 的话，那一版契约等于白写。
+    static let maxLength = 1200
 
     // MARK: 记住抠过的那些
     //
@@ -145,6 +151,24 @@ enum MessageBeats {
             }
         }
 
+        // ⚠️⚠️ **动作和心里话整段扫，不按行扫。**
+        //
+        // 以前这两样是在下面那个按行的循环里抠的，于是**心里话不能换行**——
+        // 一段几百字的心里话里必然有换行，而换了行就整条抠不出来，
+        // 标记原样露在气泡上。
+        //
+        // 一条正则从头扫到尾，顺序天然是他写的顺序（`[[act:]]` 有几个算几个）。
+        //
+        // ⚠️ 正则里那个 `\n?[ \t]*` 是为了**标记独占一行的时候把那一行也带走**。
+        // 只删标记本身的话会剩一行空白，气泡里多一道莫名其妙的缝（她报过）。
+        for (kind, inner, whole) in wideMarkers(text) {
+            let t = inner.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty {
+                beats.append(MessageBeat(kind: kind, text: String(t.prefix(maxLength))))
+            }
+            if let r = text.range(of: whole) { text.removeSubrange(r) }
+        }
+
         for line in text.components(separatedBy: br) {
             var work = line
 
@@ -167,21 +191,6 @@ enum MessageBeats {
                     .replacingOccurrences(of: "]]", with: "")
                     .trimmingCharacters(in: .whitespaces)
                 if !inner.isEmpty { cot = inner }
-                work.removeSubrange(r)
-            }
-
-            // 一行里可能夹着好几个标记，一个个抠干净
-            while let r = work.range(of: markerPattern, options: .regularExpression) {
-                let raw = String(work[r])
-                let mind = raw.hasPrefix("[[mind:")
-                let head = mind ? "[[mind:" : "[[act:"
-                let inner = raw
-                    .replacingOccurrences(of: head, with: "")
-                    .replacingOccurrences(of: "]]", with: "")
-                    .trimmingCharacters(in: .whitespaces)
-                if !inner.isEmpty {
-                    beats.append(MessageBeat(kind: mind ? "mind" : "act", text: inner))
-                }
                 work.removeSubrange(r)
             }
 
@@ -209,7 +218,33 @@ enum MessageBeats {
     /// 换行走这个常量，底下不再散写。
     private static let br = "\n"
 
-    private static let markerPattern = #"\[\[(act|mind):\s*[^\]]{1,400}?\s*\]\]"#
+    /// 动作／心里话。**`[\s\S]` 不是 `[^\]]`**——心里话要能跨行。
+    ///
+    /// 前面那个 `\n?[ \t]*` 把「标记独占一行」的那一行整行带走，
+    /// 不然剥完剩一行空白。
+    private static let markerPattern =
+        #"\n?[ \t]*\[\[(act|mind):[\s\S]{1,1200}?\]\][ \t]*"#
+
+    /// 整段扫出所有动作／心里话，按他写的顺序。
+    ///
+    /// 返回 (kind, 里面那句, 连同要一起删掉的那一整块)。
+    private static func wideMarkers(_ text: String)
+        -> [(kind: String, inner: String, whole: String)] {
+        guard let re = try? NSRegularExpression(pattern: markerPattern) else { return [] }
+        let ns = text as NSString
+        var out: [(String, String, String)] = []
+        for m in re.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            let whole = ns.substring(with: m.range)
+            guard let open = whole.range(of: "[[") ,
+                  let colon = whole.range(of: ":", range: open.upperBound..<whole.endIndex),
+                  let close = whole.range(of: "]]", options: .backwards)
+            else { continue }
+            let kind = String(whole[open.upperBound..<colon.lowerBound])
+            let inner = String(whole[colon.upperBound..<close.lowerBound])
+            out.append((kind, inner, whole))
+        }
+        return out
+    }
     /// 名字是**标题**，得短。写长了多半是他把心里话写进来了，
     /// 那种不当标题使——40 字以内才认，超了就当没写。
     private static let cotPattern = #"\[\[cot:\s*[^\]]{1,40}?\s*\]\]"#
