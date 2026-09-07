@@ -90,6 +90,17 @@ enum MessageBeats {
     typealias Parsed = (clean: String, beats: [MessageBeat], cot: String)
 
     static func cached(_ text: String) -> Parsed {
+        // ⚠️⚠️ **流式的时候标记是一个字一个字到的。**
+        //
+        // `[[mind:` 才到一半、`]]` 还没到的那几百毫秒里，
+        // 下面那套正则一条也匹配不上——于是那截半成品的
+        // 内部记号**原样显在气泡上**。心里话写得长一点，
+        // 她就能看完整一句 `[[mind:` 开头的生文。
+        //
+        // 显示前先把尾巴上那截半个标记藏起来。
+        // **只在显示这一路做**，`extract` 本人不动——
+        // 存进去的东西不能因为一个方括号就被吃掉。
+        let text = hideTornTail(text)
         let key = text.hashValue
         memoLock.lock()
         if let hit = memo[key], hit.raw == text {
@@ -115,6 +126,24 @@ enum MessageBeats {
         var beats: [MessageBeat] = []
         var body: [String] = []
         var cot = ""
+
+        // ⚠️ **漏了 `]]` 的那一个，从开标记剥到结尾。**
+        //
+        // 下面那套正则认的是**闭合**的标记。他偶尔写了
+        // `[[mind:` 就忘了收尾，那一条就永远赖在正文里，
+        // 她看到的是一句带着内部记号的话。
+        //
+        // 宁可正文短，不让协议残片露进气泡——
+        // 剥下来的当成那一条本身，一个字也不丢。
+        var text = text
+        if let (rest, kind, inner) = openTail(text) {
+            text = rest
+            let t = inner.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty {
+                if kind == "cot" { cot = String(t.prefix(40)) }
+                else { beats.append(MessageBeat(kind: kind, text: String(t.prefix(maxLength)))) }
+            }
+        }
 
         for line in text.components(separatedBy: br) {
             var work = line
@@ -186,6 +215,56 @@ enum MessageBeats {
     private static let cotPattern = #"\[\[cot:\s*[^\]]{1,40}?\s*\]\]"#
     /// 系统贴的那行回执（`AppState.toolTrace` 拼的）。他不该自己写。
     private static let receiptPattern = #"〔这一条里你真的动手了：[^〕]{0,200}〕"#
+
+    /// 三个开标记。顺序不要改：`hideTornTail` 拿它们当前缀比。
+    private static let opens = ["[[act:", "[[mind:", "[[cot:"]
+
+    /// 掉队的那一个（写了开标记、没写闭标记）。找到就把它到串尾括出来。
+    ///
+    /// 前面那些正常闭合的交给下面那套正则，这儿只管掉队的。
+    ///
+    /// ⚠️ 一旦有一个没收尾，它后面的都在它肚子里——
+    /// 所以取**最早**那一个，从它开始剥到底。
+    private static func openTail(_ text: String) -> (rest: String, kind: String, inner: String)? {
+        var best: (Range<String.Index>, String)?
+        for open in opens {
+            var from = text.startIndex
+            while let r = text.range(of: open, range: from..<text.endIndex) {
+                // 它后面还有 `]]` 吗？有就不算掉队
+                if text.range(of: "]]", range: r.upperBound..<text.endIndex) == nil {
+                    if best == nil || r.lowerBound < best!.0.lowerBound {
+                        best = (r, String(open.dropFirst(2).dropLast()))
+                    }
+                    break
+                }
+                from = r.upperBound
+            }
+        }
+        guard let (r, kind) = best else { return nil }
+        let rest = String(text[text.startIndex..<r.lowerBound])
+            .replacingOccurrences(of: "\\s+$", with: "", options: .regularExpression)
+        return (rest, kind, String(text[r.upperBound...]))
+    }
+
+    /// 尾巴上那截半个开标记（`[`、`[[`、`[[mi`……）藏起来。
+    ///
+    /// 流式的时候每一帧都可能停在标记中间。
+    /// 只有**真是那三个开标记的前缀**才藏，
+    /// 正文里偶尔出现的一个 `[` 下一帧就回来了。
+    private static func hideTornTail(_ text: String) -> String {
+        // ⚠️ 从**长的**试起。只找 `lastIndex(of: "[")` 的话，
+        // 尾巴正好是 `[[` 的时候只会藏掉后面那一个，前面那个还杵在屏幕上。
+        let most = opens.map(\.count).max() ?? 0
+        for n in stride(from: min(most - 1, text.count), through: 1, by: -1) {
+            let tail = String(text.suffix(n))
+            // 整个开标记已经到齐了：那不归这儿管，交给 `openTail`
+            if opens.contains(tail) { return text }
+            if opens.contains(where: { $0.hasPrefix(tail) }) {
+                return String(text.dropLast(n))
+            }
+        }
+        return text
+    }
 
     private static func starAction(_ t: String) -> String? {
         guard t.count >= 3, t.count <= maxLength,
