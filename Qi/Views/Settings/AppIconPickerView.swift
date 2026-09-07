@@ -92,6 +92,7 @@ struct AppIconPickerView: View {
                         .foregroundStyle(.red)
                 }
 
+                HelpNote {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("更换后 iOS 会弹出系统提示，该提示无法关闭。桌面图标可能延迟数秒刷新。")
                     if mine.isEmpty {
@@ -102,6 +103,7 @@ struct AppIconPickerView: View {
                 }
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
+                }
 
                 // 自己做一个。
                 // ⚠️ 做出来的**当不了这一排里的图标**（那些必须构建时打进包），

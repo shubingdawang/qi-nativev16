@@ -575,12 +575,15 @@ struct AppearanceView: View {
                 sampleTile("浅色", dark: false)
                 sampleTile("深色", dark: true)
             }
-            // 她说「底下那个深色浅色的预览其实我没懂是什么作用」——那就写清楚。
-            Text("以下两块为上方滑块的效果样例：左侧固定浅色，右侧固定深色。"
-                 + "「压暗」仅在深色模式下生效，调整时只有右侧样例变化。"
-                 + "当前为浅色模式时界面本身无变化，以样例为准。")
-                .font(.app(11))
-                .foregroundStyle(Theme.textMuted(scheme))
+            // 这一段是**解释这两块样例是干什么用的**，属于「说明」那一类，
+            // 所以收进抽屉。摊着的话，它比它要解释的那两块还高。
+            HelpNote {
+                Text("以下两块为上方滑块的效果样例：左侧固定浅色，右侧固定深色。"
+                     + "「压暗」仅在深色模式下生效，调整时只有右侧样例变化。"
+                     + "当前为浅色模式时界面本身无变化，以样例为准。")
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 13)

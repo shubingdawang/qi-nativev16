@@ -286,7 +286,11 @@ struct VoiceFormView: View {
                 } header: {
                     Text("接口")
                 } footer: {
-                    Text("更换服务商时，若同样采用「基址 + 密钥 + 模型 + 音色」的接口形式，通常只需修改基址。")
+                    HelpNote {
+                        Text("更换服务商时，若同样采用「基址 + 密钥 + 模型 + 音色」的接口形式，通常只需修改基址。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .transparentList()

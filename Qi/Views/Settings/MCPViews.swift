@@ -180,7 +180,11 @@ struct MCPFormView: View {
                             .foregroundStyle(messageIsError ? .red : .green)
                     }
                 } footer: {
-                    Text("需先连接一次以获取工具清单，模型据此识别可用工具。修改地址后需重新获取。")
+                    HelpNote {
+                        Text("需先连接一次以获取工具清单，模型据此识别可用工具。修改地址后需重新获取。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 if !server.tools.isEmpty {
@@ -197,7 +201,11 @@ struct MCPFormView: View {
                     } header: {
                         Text("已打开 \(server.enabledTools.count) / \(server.tools.count)")
                     } footer: {
-                        Text("启用的工具越多，每轮对话携带的说明越长，token 消耗越高。不需要的可关闭。")
+                        HelpNote {
+                            Text("启用的工具越多，每轮对话携带的说明越长，token 消耗越高。不需要的可关闭。")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     .listRowBackground(GlassRowBackground())
 

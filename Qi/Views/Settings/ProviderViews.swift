@@ -118,7 +118,11 @@ struct ProviderFormView: View {
                 } header: {
                     Text("接口路径")
                 } footer: {
-                    Text("通常无需修改。地址填写至 /v1，路径保持 /chat/completions。")
+                    HelpNote {
+                        Text("通常无需修改。地址填写至 /v1，路径保持 /chat/completions。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .listRowBackground(GlassRowBackground())
 
@@ -148,7 +152,11 @@ struct ProviderFormView: View {
                 } header: {
                     Text("模型")
                 } footer: {
-                    Text("无法获取列表时，手动填写模型名同样可用。")
+                    HelpNote {
+                        Text("无法获取列表时，手动填写模型名同样可用。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .listRowBackground(GlassRowBackground())
 
@@ -167,7 +175,11 @@ struct ProviderFormView: View {
                     } header: {
                         Text("已打开 \(provider.enabledModels.count) / \(provider.models.count)")
                     } footer: {
-                        Text("仅在此处启用的模型会出现在聊天页的「选择模型」中。左滑可删除。")
+                        HelpNote {
+                            Text("仅在此处启用的模型会出现在聊天页的「选择模型」中。左滑可删除。")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     .listRowBackground(GlassRowBackground())
 
