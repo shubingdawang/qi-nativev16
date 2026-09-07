@@ -2,12 +2,26 @@ import SwiftUI
 
 /// 占卜页那层花纹。
 ///
-/// 她说「占卜页我觉得太朴素了……可以适当增加点花纹或者玄学的装饰之类的」。
-/// 参考图那张是一整块留白 + 一行衬线小标题 + 底下一把扇开的牌。
+/// 她说「占卜页我觉得太朴素了……可以适当增加点花纹或者玄学的装饰之类的」，
+/// 后来又说「这个背景花纹太简单了，画复杂点」。
 ///
-/// 所以花纹**画在底下、很淡**：两圈同心圆、一圈刻度、几颗星、一弯月。
-/// 全是 Shape 画的——不占空间，放多大都不糊，深浅色也能各调各的。
-/// **不能抢戏**：这一页真正的主角是那把牌和那段话。
+/// 上一版是两圈圆、一圈刻度、四颗星、一弯月——摊在整块屏幕上确实太空。
+/// 这一版按**层**来画，从外往内七层，每一层都比上一层暗一点：
+///
+///     ① 最外一圈点阵（72 颗）          ⑤ 八角星（两个方叠 45°）
+///     ② 刻度环：12 长 + 36 短          ⑥ 六芒星（两个三角对扣）
+///     ③ 十二宫符号（画的，不是字）      ⑦ 正中日月
+///     ④ 从内圈发散的光芒（24 道）      ＋ 四角卷草、满天星
+///
+/// 全是 Shape 画的——不占空间，放多大都不糊，深浅色各调各的。
+///
+/// ⚠️ **不能抢戏。** 这一页真正的主角是那把牌和那段话。
+/// 所以层数加了，**每一层的墨反而更淡**：最重的一层也只有 0.16。
+/// 复杂靠的是层数和疏密，不是靠加深。
+///
+/// ⚠️ 十二宫那一圈是**画出来的短笔画**，不是 Unicode 符号。
+/// 用字符的话得挑字体，缺字就变成豆腐块——而且那些字符在小字号下
+/// 挤成一团，看不出是什么。
 struct OracleOrnament: View {
 
     var tint: Color
@@ -17,53 +31,178 @@ struct OracleOrnament: View {
         Canvas { ctx, size in
             let c = CGPoint(x: size.width / 2, y: size.height * 0.42)
             let r = min(size.width, size.height) * 0.36
-            let ink = tint.opacity(scheme == .dark ? 0.16 : 0.13)
+            let dark = scheme == .dark
+            // 一层一层往里走，墨一层比一层深，但最深也只有 0.16
+            func ink(_ k: Double) -> GraphicsContext.Shading {
+                .color(tint.opacity((dark ? 0.16 : 0.13) * k))
+            }
+            func at(_ a: Double, _ k: Double) -> CGPoint {
+                CGPoint(x: c.x + cos(a) * r * k, y: c.y + sin(a) * r * k)
+            }
+            // 正上方是 0，顺时针
+            func ang(_ i: Int, _ n: Int) -> Double {
+                Double(i) / Double(n) * 2 * .pi - .pi / 2
+            }
 
-            // 两圈同心圆
-            for k in [1.0, 0.72] {
+            // ① 最外一圈点阵。72 颗，疏密均匀——单看是点，整体是一道虚线的环。
+            for i in 0..<72 {
+                let p = at(ang(i, 72), 1.18)
+                let d = i % 6 == 0 ? 1.6 : 0.9
+                ctx.fill(Path(ellipseIn: CGRect(x: p.x - d / 2, y: p.y - d / 2,
+                                                width: d, height: d)),
+                         with: ink(i % 6 == 0 ? 1.0 : 0.6))
+            }
+
+            // ② 三圈同心圆
+            for k in [1.08, 1.0, 0.72] {
                 let rect = CGRect(x: c.x - r * k, y: c.y - r * k,
                                   width: r * k * 2, height: r * k * 2)
-                ctx.stroke(Path(ellipseIn: rect), with: .color(ink), lineWidth: 0.8)
+                ctx.stroke(Path(ellipseIn: rect), with: ink(k == 1.0 ? 1.0 : 0.7),
+                           lineWidth: k == 1.0 ? 0.9 : 0.6)
             }
 
-            // 一圈刻度：十二等分，跟十二宫、十二地支都对得上
-            for i in 0..<12 {
-                let a = Double(i) / 12 * 2 * .pi - .pi / 2
+            // ③ 刻度环：十二根长的（对十二宫、十二地支），三十六根短的
+            for i in 0..<36 {
+                let a = ang(i, 36)
                 var p = Path()
-                p.move(to: CGPoint(x: c.x + cos(a) * r, y: c.y + sin(a) * r))
-                p.addLine(to: CGPoint(x: c.x + cos(a) * r * 0.9,
-                                      y: c.y + sin(a) * r * 0.9))
-                ctx.stroke(p, with: .color(ink), lineWidth: i % 3 == 0 ? 1.4 : 0.7)
+                let long = i % 3 == 0
+                p.move(to: at(a, 1.0))
+                p.addLine(to: at(a, long ? 0.88 : 0.95))
+                ctx.stroke(p, with: ink(long ? 1.0 : 0.55),
+                           lineWidth: long ? 1.3 : 0.6)
             }
 
-            // 内圈里一个正方 + 一个倒三角，是最老的那种符号味道
-            var square = Path()
-            for i in 0..<4 {
-                let a = Double(i) / 4 * 2 * .pi - .pi / 4
-                let p = CGPoint(x: c.x + cos(a) * r * 0.52, y: c.y + sin(a) * r * 0.52)
-                if i == 0 { square.move(to: p) } else { square.addLine(to: p) }
+            // ④ 十二宫符号。每一格中间放一个短笔画，画的不是字——
+            //    用字符要挑字体，缺字就是豆腐块。
+            //
+            //    每个符号是一串「相对坐标的折线」，在 12 个格位上各画一份。
+            //    形不求准，求的是**一眼看过去是十二个不一样的记号**。
+            let glyphs: [[(Double, Double)]] = [
+                [(-1, 1), (-0.4, -1), (0, 0.2), (0.4, -1), (1, 1)],       // 白羊
+                [(-1, 0.6), (0, -0.2), (1, 0.6), (0, 1), (-1, 0.6)],      // 金牛
+                [(-0.7, -1), (-0.7, 1), (0.7, 1), (0.7, -1)],             // 双子
+                [(-1, 0), (0, -0.8), (1, 0), (0, 0.9), (-1, 0)],          // 巨蟹
+                [(-1, 1), (-0.3, -1), (0.4, 0.6), (1, -0.6)],             // 狮子
+                [(-1, -1), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0.4)],  // 处女
+                [(-1, -0.4), (1, -0.4), (1, 0.6), (-1, 0.6)],             // 天秤
+                [(-1, -1), (-1, 0.6), (0, 0.6), (0, -1), (1, -1), (1, 1)],// 天蝎
+                [(-1, 1), (1, -1), (0.2, -1), (1, -1), (1, -0.2)],        // 射手
+                [(-1, -0.6), (-0.2, 0.8), (0.5, -0.4), (1, 0.8)],         // 摩羯
+                [(-1, 0.2), (-0.3, -0.4), (0.3, 0.2), (1, -0.4)],         // 水瓶
+                [(-0.8, -1), (-0.8, 1), (0.8, -1), (0.8, 1)],             // 双鱼
+            ]
+            let gs = r * 0.055
+            for i in 0..<12 {
+                // 格位取两根长刻度的正中间
+                let a = ang(i, 12) + .pi / 12
+                let o = at(a, 1.04)
+                var p = Path()
+                for (j, v) in glyphs[i].enumerated() {
+                    let q = CGPoint(x: o.x + v.0 * gs, y: o.y + v.1 * gs)
+                    if j == 0 { p.move(to: q) } else { p.addLine(to: q) }
+                }
+                ctx.stroke(p, with: ink(0.9), lineWidth: 0.9)
             }
-            square.closeSubpath()
-            ctx.stroke(square, with: .color(ink), lineWidth: 0.8)
 
-            // 几颗星
-            for (dx, dy, s) in [(-0.62, -0.5, 5.0), (0.58, -0.36, 4.0),
-                                (0.42, 0.55, 3.0), (-0.5, 0.48, 3.5)] {
+            // ⑤ 从内圈发散的光芒，二十四道，长短交替
+            for i in 0..<24 {
+                let a = ang(i, 24)
+                var p = Path()
+                p.move(to: at(a, 0.72))
+                p.addLine(to: at(a, i % 2 == 0 ? 0.86 : 0.79))
+                ctx.stroke(p, with: ink(0.45), lineWidth: 0.6)
+            }
+
+            // ⑥ 八角星：两个正方叠 45°
+            for turn in [0.0, Double.pi / 4] {
+                var sq = Path()
+                for i in 0..<4 {
+                    let p = at(ang(i, 4) + turn + .pi / 4, 0.52)
+                    if i == 0 { sq.move(to: p) } else { sq.addLine(to: p) }
+                }
+                sq.closeSubpath()
+                ctx.stroke(sq, with: ink(0.8), lineWidth: 0.7)
+            }
+
+            // ⑦ 六芒星：两个三角对扣。最里面这层最淡，免得压住正中的日月。
+            for turn in [0.0, Double.pi] {
+                var tri = Path()
+                for i in 0..<3 {
+                    let p = at(ang(i, 3) + turn, 0.40)
+                    if i == 0 { tri.move(to: p) } else { tri.addLine(to: p) }
+                }
+                tri.closeSubpath()
+                ctx.stroke(tri, with: ink(0.55), lineWidth: 0.7)
+            }
+
+            // 正中：一弯月（缺口朝右）和一轮带芒的日，一左一右
+            var moon = Path()
+            moon.addArc(center: CGPoint(x: c.x - r * 0.13, y: c.y), radius: r * 0.15,
+                        startAngle: .degrees(55), endAngle: .degrees(305),
+                        clockwise: false)
+            ctx.stroke(moon, with: ink(1.0), lineWidth: 1.2)
+
+            let sun = CGPoint(x: c.x + r * 0.15, y: c.y)
+            ctx.stroke(Path(ellipseIn: CGRect(x: sun.x - r * 0.07, y: sun.y - r * 0.07,
+                                              width: r * 0.14, height: r * 0.14)),
+                       with: ink(1.0), lineWidth: 1.0)
+            for i in 0..<8 {
+                let a = ang(i, 8)
+                var p = Path()
+                p.move(to: CGPoint(x: sun.x + cos(a) * r * 0.10,
+                                   y: sun.y + sin(a) * r * 0.10))
+                p.addLine(to: CGPoint(x: sun.x + cos(a) * r * 0.15,
+                                      y: sun.y + sin(a) * r * 0.15))
+                ctx.stroke(p, with: ink(0.7), lineWidth: 0.8)
+            }
+
+            // 满天星。位置是写死的，不是随机的——
+            // ⚠️ 随机的话每次重画都跳一下，滚动时整页在闪。
+            let stars: [(Double, Double, Double)] = [
+                (-1.35, -0.95, 5.0), (1.28, -0.72, 4.0), (0.92, 1.05, 3.0),
+                (-1.05, 0.98, 3.5), (-0.35, -1.42, 2.5), (0.48, -1.30, 3.2),
+                (1.45, 0.35, 2.6), (-1.48, 0.18, 3.0), (0.15, 1.38, 2.4),
+                (-0.72, 1.30, 2.0), (1.12, -1.22, 2.2), (-1.22, -1.35, 2.0),
+            ]
+            for (dx, dy, s) in stars {
                 let p = CGPoint(x: c.x + r * dx, y: c.y + r * dy)
                 var star = Path()
                 star.move(to: CGPoint(x: p.x, y: p.y - s))
                 star.addLine(to: CGPoint(x: p.x, y: p.y + s))
                 star.move(to: CGPoint(x: p.x - s, y: p.y))
                 star.addLine(to: CGPoint(x: p.x + s, y: p.y))
-                ctx.stroke(star, with: .color(tint.opacity(0.22)), lineWidth: 1)
+                // 大的那几颗再加一对斜芒
+                if s > 3 {
+                    let d = s * 0.42
+                    star.move(to: CGPoint(x: p.x - d, y: p.y - d))
+                    star.addLine(to: CGPoint(x: p.x + d, y: p.y + d))
+                    star.move(to: CGPoint(x: p.x + d, y: p.y - d))
+                    star.addLine(to: CGPoint(x: p.x - d, y: p.y + d))
+                }
+                ctx.stroke(star, with: .color(tint.opacity(dark ? 0.2 : 0.17)),
+                           lineWidth: 0.9)
             }
 
-            // 一弯月，缺口朝右
-            var moon = Path()
-            moon.addArc(center: CGPoint(x: c.x, y: c.y), radius: r * 0.26,
-                        startAngle: .degrees(60), endAngle: .degrees(300),
-                        clockwise: false)
-            ctx.stroke(moon, with: .color(ink), lineWidth: 1.2)
+            // 四角卷草：每个角一段圆弧配一颗小点，把整块画面收住
+            let corners: [(CGPoint, Double)] = [
+                (CGPoint(x: 18, y: 18), 0),
+                (CGPoint(x: size.width - 18, y: 18), .pi / 2),
+                (CGPoint(x: size.width - 18, y: size.height - 18), .pi),
+                (CGPoint(x: 18, y: size.height - 18), .pi * 1.5),
+            ]
+            for (o, turn) in corners {
+                var p = Path()
+                p.addArc(center: o, radius: 26,
+                         startAngle: .radians(turn), endAngle: .radians(turn + .pi / 2),
+                         clockwise: false)
+                ctx.stroke(p, with: ink(0.6), lineWidth: 0.8)
+                var q = Path()
+                q.addArc(center: o, radius: 34,
+                         startAngle: .radians(turn + 0.25),
+                         endAngle: .radians(turn + .pi / 2 - 0.25),
+                         clockwise: false)
+                ctx.stroke(q, with: ink(0.4), lineWidth: 0.6)
+            }
         }
         .allowsHitTesting(false)
     }
