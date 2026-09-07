@@ -226,7 +226,7 @@ struct DeletableEntryList: View {
         if let notice {
             Text(notice)
                 .font(.app(12))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.softText)
         }
 
         if failed || (entries.isEmpty && !text.isEmpty) {
@@ -234,11 +234,11 @@ struct DeletableEntryList: View {
         } else if entries.isEmpty {
             Text(emptyHint)
                 .font(.app(12))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.softText)
         } else {
             Text("共 \(entries.count) 条")
                 .font(.app(11))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.softText)
             ForEach(entries) { entry in
                 MCPEntryCard(entry: entry)
                     .contextMenu {
@@ -352,17 +352,17 @@ struct FilteredEntryList: View {
         } else if entries.isEmpty {
             Text(text.isEmpty ? emptyHint : (keyword.isEmpty ? emptyHint : "没找到"))
                 .font(.app(12))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.softText)
         } else {
             if !keyword.isEmpty {
                 Text("找到 \(entries.count) 条")
                     .font(.app(11))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.softText)
             }
             if let notice {
                 Text(notice)
                     .font(.app(11))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.softText)
             }
             ForEach(entries) { entry in
                 MCPEntryCard(entry: entry)
@@ -546,7 +546,7 @@ struct MCPEntryList: View {
             if text.isEmpty {
                 Text(emptyHint)
                     .font(.app(12))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.softText)
             } else {
                 MCPResultCard(text: text, failed: failed)
             }
@@ -1386,7 +1386,7 @@ struct PulsePane: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("尚未填写心跳服务地址").heading(15)
                     Text("在「设置 → 后端服务」中填写 PulseEngine 地址，格式如 http://主机地址:8000")
-                        .font(.footnote).foregroundStyle(.secondary)
+                        .font(.footnote).foregroundStyle(Theme.softText)
                 }
                 .glassCard()
             } else {
@@ -1452,7 +1452,7 @@ struct PulsePane: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("调整").heading(15)
                     Text("直接改电脑上那个引擎的状态")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(Theme.softText)
 
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                         ForEach(PulseAPI.emotions, id: \.0) { key, label in
@@ -1696,7 +1696,7 @@ struct StatusPane: View {
 
             if base.isEmpty {
                 Text("请在「设置 → 后端服务」中填写主动消息服务地址，方可读取身体状况。")
-                    .font(.footnote).foregroundStyle(.secondary)
+                    .font(.footnote).foregroundStyle(Theme.softText)
                     .glassCard()
             } else if let st = body_ {
                 VStack(alignment: .leading, spacing: 12) {

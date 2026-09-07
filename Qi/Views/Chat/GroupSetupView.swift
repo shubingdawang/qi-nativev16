@@ -41,10 +41,10 @@ struct GroupSetupView: View {
                                     .frame(width: 8, height: 8)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(member.name.isEmpty ? "还没起名" : member.name)
-                                        .foregroundStyle(.primary)
+                                        .foregroundStyle(Theme.mainText)
                                     Text(modelLabel(member))
                                         .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(Theme.softText)
                                         .lineLimit(1)
                                 }
                                 Spacer()
@@ -135,7 +135,7 @@ struct GroupMemberFormView: View {
                             } label: {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(model.displayName).foregroundStyle(.primary)
+                                        Text(model.displayName).foregroundStyle(Theme.mainText)
                                         Text(provider.name)
                                             .font(.caption2)
                                             .foregroundStyle(.tertiary)

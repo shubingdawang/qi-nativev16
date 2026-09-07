@@ -237,7 +237,7 @@ struct IsoRoom {
         //   9 / 7 → 地板加深到 16 格之后，7 格墙又显得矮了（她说「墙需要加高」）
         // 记一句：**墙高不是一个绝对好看的数，是跟地板比出来的。**
         // 地板一改深浅，这儿就要跟着看一眼。
-        let wallCap: CGFloat = projection == .flat ? 7 : 9
+        let wallCap: CGFloat = projection == .flat ? 9 : 10
         let wallH = min(max(tileH * 4.2, room), tileH * wallCap)
 
         // 整块（墙顶到地板最下）的高度，用来把屋子**竖着摆正中**
@@ -497,6 +497,44 @@ struct IsoRoom {
                 CGPoint(x: origin.x + half, y: y))
     }
 
+    /// 平面屋的**左右两面侧墙**。立体屋没有（它那两面就是 left/rightWallPath）。
+    ///
+    /// ## 她要的是「框」，不是「描边」
+    ///
+    /// 她原话：「这个边框你搞错了，不是顺着平铺的形状描边，
+    /// 是设定一个墙壁的框架。」
+    ///
+    /// 上一版我给屋子的轮廓描了一道线——那只是把地板的形状勾了一遍，
+    /// 屋子还是一块地板加一堵后墙，两侧敞着。
+    ///
+    /// 真正该有的是**两面立起来的侧墙**：从地板左右两条边往上长 `wallH`。
+    /// 三面墙加一块地板，那才是一个框。
+    ///
+    /// ⚠️ 地板是梯形（越靠里越窄），所以侧墙也是**斜的**——
+    /// 底边跟着地板的边走，顶边就是它往上平移 `wallH`。
+    /// 画成竖直矩形的话，墙脚会离开地板的边。
+    var sideWallPaths: (left: Path, right: Path) {
+        guard projection == .flat else { return (Path(), Path()) }
+        let n = Double(size)
+        let w = CGFloat(cols)
+        let up = tileW * w * flatWide(-0.5) / 2
+        let down = tileW * w * flatWide(n - 0.5) / 2
+        let top = point(0, 0).y - rowPitch / 2
+        let bottom = point(0, n - 1).y + rowPitch / 2
+
+        func panel(_ backX: CGFloat, _ frontX: CGFloat) -> Path {
+            var p = Path()
+            p.move(to: CGPoint(x: backX, y: top))
+            p.addLine(to: CGPoint(x: frontX, y: bottom))
+            p.addLine(to: CGPoint(x: frontX, y: bottom - wallH))
+            p.addLine(to: CGPoint(x: backX, y: top - wallH))
+            p.closeSubpath()
+            return p
+        }
+        return (panel(origin.x - up, origin.x - down),
+                panel(origin.x + up, origin.x + down))
+    }
+
     /// 后墙：一整块立起来的矩形。
     private var backWallPath: Path {
         let (a, b) = backWallBase
@@ -536,6 +574,11 @@ struct IsoRoom {
         var p = floorPath
         p.addPath(leftWallPath)
         p.addPath(rightWallPath)
+        // 平面屋的两面侧墙也算屋子的一部分——不算的话，
+        // 靠边那几件家具会被裁在墙脚上。
+        let sides = sideWallPaths
+        p.addPath(sides.left)
+        p.addPath(sides.right)
         return p
     }
 

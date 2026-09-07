@@ -259,6 +259,38 @@ struct GlassRowBackground: View {
 // MARK: - 不用传 colorScheme 也能用的动态颜色
 
 extension Theme {
+    /// 正文色，**不用传 `scheme`**。
+    ///
+    /// ## 为什么要有这一份
+    ///
+    /// 她报的：「还有很多文字没有跟着设置里的字色改变。」
+    ///
+    /// `Theme.textMain(scheme)` 一直是认她那个字色的，可全 App 有四十几处
+    /// 图省事写的是 `.foregroundStyle(Theme.mainText)` / `.secondary`——
+    /// 那是系统色，跟她设的字色毫无关系。
+    ///
+    /// 之所以图省事，是因为那些地方**手边没有 `scheme`**
+    /// （嵌在 `HelpNote { }`、`Form` 的 footer、别的结构体里）。
+    /// 所以这儿给一份不用传 `scheme` 的：`UIColor` 那个闭包会在画的时候
+    /// 按当时的深浅色去问一次，深浅色和她的字色都自动跟上。
+    ///
+    /// ⚠️ 别在这儿存成一个静态的 `Color` 常量再判断深浅——
+    /// 那样只会在第一次取值的时候定死一种。
+    static let mainText = Color(UIColor { trait in
+        let dark = trait.userInterfaceStyle == .dark
+        let hex = dark ? Theme.customTextHexDark : Theme.customTextHex
+        if let c = Color(hexString: hex) { return UIColor(c) }
+        return UIColor(Theme.skin.textMain.c(dark ? .dark : .light))
+    })
+
+    /// 次要文字色。同上。
+    static let softText = Color(UIColor { trait in
+        let dark = trait.userInterfaceStyle == .dark
+        let hex = dark ? Theme.customTextHexDark : Theme.customTextHex
+        if let c = Color(hexString: hex) { return UIColor(c).withAlphaComponent(0.68) }
+        return UIColor(Theme.skin.textSoft.c(dark ? .dark : .light))
+    })
+
     /// 半透明磨砂底，深浅色自动切换。用来替换系统那些死板的灰色。
     static let softFill = Color(UIColor { trait in
         trait.userInterfaceStyle == .dark

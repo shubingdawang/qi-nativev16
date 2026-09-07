@@ -1962,7 +1962,7 @@ struct TypingIndicator: View {
             ForEach(0..<3, id: \.self) { i in
                 Circle()
                     .frame(width: 6, height: 6)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.softText)
                     .opacity(phase == i ? 1 : 0.3)
             }
         }

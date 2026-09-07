@@ -56,23 +56,52 @@ struct CharFlow: SwiftUI.Layout {
                        subviews: Subviews,
                        cache: inout ()) {
         let limit = min(proposal.width ?? maxWidth, maxWidth)
-        var x: CGFloat = 0, y: CGFloat = 0
-        var lineH: CGFloat = 0
+
+        // ⚠️⚠️ **先把每一行都分完，再摆。**
+        //
+        // 她报的：「手帐选中单个文字改色后，第一个字飘起来了。」
+        //
+        // 上一版是边走边摆，底对齐用的是 `lineH`——而那个 `lineH` 是
+        // **「到目前为止这一行最高的那个」**。轮到每行第一个字的时候
+        // 它还是 0，于是那个字的底被摆到了整行的**顶**上：整整高出一行。
+        //
+        // 它跟改不改色没关系，只是改完色她才会盯着那一个字看。
+        //
+        // 底对齐必须知道**整行**多高，所以只能分两趟：
+        // 先分行、量出每行的高，再照着摆。
+        var lines: [[LayoutSubview]] = []
+        var line: [LayoutSubview] = []
+        var x: CGFloat = 0
         for v in subviews {
             let s = v.sizeThatFits(.unspecified)
             if x > 0, x + s.width > limit {
-                y += lineH + lineGap
-                x = 0; lineH = 0
+                lines.append(line)
+                line = []
+                x = 0
             }
-            // ⚠️ 底对齐，不是顶对齐。
-            // 大小不一的字混排的时候，人眼认的是**底下那条线**——
-            // 顶对齐会让小字浮在半空中，像打错了。
-            v.place(at: CGPoint(x: bounds.minX + x,
-                                y: bounds.minY + y + lineH),
-                    anchor: .bottomLeading,
-                    proposal: .unspecified)
+            line.append(v)
             x += s.width + spacing
-            lineH = max(lineH, s.height)
+        }
+        if !line.isEmpty { lines.append(line) }
+
+        var y: CGFloat = 0
+        for row in lines {
+            let lineH = row.reduce(CGFloat(0)) {
+                max($0, $1.sizeThatFits(.unspecified).height)
+            }
+            var lx: CGFloat = 0
+            for v in row {
+                let s = v.sizeThatFits(.unspecified)
+                // ⚠️ 底对齐，不是顶对齐。
+                // 大小不一的字混排的时候，人眼认的是**底下那条线**——
+                // 顶对齐会让小字浮在半空中，像打错了。
+                v.place(at: CGPoint(x: bounds.minX + lx,
+                                    y: bounds.minY + y + lineH),
+                        anchor: .bottomLeading,
+                        proposal: .unspecified)
+                lx += s.width + spacing
+            }
+            y += lineH + lineGap
         }
     }
 }

@@ -183,7 +183,7 @@ struct MCPFormView: View {
                     HelpNote {
                         Text("需先连接一次以获取工具清单，模型据此识别可用工具。修改地址后需重新获取。")
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.softText)
                     }
                 }
                 .listRowBackground(GlassRowBackground())
@@ -204,11 +204,12 @@ struct MCPFormView: View {
                         Text("已打开 \(server.enabledTools.count) / \(server.tools.count)")
                     } footer: {
                         HelpNote {
-                            Text("启用的工具越多，每轮对话携带的说明越长，token 消耗越高。不需要的可关闭。
-
-与本机记忆库同名的工具在发送时自动隐去，无需手动关闭；关闭它们也不影响与小屋的镜像同步。")
+                            Text("启用的工具越多，每轮对话携带的说明越长，"
+                                 + "token 消耗越高。不需要的可关闭。"
+                                 + "\n\n与本机记忆库同名的工具在发送时自动隐去，"
+                                 + "无需手动关闭；关闭它们也不影响与小屋的镜像同步。")
                                 .font(.footnote)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Theme.softText)
                         }
                     }
                     .listRowBackground(GlassRowBackground())
@@ -222,7 +223,7 @@ struct MCPFormView: View {
                                     if !server.tools[i].description.isEmpty {
                                         Text(MD.inline(server.tools[i].description))
                                             .font(.caption2)
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(Theme.softText)
                                             .lineLimit(2)
                                     }
                                 }

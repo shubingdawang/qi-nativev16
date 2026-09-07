@@ -153,6 +153,18 @@ struct BookshelfView: View {
             .padding(.top, 6)
             .padding(.bottom, Layout.tabBarExpanded + 20)
         }
+        .confirmationDialog("删除书架「\(removing ?? "")」？",
+                            isPresented: Binding(get: { removing != nil },
+                                                 set: { if !$0 { removing = nil } }),
+                            titleVisibility: .visible) {
+            Button("删除", role: .destructive) {
+                if let n = removing { store.removeShelf(n) }
+                removing = nil
+            }
+            Button("取消", role: .cancel) { removing = nil }
+        } message: {
+            Text("书不会被删除，会退回未归架。")
+        }
     }
 
     /// 一排书架：上面是书脊，下面是那块板子。
@@ -160,6 +172,12 @@ struct BookshelfView: View {
     /// **书脊是竖着的窄条、书名竖排**——她要的就是「书脊面对着我」。
     /// 没有封面的书，脊上就是书名本身；有封面的，从封面上取一条颜色当脊色，
     /// 这样一排看下去深深浅浅，像真的一架书。
+    /// 正要删的那个架子。
+    ///
+    /// ⚠️ **书不跟着删**（见 `LibraryStore.removeShelf`）——
+    /// 拆个架子把书一起烧了，那不叫整理。所以确认框里要说清楚书去哪儿。
+    @State private var removing: String?
+
     private func shelfRow(title: String, books: [Book]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
@@ -181,6 +199,17 @@ struct BookshelfView: View {
             }
             .padding(.horizontal, 18)
             .padding(.bottom, 7)
+            // ⚠️ 长按认的是**真画出来的那几个像素**，这一行右边大半是空的，
+            // 不补一块实心的感应区就只有压在字上才收得到。
+            .contentShape(Rectangle())
+            .contextMenu {
+                // 「未归架」不是架子，是没归架的那一堆，删不得
+                if title != "未归架" {
+                    Button(role: .destructive) { removing = title } label: {
+                        Label("删除书架", systemImage: "trash")
+                    }
+                }
+            }
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .bottom, spacing: 5) {

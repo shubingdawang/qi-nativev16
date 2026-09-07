@@ -35,11 +35,11 @@ struct ConversationListView: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(conv.title)
                                     .font(.body)
-                                    .foregroundStyle(.primary)
+                                    .foregroundStyle(Theme.mainText)
                                     .lineLimit(1)
                                 Text(conv.preview)
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(Theme.softText)
                                     .lineLimit(1)
                             }
                             Spacer()
@@ -167,7 +167,7 @@ struct ModelPickerView: View {
                                 .font(.headline)
                             Text("去「设置 → 供应商」加一个供应商，填好地址和密钥，再把要用的模型打开。")
                                 .font(.footnote)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Theme.softText)
                         }
                         .padding(.vertical, 6)
                     }
@@ -182,7 +182,7 @@ struct ModelPickerView: View {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(entry.model.displayName)
-                                            .foregroundStyle(.primary)
+                                            .foregroundStyle(Theme.mainText)
                                         if app.providers.filter({ $0.enabled }).count > 1 {
                                             Text(entry.provider.name.isEmpty ? "未命名供应商" : entry.provider.name)
                                                 .font(.caption2)
@@ -261,7 +261,7 @@ struct SystemPromptView: View {
                     HelpNote {
                         Text("每次发消息都会带上这段话，用来设定对方的身份、语气和规矩。只对当前这个对话生效。")
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.softText)
                     }
                 } header: {
                     Text("系统提示词")
@@ -302,11 +302,11 @@ struct SystemPromptView: View {
                                 Text("等着补过去")
                                 Spacer()
                                 Text("\(app.pendingHouseWrites.count) 笔")
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(Theme.softText)
                             }
                             Text("服务恢复后自动补传新增类记录；带 id 的修改与删除不补传——两端 id 各自生成，互不对应。")
                                 .font(.footnote)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Theme.softText)
                         }
                     }
                     // 反方向那一半。**得让她看得见它在动**——
@@ -320,7 +320,7 @@ struct SystemPromptView: View {
                             Text(got.memories + got.diaries > 0
                                  ? "记忆 \(got.memories) · 日记 \(got.diaries)"
                                  : "这次没有新的")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Theme.softText)
                         }
                         if let err = HouseSync.lastError {
                             Text("上次没拉成：" + err)
@@ -331,7 +331,7 @@ struct SystemPromptView: View {
                     HelpNote {
                         Text("启用后，本窗口写入的记忆在手机本机保存的同时，自动镜像一份到共用记忆库，claude.ai 端可读取。小屋未连上时先记在手机，连上后自动补齐。\n\n反方向也通：在 claude.ai 上新增的记忆和日记，会在 App 启动时、以及你发消息时（最短间隔 10 分钟）拉回本机。按正文认重，同一条不会拉进来两遍。\n\n启用期间，小屋端与本机同名的记忆工具在本窗口内隐藏，避免两边各写各的；本机记忆库始终为准，札记与承诺页读取的也是它。\n\n镜像与拉取都由 App 直接完成，不额外消耗对话次数。\n\n⚠️ 仅同步新增类记录；带 id 的修改与删除不同步——两端 id 各自生成，互不对应。")
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.softText)
                     }
                 } header: {
                     Text("两边接得上")
@@ -355,14 +355,14 @@ struct SystemPromptView: View {
                                 Spacer()
                                 let n = app.memoryPeers(of: id).count
                                 Text(n > 0 ? "并了 \(n) 个窗口" : "只记得这一窗")
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(Theme.softText)
                             }
                         }
                     }
                     HelpNote {
                         Text("合并后，所选窗口共享同一份记忆；拆分后各窗口仅保留自身的记录，可用于隔离不同话题。")
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.softText)
                     }
                 } header: {
                     Text("他还看得见哪几扇窗")
@@ -377,7 +377,7 @@ struct SystemPromptView: View {
                             Text("已压缩")
                             Spacer()
                             Text("\(d.rounds) 次 · 收了 \(d.covered) 条")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Theme.softText)
                         }
                         NavigationLink {
                             DigestReaderView(digest: d)
@@ -386,13 +386,13 @@ struct SystemPromptView: View {
                         }
                     } else {
                         Text("本窗口尚未压缩")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.softText)
                     }
                     HStack {
                         Text("未压缩")
                         Spacer()
                         Text("\(pendingCount) 条")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.softText)
                     }
                     Button {
                         guard !compacting, let id = app.activeID(for: space) else { return }
@@ -412,7 +412,7 @@ struct SystemPromptView: View {
                     HelpNote {
                         Text(MD.inline("对话超过阈值时，将较早的消息压缩为一份浓缩件。再次压缩以「上一份浓缩件 + 新增消息」为输入，始终只保留一份。\n\n浓缩件之外另保留一份原文摘录，由本机按规则选取，不调用模型、不产生费用。摘要保留事件，原文保留措辞。\n\n每次压缩额外产生一次请求。压缩间隔在「设置 → 通用」中调整，也可关闭。"))
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.softText)
                     }
                 } header: {
                     Text("滚雪球压缩")
@@ -474,7 +474,7 @@ struct DigestReaderView: View {
                     ForEach(digest.voice, id: \.self) { line in
                         Text("「\(line)」")
                             .font(.callout)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.softText)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }

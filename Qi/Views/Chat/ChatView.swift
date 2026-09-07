@@ -1927,20 +1927,31 @@ struct MessageListView: View {
                     // 滚到底那一下它就顶在输入栏上方，最后一条稳稳露在上面。
                     Color.clear.frame(height: bottomInset)
                     Color.clear.frame(height: 1).id("__bottom")
-                        .background {
-                            GeometryReader { g -> Color in
-                                let y = g.frame(in: .global).minY
-                                let far = y > UIScreen.main.bounds.height + 300
-                                if far != awayFromBottom {
-                                    DispatchQueue.main.async {
-                                        withAnimation(.easeOut(duration: 0.18)) {
-                                            awayFromBottom = far
-                                        }
-                                    }
+                }
+                // ⚠️⚠️ **「离底还远吗」这一下不能挂在最底下那一行上。**
+                //
+                // 她报的：「滚到最底的按钮没有出现。」
+                //
+                // 上一版把量尺挂在 `__bottom` 那一格的 `.background` 里。
+                // 可这些行在 `LazyVStack` 里——**滚远了它压根不渲染**，
+                // 量尺跟着一起没了，于是「离底远」这个状态永远翻不过来。
+                // 越是该出现按钮的时候，越是没人去告诉它。
+                //
+                // 挂到 `LazyVStack` 自己身上：它是容器，一直在，
+                // 它的 `maxY` 就是整段内容的底在屏幕上的位置。
+                .background {
+                    GeometryReader { g -> Color in
+                        let far = g.frame(in: .global).maxY
+                            > UIScreen.main.bounds.height + 300
+                        if far != awayFromBottom {
+                            DispatchQueue.main.async {
+                                withAnimation(.easeOut(duration: 0.18)) {
+                                    awayFromBottom = far
                                 }
-                                return Color.clear
                             }
                         }
+                        return Color.clear
+                    }
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 100)
@@ -2051,9 +2062,9 @@ struct MessageListView: View {
                 .font(.app(38))
                 .foregroundStyle(.tertiary)
             if app.hasUsableModel {
-                Text("输入消息").foregroundStyle(.secondary)
+                Text("输入消息").foregroundStyle(Theme.softText)
             } else {
-                Text("尚未配置模型").foregroundStyle(.secondary)
+                Text("尚未配置模型").foregroundStyle(Theme.softText)
                 Text("去「设置 → 供应商」加一个")
                     .font(.footnote)
                     .foregroundStyle(.tertiary)

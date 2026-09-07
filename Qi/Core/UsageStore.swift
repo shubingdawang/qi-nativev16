@@ -398,15 +398,35 @@ final class UsageStore: ObservableObject {
         loaded = true
     }
 
-    /// 把导进来的那份用量**合并**进现在这份。
+    /// 把导进来的那份用量合进现在这份。
     ///
-    /// ⚠️ **合并，不是覆盖。** 她导备份多半是为了找回丢掉的那一段，
-    /// 覆盖的话今天这几笔反而没了。同一天同一档就把两边的数加起来。
+    /// ⚠️ **逐项取大的，不是相加。**
+    ///
+    /// 她报的：「导入进去他就直接添加上去了，没有看数据是不是已经有了。」
+    /// 上一版是相加——同一份备份导两次，账就翻倍。
+    ///
+    /// 取大的同时满足三件事：
+    ///   · **导两次跟导一次一样**（同一个数取大还是它自己）
+    ///   · 备份里有、现在没有的那几天，整天补回来
+    ///   · 今天已经攒的那几笔比备份里的多，那就留着今天的
+    ///
+    /// ⚠️ 代价是**真·两台设备各用一半**的情况合不出总和来。
+    /// 但这一条不成立：用量是这台手机自己记的账，不存在两台各记一半。
+    /// 「导入 = 找回丢掉的那段」才是她真正在做的事。
     func merge(_ incoming: [String: DayUsage]) {
         for (day, one) in incoming {
             var cur = days[day] ?? DayUsage(day: day)
             for (src, u) in one.bySource {
-                cur.bySource[src] = (cur.bySource[src] ?? TokenUsage()) + u
+                let have = cur.bySource[src] ?? TokenUsage()
+                cur.bySource[src] = TokenUsage(
+                    input: max(have.input, u.input),
+                    cacheRead: max(have.cacheRead, u.cacheRead),
+                    cacheWrite: max(have.cacheWrite, u.cacheWrite),
+                    output: max(have.output, u.output),
+                    reasoning: max(have.reasoning, u.reasoning),
+                    calls: max(have.calls, u.calls),
+                    cache1h: max(have.cache1h, u.cache1h),
+                    cache5m: max(have.cache5m, u.cache5m))
             }
             cur.day = day
             days[day] = cur

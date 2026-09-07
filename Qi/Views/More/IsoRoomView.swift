@@ -304,6 +304,21 @@ struct IsoRoomView<Clawd: View>: View {
             }
             geoRoom.leftWallPath.stroke(Color.black.opacity(0.08), lineWidth: 1)
             geoRoom.rightWallPath.stroke(Color.black.opacity(0.08), lineWidth: 1)
+
+            // 平面屋的左右两面侧墙。**立体屋没有这一段**（那两面就是上面画的）。
+            //
+            // 她要的：「不是顺着平铺的形状描边，是设定一个墙壁的框架。」
+            // 三面墙加一块地板才是一个框；只有后墙的话两侧是敞着的。
+            //
+            // ⚠️ 两侧各压一档明暗，跟立体屋同一个道理：
+            // 三个面同色拼在一起就是一张折纸。
+            if geoRoom.projection == .flat {
+                let sides = geoRoom.sideWallPaths
+                sides.left.fill(wallL)
+                sides.right.fill(wallR)
+                sides.left.stroke(Color.black.opacity(0.10), lineWidth: 1)
+                sides.right.stroke(Color.black.opacity(0.10), lineWidth: 1)
+            }
         }
     }
 

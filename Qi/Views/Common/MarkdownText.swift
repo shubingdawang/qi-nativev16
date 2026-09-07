@@ -336,7 +336,7 @@ struct CodeBlockView: View {
             HStack {
                 Text(language.isEmpty ? "代码" : language)
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.softText)
                 Spacer()
                 Button {
                     UIPasteboard.general.string = code
@@ -347,7 +347,7 @@ struct CodeBlockView: View {
                         .font(.caption2)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.softText)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)

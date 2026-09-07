@@ -17,7 +17,7 @@ struct ProviderListView: View {
                             .font(.headline)
                         Text("点击右上角的 + 添加。需填写接口地址与密钥，与网页版所用的一致。")
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.softText)
                     }
                     .padding(.vertical, 6)
                 }
@@ -31,10 +31,10 @@ struct ProviderListView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(provider.name.isEmpty ? "未命名" : provider.name)
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(Theme.mainText)
                             Text(provider.baseURL)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Theme.softText)
                                 .lineLimit(1)
                         }
                         Spacer()
@@ -121,7 +121,7 @@ struct ProviderFormView: View {
                     HelpNote {
                         Text("通常无需修改。地址填写至 /v1，路径保持 /chat/completions。")
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.softText)
                     }
                 }
                 .listRowBackground(GlassRowBackground())
@@ -155,7 +155,7 @@ struct ProviderFormView: View {
                     HelpNote {
                         Text("无法获取列表时，手动填写模型名同样可用。")
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.softText)
                     }
                 }
                 .listRowBackground(GlassRowBackground())
@@ -178,7 +178,7 @@ struct ProviderFormView: View {
                         HelpNote {
                             Text("仅在此处启用的模型会出现在聊天页的「选择模型」中。左滑可删除。")
                                 .font(.footnote)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Theme.softText)
                         }
                     }
                     .listRowBackground(GlassRowBackground())
