@@ -53,7 +53,7 @@ struct PromptShapeView: View {
             }
             .transparentList()
         }
-        .navigationTitle("都花在哪儿")
+        .navigationTitle("上下文构成")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
     }

@@ -85,20 +85,60 @@ enum Storage {
     /// 万一以后又有谁没写，至少文件被挪到一边留着，而不是被覆盖掉。
     static func load<T: Decodable>(_ type: T.Type, from name: String) -> T? {
         let url = fileURL(name)
-        guard let data = try? Data(contentsOf: url) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        do {
-            return try decoder.decode(T.self, from: data)
-        } catch {
-            // 挪到一边，别让下一次保存把它盖掉
-            let stamp = Int(Date().timeIntervalSince1970)
-            let backup = fileURL("\(name).坏了-\(stamp)")
-            try? FileManager.default.moveItem(at: url, to: backup)
-            salvaged.append(backup.lastPathComponent)
-            return nil
+
+        if let data = try? Data(contentsOf: url) {
+            do {
+                return try decoder.decode(T.self, from: data)
+            } catch {
+                // 挪到一边，别让下一次保存把它盖掉
+                let stamp = Int(Date().timeIntervalSince1970)
+                let backup = fileURL("\(name).坏了-\(stamp)")
+                try? FileManager.default.moveItem(at: url, to: backup)
+                salvaged.append(backup.lastPathComponent)
+                return nil
+            }
         }
+
+        // ⚠️⚠️ **正主没了，就去看看被挪到一边的那些还能不能解开。**
+        //
+        // 她问的：「被你修坏的 usage 怎么办？」
+        //
+        // 上一版我给 `TokenUsage` 加了两个字段没配容错解码器，
+        // 她整份用量记录当场解不开、被挪成了 `usage.json.坏了-1788740295`。
+        // 解码器已经补上了——**那份文件现在其实读得出来**，
+        // 只是没人再去读它。
+        //
+        // 所以这一段：正主不在的时候，把同名的那几份「坏了-」按时间
+        // 从新到旧试一遍，谁解得开就把谁扶正。
+        //
+        // ⚠️ **只在正主不存在的时候试。** 正主还在就说明她之后又攒了新的，
+        // 拿一份更老的盖回去是倒退。
+        //
+        // ⚠️ 救回来之后**把那份备份留着**，不删。它已经不占路了，
+        // 而万一救错了，原件还在。
+        let fm = FileManager.default
+        let dir = url.deletingLastPathComponent()
+        guard let all = try? fm.contentsOfDirectory(atPath: dir.path)
+        else { return nil }
+        let broken = all
+            .filter { $0.hasPrefix(name + ".坏了-") }
+            .sorted(by: >)          // 时间戳在名字里，倒序就是从新到旧
+        for f in broken {
+            let candidate = dir.appendingPathComponent(f)
+            guard let data = try? Data(contentsOf: candidate),
+                  let value = try? decoder.decode(T.self, from: data)
+            else { continue }
+            try? data.write(to: url, options: .atomic)
+            rescued.append(name)
+            return value
+        }
+        return nil
     }
+
+    /// 这一趟从「坏了-」里救回来的那几份。设置页会报出来。
+    nonisolated(unsafe) private(set) static var rescued: [String] = []
 
     static func save<T: Encodable>(_ value: T, to name: String) {
         let encoder = JSONEncoder()

@@ -137,7 +137,7 @@ struct FootprintView: View {
             NavigationLink { PromptShapeView() } label: {
                 HStack {
                     Image(systemName: "chart.pie")
-                    Text("这一份都花在哪儿")
+                    Text("上下文构成")
                     Spacer()
                     Image(systemName: "chevron.right").font(.caption)
                 }

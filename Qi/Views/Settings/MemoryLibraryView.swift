@@ -82,7 +82,7 @@ struct MemoryLibraryView: View {
             .padding(.vertical, 11)
 
             SettingsNote(app.settings.localMemory
-                ? "记忆库的 38 个工具（wake_up、add_memory、surface_memories、checkpoint 等）由 App 本机实现，名称与参数同远程版本一致。不经 MCP，无需本地服务与 Tailscale。\n\n⚠️ 需在「设置 → MCP」中关闭「小屋」服务器。两者同时启用会导致同名工具重复注册。"
+                ? "记忆库的 38 个工具（wake_up、add_memory、surface_memories、checkpoint 等）由 App 本机实现，名称与参数同远程版本一致。不经 MCP，无需本地服务与 Tailscale。\n\n开启后，小屋服务器上的同名工具不再提供给模型，无需手动关闭该服务器——小屋仍保持连接，用于与 claude.ai 同步。\n\n同步窗口例外：该窗口内仍使用小屋那一份，以保证两端读写同一处。"
                 : "关闭时记忆库工具经 MCP 调用远程「小屋」服务，需要本地服务处于运行状态。",
                 title: "说明")
 

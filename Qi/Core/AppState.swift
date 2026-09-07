@@ -1895,6 +1895,26 @@ final class AppState: ObservableObject {
                 if blockMemory && Self.memoryToolNames.contains(tool.name) { continue }
                 // 同步窗口：跟本机重名的那几件收起来，只留本机那一份。
                 if hiddenHouse.contains(tool.name) { continue }
+                // ⚠⚠ **本机记忆库开着的时候，小屋上同名的一律不送。**
+                //
+                // 她报的：「电脑记忆库工具开着就没法使用本机工具，
+                // 但不开着工具就没法连上记忆库。」
+                //
+                // 以前只能叫她把整台小屋关掉——那是个假选择：
+                // 小屋关了，`HouseSync` 和镜像写入也一起没了，
+                // 跟 claude.ai 就真断了。
+                //
+                // 真正该挡的只是**工具表里那几个重名的**：
+                // 同一个名字送两份，他调哪个都不好说。
+                // 服务器照旧连着，只是不把这几件摊到他面前。
+                // ⚠️ 同步窗口除外：那儿反过来，本机让位给小屋
+                //（上面 `hiddenHouse` 那一句已经把它分好了）。
+                if settings.localMemory,
+                   conversation?.syncWithClaude != true,
+                   MemoryTools.handles(tool.name,
+                                       memory: true, pulse: settings.localPulse) {
+                    continue
+                }
                 // 她报的第 6 条：「工具主动性目前只有 app 自带的工具修改了，
                 // 所以 app 自带的工具他用得很勤，其他的他就不用了」。
                 //

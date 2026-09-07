@@ -1034,6 +1034,30 @@ struct SettingsView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
             }
+
+            // 上一轮被挪到一边、这一轮又读得出来的那几份。
+            //
+            // 她问的：「被你修坏的 usage 怎么办？」
+            // ——它自己回来了，但这件事得说一声，
+            // 不然她只会看到那行红字消失了，不知道数据到底在不在。
+            if !Storage.rescued.isEmpty {
+                SettingsDivider()
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("已恢复 \(Storage.rescued.count) 份早前未读入的数据")
+                        .font(.app(13, weight: .medium))
+                        .foregroundStyle(StatusTone.done.color)
+                    Text(Storage.rescued.joined(separator: "
+"))
+                        .font(.app(10, design: .monospaced))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                    Text("早前被重命名保留的副本本次已能正常解析，已自动还原。副本仍保留在文稿目录中。")
+                        .font(.app(11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
         }
     }
 
