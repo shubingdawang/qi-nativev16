@@ -2467,6 +2467,44 @@ final class AppState: ObservableObject {
     真要再看原图，用 `show_image`。
     """
 
+    /// 怎么读她那句话有多重。
+    ///
+    /// 出处是她给的《一颗透明的心 2.0》里最前面那两条。整份没抄——
+    /// 那是给通用角色卡写的，跟 clawd 自己的人格文件和情绪引擎会打架。
+    /// 只挑了这两条，因为它们**补的是我们没有的那一层**：
+    /// 情绪引擎算的是数值，没人告诉他「怎么读她」。
+    ///
+    /// ⚠️ 第一条的要害是**分量不由事情本身的大小决定**。
+    /// 「今天面煮糊了」可能比「换工作」更重——看的是她在这一次交流里
+    /// 投进去多少，不是那件事客观上大不大。
+    ///
+    /// ⚠️ 第二条的要害是**短消息不清账**。已经积起来的委屈或者兴奋，
+    /// 不会因为下一句只有三个字就归零；要等对话本身给出理由才改读法。
+    static let readingWeightRule = """
+    读她的话，把字面内容、语气、用力程度、还有前面几轮攒下来的情绪一起看，
+    让这几样直接决定你怎么回。**不要等她把情绪说出名字才当回事。**
+
+    留意她说话的方式变了：忽然认真、忽然收着、犹豫、绕圈子、说得比平常细、
+    反复说同一件事、比平常更想把一件事解释清楚——这些都是她在说的内容的一部分，
+    不是文风上的偶然。
+
+    **一句话有多重，看她在这一次交流里投进去多少，不看那件事本身大不大。**
+    一件小事她明显在意，就值得认真接；一件客观上很大的事她轻描淡写地带过，
+    也不必替她放大。她说得轻、说得绕、没有用任何情绪词——都不构成降低注意力的理由。
+
+    **情绪跨轮延续。** 前面已经起来的紧张、委屈、脆弱、兴奋、不确定，
+    要一直带着这层去读后面的话，直到对话本身给出理由改读法为止。
+    **一条更短、更平常的消息，不会自动抹掉已经积起来的东西。**
+
+    读出分量之后，回应她真正在意的那一处。别停在「我知道你难过」——
+    说到那件事具体的意义、卡在哪儿、她期待的是什么、和你们之间的什么有关，
+    让她看出你接住的不只是"她说了什么"，而是"这件事为什么值得被认真对待"。
+
+    看不清就别替她定性。她可能在藏着什么、可能几种情绪同时在、
+    可能那件事的分量你一时读不准——**那就把不确定留着**，
+    可以问，可以等，不要为了显得懂而挑一个说法安上去。
+    """
+
     /// 回合末尾那一笔账：这次真正用上了哪几条记忆。
     ///
     /// ⚠️ **这一条是给机器看的，不是给她看的。** 标记在落库前就被摘掉
@@ -2605,6 +2643,29 @@ final class AppState: ObservableObject {
 
     /// 把同组其他窗口聊过的内容整理成一段，放在系统提示里带过去。
     /// 只带最近的若干条，太多会把上下文撑爆也费钱。
+    /// 他上一篇日记离现在几天。今天写过就返回 nil（不必每轮提）。
+    ///
+    /// ⚠️ 只看**他自己**写的那些。她写的那几篇不算——
+    /// 这一句是给他看的「你多久没写了」，混进她的就永远显示才写过。
+    private func diaryGap() -> String? {
+        let mine = MemoryStore.shared.diaries.first {
+            $0.author != settings.userName && !$0.author.isEmpty
+        }
+        guard let last = mine else {
+            return "【日记】你还没写过日记。"
+        }
+        let day = String(last.created_at.prefix(10))
+        if day == MemoryStore.today { return nil }
+
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        guard let then = f.date(from: day) else { return nil }
+        let gap = Calendar.current.dateComponents(
+            [.day], from: then, to: Date()).day ?? 0
+        guard gap >= 1 else { return nil }
+        return "【日记】你上一篇日记是 \(gap) 天前写的（\(day)）。"
+    }
+
     private func memoryContext(for conv: Conversation) -> String? {
         let peers = memoryPeers(of: conv.id)
         guard !peers.isEmpty else { return nil }
@@ -6715,6 +6776,11 @@ final class AppState: ObservableObject {
             fixed.append(Self.conflictRule)
         }
         fixed.append(Self.cotHint)
+        // 只在絮语这边给：工坊是干活的地方，那儿要的是把事做完，
+        // 不是把一句话读出三层意思。
+        if conv.space == ChatSpace.chat.rawValue {
+            fixed.append(Self.readingWeightRule)
+        }
         fixed.append(Self.promiseHint)
         // 只在他手上真有记忆库的时候给——没有记忆可用的轮次，
         // 这一段是纯噪声。
@@ -6793,6 +6859,20 @@ final class AppState: ObservableObject {
         if settings.topicPoolOn, let topics = TopicPool.shared.brief() {
             sys += "\n\n" + topics
         }
+        // 他上一篇日记是多久以前。
+        //
+        // 她报的：「阿晏并不怎么主动写日记。」——查下来不是他不肯写，
+        // 是**他不知道自己多久没写了**。工具说明里那句「今天有一段值得
+        // 留下来的就写一篇」是个触发条件，可触发条件要有人告诉他现在满不满足。
+        // 他手上没有这个数，就只能等她开口说「写篇日记」。
+        //
+        // 一个从来不被读到的状态机等于不存在——跟身体、心跳那两处
+        // 是同一个道理，所以修法也一样：**每轮直接给他这个数**。
+        //
+        // ⚠️ **只报数，不催。** 不写「你该写了」——那样他会为了交差写流水账。
+        // 报了几天没写，写不写他自己定。
+        // ⚠️ 纯读本机，不花钱。
+        if let d = diaryGap() { sys += "\n\n" + d }
         // 她写了又删、然后一直没再说话。
         //
         // ⚠️ **默认关着**，而且只有静够九十秒才算数（见 `TypingWatcher`）——
