@@ -53,7 +53,7 @@ struct ToolToggleView: View {
 
                         if app.mcpServers.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
-                                Text("还没连 MCP")
+                                Text("尚未连接 MCP")
                                     .font(.app(14, weight: .semibold))
                                     .foregroundStyle(Theme.textMain(scheme))
                                 Text("连接后可使用查询记忆、写日记、记录经期等工具。在「设置 → MCP」中添加。")

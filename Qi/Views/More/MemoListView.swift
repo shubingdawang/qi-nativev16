@@ -29,7 +29,7 @@ struct MemoListView: View {
 
                 if store.onList.isEmpty {
                     EmptyNote(icon: "checklist",
-                              title: "还没有记什么",
+                              title: "暂无记录",
                               hint: "点击右上角新建。长按条目可置顶，置顶后会显示在聊天页。")
                         .padding(.top, 30)
                 }
@@ -457,7 +457,7 @@ struct MemoHistoryView: View {
                         Button(role: .destructive) {
                             store.remove(memo.id)
                         } label: {
-                            Label("彻底删掉", systemImage: Icon.trash)
+                            Label("彻底删除", systemImage: Icon.trash)
                         }
                     }
                 }

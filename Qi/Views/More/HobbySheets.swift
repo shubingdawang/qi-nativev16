@@ -301,7 +301,7 @@ struct HobbyHistorySheet: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 10) {
                         if hobby.changes.isEmpty {
-                            Text("还没有变动")
+                            Text("暂无变动")
                                 .font(.app(12))
                                 .foregroundStyle(Theme.textMuted(scheme))
                         }
@@ -324,7 +324,7 @@ struct HobbyHistorySheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("关掉") { dismiss() }
+                    Button("关闭") { dismiss() }
                 }
             }
         }

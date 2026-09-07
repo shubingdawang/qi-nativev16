@@ -28,7 +28,7 @@ struct MCPListView: View {
                     if app.mcpServers.isEmpty {
                         SettingsCard {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("还没有连 MCP")
+                                Text("尚未连接 MCP")
                                     .font(.app(15, weight: .semibold))
                                     .foregroundStyle(Theme.textMain(scheme))
                                 Text("MCP 用于向模型提供可调用的工具，如查询记忆、写日记、记录经期。点击右上角的 + 填写服务地址。")
@@ -127,7 +127,7 @@ struct MCPListView: View {
             Button(role: .destructive) {
                 app.mcpServers.removeAll { $0.id == server.id }
             } label: {
-                Label("删掉", systemImage: Icon.trash)
+                Label("删除", systemImage: Icon.trash)
             }
         }
     }
@@ -194,7 +194,7 @@ struct MCPFormView: View {
                         HStack {
                             Button("全部打开") { setAll(true) }
                             Spacer()
-                            Button("全部关掉") { setAll(false) }
+                            Button("全部关闭") { setAll(false) }
                         }
                         .font(.caption)
                         .buttonStyle(.borderless)

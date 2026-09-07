@@ -117,14 +117,14 @@ struct FolderGridView: View {
                 renaming = acting
                 acting = nil
             }
-            Button("删掉这个文件夹", role: .destructive) {
+            Button("删除该文件夹", role: .destructive) {
                 deletingFolder = acting
                 acting = nil
             }
             Button("算了", role: .cancel) { acting = nil }
         }
         .confirmationDialog(
-            "删掉文件夹「\(deletingFolder ?? "")」？",
+            "删除文件夹「\(deletingFolder ?? "")」？",
             isPresented: Binding(get: { deletingFolder != nil },
                                  set: { if !$0 { deletingFolder = nil } }),
             titleVisibility: .visible
@@ -318,7 +318,7 @@ struct MediaGridView: View {
                                 Button(role: .destructive) {
                                     store.remove(item)
                                 } label: {
-                                    Label("删掉", systemImage: Icon.trash)
+                                    Label("删除", systemImage: Icon.trash)
                                 }
                             }
                     }

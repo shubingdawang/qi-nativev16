@@ -73,7 +73,7 @@ struct PhoneActivityView: View {
 
     private var setupCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("还没连上")
+            Text("未连接")
                 .font(.app(15, weight: .semibold))
                 .foregroundStyle(Theme.textMain(scheme))
             Text(MD.inline("由快捷指令将记录写入 txt 文件，本 App 直接读取该文件。全程不经网络。"))
@@ -202,7 +202,7 @@ struct PhoneActivityView: View {
                     Button {
                         here.ask()
                     } label: {
-                        Text("还没给定位权限，点这儿给")
+                        Text("尚未授予定位权限，点击授予")
                             .font(.app(12))
                             .foregroundStyle(.orange)
                     }

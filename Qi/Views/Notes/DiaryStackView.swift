@@ -122,7 +122,7 @@ struct DiaryStackView: View {
                     }
                 }
             } else {
-                EmptyNote(icon: "square.stack", title: "还没有日记")
+                EmptyNote(icon: "square.stack", title: "暂无日记")
             }
         }
         // 点开看全文那张挪到 DiaryCalendarView.swift 里了（DiaryEntrySheet），

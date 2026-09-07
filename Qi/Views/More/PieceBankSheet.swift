@@ -50,7 +50,7 @@ struct PieceBankSheet: View {
                         // 于是空的时候进不来，进不来就永远填不满。
                         // 现在入口常驻了（见 ClawdHomeView 那段注释）。
                         EmptyNote(icon: "tray",
-                                  title: "你自己那批还是空的",
+                                  title: "自定义素材库为空",
                                   hint: "上面那些是 App 自带的，随时能用。"
                                       + "想加自己的："
                                       + "返回小屋，点击底部的「从整版图里取家具」，"
@@ -87,11 +87,11 @@ struct PieceBankSheet: View {
                     renaming = nil
                 }
             }
-            .confirmationDialog("删掉这块素材？",
+            .confirmationDialog("删除该素材？",
                                 isPresented: Binding(get: { deleting != nil },
                                                      set: { if !$0 { deleting = nil } }),
                                 titleVisibility: .visible) {
-                Button("删掉", role: .destructive) {
+                Button("删除", role: .destructive) {
                     if let p = deleting { bank.remove(p.id) }
                     deleting = nil
                 }
@@ -196,7 +196,7 @@ struct PieceBankSheet: View {
             Button(role: .destructive) {
                 deleting = p
             } label: {
-                Label("删掉", systemImage: Icon.trash)
+                Label("删除", systemImage: Icon.trash)
             }
         }
     }

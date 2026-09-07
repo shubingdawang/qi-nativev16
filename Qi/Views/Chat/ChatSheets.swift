@@ -163,7 +163,7 @@ struct ModelPickerView: View {
                 if !app.hasUsableModel {
                     Section {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("还没有可用的模型")
+                            Text("暂无可用模型")
                                 .font(.headline)
                             Text("去「设置 → 供应商」加一个供应商，填好地址和密钥，再把要用的模型打开。")
                                 .font(.footnote)
@@ -374,7 +374,7 @@ struct SystemPromptView: View {
                 Section {
                     if let d = conv?.digest, !d.summary.isEmpty {
                         HStack {
-                            Text("已经滚了")
+                            Text("已压缩")
                             Spacer()
                             Text("\(d.rounds) 次 · 收了 \(d.covered) 条")
                                 .foregroundStyle(.secondary)
@@ -385,11 +385,11 @@ struct SystemPromptView: View {
                             Text("查看压缩结果")
                         }
                     } else {
-                        Text("这一窗还没压过")
+                        Text("本窗口尚未压缩")
                             .foregroundStyle(.secondary)
                     }
                     HStack {
-                        Text("还没压的")
+                        Text("未压缩")
                         Spacer()
                         Text("\(pendingCount) 条")
                             .foregroundStyle(.secondary)

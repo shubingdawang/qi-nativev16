@@ -17,7 +17,7 @@ struct PlayCountView: View {
                 let list = library.mostPlayed
                 if list.isEmpty {
                     EmptyNote(icon: "chart.bar",
-                              title: "还没有听完过一整首",
+                              title: "暂无完整播放记录",
                               hint: "完整播放完一首计一次，中途切换不计入。")
                         .padding(.top, 40)
                 } else {

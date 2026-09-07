@@ -92,11 +92,11 @@ struct StickerEraser: View {
                                 }
                             }
                         }
-                        Button("撤一步") {
+                        Button("撤销一步") {
                             if !strokes.isEmpty { strokes.removeLast() }
                         }
                         .disabled(strokes.isEmpty)
-                        Button("全都不擦了") { strokes.removeAll() }
+                        Button("全部撤销") { strokes.removeAll() }
                             .disabled(strokes.isEmpty)
                     }
                     .font(.app(13))

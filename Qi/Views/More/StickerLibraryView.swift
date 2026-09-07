@@ -167,7 +167,7 @@ struct StickerLibraryView: View {
                 .background(.ultraThinMaterial)
             }
         }
-        .confirmationDialog("删掉选中的 \(chosenIDs.count) 个？",
+        .confirmationDialog("删除选中的 \(chosenIDs.count) 个？",
                             isPresented: $confirmBatch, titleVisibility: .visible) {
             Button("删除", role: .destructive) {
                 // 删之前先把 id 拿出来：一边遍历一边改 store 里那个数组会出事

@@ -741,7 +741,7 @@ struct CallHistoryView: View {
         ScrollView {
             LazyVStack(spacing: 10) {
                 if store.records.isEmpty {
-                    EmptyNote(icon: "phone", title: "还没通过话")
+                    EmptyNote(icon: "phone", title: "暂无通话记录")
                         .padding(.top, 30)
                 }
 
@@ -797,7 +797,7 @@ struct CallHistoryView: View {
                         Button(role: .destructive) {
                             store.records.removeAll { $0.id == r.id }
                         } label: {
-                            Label("删掉", systemImage: Icon.trash)
+                            Label("删除", systemImage: Icon.trash)
                         }
                     }
                 }

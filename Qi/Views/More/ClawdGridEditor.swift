@@ -565,7 +565,7 @@ struct ClawdGridEditor: View {
                         .frame(width: 42, alignment: .trailing)
                 }
 
-                toolButton("删掉这个", icon: "trash", wide: true) {
+                toolButton("删除该项", icon: "trash", wide: true) {
                     guard let id = selected else { return }
                     push()
                     doc.stamps.removeAll { $0.id == id }

@@ -223,7 +223,7 @@ struct ThoughtPoolView: View {
             Button(role: .destructive) {
                 pool.remove(t.id)
             } label: {
-                Label("删掉", systemImage: Icon.trash)
+                Label("删除", systemImage: Icon.trash)
             }
         }
     }

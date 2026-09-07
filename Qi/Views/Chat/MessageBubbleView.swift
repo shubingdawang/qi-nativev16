@@ -385,7 +385,7 @@ struct MessageBubbleView: View {
                                 .font(.footnote.weight(.semibold))
                                 .foregroundStyle(.white)
                             Text("·").foregroundStyle(.white.opacity(0.5))
-                            Button("删掉这条") {
+                            Button("删除该条") {
                                 app.deleteMessage(message.id, in: conversationID)
                             }
                             .font(.footnote)
@@ -544,13 +544,13 @@ struct MessageBubbleView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 let him = app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName
-                Text(run.cardDeleted ? "\(him) 删掉了" : "\(him) 存图了")
+                Text(run.cardDeleted ? "\(him) 已删除" : "\(him) 存图了")
                     .font(.app(12, weight: .semibold))
                     // 删的用暖橘，存的用主题色。**一眼分得开**——
                     // 存和删长成一个样子，她扫过去只会当成又存了一张。
                     .foregroundStyle(run.cardDeleted ? .orange : app.settings.accentColor)
                 Text(run.cardDeleted
-                     ? "从「\(run.cardPlace)」里删掉了"
+                     ? "从「\(run.cardPlace)」里已删除"
                      : "往「\(run.cardPlace)」里存了一张图")
                     .font(.app(13))
                     .foregroundStyle(Theme.textMain(scheme))
@@ -765,7 +765,7 @@ struct MessageBubbleView: View {
                         .foregroundStyle(Theme.textMain(scheme))
                         .lineLimit(1)
                     // 删掉了就说删掉了，**别摆一个点下去没反应的卡**
-                    Text(game == nil ? "已经从游戏间里删掉了" : "点一下就玩")
+                    Text(game == nil ? "已经从游戏间里已删除" : "点一下就玩")
                         .font(.app(10.5))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
@@ -872,7 +872,7 @@ struct MessageBubbleView: View {
                         .font(.system(size: 40))
                         .foregroundStyle(.white.opacity(0.92))
                 } else {
-                    Text("这段视频的原件不在了")
+                    Text("该视频原件已丢失")
                         .font(.app(11))
                         .foregroundStyle(.white.opacity(0.9))
                         .padding(.horizontal, 9)

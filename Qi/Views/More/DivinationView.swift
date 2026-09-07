@@ -637,7 +637,7 @@ struct LiuyaoPane: View {
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
             } else {
-                Text("六爻不动，看本卦就够了。")
+                Text("六爻皆静，以本卦为准。")
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
@@ -752,7 +752,7 @@ struct DivinationHistoryView: View {
         ScrollView {
             LazyVStack(spacing: 10) {
                 if store.records.isEmpty {
-                    EmptyNote(icon: "moon.stars", title: "还没有占过")
+                    EmptyNote(icon: "moon.stars", title: "暂无占卤记录")
                         .padding(.top, 30)
                 }
                 ForEach(store.records) { r in
@@ -814,7 +814,7 @@ struct DivinationHistoryView: View {
                         Button(role: .destructive) {
                             store.remove(r.id)
                         } label: {
-                            Label("删掉", systemImage: Icon.trash)
+                            Label("删除", systemImage: Icon.trash)
                         }
                     }
                 }

@@ -99,7 +99,7 @@ struct GamesView: View {
                             Button(role: .destructive) {
                                 store.remove(game)
                             } label: {
-                                Label("删掉", systemImage: Icon.trash)
+                                Label("删除", systemImage: Icon.trash)
                             }
                         }
                     }

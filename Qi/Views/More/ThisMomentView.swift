@@ -111,7 +111,7 @@ struct ThisMomentView: View {
                             isPresented: Binding(get: { confirmResolve != nil },
                                                  set: { if !$0 { confirmResolve = nil } }),
                             titleVisibility: .visible) {
-            Button("过去了") {
+            Button("已过去") {
                 if let t = confirmResolve { store.resolveByHer(t.id) }
                 confirmResolve = nil
             }
@@ -122,17 +122,17 @@ struct ThisMomentView: View {
             // 编译器会在这一行上卡到超时（"unable to type-check in reasonable time"）。
             Text(resolveNote)
         }
-        .confirmationDialog("删掉这一条？",
+        .confirmationDialog("删除该条？",
                             isPresented: Binding(get: { confirmDelete != nil },
                                                  set: { if !$0 { confirmDelete = nil } }),
                             titleVisibility: .visible) {
-            Button("删掉", role: .destructive) {
+            Button("删除", role: .destructive) {
                 if let t = confirmDelete { store.delete(t.id) }
                 confirmDelete = nil
             }
             Button("算了", role: .cancel) { confirmDelete = nil }
         } message: {
-            Text("与「过去了」不同：该操作表示此条不应存在，将直接删除。")
+            Text("与「已过去」不同：该操作表示此条不应存在，将直接删除。")
         }
     }
 
@@ -187,13 +187,13 @@ struct ThisMomentView: View {
                 Button {
                     confirmResolve = t
                 } label: {
-                    Label("这段过去了", systemImage: "checkmark.circle")
+                    Label("标记为已过去", systemImage: "checkmark.circle")
                 }
             }
             Button(role: .destructive) {
                 confirmDelete = t
             } label: {
-                Label("删掉", systemImage: Icon.trash)
+                Label("删除", systemImage: Icon.trash)
             }
         }
     }
@@ -201,9 +201,9 @@ struct ThisMomentView: View {
     private func footnote(_ t: ExperienceThread) -> String {
         var s = Self.day.string(from: t.createdAt) + " 起"
         if let r = t.resolvedAt {
-            s += " · " + Self.day.string(from: r) + " 过去了"
+            s += " · " + Self.day.string(from: r) + " 已过去"
         } else if t.updatedAt.timeIntervalSince(t.createdAt) > 60 {
-            s += " · " + Self.day.string(from: t.updatedAt) + " 改过"
+            s += " · " + Self.day.string(from: t.updatedAt) + " 已修改"
         }
         return s
     }

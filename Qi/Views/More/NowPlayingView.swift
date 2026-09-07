@@ -49,7 +49,7 @@ struct NowPlayingView: View {
                     Spacer(minLength: 0)
                     cover(side: 260)
                     Spacer(minLength: 0)
-                    Text("这首还没有歌词")
+                    Text("暂无歌词")
                         .font(.app(12))
                         .foregroundStyle(Theme.textMuted(scheme))
                     Button {

@@ -337,7 +337,7 @@ struct FileLibraryView: View {
             Button(role: .destructive) {
                 store.remove(file)
             } label: {
-                Label("删掉", systemImage: Icon.trash)
+                Label("删除", systemImage: Icon.trash)
             }
         }
     }

@@ -1423,7 +1423,7 @@ struct ChatView: View {
                 selecting = false; selected = []
             }
 
-            action("删掉", Icon.trash, tint: .red) {
+            action("删除", Icon.trash, tint: .red) {
                 app.deleteMessages(selected, in: conv.id)
                 selecting = false; selected = []
             }
@@ -2028,9 +2028,9 @@ struct MessageListView: View {
                 .font(.app(38))
                 .foregroundStyle(.tertiary)
             if app.hasUsableModel {
-                Text("说点什么吧").foregroundStyle(.secondary)
+                Text("输入消息").foregroundStyle(.secondary)
             } else {
-                Text("还没配置模型").foregroundStyle(.secondary)
+                Text("尚未配置模型").foregroundStyle(.secondary)
                 Text("去「设置 → 供应商」加一个")
                     .font(.footnote)
                     .foregroundStyle(.tertiary)
@@ -2081,7 +2081,7 @@ extension ChatView {
                             }
                         }
                     }
-                    menuItem(msg.edits.isEmpty ? "删除" : "整条删掉", "trash") {
+                    menuItem(msg.edits.isEmpty ? "删除" : "删除整条", "trash") {
                         if let cid { app.deleteMessage(msg.id, in: cid) }
                     }
                     menuItem("多选", "checklist") {

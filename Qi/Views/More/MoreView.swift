@@ -101,7 +101,7 @@ struct FootprintView: View {
             hitRateBar(u)
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("这天大概花了")
+                Text("当日费用")
                     .font(.footnote)
                     .foregroundStyle(Theme.textSoft(scheme))
                 Text(UsageFormat.money(cost))

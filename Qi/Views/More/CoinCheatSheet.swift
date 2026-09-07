@@ -77,7 +77,7 @@ struct CoinCheatSheet: View {
                 .disabled(typed.isEmpty)
             }
 
-            Text("你自己的账，随便改。")
+            Text("金币数量可自行调整。")
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
 

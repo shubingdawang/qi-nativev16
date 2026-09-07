@@ -107,7 +107,7 @@ struct VoiceSettingsView: View {
             Button(role: .destructive) {
                 app.voices.removeAll { $0.id == voice.id }
             } label: {
-                Label("删掉这把嗓子", systemImage: Icon.trash)
+                Label("删除该音色", systemImage: Icon.trash)
             }
         }
 
@@ -170,7 +170,7 @@ struct VoiceSettingsView: View {
                     if app.voices.isEmpty {
                         SettingsCard(title: "他的嗓子") {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("还没有语音服务")
+                                Text("暂无语音服务")
                                     .font(.app(15, weight: .semibold))
                                     .foregroundStyle(Theme.textMain(scheme))
                                 Text("配置完成后，长按任意消息可朗读；模型也可主动发送语音消息。")

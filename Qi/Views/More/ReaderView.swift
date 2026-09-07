@@ -83,7 +83,7 @@ struct ReaderView: View {
             if let book, book.chapters.indices.contains(chapter) {
                 pages(book)
             } else {
-                Text("这本书打不开了").foregroundStyle(Theme.textMuted(scheme))
+                Text("该书无法打开").foregroundStyle(Theme.textMuted(scheme))
             }
 
             // 左右两侧那两条**翻页热区**（她说的：手势在两侧，稍微大一点，
@@ -344,7 +344,7 @@ struct ReaderView: View {
                         Button(role: .destructive) {
                             store.removeVocab(v.id)
                         } label: {
-                            Label("删掉", systemImage: "trash")
+                            Label("删除", systemImage: "trash")
                         }
                     }
                 }

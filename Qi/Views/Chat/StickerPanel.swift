@@ -166,7 +166,7 @@ struct StickerPanel: View {
                                 Button(role: .destructive) {
                                     store.remove(sticker)
                                 } label: {
-                                    Label("删掉", systemImage: Icon.trash)
+                                    Label("删除", systemImage: Icon.trash)
                                 }
                             } preview: {
                                 StickerPreview(sticker: sticker)
@@ -355,7 +355,7 @@ struct StickerEditorView: View {
                         store.remove(sticker)
                         dismiss()
                     } label: {
-                        Text("删掉这张").foregroundStyle(.red)
+                        Text("删除该图").foregroundStyle(.red)
                     }
                 }
             }

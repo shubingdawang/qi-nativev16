@@ -295,7 +295,7 @@ struct SettingsView: View {
                                                 ImageStore.delete(name)
                                                 app.settings.wallpaperHistory.removeAll { $0 == name }
                                             } label: {
-                                                Label("彻底删掉", systemImage: Icon.trash)
+                                                Label("彻底删除", systemImage: Icon.trash)
                                             }
                                         }
                                 }

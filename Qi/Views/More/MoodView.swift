@@ -69,10 +69,10 @@ struct MoodView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { if raw.isEmpty { await load() } }
         .sheet(isPresented: $addingDay) { addSheet }
-        .confirmationDialog("删掉这个纪念日？", isPresented: Binding(
+        .confirmationDialog("删除该纪念日？", isPresented: Binding(
             get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }
         ), titleVisibility: .visible) {
-            Button("删掉", role: .destructive) {
+            Button("删除", role: .destructive) {
                 if let e = pendingDelete { Task { await remove(e) } }
                 pendingDelete = nil
             }
@@ -240,7 +240,7 @@ struct MoodView: View {
                         Button(role: .destructive) {
                             pendingDelete = entry
                         } label: {
-                            Label("删掉", systemImage: Icon.trash)
+                            Label("删除", systemImage: Icon.trash)
                         }
                     }
                 }
@@ -382,7 +382,7 @@ struct MoodView: View {
 
     private func remove(_ entry: MCPEntry) async {
         let r = await app.deleteMemory(id: String(entry.id.prefix(8)))
-        notice = r.failed ? "没删掉：\(r.text)" : "删掉了"
+        notice = r.failed ? "删除失败：\(r.text)" : "已删除"
         if !r.failed { await load() }
     }
 }

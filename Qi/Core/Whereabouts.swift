@@ -99,7 +99,7 @@ final class WhereaboutsService: NSObject, ObservableObject, CLLocationManagerDel
     func locate() async -> CLLocation? {
         guard authorized else {
             ask()
-            lastTrouble = "还没给定位权限"
+            lastTrouble = "尚未授予定位权限"
             return nil
         }
         manager.desiredAccuracy = precision == .exact

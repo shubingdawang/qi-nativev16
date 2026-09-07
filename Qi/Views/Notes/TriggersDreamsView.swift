@@ -298,7 +298,7 @@ struct TriggerEditor: View {
                             store.words.removeAll { $0.id == word.id }
                             dismiss()
                         } label: {
-                            Text("删掉这个词")
+                            Text("删除该词条")
                         }
                     }
                 }

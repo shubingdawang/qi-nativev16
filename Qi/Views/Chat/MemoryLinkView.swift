@@ -76,7 +76,7 @@ struct MemoryLinkView: View {
 
                         if others.isEmpty {
                             EmptyNote(icon: "square.on.square",
-                                      title: "还没有别的窗口可以并")
+                                      title: "暂无可合并的窗口")
                         }
 
                         ForEach(others) { conv in

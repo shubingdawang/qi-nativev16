@@ -208,7 +208,7 @@ struct DeletableEntryList: View {
     @ViewBuilder
     private func annotationMenu(_ entry: MCPEntry) -> some View {
         if let list = annotationsOf?(entry), !list.isEmpty, let run = onDeleteAnnotation {
-            Menu("删掉批注") {
+            Menu("删除批注") {
                 ForEach(Array(list.enumerated()), id: \.offset) { i, label in
                     Button(role: .destructive) {
                         Task { notice = await run(entry, i) }
@@ -258,15 +258,15 @@ struct DeletableEntryList: View {
                         Button(role: .destructive) {
                             pending = entry
                         } label: {
-                            Label("删掉这条", systemImage: Icon.trash)
+                            Label("删除该条", systemImage: Icon.trash)
                         }
                     }
             }
-            .confirmationDialog("删掉这条记忆？",
+            .confirmationDialog("删除该条记忆？",
                                 isPresented: Binding(get: { pending != nil },
                                                      set: { if !$0 { pending = nil } }),
                                 titleVisibility: .visible) {
-                Button("删掉", role: .destructive) {
+                Button("删除", role: .destructive) {
                     if let e = pending {
                         Task { notice = await onDelete(e) }
                     }
@@ -327,7 +327,7 @@ struct FilteredEntryList: View {
     @ViewBuilder
     private func annotationMenu(_ entry: MCPEntry) -> some View {
         if let list = annotationsOf?(entry), !list.isEmpty, let run = onDeleteAnnotation {
-            Menu("删掉批注") {
+            Menu("删除批注") {
                 ForEach(Array(list.enumerated()), id: \.offset) { i, label in
                     Button(role: .destructive) {
                         Task { notice = await run(entry, i) }
@@ -381,7 +381,7 @@ struct FilteredEntryList: View {
                         annotationMenu(entry)
                         if onDelete != nil {
                             Button(role: .destructive) { pending = entry } label: {
-                                Label("删掉这条", systemImage: Icon.trash)
+                                Label("删除该条", systemImage: Icon.trash)
                             }
                         }
                     }
@@ -392,11 +392,11 @@ struct FilteredEntryList: View {
                     Task { notice = await run(entry, original, correction) }
                 }
             }
-            .confirmationDialog("删掉这条？",
+            .confirmationDialog("删除该条？",
                                 isPresented: Binding(get: { pending != nil },
                                                      set: { if !$0 { pending = nil } }),
                                 titleVisibility: .visible) {
-                Button("删掉", role: .destructive) {
+                Button("删除", role: .destructive) {
                     if let e = pending, let run = onDelete {
                         Task { notice = await run(e) }
                     }
@@ -713,7 +713,7 @@ struct DiaryPane: View {
                     onDelete: { entry in
                         await model.run(app, tool: "delete_diary", args: ["id": entry.id])
                         await model.run(app, tool: "get_diaries", args: ["limit": 50])
-                        return "删掉了。"
+                        return "已删除。"
                     },
                     onAnnotate: { entry, original, correction in
                         var args: [String: Any] = [
@@ -735,7 +735,7 @@ struct DiaryPane: View {
                     onDeleteAnnotation: { entry, i in
                         MemoryStore.shared.removeAnnotation(diary: entry.id, at: i)
                         await model.run(app, tool: "get_diaries", args: ["limit": 50])
-                        return "删掉了。"
+                        return "已删除。"
                     })
             }
         }
@@ -836,7 +836,7 @@ struct MemoryPane: View {
                 onDelete: { entry in
                     let r = await app.deleteMemory(id: String(entry.id.prefix(8)))
                     if !r.failed { await refresh() }
-                    return r.failed ? r.text : "删掉了"
+                    return r.failed ? r.text : "已删除"
                 },
                 onAnnotate: { entry, original, correction in
                     let r = await app.callTool("annotate_memory", args: [
@@ -855,7 +855,7 @@ struct MemoryPane: View {
                     MemoryStore.shared.removeAnnotation(
                         memory: String(entry.id.prefix(8)), at: i)
                     await refresh()
-                    return "删掉了"
+                    return "已删除"
                 })
         }
         .task {
@@ -1325,7 +1325,7 @@ struct PulsePane: View {
         PaneScroll {
             if base.isEmpty && !app.settings.localPulse {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("还没填心跳服务的地址").heading(15)
+                    Text("尚未填写心跳服务地址").heading(15)
                     Text("在「设置 → 后端服务」中填写 PulseEngine 地址，格式如 http://主机地址:8000")
                         .font(.footnote).foregroundStyle(.secondary)
                 }

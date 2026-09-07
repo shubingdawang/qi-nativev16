@@ -13,7 +13,7 @@ struct ProviderListView: View {
             if app.providers.isEmpty {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("还没有供应商")
+                        Text("暂无供应商")
                             .font(.headline)
                         Text("点击右上角的 + 添加。需填写接口地址与密钥，与网页版所用的一致。")
                             .font(.footnote)
@@ -168,7 +168,7 @@ struct ProviderFormView: View {
                         HStack {
                             Button("全部打开") { setAll(true) }
                             Spacer()
-                            Button("全部关掉") { setAll(false) }
+                            Button("全部关闭") { setAll(false) }
                         }
                         .font(.caption)
                         .buttonStyle(.borderless)

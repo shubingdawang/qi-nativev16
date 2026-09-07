@@ -106,7 +106,7 @@ struct PromiseView: View {
 
     private var empty: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("还没有欠着的事")
+            Text("暂无未完成的承诺")
                 .font(.app(15, weight: .semibold))
                 .foregroundStyle(Theme.textMain(scheme))
             Text("模型在对话中作出承诺时自动记入。也可点击右上角手动添加。")
@@ -175,7 +175,7 @@ struct PromiseView: View {
                 store.promises.removeAll { $0.id == p.id }
                 store.savePromises()
             } label: {
-                Label("删掉", systemImage: "trash")
+                Label("删除", systemImage: "trash")
             }
         }
     }

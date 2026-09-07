@@ -187,7 +187,7 @@ struct MusicLibraryView: View {
                 // 她看到的是一页什么都没有的空白。
                 if library.playable.isEmpty && webResults.isEmpty {
                     EmptyNote(icon: "music.note.list",
-                              title: "还没有歌",
+                              title: "暂无歌曲",
                               hint: "点击右上角从「文件」导入 mp3、m4a、flac。\n"
                                   + "网易云下载的音频需先存入「文件」App 再导入，导入后为完整音频。\n"
                                   + "上方搜索框检索的是网络试听资源，时长三十秒。")
@@ -426,7 +426,7 @@ struct MusicLibraryView: View {
                 Button(role: .destructive) {
                     library.remove(track)
                 } label: {
-                    Label("删掉", systemImage: Icon.trash)
+                    Label("删除", systemImage: Icon.trash)
                 }
             }
         }

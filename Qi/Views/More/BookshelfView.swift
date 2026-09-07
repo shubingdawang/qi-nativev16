@@ -147,7 +147,7 @@ struct BookshelfView: View {
                 }
                 // 还没归架的那些也摆一排，不然导进来找不着
                 if !loose.isEmpty {
-                    shelfRow(title: "还没归架", books: loose)
+                    shelfRow(title: "未归架", books: loose)
                 }
             }
             .padding(.top, 6)
@@ -171,7 +171,7 @@ struct BookshelfView: View {
                     .foregroundStyle(Theme.textMuted(scheme))
                 Spacer()
                 Button {
-                    openShelf = title == "还没归架" ? "" : title
+                    openShelf = title == "未归架" ? "" : title
                 } label: {
                     Text("看封面")
                         .font(.app(11))
@@ -267,7 +267,7 @@ struct BookshelfView: View {
                 let all = store.allMarks
                 if all.isEmpty {
                     EmptyNote(icon: "highlighter",
-                              title: "还没划过句子",
+                              title: "暂无划线",
                               hint: "阅读时点击右上角「选句子」进入选句模式，\n点中的句子会标为划线。")
                         .padding(.top, 40)
                 }
@@ -333,7 +333,7 @@ struct BookshelfView: View {
     /// 「小说 · 《活着》 · 第 3 章」这种面包屑，她说要「备注那个分类里的哪一本」
     private func shelfCrumb(_ book: Book?) -> String {
         guard let book else { return "（这本书已经不在了）" }
-        let shelf = book.shelf.isEmpty ? "还没归架" : book.shelf
+        let shelf = book.shelf.isEmpty ? "未归架" : book.shelf
         return shelf + " · 《" + book.title + "》"
     }
 
@@ -365,7 +365,7 @@ struct BookshelfView: View {
                   systemImage: book.shared ? "person.slash" : "person.2")
         }
         Menu {
-            Button("还没归架") { store.move(book.id, toShelf: "") }
+            Button("未归架") { store.move(book.id, toShelf: "") }
             ForEach(store.shelves(), id: \.self) { name in
                 Button(name) { store.move(book.id, toShelf: name) }
             }
@@ -465,7 +465,7 @@ struct ShelfBooksView: View {
                                 }
                             }
                             Menu {
-                                Button("还没归架") { store.move(book.id, toShelf: "") }
+                                Button("未归架") { store.move(book.id, toShelf: "") }
                                 ForEach(store.shelves(), id: \.self) { name in
                                     Button(name) { store.move(book.id, toShelf: name) }
                                 }
@@ -485,7 +485,7 @@ struct ShelfBooksView: View {
                 .padding(.bottom, Layout.tabBarExpanded)
             }
         }
-        .navigationTitle(shelf.isEmpty ? "还没归架" : shelf)
+        .navigationTitle(shelf.isEmpty ? "未归架" : shelf)
         .navigationBarTitleDisplayMode(.inline)
         // ⚠️ 弹窗挪进了不订阅任何东西的宿主，见 `PickHosts.swift`。
         // 挂在这一页上会被 AppState 的每一次变化撤掉。

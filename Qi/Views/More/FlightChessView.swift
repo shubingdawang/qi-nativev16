@@ -58,10 +58,10 @@ struct FlightChessView: View {
 
     private var empty: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("还没有棋盘")
+            Text("暂无棋盘")
                 .font(.app(14, weight: .medium))
                 .foregroundStyle(Theme.textMain(scheme))
-            Text("这一页只管走法：掷骰、走格、停下才生效、后进和退回、谁接受那一格。"
+            Text("本页仅涉及走法：掷骰、行棋、落子生效、后退与返回、格位归属。"
                  + "格子上写什么是你定的——把那份 index.html 导进来（九个版本一次全进），"
                  + "或者自己写一份 JSON 粘进来。")
                 .font(.app(11.5))
@@ -104,12 +104,12 @@ struct FlightChessView: View {
                         Button(role: .destructive) {
                             game.removeBoard(b.id)
                         } label: {
-                            Label("删掉这一副", systemImage: "trash")
+                            Label("删除该棋盘", systemImage: "trash")
                         }
                     }
                 }
             }
-            Text("换一副＝重开一局。长按某一副可以删掉它。")
+            Text("换一副＝重开一局。长按某一棋盘可将其删除。")
                 .font(.app(10.5))
                 .foregroundStyle(Theme.textMuted(scheme))
         }
@@ -151,11 +151,11 @@ struct FlightChessView: View {
     private var rollBar: some View {
         VStack(alignment: .leading, spacing: 9) {
             if game.state.stopped {
-                Text("这一局停了（404）。想再来就上面换一副，或者再点一次同一副。")
+                Text("该局已失效（404）。可在上方更换棋盘，或重新开始同一棋盘。")
                     .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
             } else if game.state.finished {
-                Text("走完了。换一副或者重开同一副。")
+                Text("本局已结束。可更换棋盘，或重新开始同一棋盘。")
                     .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
             } else {

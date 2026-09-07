@@ -95,7 +95,7 @@ struct PixelStudioView: View {
                                     store.remove(art)
                                     if result?.id == art.id { result = nil }
                                 } label: {
-                                    Label("删掉", systemImage: Icon.trash)
+                                    Label("删除", systemImage: Icon.trash)
                                 }
                             }
                         }

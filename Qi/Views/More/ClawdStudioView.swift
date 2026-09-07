@@ -398,7 +398,7 @@ struct ClawdStudioView: View {
                     remember()
                     svg = ClawdSVG.move(picked, dx: 0, dy: 0, scale: 1, in: svg)
                 }
-                tapChip("删掉这件") {
+                tapChip("删除该件") {
                     remember()
                     svg = ClawdSVG.removePlaced(picked, from: svg)
                     picked = ""

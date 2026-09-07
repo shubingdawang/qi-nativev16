@@ -890,7 +890,7 @@ struct JournalPageView: View {
                                     MyStickers.remove(file)
                                     mine = MyStickers.all()
                                 } label: {
-                                    Label("从我的库里删掉", systemImage: Icon.trash)
+                                    Label("从我的库中删除", systemImage: Icon.trash)
                                 }
                             }
                         }
@@ -1020,7 +1020,7 @@ struct JournalPageView: View {
                 commit(e.id) { $0.scale = min(5, $0.scale * 1.2) }
             }
             small("置顶") { commit(e.id) { $0.z = nextZ } }
-            small("删掉") {
+            small("删除") {
                 if !e.imageName.isEmpty { ImageStore.delete(e.imageName) }
                 page.elements.removeAll { $0.id == e.id }
                 picked = nil
@@ -1252,7 +1252,7 @@ struct QuotePickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("关掉") { dismiss() }
+                    Button("关闭") { dismiss() }
                 }
             }
         }

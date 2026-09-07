@@ -137,7 +137,7 @@ struct MemoryLibraryView: View {
             if !store.glossary.isEmpty {
                 SettingsDivider()
                 NavigationLink { GlossaryListView() } label: {
-                    SettingsRowLabel(title: "你俩的黑话",
+                    SettingsRowLabel(title: "专有词条",
                                      value: "\(store.glossary.count) 个", chevron: true)
                 }
                 .buttonStyle(.plain)
@@ -514,7 +514,7 @@ struct MemoryListView: View {
                                     store.saveMemories()
                                 }
                             } label: {
-                                Label("删掉", systemImage: "trash")
+                                Label("删除", systemImage: "trash")
                             }
                         }
                     }
@@ -620,7 +620,7 @@ struct MemoryTranscriptListView: View {
                             Button(role: .destructive) {
                                 store.deleteTranscript(t.id)
                             } label: {
-                                Label("删掉这份存档", systemImage: "trash")
+                                Label("删除该存档", systemImage: "trash")
                             }
                         }
                     }
@@ -698,7 +698,7 @@ struct LetterReaderView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .textSelection(.enabled)
                     } else {
-                        Text("还没有这封信。")
+                        Text("该信件不存在。")
                             .font(.app(13))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
@@ -751,7 +751,7 @@ struct GlossaryListView: View {
                                 store.glossary.removeAll { $0.term == g.term }
                                 store.saveGlossary()
                             } label: {
-                                Label("删掉", systemImage: "trash")
+                                Label("删除", systemImage: "trash")
                             }
                         }
                     }
@@ -760,7 +760,7 @@ struct GlossaryListView: View {
                 .padding(.bottom, Layout.tabBarExpanded + 16)
             }
         }
-        .navigationTitle("你俩的黑话")
+        .navigationTitle("专有词条")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

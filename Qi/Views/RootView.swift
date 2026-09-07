@@ -68,7 +68,7 @@ struct RootView: View {
         } message: { ask in
             Text("将调用「\(ask.name)」。\n\(ask.args)"
                  + "\n\n以上操作不可撤销，需确认后执行。"
-                 + "不想每次都问，去「设置 → 通用」关掉。")
+                 + "不想每次都问，可在「设置 → 通用」中关闭。")
         }
         // ⚠️ `!calls.minimized`：收起来的时候不摆全屏，**但电话还通着**。
         //

@@ -83,7 +83,7 @@ struct PokeSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("关掉") { dismiss() }
+                    Button("关闭") { dismiss() }
                 }
             }
         }
