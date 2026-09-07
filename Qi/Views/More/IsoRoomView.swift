@@ -121,7 +121,18 @@ struct IsoRoomView<Clawd: View>: View {
             // `contentShape` 要单独补一句：`clipShape` 只管画出来的样子，
             // **不改可点范围**——不补的话，被裁掉的那块还照样接触摸，
             // 她点屋子外面一片空气，却选中了一件家具。
-            .clipShape(geoRoom.roomPath)
+            // ⚠️ **裁用 `clipPath`，点用 `roomPath`。两个不是同一个。**
+            //
+            // 她发的图：clawd 走到最前那排，只剩一个头露在地板上。
+            // 上一版两处都是 `roomPath`，而它的下半截在地板前沿——
+            // 站在那一排的人，身子就在线外面。
+            //
+            // `clipPath` 是同一个轮廓**前面多一条裙**（见 `IsoRoom`）。
+            // 两面墙那边一点没动，阴影该被吃掉的照旧被吃掉。
+            //
+            // 可点范围不能跟着放大：那条裙底下是空气，
+            // 算进去的话她点屋外一片空白也会当成点在地板上。
+            .clipShape(geoRoom.clipPath)
             .contentShape(geoRoom.roomPath)
             // 拖到他身上的时候，在他脚下点一圈光——
             // **她得看得见「松手就是给他」**，不能靠猜
