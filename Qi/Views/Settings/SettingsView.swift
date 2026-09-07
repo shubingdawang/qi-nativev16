@@ -190,12 +190,16 @@ struct SettingsView: View {
 
             // 主题色不在这儿摆了——「自定义主题」里那一整套（八个预设 + 自己填色号）
             // 才是全的，外面再放五个圆点就是同一件事做两遍。
+            // ⚠️ `zIndex(1)`：这两行**排在最上层**，底下那块壁纸再撑大也盖不住它们。
+            // 真正的病根在 `wallpaperSlot` 里（见那儿那段），这儿是第二道保险——
+            // 同一类坑这个工程犯过两次，值得多钉一根钉子。
             NavigationLink {
                 AppearanceView()
             } label: {
                 SettingsRowLabel(title: "自定义主题", value: currentAccentName, chevron: true)
             }
             .buttonStyle(.plain)
+            .zIndex(1)
 
             SettingsDivider()
 
@@ -205,6 +209,7 @@ struct SettingsView: View {
                 SettingsRowLabel(title: "App 图标", chevron: true)
             }
             .buttonStyle(.plain)
+            .zIndex(1)
 
             SettingsDivider()
 
@@ -415,13 +420,33 @@ struct SettingsView: View {
             editingDark = dark
         } label: {
             VStack(spacing: 5) {
+                // ⚠️⚠️ **`.scaledToFill()` 的图必须装在 `Color.clear` 的 overlay 里。**
+                //
+                // 她报的：「点击自定义主题和 App 图标没反应，反而点击
+                // App 图标和背景中间的空白背景选中了。」
+                //
+                // 病根就是这一格：`scaledToFill()` **报回来的尺寸比提议的大**
+                // （它报的是「盖满提议尺寸」所需要的那个尺寸）。装在 ZStack 里，
+                // 整个 ZStack 就跟着撑大，这一格的**可点范围**也跟着涨出去，
+                // 盖住了上面那两行——于是点那两行，接住手指的是这一格。
+                //
+                // `Color.clear` 是个老实人：提议多大它就多大。
+                // 图在它的 overlay 里溢出去不影响布局，溢的那圈被 `clipped()` 剪掉。
+                //
+                // ⚠️ 这个坑**在这个工程里犯过第二次了**：第一次是小屋的地板
+                // （「随便用一张图做地板，小屋整体往左移了」），
+                // 那次的修法一模一样。见 `IsoRoomView` 里那一段。
                 ZStack {
                     RoundedRectangle(cornerRadius: 11, style: .continuous)
                         .fill(dark ? Color.black.opacity(0.55) : Theme.softFillDeep)
                     if let name, let img = ImageStore.cached(name) {
-                        Image(uiImage: img)
-                            .resizable()
-                            .scaledToFill()
+                        Color.clear
+                            .overlay {
+                                Image(uiImage: img)
+                                    .resizable()
+                                    .scaledToFill()
+                            }
+                            .clipped()
                     } else {
                         Image(systemName: dark ? "moon" : "sun.max")
                             .font(.system(size: 17))

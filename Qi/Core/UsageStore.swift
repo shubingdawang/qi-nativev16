@@ -398,6 +398,22 @@ final class UsageStore: ObservableObject {
         loaded = true
     }
 
+    /// 把导进来的那份用量**合并**进现在这份。
+    ///
+    /// ⚠️ **合并，不是覆盖。** 她导备份多半是为了找回丢掉的那一段，
+    /// 覆盖的话今天这几笔反而没了。同一天同一档就把两边的数加起来。
+    func merge(_ incoming: [String: DayUsage]) {
+        for (day, one) in incoming {
+            var cur = days[day] ?? DayUsage(day: day)
+            for (src, u) in one.bySource {
+                cur.bySource[src] = (cur.bySource[src] ?? TokenUsage()) + u
+            }
+            cur.day = day
+            days[day] = cur
+        }
+        Storage.save(days, to: "usage.json")
+    }
+
     private func scheduleSave() {
         guard !saving else { return }
         saving = true
@@ -513,6 +529,18 @@ enum UsageFormat {
 // ⚠️ 记一句：**给一个会落盘的结构加字段，必须同时给它容错解码。**
 // 这件事这个文件开头早就写着了——写着的是 `Pricing`，
 // 而 `TokenUsage` 一直没有。加字段的时候我没往上看一眼。
+// ⚠️ `DayUsage` 也一样。它的两个属性都写了默认值，
+// 可**合成出来的解码器不认默认值**——旧文件里少一个键就整份读不进来。
+// 这一条这个文件下面写过一遍了（`TokenUsage` 那儿），这儿补上。
+extension DayUsage {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        day = (try? c.decodeIfPresent(String.self, forKey: .day)) ?? ""
+        bySource = (try? c.decodeIfPresent([String: TokenUsage].self,
+                                           forKey: .bySource)) ?? [:]
+    }
+}
+
 extension TokenUsage {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)

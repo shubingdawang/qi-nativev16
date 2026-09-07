@@ -1705,11 +1705,24 @@ final class AppState: ObservableObject {
         conversation?.syncWithClaude == true
     }
 
-    /// 小屋那边的记忆库现在够不够得着（电脑开着、MCP 连着、记忆那几件是开的）。
+    /// 小屋那边的记忆库现在够不够得着。
     /// 「与 claude.ai 互通」那个开关成不成立，全看这一条。
+    ///
+    /// ⚠️⚠️ **看的是「小屋有没有这几件工具」，不是「她有没有把它们打开」。**
+    ///
+    /// 她报的：「工具关闭依旧是显示未连上。」——她说的正是这个。
+    /// 早先本机记忆库和小屋记忆库要二选一，她照做把小屋那几件关了；
+    /// 后来那个二选一取消了（现在是发请求时临时把重名的滤掉，
+    /// 见 `hiddenHouseTools`），可这一行还在数**打开着的**那几件，
+    /// 于是永远数到 0，永远显示未连上。
+    ///
+    /// 而镜像根本不走她那几个开关：**是 App 直接发的**（`HouseSync`），
+    /// 一次模型调用都不多花，跟工具开没开毫无关系。
+    /// 所以这儿该问的是「这台服务器连上了吗、它有没有记忆那几件」，
+    /// 不是「她有没有把它们勾上」。
     var houseMemoryReachable: Bool {
         mcpServers.contains { s in
-            s.usable && s.enabledTools.contains { Self.memoryToolNames.contains($0.name) }
+            s.usable && s.tools.contains { Self.memoryToolNames.contains($0.name) }
         }
     }
 

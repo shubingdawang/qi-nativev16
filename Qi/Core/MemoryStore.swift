@@ -1124,6 +1124,21 @@ final class MemoryStore: ObservableObject {
                     report.lines.append("留言")
                 } else { report.failed.append(name) }
 
+            // ⚠️ **`usage.json` 以前不在这张表里。**
+            //
+            // 她报了两轮「坏掉的 usage 依旧没处理」——它根本不是坏了，
+            // 是这儿**认不出这个名字**，于是落进「没读进来的」那一栏。
+            // 我上一轮只给 `TokenUsage` 补了容错解码（那治的是另一件事：
+            // 加字段把她的文件读崩了），没想到还有这一层。
+            //
+            // ⚠️ 用量不是记忆库的东西，但备份里就是有它，
+            // 她也确实是拿它来找回那一段账的。认下来。
+            case "usage.json":
+                if let v = try? dec.decode([String: DayUsage].self, from: data) {
+                    UsageStore.shared.merge(v)
+                    report.lines.append("用量 \(v.count) 天")
+                } else { report.failed.append(name) }
+
             case "periods.json":
                 if let v = try? dec.decode(PeriodBook.self, from: data) {
                     periods = v; savePeriods()
