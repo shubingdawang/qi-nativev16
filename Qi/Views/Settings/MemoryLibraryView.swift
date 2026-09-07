@@ -11,6 +11,7 @@ struct MemoryLibraryView: View {
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
     @ObservedObject private var store = MemoryStore.shared
+    @ObservedObject private var hits = MemoryHits.shared
 
     @State private var report: String?
     @State private var confirmWipe = false
@@ -145,6 +146,16 @@ struct MemoryLibraryView: View {
             NavigationLink { GlossaryListView() } label: {
                 SettingsRowLabel(title: "专有词条",
                                  value: "\(store.glossary.count) 条", chevron: true)
+            }
+            .buttonStyle(.plain)
+
+            SettingsDivider()
+            NavigationLink { MemoryHitsView() } label: {
+                SettingsRowLabel(
+                    title: "记忆使用情况",
+                    value: hits.book.reportedRounds == 0 ? "暂无数据"
+                        : String(format: "有效率 %.0f%%", hits.effectiveness * 100),
+                    chevron: true)
             }
             .buttonStyle(.plain)
         }
@@ -774,5 +785,102 @@ struct GlossaryListView: View {
         }
         .navigationTitle("专有词条")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+
+// MARK: - 哪些记忆是白注入的
+
+/// 记忆库现在能报的只有「有多少条」。这一页报的是下一层：
+/// **注入进去的那些，他到底用上了几条。**
+///
+/// 数从哪儿来见 `MemoryHits`——他每一轮在回合末尾报一笔，
+/// 标记落库前就摘掉了，她在聊天里看不到。
+///
+/// ⚠️ 这一页最该看的不是上面那个百分比，是**「白占位置的」那一栏**：
+/// 注入过好几次、一次都没被用上的那些，直接说明哪些记忆在白花每一轮的位置。
+struct MemoryHitsView: View {
+
+    @EnvironmentObject var app: AppState
+    @Environment(\.colorScheme) private var scheme
+    @ObservedObject private var hits = MemoryHits.shared
+    @ObservedObject private var store = MemoryStore.shared
+
+    /// id → 那条记忆的正文。表里只存 id，显示的时候才去认人。
+    private func text(_ id: String) -> String {
+        store.memories.first { $0.shortID == id }?.display ?? "（已删除）"
+    }
+
+    var body: some View {
+        ZStack {
+            WallpaperBackground()
+            ScrollView {
+                LazyVStack(spacing: 10) {
+                    if hits.book.reportedRounds == 0 {
+                        EmptyNote(icon: "chart.bar.doc.horizontal",
+                                  title: "暂无数据",
+                                  hint: "模型在每轮回复末尾上报本轮真正用上的记忆，"
+                                      + "上报内容不会显示在对话中。需先启用记忆库或 MCP，"
+                                      + "并进行若干轮对话后方有数据。")
+                    } else {
+                        summary
+                        section("白占位置的", hits.wasted.prefix(20).map { $0 },
+                                note: "注入过三次以上，一次都没被用上")
+                        section("用得最多的", hits.mostUsed.prefix(20).map { $0 }, note: "")
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, Layout.tabBarExpanded + 16)
+            }
+        }
+        .navigationTitle("记忆使用情况")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var summary: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            let t = hits.totals
+            row("上报轮数", "\(hits.book.reportedRounds)")
+            row("其中用上记忆的轮数", "\(hits.book.usefulRounds)")
+            row("注入次数", "\(t.injected)")
+            row("被用上的次数", "\(t.used)")
+            row("有效率", String(format: "%.0f%%", hits.effectiveness * 100))
+        }
+        .padding(13)
+        .glassBackground(radius: 16, strength: app.settings.glassOpacity)
+    }
+
+    private func row(_ k: String, _ v: String) -> some View {
+        HStack {
+            Text(k).font(.app(13)).foregroundStyle(Theme.textSoft(scheme))
+            Spacer()
+            Text(v).font(.app(13)).foregroundStyle(Theme.textMain(scheme))
+        }
+    }
+
+    @ViewBuilder
+    private func section(_ title: String, _ rows: [MemoryHitRow], note: String) -> some View {
+        if !rows.isEmpty {
+            VStack(alignment: .leading, spacing: 9) {
+                Text(title).heading(14).foregroundStyle(Theme.textMain(scheme))
+                if !note.isEmpty {
+                    Text(note).font(.app(11)).foregroundStyle(Theme.textMuted(scheme))
+                }
+                ForEach(rows) { r in
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(text(r.id))
+                            .font(.app(13))
+                            .foregroundStyle(Theme.textSoft(scheme))
+                            .lineLimit(2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text("注入 \(r.injected) 次 · 用上 \(r.used) 次")
+                            .font(.app(11))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
+                }
+            }
+            .padding(13)
+            .glassBackground(radius: 16, strength: app.settings.glassOpacity)
+        }
     }
 }

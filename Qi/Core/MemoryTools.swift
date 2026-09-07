@@ -468,6 +468,7 @@ enum MemoryTools {
             out += picked.map(line).joined(separator: "\n")
             let stillOpen = m.memories.filter { $0.resolved == false }.count
             if stillOpen > 0 { out += "\n\n还悬着没了结的一共 \(stillOpen) 件。" }
+            MemoryHits.shared.noteInjected(picked.map(\.shortID))
             return (out, false)
 
         case "mark_memory":
@@ -1142,6 +1143,12 @@ enum MemoryTools {
         // 还悬着没了结的（Ombre-Brain 那套里最有用的一条：
         // 未了结的事本来就该反复浮上来，直到真的收口）
         let unresolved = m.memories.filter { $0.resolved == false }
+
+        // ⚠️ 记一笔「这几条进过他眼前」。**分母就在这儿**——
+        // 没有它，后面那个「他说用上了 X 条」除不出有效率来。
+        // 见 `MemoryHits`。
+        MemoryHits.shared.noteInjected(
+            (core + Array(rest) + unresolved.prefix(8)).map(\.shortID))
         if !unresolved.isEmpty {
             parts.append("【还悬着没了结的】\n"
                          + unresolved.prefix(8).map(line).joined(separator: "\n"))

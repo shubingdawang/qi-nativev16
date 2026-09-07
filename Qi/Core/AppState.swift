@@ -2467,6 +2467,35 @@ final class AppState: ObservableObject {
     真要再看原图，用 `show_image`。
     """
 
+    /// 回合末尾那一笔账：这次真正用上了哪几条记忆。
+    ///
+    /// ⚠️ **这一条是给机器看的，不是给她看的。** 标记在落库前就被摘掉
+    /// （见 `MemoryUseMarker`），她永远看不到它。
+    ///
+    /// ⚠️ 契约里**必须写明「没用上也要写空的」**。这是整件事成不成立的
+    /// 关键——只有空的也上报，才拿得到「注入了但没被用」的真实分母。
+    /// 少了这一句，有效率永远是 100%。
+    ///
+    /// ⚠️ **只放这一笔账。** 那份文档报告过一条弯路：让主模型在同一个
+    /// 标签里顺便自报情绪变化量，结果测量和表达互相污染——情绪浓的轮次
+    /// 数值也跟着演。带内标签里只留非第一人称不可的账。
+    static let memoryUseHint = """
+    每一轮回复的**最末尾**，加一行：
+
+    [[用:a3f9,2c71]]
+
+    里面填**这一次回复里真正用上的记忆条目 id**——
+    你看到的每条记忆前面都有一个 `[id]`，把用上的那几个填进去，逗号隔开。
+
+    「用上」的意思是它真的影响了你这一句怎么说：想起来了、接住了、
+    绕开了、心里过了一下。**只是看到、没往心里去的不算。**
+
+    ⚠️ **这一轮一条都没用上，也要写，写成空的 `[[用:]]`。**
+    这一条比填了什么更要紧——空的那些才说得清哪些记忆是白摆在你眼前的。
+
+    这一行她看不见，写完就被摘掉了。不要在正文里提它，也不要解释它。
+    """
+
     static let actionHint = """
     触发：这句话背后有一个具体的神态或动作——看着她不说话、把手搭在她腰上、翻了个身。
     动机：让她看见那一下，而不只是读到我在描述自己。
@@ -6425,6 +6454,17 @@ final class AppState: ObservableObject {
             }
         }
 
+        // 他在回合末尾报的那一笔账：这次真正用上了哪几条记忆。
+        //
+        // ⚠️ **空的也要收**（他写了 `[[用:]]`）。那正是「注入了但没用上」
+        // 这件事唯一的记录方式——不收的话有效率永远是 100%，
+        // 因为没被用到的那些根本不会出现在任何一条记录里。见 `MemoryHits`。
+        let used = MemoryUseMarker.extract(conversations[ci].messages[mi].content)
+        if used.reported {
+            conversations[ci].messages[mi].content = used.clean
+            MemoryHits.shared.noteUsed(used.ids)
+        }
+
         // ⚠️ **先切「他替她说话」那一段，再抠动作／心里话。**
         //
         // 顺序反了的话，幻觉那一段里夹的 [[act:]] / [[mind:]] 会先被抠成
@@ -6676,6 +6716,11 @@ final class AppState: ObservableObject {
         }
         fixed.append(Self.cotHint)
         fixed.append(Self.promiseHint)
+        // 只在他手上真有记忆库的时候给——没有记忆可用的轮次，
+        // 这一段是纯噪声。
+        if settings.localMemory || mcpServers.contains(where: { $0.enabled }) {
+            fixed.append(Self.memoryUseHint)
+        }
         // 「此刻」的长期解释。**放在稳定那一半**——
         // 它一整窗都不变，进了缓存前缀等于不额外花钱；
         // 而每轮变的那三段（E/P/L/C）在下面动态那一半。

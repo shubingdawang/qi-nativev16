@@ -146,10 +146,19 @@ enum MessageBeats {
             text = rest
             let t = inner.trimmingCharacters(in: .whitespacesAndNewlines)
             if !t.isEmpty {
+                // ⚠️ 只有这三种。`[[用:` 那种是报给机器看的账（见 `MemoryHits`），
+                // 掉了队也只是丢掉，不能变成一条心里话显示给她。
                 if kind == "cot" { cot = String(t.prefix(40)) }
-                else { beats.append(MessageBeat(kind: kind, text: String(t.prefix(maxLength)))) }
+                else if kind == "act" || kind == "mind" {
+                    beats.append(MessageBeat(kind: kind, text: String(t.prefix(maxLength))))
+                }
             }
         }
+
+        // 报给机器看的那笔账先摘掉（见 `MemoryUseMarker`）。
+        // 落库那一步已经摘过一次，这儿是给**流式那几秒**兜底——
+        // 不摘的话她会看见 `[[用:a3f9]]` 在气泡末尾闪一下。
+        text = MemoryUseMarker.extract(text).clean
 
         // ⚠️⚠️ **动作和心里话整段扫，不按行扫。**
         //
@@ -252,7 +261,7 @@ enum MessageBeats {
     private static let receiptPattern = #"〔这一条里你真的动手了：[^〕]{0,200}〕"#
 
     /// 三个开标记。顺序不要改：`hideTornTail` 拿它们当前缀比。
-    private static let opens = ["[[act:", "[[mind:", "[[cot:"]
+    private static let opens = ["[[act:", "[[mind:", "[[cot:", "[[用:"]
 
     /// 掉队的那一个（写了开标记、没写闭标记）。找到就把它到串尾括出来。
     ///
