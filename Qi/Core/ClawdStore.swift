@@ -1422,33 +1422,33 @@ extension FurnitureCatalog {
 
         // 床：占两格宽两格深，能躺、能滚、能坐边上
         case "bed", "bed_berry", "bed_xmas":
-            return IsoShape(w: 2, d: 2, tall: 1.1,
+            return IsoShape(w: 3, d: 4, tall: 1.1,
                             actions: ["躺下", "打滚", "坐边上", "钻被窝"])
 
         // 沙发：能坐、能瘫、能趴扶手
         case "sofa":
-            return IsoShape(w: 2, d: 1, tall: 1.0,
+            return IsoShape(w: 3, d: 3, tall: 1.0,
                             actions: ["坐下", "瘫着", "趴扶手"])
 
         // 桌子：**有台面**——阿晏「把饮料放在哪张桌子上」靠的就是这个
         case "table":
-            return IsoShape(w: 2, d: 1, tall: 0.9, surface: true,
+            return IsoShape(w: 3, d: 3, tall: 0.9, surface: true,
                             actions: ["趴桌上", "在桌边站着", "把东西放上去"])
 
         case "stool":
-            return IsoShape(w: 1, d: 1, tall: 0.7, surface: true,
+            return IsoShape(w: 2, d: 2, tall: 0.7, surface: true,
                             actions: ["坐下", "踩上去", "把东西放上去"])
 
         case "shelf":
-            return IsoShape(w: 1, d: 1, tall: 2.0, surface: true,
+            return IsoShape(w: 2, d: 2, tall: 2.0, surface: true,
                             actions: ["抽一本", "踮脚够", "把东西放上去"])
 
         case "tv", "console":
-            return IsoShape(w: 1, d: 1, tall: 0.9,
+            return IsoShape(w: 2, d: 2, tall: 0.9,
                             actions: ["打开看", "凑近看", "按两下"])
 
         case "lamp":
-            return IsoShape(w: 1, d: 1, tall: 1.6, actions: ["开灯", "凑到灯下"])
+            return IsoShape(w: 2, d: 2, tall: 1.6, actions: ["开灯", "凑到灯下"])
 
         // MARK: 厨房和浴室
         //
@@ -1459,60 +1459,60 @@ extension FurnitureCatalog {
 
         // 冰箱：高，能开门、能贴着凉快、顶上能放东西
         case "fridge":
-            return IsoShape(w: 1, d: 1, tall: 2.2, surface: true,
+            return IsoShape(w: 2, d: 2, tall: 2.2, surface: true,
                             actions: ["开冰箱", "贴着凉快", "把东西放上去"])
 
         // 微波炉：矮，一般摆在台面上，所以自己不高
         case "microwave":
-            return IsoShape(w: 1, d: 1, tall: 0.7, surface: true,
+            return IsoShape(w: 2, d: 2, tall: 0.7, surface: true,
                             actions: ["按两下", "盯着转", "把东西放上去"])
 
         case "breadrack":
-            return IsoShape(w: 1, d: 1, tall: 1.5, surface: true,
+            return IsoShape(w: 2, d: 2, tall: 1.5, surface: true,
                             actions: ["踮脚够", "闻一闻", "把东西放上去"])
 
         case "washer":
-            return IsoShape(w: 1, d: 1, tall: 1.2, surface: true,
+            return IsoShape(w: 2, d: 2, tall: 1.2, surface: true,
                             actions: ["按两下", "盯着转", "坐上面"])
 
         case "toilet":
-            return IsoShape(w: 1, d: 1, tall: 1.0,
+            return IsoShape(w: 2, d: 2, tall: 1.0,
                             actions: ["掀盖子", "坐下", "冲一下"])
 
         // 浴缸：占两格，能进去泡、能坐边上、能玩水
         case "bathtub":
-            return IsoShape(w: 2, d: 1, tall: 0.8,
+            return IsoShape(w: 3, d: 3, tall: 0.8,
                             actions: ["泡进去", "坐边上", "拍水花"])
 
         case "sink":
-            return IsoShape(w: 1, d: 1, tall: 1.1, surface: true,
+            return IsoShape(w: 2, d: 2, tall: 1.1, surface: true,
                             actions: ["洗把脸", "照镜子", "把东西放上去"])
 
         // 自动贩卖机：这批里最高的一件
         case "vending":
-            return IsoShape(w: 1, d: 1, tall: 2.4,
+            return IsoShape(w: 2, d: 2, tall: 2.4,
                             actions: ["挑一瓶", "拍一下", "隔着玻璃看"])
 
         // 地毯：**摊在地上，别的东西可以压在上面**，所以高度是 0
         case "rug":
-            return IsoShape(w: 3, d: 3, tall: 0, actions: ["打滚", "躺一会儿"])
+            return IsoShape(w: 5, d: 6, tall: 0, actions: ["打滚", "躺一会儿"])
 
         case "plant", "cactus", "sunflower":
-            return IsoShape(w: 1, d: 1, tall: 1.2, actions: ["浇水", "闻一闻", "戳一下"])
+            return IsoShape(w: 2, d: 2, tall: 1.2, actions: ["浇水", "闻一闻", "戳一下"])
 
         case "bear":
-            return IsoShape(w: 1, d: 1, tall: 0.9, actions: ["抱一下", "摆正", "说悄悄话"])
+            return IsoShape(w: 2, d: 2, tall: 0.9, actions: ["抱一下", "摆正", "说悄悄话"])
 
         case "pillow":
-            return IsoShape(w: 1, d: 1, tall: 0.5, actions: ["靠上去", "抱一下", "摆正"])
+            return IsoShape(w: 2, d: 2, tall: 0.5, actions: ["靠上去", "抱一下", "摆正"])
 
         // 伞竖着，比别的小摆件高
         case "umbrella":
-            return IsoShape(w: 1, d: 1, tall: 1.4, actions: ["撑开", "撞一下", "拿起来"])
+            return IsoShape(w: 2, d: 2, tall: 1.4, actions: ["撑开", "撞一下", "拿起来"])
 
         default:
             // 小摆件：一格、矮、能摸能拿
-            return IsoShape(w: 1, d: 1, tall: 0.6, actions: ["摸一下", "拿起来"])
+            return IsoShape(w: 2, d: 2, tall: 0.6, actions: ["摸一下", "拿起来"])
         }
     }
 }

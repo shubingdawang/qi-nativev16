@@ -149,16 +149,17 @@ extension FurnitureCatalog {
     /// ⚠️ 圣诞和新年那两套一开始只有左视角，她后来补上了。
     /// 那一阵它们返回 nil，取图那边会退回左边那张——
     /// **那条退路留着**：以后新加的套装也未必一上来就两面都齐。
-    /// ⚠⚠ **贴左墙用的是 `iso_r_`，贴右墙用 `iso_l_`。反的。**
+    /// ⚠️ 上一版我把左右倒过来一次，**又改回去了**。
     ///
-    /// 她发了一组对比图：选「靠左墙」时床头靠在**右**边那面墙，
-    /// 选「靠右墙」时反过来。两张图本身是对的，是我接反了。
+    /// 当时看她那两张对比图，以为是接反了。她后来说得更清楚：
+    /// **「两张图都是靠右放的」**——那就不是接反，
+    /// 而是资产包那两个视角**本来就不是一对「靠左墙 / 靠右墙」**。
+    /// 倒一下只是在两张都像靠右的图之间换来换去，什么都没解决，
+    /// 而名字跟行为倒是对不上了。所以按名字接回去。
     ///
-    /// 资产包里 `top_front_left` 说的是「这件东西的左前方对着镜头」，
-    /// **不是「它靠左墙」**。一件左前方对着你的家具，
-    /// 它的背恰恰朝着右后方——也就是贴在右墙上。
-    ///
-    /// 名字没改（改名要动一百多行表），换成在这儿倒一下。
+    /// 真要做出「靠左墙」那一面，要么把图水平翻一下
+    ///（代价是光从另一边来了，烘在图里的影子会反），
+    /// 要么请她出一套真的靠左墙的图。这两条都得先问过她。
     static func isoRightName(_ left: String) -> String? {
         if left.hasPrefix("iso_l_") { return "iso_r_" + left.dropFirst(6) }
         if left.hasPrefix("iso_vic_") { return "iso_vicr_" + left.dropFirst(8) }
@@ -192,8 +193,7 @@ extension FurnitureCatalog {
         // ⚠️ **退回去而不是不画。** 圣诞、新年那两套只有左视角，
         // 她把一件新年家具改成靠右墙，总不能让它当场消失——
         // 透视差一点看得出来，东西没了她只会以为坏了。
-        // ⚠️ 这儿是 **`!facesRight`**，不是 `facesRight`。理由见 `isoRightName`。
-        if !flat, !facesRight, let r = isoRightName(name), let img = load(r) {
+        if !flat, facesRight, let r = isoRightName(name), let img = load(r) {
             return img
         }
         return load(name)
