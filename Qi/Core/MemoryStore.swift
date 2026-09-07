@@ -1044,7 +1044,18 @@ final class MemoryStore: ObservableObject {
                 report.failed.append(u.lastPathComponent)
                 continue
             }
-            let name = u.lastPathComponent.lowercased()
+            // ⚠️ **「坏了-」那份也要认得出来。**
+            //
+            // 她报的：「这个坏了的 usage 依旧读不了。」——文件叫
+            // `usage.json.坏了-1788740295`（见 `Storage.load` 里救回来那一段），
+            // 而下面这个 `switch` 比的是**完整文件名**，一个都对不上，
+            // 直接落进「没读进来的」。
+            //
+            // 那份文件本身是好的，只是名字后面挂了个尾巴。把尾巴剪掉再认。
+            var name = u.lastPathComponent.lowercased()
+            if let r = name.range(of: ".坏了") {
+                name = String(name[name.startIndex..<r.lowerBound])
+            }
             let dec = JSONDecoder()
 
             switch name {

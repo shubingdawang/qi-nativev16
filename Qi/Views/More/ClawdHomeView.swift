@@ -138,12 +138,34 @@ struct ClawdHomeView: View {
     // 现在都从**同一份几何**里现算。`IsoRoom` 那边只此一份，
     // 画屋子、摆家具、他走路，三处用的是同一个 `fit` 的结果。
 
-    /// 地板竖着占哪一段
+    /// 他画出来有多高（点）。**量出来的，不是算出来的。**
+    ///
+    /// ⚠️ 他的高度取决于精灵图纸、缩放系数、手上有没有举东西——
+    /// 在几何那边（`IsoRoom`）猜不出来。我在那儿猜过两次留白，
+    /// 两次都不够，她两次都截图给我看。
+    @State private var bodyH: CGFloat = 0
+
+    /// 地板竖着占哪一段。
+    ///
+    /// ⚠️ **上下都要给他让出半个身子。**
+    ///
+    /// 他是用 `.position` 摆的，那个坐标是**他这一块的正中**，不是他的脚。
+    /// 所以：
+    ///   · 最下那一排——正中贴着地板下沿，脚就伸到屋外去了
+    ///   · 最上那一排——正中贴着地板上沿，头就扎进墙里去了
+    ///
+    /// 两头各扣 `bodyH / 2`，他就整个人都在地板上。
     private var band: (top: Double, bottom: Double) {
         guard let s = roomSize, s.height > 1 else {
             return (ClawdHomeView.floorTop, ClawdHomeView.floorBottom)
         }
-        return IsoRoom.fit(in: s, as: store.projection).walkBand(in: s)
+        let raw = IsoRoom.fit(in: s, as: store.projection).walkBand(in: s)
+        let half = Double(bodyH / 2) / Double(s.height)
+        // ⚠️ 扣完不能让上沿越过下沿。屋子太小的时候宁可让他挤在中间一条，
+        // 也不能出现 top > bottom——那会让夹回去的结果乱跳。
+        let top = min(raw.top + half, raw.bottom)
+        let bottom = max(top, raw.bottom - half)
+        return (top, bottom)
     }
 
     /// 在竖直位置 y 上横着到哪儿。**地板是菱形，不是矩形**——
@@ -959,6 +981,21 @@ struct ClawdHomeView: View {
                 // 精灵那块 Canvas 是不接触摸的，得自己补一块感应区，
                 // 不然点也点不到、更别说长按拖
                 .contentShape(Rectangle().inset(by: -10))
+        }
+        // ⚠️ 量的是**他这一整块**画出来多高（气泡也算在里面——
+        // 气泡在的时候他这一块确实变高了，正中也跟着往上跑）。
+        // 量完扣进 `band`，他就永远整个人站在地板上。
+        .background {
+            GeometryReader { g -> Color in
+                let h = g.size.height
+                if abs(h - bodyH) > 0.5 {
+                    DispatchQueue.main.async {
+                        bodyH = h
+                        settleHim()
+                    }
+                }
+                return Color.clear
+            }
         }
         .position(x: clawdX * size.width, y: clawdY * size.height)
         // 拖的时候要跟手，所以不给动画；自己走的时候才慢慢挪过去

@@ -233,6 +233,39 @@ struct ModelPickerView: View {
 
 // MARK: - 这个对话的设定（系统提示词）
 
+extension SystemPromptView {
+
+    /// 小屋那一行右边显示什么
+    var houseLabel: String {
+        switch app.houseState {
+        case .ok:      return "已连上"
+        case .off:     return "已停用"
+        case .offline: return "未连上"
+        case .none:    return "未配置"
+        }
+    }
+
+    /// 下面那一行橙字。通着就不用说话。
+    ///
+    /// ⚠️ **每一句都要说清楚下一步该做什么。** 她卡在「未连上」上好几轮，
+    /// 就是因为上一版无论哪种情况都只说「服务未连接，会自动补传」——
+    /// 那句话把「你自己关的」说成了「等它自己好」。
+    var houseWhy: String? {
+        switch app.houseState {
+        case .ok:
+            return nil
+        case .off:
+            return "小屋已在「设置 → MCP」中停用。启用即可接通；"
+                + "启用后与本机记忆库同名的工具会在发送时自动隐去，"
+                + "不影响本机记忆库。"
+        case .offline:
+            return "小屋暂时够不着。记忆正常写入本机，接通后自动补传，无需手动操作。"
+        case .none:
+            return "尚未配置小屋。在「设置 → MCP」中添加后方可共用。"
+        }
+    }
+}
+
 struct SystemPromptView: View {
 
     let space: ChatSpace
@@ -286,12 +319,15 @@ struct SystemPromptView: View {
                         HStack {
                             Text("共用记忆库")
                             Spacer()
-                            Text(app.houseMemoryReachable ? "已连上" : "未连上")
-                                .foregroundStyle(app.houseMemoryReachable
+                            Text(houseLabel)
+                                .foregroundStyle(app.houseState == .ok
                                                  ? StatusTone.done.color : .orange)
                         }
-                        if !app.houseMemoryReachable {
-                            Text("小屋服务未连接。记忆正常写入本机，服务恢复后自动补传，无需手动操作。")
+                        // ⚠️ **说「为什么」，不只说「不行」。**
+                        // 只说不行的话，她唯一能做的就是等——而等永远等不来。
+                        // 见 `AppState.HouseState` 那一段。
+                        if let why = houseWhy {
+                            Text(why)
                                 .font(.footnote)
                                 .foregroundStyle(.orange)
                         }

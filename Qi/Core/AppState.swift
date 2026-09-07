@@ -1726,6 +1726,48 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// 小屋现在到底是什么状态。
+    ///
+    /// ## ⚠️ 「未连上」这三个字骗了她好几轮
+    ///
+    /// 她一直说「我关了工具，记忆库依旧是未连上」。我一直以为是判断写错了，
+    /// 改了两版判断——**都没改到点子上**。
+    ///
+    /// 直到她发了那张编辑 MCP 的图：小屋那台的**「启用」是关着的**，
+    /// 而 44 件工具全开着。也就是说她关掉的从来不是工具，是**整台服务器**。
+    ///
+    /// 服务器关着，`usable` 就是 false，当然连不上。判断没错，
+    /// **错在那句话**：「小屋服务未连接。记忆正常写入本机，服务恢复后自动补传」
+    /// 听上去像是电脑没开、网断了，是个等它自己好的事。
+    /// 而真相是「你自己把它关了，打开就行」。
+    ///
+    /// ⚠️ 记一句：**状态文案要说「为什么」，不能只说「不行」。**
+    /// 只说不行的话，她唯一能做的就是等——而等永远等不来。
+    enum HouseState {
+        /// 压根没配过小屋
+        case none
+        /// 配过，但那台的开关是关着的
+        case off
+        /// 开着，可够不着（电脑没开 / 网断了）
+        case offline
+        /// 通着
+        case ok
+    }
+
+    /// 哪一台是小屋：**摆得出记忆那几件工具的那台**。
+    /// 按名字认（"小屋"）会被她随手改名弄丢。
+    var houseServer: MCPServer? {
+        mcpServers.first { s in
+            s.tools.contains { Self.memoryToolNames.contains($0.name) }
+        }
+    }
+
+    var houseState: HouseState {
+        guard let s = houseServer else { return .none }
+        if !s.enabled { return .off }
+        return s.offlineSince == nil ? .ok : .offline
+    }
+
     /// 小屋此刻真的摆出来的工具名。
     var houseToolNames: Set<String> {
         var out: Set<String> = []

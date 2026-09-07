@@ -165,6 +165,22 @@ struct BookshelfView: View {
         } message: {
             Text("书不会被删除，会退回未归架。")
         }
+        // 改名。`alert` 带输入框是 iOS 16 起就有的写法，比自己弹一张卡省事。
+        .alert("重命名书架", isPresented: Binding(get: { renaming != nil },
+                                              set: { if !$0 { renaming = nil } })) {
+            TextField("书架名", text: $newName)
+            Button("保存") {
+                let t = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+                // ⚠️ 空名字、跟原来一样、跟别的架子重名，三种都不改。
+                // 重名会把两个架子的书混在一起，而她并没有要求合并。
+                if let old = renaming, !t.isEmpty, t != old,
+                   !store.shelves().contains(t) {
+                    store.renameShelf(from: old, to: t)
+                }
+                renaming = nil
+            }
+            Button("取消", role: .cancel) { renaming = nil }
+        }
     }
 
     /// 一排书架：上面是书脊，下面是那块板子。
@@ -177,6 +193,9 @@ struct BookshelfView: View {
     /// ⚠️ **书不跟着删**（见 `LibraryStore.removeShelf`）——
     /// 拆个架子把书一起烧了，那不叫整理。所以确认框里要说清楚书去哪儿。
     @State private var removing: String?
+    /// 正在改名的那个架子
+    @State private var renaming: String?
+    @State private var newName = ""
 
     private func shelfRow(title: String, books: [Book]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -203,8 +222,11 @@ struct BookshelfView: View {
             // 不补一块实心的感应区就只有压在字上才收得到。
             .contentShape(Rectangle())
             .contextMenu {
-                // 「未归架」不是架子，是没归架的那一堆，删不得
+                // 「未归架」不是架子，是没归架的那一堆，改不得也删不得
                 if title != "未归架" {
+                    Button { renaming = title; newName = title } label: {
+                        Label("重命名", systemImage: "pencil")
+                    }
                     Button(role: .destructive) { removing = title } label: {
                         Label("删除书架", systemImage: "trash")
                     }

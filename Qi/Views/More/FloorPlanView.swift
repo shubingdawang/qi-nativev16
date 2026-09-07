@@ -148,7 +148,10 @@ struct ClawdBadge: View {
             HStack(spacing: 5) {
                 ClawdView(mood: .idle, scale: 1.0)
                     .frame(height: 18)
-                    .offset(y: -1.5)
+                    // 她说「状态上的 clawd 再往上移一点」。
+                    // −1.5 → −4.5：精灵图下半部是空的（脚下那几行），
+                    // 按图框居中就显得比旁边的字低。
+                    .offset(y: -4.5)
                 Text(elsewhere
                      ? store.clawdDoing.line + " · 在" + store.clawdRoom.rawValue
                      : store.clawdDoing.line)

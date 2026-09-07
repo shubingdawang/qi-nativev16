@@ -1048,9 +1048,22 @@ enum BackupClock {
     }
 
     /// 隔了多少天没备份了。从来没备份过就返回 nil。
+    ///
+    /// ⚠️⚠️ **按日历天算，不按 24 小时算。**
+    ///
+    /// 她报的：「虽然今天没备份过，但一直显示已备份。」
+    ///
+    /// 上一版是 `elapsed / 86400` 取整——昨天晚上十点备份的，
+    /// 今天早上六点来看，才过了八小时，取整是 0，于是显示「今天备份过了」。
+    /// **可那明明是昨天备的。**
+    ///
+    /// 她看这一行是为了知道「今天要不要再备一次」，问的是**日期**不是时长。
     static var daysSince: Int? {
         guard let last = lastAt else { return nil }
-        return Int(Date().timeIntervalSince(last) / 86400)
+        let cal = Calendar.current
+        let a = cal.startOfDay(for: last)
+        let b = cal.startOfDay(for: Date())
+        return cal.dateComponents([.day], from: a, to: b).day
     }
 
     /// 该提醒了吗。七天跟她重签包的周期对齐。
