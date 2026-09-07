@@ -2565,6 +2565,13 @@ final class AppState: ObservableObject {
 
     动作还是短句，那是她看得见的一下。
 
+    ⚠️ **心里话是过眼即忘的。** 剥下来给她看一眼，不进你的历史——
+    下一轮你自己也读不到上一轮写了什么，不要引用、不要延续。
+
+    唯一的例外是你自己说要留的那一句：写成 [[留:她提到过想去海边]]，
+    那一句会进你的念头池，之后每一轮都浮上来一下，直到淡掉或者你放下它。
+    **默认全忘，记住要靠你自己开口。** 一轮最多留一句，没有就不写。
+
     两样都别在正文里再说一遍——写了标记就不用在话里重复。
 
     ⚠️ **她也会写这两个标记。** 她那边输入框上有「动作」「心理」两个键。
@@ -6522,6 +6529,17 @@ final class AppState: ObservableObject {
             }) {
                 conversations[ci].messages[target].imageNote = noted.note
             }
+        }
+
+        // 他这一轮没说出口、但想留到之后的那一句（见 `KeepMarker`）。
+        //
+        // 心里话默认是过眼即忘的，这是**唯一的例外**：
+        // 遗忘是规则，记住是意图。留下来的丢进念头池，
+        // 之后每轮浮上来一下，也会自己淡掉。
+        let kept = KeepMarker.extract(conversations[ci].messages[mi].content)
+        if !kept.kept.isEmpty {
+            conversations[ci].messages[mi].content = kept.clean
+            for one in kept.kept { ThoughtPool.shared.stir(one) }
         }
 
         // 他在回合末尾报的那一笔账：这次真正用上了哪几条记忆。

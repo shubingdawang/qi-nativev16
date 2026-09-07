@@ -158,6 +158,8 @@ enum MessageBeats {
         // 落库那一步已经摘过一次，这儿是给**流式那几秒**兜底——
         // 不摘的话她会看见 `[[用:a3f9]]` 在气泡末尾闪一下。
         text = MemoryUseMarker.extract(text).clean
+        // 他要留到之后的那一句也一样（见 `KeepMarker`）
+        text = KeepMarker.extract(text).clean
 
         // ⚠️⚠️ **动作和心里话整段扫，不按行扫。**
         //
@@ -295,7 +297,7 @@ enum MessageBeats {
     private static let receiptPattern = #"〔这一条里你真的动手了：[^〕]{0,200}〕"#
 
     /// 三个开标记。顺序不要改：`hideTornTail` 拿它们当前缀比。
-    private static let opens = ["[[act:", "[[mind:", "[[cot:", "[[用:"]
+    private static let opens = ["[[act:", "[[mind:", "[[cot:", "[[用:", "[[留:"]
 
     /// 掉队的那一个（写了开标记、没写闭标记）。找到就把它到串尾括出来。
     ///
