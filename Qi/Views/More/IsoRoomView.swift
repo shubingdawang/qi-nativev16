@@ -427,9 +427,35 @@ struct IsoRoomView<Clawd: View>: View {
     /// 再压回地砖下沿。她导的图和资产包那批都属于后者。
     private func groundOffset(mine: UIImage?, packed: UIImage?,
                               lift: CGFloat, width: CGFloat,
-                              bottom: CGFloat) -> CGFloat {
+                              bottom: CGFloat, frontDrop: CGFloat) -> CGFloat {
         guard let img = mine ?? packed else { return lift }
-        return -mineH(img, width: width) / 2 + bottom
+        return -mineH(img, width: width) / 2 + bottom + frontDrop
+    }
+
+    /// 从「占地正中」走到「占地最前那一格的下沿」有多远。
+    ///
+    /// ## 她报的那个悬浮
+    ///
+    /// > 虽然占地是对了，但是占地和实际的床中间还隔着什么，
+    /// > 导致床悬浮在上面。床的底应该是跟占地一起的。
+    ///
+    /// 一件家具是按**它盖住那几格的正中**摆的（`piece` 里那个 `c`），
+    /// 然后把图的底边贴到那一格的下沿。
+    ///
+    /// 一格的东西没问题——正中就是它自己。可床占 3×4：
+    /// 正中在第二排和第三排之间，而**床真正的落脚线在最前那一排**。
+    /// 两者差着一半的进深，图就悬在占地上面那么高。
+    ///
+    /// ⚠️ 两种投影差的不是同一个量：
+    /// · 等距：`gx` 和 `gy` 都往下走半格高，所以是 `(w + d - 2) × tileH / 4`
+    /// · 平面：只有纵深在走，所以是 `(d - 1) / 2 × rowPitch`
+    ///
+    /// 抄成同一个数的话，平面屋里所有大件会掉到地板外面去。
+    private func frontDrop(_ s: IsoShape, _ geoRoom: IsoRoom) -> CGFloat {
+        if geoRoom.projection == .flat {
+            return CGFloat(max(0, s.d - 1)) / 2 * geoRoom.rowPitch
+        }
+        return CGFloat(max(0, s.w + s.d - 2)) * geoRoom.tileH / 4
     }
 
     /// 一张图按这个宽度画出来会有多高
@@ -563,7 +589,8 @@ struct IsoRoomView<Clawd: View>: View {
         // 平面那档地砖只有 `rowPitch` 高，写死半格的话她自己导的家具
         // 会比画的那批低半格，同一格里两件东西脚不在一条线上。
         .offset(y: groundOffset(mine: mine, packed: packed, lift: lift,
-                                width: mineW, bottom: geoRoom.tileBottom))
+                                width: mineW, bottom: geoRoom.tileBottom,
+                                frontDrop: frontDrop(s, geoRoom)))
         .scaleEffect(lifted ? 1.06 : 1)
         .shadow(color: .black.opacity(lifted ? 0.28 : 0.12),
                 radius: lifted ? 10 : 3, y: lifted ? 8 : 2)

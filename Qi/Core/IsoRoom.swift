@@ -142,6 +142,14 @@ struct IsoRoom {
     /// 平面那档一排多高（点）
     var rowPitch: CGFloat { tileH * Self.flatRowPitch }
 
+    /// 横着一共几列。
+    ///
+    /// ⚠️ **凡是「横着数几格」的地方都得走这儿。** 立体屋横竖都是 `size`，
+    /// 平面屋横着是 `cols`（36）、竖着才是 `size`（16）。
+    /// 顺手写 `size` 的地方一律只铺出 16 列——她报的「平铺视角错误」
+    /// 就是地砖那儿犯了这个。
+    var across: Int { projection == .flat ? cols : size }
+
     /// 在这么大的地方里，屋子摆在哪儿、一格多大。
     ///
     /// ⚠️ **只此一份。** 画屋子的那边要用，
@@ -258,8 +266,22 @@ struct IsoRoom {
         let topY = Double(point(0, 0).y)
         let botY = Double(point(n - 1, n - 1).y)
         let h = Double(size.height)
+        // ⚠️⚠️ **下面要留出他半个身子。**
+        //
+        // 她报的：「clawd 的活动范围不完全在屋内。」两张图都是他站在
+        // 最下那一档，整个人在地板外面。
+        //
+        // 病根：他是用 `.position` 摆的，那个坐标是**整块的正中**，
+        // 不是他的脚。最下那一排的行心已经贴着地板下沿了，
+        // 正中摆在那儿，等于半个身子探到屋外。
+        // 以前看不出来是因为屋子的裁剪把探出去那半截切掉了——
+        // 前几天把前沿的裁剪放开之后（clawd 被切掉半个身子那次），
+        // 这件事才露出来。两个症状是同一个根。
+        //
+        // 留 `tileW * 0.55`：他大约一格半高，半个身子就是这么多。
+        let pad = Double(tileW) * 0.55
         let t = min(0.98, max(0.02, topY / h))
-        let b = min(0.98, max(0.02, botY / h))
+        let b = min(0.98, max(0.02, (botY - pad) / h))
         // 上边多让出一点——最上那个角太窄，站上去两边都悬空
         return (min(t + 0.03, b), b)
     }

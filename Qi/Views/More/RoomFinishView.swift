@@ -139,7 +139,15 @@ struct FloorFinishView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            ForEach(0..<(room.size * room.size), id: \.self) { i in
+            // ⚠️⚠️ **横着有几列要问 `cols`，不是 `size`。**
+            //
+            // 她报的「平铺视角错误」就是这儿：`size` 是**纵深**（16 排），
+            // 平面屋横着是 `cols`（36 列）。按 `size` 铺的话只铺出 16 列，
+            // 而地板轮廓、后墙都是按 36 列画的——于是她看到的是
+            // **一块靠左的棋盘格 + 右边一大片空**，右边缘还斜着（那是梯形）。
+            //
+            // 立体屋 `cols == size`，这一行对它没有影响。
+            ForEach(0..<(room.across * room.size), id: \.self) { i in
                 let gx = i / room.size, gy = i % room.size
                 room.tilePath(gx, gy).fill(fill(gx, gy))
             }
@@ -174,34 +182,40 @@ struct FloorFinishView: View {
     /// 缝画在哪儿
     private var seams: Path {
         var p = Path()
+        // ⚠️ **两个维度不是同一个数。**
+        //
+        // `n` 是纵深（16 排），`w` 是横着几列——立体屋两者相同，
+        // 平面屋横着是 36 列。混用的话平面屋的缝只画到第 16 列就断了，
+        // 右边一大片地板光秃秃的。
         let n = room.size
+        let w = room.across
         switch kind {
         case .checker:
             break
         case .wood:
             // 板子之间那道缝：只画 gx 方向的分界
-            for gx in 1..<n {
+            for gx in 1..<w {
                 p.move(to: room.point(Double(gx), -0.5))
                 p.addLine(to: room.point(Double(gx), Double(n) - 0.5))
             }
         case .tatami:
             // 每张席一圈边
-            for gx in 0...n {
+            for gx in 0...w {
                 p.move(to: room.point(Double(gx) - 0.5, -0.5))
                 p.addLine(to: room.point(Double(gx) - 0.5, Double(n) - 0.5))
             }
             for gy in stride(from: 0, through: n, by: 2) {
                 p.move(to: room.point(-0.5, Double(gy) - 0.5))
-                p.addLine(to: room.point(Double(n) - 0.5, Double(gy) - 0.5))
+                p.addLine(to: room.point(Double(w) - 0.5, Double(gy) - 0.5))
             }
         case .tile, .terrazzo:
-            for gx in 0...n {
+            for gx in 0...w {
                 p.move(to: room.point(Double(gx) - 0.5, -0.5))
                 p.addLine(to: room.point(Double(gx) - 0.5, Double(n) - 0.5))
             }
             for gy in 0...n {
                 p.move(to: room.point(-0.5, Double(gy) - 0.5))
-                p.addLine(to: room.point(Double(n) - 0.5, Double(gy) - 0.5))
+                p.addLine(to: room.point(Double(w) - 0.5, Double(gy) - 0.5))
             }
         }
         return p
@@ -214,7 +228,7 @@ struct FloorFinishView: View {
     /// 拿格子坐标算一个定死的伪随机，位置就永远不变。
     private var speckles: some View {
         Canvas { ctx, _ in
-            for gx in 0..<room.size {
+            for gx in 0..<room.across {
                 for gy in 0..<room.size {
                     let c = room.point(Double(gx), Double(gy))
                     var seed = UInt64(gx &* 73856093 ^ gy &* 19349663) | 1

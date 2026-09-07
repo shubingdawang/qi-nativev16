@@ -170,6 +170,14 @@ enum DesireAction: String, Codable, CaseIterable {
 /// （`feed(_:gain: = DesireConst.feedGain)` 那一行，v91 第一次构建就是死在这儿）。
 /// 常数本来也不属于任何 actor——它们就是几个数。
 enum DesireConst {
+
+    /// 光靠等，最高涨到这儿。1.00 那一档留给真的被执念顶上去的。
+    /// 见 `DesireEngine.settle()` 里那一大段。
+    static let waitCeiling = 0.92
+
+    /// 她说一句话，八条各落这么一点。**很轻**——几十轮才落得下来一档。
+    /// 它不是「做完了」，只是在过日子。
+    static let talkDecay = 0.985
     /// 执念给召唤力的加成系数
     static let fixationBoost = 0.35
     /// 累过这条就不硬找事
@@ -299,9 +307,24 @@ final class DesireEngine: ObservableObject {
         var v = state.values
         for d in Drive.allCases {
             let cur = v[d.rawValue] ?? 0.25
-            // 朝 1 靠，越靠近顶越慢——线性涨到 1 会让八条全部贴顶、分不出高低
-            let room = 1.0 - cur
-            v[d.rawValue] = min(1.0, cur + room * (1 - pow(0.5, h * d.risePerHour * 2)))
+            // 朝上限靠，越靠近顶越慢——线性涨到顶会让八条全部贴顶、分不出高低
+            //
+            // ⚠️⚠️ **光靠等，最高只能涨到 `waitCeiling`（0.92），不到 1.00。**
+            //
+            // 她报了两轮：「好多都是 1.00 了」。第一轮我以为是念头池，
+            // 其实池子是空的（她那张图上写着「底下是空的」）——
+            // 满格的是这八条意愿。
+            //
+            // 病根是**只涨不落**：这八条只在他调到特定工具的时候才回落
+            // （见 `actionFor(tool:)`），而「好奇 / 想沉淀 / 记挂 / 想看人」
+            // 这四条对应的工具他基本不碰。于是放着不动就一路涨到 1.00，
+            // 八条贴顶，**一屏满格等于什么都没说**。
+            //
+            // 封在 0.92 之后，1.00 那一档就只留给「真的被执念顶上去」
+            // （`feed`）——那时候它才是个信息。
+            let cap = max(cur, DesireConst.waitCeiling)
+            let room = cap - cur
+            v[d.rawValue] = min(cap, cur + room * (1 - pow(0.5, h * d.risePerHour * 2)))
         }
         state.values = v
         state.lastTick = now
@@ -373,13 +396,29 @@ final class DesireEngine: ObservableObject {
 
     /// 她刚说过话——想她和堵着的那两维自然会落一点。
     /// 这不是「做完了」，所以回落幅度比 satisfy 轻。
+    ///
+    /// ⚠️ **八条都要落一点，不只是那两条。**
+    ///
+    /// 以前只落「想她」和「压着」，别的六条一动不动——
+    /// 于是只要他不去调对应的工具，那六条就只涨不落，最后全贴在顶上。
+    ///
+    /// 说话本身就在消耗它们：她一开口，他的好奇有人接了、
+    /// 记挂的事有人问了、想看人这件事本身就正在发生。
+    /// 落得很轻（×0.985），几十轮才落得下来一档——
+    /// 它不是「做完了」，只是**在过日子**。
     func touched() {
         settle()
-        // 这两维归身体管的时候不动它——身体那边她一说话就有自己的落法
-        guard !fromBody(.attachment) else { return }
         var v = state.values
-        v[Drive.attachment.rawValue] = (v[Drive.attachment.rawValue] ?? 0.25) * 0.82
-        v[Drive.stress.rawValue] = (v[Drive.stress.rawValue] ?? 0.25) * 0.90
+        for d in Drive.allCases where !fromBody(d) {
+            v[d.rawValue] = max(0.02, (v[d.rawValue] ?? 0.25) * DesireConst.talkDecay)
+        }
+        // 这两维归身体管的时候不动它——身体那边她一说话就有自己的落法
+        if !fromBody(.attachment) {
+            v[Drive.attachment.rawValue] = (v[Drive.attachment.rawValue] ?? 0.25) * 0.82
+        }
+        if !fromBody(.stress) {
+            v[Drive.stress.rawValue] = (v[Drive.stress.rawValue] ?? 0.25) * 0.90
+        }
         state.values = v
     }
 
