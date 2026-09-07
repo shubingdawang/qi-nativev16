@@ -157,14 +157,34 @@ extension FurnitureCatalog {
     /// 倒一下只是在两张都像靠右的图之间换来换去，什么都没解决，
     /// 而名字跟行为倒是对不上了。所以按名字接回去。
     ///
-    /// 真要做出「靠左墙」那一面，要么把图水平翻一下
-    ///（代价是光从另一边来了，烘在图里的影子会反），
-    /// 要么请她出一套真的靠左墙的图。这两条都得先问过她。
+    /// 后来她**自己重画了一套真的靠左墙的**（`iso_wl_…`，见 `wallLeftName`）。
+    /// 所以现在这几个名字各归各的：
+    ///
+    ///   · `iso_l_` / `iso_r_` —— 资产包原来那两个视角，都读作**靠右墙**
+    ///   · `iso_wl_`          —— 她重画的那一套，**真的靠左墙**
     static func isoRightName(_ left: String) -> String? {
         if left.hasPrefix("iso_l_") { return "iso_r_" + left.dropFirst(6) }
         if left.hasPrefix("iso_vic_") { return "iso_vicr_" + left.dropFirst(8) }
         if left.hasPrefix("iso_xmas_") { return "iso_xmasr_" + left.dropFirst(9) }
         if left.hasPrefix("iso_ny_") { return "iso_nyr_" + left.dropFirst(7) }
+        return nil
+    }
+
+    /// 同一件东西**贴左墙**那张叫什么。
+    ///
+    /// 她重画的那一套（59 张）。名字规矩跟右边那套一样：从已有那张推。
+    ///
+    /// ⚠️ 只收**名字对得上**的那些（见 `scripts/prep_wall_left.py`）。
+    /// 新包里有几件叫法不同（`chair` / `tv` / `sink`…），
+    /// 进包时按对照表改过名了；对不上的宁可不收——
+    /// 收错一张就是「改个朝向，家具变成了另一件」。
+    ///
+    /// 推不出来（比如她那套里没画的那几件）就返回 nil，
+    /// 取图那边照旧退回原来那张，不会缺东西。
+    static func wallLeftName(_ base: String) -> String? {
+        if base.hasPrefix("iso_l_") { return "iso_wl_" + base.dropFirst(6) }
+        if base.hasPrefix("iso_xmas_") { return "iso_wlxmas_" + base.dropFirst(9) }
+        if base.hasPrefix("iso_ny_") { return "iso_wlny_" + base.dropFirst(7) }
         return nil
     }
 
@@ -193,8 +213,15 @@ extension FurnitureCatalog {
         // ⚠️ **退回去而不是不画。** 圣诞、新年那两套只有左视角，
         // 她把一件新年家具改成靠右墙，总不能让它当场消失——
         // 透视差一点看得出来，东西没了她只会以为坏了。
-        if !flat, facesRight, let r = isoRightName(name), let img = load(r) {
-            return img
+        if !flat {
+            if facesRight {
+                // 贴右墙：资产包原来那两个视角都读作靠右，
+                // 有右视角就用右视角，没有就用手上这张。
+                if let r = isoRightName(name), let img = load(r) { return img }
+            } else if let l = wallLeftName(name), let img = load(l) {
+                // 贴左墙：她重画的那一套。
+                return img
+            }
         }
         return load(name)
     }

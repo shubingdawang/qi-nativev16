@@ -77,8 +77,20 @@ def right_of(left):
     return None
 
 
+# 她重画的那套「真的靠左墙」的，也是按名字推出来的
+def wall_left_of(base):
+    if base.startswith("iso_l_"):
+        return "iso_wl_" + base[len("iso_l_"):]
+    if base.startswith("iso_xmas_"):
+        return "iso_wlxmas_" + base[len("iso_xmas_"):]
+    if base.startswith("iso_ny_"):
+        return "iso_wlny_" + base[len("iso_ny_"):]
+    return None
+
+
 used = set()
 righted = 0
+walled = 0
 for _, flat, iso in rows:
     used.add(flat)
     if iso != "nil":
@@ -88,6 +100,10 @@ for _, flat, iso in rows:
         if r and r in have:
             used.add(r)
             righted += 1
+        wl = wall_left_of(name)
+        if wl and wl in have:
+            used.add(wl)
+            walled += 1
 spare = sorted(have - used)
 
 # 动作名也对一遍：`IsoShape.actions` 里写了、`RoomActs.act` 里没有的，
@@ -109,6 +125,7 @@ print("商品 %d 件 · 对照表 %d 条（%d 条带等距，其中 %d 条有右
       "包里 %d 张（闲置 %d）"
       % (len(ids), len(rows),
          sum(1 for r in rows if r[2] != "nil"), righted, len(have), len(spare)))
+print("   其中 %d 件有她重画的「真靠左墙」那一张" % walled)
 if bad:
     print("--- %d 处对不上" % bad)
     sys.exit(1)
