@@ -235,6 +235,10 @@ struct ChatView: View {
                         jumpTo: jumpTo,
                         onJumped: { jumpTo = nil }
                     )
+                    // ⚠️⚠️ **这一下是打字不卡的关键。**见文件末尾那个
+                    // `MessageListView: Equatable`。没它的话，她每敲一个字
+                    // 整屏气泡重建一遍。
+                    .equatable()
                     // 表情面板开着的时候，点聊天区任何一处就收起来（她要的）。
                     // **不能盖一层全屏透明层**——那层会连表情本身一起挡住，
                     // 变成点哪儿都只是关掉、一张也选不中。
@@ -2150,5 +2154,50 @@ extension ChatView {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+
+// MARK: - 消息区重不重画，看这几样
+//
+// 她报的：「卡顿是每次都卡，且点开输入框有延迟。」
+//
+// 上一轮治了一半（`MessageBeats` 记下来不重算），
+// 剩下那一半在这儿：
+//
+// 她敲一个字 → `draftText` 变 → `ChatView.body` 重跑。
+// 这一步避不开。可以避开的是下一步：
+// **整个消息区跟着重建。**
+//
+// SwiftUI 判断一个子视图要不要重跑 `body`，靠的是逐个比
+// 它存下来的属性。`MessageListView` 存了**十五个回调**，
+// 而**闭包永远比不相等**——于是每敲一个字，
+// 可见的十几个气泡全部重建一遍（Markdown、拍子、图片尺寸……）。
+//
+// 手写一个 `==`，**只比真能改变画面的那几样**，
+// 回调一律不比。配上调用处那一句 `.equatable()`，
+// 打字就不再惊动消息区了。
+//
+// ⚠️ **回调会“旧”一拍，而这是安全的。**
+// `==` 判相等时 SwiftUI 留着旧那份视图值，里面的闭包也是旧的。
+// 但它们碰的东西全是 `@State` / `@EnvironmentObject`，
+// 那两样内部都是引用——旧的结构体副本读写的依旧是同一块存储。
+//
+// ⚠️ 真正会被闭包**捕获成值**的只有 `selected`（`onToggle` 里要读它）
+// 和 `conv`（`onRetry` 里要它的 id）——所以这两样**必须留在 `==` 里**。
+// 往里加新属性的时候记一句：
+// **能改变画面、或者被闭包按值捕获的，都得补进来。**
+extension MessageListView: Equatable {
+
+    nonisolated static func == (a: MessageListView, b: MessageListView) -> Bool {
+        a.conversation == b.conversation
+            && a.space == b.space
+            && a.selecting == b.selecting
+            && a.selected == b.selected
+            && a.menuOpenID == b.menuOpenID
+            && a.running == b.running
+            && a.typingTick == b.typingTick
+            && a.bottomInset == b.bottomInset
+            && a.jumpTo == b.jumpTo
     }
 }
