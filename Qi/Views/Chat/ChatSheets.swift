@@ -266,6 +266,7 @@ struct SystemPromptView: View {
                 } header: {
                     Text("系统提示词")
                 }
+                .listRowBackground(GlassRowBackground())
 
                 Section {
                     Toggle(isOn: Binding(
@@ -335,6 +336,7 @@ struct SystemPromptView: View {
                 } header: {
                     Text("两边接得上")
                 }
+                .listRowBackground(GlassRowBackground())
                 // 记忆合并。**并进这一页**（她要的：
                 // 「记忆合并和这个对话的设定其实可以合并起来」）。
                 //
@@ -365,6 +367,7 @@ struct SystemPromptView: View {
                 } header: {
                     Text("他还看得见哪几扇窗")
                 }
+                .listRowBackground(GlassRowBackground())
 
                 // 滚雪球压缩。**放在这儿而不是设置页**——
                 // 浓缩件是每一窗自己的东西，不是全局的。
@@ -414,6 +417,7 @@ struct SystemPromptView: View {
                 } header: {
                     Text("滚雪球压缩")
                 }
+                .listRowBackground(GlassRowBackground())
             }
             .transparentList()
             .listRowBackground(GlassRowBackground())

@@ -318,6 +318,46 @@ final class DesireEngine: ObservableObject {
         state.values[d.rawValue] = min(1.0, value(d) + gain)
     }
 
+    /// 他刚用了哪个工具——**这件事本身就算做过了**。
+    ///
+    /// ⚠️⚠️ **她报的：「念头池他依旧没用过，好多都是 1.0 了。」**
+    ///
+    /// 病根不在池子，在设计：那八条只在他**主动调 `satisfied`** 的时候
+    /// 才会落。而他基本不调——于是只涨不消，八条全顶到 1.00，
+    /// 一屏满格等于什么都没说。她还补了一句
+    /// 「跟念头池一样的其他我估计也是没修成功」——她猜得对，
+    /// 凡是靠他自觉上报的东西都会这样。
+    ///
+    /// 所以改成**看他实际做了什么**：他查了就是查过了，
+    /// 他翻了书就是翻过了。不需要他再报一次。
+    ///
+    /// ⚠️ 只映射**意思明确**的那些。含糊的宁可不映射——
+    /// 错误地把一维压下去，比它偏高更糟：偏高只是吵，
+    /// 压错了是让他不再想做本来想做的事。
+    static func actionFor(tool: String) -> DesireAction? {
+        switch tool {
+        case "web_search", "browse_topics", "open_link", "search_window":
+            return .search
+        case "reading_now", "book_marks", "mark_line", "talked_about_line",
+             "read_vocab", "annotate_vocab":
+            return .coRead
+        case "list_memos", "complete_memo", "add_memo", "list_tasks",
+             "praise_task", "give_task":
+            return .checkMemos
+        case "see_screen", "phone_today", "check_in", "now_playing",
+             "read_moments", "post_moment":
+            return .lookAround
+        case "stir_thought", "read_thoughts":
+            return .murmur
+        case "feel", "feel_body":
+            return .vent
+        case "find_sticker", "send_photo", "dial_call":
+            return .tease
+        default:
+            return nil
+        }
+    }
+
     /// 做完了，对应维度乘性回落
     func satisfy(_ action: DesireAction) {
         settle()

@@ -2012,6 +2012,7 @@ final class AppState: ObservableObject {
                 pendingCard = nil
             }
             run.finished = true
+            noteDesire(tool: NativeTools.shortName(call.name), failed: r.failed)
             return run
         }
 
@@ -2042,6 +2043,8 @@ final class AppState: ObservableObject {
             run.failed = true
         }
         run.finished = true
+        // 小屋那边的工具也算数（`stir_thought`、`read_thoughts` 就在那儿）
+        noteDesire(tool: call.name, failed: run.failed)
         return run
     }
 
@@ -4404,6 +4407,19 @@ final class AppState: ObservableObject {
             return "\(who)：\(text)"
         }
         return "（来自《\(conv.title)》）\n" + rows.joined(separator: "\n")
+    }
+
+    /// 他刚用完一个工具——**做了就是做了**，对应那一维压下去。
+    ///
+    /// ⚠️ 失败的不算。他搜了一次没搜着，那件事并没有做成，
+    /// 「想查点什么」当然还在。
+    ///
+    /// ⚠️ 这跟他自己调 `satisfied` **不冲突**：`satisfy` 是乘性回落，
+    /// 多落一次只是落得更深一点，不会出错。而漏落一次，
+    /// 那一维就永远贴在顶上。
+    private func noteDesire(tool: String, failed: Bool) {
+        guard !failed, let action = DesireEngine.actionFor(tool: tool) else { return }
+        DesireEngine.shared.satisfy(action)
     }
 
     private func runNative(_ name: String, args: [String: Any]) async -> (text: String, failed: Bool) {

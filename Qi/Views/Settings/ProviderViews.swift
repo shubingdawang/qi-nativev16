@@ -21,6 +21,7 @@ struct ProviderListView: View {
                     }
                     .padding(.vertical, 6)
                 }
+                .listRowBackground(GlassRowBackground())
             }
 
             ForEach(app.providers) { provider in
@@ -52,6 +53,7 @@ struct ProviderListView: View {
                         Label("删除", systemImage: "trash")
                     }
                 }
+                .listRowBackground(GlassRowBackground())
             }
         }
         .transparentList()
@@ -107,6 +109,7 @@ struct ProviderFormView: View {
                         .autocorrectionDisabled()
                     Toggle("启用", isOn: $provider.enabled)
                 }
+                .listRowBackground(GlassRowBackground())
 
                 Section {
                     TextField("/chat/completions", text: $provider.apiPath)
@@ -117,6 +120,7 @@ struct ProviderFormView: View {
                 } footer: {
                     Text("通常无需修改。地址填写至 /v1，路径保持 /chat/completions。")
                 }
+                .listRowBackground(GlassRowBackground())
 
                 Section {
                     Button {
@@ -146,6 +150,7 @@ struct ProviderFormView: View {
                 } footer: {
                     Text("无法获取列表时，手动填写模型名同样可用。")
                 }
+                .listRowBackground(GlassRowBackground())
 
                 if !provider.models.isEmpty {
                     Section {
@@ -164,6 +169,7 @@ struct ProviderFormView: View {
                     } footer: {
                         Text("仅在此处启用的模型会出现在聊天页的「选择模型」中。左滑可删除。")
                     }
+                    .listRowBackground(GlassRowBackground())
 
                     ForEach(brandGroups, id: \.brand) { group in
                         Section(group.brand) {

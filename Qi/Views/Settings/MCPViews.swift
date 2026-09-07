@@ -160,6 +160,7 @@ struct MCPFormView: View {
                     Toggle("启用", isOn: $server.enabled)
                     Stepper("超时 \(server.timeoutSec) 秒", value: $server.timeoutSec, in: 5...120, step: 5)
                 }
+                .listRowBackground(GlassRowBackground())
 
                 Section {
                     Button {
@@ -198,6 +199,7 @@ struct MCPFormView: View {
                     } footer: {
                         Text("启用的工具越多，每轮对话携带的说明越长，token 消耗越高。不需要的可关闭。")
                     }
+                    .listRowBackground(GlassRowBackground())
 
                     Section {
                         ForEach(visibleIndices, id: \.self) { i in
