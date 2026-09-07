@@ -58,9 +58,18 @@ final class BackupInbox {
             .appendingPathComponent("待还原-" + UUID().uuidString + ".json")
         let scoped = url.startAccessingSecurityScopedResource()
         busy = true
-        alert("正在读取…")
 
         Task {
+            // ⚠️ **先等界面搭好，再弹任何东西。**
+            //
+            // 她报的：「共享那个没反应，可以点，点完什么也没发生。」
+            // 从共享菜单进来的那一下 App 可能是刚被叫醒的——
+            // 场景还没接上，`top()` 是 nil，那时候 present 等于没弹。
+            // 而后面那句「这份怎么放？」也是同一个问题，
+            // 它弹不出来的话，文件就被 onCancel 悄悄删了。
+            _ = await DocPicker.waitForHost()
+            alert("正在读取…")
+
             let ok = await Task.detached(priority: .userInitiated) { () -> Bool in
                 let fm = FileManager.default
                 try? fm.removeItem(at: copy)
@@ -79,6 +88,8 @@ final class BackupInbox {
                 return
             }
 
+            // 上一句「正在读取…」关掉要一小会儿，等它关完再问。
+            _ = await DocPicker.waitForHost()
             DocPicker.shared.askRestore(copy) { file, mode in
                 self.restore(file, mode: mode)
             } onCancel: { file in

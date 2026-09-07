@@ -90,6 +90,18 @@ struct DivinationView: View {
                 .padding(.top, 4)
                 .padding(.bottom, Layout.tabBarExpanded + 20)
             }
+            // ⚠️⚠️ **塔罗那一档不许上下滑。**
+            //
+            // 她报的：「占卜的牌又不能往后拖了，反而是页面可以上下拖动了，
+            // 不要上下拖动。」
+            //
+            // 两件事是同一个：那一排牌铺在**横向** ScrollView 里，
+            // 而它外面这一层是**纵向**的。手指横着扫的时候只要带一点点竖分量，
+            // 外面这层就把这一下抢过去当成翻页——牌就不动了。
+            //
+            // 这一页的九个档里只有塔罗要横滑，所以只掐它这一档。
+            // 别的档（八字、解梦那些）内容长，照旧能滑。
+            .scrollDisabled(mode == 0)
         }
         .animation(.easeInOut(duration: 0.2), value: mode)
         .background {

@@ -97,6 +97,27 @@ final class DocPicker: NSObject {
         host.present(picker, animated: true)
     }
 
+    /// 等到有地方能弹东西为止。
+    ///
+    /// ⚠️ 从「文件」的共享菜单点进来的那一下，**App 可能是刚被叫醒的**：
+    /// 场景还没接上、窗口还没成为 key，这时候 `top()` 是 nil。
+    /// 不等就直接返回，从她那边看就是「点了共享，什么都没发生」——
+    /// 她报的正是这一句。
+    ///
+    /// ⚠️ 还要等**当前没有别的东西正在弹**：分享面板自己关掉要一小会儿，
+    /// 那期间去 present 会撞上「already presenting」，同样是静悄悄地没反应。
+    static func waitForHost(_ seconds: Double = 4) async -> UIViewController? {
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline {
+            if let vc = top(), vc.isViewLoaded, vc.view.window != nil,
+               vc.presentedViewController == nil {
+                return vc
+            }
+            try? await Task.sleep(nanoseconds: 150_000_000)
+        }
+        return top()
+    }
+
     /// 现在屏幕最上面那个视图控制器。
     ///
     /// ⚠️ **要一路走到最上面。** 设置页本身常常已经是从别处弹出来的，

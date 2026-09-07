@@ -84,9 +84,52 @@ struct TokenUsage: Codable, Hashable {
     /// - Anthropic 原生：`input_tokens` / `output_tokens` /
     ///   `cache_read_input_tokens` / `cache_creation_input_tokens`，
     ///   这里的 input_tokens **不含**缓存，不用减。
-    static func parse(_ usage: [String: Any]) -> TokenUsage {
+    /// 缓存那几个数**可能不在顶层**。
+    ///
+    /// ⚠️ 她那个中转回的是这样：
+    ///
+    ///     usage {
+    ///       prompt_tokens = 116098
+    ///       completion_tokens = 264
+    ///       billing_usage {
+    ///         claude_usage {
+    ///           cache_creation_input_tokens = 116095      ← 在这儿
+    ///           cache_read_input_tokens = 0
+    ///           cache_creation { ephemeral_5m_input_tokens = 116095 }
+    ///         }
+    ///       }
+    ///     }
+    ///
+    /// 顶层一个 cache 字段都没有，所以 App 一直报「缓存写入 0」。
+    /// 她说「我当然知道有缓存命中率，我说的是没有数据」——**数据一直在**，
+    /// 是我没往下找。
+    ///
+    /// ⚠️ 只往下钻两层，而且**只找带 cache 键的那一块**。
+    /// 无脑深挖会把别的地方的同名数字也捞上来，那比读不到更糟。
+    private static func cacheHome(_ usage: [String: Any]) -> [String: Any] {
+        func hasCache(_ d: [String: Any]) -> Bool {
+            d["cache_read_input_tokens"] != nil
+                || d["cache_creation_input_tokens"] != nil
+                || d["cache_creation"] != nil
+        }
+        if hasCache(usage) { return usage }
+        for (_, v) in usage {
+            guard let d = v as? [String: Any] else { continue }
+            if hasCache(d) { return d }
+            for (_, v2) in d {
+                if let d2 = v2 as? [String: Any], hasCache(d2) { return d2 }
+            }
+        }
+        return usage
+    }
+
+    static func parse(_ raw: [String: Any]) -> TokenUsage {
         var u = TokenUsage()
         u.calls = 1
+
+        // 总数按顶层读，缓存那几个去它藏着的那一层读。
+        let usage = raw
+        let cache = cacheHome(raw)
 
         let promptDetails = usage["prompt_tokens_details"] as? [String: Any]
         let inputDetails = usage["input_tokens_details"] as? [String: Any]
@@ -104,27 +147,32 @@ struct TokenUsage: Codable, Hashable {
         //   · 有的中转          input_tokens_details.cached_tokens
         //   · DeepSeek 那一派   prompt_cache_hit_tokens
         //   · 少数中转平铺在顶层 cached_tokens / cache_read_tokens
-        u.cacheRead = (usage["cache_read_input_tokens"] as? Int)
+        u.cacheRead = (cache["cache_read_input_tokens"] as? Int)
             ?? (promptDetails?["cached_tokens"] as? Int)
             ?? (inputDetails?["cached_tokens"] as? Int)
-            ?? (usage["prompt_cache_hit_tokens"] as? Int)
-            ?? (usage["cached_tokens"] as? Int)
-            ?? (usage["cache_read_tokens"] as? Int)
+            ?? (cache["prompt_cache_hit_tokens"] as? Int)
+            ?? (cache["cached_tokens"] as? Int)
+            ?? (cache["cache_read_tokens"] as? Int)
             ?? 0
-        u.cacheWrite = (usage["cache_creation_input_tokens"] as? Int)
+        u.cacheWrite = (cache["cache_creation_input_tokens"] as? Int)
             ?? (promptDetails?["cache_creation_tokens"] as? Int)
-            ?? (usage["cache_creation_tokens"] as? Int)
-            ?? (usage["cache_write_tokens"] as? Int)
+            ?? (cache["cache_creation_tokens"] as? Int)
+            ?? (cache["cache_write_tokens"] as? Int)
             ?? 0
 
         // 拆开的那两个桶。没有这个字段就都留 0（见上面那段注释）。
-        if let split = usage["cache_creation"] as? [String: Any] {
+        if let split = cache["cache_creation"] as? [String: Any] {
             u.cache1h = (split["ephemeral_1h_input_tokens"] as? Int) ?? 0
             u.cache5m = (split["ephemeral_5m_input_tokens"] as? Int) ?? 0
         }
 
         if let prompt = usage["prompt_tokens"] as? Int {
-            // OpenAI 口径：prompt 里已经含了命中的缓存
+            // OpenAI 口径：prompt 里已经含了命中的缓存。
+            //
+            // ⚠️ 缓存那几个数要是**从别处捞上来的**（比如她那个中转塞在
+            // `billing_usage.claude_usage` 里），那它跟顶层这个
+            // `prompt_tokens` 未必是同一本账——减出负数就说明不是。
+            // 减到负数一律当 0，别让「新输入」变成一个荒唐的数。
             u.input = max(0, prompt - u.cacheRead - u.cacheWrite)
         } else if let input = usage["input_tokens"] as? Int {
             u.input = input

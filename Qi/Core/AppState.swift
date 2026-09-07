@@ -32,6 +32,10 @@ final class AppState: ObservableObject {
         // 不像 SwiftUI 会自己跟着状态走。所以换玻璃样式、拧模糊程度之后
         // 都得在这儿重调一次，不然顶上那条永远停在启动时那一档
         // （她报的「更换玻璃导航栏没有跟着一起更换」）。
+        // ⚠️ **这一行要排在 `applyNavBar` 前面。**
+        // 导航栏的字也跟着字形走，而 `applyNavBar` 会拿它当缓存键——
+        // 排在后面的话，她换完字形，顶上那条要等下一次别的设置变了才跟上。
+        Theme.fontDesign = settings.fontDesignValue
         Look.applyNavBar(style: settings.glassStyle, opacity: settings.glassOpacity)
         Theme.preset = settings.preset
         Theme.glassStyle = settings.glassStyle

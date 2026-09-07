@@ -41,6 +41,25 @@ enum Look {
         }
     }
 
+    /// 导航栏标题那两行的字。跟「字体」那一栏走。
+    ///
+    /// ⚠️ UIKit 这边只认 `UIFontDescriptor.SystemDesign`，
+    /// 跟 SwiftUI 的 `Font.Design` 是两套枚举，得手翻一遍。
+    /// 翻不成（有的档在某些系统上拿不到 descriptor）就用原样的系统字，
+    /// **不能返回 nil**——导航栏拿不到字会退回默认，那是另一种样子。
+    static func navFont(_ size: CGFloat, weight: UIFont.Weight) -> UIFont {
+        let base = UIFont.systemFont(ofSize: size, weight: weight)
+        let design: UIFontDescriptor.SystemDesign
+        switch Theme.fontDesign {
+        case .serif:      design = .serif
+        case .rounded:    design = .rounded
+        case .monospaced: design = .monospaced
+        default:          return base
+        }
+        guard let d = base.fontDescriptor.withDesign(design) else { return base }
+        return UIFont(descriptor: d, size: size)
+    }
+
     /// 标题字距。字越大越要拉开，小字拉太开会散。
     static func tracking(_ size: CGFloat) -> CGFloat {
         size >= 22 ? 2.0 : (size >= 16 ? 1.2 : 0.7)
@@ -79,15 +98,20 @@ enum Look {
     /// ⚠️ `syncTheme()` 是每次设置一变就调，而这个函数要走一遍整棵视图树。
     /// 不挡住的话，她拖任何一根滑块都会顺带遍历全屏所有 view——
     /// 那正是我们花了三轮在消灭的那种代价。
-    @MainActor private static var lastNav: (GlassStyle, Double)?
+    /// 上一次是拿什么参数刷的。
+    ///
+    /// 第三项是字形档：**换字体也要重刷导航栏**，
+    /// 不记进来的话她换完字形，别处都变了、顶上那条不动。
+    @MainActor private static var lastNav: (GlassStyle, Double, Font.Design)?
 
     @MainActor
     static func applyNavBar(style: GlassStyle = .frosted, opacity: Double = 1) {
         // 模糊程度只在跨过「几乎全透」那条线时才影响导航栏，
         // 所以按档比较，不按精确值——不然拖滑块每一帧都要重来一遍。
         let step = opacity < 0.12 ? 0.0 : 1.0
-        if let last = lastNav, last.0 == style, last.1 == step { return }
-        lastNav = (style, step)
+        if let last = lastNav, last.0 == style, last.1 == step,
+           last.2 == Theme.fontDesign { return }
+        lastNav = (style, step, Theme.fontDesign)
 
         let bar = UINavigationBar.appearance()
 
@@ -118,10 +142,11 @@ enum Look {
         }
 
         func dress(_ a: UINavigationBarAppearance) {
-            let title = UIFont(name: serifName(.semibold), size: 17)
-                ?? .systemFont(ofSize: 17, weight: .semibold)
-            let large = UIFont(name: serifName(.bold), size: 30)
-                ?? .systemFont(ofSize: 30, weight: .bold)
+            // ⚠️ 导航栏这一条也跟着「字体」那一栏走（见 `Look.serif`）。
+            // UIKit 这边拿不到 SwiftUI 的 `Font.Design`，
+            // 所以按档翻成对应的 `UIFontDescriptor.SystemDesign`。
+            let title = navFont(17, weight: .semibold)
+            let large = navFont(30, weight: .bold)
             a.titleTextAttributes = [.font: title, .kern: 1.2]
             a.largeTitleTextAttributes = [.font: large, .kern: 1.6]
         }
@@ -187,18 +212,24 @@ enum Look {
 
 extension Font {
 
-    /// 衬线中文。跟 `.app(_:)` 一样跟着「字号」那根滑块走。
+    /// 标题用的字。跟「字号」那根滑块和「字体」那一栏一起走。
     ///
-    /// 用在**标题**上。正文别用——一屏宋体读久了累，
-    /// 而且那样就没有「标题 / 正文」的分别了。
+    /// ⚠️ **不再写死宋体。**
+    ///
+    /// 她说：「不喜欢宋体」，还有「设置里的字体只控制了 App 里的
+    /// 小部分区域，字体应该是全局更换的吧」。两句是同一件事——
+    /// 标题走的是 `.custom("STSongti-SC-…")`，
+    /// 而 `.fontDesign()` 管不住写死的字体。
+    ///
+    /// 现在它跟着她选的那一档：选「衬线」才是衬线，
+    /// 默认就是系统字。标题和正文的分别改由**字重和字距**去撑
+    /// （见 `heading`），不再靠换一套字。
+    ///
+    /// ⚠️ 名字还叫 `serif` 是**故意不改的**：全项目七十多处在用它，
+    /// 改名要动七十多个文件，而这一次改的是它长什么样，不是它是什么。
     static func serif(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
         let scaled = size * Theme.fontScale
-        let name = Look.serifName(weight)
-        if UIFont(name: name, size: scaled) != nil {
-            return .custom(name, size: scaled)
-        }
-        // 万一哪天系统里没这套字：退回系统衬线，别整页糊掉
-        return .system(size: scaled, weight: weight, design: .serif)
+        return .system(size: scaled, weight: weight, design: Theme.fontDesign)
     }
 }
 

@@ -54,6 +54,20 @@ enum Theme {
     /// 基准 16（滑块的默认值），拉到 22 就是 1.375 倍，整个 App 一起变大。
     nonisolated(unsafe) static var fontScale: Double = 1.0
 
+    /// 她在「外观 → 字体」里选的那一档。
+    ///
+    /// ⚠️ **标题也要跟着它走。**
+    ///
+    /// 她报的：「设置里的字体只控制了 App 里的小部分区域，
+    /// 字体应该是全局更换的吧。」——她说得对。
+    /// `.fontDesign()` 挂在根视图上，只管得住 `.system` 那些；
+    /// 而标题走的是 `.custom("STSongti-SC-…")`，**写死的字体不认它**。
+    /// 于是她换字形，正文变了、标题纹丝不动。
+    ///
+    /// 这个静态量是给 `Look.serif` 用的：它是个 `static func`，
+    /// 拿不到 `AppSettings`，只能像 `fontScale` 一样在设置变的时候推给它。
+    nonisolated(unsafe) static var fontDesign: Font.Design = .default
+
     /// 她自己调过字色的话，那个说了算——比主题优先。
     private static func custom(_ scheme: ColorScheme) -> Color? {
         let hex = scheme == .dark ? customTextHexDark : customTextHex

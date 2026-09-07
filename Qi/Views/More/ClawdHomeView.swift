@@ -300,7 +300,13 @@ struct ClawdHomeView: View {
                     .allowsHitTesting(false)
             }
             .padding(.horizontal, 16)
-            .padding(.top, 6)
+            // ⚠️ 这一页把导航栏藏了，所以这一行就顶在状态栏底下。
+            //
+            // 她报的：「clawd 的 UI 太靠上了，整体往下移动，
+            // 顶上的 UI 不用和标题同高。」——她说得对：
+            // 别的页那儿是导航栏，这一行占着导航栏的位置，
+            // 看着就像被推上去顶住了屏幕边。
+            .padding(.top, 26)
             .padding(.bottom, 10)
     }
 
@@ -562,10 +568,13 @@ struct ClawdHomeView: View {
                 // 三个档、房间名）占的地方。
                 //
                 // 记一句：**尺寸要问一个稳定的东西要，别问「还剩多少」。**
-                // 减 290：顶上那几样（标题、币、三个档、房间名）约 200，
+                // 减 310：顶上那几样（标题、币、三个档、房间名）约 220，
                 // 再加底下那排手势约 90。不给它让地方的话，
                 // 手势条会被顶到标签栏底下去。
-                .containerRelativeFrame(.vertical) { h, _ in max(300, h - 290) }
+                //
+                // ⚠️ 顶上那一行往下挪了 20（见 `header`），这个数要跟着加，
+                // 不然多出来的那 20 全从底下那排手势身上扣。
+                .containerRelativeFrame(.vertical) { h, _ in max(300, h - 310) }
                 // ⚠️ **屋子上面不再叠「他在干嘛」那块牌子。**
                 // 她说的：「左上的 clawd 有点挡住了，把那行去掉就不会挡到了。」
                 // 它挪到上面那条房间名里了（横着的一小条，见 `roomBar`）。
@@ -1313,7 +1322,13 @@ struct ClawdHomeView: View {
                 ForEach(store.owned) { item in
                     if let kind = FurnitureCatalog.kind(item.kind) {
                         VStack(spacing: 6) {
-                            FurnitureThumb(kind: kind, height: 60, scale: 2.4)
+                            // ⚠️ 60 → 34。她报的：「商店里的物品缩略图
+                            // 再小一半，现在太大了，下面 clawd 的衣服
+                            // 更是大的离谱。」
+                            //
+                            // 穿戴那几件本来就画得满格（一顶帽子占满整张图），
+                            // 跟一张画着整间屋的床图摆在一起，看着就大一圈。
+                            FurnitureThumb(kind: kind, height: 34, scale: 1.4)
                                 .opacity(item.hidden ? 0.35 : 1)
                             Text(kind.name)
                                 .font(.app(10))
@@ -1400,7 +1415,7 @@ struct ClawdHomeView: View {
             }
         } label: {
             VStack(spacing: 5) {
-                FurnitureThumb(kind: kind, height: 54, scale: 2.2)
+                FurnitureThumb(kind: kind, height: 30, scale: 1.3)
                 Text(kind.name)
                     .font(.app(10))
                     .foregroundStyle(Theme.textMain(scheme))
