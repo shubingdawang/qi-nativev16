@@ -204,7 +204,9 @@ struct MCPFormView: View {
                         Text("已打开 \(server.enabledTools.count) / \(server.tools.count)")
                     } footer: {
                         HelpNote {
-                            Text("启用的工具越多，每轮对话携带的说明越长，token 消耗越高。不需要的可关闭。")
+                            Text("启用的工具越多，每轮对话携带的说明越长，token 消耗越高。不需要的可关闭。
+
+与本机记忆库同名的工具在发送时自动隐去，无需手动关闭；关闭它们也不影响与小屋的镜像同步。")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }

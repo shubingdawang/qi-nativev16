@@ -110,7 +110,21 @@ struct IsoRoomView<Clawd: View>: View {
                 // ⚠️ 这一句就是「不穿模」的全部：**按离镜头的远近排好再画**。
                 ForEach(drawables(geoRoom), id: \.key) { d in
                     if d.isClawd {
+                        // ⚠️⚠️ **拖屋子的时候他要跟着一起走。**
+                        //
+                        // 她报的两条其实是同一件事：
+                        //   「平面我左右拖动时 clawd 也跟着我动，没有在原地」
+                        //   「clawd 会突然消失」
+                        //
+                        // 家具的落点是 `geoRoom.point(...)` 算的，那里面带着 `panX`，
+                        // 所以家具跟着屋子走；**他不是**——他是按「占容器宽度的
+                        // 百分之几」摆的，那套坐标里没有 pan。
+                        //
+                        // 于是拖动的时候：屋子往左走，他钉在屏幕上不动，
+                        // 看着就是「他自己在动」；拖远一点，他相对屋子就跑到
+                        // 屋外去了，而裁剪是跟着屋子走的——**当场被剪没**。
                         clawd()
+                            .offset(x: geoRoom.projection == .flat ? panX : 0)
                     } else if let item = d.item, let kind = d.kind {
                         piece(item, kind, geoRoom)
                     }
@@ -623,8 +637,20 @@ struct IsoRoomView<Clawd: View>: View {
     /// 墙在格子外边缘，中间差半格。
     private func wallHug(_ cell: (gx: Int, gy: Int), _ g: IsoRoom) -> CGPoint {
         var dx: CGFloat = 0, dy: CGFloat = 0
-        if cell.gx == 0 { dx -= g.tileW / 4; dy -= g.tileH / 4 }
-        if cell.gy == 0 { dx += g.tileW / 4; dy -= g.tileH / 4 }
+        var up: CGFloat = 0
+        if cell.gx == 0 { dx -= g.tileW / 4; up += g.tileH / 4 }
+        if cell.gy == 0 { dx += g.tileW / 4; up += g.tileH / 4 }
+        // ⚠️⚠️ **摆在角落里的那一件，往上挪的那一半要收一收。**
+        //
+        // 她报的「床依旧轻微浮起」——只在角落上才有，摆在别处是好的。
+        //
+        // 往里挪半格，在等距里 = 屏幕上 (∓tileW/4, −tileH/4)。
+        // 挨着一面墙的时候，横竖各挪一点，看着就是「贴上去了」。
+        // 可摆在**两面墙的夹角**上时，两次的横向分量正好抵消，
+        // 只剩下两次的纵向——**净效果是纯往上抬半格**，也就是悬空。
+        //
+        // 所以夹角上只取一次的量：贴还是贴上了，脚也还在地上。
+        dy = -min(up, g.tileH / 4)
         return CGPoint(x: dx, y: dy)
     }
 

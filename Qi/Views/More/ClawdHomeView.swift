@@ -153,6 +153,24 @@ struct ClawdHomeView: View {
         return IsoRoom.fit(in: s, as: store.projection).walkSpan(atY: y, in: s)
     }
 
+    /// 把他夹回地板里。**每次量完屋子就叫一次。**
+    ///
+    /// ## 为什么必须有这一下
+    ///
+    /// 他的位置存的是「占容器宽高的百分之几」，而地板的形状是算出来的。
+    /// 屋子一改（墙加高、地板加深、换投影、转屏），那两个百分比就还停在
+    /// 老屋子的位置上——**而他自己不会重新落地**：走路那套只在他决定
+    /// 要去哪儿的时候才夹一次，站着不动的时候一次都不夹。
+    ///
+    /// 她报的「走在最下一排也没有在屋里」有一半是这个：不是范围算错了，
+    /// 是他压根没被重新安置过。
+    private func settleHim() {
+        let p = onFloor(clawdX, clawdY)
+        guard abs(p.x - clawdX) > 0.0001 || abs(p.y - clawdY) > 0.0001 else { return }
+        clawdX = p.x
+        clawdY = p.y
+    }
+
     /// 把一个点夹回地板里
     private func onFloor(_ x: Double, _ y: Double) -> (x: Double, y: Double) {
         let b = band
@@ -695,11 +713,15 @@ struct ClawdHomeView: View {
             .onAppear {
                 roomSize = geo.size
                 roomOrigin = geo.frame(in: .named("roomPage")).origin
+                settleHim()
             }
             .onChange(of: geo.size) { _, v in
                 roomSize = v
                 roomOrigin = geo.frame(in: .named("roomPage")).origin
+                settleHim()
             }
+            // 换个投影（立体 ⇄ 平面）也是换了一间屋子的形状
+            .onChange(of: store.projection) { _, _ in settleHim() }
         }
         .padding(.horizontal, 16)
         // ⚠️ 底下那条给标签栏的留白**不在这儿**了：
