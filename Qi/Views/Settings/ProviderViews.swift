@@ -202,6 +202,11 @@ struct ProviderFormView: View {
                                 }
                             }
                         }
+                        // ⚠️ 每一个 Section 都要自己挂一遍。
+                        // `listRowBackground` 管的是「行」，挂在外面那层 Form 上
+                        // 不会往里传——她报的「其他两个有一部分不是玻璃」
+                        // 就是这几块：模型列表、MCP 工具列表。
+                        .listRowBackground(GlassRowBackground())
                     }
                 }
             }

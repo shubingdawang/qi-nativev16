@@ -186,6 +186,8 @@ struct MCPFormView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                .listRowBackground(GlassRowBackground())
+
 
                 if !server.tools.isEmpty {
                     Section {
@@ -225,6 +227,7 @@ struct MCPFormView: View {
                             }
                         }
                     }
+                    .listRowBackground(GlassRowBackground())
                 }
             }
             .transparentList()
