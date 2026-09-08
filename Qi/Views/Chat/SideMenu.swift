@@ -23,16 +23,6 @@ struct SideMenuShell<Content: View>: View {
     /// 关的时候手指往左带了多少（负数）
     @State private var drag: CGFloat = 0
 
-    /// 被推开那张卡片的圆角。
-    ///
-    /// ⚠️ **只有「关着」和「开着」两个值，中间不插值。**
-    /// 插值意味着每一帧都要重画一张盖住整页的遮罩，那正是卡的原因
-    /// （见 `body` 里那段）。动画那零点几秒里卡片同时在缩、在移，
-    /// 圆角早一帧到位看不出来。
-    private func sheetRadius(_ progress: CGFloat) -> CGFloat {
-        progress > 0.001 ? 36 : 0
-    }
-
     var body: some View {
         GeometryReader { geo in
             let width = min(geo.size.width * 0.80, 320)
@@ -50,7 +40,10 @@ struct SideMenuShell<Content: View>: View {
                 // 侧栏要顶到屏幕最上最下，不然上下各留一条白边，
                 // 看着像贴了张比屏幕小一圈的纸
                 .ignoresSafeArea()
-                .opacity(progress)
+                // ⚠️ 这儿以前有一句 `.opacity(progress)`。**它是多余的，而且不便宜：**
+                // 关着的时候整页聊天本来就盖在它上面，看不见；
+                // 而给一个内容重叠的容器加 `opacity`，
+                // 会逼它每帧先合成到一张离屏位图再混合。
                 .allowsHitTesting(isOpen)
                 .zIndex(0)
 
@@ -60,67 +53,47 @@ struct SideMenuShell<Content: View>: View {
                 // 之前是在它上面盖一层透明的捕捉层，结果连底下侧栏的点击
                 // 和滚动一起吃掉了，侧栏看得见点不动。现在改成直接让它失效，
                 // 再单独放一层只盖住它自己的捕捉层。
-                // 下沉要够狠才看得出来是"推开了一张卡片"。
-                // 上一版只缩了 10%、盖了一层几乎看不见的暗，
-                // 结果推开之后跟没推一样。现在三件事一起加：
-                // 缩到 84%、圆角给到 36、**页面本身压一层暗**——
-                // 最后这条是关键，光靠外面的阴影是压不下去的。
                 content
                     .frame(width: geo.size.width, height: geo.size.height)
                     .allowsHitTesting(!isOpen)
                     .overlay {
-                        // 压一层暗是为了"沉下去"，不是为了把聊天页关灯。
-                        // 0.34 太重了，推开之后那半边黑得很突兀。
+                        // 压一层暗是为了"沉下去"。纯 alpha，不要钱。
                         Color.black.opacity(0.16 * progress)
                             .allowsHitTesting(false)
                     }
-                    .compositingGroup()
-                    // ⚠️⚠️ **圆角和阴影的「形状」不跟着 progress 变，只有浓淡变。**
+                    // ⚠️⚠️⚠️ **这儿只许有平移和 alpha。**
                     //
-                    // 她报的：「划出左侧栏和收起左侧栏依旧有些卡顿，
-                    // 只有划出和收起手势的时候卡，里面滑动还是比较流畅的。」
+                    // 她第三次报同一件事：「无法做到一下子就出现一下子就收回，
+                    // 有非常明显的卡顿。」前两轮我各拆了一样
+                    //（每行的模糊、圆角和阴影的插值），都只是把成本压小，
+                    // 没动到根上。
                     //
-                    // 这句话把范围缩得很死：滑动流畅 → 每行那些 `visualEffect`
-                    // 不是瓶颈；卡的只有开合动画。那就看开合每一帧在干什么：
+                    // 根在这儿：这张「卡片」不是一张图，**是整页聊天**。
+                    // 只要它身上挂着 `compositingGroup` + `scaleEffect`，
+                    // 系统就得在动画的每一帧把整页按新尺寸重新光栅化一遍
+                    //（缩放要保持清晰，不能直接拉伸旧位图）。
+                    // 一屏几十个气泡、玻璃、壁纸——那是压不下去的一笔。
                     //
-                    //   · `clipShape` 的圆角是 `36 * progress` —— **半径一变，
-                    //     那张遮罩就得重画**，而遮罩盖的是整页聊天
-                    //   · 两层 `.shadow`，半径也是跟着 progress 变的 ——
-                    //     **半径一变，那张模糊图就得重新生成**，
-                    //     一帧两次全屏高斯，还叠在刚光栅化完的整页上
+                    // 所以撤掉的是：`compositingGroup`、`scaleEffect`、
+                    // `clipShape`（圆角）、描边、`shadow`。
+                    // 留下的 `offset` 是纯仿射变换，`opacity` 是纯 alpha，
+                    // 两样都不需要重新生成任何位图——**这就是「一下子就出来」**。
                     //
-                    // 位移和缩放是仿射变换，GPU 上不要钱；真正贵的是
-                    // 「每一帧都得重新生成一张全屏位图」。
-                    //
-                    // 所以：**形状定死，只让透明度动**。
-                    // 圆角在动画一开始就跳到 36 —— 那零点几秒里卡片同时在缩、在移，
-                    // 圆角早一帧到位根本看不出来；而遮罩从此只重画一次。
-                    // 两层阴影并成一层，半径钉死 26。
-                    .clipShape(RoundedRectangle(cornerRadius: sheetRadius(progress),
-                                                style: .continuous))
-                    .overlay {
-                        // 推开之后给它一道边，不然跟底下那层糊成一片，
-                        // 看不出来是"浮"在上面的
-                        RoundedRectangle(cornerRadius: sheetRadius(progress),
-                                         style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.28 * progress), lineWidth: 1)
-                            .allowsHitTesting(false)
-                    }
-                    .shadow(color: Color.black.opacity(0.45 * progress),
-                            radius: 26, x: -10, y: 0)
-                    .scaleEffect(1 - 0.16 * progress, anchor: .center)
+                    // ⚠️ 想把「推开一张卡片」那个观感加回来的话，
+                    // **别再往这一支上挂**。正确的做法是在侧栏那一层的右边缘
+                    // 单独画一道静态的圆角+阴影条，它只有一条边那么大，
+                    // 跟整页无关。要做再说，现在先让它快。
                     .offset(x: width * progress)
                     .zIndex(1)
 
                 // 捕捉层：只盖住聊天页那一块，点一下关上，往左拖也关上。
                 if progress > 0.02 {
-                    // 这块盖的是被推开那张卡片，尺寸得跟着上面的缩放一起改，
-                    // 不然点空白处关不掉、或者点到侧栏上反而被它吃掉
+                    // 这块盖的就是被推开那一页。**不再跟着缩放算**——
+                    // 页面已经不缩了，它跟着平移就行。
                     Color.black.opacity(0.001)
-                        .frame(width: geo.size.width * (1 - 0.16 * progress),
-                               height: geo.size.height * (1 - 0.16 * progress))
+                        .frame(width: geo.size.width, height: geo.size.height)
                         .contentShape(Rectangle())
-                        .offset(x: width * progress + geo.size.width * 0.08 * progress)
+                        .offset(x: width * progress)
                         .onTapGesture { close() }
                         .gesture(
                             DragGesture()
