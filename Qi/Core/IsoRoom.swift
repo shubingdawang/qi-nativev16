@@ -390,6 +390,16 @@ struct IsoRoom {
     /// 平面那档的地砖只有半格高，写死的话一屋子家具会往下沉半格。
     var tileBottom: CGFloat { projection == .flat ? rowPitch / 2 : tileH / 2 }
 
+    /// **一「格高」在屏幕上有多少点。**
+    ///
+    /// 家具那个 `tall` 用的就是这个单位。桌上那一层要抬多高
+    /// （`IsoShape.Mount.table`）、墙上那一层挂多高，都靠它换算。
+    ///
+    /// ⚠️ 两种投影下不一样：等距屋一格地砖只有 `tileH` 高（斜着看的），
+    /// 平面屋一排是 `rowPitch`。竖着的高度不能跟着地砖走，
+    /// 不然平面屋里一张桌子只有一丁点高，杯子几乎贴在地上。
+    var unitH: CGFloat { projection == .flat ? rowPitch * 1.9 : tileH * 1.7 }
+
     /// 这一格在不在地板上
     func inside(_ gx: Int, _ gy: Int) -> Bool {
         gx >= 0 && gy >= 0 && gx < cols && gy < size
@@ -699,8 +709,22 @@ struct IsoShape {
     var d: Int = 1
     /// 立起来多高（格）。只影响谁挡谁的第二把尺子和影子大小
     var tall: Double = 1
-    /// 贴墙的（画、空调、窗）。贴墙的不占地板
-    var onWall: Bool = false
+    /// 摆在哪一层：地上、墙上、还是桌上。
+    ///
+    /// 她报的：「很多物品没有分墙上地上桌上……
+    /// 饮料食物应该是要放在任何桌上的而不是地上，
+    /// 图上这个植物叫吊兰，应该是挂在墙上的才对。」
+    var mount: Mount = .floor
+
+    enum Mount: String {
+        /// 摆在地板上。**只有这一层占格子**
+        case floor
+        /// 挂在墙上（相框、窗帘、吊兰、风铃）。沿着最里那排墙横着滑
+        case wall
+        /// 放在台面上（吃的、喝的、小摆件）。
+        /// 底下压着一件有台面的就抬到台面上，没有就直接落地
+        case table
+    }
     /// 有没有一个能放东西的台面（桌子有，床没有）。
     /// 阿晏「把饮料放在哪张桌子上」靠的就是这一条
     var surface: Bool = false

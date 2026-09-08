@@ -411,7 +411,21 @@ struct IsoRoomView<Clawd: View>: View {
             let depth = geoRoom.projection == .flat
                 ? Double(farY) + Double(farX) * 0.001   // 同排的按左右定先后，稳定就行
                 : Double(farX + farY)
-            out.append(Drawable(key: f.id.uuidString, depth: depth,
+            // ⚠️ **分层压在深度上面。**
+            //
+            // 挂在墙上的要画在**所有东西的最里面**（它本来就在墙上，
+            // 屋里任何一件都该挡在它前面）；放在台面上的要画在
+            // 同一格那件**之后**，不然杯子会被桌子盖住。
+            //
+            // 走深度而不是另开一摞：整间屋只有一个画序，
+            // 分成两摞的话「谁挡谁」就得在两边各判一次。
+            let layered: Double
+            switch s.mount {
+            case .wall:  layered = depth - 1000
+            case .table: layered = depth + 0.4
+            case .floor: layered = depth
+            }
+            out.append(Drawable(key: f.id.uuidString, depth: layered,
                                 tall: s.tall, item: f, kind: kind))
         }
 
@@ -640,7 +654,8 @@ struct IsoRoomView<Clawd: View>: View {
         // 会比画的那批低半格，同一格里两件东西脚不在一条线上。
         .offset(y: groundOffset(mine: mine, packed: packed, lift: lift,
                                 width: mineW, bottom: geoRoom.tileBottom,
-                                frontDrop: frontDrop(s, geoRoom)))
+                                frontDrop: frontDrop(s, geoRoom))
+                   + mountLift(item, s, geoRoom))
         .scaleEffect(lifted ? 1.06 : 1)
         .shadow(color: .black.opacity(lifted ? 0.28 : 0.12),
                 radius: lifted ? 10 : 3, y: lifted ? 8 : 2)
@@ -665,6 +680,37 @@ struct IsoRoomView<Clawd: View>: View {
         .animation(.spring(response: 0.26, dampingFraction: 0.78), value: lifted)
         .onTapGesture { onTapFurniture(item) }
         .gesture(dragGesture(item, s, geoRoom))
+    }
+
+    /// 挂在墙上／放在台面上的，要往上抬多少。摆在地上的是零。
+    ///
+    /// 她报的：「很多物品没有分墙上地上桌上……
+    /// 饮料食物应该是要放在任何桌上的而不是地上。」
+    ///
+    /// ⚠️ 台面那一层是**看底下压着什么**算的，不是写死一个高度。
+    /// 写死的话，杯子摆在矮凳上和摆在高柜上会浮在同一个高度，
+    /// 而且屋里没桌子的时候它会悬在半空——现在没桌子就直接落地。
+    private func mountLift(_ item: Furniture, _ s: IsoShape,
+                           _ g: IsoRoom) -> CGFloat {
+        switch s.mount {
+        case .floor:
+            return 0
+        case .wall:
+            // 挂在墙的中上段。墙有 `wallH` 高，挂太高看着像浮在天花板上
+            return -g.wallH * 0.55
+        case .table:
+            let cell = (item.id == dragging) ? dragCell : store.cell(of: item)
+            var top: Double = 0
+            for f in store.furniture(in: room) where f.id != item.id {
+                let o = FurnitureCatalog.shape(of: f.kind)
+                guard o.surface else { continue }
+                let c = store.cell(of: f)
+                let on = cell.gx >= c.gx && cell.gx < c.gx + max(1, o.w)
+                    && cell.gy >= c.gy && cell.gy < c.gy + max(1, o.d)
+                if on { top = max(top, o.tall) }
+            }
+            return -CGFloat(top) * g.unitH
+        }
     }
 
     /// 贴墙那一排往墙里挪多少。不在边上就是零。

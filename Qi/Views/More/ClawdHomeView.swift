@@ -123,6 +123,12 @@ struct ClawdHomeView: View {
     /// 正要买的那套主题、换到哪一间
     @State private var buying: (theme: RoomTheme, room: HomeRoom)?
 
+    /// 长按商店里某一件之后，正在挑数量和房间的那一件
+    @State private var shopping: FurnitureKind?
+
+    /// 正在挑「搬去哪一间」的那一件
+    @State private var sending: Furniture?
+
     /// 屋子这一页现在画的是哪一间。
     /// `viewing` 还没定下来的时候（刚进来那一帧）就跟着他。
     private var shownRoom: HomeRoom { viewing ?? store.clawdRoom }
@@ -311,6 +317,36 @@ struct ClawdHomeView: View {
             CoinCheatSheet(store: store)
                 .presentationDetents([.height(300)])
                 .presentationDragIndicator(.visible)
+        }
+        .confirmationDialog(
+            "搬到哪一间",
+            isPresented: Binding(get: { sending != nil },
+                                 set: { if !$0 { sending = nil } }),
+            titleVisibility: .visible
+        ) {
+            if let item = sending {
+                // ⚠️ 它现在待的那间不摆出来——搬到原地不是一个选项。
+                ForEach(HomeRoom.allCases.filter { $0.rawValue != item.room }) { r in
+                    Button(r.rawValue) {
+                        store.send(item.id, to: r)
+                        say("搬去" + r.rawValue + "了")
+                        sending = nil
+                    }
+                }
+            }
+            Button("算了", role: .cancel) { sending = nil }
+        }
+        .sheet(item: $shopping) { kind in
+            BuyBox(kind: kind, store: store) { got, room in
+                if got > 0 {
+                    say(kind.name + "买了 " + String(got) + " 件，放进" + room.rawValue)
+                    tab = 0
+                } else {
+                    say("币不够，再攒攒")
+                }
+            }
+            .presentationDetents([.height(400)])
+            .presentationDragIndicator(.visible)
         }
         .confirmationDialog("在此房间启用自动发言？", isPresented: $askingLink,
                             titleVisibility: .visible) {
@@ -799,6 +835,12 @@ struct ClawdHomeView: View {
                         store.flipFacing(item.id)
                     }
                 }
+                // 买过之后也能换一间。
+                //
+                // 她报的：「家具分区太绝对了，桌子也可以摆在卧室，
+                // 但现在只能摆在餐厅。」——买下来归哪一间只是个默认，
+                // 可**改这个默认的路以前不存在**：一件东西落在餐厅就出不来了。
+                Button("搬到别的房间") { sending = item }
                 Button("收起来") { store.toggleHidden(item.id) }
                 Button("卖掉，退一半的币", role: .destructive) {
                     store.sell(item.id)
@@ -1413,47 +1455,86 @@ struct ClawdHomeView: View {
         .padding(.bottom, 10)
     }
 
+    /// 柜子里按**种**归拢：同一种买了几件只占一张卡片，右下角标数量。
+    ///
+    /// ⚠️ 顺序按**第一件买进来的先后**，不排序也不按 id 排。
+    /// 每次进柜子顺序都变的话，她刚放下的那件下次就找不着了。
+    private var cabinetGroups: [(kind: FurnitureKind, count: Int)] {
+        var order: [String] = []
+        var n: [String: Int] = [:]
+        for f in store.owned {
+            if n[f.kind] == nil { order.append(f.kind) }
+            n[f.kind, default: 0] += 1
+        }
+        return order.compactMap { id in
+            guard let k = FurnitureCatalog.kind(id), let c = n[id] else { return nil }
+            return (k, c)
+        }
+    }
+
     private var cabinet: some View {
         ScrollView {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10),
                                      count: 3), spacing: 12) {
-                ForEach(store.owned) { item in
-                    if let kind = FurnitureCatalog.kind(item.kind) {
-                        VStack(spacing: 6) {
-                            // ⚠️ 60 → 34。她报的：「商店里的物品缩略图
-                            // 再小一半，现在太大了，下面 clawd 的衣服
-                            // 更是大的离谱。」
-                            //
-                            // 穿戴那几件本来就画得满格（一顶帽子占满整张图），
-                            // 跟一张画着整间屋的床图摆在一起，看着就大一圈。
-                            FurnitureThumb(kind: kind, height: 34, scale: 1.4)
-                                .opacity(item.hidden ? 0.35 : 1)
-                            Text(kind.name)
-                                .font(.app(10))
-                                .foregroundStyle(item.hidden
-                                                 ? Theme.textMuted(scheme)
-                                                 : Theme.textMain(scheme))
+                ForEach(cabinetGroups, id: \.kind.id) { g in
+                    let kind = g.kind
+                    let out = store.outCount(of: kind.id)
+                    let all = g.count
+                    VStack(spacing: 6) {
+                        // ⚠️ 60 → 34。她报的：「商店里的物品缩略图
+                        // 再小一半，现在太大了，下面 clawd 的衣服
+                        // 更是大的离谱。」
+                        //
+                        // 穿戴那几件本来就画得满格（一顶帽子占满整张图），
+                        // 跟一张画着整间屋的床图摆在一起，看着就大一圈。
+                        FurnitureThumb(kind: kind, height: 34, scale: 1.4)
+                            .opacity(out > 0 ? 1 : 0.35)
+                        Text(kind.name)
+                            .font(.app(10))
+                            .foregroundStyle(out > 0
+                                             ? Theme.textMain(scheme)
+                                             : Theme.textMuted(scheme))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .glassCard(padding: 0)
+                    // ⚠️ 穿戴那一类点一下是**穿上／脱下**，不是收起来。
+                    // 她报的：「贝雷帽被当成家具放在房间里，
+                    // 实际上应该给他直接穿上。」——一顶帽子摆在地板上是很怪。
+                    .overlay(alignment: .topTrailing) {
+                        if kind.category == .wear, store.wearing == kind.id {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.app(12))
+                                .foregroundStyle(app.settings.accentColor)
+                                .padding(5)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .glassCard(padding: 0)
-                        // ⚠️ 穿戴那一类点一下是**穿上／脱下**，不是收起来。
-                        // 她报的：「贝雷帽被当成家具放在房间里，
-                        // 实际上应该给他直接穿上。」——一顶帽子摆在地板上是很怪。
-                        .overlay(alignment: .topTrailing) {
-                            if kind.category == .wear, store.wearing == item.kind {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.app(12))
-                                    .foregroundStyle(app.settings.accentColor)
-                                    .padding(5)
-                            }
+                    }
+                    // 右下角那个数：**摆出去几件 / 一共几件**。
+                    //
+                    // 她要的：「在柜子物品的右下角显示数量，可以重复摆放。」
+                    //
+                    // ⚠️ 只有一件的时候不标——一个「1/1」是噪音，
+                    // 图标暗着就已经说明它收起来了。
+                    .overlay(alignment: .bottomTrailing) {
+                        if all > 1 {
+                            Text(String(out) + "/" + String(all))
+                                .font(HomeType.number(9))
+                                .foregroundStyle(out > 0
+                                                 ? Theme.textSoft(scheme)
+                                                 : Theme.textMuted(scheme))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Theme.softFillDeep))
+                                .padding(5)
                         }
-                        .onTapGesture {
-                            if kind.category == .wear {
-                                store.wear(item.kind)
-                            } else {
-                                store.toggleHidden(item.id)
-                            }
+                    }
+                    // 点一下**动一件**，不是一整种：
+                    // 柜子里还有存货就摆出去一件，都摆出去了就收回来一件。
+                    .onTapGesture {
+                        if kind.category == .wear {
+                            store.wear(kind.id)
+                        } else if !store.putOutOne(kind.id) {
+                            store.takeBackOne(kind.id)
                         }
                     }
                 }
@@ -1467,7 +1548,7 @@ struct ClawdHomeView: View {
                     .foregroundStyle(Theme.textMuted(scheme))
                     .padding(.top, 50)
             } else {
-                Text("点一下收起来或者摆回房间")
+                Text("点一下摆出一件，都摆出去后再点一下收回一件")
                     .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
@@ -1479,6 +1560,12 @@ struct ClawdHomeView: View {
     private var shop: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
+                // 长按那条路不写出来她找不到。同一件可以买很多份，
+                // 长按能挑数量和放进哪一间。
+                Text("点一下买一件，长按可以选数量和房间")
+                    .font(.app(10))
+                    .foregroundStyle(Theme.textMuted(scheme))
+
                 ForEach(FurnitureKind.Category.allCases) { cat in
                     let list = FurnitureCatalog.all.filter { $0.category == cat }
                     if !list.isEmpty {
@@ -1500,13 +1587,19 @@ struct ClawdHomeView: View {
         }
     }
 
+    /// 商店里的一格。**点一下买一件，长按挑数量和房间。**
+    ///
+    /// 她说的：「家具可以重复购买，不要点一下就放点一下就收……
+    /// 在添加家具的时候可以长按选择添加到哪里还有购买数量。」
+    ///
+    /// ⚠️ 「已有」不再是**灰掉不能点**，只是一个数。
     private func shopItem(_ kind: FurnitureKind) -> some View {
-        let owned = store.has(kind.id)
+        let have = store.count(of: kind.id)
         let afford = store.coins >= kind.price
         return Button {
-            guard !owned else { return }
-            if store.buy(kind) {
-                say("\(kind.name)买到了")
+            let got = store.buy(kind)
+            if got > 0 {
+                say(kind.name + "买到了")
                 tab = 0
             } else {
                 say("币不够，再攒攒")
@@ -1517,27 +1610,40 @@ struct ClawdHomeView: View {
                 Text(kind.name)
                     .font(.app(10))
                     .foregroundStyle(Theme.textMain(scheme))
-                if owned {
-                    Text("已有")
-                        .font(.app(9))
-                        .foregroundStyle(StatusTone.done.color)
-                } else {
-                    HStack(spacing: 3) {
-                        Circle().fill(HomePalette.amber).frame(width: 6, height: 6)
-                        Text("\(kind.price)")
-                            .font(HomeType.number(10))
-                    }
-                    .foregroundStyle(afford
-                                     ? Theme.textSoft(scheme)
-                                     : Theme.textMuted(scheme).opacity(0.6))
+                HStack(spacing: 3) {
+                    Circle().fill(HomePalette.amber).frame(width: 6, height: 6)
+                    Text("\(kind.price)")
+                        .font(HomeType.number(10))
                 }
+                .foregroundStyle(afford
+                                 ? Theme.textSoft(scheme)
+                                 : Theme.textMuted(scheme).opacity(0.6))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
             .glassCard(padding: 0)
-            .opacity(owned ? 0.55 : 1)
+            .overlay(alignment: .topTrailing) {
+                if have > 0 {
+                    Text("已有 " + String(have))
+                        .font(.app(9))
+                        .foregroundStyle(StatusTone.done.color)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Theme.softFillDeep))
+                        .padding(5)
+                }
+            }
+            .opacity(afford ? 1 : 0.55)
         }
         .buttonStyle(.plain)
+        // ⚠️ 用 `onLongPressGesture` 而不是 `contextMenu`：
+        // 要挑数量和房间，菜单里塞不下一个步进器。
+        .onLongPressGesture(minimumDuration: 0.35) {
+            if app.settings.haptics {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            }
+            shopping = kind
+        }
     }
 
     // MARK: 它自己的小动作

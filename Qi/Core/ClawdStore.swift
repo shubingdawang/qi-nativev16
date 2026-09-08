@@ -1281,23 +1281,78 @@ final class ClawdStore: ObservableObject {
         setFlooring(t.floorToken, for: room)
     }
 
+    /// 买几件，摆进哪一间。**返回真的买到了几件。**
+    ///
+    /// ⚠️⚠️ **同一件东西可以买很多份。**
+    ///
+    /// 她说的：「家具可以重复购买，不要点一下就放点一下就收，
+    /// 这样太简单了，不符合我装修换装小游戏的理念。」
+    ///
+    /// 以前这儿有一句 `!has(kind.id)`——一种只准有一件，
+    /// 于是「装修」这件事就只剩下把六十九件东西各摆一遍。
+    /// 一排四把椅子、两盏一样的灯，本来就是装修在做的事。
+    ///
+    /// ⚠️ 攒够几件买几件，**中途钱不够就停下**，不是整笔失败。
+    /// 她要五个只买得起三个的时候，给她三个比什么都不给强。
     @discardableResult
-    func buy(_ kind: FurnitureKind) -> Bool {
-        guard coins >= kind.price, !has(kind.id) else { return false }
-        coins -= kind.price
-        var item = Furniture(kind: kind.id)
-        // 随便找个地方放下，别都堆在正中间。
-        //
-        // ⚠️ **必须落在地板上**（她报的「所有家具买来都在墙上」）。
-        // 以前这儿写的是 `0.35...0.75`，而地板是从 `floorTop`（0.70）才开始的——
-        // 也就是说买十件有九件半落在墙面上。
-        // 挪家具那条早就走 `onFloor` 统一了规矩，**买这条一直漏在外面**。
-        item.x = Double.random(in: 0.2...0.8)
-        item.y = Double.random(in: Self.floorTop...Self.floorBottom)
-        // 买来先归到它该在的那间屋（床进卧室、锅进厨房）。
-        // **只是默认**——她想搬哪儿搬哪儿。
-        item.room = HomeRoom.home(for: kind).rawValue
-        owned.append(item)
+    func buy(_ kind: FurnitureKind, count: Int = 1,
+             room: HomeRoom? = nil) -> Int {
+        // ⚠️ **攒够一批再写回 `owned`。**
+        // `owned` 的 `didSet` 每次都要落盘，一件一件 append
+        // 等于买十件写十次盘。
+        var batch: [Furniture] = []
+        let home = (room ?? HomeRoom.home(for: kind)).rawValue
+        for _ in 0..<max(1, count) {
+            guard coins >= kind.price else { break }
+            coins -= kind.price
+            var item = Furniture(kind: kind.id)
+            // 随便找个地方放下，别都堆在正中间。
+            //
+            // ⚠️ **必须落在地板上**（她报的「所有家具买来都在墙上」）。
+            // 以前这儿写的是 `0.35...0.75`，而地板是从 `floorTop`（0.70）
+            // 才开始的——也就是说买十件有九件半落在墙面上。
+            item.x = Double.random(in: 0.2...0.8)
+            item.y = Double.random(in: Self.floorTop...Self.floorBottom)
+            item.room = home
+            batch.append(item)
+        }
+        guard !batch.isEmpty else { return 0 }
+        owned.append(contentsOf: batch)
+        return batch.count
+    }
+
+    /// 这一种一共有几件
+    func count(of kindID: String) -> Int {
+        owned.reduce(0) { $0 + ($1.kind == kindID ? 1 : 0) }
+    }
+
+    /// 这一种**摆在屋里**的有几件（收进柜子的不算）
+    func outCount(of kindID: String) -> Int {
+        owned.reduce(0) { $0 + ($1.kind == kindID && !$1.hidden ? 1 : 0) }
+    }
+
+    /// 从柜子里拿一件出来摆上。全摆出来了就返回 false。
+    ///
+    /// 她要的「可以重复摆放」就是这一条：柜子里那张卡片按的是**一件**，
+    /// 不是一整种——按一下多一件，按到没有为止。
+    @discardableResult
+    func putOutOne(_ kindID: String) -> Bool {
+        guard let i = owned.firstIndex(where: { $0.kind == kindID && $0.hidden })
+        else { return false }
+        owned[i].hidden = false
+        return true
+    }
+
+    /// 收一件回柜子里。
+    ///
+    /// ⚠️ 从**后面**开始收：她刚摆出去那件是最后加的，
+    /// 一放一收该是同一件，不然看着像随机消失了一件。
+    @discardableResult
+    func takeBackOne(_ kindID: String) -> Bool {
+        guard let i = owned.lastIndex(where: {
+            $0.kind == kindID && !$0.hidden && !$0.carried
+        }) else { return false }
+        owned[i].hidden = true
         return true
     }
 
@@ -1414,6 +1469,39 @@ extension FurnitureCatalog {
     ///
     /// 没填的按小摆件算（一格、能摸一下），**不会因为漏填就崩**。
     static func shape(of id: String) -> IsoShape {
+        var s = baseShape(of: id)
+        s.mount = mount(of: id)
+        return s
+    }
+
+    /// 这件东西**摆在哪一层**。
+    ///
+    /// 她报的：「很多物品没有分墙上地上桌上。」
+    ///
+    /// ⚠️ 吃的和喝的**走分类判**，不逐个列 id。主题包里那 94 件是生成出来的，
+    /// 挨个列一遍既写不全也改不动；而「吃的就该放在桌上」本来就是按类成立的。
+    static func mount(of id: String) -> IsoShape.Mount {
+        switch id {
+        // 挂在墙上的
+        case "frame", "curtain", "hanging", "chime", "stars",
+             "painting", "wallclock", "ny_couplet", "fucouplet",
+             "doorwreath", "xmas_wreath", "autumn_wreath", "vic_frame":
+            return .wall
+        // 摆在台面上的
+        case "candle", "tissue", "polaroid", "globe", "tank", "humid",
+             "speaker", "record", "bonsai", "teapot", "microwave",
+             "flowervase", "minitree", "vic_vase":
+            return .table
+        default:
+            switch kind(id)?.category {
+            case .food, .drink: return .table
+            default:            return .floor
+            }
+        }
+    }
+
+    /// 占几格、多高、有没有台面。**摆在哪一层由 `mount` 单管**，不在这儿。
+    private static func baseShape(of id: String) -> IsoShape {
         // 主题那一批在自己那张表里（`FurnitureThemes.swift`）。
         // 不先问的话它们会全掉进最底下那个 default，
         // 一张双人床变成一格小摆件。
@@ -1498,22 +1586,57 @@ extension FurnitureCatalog {
         case "rug":
             return IsoShape(w: 5, d: 6, tall: 0, actions: ["打滚", "躺一会儿"])
 
-        case "plant", "cactus", "sunflower":
-            return IsoShape(w: 2, d: 2, tall: 1.2, actions: ["浇水", "闻一闻", "戳一下"])
+        // 一盆绿植占一格。她报的「植物也太大了」——
+        // 以前这几件跟凳子一样占两格，一盆桌上的小绿植画得比人还宽。
+        case "plant", "cactus":
+            return IsoShape(w: 1, d: 1, tall: 0.8, actions: ["浇水", "闻一闻", "戳一下"])
+        case "sunflower", "sakura":
+            return IsoShape(w: 1, d: 1, tall: 1.5, actions: ["浇水", "闻一闻", "戳一下"])
 
         case "bear":
-            return IsoShape(w: 2, d: 2, tall: 0.9, actions: ["抱一下", "摆正", "说悄悄话"])
+            return IsoShape(w: 1, d: 1, tall: 0.8, actions: ["抱一下", "摆正", "说悄悄话"])
 
         case "pillow":
-            return IsoShape(w: 2, d: 2, tall: 0.5, actions: ["靠上去", "抱一下", "摆正"])
+            return IsoShape(w: 1, d: 1, tall: 0.4, actions: ["靠上去", "抱一下", "摆正"])
 
         // 伞竖着，比别的小摆件高
         case "umbrella":
-            return IsoShape(w: 2, d: 2, tall: 1.4, actions: ["撑开", "撞一下", "拿起来"])
+            return IsoShape(w: 1, d: 1, tall: 1.4, actions: ["撑开", "撞一下", "拿起来"])
+
+        // MARK: 底下这些原来全掉进 default
+        //
+        // ⚠️ default 从「两格」改成「一格」了（见最下面那段），
+        // 所以**这一批大件必须自己报数**——不报的话一个衣柜会缩成一格。
+
+        case "wardrobe":
+            return IsoShape(w: 2, d: 1, tall: 2.2, surface: true,
+                            actions: ["拉开柜门", "踮脚够", "把东西放上去"])
+        case "mirror":
+            return IsoShape(w: 1, d: 1, tall: 2.0, actions: ["照一照", "凑近看", "摸一下"])
+        case "desk":
+            return IsoShape(w: 3, d: 2, tall: 0.9, surface: true,
+                            actions: ["趴桌上", "在桌边站着", "把东西放上去"])
+        case "shoerack":
+            return IsoShape(w: 2, d: 1, tall: 0.8, surface: true,
+                            actions: ["坐着换鞋", "摆正", "把东西放上去"])
+        case "horse":
+            return IsoShape(w: 2, d: 2, tall: 1.0, actions: ["骑上去", "摇一摇", "摸一下"])
+        case "moon", "fan":
+            return IsoShape(w: 1, d: 1, tall: 1.0, actions: ["开灯", "凑近看", "摸一下"])
+        case "robot", "blocks":
+            return IsoShape(w: 1, d: 1, tall: 0.8, actions: ["拿起来", "摆正", "摸一下"])
 
         default:
-            // 小摆件：一格、矮、能摸能拿
-            return IsoShape(w: 2, d: 2, tall: 0.6, actions: ["摸一下", "拿起来"])
+            // ⚠️⚠️ **小摆件占一格，不是两格。**
+            //
+            // 她报的：「饮料食物太大了。」病根就在这儿——
+            // 一罐汽水没有自己那一行，掉进 default，于是跟凳子一样占两格；
+            // 而画多宽是**按占几格算的**（见 `IsoRoomView.piece`），
+            // 所以它画出来真就有两格宽。
+            //
+            // 改成一格之后，反过来轮到大件不能再指望 default——
+            // 上面那一批就是为此补的。
+            return IsoShape(w: 1, d: 1, tall: 0.5, actions: ["摸一下", "拿起来"])
         }
     }
 }
@@ -1741,6 +1864,8 @@ extension ClawdStore {
         let geo = IsoRoom(size: Self.roomSize,
                           cols: projection == .flat ? Self.flatCols : Self.roomSize,
                           projection: projection)
+        // 墙上和桌上的不占地板，落不落座这一步跟它们无关（见 `place`）
+        guard s.mount == .floor else { return }
         let taken = takenCells(in: room, except: id)
         let here = cell(of: owned[i])
         if let spot = geo.nearestFree(here.gx, here.gy, w: s.w, d: s.d, taken: taken) {
@@ -1765,7 +1890,9 @@ extension ClawdStore {
         for f in owned where !f.hidden && !f.carried
             && f.room == room.rawValue && f.id != except {
             let s = FurnitureCatalog.shape(of: f.kind)
-            guard s.tall > 0 else { continue }
+            // ⚠️ 只有**摆在地上**的占格子。挂墙上的和放桌上的都不占——
+            // 占了的话一张桌子上摆两个杯子就会互相挤开。
+            guard s.tall > 0, s.mount == .floor else { continue }
             let c = cell(of: f)
             for (x, y) in IsoRoom.cells(c.gx, c.gy, s.w, s.d) {
                 out.insert("\(x),\(y)")
@@ -1783,9 +1910,18 @@ extension ClawdStore {
         let geo = IsoRoom(size: Self.roomSize,
                           cols: projection == .flat ? Self.flatCols : Self.roomSize,
                           projection: projection)
-        guard let spot = geo.nearestFree(gx, gy, w: s.w, d: s.d,
-                                         taken: takenCells(in: room, except: id))
-        else { return false }
+        // 墙上和桌上的**不占地板，也就不用避让**——她指哪儿就放哪儿。
+        // 走 `nearestFree` 的话，两个杯子会被当成抢同一格而弹开。
+        // ⚠️ 挂墙上的只沿着最里那排横着滑，所以纵深钉死在 0。
+        let spot: (Int, Int)
+        if s.mount == .floor {
+            guard let free = geo.nearestFree(gx, gy, w: s.w, d: s.d,
+                                             taken: takenCells(in: room, except: id))
+            else { return false }
+            spot = free
+        } else {
+            spot = geo.clamp(gx, s.mount == .wall ? 0 : gy)
+        }
         // ⚠️ **写回当前这个视角那一对。**
         //
         // 两种视角各存各的位置（见 `Furniture.fx`）——
