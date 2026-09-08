@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - 会动手的 clawd
 //
@@ -178,11 +179,7 @@ struct ClawdRigView: View {
             // 别的「不是站着」的图还有同样的隐患，但她只报过这两张：
             // 挡多了她买的帽子会莫名其妙消失。
             if let worn, mood != .sleeping, mood != .lying {
-                PixelSpriteView(sprite: worn, scale: scale)
-                    .offset(x: ClawdRig.wearAt(wornID, itemW: CGFloat(worn.width),
-                                               itemH: CGFloat(worn.height)).x * scale,
-                            y: ClawdRig.wearAt(wornID, itemW: CGFloat(worn.width),
-                                               itemH: CGFloat(worn.height)).y * scale)
+                ClawdWornView(id: wornID, fallback: worn, scale: scale)
             }
 
             // 举重物会出汗。抄的参考里那两滴 `.bb-sweat`：
@@ -707,6 +704,49 @@ enum ClawdRig {
         }
     }
 
+    /// 一件衣服**戴上去**该多大、落在哪儿。
+    ///
+    /// ## 为什么会有这张表
+    ///
+    /// 她报的：「小屋的眼镜也不是我给的图，而且不止眼镜，其他服装肯定也有问题。」
+    ///
+    /// 穿戴以前画的是 `ClawdStore` 里那几行手写像素（眼镜是个 10×5 的小格子），
+    /// 而她的 PNG 只用在商店缩略图和摆在地上的时候。现在穿戴也用她的图，
+    /// 位置和大小就得有个说法——就是这张表。
+    ///
+    /// ⚠️ **单位是图纸格**，跟身子那些常数同一套（图纸 36×36）：
+    /// 身子 6..27 列、14..27 行，眼睛 18..21 行，脚 28..31 行。
+    ///
+    /// ⚠️ **只给宽和下沿，不给高。** 高度由图自己的长宽比算出来——
+    /// 写死高度的话，换一张长宽比不同的图就会被压扁。
+    /// 记下沿而不是中心：帽子要「扣在头顶上」、靴子要「贴着脚」，
+    /// 这两件靠的都是下沿对齐，按中心摆的话换张图就浮起来了。
+    struct WearArt {
+        /// 戴上去多宽（图纸格）
+        var width: CGFloat
+        /// 下沿落在第几行
+        var baseY: CGFloat
+        /// 横着偏多少格。只有背包用得上——它挂在身侧
+        var dx: CGFloat = 0
+    }
+
+    static func wearArt(_ id: String) -> WearArt? {
+        switch id {
+        case "hat":      return WearArt(width: 14, baseY: 18)
+        case "beret":    return WearArt(width: 15, baseY: 17)
+        case "glasses":  return WearArt(width: 17, baseY: 23)
+        case "bowtie":   return WearArt(width: 9,  baseY: 26)
+        case "scarf":    return WearArt(width: 10, baseY: 30)
+        case "bag":      return WearArt(width: 11, baseY: 27, dx: 7)
+        case "boots":    return WearArt(width: 11, baseY: 32)
+        case "slippers": return WearArt(width: 12, baseY: 32)
+        default:         return nil
+        }
+    }
+
+    /// 身子横着的正中（图纸格）
+    static var midX: CGFloat { CGFloat(bodyLeft + bodyRight + 1) / 2 }
+
     /// 一件东西**该怎么拿**。
     ///
     /// 这是唯一需要为新家具填的一项：说清楚它是「拿着」还是「举着」、
@@ -724,5 +764,47 @@ enum ClawdRig {
         // 大件：举得动，但喝不了
         if kind.sprite.width >= 16 { return [.lift] }
         return [.hold]
+    }
+}
+
+
+/// 穿在身上的那件，画她的图（见 `ClawdRig.wearArt`）。
+///
+/// ⚠️⚠️ **这个 View 必须放在一块跟图纸一样大、左上对齐的底上。**
+/// 它里面那个 `offset` 说的是图纸的行列（左上角是原点），
+/// 贴到别的对齐方式上，数字就不是行列了——`ClawdView` 以前就是这么错的。
+///
+/// ## 为什么两处共用一个 View
+///
+/// 穿戴要画在两个地方：小屋里那只（`ClawdView`）和聊天页那只
+///（`ClawdRigView`）。以前两处各写各的 `offset`，
+/// 于是同一副眼镜在聊天页挂在脸上、在小屋飘在半空
+///（她：「聊天页的眼镜倒是有在脸上」）。合成一处就不会再各偏各的。
+struct ClawdWornView: View {
+    /// 哪一件（`hat` / `glasses` / …）
+    let id: String
+    /// 她那张图读不出来时退回去画的手写像素
+    let fallback: PixelSprite
+    let scale: CGFloat
+
+    var body: some View {
+        if let art = ClawdRig.wearArt(id),
+           let img = FurnitureCatalog.artImage(of: id, flat: true),
+           img.size.width > 0 {
+            let w = art.width
+            let h = w * img.size.height / img.size.width
+            Image(uiImage: img)
+                .resizable()
+                .interpolation(.none)          // 像素图不许插值，糊了就不是像素画了
+                .frame(width: w * scale, height: h * scale)
+                .offset(x: (ClawdRig.midX + art.dx - w / 2) * scale,
+                        y: (art.baseY - h) * scale)
+        } else {
+            PixelSpriteView(sprite: fallback, scale: scale)
+                .offset(x: ClawdRig.wearAt(id, itemW: CGFloat(fallback.width),
+                                           itemH: CGFloat(fallback.height)).x * scale,
+                        y: ClawdRig.wearAt(id, itemW: CGFloat(fallback.width),
+                                           itemH: CGFloat(fallback.height)).y * scale)
+        }
     }
 }

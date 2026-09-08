@@ -2556,13 +2556,30 @@ struct ClawdView: View {
                 waving
             }
 
-            // 身上戴的那件，贴在对应的位置上（见 `ClawdRig.wearAt`）
-            if let worn {
-                PixelSpriteView(sprite: worn, scale: scale)
-                    .offset(x: ClawdRig.wearAt(wornID, itemW: CGFloat(worn.width),
-                                               itemH: CGFloat(worn.height)).x * scale,
-                            y: ClawdRig.wearAt(wornID, itemW: CGFloat(worn.width),
-                                               itemH: CGFloat(worn.height)).y * scale)
+            // 身上戴的那件（见 `ClawdRig.wearArt`）。
+            //
+            // ⚠️⚠️ **必须垫一块跟图纸一样大、左上对齐的底。**
+            //
+            // 位置那张表说的是**图纸坐标**（左上角是原点，「眼睛在第 18 行」）。
+            // 而外面这个 ZStack 是**底对齐**的——直接把 `.offset(y: 18)` 贴上去，
+            // 18 就成了从底边往下数 18 格，整件东西掉到画布外面。
+            //
+            // 她报的「小屋的眼镜压根不在脸上，聊天页的眼镜倒是有在脸上」
+            // 就是这一处：聊天页那只（`ClawdRigView.rigBody`）本来就是
+            // `.topLeading` 外加一块 36×36 的框，只有这儿没垫。
+            //
+            // ⚠️ 躺着和睡着的时候不叠：那两张图里人是横着的，
+            // 而这张表只会按站姿算位置（帽子会盖掉他自带的睡帽，
+            // 她报过「睡觉的动画帽子被吞掉了」）。聊天页那只早就挡了，
+            // 小屋这只一直没挡。
+            if let worn, mood != .sleeping, mood != .lying {
+                Color.clear
+                    .frame(width: CGFloat(sprites[0].0.width) * scale,
+                           height: CGFloat(sprites[0].0.height) * scale)
+                    .overlay(alignment: .topLeading) {
+                        ClawdWornView(id: wornID, fallback: worn, scale: scale)
+                    }
+                    .allowsHitTesting(false)
             }
 
             // 甜的时候头顶飘爱心。
