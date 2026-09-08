@@ -1439,8 +1439,9 @@ extension FurnitureCatalog {
             return IsoShape(w: 2, d: 2, tall: 0.7, surface: true,
                             actions: ["坐下", "踩上去", "把东西放上去"])
 
+        // 书架：**宽两格、深一格**。它是贴墙站的，不占屋子中间那么大一块。
         case "shelf":
-            return IsoShape(w: 2, d: 2, tall: 2.0, surface: true,
+            return IsoShape(w: 2, d: 1, tall: 2.0, surface: true,
                             actions: ["抽一本", "踮脚够", "把东西放上去"])
 
         case "tv", "console":

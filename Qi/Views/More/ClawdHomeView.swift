@@ -145,27 +145,23 @@ struct ClawdHomeView: View {
     /// 两次都不够，她两次都截图给我看。
     @State private var bodyH: CGFloat = 0
 
-    /// 地板竖着占哪一段。
+    /// 地板竖着占哪一段。**就是地板，不多不少。**
     ///
-    /// ⚠️ **上下都要给他让出半个身子。**
+    /// ⚠️ 这儿**不再替他扣半个身子**了。
     ///
-    /// 他是用 `.position` 摆的，那个坐标是**他这一块的正中**，不是他的脚。
-    /// 所以：
-    ///   · 最下那一排——正中贴着地板下沿，脚就伸到屋外去了
-    ///   · 最上那一排——正中贴着地板上沿，头就扎进墙里去了
+    /// 她报的：「你貌似套了两层活动范围。」——对。上一版这儿会从两头
+    /// 各扣 `bodyH / 2`，那是为了治「他半个身子在屋外」打的补丁；
+    /// 而几何那边（`IsoRoom.walkBand`）也曾经扣过一次。
+    /// 两层在两个文件里、两套单位，改一处不看另一处就对不上。
     ///
-    /// 两头各扣 `bodyH / 2`，他就整个人都在地板上。
+    /// 真正的病根只有一个：**他是按整块的正中摆的，不是按脚。**
+    /// 现在在摆的那一步解决（`clawdBody` 里那句 `.offset(y: -bodyH / 2)`），
+    /// 这儿就干干净净地只回答「地板在哪儿」。
     private var band: (top: Double, bottom: Double) {
         guard let s = roomSize, s.height > 1 else {
             return (ClawdHomeView.floorTop, ClawdHomeView.floorBottom)
         }
-        let raw = IsoRoom.fit(in: s, as: store.projection).walkBand(in: s)
-        let half = Double(bodyH / 2) / Double(s.height)
-        // ⚠️ 扣完不能让上沿越过下沿。屋子太小的时候宁可让他挤在中间一条，
-        // 也不能出现 top > bottom——那会让夹回去的结果乱跳。
-        let top = min(raw.top + half, raw.bottom)
-        let bottom = max(top, raw.bottom - half)
-        return (top, bottom)
+        return IsoRoom.fit(in: s, as: store.projection).walkBand(in: s)
     }
 
     /// 在竖直位置 y 上横着到哪儿。**地板是菱形，不是矩形**——
@@ -878,22 +874,14 @@ struct ClawdHomeView: View {
         // 写死一个数的话，屋子每改一次就有一样东西悄悄跟不上，
         // 而跟不上要等她截图给我看才发现。
         let tile = IsoRoom.fit(in: size, as: store.projection).tileW
+        // ⚠️ **气泡不进这一摞。**
+        //
+        // 以前气泡跟他排在同一个 `VStack` 里，于是「他这一块」的高度
+        // 会随气泡有没有而变——而定位、抬升全都按这个高度算，
+        // 结果就是他一说话整只往下沉一截。
+        //
+        // 现在气泡挂成 overlay 浮在头顶，不占高度（见下面 `.overlay`）。
         return VStack(spacing: 4) {
-            if let bubble {
-                Text(bubble)
-                    .font(.app(11))
-                    .foregroundStyle(Theme.textMain(scheme))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .background(
-                        RoundedRectangle(cornerRadius: 11, style: .continuous)
-                            .fill(scheme == .dark
-                                  ? Color.white.opacity(0.14)
-                                  : Color.white.opacity(0.92))
-                    )
-                    .fixedSize()
-                    .transition(.scale(scale: 0.9).combined(with: .opacity))
-            }
             HStack(alignment: .bottom, spacing: 2) {
                 // ⚠️⚠️ **他多大是从一格多大**算出来的，不写死。
                 //
@@ -982,21 +970,47 @@ struct ClawdHomeView: View {
                 // 不然点也点不到、更别说长按拖
                 .contentShape(Rectangle().inset(by: -10))
         }
-        // ⚠️ 量的是**他这一整块**画出来多高（气泡也算在里面——
-        // 气泡在的时候他这一块确实变高了，正中也跟着往上跑）。
-        // 量完扣进 `band`，他就永远整个人站在地板上。
+        // 量一下他画出来多高。**只量他自己**，气泡不算在内。
         .background {
             GeometryReader { g -> Color in
                 let h = g.size.height
                 if abs(h - bodyH) > 0.5 {
-                    DispatchQueue.main.async {
-                        bodyH = h
-                        settleHim()
-                    }
+                    DispatchQueue.main.async { bodyH = h }
                 }
                 return Color.clear
             }
         }
+        // 他说的那句话浮在头顶。**用 overlay 不用 VStack**——
+        // overlay 不改变这一块的高度，所以他不会因为说了句话就往下沉。
+        .overlay(alignment: .bottom) {
+            if let bubble {
+                Text(bubble)
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMain(scheme))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .fill(scheme == .dark
+                                  ? Color.white.opacity(0.14)
+                                  : Color.white.opacity(0.92))
+                    )
+                    .fixedSize()
+                    .offset(y: -bodyH - 8)
+                    .transition(.scale(scale: 0.9).combined(with: .opacity))
+                    .allowsHitTesting(false)
+            }
+        }
+        // ⚠️⚠️ **按脚定位，不按正中。**
+        //
+        // `.position` 摆的是这一块的**正中**。往上抬半个身子之后，
+        // 那个定位点就正好落在他脚底下——于是 `clawdX / clawdY` 的含义
+        // 从「他的中心在哪儿」变成「他站在哪儿」。
+        //
+        // 这一句是「他半个身子在屋外」唯一该有的修法。
+        // 在几何那边或者 `band` 里替他留白都是补丁：那两处不知道他多高，
+        // 只能猜，猜过两次都不够（她两次都截图给我看）。
+        .offset(y: -bodyH / 2)
         .position(x: clawdX * size.width, y: clawdY * size.height)
         // 拖的时候要跟手，所以不给动画；自己走的时候才慢慢挪过去
         .animation(held ? nil : .easeInOut(duration: walkSeconds), value: clawdX)

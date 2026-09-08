@@ -563,9 +563,15 @@ struct JournalPageView: View {
             // 一个字一个小方块，点哪个选哪个。
             // ⚠️ 选字**在这儿选，不在画布上点**——画布上点会跟拖拽、
             // 缩放、旋转抢手势，而且逐字渲染会让那块字的位置跳。
-            if e.kind == .text, !e.text.isEmpty {
-                charStrip(e)
-            }
+            // ⚠️ **操作那几个（缩放／置顶／删除）单独占最上面一行的右端。**
+            //
+            // 她报的：「这个操作按钮跟切换颜色放在一起不好操作。」
+            // 以前它们钉在颜色那一行的右边——那一行本来就挤，
+            // 手指落下去很容易点到旁边的颜色，而且**删除**是不可逆的。
+            //
+            // 不管选中的是字、贴纸、邮票还是照片，这一行都在同一个位置，
+            // 位置固定了才形成肌肉记忆。
+            actionRow(e)
             firstBar(e)
             // 她定的：「可以给贴纸单独图案和背景选色，
             // 比如一个素底点点图案的胶带，我想做红白配色，
@@ -726,12 +732,25 @@ struct JournalPageView: View {
     }
 
     /// 选中之后第一排：会滚的那半 + 钉在右边的那半。
-    private func firstBar(_ e: JournalElement) -> some View {
+    /// 最上面那一行：左边是选字条（只有文字才有），右端是那几个操作。
+    ///
+    /// ⚠️ 选字条自己会横滚，所以**不能跟操作放在同一个滚动区里**——
+    /// 一滚操作就跑没影了。左右两块各归各的。
+    private func actionRow(_ e: JournalElement) -> some View {
         HStack(spacing: 0) {
-            scrollingBar(e)
+            if e.kind == .text, !e.text.isEmpty {
+                charStrip(e)
+            } else {
+                Spacer(minLength: 0)
+            }
             pinnedBar(e)
         }
         .frame(height: 38)
+    }
+
+    private func firstBar(_ e: JournalElement) -> some View {
+        scrollingBar(e)
+            .frame(height: 38)
     }
 
     private func scrollingBar(_ e: JournalElement) -> some View {
@@ -755,6 +774,33 @@ struct JournalPageView: View {
                     }
                     Divider().frame(height: 20)
                 }
+                // ⚠️ **这几个摆在颜色前面，不摆在最后。**
+                //
+                // 她报的：「拉正擦一擦也不要放在切换的最后面了，不好找。」
+                // 颜色那一串很长（还有花纹、印章图案接在后面），
+                // 排在它们后面等于每次都要横滑到底才找得到。
+                //
+                // 它们是「对这一件做点什么」，跟换色不是一类事，
+                // 所以也不该混在色板中间。
+                if e.kind == .photo || e.kind == .frame || e.kind == .cutout {
+                    small("贴图") { showingPhotoPicker = true }
+                }
+                small("拉正") { commit(e.id) { $0.angle = 0 } }
+                // 擦一擦。只给**有图**的那几种——
+                // 画出来的贴纸和 emoji 没有像素可擦。
+                if let img = erasableImage(e) {
+                    small("擦一擦") { erasing = ErasePick(id: e.id, image: img) }
+                }
+                // ⚠️ 「改文字」得单独给个钮。
+                // 以前是「选中之后再点一下」进编辑，可现在点字是选那个字——
+                // 一个动作不能既是选字又是改内容。
+                if e.kind == .text || e.kind == .note || e.kind == .quote {
+                    small("改文字") {
+                        draftText = e.text
+                        editingText = e
+                    }
+                }
+
                 ForEach(colorsFor(e.kind), id: \.1) { _, hex in
                     Button {
                         // ⚠️ 点中了某个字就**只改那一个字**。
@@ -972,29 +1018,6 @@ struct JournalPageView: View {
                     }
                 }
 
-                if e.kind == .photo || e.kind == .frame || e.kind == .cutout {
-                    small("贴图") { showingPhotoPicker = true }
-                }
-
-                small("拉正") { commit(e.id) { $0.angle = 0 } }
-                // ⚠️ 「改文字」得单独给个钮。
-                // 以前是「选中之后再点一下」进编辑，可现在点字是选那个字——
-                // 一个动作不能既是选字又是改内容。
-                // 擦一擦。只给**有图**的那几种——
-                // 画出来的贴纸和 emoji 没有像素可擦。
-                if let img = erasableImage(e) {
-                    small("擦一擦") { erasing = ErasePick(id: e.id, image: img) }
-                }
-                if e.kind == .text || e.kind == .note || e.kind == .quote {
-                    small("改文字") {
-                        draftText = e.text
-                        editingText = e
-                    }
-                }
-                // ⚠️ 「置顶／删掉」**搬出去了**，钉在右边不跟着滚。
-                // 她报的：「删除等等功能要拖动到最后很麻烦。」
-                // 那一排现在有选字、字号、两排颜色、样子……越加越长，
-                // 而「删掉」是最常用的一个，凭什么排在最远。
             }
             .padding(.leading, 14)
             .padding(.trailing, 4)

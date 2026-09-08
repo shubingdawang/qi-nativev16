@@ -543,10 +543,18 @@ extension FurnitureCatalog {
              "vic_desk", "vic_vanity", "vic_piano":
             return IsoShape(w: 2, d: 1, tall: 0.9, surface: true,
                             actions: ["趴桌上", "在桌边站着", "把东西放上去"])
+        // ⚠️ 柜子这一类占地是 **2×1**，不是 1×1。
+        //
+        // 她报的「这个书架没规定占位还浮着」——占地写成一格，
+        // 而图画出来有两格宽，于是格子跟图对不上：
+        // 图按一格的宽度缩放，看着就跟地板脱开了。
+        //
+        // 靠墙那一排的东西**宽度上占两格、进深只占一格**，
+        // 这跟它们贴着墙站的样子是一致的。
         case "nightstand", "stove", "kitchensink", "nordic_shelf",
              "gothic_shelf", "lolita_wardrobe", "xmas_shelf", "ny_cabinet",
              "vic_night", "vic_wardrobe", "vic_shelf", "vic_sideboard":
-            return IsoShape(w: 1, d: 1, tall: 2.0, surface: true,
+            return IsoShape(w: 2, d: 1, tall: 2.0, surface: true,
                             actions: ["抽一本", "踮脚够", "把东西放上去"])
         default: return nil
         }

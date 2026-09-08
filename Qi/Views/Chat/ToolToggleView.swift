@@ -362,9 +362,26 @@ struct ToolToggleView: View {
                          on: Binding<Bool>, enabled: Bool) -> some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(name)
-                    .font(.app(13, design: .monospaced))
-                    .foregroundStyle(Theme.textMain(scheme))
+                HStack(spacing: 6) {
+                    Text(name)
+                        .font(.app(13, design: .monospaced))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    // ⚠️ **让「自动隐去」看得见。**
+                    //
+                    // 她说「你说的什么隐去也没有」——隐去这件事一直在做，
+                    // 可它发生在发请求的那一刻，界面上一个字都没提。
+                    // 看不见的机制，在她眼里跟没有是一回事。
+                    if app.settings.localMemory,
+                       MemoryTools.handles(name, memory: true,
+                                           pulse: app.settings.localPulse) {
+                        Text("本机代替")
+                            .font(.app(10))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Theme.softFillDeep, in: Capsule())
+                            .foregroundStyle(Theme.softText)
+                    }
+                }
                 if !desc.isEmpty {
                     Text(desc)
                         .font(.app(11))

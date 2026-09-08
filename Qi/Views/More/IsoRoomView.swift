@@ -107,6 +107,26 @@ struct IsoRoomView<Clawd: View>: View {
                             .onEnded { _ in panFrom = panX }
                     )
 
+            // 平面屋外面那一圈框。**立体屋没有。**
+            //
+            // ⚠️⚠️ **必须画在地板之后。**
+            //
+            // 她报的：「边框没把地板也框起来。」上一版我把它写在 `walls()` 里，
+            // 而 `walls()` 排在 `floor()` 前面——地板一铺上去，
+            // 框的下半圈就被盖掉了，看着只框住了墙。
+            //
+            // ⚠️ 描线还要**往里缩半个线宽**：`strokedPath` 是骑在路径上画的，
+            // 一半在里一半在外。缩了之后线的外沿正好落在 `flatFrame` 上，
+            // 整圈压在屋子里，才像一堵有厚度的墙。
+            if geoRoom.projection == .flat {
+                let fw = geoRoom.flatFrameWidth
+                Rectangle()
+                    .path(in: geoRoom.flatFrame.insetBy(dx: fw / 2, dy: fw / 2))
+                    .strokedPath(.init(lineWidth: fw))
+                    .fill(frameTone)
+                    .allowsHitTesting(false)
+            }
+
                 // ⚠️ 这一句就是「不穿模」的全部：**按离镜头的远近排好再画**。
                 ForEach(drawables(geoRoom), id: \.key) { d in
                     if d.isClawd {
@@ -305,26 +325,6 @@ struct IsoRoomView<Clawd: View>: View {
             geoRoom.leftWallPath.stroke(Color.black.opacity(0.08), lineWidth: 1)
             geoRoom.rightWallPath.stroke(Color.black.opacity(0.08), lineWidth: 1)
 
-            // 平面屋外面那一圈框。**立体屋没有。**
-            //
-            // 她给的参考图里，整间屋是被一圈厚实的深色墙围着的，
-            // 框里面上半是墙、下半是地。
-            //
-            // ⚠️ **描线要往里缩半个线宽。**
-            // `strokedPath` 是骑在路径上画的：一半在里、一半在外。
-            // 不缩的话这一圈有一半飘在屋子外面，看着像浮在空中的一道边，
-            // 而不是一堵有厚度的墙。
-            //
-            // 缩半个线宽之后，线的**外沿**正好落在 `flatFrame` 上，
-            // 整圈都压在屋子里，跟参考图里那种「墙有厚度」是一个意思。
-            if geoRoom.projection == .flat {
-                let w = geoRoom.flatFrameWidth
-                Rectangle()
-                    .path(in: geoRoom.flatFrame.insetBy(dx: w / 2, dy: w / 2))
-                    .strokedPath(.init(lineWidth: w))
-                    .fill(frameTone)
-                    .allowsHitTesting(false)
-            }
         }
     }
 
@@ -664,22 +664,22 @@ struct IsoRoomView<Clawd: View>: View {
     /// 理由见 `piece` 里 `.position` 那段：家具画在格子中心，
     /// 墙在格子外边缘，中间差半格。
     private func wallHug(_ cell: (gx: Int, gy: Int), _ g: IsoRoom) -> CGPoint {
-        var dx: CGFloat = 0, dy: CGFloat = 0
-        var up: CGFloat = 0
-        if cell.gx == 0 { dx -= g.tileW / 4; up += g.tileH / 4 }
-        if cell.gy == 0 { dx += g.tileW / 4; up += g.tileH / 4 }
-        // ⚠️⚠️ **摆在角落里的那一件，往上挪的那一半要收一收。**
+        // ⚠️⚠️ **只往横里挪，不往上抬。**
         //
-        // 她报的「床依旧轻微浮起」——只在角落上才有，摆在别处是好的。
+        // 「往墙里挪半格」在等距里本来是 (∓tileW/4, −tileH/4)：
+        // 横竖各一点。可那个纵向分量把家具的**脚抬离了地板**——
+        // 她报了三轮的「浮起来」，每一轮都是这一下。
         //
-        // 往里挪半格，在等距里 = 屏幕上 (∓tileW/4, −tileH/4)。
-        // 挨着一面墙的时候，横竖各挪一点，看着就是「贴上去了」。
-        // 可摆在**两面墙的夹角**上时，两次的横向分量正好抵消，
-        // 只剩下两次的纵向——**净效果是纯往上抬半格**，也就是悬空。
+        // 我上一版又加了一句「夹角上只取一次的量」去压它。
+        // 那是在补丁上打补丁：压小了还是抬，只是抬得少一点。
+        // 她说得对——「修一个东西不要直接往上糊新代码」。
         //
-        // 所以夹角上只取一次的量：贴还是贴上了，脚也还在地上。
-        dy = -min(up, g.tileH / 4)
-        return CGPoint(x: dx, y: dy)
+        // 抬这件事本身就不该有：横向挪一点已经足够读成「贴着墙」，
+        // 而脚必须留在地板上。所以纵向那一半整个去掉，也顺手少一个补丁。
+        var dx: CGFloat = 0
+        if cell.gx == 0 { dx -= g.tileW / 4 }
+        if cell.gy == 0 { dx += g.tileW / 4 }
+        return CGPoint(x: dx, y: 0)
     }
 
     private func dragGesture(_ item: Furniture, _ s: IsoShape,
