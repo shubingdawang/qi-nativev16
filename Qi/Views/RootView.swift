@@ -503,7 +503,6 @@ struct WallpaperBackground: View {
                 // 那层会流动的光。**压暗之后才铺**——
                 // 压在它上面的话，这层光自己也会被压掉一半。
                 // 它是全 App 唯一的主效果，别的地方一律只做细节。
-                AuroraLayer()
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }

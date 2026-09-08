@@ -1386,7 +1386,7 @@ struct PulsePane: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("尚未填写心跳服务地址").heading(15)
                     Text("在「设置 → 后端服务」中填写 PulseEngine 地址，格式如 http://主机地址:8000")
-                        .font(.footnote).foregroundStyle(Theme.softText)
+                        .font(.app(13)).foregroundStyle(Theme.softText)
                 }
                 .glassCard()
             } else {
@@ -1429,7 +1429,7 @@ struct PulsePane: View {
                         Text(offline
                              ? "这是 \(timeText(snap.fetchedAt)) 最后一次读到的"
                              : "更新于 \(timeText(snap.fetchedAt))")
-                            .font(.caption2)
+                            .font(.app(11))
                             .foregroundStyle(.tertiary)
                             .padding(.top, 2)
                     }
@@ -1446,13 +1446,13 @@ struct PulsePane: View {
                 }
 
                 if let error {
-                    Text(error).font(.footnote).foregroundStyle(.red)
+                    Text(error).font(.app(13)).foregroundStyle(.red)
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
                     Text("调整").heading(15)
                     Text("直接改电脑上那个引擎的状态")
-                        .font(.caption).foregroundStyle(Theme.softText)
+                        .font(.app(12)).foregroundStyle(Theme.softText)
 
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                         ForEach(PulseAPI.emotions, id: \.0) { key, label in
@@ -1696,7 +1696,7 @@ struct StatusPane: View {
 
             if base.isEmpty {
                 Text("请在「设置 → 后端服务」中填写主动消息服务地址，方可读取身体状况。")
-                    .font(.footnote).foregroundStyle(Theme.softText)
+                    .font(.app(13)).foregroundStyle(Theme.softText)
                     .glassCard()
             } else if let st = body_ {
                 VStack(alignment: .leading, spacing: 12) {
@@ -1758,11 +1758,11 @@ struct StatusPane: View {
                     Text(offline
                          ? "这是 \(timeText(st.fetchedAt)) 最后一次读到的"
                          : "更新于 \(timeText(st.fetchedAt))")
-                        .font(.caption2).foregroundStyle(.tertiary)
+                        .font(.app(11)).foregroundStyle(.tertiary)
                 }
                 .glassCard()
             } else if let bodyError {
-                Text(bodyError).font(.footnote).foregroundStyle(.red).glassCard()
+                Text(bodyError).font(.app(13)).foregroundStyle(.red).glassCard()
             }
 
             HStack(spacing: 10) {

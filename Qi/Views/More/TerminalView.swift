@@ -147,7 +147,7 @@ struct TerminalView: View {
                         }
                         ForEach(shellLines) { l in
                             Text(l.text)
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(.app(11, design: .monospaced))
                                 // 出错的那几行单独一个色——她多半是为了它才看的
                                 .foregroundStyle(l.kind == "err" ? .orange
                                                  : (l.kind == "start"
@@ -179,10 +179,10 @@ struct TerminalView: View {
 
             HStack(spacing: 8) {
                 Text("$")
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .font(.app(12, weight: .semibold, design: .monospaced))
                     .foregroundStyle(Theme.textMuted(scheme))
                 TextField("git status", text: $cmd)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.app(12, design: .monospaced))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .onSubmit { send() }

@@ -466,7 +466,7 @@ struct MemoryListView: View {
                                     .foregroundStyle(Theme.textMuted(scheme))
                                 if mem.pinned == true {
                                     Image(systemName: "pin.fill")
-                                        .font(.system(size: 9))
+                                        .font(.app(9))
                                         .foregroundStyle(app.settings.accentColor)
                                 }
                                 if mem.resolved == false {

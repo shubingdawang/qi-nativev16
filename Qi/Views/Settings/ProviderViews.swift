@@ -14,9 +14,9 @@ struct ProviderListView: View {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("暂无供应商")
-                            .font(.headline)
+                            .font(.app(17, weight: .semibold))
                         Text("点击右上角的 + 添加。需填写接口地址与密钥，与网页版所用的一致。")
-                            .font(.footnote)
+                            .font(.app(13))
                             .foregroundStyle(Theme.softText)
                     }
                     .padding(.vertical, 6)
@@ -33,16 +33,16 @@ struct ProviderListView: View {
                             Text(provider.name.isEmpty ? "未命名" : provider.name)
                                 .foregroundStyle(Theme.mainText)
                             Text(provider.baseURL)
-                                .font(.caption)
+                                .font(.app(12))
                                 .foregroundStyle(Theme.softText)
                                 .lineLimit(1)
                         }
                         Spacer()
                         Text("\(provider.enabledModels.count) 个模型")
-                            .font(.caption)
+                            .font(.app(12))
                             .foregroundStyle(.tertiary)
                         Image(systemName: "chevron.right")
-                            .font(.caption)
+                            .font(.app(12))
                             .foregroundStyle(.tertiary)
                     }
                 }
@@ -120,7 +120,7 @@ struct ProviderFormView: View {
                 } footer: {
                     HelpNote {
                         Text("通常无需修改。地址填写至 /v1，路径保持 /chat/completions。")
-                            .font(.footnote)
+                            .font(.app(13))
                             .foregroundStyle(Theme.softText)
                     }
                 }
@@ -146,7 +146,7 @@ struct ProviderFormView: View {
 
                     if let loadError {
                         Text(loadError)
-                            .font(.footnote)
+                            .font(.app(13))
                             .foregroundStyle(.red)
                     }
                 } header: {
@@ -154,7 +154,7 @@ struct ProviderFormView: View {
                 } footer: {
                     HelpNote {
                         Text("无法获取列表时，手动填写模型名同样可用。")
-                            .font(.footnote)
+                            .font(.app(13))
                             .foregroundStyle(Theme.softText)
                     }
                 }
@@ -170,14 +170,14 @@ struct ProviderFormView: View {
                             Spacer()
                             Button("全部关闭") { setAll(false) }
                         }
-                        .font(.caption)
+                        .font(.app(12))
                         .buttonStyle(.borderless)
                     } header: {
                         Text("已打开 \(provider.enabledModels.count) / \(provider.models.count)")
                     } footer: {
                         HelpNote {
                             Text("仅在此处启用的模型会出现在聊天页的「选择模型」中。左滑可删除。")
-                                .font(.footnote)
+                                .font(.app(13))
                                 .foregroundStyle(Theme.softText)
                         }
                     }

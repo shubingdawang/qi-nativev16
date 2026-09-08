@@ -145,7 +145,7 @@ struct NowPlayingView: View {
             if let mark, mark.discussed {
                 Button { openedMark = mark } label: {
                     Image(systemName: "bubble.left.fill")
-                        .font(.system(size: 9))
+                        .font(.app(9))
                         .foregroundStyle(app.settings.accentColor.opacity(0.85))
                 }
                 .buttonStyle(.plain)

@@ -42,7 +42,7 @@ struct FootprintView: View {
             cardTitle("这些天")
             HeatmapView(counts: dailyCounts, picked: $picked)
             Text("点击方块查看当日的对话与用量。")
-                .font(.caption)
+                .font(.app(12))
                 .foregroundStyle(Theme.textMuted(scheme))
         }
         .glassCard()
@@ -64,7 +64,7 @@ struct FootprintView: View {
                     Button("回今天") {
                         withAnimation { picked = Calendar.current.startOfDay(for: Date()) }
                     }
-                    .font(.caption)
+                    .font(.app(12))
                 }
             }
 
@@ -85,7 +85,7 @@ struct FootprintView: View {
             if u.reasoning > 0 {
                 HStack {
                     Text("其中思考")
-                        .font(.caption)
+                        .font(.app(12))
                         .foregroundStyle(Theme.textSoft(scheme))
                     Spacer()
                     Text(UsageFormat.short(u.reasoning))
@@ -93,7 +93,7 @@ struct FootprintView: View {
                         .foregroundStyle(Theme.textSoft(scheme))
                     Text(String(format: "占输出 %.0f%%",
                                 Double(u.reasoning) / Double(max(1, u.output)) * 100))
-                        .font(.caption2)
+                        .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
             }
@@ -102,13 +102,13 @@ struct FootprintView: View {
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("当日费用")
-                    .font(.footnote)
+                    .font(.app(13))
                     .foregroundStyle(Theme.textSoft(scheme))
                 Text(UsageFormat.money(cost))
                     .font(.app(26, weight: .semibold, design: .rounded))
                     .foregroundStyle(HomePalette.orange)
                 Text("元")
-                    .font(.footnote)
+                    .font(.app(13))
                     .foregroundStyle(Theme.textSoft(scheme))
                 Spacer()
             }
@@ -123,7 +123,7 @@ struct FootprintView: View {
                 }
             } else {
                 Text("当日无记录。用量统计自本版本起启用，此前数据无法补录。")
-                    .font(.caption)
+                    .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
 
@@ -139,7 +139,7 @@ struct FootprintView: View {
                     Image(systemName: "chart.pie")
                     Text("上下文构成")
                     Spacer()
-                    Image(systemName: "chevron.right").font(.caption)
+                    Image(systemName: "chevron.right").font(.app(12))
                 }
                 .font(.app(15, weight: .medium))
                 .foregroundStyle(Theme.textMain(scheme))
@@ -161,7 +161,7 @@ struct FootprintView: View {
                     Image(systemName: "doc.plaintext")
                     Text("打印当日小票")
                     Spacer()
-                    Image(systemName: "chevron.right").font(.caption)
+                    Image(systemName: "chevron.right").font(.app(12))
                 }
                 .font(.app(15, weight: .medium))
                 .foregroundStyle(Theme.textMain(scheme))
@@ -184,7 +184,7 @@ struct FootprintView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text("缓存命中率")
-                    .font(.caption)
+                    .font(.app(12))
                     .foregroundStyle(Theme.textSoft(scheme))
                 Spacer()
                 Text(String(format: "%.0f%%", u.hitRate * 100))
@@ -217,11 +217,11 @@ struct FootprintView: View {
                 Text(MD.inline("**该链路无缓存数据。** 命中与写入均为 0，"
                     + "通常为中转不支持缓存标记，或未回报缓存用量。"
                     + "改用官方直连接口后方可获得这两项数值。"))
-                    .font(.caption2)
+                    .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
             } else {
                 Text("命中部分按较低费率计费，占比越高越好。")
-                    .font(.caption2)
+                    .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
         }
@@ -256,7 +256,7 @@ struct FootprintView: View {
     private func tile(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.caption)
+                .font(.app(12))
                 .foregroundStyle(Theme.textSoft(scheme))
             Text(value)
                 .font(.app(22, weight: .medium, design: .rounded))
@@ -294,7 +294,7 @@ struct FootprintView: View {
         VStack(alignment: .leading, spacing: 12) {
             cardTitle("计费设置")
             Text("费用为按该单价估算所得，非实际账单。")
-                .font(.caption)
+                .font(.app(12))
                 .foregroundStyle(Theme.textMuted(scheme))
 
             Picker("计价方式", selection: Binding(
@@ -309,7 +309,7 @@ struct FootprintView: View {
             if app.settings.pricing.mode == .perCall {
                 priceField("每次回复", keyPath: \.perCall, unit: "元 / 次")
                 Text("部分中转按次计费，不区分输入与输出。")
-                    .font(.caption2)
+                    .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
             } else {
                 priceField("新输入", keyPath: \.input, unit: "元 / 百万")
@@ -354,7 +354,7 @@ struct FootprintView: View {
                         .fill(Theme.softFill)
                 )
             Text(unit)
-                .font(.caption2)
+                .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .frame(width: 64, alignment: .leading)
         }
@@ -367,7 +367,7 @@ struct FootprintView: View {
             cardTitle("存储")
             statRow("占用空间", storageText)
             Text("图片与聊天记录均保存在本机，不上传至任何服务器。卸载 App 后清空。")
-                .font(.caption)
+                .font(.app(12))
                 .foregroundStyle(Theme.textMuted(scheme))
         }
         .glassCard()
@@ -514,7 +514,7 @@ struct HeatmapView: View {
 
             HStack(spacing: 4) {
                 Text("少")
-                    .font(.caption2)
+                    .font(.app(11))
                     .foregroundStyle(.tertiary)
                 ForEach([0, 1, 4, 9, 20], id: \.self) { n in
                     RoundedRectangle(cornerRadius: 2)
@@ -522,7 +522,7 @@ struct HeatmapView: View {
                         .frame(width: 11, height: 11)
                 }
                 Text("多")
-                    .font(.caption2)
+                    .font(.app(11))
                     .foregroundStyle(.tertiary)
                 Spacer()
             }

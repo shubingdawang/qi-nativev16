@@ -575,7 +575,7 @@ struct ClawdHomeView: View {
         .overlay {
             if let at = handAt {
                 Text(hand.emoji)
-                    .font(.system(size: 40))
+                    .font(.app(40))
                     .position(at)
                     .allowsHitTesting(false)
                     .transition(.scale.combined(with: .opacity))
@@ -1189,7 +1189,7 @@ struct ClawdHomeView: View {
         let on = hand == tool
         return VStack(spacing: 3) {
             Text(tool.emoji)
-                .font(.system(size: 24))
+                .font(.app(24))
             Text(tool.label)
                 .font(.app(9.5, weight: on ? .semibold : .regular))
                 .foregroundStyle(on ? app.settings.accentColor : Theme.textMuted(scheme))

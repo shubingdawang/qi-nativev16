@@ -176,13 +176,13 @@ struct MCPFormView: View {
 
                     if let message {
                         Text(message)
-                            .font(.footnote)
+                            .font(.app(13))
                             .foregroundStyle(messageIsError ? .red : .green)
                     }
                 } footer: {
                     HelpNote {
                         Text("需先连接一次以获取工具清单，模型据此识别可用工具。修改地址后需重新获取。")
-                            .font(.footnote)
+                            .font(.app(13))
                             .foregroundStyle(Theme.softText)
                     }
                 }
@@ -198,7 +198,7 @@ struct MCPFormView: View {
                             Spacer()
                             Button("全部关闭") { setAll(false) }
                         }
-                        .font(.caption)
+                        .font(.app(12))
                         .buttonStyle(.borderless)
                     } header: {
                         Text("已打开 \(server.enabledTools.count) / \(server.tools.count)")
@@ -208,7 +208,7 @@ struct MCPFormView: View {
                                  + "token 消耗越高。不需要的可关闭。"
                                  + "\n\n与本机记忆库同名的工具在发送时自动隐去，"
                                  + "无需手动关闭；关闭它们也不影响与小屋的镜像同步。")
-                                .font(.footnote)
+                                .font(.app(13))
                                 .foregroundStyle(Theme.softText)
                         }
                     }
@@ -244,7 +244,7 @@ struct MCPFormView: View {
                                     }
                                     if !server.tools[i].description.isEmpty {
                                         Text(MD.inline(server.tools[i].description))
-                                            .font(.caption2)
+                                            .font(.app(11))
                                             .foregroundStyle(Theme.softText)
                                             .lineLimit(2)
                                     }

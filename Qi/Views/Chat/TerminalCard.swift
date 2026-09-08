@@ -63,7 +63,7 @@ struct TerminalCard: View {
                 dot(Color(red: 0.20, green: 0.38, blue: 0.22))
             }
             Text(title)
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .font(.app(11, weight: .medium, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.82))
                 .padding(.horizontal, 9)
                 .padding(.vertical, 3)
@@ -76,7 +76,7 @@ struct TerminalCard: View {
                     Image(systemName: folded
                           ? "arrow.down.left.and.arrow.up.right"
                           : "arrow.down.right.and.arrow.up.left")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.app(10, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.6))
                         .frame(width: 22, height: 22)
                         .background(Circle().fill(.white.opacity(0.08)))
@@ -97,14 +97,14 @@ struct TerminalCard: View {
         VStack(alignment: .leading, spacing: 3) {
             ForEach(Array(shown.enumerated()), id: \.offset) { _, line in
                 Text(line)
-                    .font(.system(size: 10.5, design: .monospaced))
+                    .font(.app(10.5, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.86))
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             if !footer.isEmpty {
                 Text(footer)
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(.app(10, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.45))
                     .padding(.top, 5)
             }

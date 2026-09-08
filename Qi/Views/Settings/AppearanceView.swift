@@ -16,9 +16,6 @@ struct AppearanceView: View {
         "\n\n强调色每屏最多一处，仅用于发送键或主按钮。"
         + "列表、图标与标题不使用强调色，强调通过字重和面板色实现。"
 
-    /// 背景那层光的开关。跟 `AuroraLayer` 读的是同一个键
-    @AppStorage("auroraOn") private var auroraOn = true
-
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
     @State private var customHex = ""
@@ -49,7 +46,6 @@ struct AppearanceView: View {
                 VStack(spacing: 18) {
                     accentCard
                     fontCard
-                    auroraCard
                     glassCard
                     presetCard
                     textColorCard
@@ -245,34 +241,6 @@ struct AppearanceView: View {
     }
 
     // MARK: 玻璃
-
-    private var auroraCard: some View {
-        SettingsCard(title: "光晕") {
-            Toggle(isOn: $auroraOn) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("背景里的光")
-                        .font(.app(15))
-                        .foregroundStyle(Theme.textMain(scheme))
-                    Text("三处低透明度光斑，取主题色，四十秒循环一次")
-                        .font(.app(11))
-                        .foregroundStyle(Theme.textMuted(scheme))
-                }
-            }
-            .tint(app.settings.accentColor)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 11)
-
-            SettingsNote("""
-            在壁纸之上、内容之下叠一层缓慢浮动的光晕，共三团，透明度极低。
-
-            作用范围为全 App 背景，不影响卡片、文字与图标的对比度。
-
-            实现方式为径向渐变，非高斯模糊，因此不产生逐帧重算，耗电可忽略。
-
-            关闭后该层完全不绘制。
-            """, title: "说明")
-        }
-    }
 
     private var glassCard: some View {
         SettingsCard(title: "玻璃") {
@@ -591,7 +559,7 @@ struct AppearanceView: View {
 
     private func sampleTile(_ label: String, dark: Bool) -> some View {
         ZStack {
-            sampleGround
+            sampleGround(dark: dark)
             Text(label)
                 .font(.app(12, weight: .medium))
                 .foregroundStyle(dark ? Color.white : Color.black.opacity(0.72))
@@ -613,9 +581,19 @@ struct AppearanceView: View {
 
     /// 样品底下垫的东西：有壁纸用壁纸，没有就用主题色拉个渐变。
     /// 纯色底下是糊不出东西的，所以一定要垫点有花纹的。
+    ///
+    /// ⚠️ **深浅两块各垫各的壁纸。**
+    ///
+    /// 她报的：「模糊程度的这个深色模式的框框并不是现在设置的深色模式的样子。」
+    /// 上一版两块垫的都是 `wallpaperName`——那是**浅色那张**。
+    /// 于是右边那块把深色模式的玻璃盖在浅色壁纸上，
+    /// 演的是一个根本不存在的组合。
+    ///
+    /// 样例的全部意义就是「让她看见真实的样子」，垫错了底就是在骗人。
     @ViewBuilder
-    private var sampleGround: some View {
-        if let name = app.settings.wallpaperName, let img = ImageStore.cached(name) {
+    private func sampleGround(dark: Bool) -> some View {
+        if let name = app.settings.wallpaper(dark ? .dark : .light),
+           let img = ImageStore.cached(name) {
             Image(uiImage: img)
                 .resizable()
                 .scaledToFill()

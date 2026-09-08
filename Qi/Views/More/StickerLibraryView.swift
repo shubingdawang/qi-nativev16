@@ -563,7 +563,7 @@ struct HarvestSheet: View {
 
             if on {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 15))
+                    .font(.app(15))
                     .foregroundStyle(.white, app.settings.accentColor)
                     .padding(3)
             }

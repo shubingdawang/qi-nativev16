@@ -335,7 +335,7 @@ struct CodeBlockView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(language.isEmpty ? "代码" : language)
-                    .font(.caption2)
+                    .font(.app(11))
                     .foregroundStyle(Theme.softText)
                 Spacer()
                 Button {
@@ -344,7 +344,7 @@ struct CodeBlockView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
                 } label: {
                     Text(copied ? "已复制" : "复制")
-                        .font(.caption2)
+                        .font(.app(11))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.softText)

@@ -449,7 +449,7 @@ struct SettingsView: View {
                             .clipped()
                     } else {
                         Image(systemName: dark ? "moon" : "sun.max")
-                            .font(.system(size: 17))
+                            .font(.app(17))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                 }

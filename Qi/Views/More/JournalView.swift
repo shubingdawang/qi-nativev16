@@ -102,7 +102,7 @@ struct JournalView: View {
                     // 给他看的那几页标一下，一眼看得出哪些他能看见
                     if p.shared {
                         Image(systemName: "person.2.fill")
-                            .font(.system(size: 7))
+                            .font(.app(7))
                             .foregroundStyle(app.settings.accentColor)
                     }
                     Text(dayText(p.day))

@@ -352,7 +352,7 @@ struct BookshelfView: View {
                 Spacer()
                 if m.discussed {
                     Image(systemName: "bubble.left.fill")
-                        .font(.system(size: 9))
+                        .font(.app(9))
                         .foregroundStyle(app.settings.accentColor.opacity(0.8))
                 }
                 Text(String(m.createdAt.formatted(.dateTime.month().day())))
@@ -569,7 +569,7 @@ struct ShelfBooksView: View {
             HStack(spacing: 4) {
                 if book.shared {
                     Image(systemName: "person.2.fill")
-                        .font(.system(size: 8))
+                        .font(.app(8))
                         .foregroundStyle(app.settings.accentColor)
                 }
                 Text(book.progress < 0.005

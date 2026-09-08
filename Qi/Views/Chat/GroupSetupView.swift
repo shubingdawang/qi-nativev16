@@ -43,13 +43,13 @@ struct GroupSetupView: View {
                                     Text(member.name.isEmpty ? "还没起名" : member.name)
                                         .foregroundStyle(Theme.mainText)
                                     Text(modelLabel(member))
-                                        .font(.caption)
+                                        .font(.app(12))
                                         .foregroundStyle(Theme.softText)
                                         .lineLimit(1)
                                 }
                                 Spacer()
                                 Image(systemName: Icon.chevron)
-                                    .font(.caption)
+                                    .font(.app(12))
                                     .foregroundStyle(.tertiary)
                             }
                         }
@@ -137,7 +137,7 @@ struct GroupMemberFormView: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(model.displayName).foregroundStyle(Theme.mainText)
                                         Text(provider.name)
-                                            .font(.caption2)
+                                            .font(.app(11))
                                             .foregroundStyle(.tertiary)
                                     }
                                     Spacer()

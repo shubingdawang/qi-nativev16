@@ -613,12 +613,12 @@ struct ReceiptView: View {
 
                     if !failed.isEmpty {
                         Text(failed)
-                            .font(.caption)
+                            .font(.app(12))
                             .foregroundStyle(Color.secondary)
                     }
 
                     Text("关键词需手动触发生成，会调用模型并产生费用。\n数字部分为已有记录，查看小票不产生费用。")
-                        .font(.caption2)
+                        .font(.app(11))
                         .foregroundStyle(Color.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 24)

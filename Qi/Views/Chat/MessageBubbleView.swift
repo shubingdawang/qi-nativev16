@@ -378,7 +378,7 @@ struct MessageBubbleView: View {
                     // 网断一次这一窗就再也接不下去了。现在底下挂两个按钮。
                     VStack(alignment: .leading, spacing: 8) {
                         Text(error)
-                            .font(.footnote)
+                            .font(.app(13))
                             .foregroundStyle(.white)
                         HStack(spacing: 10) {
                             Button("重试") { onRetry() }
@@ -388,7 +388,7 @@ struct MessageBubbleView: View {
                             Button("删除该条") {
                                 app.deleteMessage(message.id, in: conversationID)
                             }
-                            .font(.footnote)
+                            .font(.app(13))
                             .foregroundStyle(.white.opacity(0.85))
                         }
                     }
@@ -435,9 +435,9 @@ struct MessageBubbleView: View {
                             // 或者以为这个数坏了——两种都不是实话。
                             Text(tokens > 0 ? "\(tokens) tokens" : "用量未知")
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 7, weight: .semibold))
+                                .font(.app(7, weight: .semibold))
                         }
-                        .font(.caption2)
+                        .font(.app(11))
                         .foregroundStyle(.tertiary)
                     }
                     .buttonStyle(.plain)
@@ -572,18 +572,18 @@ struct MessageBubbleView: View {
             Button {
                 editPage = max(0, editPage - 1)
             } label: {
-                Image(systemName: "chevron.left").font(.system(size: 10))
+                Image(systemName: "chevron.left").font(.app(10))
             }
             .disabled(editPage == 0)
 
             Text("\(editPage + 1)/\(message.edits.count + 1)")
-                .font(.caption2)
+                .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
 
             Button {
                 editPage = min(message.edits.count, editPage + 1)
             } label: {
-                Image(systemName: "chevron.right").font(.system(size: 10))
+                Image(systemName: "chevron.right").font(.app(10))
             }
             .disabled(editPage >= message.edits.count)
 
@@ -719,7 +719,7 @@ struct MessageBubbleView: View {
                     // 图片帖子、视频帖子」）。
                     if note.source != .xhs || note.isVideo {
                         Image(systemName: "play.circle.fill")
-                            .font(.system(size: 34))
+                            .font(.app(34))
                             .foregroundStyle(.white.opacity(0.9))
                             .shadow(color: .black.opacity(0.3), radius: 4)
                             .frame(width: 265, height: 150)
@@ -936,7 +936,7 @@ struct MessageBubbleView: View {
                 }
                 if playable {
                     Image(systemName: "play.circle.fill")
-                        .font(.system(size: 40))
+                        .font(.app(40))
                         .foregroundStyle(.white.opacity(0.92))
                 } else {
                     Text("该视频原件已丢失")

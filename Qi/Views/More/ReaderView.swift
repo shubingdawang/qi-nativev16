@@ -484,7 +484,7 @@ struct ReaderView: View {
             if let mark, mark.discussed {
                 Button { openedMark = mark } label: {
                     Image(systemName: "bubble.left.fill")
-                        .font(.system(size: 10))
+                        .font(.app(10))
                         .foregroundStyle(app.settings.accentColor.opacity(0.85))
                         .padding(.top, 4)
                 }
@@ -643,7 +643,7 @@ struct ReaderView: View {
                         Spacer()
                         if i == chapter {
                             Image(systemName: "book.fill")
-                                .font(.system(size: 10))
+                                .font(.app(10))
                                 .foregroundStyle(app.settings.accentColor)
                         }
                     }

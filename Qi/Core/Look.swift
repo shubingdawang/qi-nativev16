@@ -427,147 +427,18 @@ struct DayMark: View {
 //
 // 所以这一轮加四样，一样都不加内容：
 //
-//   1. **一层会流动的光**（全 App 唯一的主效果，其余一律是细节）
+//   1. ~~一层会流动的光~~ —— **已删。** 她自己做完了对照实验：
+//      「我将背景里的光选项关闭，左侧栏就快了不少。」
+//      那层挂着 `.blendMode`，而混合模式要求「先把底下画好的读回来
+//      再跟这一层算」——**每次画背景都得离屏合成一次全屏**。
+//      径向渐变本身确实便宜（当初就是为这个选的它），可 `blendMode` 不便宜，
+//      我当时只算了前半笔。
 //   2. **玻璃上有光扫过**（材质）
 //   3. **页面有主角**（大号极浅的装饰字 + 宋体大标题）
 //   4. **东西是「落」下来的**（进场微动）
 //
 // ⚠️ 还是那条自律：只管好看，不改任何功能的行为。
 
-/// 一层会慢慢流动的光。**全 App 唯一的主效果。**
-///
-/// 三团极淡的光晕，跟着强调色走，四十秒漂一个来回。
-/// 它不抢任何东西的戏——单独看几乎注意不到，
-/// 但整个 App 会从「一张纸」变成「有空气的地方」。
-/// 这就是「华丽」最便宜的来源：**不是加东西，是给已有的东西加光。**
-///
-/// ⚠️ 用 `RadialGradient` 画，**不用 `.blur()`**。
-/// 径向渐变本身就是软边，零模糊开销；`blur(90)` 那种每一帧都要重算，
-/// 挂在全屏背景上等于一直烧电。她这是随身带一整天的 App，
-/// 好看不能拿续航换。
-///
-/// 淡到什么程度：最浓的那团也只有 0.16。
-/// **看得见就过了**——它该是余光里的东西。
-struct AuroraLayer: View {
-
-    @EnvironmentObject private var app: AppState
-    @Environment(\.colorScheme) private var scheme
-    /// 关掉就一层都不画。她要是嫌花，一个开关的事
-    @AppStorage("auroraOn") private var on = true
-
-    @State private var drift = false
-    /// 系统里开了「减弱动态效果」就整层不画。
-    /// 会飘的背景正是那个开关想关掉的东西。
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        if on && !reduceMotion {
-            GeometryReader { geo in
-                let w = geo.size.width, h = geo.size.height
-                // ⚠️ 三团光**位置是死的**，动的是整组的一个 `offset`。
-                //
-                // 她报的「app 有点卡顿」多半就是这儿：上一版每一帧都在改
-                // 三个 `position`，每改一次 SwiftUI 就得重新布局三个渐变；
-                // 外面还套着 `compositingGroup + blendMode`，
-                // 等于**每一帧都离屏合成一次全屏**。
-                //
-                // 现在整组只有一个位移和一个缩放——那是 GPU 上一次变换的事，
-                // 不重新布局、不重新合成。看着一模一样，代价差一个数量级。
-                ZStack {
-                    blob(app.settings.accentColor, 0.16 * punch,
-                         at: CGPoint(x: w * 0.30, y: h * 0.22), size: w * 1.15)
-                    blob(Self.companion(app.settings.accentColor), 0.13 * punch,
-                         at: CGPoint(x: w * 0.80, y: h * 0.38), size: w * 1.0)
-                    blob(app.settings.accentColor, 0.10 * punch,
-                         at: CGPoint(x: w * 0.50, y: h * 0.82), size: w * 1.3)
-                }
-                .offset(x: drift ? w * 0.06 : -w * 0.06,
-                        y: drift ? h * 0.04 : -h * 0.04)
-                .scaleEffect(drift ? 1.06 : 1)
-                // 混合方式分三种情况：
-                //
-                // · **铺了照片当壁纸** → `.overlay`。她报的「一旦换上背景就看不见」
-                //   就是这一档：正常混合的一层淡色摊在一张有明暗有细节的照片上，
-                //   等于什么都没加。`.overlay` 会**顺着照片本身的明暗走**——
-                //   亮处更亮、暗处更沉，颜色才吃得进去，照片的细节也还在。
-                // · 深色纯底 → 滤色，不然是三团灰。
-                // · 浅色纯底 → 正常混合。试过 plusDarker，一叠上去就发脏。
-                .blendMode(overPhoto ? .overlay : (scheme == .dark ? .screen : .normal))
-                .opacity(overPhoto ? 1 : (scheme == .dark ? 1 : 0.8))
-                .animation(.easeInOut(duration: 40).repeatForever(autoreverses: true),
-                           value: drift)
-                .onAppear { drift = true }
-            }
-            .allowsHitTesting(false)
-            .ignoresSafeArea()
-        }
-    }
-
-    /// 底下铺的是不是一张照片。
-    /// 照片那一档要用另一种混合，也要浓一点——不然它整个被照片吃掉。
-    private var overPhoto: Bool {
-        guard !app.settings.preset.usesGradient,
-              !app.settings.preset.ownsBackground else { return false }
-        return app.settings.wallpaperMode != "solid"
-            && app.settings.wallpaper(scheme) != nil
-    }
-
-    /// 光的浓度。照片上要更浓一点才看得见。
-    private var punch: Double { overPhoto ? 1.7 : 1 }
-
-    private func blob(_ color: Color, _ peak: Double,
-                      at center: CGPoint, size: CGFloat) -> some View {
-        RadialGradient(colors: [color.opacity(peak), color.opacity(0)],
-                       center: .center, startRadius: 0, endRadius: size / 2)
-            .frame(width: size, height: size)
-            .position(center)
-    }
-
-    // ⚠️ 说句实话：**照片壁纸上它永远是含蓄的。**
-    // 一张有自己明暗和颜色的照片，任何柔光铺上去都只能是「染一点」，
-    // 想要那种一眼「哇」的光，底得是纯色或者渐变。
-    // 所以这一层的主场是纯色／渐变那两档，照片那档是尽量。
-
-    /// 陪衬那一团的颜色：把强调色在色相上挪开一点。
-    /// **同一个色相三团 = 一块糊掉的色斑**；挪开之后才有层次。
-    static func companion(_ c: Color) -> Color {
-        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        UIColor(c).getHue(&h, saturation: &s, brightness: &b, alpha: &a)
-        return Color(hue: Double((h + 0.13).truncatingRemainder(dividingBy: 1)),
-                     saturation: Double(min(1, s * 0.9)),
-                     brightness: Double(b))
-    }
-}
-
-/// 玻璃上那道扫过去的光。
-///
-// ⚠️ `GlassSheen` 删掉了。
-//
-// 它是一个椭圆白色渐变，中心压在卡片**上方偏左**、
-// 浅色下白到 0.55，盖在三档玻璃上面。
-// 她说「磨砂根本就是一整块……反倒是像顶上有光打下来」——
-// **那句话精确指到了它。**
-//
-// 我当初加它的理由是「真玻璃上缘有高光」，理由没错，
-// 错在**把光打在了面上**。玻璃的厚度是从**边**上读出来的；
-// 打在面上就不是玻璃了，是一盏灯。
-// 现在这一层在 `GlassEdge`（高光 + 描边）加一道很轻的阴影。
-
-
-/// 一页的主角。
-///
-/// 出处是那份手册**自己的排版**：每一页右上角一个巨大的、极浅的序号，
-/// 左边是标题和一行小字。那个大数字不承担任何信息——
-/// 它是**构图**：有了它，这一页才有"上下左右"，而不是一堆卡片从顶上排下来。
-///
-/// 这是「参考语言，不复制皮肤」的用法：我抄的不是它的米色和紫色，
-/// 是**「用一个巨大的浅色字给页面定锚」**这件事。
-/// ⚠️ 两条她试出来的规矩：
-/// · **右上角那个巨大的浅色字撤了。** 她说「有点多余」——她说得对：
-///   我原来的理由是「它是构图不是内容」，可实际摆上去之后，
-///   它既不承担信息，又让人忍不住去认那是个什么字。
-///   **一个需要解释才成立的装饰，就是多余的装饰。**
-/// · **用了这个的页面，导航栏就别再写标题**，不然一屏两个「设置」。
 struct PageHero: View {
 
     let title: String

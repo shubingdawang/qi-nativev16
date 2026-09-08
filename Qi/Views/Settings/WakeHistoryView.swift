@@ -63,7 +63,7 @@ struct WakeHistoryDrawer: View {
                         .font(.app(12))
                         .foregroundStyle(Theme.textMuted(scheme))
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.app(11, weight: .semibold))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .rotationEffect(.degrees(open ? 0 : -90))
                 }
@@ -114,7 +114,7 @@ struct WakeHistoryDrawer: View {
                        _ act: @escaping () -> Void) -> some View {
         Button(action: act) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.app(12, weight: .semibold))
                 .frame(width: 30, height: 30)
                 .background(Circle().fill(scheme == .dark
                                           ? Color.white.opacity(0.08)

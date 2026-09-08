@@ -2066,7 +2066,7 @@ struct MessageListView: View {
             } else {
                 Text("尚未配置模型").foregroundStyle(Theme.softText)
                 Text("去「设置 → 供应商」加一个")
-                    .font(.footnote)
+                    .font(.app(13))
                     .foregroundStyle(.tertiary)
             }
         }
@@ -2171,7 +2171,7 @@ extension ChatView {
         } label: {
             VStack(spacing: 7) {
                 Image(systemName: icon)
-                    .font(.system(size: 20, weight: .regular))
+                    .font(.app(20, weight: .regular))
                     .foregroundStyle(.white)
                     .frame(height: 24)
                 Text(title)
