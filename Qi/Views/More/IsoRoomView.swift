@@ -50,7 +50,8 @@ struct IsoRoomView<Clawd: View>: View {
     ///
     /// 她要的：「平面视角的房间有点太小了不够放太多家具，
     /// 改为可以拖动往最左右分别移动五格的。」
-    @State private var panX: CGFloat = 0
+    /// 横着拖走了多远。**存在 `store` 里**，因为判定那两处也要用同一个数
+    /// （见 `ClawdStore.flatPanX`）。
     /// 这一次拖之前停在哪儿
     @State private var panFrom: CGFloat = 0
     /// 正拖着的这一件此刻悬在 clawd 身上
@@ -71,7 +72,8 @@ struct IsoRoomView<Clawd: View>: View {
             // 编译器逮住了，但这已经是这一轮里第几次
             // **同一个名字两个意思**了。所以叫 `geoRoom`。
             let geoRoom = IsoRoom.fit(in: geo.size, as: store.projection,
-                                      panX: store.projection == .flat ? panX : 0)
+                                      panX: store.projection == .flat
+                                          ? store.flatPanX : 0)
 
             // ⚠️ 整块**裁进屋子的轮廓里**（见 `IsoRoom.roomPath`）。
             //
@@ -102,30 +104,10 @@ struct IsoRoomView<Clawd: View>: View {
                                 guard store.projection == .flat else { return }
                                 let cap = geoRoom.maxPan
                                 let want = panFrom + v.translation.width
-                                panX = min(cap, max(-cap, want))
+                                store.flatPanX = min(cap, max(-cap, want))
                             }
-                            .onEnded { _ in panFrom = panX }
+                            .onEnded { _ in panFrom = store.flatPanX }
                     )
-
-            // 平面屋外面那一圈框。**立体屋没有。**
-            //
-            // ⚠️⚠️ **必须画在地板之后。**
-            //
-            // 她报的：「边框没把地板也框起来。」上一版我把它写在 `walls()` 里，
-            // 而 `walls()` 排在 `floor()` 前面——地板一铺上去，
-            // 框的下半圈就被盖掉了，看着只框住了墙。
-            //
-            // ⚠️ 描线还要**往里缩半个线宽**：`strokedPath` 是骑在路径上画的，
-            // 一半在里一半在外。缩了之后线的外沿正好落在 `flatFrame` 上，
-            // 整圈压在屋子里，才像一堵有厚度的墙。
-            if geoRoom.projection == .flat {
-                let fw = geoRoom.flatFrameWidth
-                Rectangle()
-                    .path(in: geoRoom.flatFrame.insetBy(dx: fw / 2, dy: fw / 2))
-                    .strokedPath(.init(lineWidth: fw))
-                    .fill(frameTone)
-                    .allowsHitTesting(false)
-            }
 
                 // ⚠️ 这一句就是「不穿模」的全部：**按离镜头的远近排好再画**。
                 ForEach(drawables(geoRoom), id: \.key) { d in
@@ -144,10 +126,36 @@ struct IsoRoomView<Clawd: View>: View {
                         // 看着就是「他自己在动」；拖远一点，他相对屋子就跑到
                         // 屋外去了，而裁剪是跟着屋子走的——**当场被剪没**。
                         clawd()
-                            .offset(x: geoRoom.projection == .flat ? panX : 0)
+                            .offset(x: geoRoom.projection == .flat
+                                    ? store.flatPanX : 0)
                     } else if let item = d.item, let kind = d.kind {
                         piece(item, kind, geoRoom)
                     }
+                }
+
+                // 平面屋外面那一圈框。**立体屋没有。**
+                //
+                // ⚠️⚠️ **画在最后：地板之后、家具之后。**
+                //
+                // 两轮各错一次：
+                //   · 第一版写在 `walls()` 里 → 地板铺上去把框的下半圈盖了
+                //     （她：「边框没把地板也框起来」）
+                //   · 第二版挪到地板后面 → 家具又画在框上面，
+                //     一件东西拖到边上就爬到框外面去了
+                //     （她：「家具拖到边缘的时候在边框上面」）
+                //
+                // 框是**墙的厚度**，屋里任何东西都该被它挡住。
+                // 所以它是这一摞里最后画的那一层。
+                //
+                // ⚠️ 描线往里缩半个线宽：`strokedPath` 骑在路径上画，
+                // 一半在里一半在外。缩了之后线的外沿正好落在 `flatFrame` 上。
+                if geoRoom.projection == .flat {
+                    let fw = geoRoom.flatFrameWidth
+                    Rectangle()
+                        .path(in: geoRoom.flatFrame.insetBy(dx: fw / 2, dy: fw / 2))
+                        .strokedPath(.init(lineWidth: fw))
+                        .fill(frameTone)
+                        .allowsHitTesting(false)
                 }
             }
             // ⚠️ 裁进屋子的轮廓（理由见上面 ZStack 那段）。
@@ -753,7 +761,9 @@ struct IsoRoomView<Clawd: View>: View {
         // 藏起来的时候（捉迷藏）同理：`clawdHere` 已经把藏着算进去了。
         guard clawdHere else { return false }
         guard let s = boardSize, s.width > 1, s.height > 1 else { return false }
+        // ⚠️ 屋子拖走了多远也要算进来，不然画在右边、判定在左边。
         let cx = clawdX * s.width
+            + (store.projection == .flat ? store.flatPanX : 0)
         let cy = clawdY * s.height
         let reach = min(s.width, s.height) * 0.13
         return abs(p.x - cx) < reach && abs(p.y - cy) < reach

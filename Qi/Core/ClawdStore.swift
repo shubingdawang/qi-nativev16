@@ -1550,6 +1550,16 @@ extension ClawdStore {
     ///
     /// 36 → 24。她说「平铺视角有点太长了，可以缩短一点，因为格子变小了」。
     /// 格子从八格制细分到十六格制之后，36 列拖起来没个头。
+    /// 平铺屋横着拖走了多远（点）。**不存盘，只活在这一次打开里。**
+    ///
+    /// ⚠️ 为什么放在这儿而不是视图的 `@State`：
+    /// 屋子拖走之后，**画**和**判定**必须用同一个数。
+    /// 画在 `IsoRoomView`，而「手势有没有碰到他」的判定有两处
+    /// （`IsoRoomView.nearClawd`、`ClawdHomeView.touching`）——
+    /// 三处分别在两个文件里。放在视图的 `@State` 里，另一个文件够不着，
+    /// 只能各写各的，于是画在右边、判定还在左边（她报的「手势没反应」）。
+    @Published var flatPanX: CGFloat = 0
+
     nonisolated static let flatCols = 24
 
     /// 平面屋一屏里看得见几列。一格多大按它算（见 `IsoRoom.fit`）。

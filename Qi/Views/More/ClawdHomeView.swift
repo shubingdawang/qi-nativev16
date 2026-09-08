@@ -1294,7 +1294,11 @@ struct ClawdHomeView: View {
         // 他不在这一间、或者正藏着，就没得碰
         guard shownRoom == store.clawdRoom, !hiding, !held else { return false }
         let tile = IsoRoom.fit(in: size, as: store.projection).tileW
-        let him = CGPoint(x: clawdX * size.width, y: clawdY * size.height)
+        // ⚠️ 平铺屋拖走了多远也要算进来（见 `ClawdStore.flatPanX`）——
+        // 他的画跟着屋子走，判定不跟就永远碰不到他。
+        let pan = store.projection == .flat ? store.flatPanX : 0
+        let him = CGPoint(x: clawdX * size.width + pan,
+                          y: clawdY * size.height)
         let dx = p.x - him.x, dy = p.y - him.y
         // ⚠️ 半径按**他有多高**给，不是按一格多宽。他约 1.47 格高，
         // 而且头顶还顶着说话的气泡，位置会往下挪半个身子。
