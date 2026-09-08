@@ -125,21 +125,6 @@ STANDINS = {
 #
 # ⚠️ 动作名**只用 `RoomActs.act` 里已经有的**。写一个没有的不会报错，
 # 只会让他跑过去站着说一句「……」。`scripts/artcheck.py` 会对这一条。
-SHAPES = {
-    "bed":    (3, 4, 1.1, False, ["躺下", "打滚", "坐边上", "钻被窝"]),
-    "sofa":   (3, 3, 1.0, False, ["坐下", "瘫着", "趴扶手"]),
-    "chair":  (2, 2, 1.0, False, ["坐下", "瘫着"]),
-    "table":  (3, 3, 0.9, True,  ["趴桌上", "在桌边站着", "把东西放上去"]),
-    "rug":    (5, 6, 0.0, False, ["打滚", "躺一会儿"]),
-    "tall":   (2, 2, 2.0, True,  ["抽一本", "踮脚够", "把东西放上去"]),
-    "lamp":   (2, 2, 1.6, False, ["开灯", "凑到灯下"]),
-    "plant":  (2, 2, 1.2, False, ["浇水", "闻一闻", "戳一下"]),
-    "fire":   (2, 2, 1.6, False, ["凑近看", "开灯"]),
-    "screen": (2, 2, 2.2, False, ["凑近看", "摸一下"]),
-    "small":  (2, 2, 0.6, False, ["摸一下", "拿起来"]),
-    "food":   (2, 2, 0.5, False, ["闻一闻", "摸一下", "拿起来"]),
-}
-
 # 形状 → (宽, 深, 高, 有没有台面, 动作)
 #
 # ⚠️ 动作名**只用 `RoomActs.act` 里已经有的**。写一个没有的不会报错，
@@ -314,6 +299,64 @@ ITEMS = [
     # ── 乐器、衣服 ──────────────────────────────────
     ("guitar_item", "吉他", 150, TO, "screen", "it_inst_guitar", None, "拨两下"),
     ("hoodie",     "小卫衣", 85, W, "small", "it_wear_hoodie", None, "套头上卡住"),
+    # ── 圣诞红（她 2026-09-08 发的第一张拼图，16 件）───────
+    #
+    # ⚠️ 这三套的图是 `scripts/prep_theme.py` 从整张拼图上切下来的，
+    # 文件名就是那边名单里的那个后缀，改名要两边一起改。
+    ("xred_bed",       "圣诞红·四柱床", 210, T, "bed",    "fu_xred_bed", None, "钻进被窝"),
+    ("xred_sofa",      "圣诞红·沙发",   190, T, "sofa",   "fu_xred_sofa", None, "陷进抱枕里"),
+    ("xred_wardrobe",  "圣诞红·衣柜",   175, T, "tall",   "fu_xred_wardrobe", None, "拉开柜门"),
+    ("xred_vanity",    "圣诞红·梳妆台", 165, T, "table",  "fu_xred_vanity", None, "对着镜子摆弄"),
+    ("xred_armchair",  "圣诞红·扶手椅", 150, T, "chair",  "fu_xred_armchair", None, "窝进去"),
+    ("xred_shelf",     "圣诞红·书架",   160, T, "tall",   "fu_xred_shelf", None, "抽一本厚的"),
+    ("xred_table",     "圣诞红·圆茶桌", 150, T, "table",  "fu_xred_table", None, "把杯子摆好"),
+    ("xred_lamp",      "圣诞红·落地灯", 105, T, "lamp",   "fu_xred_lamp", None, "站在光里"),
+    ("xred_rug",       "圣诞红·地毯",   95,  T, "rug",    "fu_xred_rug", None, "满地打滚"),
+    ("xred_flower",    "圣诞红·一品红", 85,  T, "plant",  "fu_xred_flower", None, "闻一闻"),
+    ("xred_sideboard", "圣诞红·边柜",   155, T, "tall",   "fu_xred_sideboard", None, "把烛台摆正"),
+    ("xred_ottoman",   "圣诞红·圆凳",   80,  T, "chair",  "fu_xred_ottoman", None, "坐得很端正"),
+    ("xred_mirror",    "圣诞红·壁镜",   110, T, "screen", "fu_xred_mirror", None, "照一照"),
+    ("xred_cart",      "圣诞红·餐车",   140, T, "table",  "fu_xred_cart", None, "推着走两步"),
+    ("xred_plant",     "圣诞红·冬青",   90,  T, "plant",  "fu_xred_plant", None, "戳戳叶子"),
+    ("xred_trunk",     "圣诞红·箱子",   120, T, "small",  "fu_xred_trunk", None, "钻进去躲着"),
+
+    # ── 粉玫瑰（第二张，16 件）──────────────────────────
+    ("rose_bed",       "粉玫瑰·小床",   210, T, "bed",    "fu_rose_bed", None, "抱着兔子睡"),
+    ("rose_sofa",      "粉玫瑰·沙发",   190, T, "sofa",   "fu_rose_sofa", None, "陷进抱枕里"),
+    ("rose_wardrobe",  "粉玫瑰·衣柜",   175, T, "tall",   "fu_rose_wardrobe", None, "拉开柜门"),
+    ("rose_vanity",    "粉玫瑰·梳妆台", 165, T, "table",  "fu_rose_vanity", None, "对着镜子摆弄"),
+    ("rose_armchair",  "粉玫瑰·扶手椅", 150, T, "chair",  "fu_rose_armchair", None, "窝进去"),
+    ("rose_shelf",     "粉玫瑰·书架",   160, T, "tall",   "fu_rose_shelf", None, "抽一本厚的"),
+    ("rose_table",     "粉玫瑰·茶桌",   150, T, "table",  "fu_rose_table", None, "把杯子摆好"),
+    ("rose_lamp",      "粉玫瑰·落地灯", 105, T, "lamp",   "fu_rose_lamp", None, "站在光里"),
+    ("rose_rug",       "粉玫瑰·地毯",   95,  T, "rug",    "fu_rose_rug", None, "满地打滚"),
+    ("rose_flower",    "粉玫瑰·玫瑰",   85,  T, "plant",  "fu_rose_flower", None, "闻一闻"),
+    ("rose_sideboard", "粉玫瑰·边柜",   155, T, "tall",   "fu_rose_sideboard", None, "把相框摆正"),
+    ("rose_ottoman",   "粉玫瑰·圆凳",   80,  T, "chair",  "fu_rose_ottoman", None, "坐得很端正"),
+    ("rose_frame",     "粉玫瑰·画框",   110, T, "screen", "fu_rose_frame", None, "凑近看"),
+    ("rose_cart",      "粉玫瑰·餐车",   140, T, "table",  "fu_rose_cart", None, "推着走两步"),
+    ("rose_plant",     "粉玫瑰·龟背竹", 90,  T, "plant",  "fu_rose_plant", None, "躲到叶子下"),
+    ("rose_trunk",     "粉玫瑰·箱子",   120, T, "small",  "fu_rose_trunk", None, "钻进去躲着"),
+
+    # ── 星月蓝（第三张，18 件）──────────────────────────
+    ("star_bed",        "星月蓝·小床",   210, T, "bed",    "fu_star_bed", None, "数着星星睡"),
+    ("star_sofa",       "星月蓝·沙发",   190, T, "sofa",   "fu_star_sofa", None, "陷进抱枕里"),
+    ("star_shelf",      "星月蓝·书架",   160, T, "tall",   "fu_star_shelf", None, "抽一本厚的"),
+    ("star_vanity",     "星月蓝·梳妆台", 165, T, "table",  "fu_star_vanity", None, "对着镜子摆弄"),
+    ("star_seat",       "星月蓝·飘窗榻", 170, T, "sofa",   "fu_star_seat", None, "坐上去看月亮"),
+    ("star_table",      "星月蓝·餐桌",   150, T, "table",  "fu_star_table", None, "爬上去坐好"),
+    ("star_lamp",       "星月蓝·落地灯", 105, T, "lamp",   "fu_star_lamp", None, "站在光里"),
+    ("star_armchair",   "星月蓝·扶手椅", 150, T, "chair",  "fu_star_armchair", None, "窝进去"),
+    ("star_flower",     "星月蓝·星星花", 85,  T, "plant",  "fu_star_flower", None, "闻一闻"),
+    ("star_rug",        "星月蓝·圆地毯", 95,  T, "rug",    "fu_star_rug", None, "满地打滚"),
+    ("star_window",     "星月蓝·拱窗",   130, T, "screen", "fu_star_window", None, "趴着看夜色"),
+    ("star_cart",       "星月蓝·餐车",   140, T, "table",  "fu_star_cart", None, "推着走两步"),
+    ("star_fireplace",  "星月蓝·壁炉",   180, T, "fire",   "fu_star_fireplace", None, "烤火"),
+    ("star_trunk",      "星月蓝·箱子",   120, T, "small",  "fu_star_trunk", None, "钻进去躲着"),
+    ("star_ottoman",    "星月蓝·圆凳",   80,  T, "chair",  "fu_star_ottoman", None, "坐得很端正"),
+    ("star_sideboard",  "星月蓝·边柜",   155, T, "tall",   "fu_star_sideboard", None, "把烛台摆正"),
+    ("star_gramophone", "星月蓝·留声机", 145, T, "small",  "fu_star_gramophone", None, "放一张唱片"),
+    ("star_books",      "星月蓝·书堆",   60,  T, "small",  "fu_star_books", None, "抽一本厚的"),
 ]
 
 CATS = {"themed": ".themed", "decor": ".decor", "food": ".food",

@@ -366,7 +366,107 @@ extension FurnitureCatalog {
         .init(id: "guitar_item", name: "吉他", price: 150,
               sprite: sp_screen, category: .toy, reaction: "拨两下"),
         .init(id: "hoodie", name: "小卫衣", price: 85,
-              sprite: sp_small, category: .wear, reaction: "套头上卡住")
+              sprite: sp_small, category: .wear, reaction: "套头上卡住"),
+        .init(id: "xred_bed", name: "圣诞红·四柱床", price: 210,
+              sprite: sp_bed, category: .themed, reaction: "钻进被窝"),
+        .init(id: "xred_sofa", name: "圣诞红·沙发", price: 190,
+              sprite: sp_sofa, category: .themed, reaction: "陷进抱枕里"),
+        .init(id: "xred_wardrobe", name: "圣诞红·衣柜", price: 175,
+              sprite: sp_tall, category: .themed, reaction: "拉开柜门"),
+        .init(id: "xred_vanity", name: "圣诞红·梳妆台", price: 165,
+              sprite: sp_table, category: .themed, reaction: "对着镜子摆弄"),
+        .init(id: "xred_armchair", name: "圣诞红·扶手椅", price: 150,
+              sprite: sp_chair, category: .themed, reaction: "窝进去"),
+        .init(id: "xred_shelf", name: "圣诞红·书架", price: 160,
+              sprite: sp_tall, category: .themed, reaction: "抽一本厚的"),
+        .init(id: "xred_table", name: "圣诞红·圆茶桌", price: 150,
+              sprite: sp_table, category: .themed, reaction: "把杯子摆好"),
+        .init(id: "xred_lamp", name: "圣诞红·落地灯", price: 105,
+              sprite: sp_lamp, category: .themed, reaction: "站在光里"),
+        .init(id: "xred_rug", name: "圣诞红·地毯", price: 95,
+              sprite: sp_rug, category: .themed, reaction: "满地打滚"),
+        .init(id: "xred_flower", name: "圣诞红·一品红", price: 85,
+              sprite: sp_plant, category: .themed, reaction: "闻一闻"),
+        .init(id: "xred_sideboard", name: "圣诞红·边柜", price: 155,
+              sprite: sp_tall, category: .themed, reaction: "把烛台摆正"),
+        .init(id: "xred_ottoman", name: "圣诞红·圆凳", price: 80,
+              sprite: sp_chair, category: .themed, reaction: "坐得很端正"),
+        .init(id: "xred_mirror", name: "圣诞红·壁镜", price: 110,
+              sprite: sp_screen, category: .themed, reaction: "照一照"),
+        .init(id: "xred_cart", name: "圣诞红·餐车", price: 140,
+              sprite: sp_table, category: .themed, reaction: "推着走两步"),
+        .init(id: "xred_plant", name: "圣诞红·冬青", price: 90,
+              sprite: sp_plant, category: .themed, reaction: "戳戳叶子"),
+        .init(id: "xred_trunk", name: "圣诞红·箱子", price: 120,
+              sprite: sp_small, category: .themed, reaction: "钻进去躲着"),
+        .init(id: "rose_bed", name: "粉玫瑰·小床", price: 210,
+              sprite: sp_bed, category: .themed, reaction: "抱着兔子睡"),
+        .init(id: "rose_sofa", name: "粉玫瑰·沙发", price: 190,
+              sprite: sp_sofa, category: .themed, reaction: "陷进抱枕里"),
+        .init(id: "rose_wardrobe", name: "粉玫瑰·衣柜", price: 175,
+              sprite: sp_tall, category: .themed, reaction: "拉开柜门"),
+        .init(id: "rose_vanity", name: "粉玫瑰·梳妆台", price: 165,
+              sprite: sp_table, category: .themed, reaction: "对着镜子摆弄"),
+        .init(id: "rose_armchair", name: "粉玫瑰·扶手椅", price: 150,
+              sprite: sp_chair, category: .themed, reaction: "窝进去"),
+        .init(id: "rose_shelf", name: "粉玫瑰·书架", price: 160,
+              sprite: sp_tall, category: .themed, reaction: "抽一本厚的"),
+        .init(id: "rose_table", name: "粉玫瑰·茶桌", price: 150,
+              sprite: sp_table, category: .themed, reaction: "把杯子摆好"),
+        .init(id: "rose_lamp", name: "粉玫瑰·落地灯", price: 105,
+              sprite: sp_lamp, category: .themed, reaction: "站在光里"),
+        .init(id: "rose_rug", name: "粉玫瑰·地毯", price: 95,
+              sprite: sp_rug, category: .themed, reaction: "满地打滚"),
+        .init(id: "rose_flower", name: "粉玫瑰·玫瑰", price: 85,
+              sprite: sp_plant, category: .themed, reaction: "闻一闻"),
+        .init(id: "rose_sideboard", name: "粉玫瑰·边柜", price: 155,
+              sprite: sp_tall, category: .themed, reaction: "把相框摆正"),
+        .init(id: "rose_ottoman", name: "粉玫瑰·圆凳", price: 80,
+              sprite: sp_chair, category: .themed, reaction: "坐得很端正"),
+        .init(id: "rose_frame", name: "粉玫瑰·画框", price: 110,
+              sprite: sp_screen, category: .themed, reaction: "凑近看"),
+        .init(id: "rose_cart", name: "粉玫瑰·餐车", price: 140,
+              sprite: sp_table, category: .themed, reaction: "推着走两步"),
+        .init(id: "rose_plant", name: "粉玫瑰·龟背竹", price: 90,
+              sprite: sp_plant, category: .themed, reaction: "躲到叶子下"),
+        .init(id: "rose_trunk", name: "粉玫瑰·箱子", price: 120,
+              sprite: sp_small, category: .themed, reaction: "钻进去躲着"),
+        .init(id: "star_bed", name: "星月蓝·小床", price: 210,
+              sprite: sp_bed, category: .themed, reaction: "数着星星睡"),
+        .init(id: "star_sofa", name: "星月蓝·沙发", price: 190,
+              sprite: sp_sofa, category: .themed, reaction: "陷进抱枕里"),
+        .init(id: "star_shelf", name: "星月蓝·书架", price: 160,
+              sprite: sp_tall, category: .themed, reaction: "抽一本厚的"),
+        .init(id: "star_vanity", name: "星月蓝·梳妆台", price: 165,
+              sprite: sp_table, category: .themed, reaction: "对着镜子摆弄"),
+        .init(id: "star_seat", name: "星月蓝·飘窗榻", price: 170,
+              sprite: sp_sofa, category: .themed, reaction: "坐上去看月亮"),
+        .init(id: "star_table", name: "星月蓝·餐桌", price: 150,
+              sprite: sp_table, category: .themed, reaction: "爬上去坐好"),
+        .init(id: "star_lamp", name: "星月蓝·落地灯", price: 105,
+              sprite: sp_lamp, category: .themed, reaction: "站在光里"),
+        .init(id: "star_armchair", name: "星月蓝·扶手椅", price: 150,
+              sprite: sp_chair, category: .themed, reaction: "窝进去"),
+        .init(id: "star_flower", name: "星月蓝·星星花", price: 85,
+              sprite: sp_plant, category: .themed, reaction: "闻一闻"),
+        .init(id: "star_rug", name: "星月蓝·圆地毯", price: 95,
+              sprite: sp_rug, category: .themed, reaction: "满地打滚"),
+        .init(id: "star_window", name: "星月蓝·拱窗", price: 130,
+              sprite: sp_screen, category: .themed, reaction: "趴着看夜色"),
+        .init(id: "star_cart", name: "星月蓝·餐车", price: 140,
+              sprite: sp_table, category: .themed, reaction: "推着走两步"),
+        .init(id: "star_fireplace", name: "星月蓝·壁炉", price: 180,
+              sprite: sp_fire, category: .themed, reaction: "烤火"),
+        .init(id: "star_trunk", name: "星月蓝·箱子", price: 120,
+              sprite: sp_small, category: .themed, reaction: "钻进去躲着"),
+        .init(id: "star_ottoman", name: "星月蓝·圆凳", price: 80,
+              sprite: sp_chair, category: .themed, reaction: "坐得很端正"),
+        .init(id: "star_sideboard", name: "星月蓝·边柜", price: 155,
+              sprite: sp_tall, category: .themed, reaction: "把烛台摆正"),
+        .init(id: "star_gramophone", name: "星月蓝·留声机", price: 145,
+              sprite: sp_small, category: .themed, reaction: "放一张唱片"),
+        .init(id: "star_books", name: "星月蓝·书堆", price: 60,
+              sprite: sp_small, category: .themed, reaction: "抽一本厚的")
     ]
 
     /// 这一批的图。合进 `artTable`。
@@ -486,7 +586,57 @@ extension FurnitureCatalog {
         "minitree":       Art(flat: "it_holiday_christmas_tree", iso: nil),
         "doorwreath":     Art(flat: "it_holiday_christmas_wreath",iso: nil),
         "guitar_item":    Art(flat: "it_inst_guitar",            iso: nil),
-        "hoodie":         Art(flat: "it_wear_hoodie",            iso: nil)
+        "hoodie":         Art(flat: "it_wear_hoodie",            iso: nil),
+        "xred_bed":       Art(flat: "fu_xred_bed",               iso: nil),
+        "xred_sofa":      Art(flat: "fu_xred_sofa",              iso: nil),
+        "xred_wardrobe":  Art(flat: "fu_xred_wardrobe",          iso: nil),
+        "xred_vanity":    Art(flat: "fu_xred_vanity",            iso: nil),
+        "xred_armchair":  Art(flat: "fu_xred_armchair",          iso: nil),
+        "xred_shelf":     Art(flat: "fu_xred_shelf",             iso: nil),
+        "xred_table":     Art(flat: "fu_xred_table",             iso: nil),
+        "xred_lamp":      Art(flat: "fu_xred_lamp",              iso: nil),
+        "xred_rug":       Art(flat: "fu_xred_rug",               iso: nil),
+        "xred_flower":    Art(flat: "fu_xred_flower",            iso: nil),
+        "xred_sideboard": Art(flat: "fu_xred_sideboard",         iso: nil),
+        "xred_ottoman":   Art(flat: "fu_xred_ottoman",           iso: nil),
+        "xred_mirror":    Art(flat: "fu_xred_mirror",            iso: nil),
+        "xred_cart":      Art(flat: "fu_xred_cart",              iso: nil),
+        "xred_plant":     Art(flat: "fu_xred_plant",             iso: nil),
+        "xred_trunk":     Art(flat: "fu_xred_trunk",             iso: nil),
+        "rose_bed":       Art(flat: "fu_rose_bed",               iso: nil),
+        "rose_sofa":      Art(flat: "fu_rose_sofa",              iso: nil),
+        "rose_wardrobe":  Art(flat: "fu_rose_wardrobe",          iso: nil),
+        "rose_vanity":    Art(flat: "fu_rose_vanity",            iso: nil),
+        "rose_armchair":  Art(flat: "fu_rose_armchair",          iso: nil),
+        "rose_shelf":     Art(flat: "fu_rose_shelf",             iso: nil),
+        "rose_table":     Art(flat: "fu_rose_table",             iso: nil),
+        "rose_lamp":      Art(flat: "fu_rose_lamp",              iso: nil),
+        "rose_rug":       Art(flat: "fu_rose_rug",               iso: nil),
+        "rose_flower":    Art(flat: "fu_rose_flower",            iso: nil),
+        "rose_sideboard": Art(flat: "fu_rose_sideboard",         iso: nil),
+        "rose_ottoman":   Art(flat: "fu_rose_ottoman",           iso: nil),
+        "rose_frame":     Art(flat: "fu_rose_frame",             iso: nil),
+        "rose_cart":      Art(flat: "fu_rose_cart",              iso: nil),
+        "rose_plant":     Art(flat: "fu_rose_plant",             iso: nil),
+        "rose_trunk":     Art(flat: "fu_rose_trunk",             iso: nil),
+        "star_bed":       Art(flat: "fu_star_bed",               iso: nil),
+        "star_sofa":      Art(flat: "fu_star_sofa",              iso: nil),
+        "star_shelf":     Art(flat: "fu_star_shelf",             iso: nil),
+        "star_vanity":    Art(flat: "fu_star_vanity",            iso: nil),
+        "star_seat":      Art(flat: "fu_star_seat",              iso: nil),
+        "star_table":     Art(flat: "fu_star_table",             iso: nil),
+        "star_lamp":      Art(flat: "fu_star_lamp",              iso: nil),
+        "star_armchair":  Art(flat: "fu_star_armchair",          iso: nil),
+        "star_flower":    Art(flat: "fu_star_flower",            iso: nil),
+        "star_rug":       Art(flat: "fu_star_rug",               iso: nil),
+        "star_window":    Art(flat: "fu_star_window",            iso: nil),
+        "star_cart":      Art(flat: "fu_star_cart",              iso: nil),
+        "star_fireplace": Art(flat: "fu_star_fireplace",         iso: nil),
+        "star_trunk":     Art(flat: "fu_star_trunk",             iso: nil),
+        "star_ottoman":   Art(flat: "fu_star_ottoman",           iso: nil),
+        "star_sideboard": Art(flat: "fu_star_sideboard",         iso: nil),
+        "star_gramophone":Art(flat: "fu_star_gramophone",        iso: nil),
+        "star_books":     Art(flat: "fu_star_books",             iso: nil)
     ]
 
     /// 这一批占几格、能做什么。
@@ -496,14 +646,17 @@ extension FurnitureCatalog {
     static func themedShape(of id: String) -> IsoShape? {
         switch id {
         case "sakura_bed", "nordic_bed", "ocean_bed", "autumn_bed",
-             "gothic_bed", "jp_bed", "lolita_bed", "ny_bed", "vic_bed":
+             "gothic_bed", "jp_bed", "lolita_bed", "ny_bed", "vic_bed",
+             "xred_bed", "rose_bed", "star_bed":
             return IsoShape(w: 2, d: 2, tall: 1.1,
                             actions: ["躺下", "打滚", "坐边上", "钻被窝"])
         case "armchair", "bench", "gothic_chair", "lolita_chair", "xmas_chair",
-             "ny_chair", "vic_chair", "vic_ottoman":
+             "ny_chair", "vic_chair", "vic_ottoman", "xred_armchair",
+             "xred_ottoman", "rose_armchair", "rose_ottoman", "star_armchair",
+             "star_ottoman":
             return IsoShape(w: 1, d: 1, tall: 1.0,
                             actions: ["坐下", "瘫着"])
-        case "gothic_fire", "xmas_fire":
+        case "gothic_fire", "xmas_fire", "star_fireplace":
             return IsoShape(w: 1, d: 1, tall: 1.6,
                             actions: ["凑近看", "开灯"])
         case "sushi", "ramen", "hotpot", "bubbletea", "cookies", "croissant",
@@ -512,49 +665,51 @@ extension FurnitureCatalog {
                             actions: ["闻一闻", "摸一下", "拿起来"])
         case "floorlamp", "sakura_lantern", "nordic_lamp", "ocean_light",
              "gothic_candle", "jp_lantern", "ny_lantern", "vic_chandelier",
-             "vic_lamp", "redlantern", "jackolantern":
+             "vic_lamp", "redlantern", "jackolantern", "xred_lamp", "rose_lamp",
+             "star_lamp":
             return IsoShape(w: 1, d: 1, tall: 1.6,
                             actions: ["开灯", "凑到灯下"])
         case "succulent", "sakura_bonsai", "nordic_plant", "ocean_palm",
              "autumn_maple", "autumn_wheat", "jp_vase", "xmas_tree", "ny_plum",
-             "vic_vase", "vic_plant", "flowervase", "minitree":
+             "vic_vase", "vic_plant", "flowervase", "minitree", "xred_flower",
+             "xred_plant", "rose_flower", "rose_plant", "star_flower":
             return IsoShape(w: 1, d: 1, tall: 1.2,
                             actions: ["浇水", "闻一闻", "戳一下"])
-        case "sakura_rug", "vic_rug":
+        case "sakura_rug", "vic_rug", "xred_rug", "rose_rug", "star_rug":
             return IsoShape(w: 3, d: 3, tall: 0.0,
                             actions: ["打滚", "躺一会儿"])
         case "coatrack", "ocean_net", "ocean_board", "gothic_mirror", "jp_door",
              "lolita_mirror", "ny_screen", "ny_couplet", "painting",
-             "fucouplet", "guitar_item":
+             "fucouplet", "guitar_item", "xred_mirror", "rose_frame",
+             "star_window":
             return IsoShape(w: 1, d: 1, tall: 2.2,
                             actions: ["凑近看", "摸一下"])
         case "autumn_pumpkin", "autumn_wreath", "xmas_gifts", "xmas_wreath",
              "xmas_nutcracker", "xmas_snowman", "xmas_house", "xmas_advent",
              "ny_firecracker", "ny_envelope", "ny_ingot", "ny_knot",
-             "vic_frame", "wallclock", "bdaydecor", "doorwreath", "hoodie":
+             "vic_frame", "wallclock", "bdaydecor", "doorwreath", "hoodie",
+             "xred_trunk", "rose_trunk", "star_trunk", "star_gramophone",
+             "star_books":
             return IsoShape(w: 1, d: 1, tall: 0.6,
                             actions: ["摸一下", "拿起来"])
         case "sakura_sofa", "nordic_sofa", "ocean_sofa", "autumn_sofa",
-             "xmas_sofa", "ny_sofa", "vic_loveseat":
+             "xmas_sofa", "ny_sofa", "vic_loveseat", "xred_sofa", "rose_sofa",
+             "star_sofa", "star_seat":
             return IsoShape(w: 2, d: 1, tall: 1.0,
                             actions: ["坐下", "瘫着", "趴扶手"])
         case "dining", "vanity", "nordic_table", "jp_table", "lolita_vanity",
              "lolita_table", "xmas_dining", "ny_table", "ny_tea", "vic_tea",
-             "vic_desk", "vic_vanity", "vic_piano":
+             "vic_desk", "vic_vanity", "vic_piano", "xred_vanity", "xred_table",
+             "xred_cart", "rose_vanity", "rose_table", "rose_cart",
+             "star_vanity", "star_table", "star_cart":
             return IsoShape(w: 2, d: 1, tall: 0.9, surface: true,
                             actions: ["趴桌上", "在桌边站着", "把东西放上去"])
-        // ⚠️ 柜子这一类占地是 **2×1**，不是 1×1。
-        //
-        // 她报的「这个书架没规定占位还浮着」——占地写成一格，
-        // 而图画出来有两格宽，于是格子跟图对不上：
-        // 图按一格的宽度缩放，看着就跟地板脱开了。
-        //
-        // 靠墙那一排的东西**宽度上占两格、进深只占一格**，
-        // 这跟它们贴着墙站的样子是一致的。
         case "nightstand", "stove", "kitchensink", "nordic_shelf",
              "gothic_shelf", "lolita_wardrobe", "xmas_shelf", "ny_cabinet",
-             "vic_night", "vic_wardrobe", "vic_shelf", "vic_sideboard":
-            return IsoShape(w: 2, d: 1, tall: 2.0, surface: true,
+             "vic_night", "vic_wardrobe", "vic_shelf", "vic_sideboard",
+             "xred_wardrobe", "xred_shelf", "xred_sideboard", "rose_wardrobe",
+             "rose_shelf", "rose_sideboard", "star_shelf", "star_sideboard":
+            return IsoShape(w: 1, d: 1, tall: 2.0, surface: true,
                             actions: ["抽一本", "踮脚够", "把东西放上去"])
         default: return nil
         }

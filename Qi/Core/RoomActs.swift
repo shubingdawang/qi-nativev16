@@ -184,6 +184,27 @@ enum RoomActs {
             return RoomAct(name: name, spot: .beside, mood: .peeking, seconds: 5,
                            lines: ["贴着看", "亮晶晶的"])
 
+        // MARK: 这一批是新家具带进来的
+        //
+        // 衣柜、落地镜、鞋架、摇摇马自己报占地那次（见 `FurnitureCatalog`
+        // 那张尺寸表）顺手写了动作名，而**这张表里没有**——
+        // 没补的话他跑过去站着说一句「……」，看着像坏了。
+        case "拉开柜门":
+            return RoomAct(name: name, spot: .beside, mood: .peeking, seconds: 4,
+                           lines: ["看看有什么", "关上关上"])
+        case "照一照":
+            return RoomAct(name: name, spot: .beside, mood: .happy, seconds: 4,
+                           lines: ["还是这么好看", "转一圈"])
+        case "坐着换鞋":
+            return RoomAct(name: name, spot: .beside, mood: .idle, seconds: 4,
+                           lines: ["穿好了", "这只在哪儿"])
+        case "骑上去":
+            return RoomAct(name: name, spot: .onTop, mood: .happy, seconds: 5,
+                           lines: ["驾", "跑起来了"])
+        case "摇一摇":
+            return RoomAct(name: name, spot: .onTop, mood: .flail, seconds: 4,
+                           lines: ["晃啊晃", "再快一点"])
+
         default:
             return RoomAct(name: name, spot: .beside, mood: .idle, seconds: 3,
                            lines: ["……", "看看"])

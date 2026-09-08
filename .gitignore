@@ -15,3 +15,6 @@ _看一眼/
 # Python 缓存
 __pycache__/
 *.pyc
+
+# 三张主题拼图的源图，切完就不用了
+scripts/theme3/
