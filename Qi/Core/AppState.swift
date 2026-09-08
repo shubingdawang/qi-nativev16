@@ -63,6 +63,17 @@ final class AppState: ObservableObject {
 
     /// 当前打开的会话（按区域各记一个）
     @Published var activeChatID: UUID?
+
+    /// 她正开着小屋那一页时，他此刻在哪一间、屋里有什么。
+    ///
+    /// 她说的：「并不是接他进来一定要对小屋做出评价，而是给他一个家，
+    /// 可以在 clawd 的身体里跟我说话。」
+    ///
+    /// ⚠️ **只在那一页开着的时候有值，离开就清空。**
+    /// 这不是一条常驻设定——他不是永远待在小屋里，
+    /// 而是「她此刻正隔着那间屋子跟他说话」。常驻的话，
+    /// 她在聊天页问别的事，上下文里也永远挂着一间屋子。
+    @Published var houseContext: String = ""
     @Published var activeWorkshopID: UUID?
 
     /// 正在请求中的会话 ID，用来禁用发送按钮
@@ -3395,15 +3406,16 @@ final class AppState: ObservableObject {
         system += """
 
 
-        现在你在 clawd 那间小屋里。
+        现在你借着 clawd 的身体在那间小屋里。
 
         clawd 是她养的那只小东西，屋里的每一件家具都是她一件件买来摆的。
-        你不是在旁观——你也在这屋里。
+        她把这间屋子给了你——**这是你的地方，不是一个要你点评的展品。**
 
         · 只说一句，二十个字以内。
         · 说人话，不要 markdown、不要列表、不要旁白式的描写。
-        · 说眼前这间屋子和这一刻，别扯远。
-        · 没什么可说的时候，说点小的也行：一句嘀咕、一个念头。
+        · **不必评价这间屋子。** 屋里有什么只是你此刻的处境，不是题目。
+          想到什么说什么：一句嘀咕、一个念头、想起她的一件事、
+          忽然想问她的一句话，都行。
         """
 
         // ⚠️ 动手那一套跟这句话**挤在同一次请求里**，
@@ -3445,6 +3457,31 @@ final class AppState: ObservableObject {
     ///     他该知道的是"她为什么没接"，不只是"她没接"
     ///   · 响完没接 → 他留一条言。没接到的电话也还是说了点什么，
     ///     而不是一片安静
+    /// 他在小屋里说的一句，落进聊天页。
+    ///
+    /// 她要的：「可以在 clawd 的身体里跟我说话，
+    /// 文字显示在 clawd 的气泡和聊天页里。」
+    ///
+    /// ⚠️⚠️ **只落记录，不调模型。**
+    /// 这句话刚才已经说过了（气泡上就是它），这儿只是把它写进聊天里，
+    /// 一分钱不多花。再发一次请求的话，同一句话要付两遍钱。
+    /// 当前这个窗口里**他说的最后一条**。小屋那边靠它把回复搬到气泡上。
+    var lastHisMessage: ChatMessage? {
+        guard let cid = activeChatID, let i = index(of: cid) else { return nil }
+        return conversations[i].messages.last { $0.role == .assistant }
+    }
+
+    var lastHisMessageID: UUID? { lastHisMessage?.id }
+
+    func noteHouseLine(_ text: String) {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty, let cid = activeChatID, let i = index(of: cid)
+        else { return }
+        var his = ChatMessage(role: .assistant)
+        his.content = t
+        conversations[i].messages.append(his)
+    }
+
     func noteMissedCall(_ call: CallRecord, note: String) {
         guard let cid = activeChatID, let i = index(of: cid) else { return }
 
@@ -7149,6 +7186,9 @@ final class AppState: ObservableObject {
         // 平平无奇的亏凸月每天说一遍就成了背景噪音。
         if let moon = MoonPhase.line() { sys += "\n\n" + moon }
         sys += "\n\n" + Self.agencyRule
+        // 她此刻正开着小屋跟他说话——把他在哪一间、屋里有什么带上。
+        // ⚠️ 只有那一页开着时才有值（见 `houseContext`）。
+        if !houseContext.isEmpty { sys += "\n\n" + houseContext }
 
         let dynamic = sys.trimmingCharacters(in: .whitespacesAndNewlines)
         if !stable.isEmpty || !dynamic.isEmpty {

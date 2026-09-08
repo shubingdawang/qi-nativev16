@@ -129,6 +129,16 @@ struct ClawdHomeView: View {
     /// 正在挑「搬去哪一间」的那一件
     @State private var sending: Furniture?
 
+    /// 底下那个输入框里打了什么
+    @State private var himDraft = ""
+
+    /// 已经搬到气泡上的那一句是哪一条。
+    /// **靠它认新的**：聊天页里他刚回完的那句要接到气泡上来，
+    /// 而这一页每次重画都会读一遍最后那条——不记的话同一句会反复弹。
+    @State private var mirrored: UUID?
+
+    @FocusState private var typing: Bool
+
     /// 屋子这一页现在画的是哪一间。
     /// `viewing` 还没定下来的时候（刚进来那一帧）就跟着他。
     private var shownRoom: HomeRoom { viewing ?? store.clawdRoom }
@@ -210,7 +220,7 @@ struct ClawdHomeView: View {
             // 接进来了就一直摆着这一行。铁律第二条：会自己花钱的地方，
             // 得让她看得见它开着。
             if store.linked {
-                Text("停留在本页时，每隔数分钟生成一句发言 · 产生费用")
+                Text("他在屋里 · 停留在本页时每隔数分钟自己说一句 · 产生费用")
                     .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -267,6 +277,10 @@ struct ClawdHomeView: View {
             if viewing == nil, following { viewing = store.clawdRoom }
             startWalking()
             startHim()
+            // ⚠️ **进来先记下他此刻说到哪儿了。**
+            // 不记的话，她一打开小屋，聊天页里上一次的回复会立刻
+            // 弹到气泡上——那句话是十分钟前说的，弹出来像刚说的。
+            mirrored = app.lastHisMessageID
             // 到日子了自己换上节日那套（买了才换），过了自己换回来。
             // ⚠️ **放在 onAppear 里就够。** 不用开定时器守着零点——
             // 她开着这一页跨过零点的概率，比多一个常驻定时器的代价小得多。
@@ -290,7 +304,14 @@ struct ClawdHomeView: View {
             // 切走就停。**他只在这一页开着的时候说话**——
             // 不然她人在别处，钱在后台自己流。
             himTask?.cancel()
+            // 屋子的处境跟着这一页走。她回聊天页问别的事的时候，
+            // 上下文里不该还挂着一间屋子（见 `AppState.houseContext`）。
+            app.houseContext = ""
         }
+        // 他在聊天那边说完了，把那句搬到 clawd 的气泡上。
+        // 两条都听：`id` 变是来了新的一条，`isStreaming` 落下来是这条说完了。
+        .onChange(of: app.lastHisMessageID) { _, _ in mirrorHisReply() }
+        .onChange(of: app.lastHisMessage?.isStreaming) { _, _ in mirrorHisReply() }
         .onChange(of: store.linked) { _, on in
             if on { startHim() } else { himTask?.cancel() }
         }
@@ -348,15 +369,22 @@ struct ClawdHomeView: View {
             .presentationDetents([.height(400)])
             .presentationDragIndicator(.visible)
         }
-        .confirmationDialog("在此房间启用自动发言？", isPresented: $askingLink,
+        .confirmationDialog("把这间屋子给他？", isPresented: $askingLink,
                             titleVisibility: .visible) {
-            Button("接入") {
+            Button("给他") {
                 store.linked = true
                 say("他进来了")
             }
             Button("算了", role: .cancel) { }
         } message: {
-            Text(MD.inline("启用后，停留在本页期间每隔数分钟自动生成一句发言，内容与房间的陈设相关。\n\n⚠️ 该功能会自动发起请求，不需要手动触发，因此**持续产生费用**。用量在设置中按「clawd 小屋」单独统计。\n\n关闭后不再发起请求。"))
+            // ⚠️ 这段改过一次：原来写的是「启用自动发言……内容与房间的陈设相关」。
+            //
+            // 她说的：「接他进来有几点太绝对了，并不是接他进来一定要对小屋
+            // 做出评价，而是给他一个家，可以在 clawd 的身体里跟我说话。」
+            //
+            // 所以这一段现在说的是**这件事是什么**，不是「开了一个功能」。
+            // 花钱那一条照旧写清楚——铁律第二条，会自己花钱的地方要看得见。
+            Text(MD.inline("接进来后，他借着 clawd 的身体待在屋里：底部的输入框可以直接跟他说话，他说的话同时出现在 clawd 的气泡和聊天页里。\n\n停留在本页期间，他还会每隔数分钟自己说一句。\n\n⚠️ 自己说的那一句**不需要手动触发，持续产生费用**。用量在设置中按「clawd 小屋」单独统计。\n\n关闭后不再自己说话。"))
         }
     }
 
@@ -434,6 +462,7 @@ struct ClawdHomeView: View {
                     store.linked = false
                     himTask?.cancel()
                     himLine = nil
+                    app.houseContext = ""
                     say("他先出去了")
                 } else {
                     askingLink = true
@@ -650,14 +679,24 @@ struct ClawdHomeView: View {
                 // 再加底下那排手势约 90。不给它让地方的话，
                 // 手势条会被顶到标签栏底下去。
                 //
-                // ⚠️ 顶上那一行往下挪了 42（见 `header`），这个数要跟着加，
-                // 不然多出来的那一截全从底下那排手势身上扣。
-                .containerRelativeFrame(.vertical) { h, _ in max(300, h - 330) }
+                // ⚠️ **上下多出来一样东西，这个数就得跟着加。**
+                // 不加的话多出来的那一截全从底下那排手势身上扣，
+                // 手势条会被顶到标签栏底下去。
+                // 已经算进去的：顶上那一行往下挪的 42（见 `header`）；
+                // 接他进来之后底下那条输入框（见 `himBar`）另加 56。
+                .containerRelativeFrame(.vertical) { h, _ in
+                    max(280, h - (store.linked ? 386 : 330))
+                }
                 // ⚠️ **屋子上面不再叠「他在干嘛」那块牌子。**
                 // 她说的：「左上的 clawd 有点挡住了，把那行去掉就不会挡到了。」
                 // 它挪到上面那条房间名里了（横着的一小条，见 `roomBar`）。
 
             handBar
+
+            // 跟他说话。**只有接进来之后才有。**
+            //
+            // 她要的：「在小屋最下面应该新增一个输入框供我给他打字交流。」
+            if store.linked { himBar }
         }
         .padding(.bottom, Layout.tabBarExpanded + 12)
     }
@@ -1799,6 +1838,97 @@ struct ClawdHomeView: View {
         }
     }
 
+
+    // MARK: 跟他说话
+
+    /// 小屋最底下那条输入框。
+    ///
+    /// 她要的：「在小屋最下面应该新增一个输入框供我给他打字交流。」
+    ///
+    /// ## 为什么走聊天那条路，而不是另开一条
+    ///
+    /// 她这句话要同时出现在**聊天页**里（「文字显示在 clawd 的气泡和
+    /// 聊天页里」）。另开一条的话，小屋里聊的和聊天页里聊的就是两段
+    /// 互相不知道的记忆——她在屋里问过的事，回聊天页再问一遍他会不认。
+    ///
+    /// 走 `app.send` 就什么都对上了：落进同一段记录、带着同样的上下文、
+    /// 用量也照常算。多带的只有一句「他此刻在哪一间、屋里有什么」
+    /// （见 `AppState.houseContext`）。
+    private var himBar: some View {
+        let ready = !himDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return HStack(spacing: 8) {
+            TextField("跟他说点什么", text: $himDraft, axis: .vertical)
+                .font(.app(13))
+                .lineLimit(1...3)
+                .focused($typing)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .background(Capsule().fill(Theme.softFillDeep))
+                .submitLabel(.send)
+                .onSubmit { sendToHim() }
+
+            Button {
+                sendToHim()
+            } label: {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.app(24))
+                    .foregroundStyle(ready
+                                     ? app.settings.accentColor
+                                     : Theme.textMuted(scheme).opacity(0.5))
+            }
+            .buttonStyle(.plain)
+            .disabled(!ready)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
+    }
+
+    private func sendToHim() {
+        let t = himDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        // ⚠️ 没有当前会话就没地方落这句话。**要说出来**——
+        // 静悄悄地吞掉的话，她会以为输入框坏了。
+        guard let cid = app.activeChatID else {
+            notice = "还没有打开的会话，先去聊天页开一个"
+            return
+        }
+        himDraft = ""
+        typing = false
+        // 发出去之前把这一刻的屋子记下来——他要知道自己站在哪儿。
+        //
+        // ⚠️ `canArrange: false`：聊天那条路上**没有**动手的那份约定
+        // （`RoomMarker.contract`），也没人解析他写的记号。给 true 的话
+        // 他会往回复里写 `[[…]]`，那几个字会原样落进她的聊天记录。
+        app.houseContext = "【她此刻开着 clawd 的小屋在跟你说话，"
+            + "你借着 clawd 的身体待在屋里】\n"
+            + store.homeBrief(watching: viewing, canArrange: false)
+        app.send(text: t, images: [], in: cid)
+    }
+
+    /// 聊天那边他刚说完的那句，搬到 clawd 的气泡上。
+    ///
+    /// ⚠️ **等它说完再搬**（`isStreaming` 落下来才算）。
+    /// 边流边搬的话气泡会一个字一个字地跳，而气泡只有两行的地方。
+    private func mirrorHisReply() {
+        guard store.linked,
+              let last = app.lastHisMessage,
+              !last.isStreaming, last.errorText == nil,
+              last.id != mirrored else { return }
+        let line = last.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        mirrored = last.id
+        guard !line.isEmpty else { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            // 气泡上只放前面一截。整段长文该在聊天页看，
+            // 挤进一个两行的气泡里等于两边都读不成。
+            himLine = line.count > 40 ? String(line.prefix(40)) + "…" : line
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 14_000_000_000)
+            withAnimation(.easeOut(duration: 0.3)) { himLine = nil }
+        }
+    }
+
     // MARK: 他在这屋里
 
     /// 接进来之后，隔几分钟问他一句。
@@ -1854,6 +1984,13 @@ struct ClawdHomeView: View {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         himLine = line
                     }
+                    // 她要的：「文字显示在 clawd 的气泡和聊天页里。」
+                    //
+                    // ⚠️ **只落记录，不再发一次请求**（见 `noteHouseLine`）——
+                    // 这句话刚才已经付过钱了。
+                    app.noteHouseLine(line)
+                    // 落下去的那条就是气泡上这句，别再当成「新回复」搬一遍
+                    mirrored = app.lastHisMessageID
                     try? await Task.sleep(nanoseconds: 14_000_000_000)
                     if Task.isCancelled { return }
                     withAnimation(.easeOut(duration: 0.3)) { himLine = nil }

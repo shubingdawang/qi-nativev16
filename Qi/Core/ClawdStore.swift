@@ -1410,7 +1410,10 @@ final class ClawdStore: ObservableObject {
     /// 也就没法说「把床搬到书房」。
     /// 顺带告诉他两件他做决定要用的事：**她此刻在看哪一间**、
     /// **柜子里还收着什么**（那些他能拿出来）。
-    func homeBrief(watching: HomeRoom?) -> String {
+    /// - Parameter canArrange: 他这一次能不能动手搬东西。
+    ///   **聊天页那条路要给 `false`**——那边没有 `RoomMarker.contract`，
+    ///   也没人解析他写的记号，`[[…]]` 会原样落进她的聊天记录里。
+    func homeBrief(watching: HomeRoom?, canArrange: Bool = true) -> String {
         guard linked else { return "" }
         var lines: [String] = []
         for r in HomeRoom.allCases {
@@ -1428,11 +1431,13 @@ final class ClawdStore: ObservableObject {
             .compactMap { FurnitureCatalog.kind($0.kind)?.name }
         if !away.isEmpty {
             s += "\n\n她收进柜子里的：" + away.joined(separator: "、")
-                + "。**这些你也能拿出来摆**。"
+            if canArrange { s += "。**这些你也能拿出来摆**" }
+            s += "。"
         }
         if let watching, watching != clawdRoom {
-            s += "\n\n她此刻在看" + watching.rawValue + "，你在" + clawdRoom.rawValue
-                + "。要不要过去随你。"
+            s += "\n\n她此刻在看" + watching.rawValue
+                + "，你在" + clawdRoom.rawValue + "。"
+            if canArrange { s += "要不要过去随你。" }
         }
         return s
     }
