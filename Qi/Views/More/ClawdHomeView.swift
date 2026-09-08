@@ -10,6 +10,9 @@ struct ClawdHomeView: View {
     @ObservedObject private var store = ClawdStore.shared
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
+    /// 关掉这一层。点他的气泡回聊天页靠它——
+    /// 小屋是盖在聊天页上的一张 sheet，关掉就回去了。
+    @Environment(\.dismiss) private var dismiss
 
     @State private var tab = 0            // 0 房间，1 柜子，2 商店
     // 家具的拖拽整个搬进 `IsoRoomView` 了（它自己管落在哪一格），
@@ -762,9 +765,20 @@ struct ClawdHomeView: View {
                 // clawd 那些是本地写死的台词，这一句是真的问了他。
                 if let himLine {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName)
-                            .font(.app(9, weight: .medium))
-                            .foregroundStyle(app.settings.accentColor)
+                        HStack(spacing: 4) {
+                            Text(app.settings.aiName.isEmpty
+                                 ? "阿晏" : app.settings.aiName)
+                                .font(.app(9, weight: .medium))
+                            Spacer(minLength: 6)
+                            // 点得动就说出来。气泡上只放得下四十个字，
+                            // 整段在聊天页——不写这一句她不会知道能点。
+                            Text("看整段")
+                                .font(.app(9))
+                            Image(systemName: "chevron.right")
+                                .font(.app(7, weight: .semibold))
+                        }
+                        .foregroundStyle(app.settings.accentColor)
+
                         Text(MD.inline(himLine))
                             .font(.app(12))
                             .foregroundStyle(Theme.textMain(scheme))
@@ -779,6 +793,26 @@ struct ClawdHomeView: View {
                                   ? Color.white.opacity(0.13)
                                   : Color.white.opacity(0.92))
                     )
+                    // 点一下回聊天页看整段。
+                    //
+                    // 她说的：「如果整段要到聊天页看的话，
+                    // 新增一个点击他说话的气泡回到聊天页吧，
+                    // 只在接他进来的时候生效，家具触发的对话不生效。」
+                    //
+                    // ⚠️ **这一条只挂在他这个气泡上。**
+                    // clawd 自己那个（`bubble`，挨着家具说的那些台词）
+                    // 是本地写死的话，聊天页里根本没有它——
+                    // 点过去只会是一屏跟那句话无关的记录。
+                    // 两个气泡本来就是两个 View，所以不用另加判断；
+                    // 而 `himLine` 只有接他进来之后才会有值。
+                    .contentShape(RoundedRectangle(cornerRadius: 12,
+                                                   style: .continuous))
+                    .onTapGesture {
+                        if app.settings.haptics {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        }
+                        dismiss()
+                    }
                     .padding(12)
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
