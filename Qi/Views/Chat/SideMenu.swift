@@ -23,6 +23,16 @@ struct SideMenuShell<Content: View>: View {
     /// 关的时候手指往左带了多少（负数）
     @State private var drag: CGFloat = 0
 
+    /// 被推开那张卡片的圆角。
+    ///
+    /// ⚠️ **只有「关着」和「开着」两个值，中间不插值。**
+    /// 插值意味着每一帧都要重画一张盖住整页的遮罩，那正是卡的原因
+    /// （见 `body` 里那段）。动画那零点几秒里卡片同时在缩、在移，
+    /// 圆角早一帧到位看不出来。
+    private func sheetRadius(_ progress: CGFloat) -> CGFloat {
+        progress > 0.001 ? 36 : 0
+    }
+
     var body: some View {
         GeometryReader { geo in
             let width = min(geo.size.width * 0.80, 320)
@@ -65,19 +75,39 @@ struct SideMenuShell<Content: View>: View {
                             .allowsHitTesting(false)
                     }
                     .compositingGroup()
-                    .clipShape(RoundedRectangle(cornerRadius: 36 * progress,
+                    // ⚠️⚠️ **圆角和阴影的「形状」不跟着 progress 变，只有浓淡变。**
+                    //
+                    // 她报的：「划出左侧栏和收起左侧栏依旧有些卡顿，
+                    // 只有划出和收起手势的时候卡，里面滑动还是比较流畅的。」
+                    //
+                    // 这句话把范围缩得很死：滑动流畅 → 每行那些 `visualEffect`
+                    // 不是瓶颈；卡的只有开合动画。那就看开合每一帧在干什么：
+                    //
+                    //   · `clipShape` 的圆角是 `36 * progress` —— **半径一变，
+                    //     那张遮罩就得重画**，而遮罩盖的是整页聊天
+                    //   · 两层 `.shadow`，半径也是跟着 progress 变的 ——
+                    //     **半径一变，那张模糊图就得重新生成**，
+                    //     一帧两次全屏高斯，还叠在刚光栅化完的整页上
+                    //
+                    // 位移和缩放是仿射变换，GPU 上不要钱；真正贵的是
+                    // 「每一帧都得重新生成一张全屏位图」。
+                    //
+                    // 所以：**形状定死，只让透明度动**。
+                    // 圆角在动画一开始就跳到 36 —— 那零点几秒里卡片同时在缩、在移，
+                    // 圆角早一帧到位根本看不出来；而遮罩从此只重画一次。
+                    // 两层阴影并成一层，半径钉死 26。
+                    .clipShape(RoundedRectangle(cornerRadius: sheetRadius(progress),
                                                 style: .continuous))
                     .overlay {
                         // 推开之后给它一道边，不然跟底下那层糊成一片，
                         // 看不出来是"浮"在上面的
-                        RoundedRectangle(cornerRadius: 36 * progress, style: .continuous)
+                        RoundedRectangle(cornerRadius: sheetRadius(progress),
+                                         style: .continuous)
                             .strokeBorder(Color.white.opacity(0.28 * progress), lineWidth: 1)
                             .allowsHitTesting(false)
                     }
                     .shadow(color: Color.black.opacity(0.45 * progress),
-                            radius: 30 * progress, x: -12 * progress, y: 0)
-                    .shadow(color: Color.black.opacity(0.22 * progress),
-                            radius: 8 * progress, x: -3 * progress, y: 0)
+                            radius: 26, x: -10, y: 0)
                     .scaleEffect(1 - 0.16 * progress, anchor: .center)
                     .offset(x: width * progress)
                     .zIndex(1)
@@ -198,7 +228,7 @@ struct SideMenuPanel: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 2) {
-                        ForEach(Array(SideMenuItem.all.enumerated()), id: \.element.id) { i, item in
+                        ForEach(SideMenuItem.all) { item in
                             row(item)
                                 .id(item.id)
                                 .visualEffect { content, proxy in
@@ -224,15 +254,27 @@ struct SideMenuPanel: View {
                                         // 而透明度已经做掉了同一件事（`opacity` 到 0.32）。
                                         // 花最贵的代价买一个已经有了的效果，划不来。
                                 }
-                                // 拉开侧栏的那一下，一行比一行晚一点点抬上来
-                                .offset(y: isOpen ? 0 : 26)
-                                .opacity(isOpen ? 1 : 0)
-                                .animation(
-                                    .spring(response: 0.42, dampingFraction: 0.82)
-                                        .delay(isOpen ? Double(i) * 0.03 : 0),
-                                    value: isOpen)
                         }
                     }
+                    // 拉开侧栏的那一下，整栏一起抬上来。
+                    //
+                    // ⚠️⚠️ **以前是一行一份、还各带一个 delay 做出错落。**
+                    // 那个错落挺好看，但代价在开合那一下：
+                    //
+                    //   · 二十几行 = 二十几组弹簧同时在跑
+                    //   · 每一行的 `offset` 一动，它在 `wheel` 坐标系里的位置就变，
+                    //     **上面那个 `visualEffect` 就得为每一行重算一遍**——
+                    //     每帧二十几次
+                    //
+                    // 她报的正是「只有划出和收起的时候卡，里面滑动是流畅的」：
+                    // 滑动时只有真正移动的那几行要重算，开合时是全部。
+                    //
+                    // 整栏一起动：一组弹簧，`visualEffect` 也不会被踢。
+                    // 错落没了，换的是这一下不卡——这个交换划得来。
+                    .offset(y: isOpen ? 0 : 26)
+                    .opacity(isOpen ? 1 : 0)
+                    .animation(.spring(response: 0.42, dampingFraction: 0.82),
+                               value: isOpen)
                     // 整栏往右让开一截，别贴着屏幕边
                     .padding(.leading, 44)
                     .padding(.trailing, 10)
