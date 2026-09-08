@@ -169,7 +169,14 @@ struct IsoRoomView<Clawd: View>: View {
                         .fill(app.settings.accentColor.opacity(0.30))
                         .frame(width: min(s.width, s.height) * 0.26,
                                height: min(s.width, s.height) * 0.26)
-                        .position(x: clawdX * s.width, y: clawdY * s.height)
+                        // ⚠️ 屋子拖走了多远也要算进来。
+                        // 她报的：「饮料和 clawd 交互的这个圈并不在 clawd 身上。」
+                        // 他的画带着 `flatPanX`，这个圈原来没带——
+                        // 屋子一拖，圈就留在原地了。
+                        .position(x: clawdX * s.width
+                                     + (geoRoom.projection == .flat
+                                        ? store.flatPanX : 0),
+                                  y: clawdY * s.height)
                         .allowsHitTesting(false)
                         .transition(.opacity)
                 }

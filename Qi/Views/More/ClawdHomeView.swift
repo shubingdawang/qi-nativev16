@@ -511,7 +511,13 @@ struct ClawdHomeView: View {
                 } label: {
                     Label("整个家", systemImage: "square.grid.2x2")
                         .font(.app(11.5))
-                        .foregroundStyle(app.settings.accentColor)
+                        // ⚠️ 走**她设的字色**，不走主题色。
+                        //
+                        // 她报的：「clawd 里的『整个家』刷子功能依旧没有
+                        // 跟着字体颜色变化。」——这一行上别的字
+                        //（房间名、「正在屋里转」）都是字色，
+                        // 只有这两个是主题色，看着就像它们没跟上设置。
+                        .foregroundStyle(Theme.textMain(scheme))
                 }
                 .buttonStyle(.plain)
 
@@ -611,9 +617,10 @@ struct ClawdHomeView: View {
                         }
                     }
                 } label: {
+                    // ⚠️ 跟「整个家」同一条：走**她设的字色**（见上面那段）
                     Image(systemName: "paintbrush")
                         .font(.app(12))
-                        .foregroundStyle(app.settings.accentColor)
+                        .foregroundStyle(Theme.textMain(scheme))
                 }
 
                 Image(systemName: r.icon)
@@ -1819,6 +1826,32 @@ struct ClawdHomeView: View {
                     try? await Task.sleep(nanoseconds: 1_400_000_000)
                     if Task.isCancelled { return }
                     guard !held else { continue }
+
+                    // ⚠️⚠️ **吃的喝的是拿起来的，不是站在旁边摸一下。**
+                    //
+                    // 她报的：「饮料等物品跟 clawd 交互很奇怪，
+                    // 至少应该拿在手上。」
+                    //
+                    // 拿在手上这套本来就有（`pickUp` / `carriedKind`，
+                    // 举家具走的就是它），**只是这条互动路没接上**——
+                    // 一罐汽水跟一台冰箱走的是同一支「站旁边做个动作」。
+                    if kind.category == .food || kind.category == .drink {
+                        store.pickUp(kind.id)
+                        mood = .carrying
+                        store.clawdDoing = kind.category == .drink
+                            ? .drinking : .eating
+                        say(kind.category == .drink
+                            ? ["喝一口", "凉的", "唔——"].randomElement()!
+                            : ["咬一口", "好吃", "唔——"].randomElement()!)
+                        try? await Task.sleep(nanoseconds: 7_000_000_000)
+                        if Task.isCancelled { return }
+                        // 放回他脚边。**一定要放**——不放的话那件东西
+                        // 会一直挂在他手上，屋里再也见不到它。
+                        store.putDown(at: CGPoint(x: clawdX, y: clawdY))
+                        mood = .idle
+                        store.clawdDoing = .idling
+                        continue
+                    }
 
                     mood = chosen.mood
                     store.clawdDoing = doing(for: chosen, kind: kind)

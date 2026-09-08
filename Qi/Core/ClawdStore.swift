@@ -1152,6 +1152,13 @@ final class ClawdStore: ObservableObject {
         // 而这一句只在「手上是空的」时候才跑。
         if UserDefaults.standard.string(forKey: "clawdCarrying") == nil {
             for i in owned.indices where owned[i].carried { owned[i].carried = false }
+            // 以前买的穿戴还摊在地板上，收一次。**没戴在身上的才收**——
+            // 戴着那件本来就不该出现在屋里（见 `buy`）。
+            for i in owned.indices
+            where FurnitureCatalog.kind(owned[i].kind)?.category == .wear
+                && !owned[i].hidden {
+                owned[i].hidden = true
+            }
         }
         // ⚠️ 先看**键在不在**，再取值。
         //
@@ -1324,6 +1331,12 @@ final class ClawdStore: ObservableObject {
             item.x = Double.random(in: 0.2...0.8)
             item.y = Double.random(in: Self.floorTop...Self.floorBottom)
             item.room = home
+            // ⚠️ 穿戴买来**直接进柜子**，不摆在地板上。
+            //
+            // 她报的：「服饰没有带上应该直接收到柜子里，不是放在地上。」
+            // 一顶帽子摊在客厅地板中间，怎么看都不对——
+            // 它要么在他头上，要么在柜子里。
+            if kind.category == .wear { item.hidden = true }
             batch.append(item)
         }
         guard !batch.isEmpty else { return 0 }

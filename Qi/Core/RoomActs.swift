@@ -62,7 +62,12 @@ enum RoomActs {
             // ⚠️ 演的是 `.lying` 不是 `.sleeping`。
             // `.sleeping` 那个 gif **自带一张床和一床被子**——
             // 躺在她自己摆的床上就成了两张床叠在一起。
-            return RoomAct(name: name, spot: .onTop, mood: .lying, seconds: 9,
+            // ⚠️ 9 → 30 秒。她报的：「clawd 睡觉会一会有动画一会回到待机。」
+            //
+            // 不是动画坏了——是**这一档只有九秒**。躺下、九秒、站起来、
+            // 走开、过一会儿再躺下，看着就是一直在抖。
+            // 睡这件事本来就该占一段时间，别的动作三五秒是对的，这个不是。
+            return RoomAct(name: name, spot: .onTop, mood: .lying, seconds: 30,
                            lines: ["躺一会儿", "唔……软的", "就眯一小会儿"])
         case "打滚":
             return RoomAct(name: name, spot: .onTop, mood: .flail, seconds: 3.5,
@@ -224,8 +229,16 @@ enum RoomActs {
     static func spot(of item: Furniture, kindID: String,
                      in geo: IsoRoom, act: RoomAct) -> CGPoint {
         let s = FurnitureCatalog.shape(of: kindID)
-        let cx = Double(item.gx) + Double(s.w - 1) / 2
-        let cy = Double(item.gy) + Double(s.d - 1) / 2
+        // ⚠️⚠️ **两种视角各存各的格子，不能直接读 `item.gx / gy`。**
+        //
+        // `gx/gy` 是**立体屋专用**的那一对；平面屋那一对叫 `fx/fy`
+        //（见 `Furniture.flatCell`）。读错的话他会走到屋子另一头去
+        // 站着做动作——东西在这边，他在那边。
+        let cell = geo.projection == .flat
+            ? item.flatCell(cols: ClawdStore.flatCols)
+            : (gx: item.gx, gy: item.gy)
+        let cx = Double(cell.gx) + Double(s.w - 1) / 2
+        let cy = Double(cell.gy) + Double(s.d - 1) / 2
 
         switch act.spot {
         case .onTop:

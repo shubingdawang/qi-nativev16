@@ -734,7 +734,11 @@ enum ClawdRig {
         switch id {
         case "hat":      return WearArt(width: 14, baseY: 18)
         case "beret":    return WearArt(width: 15, baseY: 17)
-        case "glasses":  return WearArt(width: 17, baseY: 23)
+        // ⚠️ 17 → 21。她报的：「眼镜需要再大一点盖住眼睛，
+        // 现在有点像斗鸡眼。」——镜框比两只眼睛窄的时候，
+        // 两个镜片都落在眼球内侧，看着就是斗鸡眼。
+        // 身子横着 6..27 共 22 格，镜框给 21，正好一脸宽。
+        case "glasses":  return WearArt(width: 21, baseY: 24)
         case "bowtie":   return WearArt(width: 9,  baseY: 26)
         case "scarf":    return WearArt(width: 10, baseY: 30)
         case "bag":      return WearArt(width: 11, baseY: 27, dx: 7)
