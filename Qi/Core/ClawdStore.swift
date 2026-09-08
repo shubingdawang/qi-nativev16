@@ -975,6 +975,16 @@ final class ClawdStore: ObservableObject {
         didSet { if loaded { UserDefaults.standard.set(linked, forKey: "clawdLinked") } }
     }
 
+    /// 平铺屋横着拖走了多远（点）。**不存盘，只活在这一次打开里。**
+    ///
+    /// ⚠️ 为什么放在这儿而不是视图的 `@State`：
+    /// 屋子拖走之后，**画**和**判定**必须用同一个数。
+    /// 画在 `IsoRoomView`，而「手势有没有碰到他」的判定有两处
+    /// （`IsoRoomView.nearClawd`、`ClawdHomeView.touching`）——
+    /// 三处分别在两个文件里。放在视图的 `@State` 里，另一个文件够不着，
+    /// 只能各写各的，于是画在右边、判定还在左边（她报的「手势没反应」）。
+    @Published var flatPanX: CGFloat = 0
+
     // MARK: 他现在手上拿着什么、在干嘛
     //
     // 这两个状态**放在 store 里而不是各自的 View 里**，就是为了让小屋和聊天页
@@ -1672,24 +1682,11 @@ extension ClawdStore {
     /// 不然一屋子东西全挤在左上角那四分之一里。
     nonisolated static let roomSize = 16
 
-    /// 平面屋横着几格。
+    /// 平面屋横着几列。看得见的只有中间 `flatVisibleCols` 列，
+    /// 两边多出来的是留给横拖的（她要的「可以拖动往左右移动」）。
     ///
-    /// 18 = 看得见的 8 列 + 左右各 5 列。她要的：
-    /// 「可以拖动往最左右分别移动五格的」。
-    /// 平面屋横着几列。
-    ///
-    /// 36 → 24。她说「平铺视角有点太长了，可以缩短一点，因为格子变小了」。
+    /// ⚠️ 36 → 24。她说「平铺视角有点太长了，可以缩短一点，因为格子变小了」——
     /// 格子从八格制细分到十六格制之后，36 列拖起来没个头。
-    /// 平铺屋横着拖走了多远（点）。**不存盘，只活在这一次打开里。**
-    ///
-    /// ⚠️ 为什么放在这儿而不是视图的 `@State`：
-    /// 屋子拖走之后，**画**和**判定**必须用同一个数。
-    /// 画在 `IsoRoomView`，而「手势有没有碰到他」的判定有两处
-    /// （`IsoRoomView.nearClawd`、`ClawdHomeView.touching`）——
-    /// 三处分别在两个文件里。放在视图的 `@State` 里，另一个文件够不着，
-    /// 只能各写各的，于是画在右边、判定还在左边（她报的「手势没反应」）。
-    @Published var flatPanX: CGFloat = 0
-
     nonisolated static let flatCols = 24
 
     /// 平面屋一屏里看得见几列。一格多大按它算（见 `IsoRoom.fit`）。
