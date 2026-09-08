@@ -110,28 +110,13 @@ struct IsoRoomView<Clawd: View>: View {
                     )
 
                 // ⚠️ 这一句就是「不穿模」的全部：**按离镜头的远近排好再画**。
-                ForEach(drawables(geoRoom), id: \.key) { d in
-                    if d.isClawd {
-                        // ⚠️⚠️ **拖屋子的时候他要跟着一起走。**
-                        //
-                        // 她报的两条其实是同一件事：
-                        //   「平面我左右拖动时 clawd 也跟着我动，没有在原地」
-                        //   「clawd 会突然消失」
-                        //
-                        // 家具的落点是 `geoRoom.point(...)` 算的，那里面带着 `panX`，
-                        // 所以家具跟着屋子走；**他不是**——他是按「占容器宽度的
-                        // 百分之几」摆的，那套坐标里没有 pan。
-                        //
-                        // 于是拖动的时候：屋子往左走，他钉在屏幕上不动，
-                        // 看着就是「他自己在动」；拖远一点，他相对屋子就跑到
-                        // 屋外去了，而裁剪是跟着屋子走的——**当场被剪没**。
-                        clawd()
-                            .offset(x: geoRoom.projection == .flat
-                                    ? store.flatPanX : 0)
-                    } else if let item = d.item, let kind = d.kind {
-                        piece(item, kind, geoRoom)
-                    }
-                }
+                //
+                // ⚠️⚠️ 外面那层 `.clipShape` **是给整间屋子的**，比框大一圈
+                // （它还带着地板前沿那条裙）。所以家具这一层要**自己再裁一次**，
+                // 裁进框的里沿——她报了两轮的「家具拖到边上还在边框外面」
+                // 就是这一下：框画在最后没错，可框只有一条边那么宽，
+                // 爬到框**外面**去的那一截，谁也盖不住它。
+                furnitureLayer(geoRoom)
 
                 // 平面屋外面那一圈框。**立体屋没有。**
                 //
@@ -544,6 +529,47 @@ struct IsoRoomView<Clawd: View>: View {
         return deep * deepest
     }
 
+    /// 屋里所有会动的东西（家具和他），排好序画出来。
+    ///
+    /// ⚠️ 单开一层是为了**裁**：平面屋要把这一层裁进框的里沿，
+    /// 不然一件拖到边上的家具会爬到框外面去（见调用处那段）。
+    @ViewBuilder
+    private func furnitureLayer(_ geoRoom: IsoRoom) -> some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(drawables(geoRoom), id: \.key) { d in
+                if d.isClawd {
+                    // ⚠️⚠️ **拖屋子的时候他要跟着一起走。**
+                    //
+                    // 她报的两条其实是同一件事：
+                    //   「平面我左右拖动时 clawd 也跟着我动，没有在原地」
+                    //   「clawd 会突然消失」
+                    //
+                    // 家具的落点是 `geoRoom.point(...)` 算的，那里面带着 `panX`，
+                    // 所以家具跟着屋子走；**他不是**——他是按「占容器宽度的
+                    // 百分之几」摆的，那套坐标里没有 pan。
+                    //
+                    // 于是拖动的时候：屋子往左走，他钉在屏幕上不动，
+                    // 看着就是「他自己在动」；拖远一点，他相对屋子就跑到
+                    // 屋外去了，而裁剪是跟着屋子走的——**当场被剪没**。
+                    clawd()
+                        .offset(x: geoRoom.projection == .flat
+                                ? store.flatPanX : 0)
+                } else if let item = d.item, let kind = d.kind {
+                    piece(item, kind, geoRoom)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .clipShape(insideFrame(geoRoom))
+    }
+
+    /// 框的**里沿**围出来的那块。等距屋没有框，就还用屋子自己的轮廓。
+    private func insideFrame(_ g: IsoRoom) -> Path {
+        guard g.projection == .flat else { return g.clipPath }
+        return Path(g.flatFrame.insetBy(dx: g.flatFrameWidth,
+                                        dy: g.flatFrameWidth))
+    }
+
     // MARK: 一件家具
 
     private func piece(_ item: Furniture, _ kind: FurnitureKind,
@@ -654,8 +680,7 @@ struct IsoRoomView<Clawd: View>: View {
         // 会比画的那批低半格，同一格里两件东西脚不在一条线上。
         .offset(y: groundOffset(mine: mine, packed: packed, lift: lift,
                                 width: mineW, bottom: geoRoom.tileBottom,
-                                frontDrop: frontDrop(s, geoRoom))
-                   + mountLift(item, s, geoRoom))
+                                frontDrop: frontDrop(s, geoRoom)))
         .scaleEffect(lifted ? 1.06 : 1)
         .shadow(color: .black.opacity(lifted ? 0.28 : 0.12),
                 radius: lifted ? 10 : 3, y: lifted ? 8 : 2)
@@ -675,8 +700,20 @@ struct IsoRoomView<Clawd: View>: View {
         //
         // 等距里往 -gx 走一格 = 屏幕上 (-tileW/2, -tileH/2)，
         // 往 -gy 走一格 = (+tileW/2, -tileH/2)。各取一半。
+        // ⚠️⚠️ **挂墙上／放桌上那一档要加在这儿，不能加在上面的 `.offset` 上。**
+        //
+        // 她报的：「吊兰现在无法长按拖动了。」
+        //
+        // 上一版把 `mountLift` 加进了 `.offset`。可 `.offset` 只搬**画出来的样子**，
+        // 底下那句 `.contentShape` 圈的是**布局框**——布局框没跟着走。
+        // 于是吊兰画在墙上，能点的地方还留在地板上那一格。
+        // 家具那批抬得少（半张图），差一点还蹭得到；
+        // 吊兰抬了大半堵墙，就彻底摸不着了。
+        //
+        // `.position` 是真的把它放在那儿，可点范围跟着一起走。
         .position(x: c.x + wallHug(cell, geoRoom).x,
-                   y: c.y + wallHug(cell, geoRoom).y)
+                   y: c.y + wallHug(cell, geoRoom).y
+                      + mountLift(item, s, geoRoom))
         .animation(.spring(response: 0.26, dampingFraction: 0.78), value: lifted)
         .onTapGesture { onTapFurniture(item) }
         .gesture(dragGesture(item, s, geoRoom))
@@ -699,18 +736,42 @@ struct IsoRoomView<Clawd: View>: View {
             // 挂在墙的中上段。墙有 `wallH` 高，挂太高看着像浮在天花板上
             return -g.wallH * 0.55
         case .table:
+            // ⚠️⚠️ **抬多高按底下那件「画出来多高」算，不是按它的 `tall`。**
+            //
+            // 她报的：「饮料无法放在桌上。」
+            //
+            // 上一版乘的是 `tall * unitH`。可 `tall` 是「几格高」，
+            // 而一件东西**画出来**多高是按图自己的长宽比来的——
+            // 一张 `tall: 0.9` 的桌子画出来有两格半。
+            // 乘 `tall` 抬起来的那点高度只到桌腿，看着就是没放上去。
             let cell = (item.id == dragging) ? dragCell : store.cell(of: item)
-            var top: Double = 0
+            var top: CGFloat = 0
             for f in store.furniture(in: room) where f.id != item.id {
                 let o = FurnitureCatalog.shape(of: f.kind)
                 guard o.surface else { continue }
                 let c = store.cell(of: f)
                 let on = cell.gx >= c.gx && cell.gx < c.gx + max(1, o.w)
                     && cell.gy >= c.gy && cell.gy < c.gy + max(1, o.d)
-                if on { top = max(top, o.tall) }
+                if on { top = max(top, drawnH(f, o, g) * CGFloat(o.surfaceAt)) }
             }
-            return -CGFloat(top) * g.unitH
+            return -top
         }
+    }
+
+    /// 一件家具**画出来**有多高。
+    ///
+    /// 宽度是按占几格定死的（见 `piece`），高度就由图自己的长宽比定。
+    /// 读不到图的按方的算——总比抬到半空强。
+    private func drawnH(_ f: Furniture, _ s: IsoShape, _ g: IsoRoom) -> CGFloat {
+        let w = g.tileW * (g.projection == .flat
+                           ? CGFloat(max(1, s.w))
+                           : CGFloat(s.w + s.d) / 2)
+        let img = ImageStore.cached(f.imageName)
+            ?? FurnitureCatalog.artImage(of: f.kind,
+                                         flat: g.projection == .flat,
+                                         facesRight: f.facesRight)
+        guard let img, img.size.width > 0 else { return w }
+        return w * img.size.height / img.size.width
     }
 
     /// 贴墙那一排往墙里挪多少。不在边上就是零。
@@ -766,6 +827,21 @@ struct IsoRoomView<Clawd: View>: View {
                 dragging = nil
                 let dropped = onClawd
                 onClawd = false
+
+                // ⚠️ **按住不动再松手 = 弹菜单。**
+                //
+                // 她报的：「长按家具只有移动没有菜单。」
+                //
+                // 菜单本来在**轻点**上（`onTapFurniture`）。可这一页里
+                // 「按住」才是家具的主要动作，她自然会按住去找菜单——
+                // 按住又只有拖动，于是菜单像是没了。
+                //
+                // 分辨得很干脆：按住之后**一格都没挪过**，那就不是在拖，
+                // 是在等菜单。挪过一格的照旧当拖。
+                if !dropped, dragCell == store.cell(of: item) {
+                    onTapFurniture(item)
+                    return
+                }
 
                 // ⚠️ **递给他。**
                 //

@@ -521,6 +521,30 @@ struct ClawdHomeView: View {
                     enter(store.clawdRoom)
                 }, compact: true)
 
+                // 叫他到这一间来。**他不在这间才有。**
+                //
+                // 她报的：「我无法让他到指定哪个房间，
+                // 这样我没法测试指定房间的家具。」
+                //
+                // 以前只有「跟着他走」（上面那个头像点一下就切到他那间），
+                // 反过来那条一直没有——她想让他进厨房，只能等他自己晃过去。
+                if store.clawdRoom != r {
+                    Button {
+                        store.clawdRoom = r
+                        store.clawdDoing = .moving
+                        following = true
+                        say("我过来了")
+                    } label: {
+                        Text("叫他过来")
+                            .font(.app(11))
+                            .foregroundStyle(app.settings.accentColor)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(Capsule().fill(Theme.softFillDeep))
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 Spacer(minLength: 4)
 
                 // 换这一间的墙纸和地板。
