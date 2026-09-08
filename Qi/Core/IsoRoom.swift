@@ -102,7 +102,17 @@ struct IsoRoom {
     /// 最里面那一排几乎贴着墙根，摆件东西上去，脚下看不见地，
     /// 整件就像挂在墙上。0.8 之后八排摊开有三格多深，最里面那排底下
     /// 还剩得出地板来。
-    static let flatRowPitch: CGFloat = 1.15
+    /// 平面屋一排有多高（几个 tileH）。
+    ///
+    /// 0.8 → 1.15 → 0.72。
+    ///
+    /// 抬到 1.15 是为了「地板占得多一点」；现在退回 0.72，
+    /// 因为她说**反了**：「墙壁和地板的线需要往下一点，
+    /// 现在的显得墙壁太窄地板太高。」
+    ///
+    /// 一排矮了，十六排加起来就矮，那条分界线自然往下走——
+    /// 墙分到的高度跟着变多。参考图里大约是墙四地六，这个数就是照它调的。
+    static let flatRowPitch: CGFloat = 0.72
 
     /// 平面那档：**最里那一排比最外那一排窄多少**（0…1）。
     ///
@@ -116,7 +126,17 @@ struct IsoRoom {
     /// ⚠️ 这个数一改，**四处要一起改**：落点（`point`）、反查（`tile(at:)`）、
     /// 他能站到哪儿（`walkSpan`）、地砖和地板的形状（`tilePath` / `floorPath`）。
     /// 漏一处就是「家具落在别的格子里」或者「他走出地板外面」。
-    static let flatBackNarrow: CGFloat = 0.30
+    /// 平面屋最里那排比最外那排窄多少。
+    ///
+    /// ⚠️ **现在是 0：不收窄，地板是个正经的矩形。**
+    ///
+    /// 她原话：「地板这个梯形格子说实话并不太好看。」——对。
+    /// 那个梯形是我上一轮为了做出「有纵深」硬加的透视，
+    /// 可她给的参考图（那两张像素房间）里，平面视角的地板就是**方格子**，
+    /// 纵深感靠的是「上面一堵墙 + 下面一片地」，不是把格子拉斜。
+    ///
+    /// 留着这个常数不删：想再试透视的时候改回 0.2~0.3 就有。
+    static let flatBackNarrow: CGFloat = 0
 
     /// 横着最多能拖多远（点）。左右各这么多。
     ///
@@ -492,43 +512,32 @@ struct IsoRoom {
                 CGPoint(x: origin.x + half, y: y))
     }
 
-    /// 平面屋的**左右两面侧墙**。立体屋没有（它那两面就是 left/rightWallPath）。
+    /// 平面屋整间的外框（墙顶到地板下沿、最左到最右）。
     ///
-    /// ## 她要的是「框」，不是「描边」
+    /// ## 她要的「边框」是这个
     ///
     /// 她原话：「这个边框你搞错了，不是顺着平铺的形状描边，
-    /// 是设定一个墙壁的框架。」
+    /// 是设定一个墙壁的框架。」后来又发了两张参考图——
+    /// 那两张里都是**一圈厚实的深色墙框**把整间屋围起来，
+    /// 框里面上半是墙、下半是地。
     ///
-    /// 上一版我给屋子的轮廓描了一道线——那只是把地板的形状勾了一遍，
-    /// 屋子还是一块地板加一堵后墙，两侧敞着。
+    /// 我中间还错过一版：做成了两面**斜着的侧墙**。那是跟着梯形地板来的，
+    /// 而梯形本身她也说不好看。现在地板是方的，框也就是个正经的矩形。
     ///
-    /// 真正该有的是**两面立起来的侧墙**：从地板左右两条边往上长 `wallH`。
-    /// 三面墙加一块地板，那才是一个框。
-    ///
-    /// ⚠️ 地板是梯形（越靠里越窄），所以侧墙也是**斜的**——
-    /// 底边跟着地板的边走，顶边就是它往上平移 `wallH`。
-    /// 画成竖直矩形的话，墙脚会离开地板的边。
-    var sideWallPaths: (left: Path, right: Path) {
-        guard projection == .flat else { return (Path(), Path()) }
+    /// ⚠️ 返回的是**外沿**。画的时候往里描一道粗线，
+    /// 线宽的一半压在屋里、一半露在外面，看着才像一堵有厚度的墙。
+    var flatFrame: CGRect {
+        guard projection == .flat else { return .zero }
         let n = Double(size)
-        let w = CGFloat(cols)
-        let up = tileW * w * flatWide(-0.5) / 2
-        let down = tileW * w * flatWide(n - 0.5) / 2
-        let top = point(0, 0).y - rowPitch / 2
+        let half = tileW * CGFloat(cols) / 2
+        let top = point(0, 0).y - rowPitch / 2 - wallH
         let bottom = point(0, n - 1).y + rowPitch / 2
-
-        func panel(_ backX: CGFloat, _ frontX: CGFloat) -> Path {
-            var p = Path()
-            p.move(to: CGPoint(x: backX, y: top))
-            p.addLine(to: CGPoint(x: frontX, y: bottom))
-            p.addLine(to: CGPoint(x: frontX, y: bottom - wallH))
-            p.addLine(to: CGPoint(x: backX, y: top - wallH))
-            p.closeSubpath()
-            return p
-        }
-        return (panel(origin.x - up, origin.x - down),
-                panel(origin.x + up, origin.x + down))
+        return CGRect(x: origin.x - half, y: top,
+                      width: half * 2, height: bottom - top)
     }
+
+    /// 那道框有多粗
+    var flatFrameWidth: CGFloat { max(6, tileW * 0.5) }
 
     /// 后墙：一整块立起来的矩形。
     private var backWallPath: Path {
@@ -569,11 +578,9 @@ struct IsoRoom {
         var p = floorPath
         p.addPath(leftWallPath)
         p.addPath(rightWallPath)
-        // 平面屋的两面侧墙也算屋子的一部分——不算的话，
-        // 靠边那几件家具会被裁在墙脚上。
-        let sides = sideWallPaths
-        p.addPath(sides.left)
-        p.addPath(sides.right)
+        // 平面屋的外框也算屋子的一部分——不算的话，
+        // 靠边那几件家具会被裁在框上。
+        if projection == .flat { p.addRect(flatFrame) }
         return p
     }
 

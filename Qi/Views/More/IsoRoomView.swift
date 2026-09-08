@@ -305,21 +305,34 @@ struct IsoRoomView<Clawd: View>: View {
             geoRoom.leftWallPath.stroke(Color.black.opacity(0.08), lineWidth: 1)
             geoRoom.rightWallPath.stroke(Color.black.opacity(0.08), lineWidth: 1)
 
-            // 平面屋的左右两面侧墙。**立体屋没有这一段**（那两面就是上面画的）。
+            // 平面屋外面那一圈框。**立体屋没有。**
             //
-            // 她要的：「不是顺着平铺的形状描边，是设定一个墙壁的框架。」
-            // 三面墙加一块地板才是一个框；只有后墙的话两侧是敞着的。
+            // 她给的参考图里，整间屋是被一圈厚实的深色墙围着的，
+            // 框里面上半是墙、下半是地。
             //
-            // ⚠️ 两侧各压一档明暗，跟立体屋同一个道理：
-            // 三个面同色拼在一起就是一张折纸。
+            // ⚠️ **描线要往里缩半个线宽。**
+            // `strokedPath` 是骑在路径上画的：一半在里、一半在外。
+            // 不缩的话这一圈有一半飘在屋子外面，看着像浮在空中的一道边，
+            // 而不是一堵有厚度的墙。
+            //
+            // 缩半个线宽之后，线的**外沿**正好落在 `flatFrame` 上，
+            // 整圈都压在屋子里，跟参考图里那种「墙有厚度」是一个意思。
             if geoRoom.projection == .flat {
-                let sides = geoRoom.sideWallPaths
-                sides.left.fill(wallL)
-                sides.right.fill(wallR)
-                sides.left.stroke(Color.black.opacity(0.10), lineWidth: 1)
-                sides.right.stroke(Color.black.opacity(0.10), lineWidth: 1)
+                let w = geoRoom.flatFrameWidth
+                Rectangle()
+                    .path(in: geoRoom.flatFrame.insetBy(dx: w / 2, dy: w / 2))
+                    .strokedPath(.init(lineWidth: w))
+                    .fill(frameTone)
+                    .allowsHitTesting(false)
             }
         }
+    }
+
+    /// 平面屋那一圈框什么色。比墙深一档——它是墙的**厚度**，
+    /// 是背光的那一面，跟墙同色的话框就消失了。
+    private var frameTone: Color {
+        // 拿左面墙那一档往黑里掺——深色模式下本来就暗，掺少一点
+        Theme.blend(wallL, toward: .black, scheme == .dark ? 0.35 : 0.55)
     }
 
     // 两面墙**不能同一个色**——同色的两个面拼在一起就是一张折纸，

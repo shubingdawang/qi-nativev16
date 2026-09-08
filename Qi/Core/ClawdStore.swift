@@ -1545,7 +1545,11 @@ extension ClawdStore {
     ///
     /// 18 = 看得见的 8 列 + 左右各 5 列。她要的：
     /// 「可以拖动往最左右分别移动五格的」。
-    nonisolated static let flatCols = 36
+    /// 平面屋横着几列。
+    ///
+    /// 36 → 24。她说「平铺视角有点太长了，可以缩短一点，因为格子变小了」。
+    /// 格子从八格制细分到十六格制之后，36 列拖起来没个头。
+    nonisolated static let flatCols = 24
 
     /// 平面屋一屏里看得见几列。一格多大按它算（见 `IsoRoom.fit`）。
     nonisolated static let flatVisibleCols = 16
