@@ -3465,6 +3465,30 @@ final class AppState: ObservableObject {
     /// ⚠️⚠️ **只落记录，不调模型。**
     /// 这句话刚才已经说过了（气泡上就是它），这儿只是把它写进聊天里，
     /// 一分钱不多花。再发一次请求的话，同一句话要付两遍钱。
+    /// 预设有没有真的送到模型那儿：最近几轮里有几轮带了本轮标题。
+    ///
+    /// ## 为什么这个数能说明问题
+    ///
+    /// 「预设生效了没有」一直没法直接问——**让模型复述系统提示词证明不了什么**，
+    /// 它照样能编一段像模像样的。要验证，得放一条
+    /// **不影响正文、但看得出遵没遵守**的行为指令，看它连续几轮稳不稳。
+    ///
+    /// `[[cot:…]]` 正好就是这样一条：预设里写着「每一轮都要给自己起个名字」，
+    /// 十来个字，不改正文的意思，而**带没带**一眼就看得出来。
+    ///
+    /// 连续几轮都没有 → 那份预设多半根本没进上下文。
+    /// 偶尔漏一轮 → 是模型自己漏了，跟预设送没送到无关。
+    ///
+    /// ⚠️ **不调模型，一分钱不花。** 数的是已经存下来的那几条。
+    var presetLanded: (hit: Int, total: Int) {
+        guard let cid = activeChatID, let i = index(of: cid) else { return (0, 0) }
+        let his = conversations[i].messages
+            .filter { $0.role == .assistant && $0.errorText == nil
+                      && !$0.isStreaming && !$0.content.isEmpty }
+            .suffix(8)
+        return (his.filter { !$0.cotTitle.isEmpty }.count, his.count)
+    }
+
     /// 当前这个窗口里**他说的最后一条**。小屋那边靠它把回复搬到气泡上。
     var lastHisMessage: ChatMessage? {
         guard let cid = activeChatID, let i = index(of: cid) else { return nil }

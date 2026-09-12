@@ -25,6 +25,46 @@ struct PromptShapeView: View {
     // push 进来的这边什么都不用做。
     //
     // ⚠️ 记一句：**一个页面不该假设自己是怎么被打开的。**
+    /// 预设送达自检。
+    ///
+    /// 她发过一段群聊，里面那条是对的：
+    /// 「如果你要验证预设到底有没有被模型读到，最好放一个不会影响 RP 的
+    /// 可验证行为指令……连续几轮都稳定遵守，才比较能说明预设确实进入了上下文。」
+    ///
+    /// 摆在这一页，是因为这一页本来回答的就是同一类问题——
+    /// 「我发出去的到底是什么」。上面那几块说的是**发了多少**，
+    /// 这一块说的是**到没到**。
+    @ViewBuilder
+    private var landedCard: some View {
+        let r = app.presetLanded
+        if r.total > 0 {
+            let ok = r.hit * 2 >= r.total
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    Image(systemName: ok ? "checkmark.seal" : "exclamationmark.triangle")
+                        .font(.app(12))
+                        .foregroundStyle(ok ? StatusTone.done.color : .orange)
+                    Text("预设送达自检")
+                        .font(.app(13, weight: .medium))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    Spacer(minLength: 0)
+                    Text(String(r.hit) + " / " + String(r.total))
+                        .font(HomeType.number(13))
+                        .foregroundStyle(ok ? Theme.textSoft(scheme) : .orange)
+                }
+                Text(MD.inline("最近 " + String(r.total)
+                     + " 轮回复中，带有本轮标题（`[[cot:]]`）的有 "
+                     + String(r.hit) + " 轮。该标记由预设要求，每轮均应输出。"
+                     + "**连续多轮缺失表示预设未进入上下文**；偶尔缺失属模型自身遗漏。"))
+                    .font(.app(10.5))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassCard(padding: 0)
+        }
+    }
+
     var body: some View {
         // ⚠️ **壁纸只铺一层。**
         //
@@ -40,6 +80,7 @@ struct PromptShapeView: View {
                 if let s = shape {
                     VStack(alignment: .leading, spacing: 14) {
                         total(s)
+                        landedCard
                         ForEach(s.blocks) { b in row(b, of: s.total) }
                         cacheNote(s)
                         if !s.fattestTools.isEmpty { tools(s) }
