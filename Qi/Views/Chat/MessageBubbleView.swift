@@ -1544,6 +1544,45 @@ struct MessageBubbleView: View {
                 // 混在一起，看着像也是他写的。弹窗那边也是这么写的。
                 step(icon: "brain", tint: Theme.textMuted(scheme), title: "Thinking") {
                     VStack(alignment: .leading, spacing: 6) {
+                        // 翻译那个按钮**摆在这一块的右上角**，不再只藏在长按菜单里。
+                        //
+                        // 她发的参考图（别人那个 App 的「思考摘要」）就是这样：
+                        // 面板右上角一个「文A」，一眼看得见、一下点得到。
+                        //
+                        // ⚠️ 这是**同一条路**，不是第二条——按的还是
+                        // `app.translate(..., reasoning: true)`。长按菜单留着
+                        // （那儿还有「重新翻」「收起译文」「拷贝」），
+                        // 这儿只是把最常用的那一下摆到看得见的地方。
+                        //
+                        // 她的老毛病就在这上头：「我没找到素材库在哪里」、
+                        // 「原来在工具边上，我以为会是在名字边上」——
+                        // **一个功能藏在长按里，等于没有。**
+                        //
+                        // ⚠️ 已经翻好了就不再摆——那时候该看的是译文，
+                        // 重翻是少数情况，留在菜单里就够。
+                        if message.reasoningTranslation == nil,
+                           !message.isTranslatingReasoning {
+                            HStack {
+                                Spacer(minLength: 0)
+                                Button {
+                                    app.translate(message.id, in: conversationID,
+                                                  reasoning: true)
+                                } label: {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "character.book.closed")
+                                            .font(.app(9))
+                                        Text("翻成中文")
+                                            .font(.app(9.5))
+                                    }
+                                    .foregroundStyle(app.settings.accentColor)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(Capsule().fill(Theme.softFillDeep))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
                         Text(MD.inline(cleanReasoning(r)))
                             .font(.system(size: max(11, app.settings.fontSize - 3)))
                             .foregroundStyle(Theme.textSoft(scheme))
@@ -1756,6 +1795,47 @@ struct MessageBubbleView: View {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(app.settings.accentColor.opacity(0.30 * app.settings.bubbleTint))
                 }
+
+                // MARK: 磨砂那两笔
+                //
+                // 照她给的那份「磨砂气泡」（docx）来。整份里真正让它读成
+                // **磨砂**而不是**一块塑料片**的，就是这两行 CSS：
+                //
+                //     box-shadow: inset 0 1px 0 rgba(255,255,255,.5);
+                //     background-image: radial-gradient(circle at 30% 20%, …);
+                //
+                // 一块半透明的面，没有顶上那道内高光就是平的；
+                // 有了它，光才像是打在一片玻璃的上棱上。
+                //
+                // ⚠️ **这不是边框。** 她定过「气泡不该有边框」——
+                // 那说的是一圈看得见的描边。这一道是**从顶边往下一格就化没**
+                // 的高光（下面那个渐变到 0 就是干这个的），
+                // 侧面和底边上一点都没有。别把它改成一圈匀的线。
+                //
+                // ⚠️ **不许加 `blendMode`。** 「背景里的光」那次的教训：
+                // 混合模式要求每帧把底下画好的读回来重算，
+                // 而一屏有几十个气泡。这儿两层都是普通叠加。
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [.white.opacity(scheme == .dark ? 0.20 : 0.50),
+                                     .white.opacity(0)],
+                            startPoint: .top, endPoint: .center),
+                        lineWidth: 1)
+                    .allowsHitTesting(false)
+
+                // 左上那一团极淡的光。`circle at 30% 20%`。
+                // ⚠️ 淡到**单看注意不到**才对——它是让整块面不平的，
+                // 看得见就成了一块污渍。
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(
+                        RadialGradient(
+                            colors: [.white.opacity(scheme == .dark ? 0.07 : 0.18),
+                                     .white.opacity(0)],
+                            center: UnitPoint(x: 0.30, y: 0.20),
+                            startRadius: 0, endRadius: 140)
+                    )
+                    .allowsHitTesting(false)
             }
         }
     }
