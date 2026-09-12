@@ -786,6 +786,10 @@ enum ClawdRig {
     /// 顺序反了的话围巾会盖住下巴、帽子会被眼镜压住。
     static let wearOrder: [WearSlot] = [.back, .feet, .neck, .face, .head]
 
+    /// 图纸多少格见方。**穿戴那批图也是按这个画的**
+    /// （见 `scripts/wear_art.py`）。
+    static let canvas = 36
+
     /// 身子横着的正中（图纸格）
     static var midX: CGFloat { CGFloat(bodyLeft + bodyRight + 1) / 2 }
 
@@ -837,7 +841,24 @@ struct ClawdWornView: View {
     }
 
     var body: some View {
-        if let art = ClawdRig.wearArt(id),
+        if let worn = FurnitureCatalog.wornImage(of: id) {
+            // ⚠️⚠️ **整张贴上，一个偏移都不加。**
+            //
+            // 这张图是按身体那张图纸画的（`scripts/wear_art.py`，
+            // 36×36，跟 `ClawdRig` 同一套坐标），所以「戴在哪儿」
+            // 已经画在图里了。外面那一层给的就是 36 格见方、左上对齐的底。
+            //
+            // 以前那张 `wearArt` 锚点表（多宽、下沿在第几行）**不再走这条路**——
+            // 每加一件就要手调两个数，而且换个姿势又偏。位置写在图里，不写在代码里。
+            //
+            // ⚠️ **这一支不关插值。** 这批图是拿比一格更小的块拼出来的
+            //（她要的「越多越小的像素块拼起来最精致」），
+            // 关了插值按最近邻缩小，被吃掉的正是那些小块。
+            Image(uiImage: worn)
+                .resizable()
+                .frame(width: CGFloat(ClawdRig.canvas) * scale,
+                       height: CGFloat(ClawdRig.canvas) * scale)
+        } else if let art = ClawdRig.wearArt(id),
            let img = FurnitureCatalog.artImage(of: id, flat: true),
            img.size.width > 0 {
             let w = art.width

@@ -235,6 +235,20 @@ extension FurnitureCatalog {
         return img
     }
 
+    /// **戴在身上**那张（`scripts/wear_art.py` 画的）。
+    ///
+    /// 跟商店里那张 `it_misc_*` 是两回事：那张是**这件东西摊开的样子**
+    /// （一副放平的眼镜），戴到脸上要的是**戴着的样子**。
+    /// 她报的「小屋的眼镜也不是我给的图，而且不止眼镜」就是这个差别。
+    ///
+    /// ⚠️ 这批图是**按身体那张图纸画的**（36×36，跟 `ClawdRig` 同一套坐标），
+    /// 所以贴上去整张对齐就行，**没有锚点表**——
+    /// 位置写在图里，不写在代码里。
+    @MainActor
+    static func wornImage(of id: String) -> UIImage? {
+        load("wear_" + id)
+    }
+
     /// 商城和背包里那张缩略图：一律用正面那张，等距的斜着摆不好看。
     @MainActor
     static func shopImage(of id: String) -> UIImage? {

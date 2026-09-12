@@ -104,6 +104,15 @@ for _, flat, iso in rows:
         if wl and wl in have:
             used.add(wl)
             walled += 1
+# 穿戴那批（`wear_<id>.png`，`scripts/wear_art.py` 画的）**不走对照表**。
+#
+# 它们是「戴在身上的样子」，由 `FurnitureCatalog.wornImage(of:)` 按名字直接取，
+# 不在 `artTable` 里。不排掉的话这儿会把它们全算成「闲置」，
+# 而「闲置 0」正是这张表用来发现漏接的那个信号——
+# 一直挂着八张假的闲置，真漏了一张就看不出来了。
+for f in list(have):
+    if f.startswith("wear_"):
+        used.add(f)
 spare = sorted(have - used)
 
 # 动作名也对一遍：`IsoShape.actions` 里写了、`RoomActs.act` 里没有的，
