@@ -384,6 +384,22 @@ struct TarotPane: View {
                 .font(.app(13))
                 .foregroundStyle(Theme.textMuted(scheme))
 
+            // 先摊一桌，再往下才是要读的那几段。
+            //
+            // 她说的：「塔罗牌排布参考，增添一点新的花样，不然画面太空。」
+            //
+            // ⚠️ 底下那条列表**不删**。摆出来的是形状，读的还是得读——
+            // 凯尔特十字第二张横着压在第一张上那层意思，只有摆出来才有；
+            // 而「这张牌什么意思」只有写出来才有。两样都要。
+            if !record.cards.isEmpty {
+                TarotTable(cards: record.cards,
+                           spreadName: record.spreadName,
+                           tint: app.settings.accentColor) { d in
+                    flipped = d
+                }
+                .frame(height: TarotTable.height(for: record.spreadName))
+            }
+
             ForEach(record.cards) { drawn in
                 HStack(alignment: .top, spacing: 11) {
                     // 真的牌面（见 TarotFace.swift）。以前这儿是一块色底加一行字，
