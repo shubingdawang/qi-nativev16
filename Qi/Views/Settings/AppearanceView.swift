@@ -16,6 +16,9 @@ struct AppearanceView: View {
         "\n\n强调色每屏最多一处，仅用于发送键或主按钮。"
         + "列表、图标与标题不使用强调色，强调通过字重和面板色实现。"
 
+    /// 背景那层光的开关。跟 `AuroraLayer` 读的是同一个键
+    @AppStorage("auroraOn") private var auroraOn = false
+
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
     @State private var customHex = ""
@@ -50,6 +53,7 @@ struct AppearanceView: View {
                     presetCard
                     textColorCard
                     chatCard
+                    auroraCard
                     previewCard
                 }
                 .padding(.horizontal, 16)
@@ -621,6 +625,42 @@ struct AppearanceView: View {
     }
 
     // MARK: 预览
+
+    /// 背景里那层光。
+    ///
+    /// ⚠️ 这一档删过一次又回来了。说明里要写清楚**现在和当初不一样**——
+    /// 她关掉它是因为卡，不写的话她不会再打开第二次。
+    private var auroraCard: some View {
+        SettingsCard(title: "光晕") {
+            Toggle(isOn: $auroraOn) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("背景里的光")
+                        .font(.app(15))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    Text("三处低透明度光斑，取主题色，四十秒循环一次")
+                        .font(.app(11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+            }
+            .tint(app.settings.accentColor)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+
+            SettingsNote("""
+            在壁纸之上、内容之下叠一层缓慢浮动的光晕，共三团，透明度极低。
+
+            作用范围为全 App 背景，不影响卡片、文字与图标的对比度。
+
+            三团光在首次显示时渲染为一张位图并缓存，之后每帧仅做一次位移与缩放，\
+            不参与混合运算，因此不会拖慢侧栏开合。此前的版本使用混合模式，\
+            每帧需要一次全屏离屏合成，即为当时卡顿的原因。
+
+            照片壁纸下效果较弱，纯色与渐变底下最明显。
+
+            关闭后该层完全不绘制。
+            """, title: "说明")
+        }
+    }
 
     private var previewCard: some View {
         SettingsCard(title: "预览") {

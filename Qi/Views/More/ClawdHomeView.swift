@@ -1069,8 +1069,7 @@ struct ClawdHomeView: View {
                             .truncatingRemainder(dividingBy: 1)
                         ClawdRigView(mood: mood,
                                      item: kind.sprite,
-                                     worn: store.wornKind?.sprite,
-                                     wornID: store.wearing ?? "",
+                                     wornIDs: store.wornIDs,
                                      pose: .lift,
                                      scale: tile * 1.47 / 36,
                                      beat: beat,
@@ -1084,8 +1083,7 @@ struct ClawdHomeView: View {
                     ClawdView(mood: mood, scale: tile * 1.47 / 36, shadow: true,
                               // 小屋里也要戴上。**两边都传**——只给一边的话，
                               // 她在这儿给他戴上帽子，切到聊天页就没了。
-                              worn: store.wornKind?.sprite,
-                              wornID: store.wearing ?? "",
+                              wornIDs: store.wornIDs,
                               // 高兴的时候**手要摆起来**。
                               // 她说的「随着他的情绪联动的表情，笑、冒爱心等等都没有」——
                               // 冒爱心那条早就有了（`.loving` 那一档），
@@ -1606,7 +1604,7 @@ struct ClawdHomeView: View {
                     // 她报的：「贝雷帽被当成家具放在房间里，
                     // 实际上应该给他直接穿上。」——一顶帽子摆在地板上是很怪。
                     .overlay(alignment: .topTrailing) {
-                        if kind.category == .wear, store.wearing == kind.id {
+                        if kind.category == .wear, store.isWearing(kind.id) {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.app(12))
                                 .foregroundStyle(app.settings.accentColor)

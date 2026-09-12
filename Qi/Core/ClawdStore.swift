@@ -1000,19 +1000,39 @@ final class ClawdStore: ObservableObject {
     ///
     /// ⚠️ 跟 `carrying`（拎在手上那件）是**两个槽**：
     /// 手上能拎一张床，头上戴的是帽子，两件事互不影响。
-    @Published var wearing: String? {
-        didSet { if loaded { UserDefaults.standard.set(wearing, forKey: "clawdWearing") } }
+    /// **一个位置一件**（`ClawdRig.WearSlot` → kind id）。
+    ///
+    /// 她说的：「眼镜和帽子可以一起戴上，现在是只能戴一个，
+    /// 同类只能戴一个，不同类可以一起戴。」
+    ///
+    /// ⚠️ 以前这儿是一个 `String?`，所以戴上眼镜就得摘掉帽子。
+    /// 换成「位置 → 那件」之后，规则由位置本身兜住，
+    /// 不用另写一张「谁跟谁冲突」的表。
+    @Published var wornSlots: [String: String] = [:] {
+        didSet {
+            if loaded {
+                UserDefaults.standard.set(wornSlots, forKey: "clawdWornSlots")
+            }
+        }
     }
 
-    /// 他这会儿戴着的那件是什么
-    var wornKind: FurnitureKind? {
-        wearing.flatMap { FurnitureCatalog.kind($0) }
+    /// 身上戴着的那几件，**按画的先后排好**（见 `ClawdRig.wearOrder`）。
+    var wornIDs: [String] {
+        ClawdRig.wearOrder.compactMap { wornSlots[$0.rawValue] }
     }
 
-    /// 穿上／脱下。已经戴着这件就是脱下来。
-    /// **一次只戴一件**——两顶帽子叠在头上不是可爱，是坏了。
+    /// 这一件戴着没有
+    func isWearing(_ kindID: String) -> Bool {
+        wornSlots[ClawdRig.wearSlot(kindID).rawValue] == kindID
+    }
+
+    /// 穿上／脱下。
+    ///
+    /// 已经戴着这件 → 脱下来。那个位置戴着**别的** → 换成这件
+    /// （两顶帽子叠在头上不是可爱，是坏了）。别的位置一概不动。
     func wear(_ kindID: String) {
-        wearing = (wearing == kindID) ? nil : kindID
+        let slot = ClawdRig.wearSlot(kindID).rawValue
+        wornSlots[slot] = (wornSlots[slot] == kindID) ? nil : kindID
     }
 
     @Published var carrying: String? {
@@ -1176,8 +1196,16 @@ final class ClawdStore: ObservableObject {
         let t = UserDefaults.standard.double(forKey: "clawdCheckIn")
         lastCheckIn = t > 0 ? Date(timeIntervalSince1970: t) : nil
         linked = UserDefaults.standard.bool(forKey: "clawdLinked")
+        // 穿戴：新的是「位置 → 那件」。
+        // ⚠️ 老数据（只存了一件的那个键）搬一次，别让她开机发现帽子没了。
+        if let d = UserDefaults.standard.dictionary(forKey: "clawdWornSlots")
+            as? [String: String] {
+            wornSlots = d
+        } else if let one = UserDefaults.standard.string(forKey: "clawdWearing"),
+                  !one.isEmpty {
+            wornSlots = [ClawdRig.wearSlot(one).rawValue: one]
+        }
         carrying = UserDefaults.standard.string(forKey: "clawdCarrying")
-        wearing = UserDefaults.standard.string(forKey: "clawdWearing")
         ownedThemes = UserDefaults.standard.stringArray(forKey: "clawdThemes") ?? []
         projection = RoomProjection(
             rawValue: UserDefaults.standard.string(forKey: "clawdProjection") ?? "")

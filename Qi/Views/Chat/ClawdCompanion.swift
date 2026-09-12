@@ -145,8 +145,7 @@ struct ClawdRoamer: View {
                              // 然后就再也没出现过（`wornKind` 全项目零处引用）。
                              // 她报了两次，第二次是「穿衣服也是像图上这样，
                              // 不是一成不变的一个纸片」。
-                             worn: room.wornKind?.sprite,
-                             wornID: room.wearing ?? "",
+                             wornIDs: room.wornIDs,
                              pose: carryPose,
                              // 探头时身体绕脚底往屏幕里倾（见 `ClawdRigView.tilt`）
                              tilt: peekTilt,

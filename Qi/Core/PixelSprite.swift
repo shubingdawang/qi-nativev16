@@ -2389,13 +2389,18 @@ struct ClawdView: View {
     /// 脚底下那团影子。摆在房间里要有，不然它像浮在半空；
     /// 输入框上蹲的那只太小，加了反而脏。
     var shadow: Bool = false
-    /// **身上穿戴的那件**（帽子、眼镜、围巾…）。
+    /// **身上戴着的那几件**（kind id）。
     ///
     /// ⚠️ 小屋里那只走的是这个 `ClawdView`，不是聊天页那个 `ClawdRigView`。
     /// 两边**都要传**——只给一边的话，她在小屋给他戴上帽子，
     /// 切到聊天页帽子就没了，看着像刚才那一下没生效。
-    var worn: PixelSprite?
-    var wornID: String = ""
+    ///
+    /// ⚠️ **一个位置一件，不同位置能一起戴**（见 `ClawdRig.wearSlot`）——
+    /// 她要的「眼镜和帽子可以一起戴上」。所以这儿是一摞，不是一件。
+    ///
+    /// ⚠️ 排好序再传（`ClawdStore.wornIDs`）：背包在最底下，
+    /// 脚、脖子、脸、头往上叠。顺序反了围巾会盖住下巴。
+    var wornIDs: [String] = []
     /// **两只手摆起来**（欢呼 / 招手）。
     ///
     /// 她要的「随着情绪联动」里最要紧的一件。做法见 `ClawdRig.plan`
@@ -2531,7 +2536,7 @@ struct ClawdView: View {
                     .allowsHitTesting(false)
             }
 
-            if let g = mood.gif, ClawdGif.exists(g), pose == .none, worn == nil {
+            if let g = mood.gif, ClawdGif.exists(g), pose == .none, wornIDs.isEmpty {
                 // ⚠️ **播 gif 的时候，我们自己那套一件都不叠。**
                 //
                 // 道具、飘着的音符和爱心、动作的快慢，人家的 gif 里全都有。
@@ -2572,12 +2577,14 @@ struct ClawdView: View {
             // 而这张表只会按站姿算位置（帽子会盖掉他自带的睡帽，
             // 她报过「睡觉的动画帽子被吞掉了」）。聊天页那只早就挡了，
             // 小屋这只一直没挡。
-            if let worn, mood != .sleeping, mood != .lying {
+            if !wornIDs.isEmpty, mood != .sleeping, mood != .lying {
                 Color.clear
                     .frame(width: CGFloat(sprites[0].0.width) * scale,
                            height: CGFloat(sprites[0].0.height) * scale)
                     .overlay(alignment: .topLeading) {
-                        ClawdWornView(id: wornID, fallback: worn, scale: scale)
+                        ForEach(wornIDs, id: \.self) { id in
+                            ClawdWornView(id: id, scale: scale)
+                        }
                     }
                     .allowsHitTesting(false)
             }

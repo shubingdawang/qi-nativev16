@@ -57,10 +57,14 @@ struct ClawdRigView: View {
     var mood: ClawdMood = .idle
     /// 手上那件东西。空着就是没拿
     var item: PixelSprite?
-    /// **身上穿戴的那件**（帽子、眼镜、围巾…）。跟手上那件是两个槽。
-    var worn: PixelSprite?
-    /// 那件穿戴是什么（决定贴在身上哪儿，见 `ClawdRig.wearAt`）
-    var wornID: String = ""
+    /// **身上戴着的那几件**（kind id）。跟手上那件是两个槽。
+    ///
+    /// ⚠️ **一个位置一件，不同位置能一起戴**（见 `ClawdRig.wearSlot`）——
+    /// 她要的「眼镜和帽子可以一起戴上」。所以这儿是一摞，不是一件。
+    ///
+    /// ⚠️ 排好序再传（`ClawdStore.wornIDs`）：背包在最底下，
+    /// 脚、脖子、脸、头往上叠。顺序反了围巾会盖住下巴。
+    var wornIDs: [String] = []
     var pose: CarryPose = .none
     /// **绕脚底倾斜多少度**（正数往右倒）。探头用的就是它。
     ///
@@ -178,8 +182,10 @@ struct ClawdRigView: View {
             //
             // 别的「不是站着」的图还有同样的隐患，但她只报过这两张：
             // 挡多了她买的帽子会莫名其妙消失。
-            if let worn, mood != .sleeping, mood != .lying {
-                ClawdWornView(id: wornID, fallback: worn, scale: scale)
+            if mood != .sleeping, mood != .lying {
+                ForEach(wornIDs, id: \.self) { id in
+                    ClawdWornView(id: id, scale: scale)
+                }
             }
 
             // 举重物会出汗。抄的参考里那两滴 `.bb-sweat`：
@@ -748,6 +754,38 @@ enum ClawdRig {
         }
     }
 
+    /// 一件穿戴**戴在身上哪个位置**。
+    ///
+    /// 她说的：「眼镜和帽子可以一起戴上，现在是只能戴一个，
+    /// 同类只能戴一个，不同类可以一起戴。」
+    ///
+    /// ⚠️ 位置就是规则本身：**一个位置只准一件**（两顶帽子叠着不是可爱，
+    /// 是坏了），**不同位置随便凑**（帽子 + 眼镜 + 围巾 + 背包 + 靴子
+    /// 可以一起戴）。不用另写一张「谁跟谁冲突」的表——
+    /// 那种表加一件衣服就要改 N 行。
+    enum WearSlot: String, CaseIterable {
+        case head      // 头上：帽子、贝雷帽
+        case face      // 脸上：眼镜
+        case neck      // 脖子：领结、围巾
+        case back      // 背上：背包
+        case feet      // 脚上：靴子、拖鞋
+    }
+
+    static func wearSlot(_ id: String) -> WearSlot {
+        switch id {
+        case "hat", "beret":      return .head
+        case "glasses":           return .face
+        case "bowtie", "scarf":   return .neck
+        case "bag":               return .back
+        case "boots", "slippers": return .feet
+        default:                  return .head
+        }
+    }
+
+    /// 画的先后。**背包在最底下**（它挂在身后），脚、脖子、脸、头往上叠。
+    /// 顺序反了的话围巾会盖住下巴、帽子会被眼镜压住。
+    static let wearOrder: [WearSlot] = [.back, .feet, .neck, .face, .head]
+
     /// 身子横着的正中（图纸格）
     static var midX: CGFloat { CGFloat(bodyLeft + bodyRight + 1) / 2 }
 
@@ -787,9 +825,16 @@ enum ClawdRig {
 struct ClawdWornView: View {
     /// 哪一件（`hat` / `glasses` / …）
     let id: String
-    /// 她那张图读不出来时退回去画的手写像素
-    let fallback: PixelSprite
     let scale: CGFloat
+
+    /// 她那张图读不出来时退回去画的手写像素。
+    ///
+    /// ⚠️ **自己去目录里取，不由外面喂。** 以前是外面传进来的，
+    /// 那时候身上只戴一件；现在一次能戴好几件，外面就得挨个去查一遍——
+    /// 同一件事在两处各做一次，早晚对不上。
+    private var fallback: PixelSprite? {
+        FurnitureCatalog.kind(id)?.sprite
+    }
 
     var body: some View {
         if let art = ClawdRig.wearArt(id),
@@ -803,7 +848,7 @@ struct ClawdWornView: View {
                 .frame(width: w * scale, height: h * scale)
                 .offset(x: (ClawdRig.midX + art.dx - w / 2) * scale,
                         y: (art.baseY - h) * scale)
-        } else {
+        } else if let fallback {
             PixelSpriteView(sprite: fallback, scale: scale)
                 .offset(x: ClawdRig.wearAt(id, itemW: CGFloat(fallback.width),
                                            itemH: CGFloat(fallback.height)).x * scale,
