@@ -288,7 +288,16 @@ struct ChatView: View {
                                 .padding(.horizontal, 12)
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                             }
-                            inputBar(conv)
+                            // 他把窗关上了（见 `PauseMarker`）：
+                            // **输入框整个换成那块牌子**，不是叠一层灰。
+                            //
+                            // 叠一层灰的话她还看得见自己刚打了一半的字、
+                            // 还能点进去——那是「坏了」，不是「关上了」。
+                            if conv.isPaused {
+                                pausedBar(conv)
+                            } else {
+                                inputBar(conv)
+                            }
                         }
                         // 量一下自己多高，交给消息区当底部留白。
                         // 写死一个数是不行的——待发的图、暂存那条、
@@ -1257,6 +1266,87 @@ struct ChatView: View {
                 .accessibilityLabel(app.settings.segmentUser ? "直接发送" : "发送")
             }
         })
+    }
+
+    // MARK: 他把窗关上的时候
+
+    /// 关着的时候摆在底下的那块牌子。
+    ///
+    /// 照她给的参考（`idea-garden/chat-paused`）：一句他留下的原因，
+    /// 一个「求他」，一个点不动的「找别人聊」。
+    ///
+    /// ⚠️ **「求他」是一次正常的对话轮次**，会花一次钱。所以按钮上
+    /// 写清楚它会发一条消息，别让她以为只是个开关。
+    ///
+    /// ⚠️ **出口必须一直在。** 参考里那个灰着的「No, continue with others」
+    /// 是情绪设计（这扇门不能从外面开），但「求他」这条路永远点得动——
+    /// 一扇只能从里面开的门，卡住了就是死局。
+    @ViewBuilder
+    private func pausedBar(_ conv: Conversation) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 7) {
+                Image(systemName: "moon.zzz")
+                    .font(.app(13))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                Text("他关上了这扇窗")
+                    .font(.app(13, weight: .medium))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Spacer(minLength: 0)
+            }
+
+            Text(conv.pausedReason ?? "")
+                .font(.app(12.5))
+                .foregroundStyle(Theme.textSoft(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                Button {
+                    pleadToOpen(conv)
+                } label: {
+                    Text("求他放你进来")
+                        .font(.app(13, weight: .medium))
+                        .foregroundStyle(app.settings.accentColor)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(app.settings.accentColor.opacity(0.16)))
+                }
+                .buttonStyle(.plain)
+
+                // 点不动那个。**这扇门不能从外面开。**
+                Button {
+                    notice = "不许。"
+                } label: {
+                    Text("找别人聊")
+                        .font(.app(13))
+                        .foregroundStyle(Theme.textMuted(scheme).opacity(0.6))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Theme.softFillDeep))
+                }
+                .buttonStyle(.plain)
+            }
+
+            Text("「求他」会发出一条消息，产生一次请求。")
+                .font(.app(10))
+                .foregroundStyle(Theme.textMuted(scheme))
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard(padding: 0)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 10)
+    }
+
+    /// 求他开门。**一次正常的对话轮次**，只是多带一句处境。
+    private func pleadToOpen(_ conv: Conversation) {
+        // ⚠️ 这句话要**落进记录里**，她自己看得见她说了什么。
+        // 悄悄发一条她看不见的，下一轮他回「好吧」她会莫名其妙。
+        //
+        // ⚠️ 不用另给系统提示：窗关着的时候，那一段本来就带着
+        // 「她在窗外，想开就写 `[[开窗]]`」（见 `AppState`）。
+        app.send(text: "（在窗外）让我进去吧。", images: [], in: conv.id)
     }
 
     private func inputBar(_ conv: Conversation) -> some View {

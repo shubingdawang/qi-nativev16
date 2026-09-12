@@ -413,6 +413,18 @@ struct Conversation: Identifiable, Codable, Hashable {
     /// 这个窗口聊的东西要不要写进小屋，好让 claude.ai 那边接得上。
     /// 每个窗口单独开关：打开就放开记忆工具 + 提示他 checkpoint。
     var syncWithClaude: Bool = false
+    /// 他把这扇窗关上了，这是他留下的那句原因（见 `PauseMarker`）。
+    ///
+    /// ⚠️ **必须是可选的。** 往一个已经落过盘的结构里加**非可选**字段，
+    /// Swift 合成的解码器不认默认值——老文件会整个解不开。
+    /// 这仓库栽过（`decoder_check.py` 就是为这个写的）。
+    var pausedReason: String? = nil
+    /// 什么时候关的
+    var pausedAt: Date? = nil
+
+    /// 这扇窗现在是关着的吗
+    var isPaused: Bool { pausedReason != nil }
+
     /// 是不是群聊
     var isGroup: Bool = false
     /// 群里都有谁，按这个顺序轮流说话

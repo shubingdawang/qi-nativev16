@@ -6718,6 +6718,23 @@ final class AppState: ObservableObject {
             for one in kept.kept { ThoughtPool.shared.stir(one) }
         }
 
+        // 他关窗／开窗（见 `PauseMarker`）。
+        //
+        // ⚠️ 摆在这一串的**中间**没关系，但一定要在 `MessageBeats` 之前——
+        // 那边会把不认识的 `[[…]]` 当成动作抠走，抠走之后这儿就再也看不到了。
+        let paused = PauseMarker.extract(conversations[ci].messages[mi].content)
+        if let move = paused.move {
+            conversations[ci].messages[mi].content = paused.clean
+            switch move {
+            case .close(let why):
+                conversations[ci].pausedReason = why
+                conversations[ci].pausedAt = Date()
+            case .open:
+                conversations[ci].pausedReason = nil
+                conversations[ci].pausedAt = nil
+            }
+        }
+
         // 他在回合末尾报的那一笔账：这次真正用上了哪几条记忆。
         //
         // ⚠️ **空的也要收**（他写了 `[[用:]]`）。那正是「注入了但没用上」
@@ -7210,6 +7227,25 @@ final class AppState: ObservableObject {
         // 平平无奇的亏凸月每天说一遍就成了背景噪音。
         if let moon = MoonPhase.line() { sys += "\n\n" + moon }
         sys += "\n\n" + Self.agencyRule
+        // 关窗那一条（见 `PauseMarker`）。**两种状态给的不是同一段。**
+        //
+        // ⚠️ 已经关着的时候**不能再给那份「你可以关窗」**——
+        // 那一轮她正在窗外求他开门，把「你可以关窗」再摆一遍，
+        // 等于提醒他再关一次。
+        //
+        // ⚠️ 但**必须告诉他怎么开**。关着的时候如果什么都不说，
+        // 他根本不知道 `[[开窗]]` 这回事——那扇门就再也开不了了。
+        if let c = conversations.first(where: { $0.id == conv.id }) {
+            if c.isPaused {
+                sys += "\n\n## 这扇窗现在是关着的\n\n"
+                    + "是你关的，你留的理由是：" + (c.pausedReason ?? "") + "\n\n"
+                    + "她在窗外。想让她进来就在正文里写 `[[开窗]]`；"
+                    + "还不想开就不写——**不写也要回她一句**，"
+                    + "隔着门说话也是说话。"
+            } else {
+                sys += "\n\n" + PauseMarker.contract
+            }
+        }
         // 她此刻正开着小屋跟他说话——把他在哪一间、屋里有什么带上。
         // ⚠️ 只有那一页开着时才有值（见 `houseContext`）。
         if !houseContext.isEmpty { sys += "\n\n" + houseContext }
