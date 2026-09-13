@@ -198,38 +198,32 @@ struct WageView: View {
                 editing = WageDayRef(date: date)
             }
         } label: {
-            VStack(spacing: 2) {
+            VStack(spacing: 1) {
+                // 日期。**班次是它右下角的一个小圆点**，不再单独占一行。
+                //
+                // 她要的：「中班可以用点的形式在日期的右下角，中间只显示 +- 金额。」
+                // 点用 overlay 挂在数字上，不改数字本身的位置——
+                // 有班没班的格子，日期都在同一条线上。
                 Text(String(cal.component(.day, from: date)))
                     .font(.app(13, weight: isToday ? .semibold : .regular))
                     .foregroundStyle(isToday ? app.settings.accentColor : Theme.textMain(scheme))
+                    .overlay(alignment: .bottomTrailing) {
+                        if let k = rec?.shift {
+                            Circle()
+                                .fill(k.tint)
+                                .frame(width: 6, height: 6)
+                                .offset(x: 6, y: 1)
+                        }
+                    }
+                    .frame(height: 20)
 
-                if let k = rec?.shift {
-                    Text(k.short)
-                        .font(.app(9.5, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 17, height: 15)
-                        .background(RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .fill(k.tint))
-                } else {
-                    Color.clear.frame(height: 15)
-                }
-
-                // 红字：当天时长 × 时薪
-                if let r = rec, r.shift != nil {
-                    Text("+" + WageStore.money(r.pay))
-                        .font(.app(9.5, weight: .semibold))
-                        .foregroundStyle(Self.payRed)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                } else if let r = rec, !r.entries.isEmpty {
-                    // 没排班、只记了账：一个小点
-                    Circle()
-                        .fill(Theme.textMuted(scheme).opacity(0.6))
-                        .frame(width: 4, height: 4)
-                        .frame(height: 12)
-                } else {
-                    Color.clear.frame(height: 12)
-                }
+                // 中间只放金额：进来的红字 +，花出去的 -。
+                // ⚠️ + 算的是**薪资加上记成收入的那几笔**，不只是薪资。
+                let plus = (rec?.pay ?? 0) + (rec?.earnedExtra ?? 0)
+                let minus = rec?.spent ?? 0
+                amountLine(plus > 0 ? "+" + WageStore.money(plus) : nil, Self.payRed)
+                amountLine(minus > 0 ? "-" + WageStore.money(minus) : nil,
+                           Theme.textSoft(scheme))
             }
             .frame(maxWidth: .infinity)
             .frame(height: 60)
@@ -248,14 +242,29 @@ struct WageView: View {
         .buttonStyle(.plain)
     }
 
+    /// 格子里一行金额。没有就留一行空，格子高度不跳。
+    @ViewBuilder
+    private func amountLine(_ text: String?, _ color: Color) -> some View {
+        if let t = text {
+            Text(t)
+                .font(.app(9.5, weight: .semibold))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .frame(height: 13)
+        } else {
+            Color.clear.frame(height: 13)
+        }
+    }
+
     private var legend: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 ForEach(ShiftKind.allCases) { k in
                     HStack(spacing: 5) {
-                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        Circle()
                             .fill(k.tint)
-                            .frame(width: 10, height: 10)
+                            .frame(width: 8, height: 8)
                         Text(k.rawValue)
                             .font(.app(11))
                             .foregroundStyle(Theme.textMuted(scheme))
@@ -286,7 +295,11 @@ struct WageView: View {
                                     editing = ref
                                 },
                                 onClose: { summary = nil },
-                                onOpenImage: { preview = $0 })
+                                onOpenImage: { preview = $0 },
+                                onDelete: {
+                                    store.deleteDay(on: ref.date)
+                                    summary = nil
+                                })
                     .padding(.horizontal, 28)
             }
         }
@@ -340,6 +353,14 @@ struct WageSummaryCard: View {
     var onEdit: () -> Void
     var onClose: () -> Void
     var onOpenImage: (String) -> Void = { _ in }
+    var onDelete: () -> Void = {}
+
+    /// 点了「删除」之后，按钮那一行换成「确认删除 / 取消」。
+    ///
+    /// ⚠️ **不用 `confirmationDialog`**：这张卡画在订阅着 AppState 的页面里，
+    /// 挂系统弹窗会被页面重建撤掉（PickHosts.swift 里记过四回）。
+    /// 就地换一行按钮，没有这个问题，而且手指不用挪地方。
+    @State private var confirming = false
 
     @EnvironmentObject private var app: AppState
     @Environment(\.colorScheme) private var scheme
@@ -419,25 +440,27 @@ struct WageSummaryCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: 10) {
-                Button(action: onClose) {
-                    Text("关闭")
-                        .font(.app(14))
-                        .foregroundStyle(Theme.textSoft(scheme))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(Capsule().fill(Theme.softFillDeep))
+            if confirming {
+                VStack(spacing: 8) {
+                    Text("删除这一天的班次和全部记账（含图片）？")
+                        .font(.app(12))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                    HStack(spacing: 10) {
+                        pill("取消", Theme.textSoft(scheme), Theme.softFillDeep) {
+                            confirming = false
+                        }
+                        pill("确认删除", Color.white, WageView.payRed, bold: true, action: onDelete)
+                    }
                 }
-                .buttonStyle(.plain)
-                Button(action: onEdit) {
-                    Text("编辑")
-                        .font(.app(14, weight: .medium))
-                        .foregroundStyle(app.settings.accentColor)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(Capsule().fill(app.settings.accentColor.opacity(0.16)))
+            } else {
+                HStack(spacing: 10) {
+                    pill("删除", WageView.payRed, WageView.payRed.opacity(0.12)) {
+                        confirming = true
+                    }
+                    pill("关闭", Theme.textSoft(scheme), Theme.softFillDeep, action: onClose)
+                    pill("编辑", app.settings.accentColor,
+                         app.settings.accentColor.opacity(0.16), bold: true, action: onEdit)
                 }
-                .buttonStyle(.plain)
             }
         }
         .padding(20)
@@ -470,6 +493,19 @@ struct WageSummaryCard: View {
             .font(.app(14))
             .foregroundStyle(Theme.textMain(scheme))
             .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func pill(_ title: String, _ fg: Color, _ bg: Color, bold: Bool = false,
+                      action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.app(14, weight: bold ? .medium : .regular))
+                .foregroundStyle(fg)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(Capsule().fill(bg))
+        }
+        .buttonStyle(.plain)
     }
 
     /// 一笔：那一行字，**下面一行**是它的缩略图（她要的排法）。
@@ -549,6 +585,9 @@ struct WageDayEditor: View {
     /// 打开时这一天本来就挂着的图。点「完成」时被删掉了的，才真的去删文件。
     private let original: Set<String>
     @State private var committed = false
+    /// 打开时这一天是不是本来就有记录。空的那一天没什么可删，不摆删除。
+    private let existed: Bool
+    @State private var confirmingDelete = false
 
     init(date: Date) {
         self.date = date
@@ -558,6 +597,7 @@ struct WageDayEditor: View {
             ?? WorkDay(shift: nil, work: t.work, breaks: t.breaks, hourly: s.settings.hourly)
         _day = State(initialValue: d)
         original = Set(d.entries.flatMap(\.images))
+        existed = s.day(date) != nil
     }
 
     private var title: String {
@@ -576,6 +616,7 @@ struct WageDayEditor: View {
                         shiftCard
                         if day.shift != nil { timeCard }
                         ledgerCard
+                        if existed { deleteBar }
                     }
                     .padding(16)
                 }
@@ -805,6 +846,56 @@ struct WageDayEditor: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard()
+    }
+
+    // MARK: 删除这一天
+
+    /// ⚠️ 同总结卡片那边：**就地换一行确认，不挂 `confirmationDialog`**。
+    private var deleteBar: some View {
+        VStack(spacing: 8) {
+            if confirmingDelete {
+                Text("删除这一天的班次和全部记账（含图片）？")
+                    .font(.app(12))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                HStack(spacing: 10) {
+                    Button { confirmingDelete = false } label: {
+                        Text("取消")
+                            .font(.app(14))
+                            .foregroundStyle(Theme.textSoft(scheme))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 11)
+                            .background(Capsule().fill(Theme.softFillDeep))
+                    }
+                    .buttonStyle(.plain)
+                    Button {
+                        // 这一次新挑的图也不留（删整天之后没人认领它们）
+                        for n in addedNow { ImageStore.delete(n) }
+                        store.deleteDay(on: date)
+                        committed = true
+                        dismiss()
+                    } label: {
+                        Text("确认删除")
+                            .font(.app(14, weight: .medium))
+                            .foregroundStyle(Color.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 11)
+                            .background(Capsule().fill(WageView.payRed))
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else {
+                Button { confirmingDelete = true } label: {
+                    Label("删除这一天的记录", systemImage: "trash")
+                        .font(.app(13.5))
+                        .foregroundStyle(WageView.payRed)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .background(Capsule().fill(WageView.payRed.opacity(0.12)))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.top, 4)
     }
 
     // MARK: 记账

@@ -322,6 +322,19 @@ final class WageStore: ObservableObject {
         return .ok(day.entries[i].images.count)
     }
 
+    /// 删掉某一天的全部记录（班次和所有账）。
+    ///
+    /// 她要的：「再新增一个删除功能，有时候填错日期了。」
+    /// ⚠️ 挂在账上的图文件一起删——那些都是这一天自己的（页面上挑的、
+    /// 或者他从聊天里复制过来的），不删就成了没人认领的文件。
+    func deleteDay(on d: Date) {
+        guard let day = self.day(d) else { return }
+        for e in day.entries { for n in e.images { ImageStore.delete(n) } }
+        var f = file
+        f.days[Self.key(d)] = nil
+        file = f
+    }
+
     func updateSettings(_ s: WageSettings) {
         var f = file
         f.settings = s
