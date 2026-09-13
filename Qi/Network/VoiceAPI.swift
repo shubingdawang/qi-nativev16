@@ -155,9 +155,11 @@ final class SystemVoice {
     func speak(_ text: String) {
         guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return }
         stop()
-        try? AVAudioSession.sharedInstance()
-            .setCategory(.playback, mode: .spokenAudio, options: .duckOthers)
-        try? AVAudioSession.sharedInstance().setActive(true)
+        if !CallAudio.inCall {
+            try? AVAudioSession.sharedInstance()
+                .setCategory(.playback, mode: .spokenAudio, options: .duckOthers)
+            try? AVAudioSession.sharedInstance().setActive(true)
+        }
 
         let u = AVSpeechUtterance(string: text)
         u.voice = AVSpeechSynthesisVoice(language: "zh-CN")
@@ -228,8 +230,10 @@ final class VoicePlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
         stop()
         do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
-            try AVAudioSession.sharedInstance().setActive(true)
+            if !CallAudio.inCall {
+                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
+                try AVAudioSession.sharedInstance().setActive(true)
+            }
             let p = try AVAudioPlayer(contentsOf: VoiceStore.url(fileName))
             p.delegate = self
             p.prepareToPlay()

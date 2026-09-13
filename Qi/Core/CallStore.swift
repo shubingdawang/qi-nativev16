@@ -131,6 +131,7 @@ final class CallStore: ObservableObject {
         call.connectedAt = Date()
         active = call
         incoming = nil
+        CallAudio.begin()
     }
 
     /// 不接。
@@ -163,6 +164,7 @@ final class CallStore: ObservableObject {
         var call = CallRecord(caller: "me")
         call.connectedAt = Date()
         active = call
+        CallAudio.begin()
         return true
     }
 
@@ -179,6 +181,7 @@ final class CallStore: ObservableObject {
         call.endedBy = who
         records.insert(call, at: 0)
         active = nil
+        CallAudio.end()
         // 挂了就把“收起来”也清掉。
         // 不清的话下一通电话一接通就是收起来的，
         // 她会以为没接通。

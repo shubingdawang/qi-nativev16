@@ -243,9 +243,12 @@ final class VoiceRecorder: NSObject, ObservableObject {
 
     func start() throws {
         stop()
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .default, options: .defaultToSpeaker)
-        try session.setActive(true)
+        // 通话中会话由 CallAudio 管着，这里不碰
+        if !CallAudio.inCall {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playAndRecord, mode: .default, options: .defaultToSpeaker)
+            try session.setActive(true)
+        }
 
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("rec-\(UUID().uuidString).m4a")
@@ -354,8 +357,11 @@ final class VoiceRecorder: NSObject, ObservableObject {
         // samples **故意不清空**：停下来之后正是要拿它去算语气的时候。
         // 下一次 start() 会把它重置。
         startedAt = nil
-        try? AVAudioSession.sharedInstance().setActive(false,
-                                                       options: .notifyOthersOnDeactivation)
+        // ⚠️ 通话中**不许关会话**：后台里一关，App 当场被挂起
+        if !CallAudio.inCall {
+            try? AVAudioSession.sharedInstance().setActive(false,
+                                                           options: .notifyOthersOnDeactivation)
+        }
         let url = fileURL
         fileURL = nil
         return url
