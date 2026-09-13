@@ -18,6 +18,10 @@ struct WageView: View {
     @State private var showSettings = false
     /// 总结里点开放大的那张图
     @State private var preview: String?
+    /// 正在挪的那一天。有值的时候，日历进入「点一下目标日期」的状态
+    @State private var moving: Date?
+    /// 底下飘一下的那句提示
+    @State private var notice: String?
 
     private let cal = Calendar.current
 
@@ -28,8 +32,25 @@ struct WageView: View {
         ZStack {
             PaneScroll {
                 overview
+                if moving != nil { moveBanner }
                 calendar
                 legend
+            }
+
+            if let n = notice {
+                VStack {
+                    Spacer()
+                    Text(n)
+                        .font(.app(13))
+                        .foregroundStyle(Theme.textMain(scheme))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(.regularMaterial))
+                        .padding(.bottom, Layout.tabBarExpanded + 20)
+                }
+                .transition(.opacity)
+                .allowsHitTesting(false)
+                .zIndex(30)
             }
 
             if let s = summary {
@@ -58,6 +79,8 @@ struct WageView: View {
         }
         .animation(.easeOut(duration: 0.18), value: summary?.id)
         .animation(.easeOut(duration: 0.18), value: preview)
+        .animation(.easeOut(duration: 0.18), value: notice)
+        .animation(.easeOut(duration: 0.18), value: moving)
         .navigationTitle("工资")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -69,7 +92,7 @@ struct WageView: View {
             }
         }
         .sheet(item: $editing) { ref in
-            WageDayEditor(date: ref.date)
+            WageDayEditor(date: ref.date, onMove: { moving = ref.date })
         }
         .sheet(isPresented: $showSettings) {
             WageSettingsSheet()
@@ -189,8 +212,14 @@ struct WageView: View {
     private func cell(_ date: Date) -> some View {
         let rec = store.day(date)
         let isToday = cal.isDateInToday(date)
+        let isSource = moving.map { cal.isDate($0, inSameDayAs: date) } ?? false
         return Button {
             if app.settings.haptics { UISelectionFeedbackGenerator().selectionChanged() }
+            // 挪日期的状态下，点哪天就是挪到哪天
+            if let from = moving {
+                finishMove(from: from, to: date)
+                return
+            }
             // 设过的那一天点进去**直接是总结**；空的那一天才进编辑
             if rec != nil {
                 summary = WageDayRef(date: date)
@@ -232,7 +261,12 @@ struct WageView: View {
                     .fill(rec?.shift?.tint.opacity(0.10) ?? Color.clear)
             )
             .overlay {
-                if isToday {
+                if isSource {
+                    // 正在挪的那一天：虚线框出来，她知道自己在挪哪一格
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(app.settings.accentColor,
+                                      style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                } else if isToday {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .strokeBorder(app.settings.accentColor.opacity(0.6), lineWidth: 1)
                 }
@@ -240,6 +274,61 @@ struct WageView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: 挪日期
+
+    private var moveBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "arrow.right.circle")
+                .foregroundStyle(app.settings.accentColor)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("挪到哪一天？")
+                    .font(.app(13.5, weight: .medium))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Text("点击目标日期，可左右滑动切换月份")
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+            Spacer(minLength: 0)
+            Button { moving = nil } label: {
+                Text("取消")
+                    .font(.app(13))
+                    .foregroundStyle(Theme.textSoft(scheme))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Theme.softFillDeep))
+            }
+            .buttonStyle(.plain)
+        }
+        .glassCard()
+    }
+
+    private func finishMove(from: Date, to: Date) {
+        if cal.isDate(from, inSameDayAs: to) {
+            moving = nil
+            return
+        }
+        guard store.day(to) == nil else {
+            flash("那一天已经有记录了，先删掉或者换一天")
+            return
+        }
+        store.moveDay(from: from, to: to)
+        moving = nil
+        let f = DateFormatter()
+        f.dateFormat = "M月d日"
+        flash("挪到 " + f.string(from: to) + " 了")
+        if app.settings.haptics {
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        }
+    }
+
+    private func flash(_ text: String) {
+        notice = text
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_800_000_000)
+            if notice == text { notice = nil }
+        }
     }
 
     /// 格子里一行金额。没有就留一行空，格子高度不跳。
@@ -299,6 +388,10 @@ struct WageView: View {
                                 onDelete: {
                                     store.deleteDay(on: ref.date)
                                     summary = nil
+                                },
+                                onMove: {
+                                    summary = nil
+                                    moving = ref.date
                                 })
                     .padding(.horizontal, 28)
             }
@@ -354,6 +447,7 @@ struct WageSummaryCard: View {
     var onClose: () -> Void
     var onOpenImage: (String) -> Void = { _ in }
     var onDelete: () -> Void = {}
+    var onMove: () -> Void = {}
 
     /// 点了「删除」之后，按钮那一行换成「确认删除 / 取消」。
     ///
@@ -453,10 +547,11 @@ struct WageSummaryCard: View {
                     }
                 }
             } else {
-                HStack(spacing: 10) {
+                HStack(spacing: 8) {
                     pill("删除", WageView.payRed, WageView.payRed.opacity(0.12)) {
                         confirming = true
                     }
+                    pill("挪日期", Theme.textSoft(scheme), Theme.softFillDeep, action: onMove)
                     pill("关闭", Theme.textSoft(scheme), Theme.softFillDeep, action: onClose)
                     pill("编辑", app.settings.accentColor,
                          app.settings.accentColor.opacity(0.16), bold: true, action: onEdit)
@@ -501,6 +596,8 @@ struct WageSummaryCard: View {
             Text(title)
                 .font(.app(14, weight: bold ? .medium : .regular))
                 .foregroundStyle(fg)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
                 .background(Capsule().fill(bg))
@@ -555,6 +652,8 @@ struct WageThumb: View {
 struct WageDayEditor: View {
 
     let date: Date
+    /// 点「挪到另一天」：先把这一次的改动存下，关掉编辑页，回日历上点目标日期
+    var onMove: () -> Void = {}
 
     @ObservedObject private var store = WageStore.shared
     @EnvironmentObject private var app: AppState
@@ -589,8 +688,9 @@ struct WageDayEditor: View {
     private let existed: Bool
     @State private var confirmingDelete = false
 
-    init(date: Date) {
+    init(date: Date, onMove: @escaping () -> Void = {}) {
         self.date = date
+        self.onMove = onMove
         let s = WageStore.shared
         let t = s.settings.template(.middle)
         let d = s.day(date)
@@ -630,14 +730,7 @@ struct WageDayEditor: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("完成") {
-                        commitDraftEntry()
-                        store.put(day, on: date)
-                        committed = true
-                        // 这一次里被拿掉的图（新挑的、原来就有的都算），删文件
-                        let kept = Set(day.entries.flatMap(\.images))
-                        for n in addedNow.union(original).subtracting(kept) {
-                            ImageStore.delete(n)
-                        }
+                        save()
                         dismiss()
                     }
                     .fontWeight(.semibold)
@@ -665,6 +758,17 @@ struct WageDayEditor: View {
                     pickedItems = []
                 }
             }
+        }
+    }
+
+    /// 写回去，并把这一次里被拿掉的图（新挑的、原来就有的都算）删文件。
+    private func save() {
+        commitDraftEntry()
+        store.put(day, on: date)
+        committed = true
+        let kept = Set(day.entries.flatMap(\.images))
+        for n in addedNow.union(original).subtracting(kept) {
+            ImageStore.delete(n)
         }
     }
 
@@ -884,15 +988,31 @@ struct WageDayEditor: View {
                     .buttonStyle(.plain)
                 }
             } else {
-                Button { confirmingDelete = true } label: {
-                    Label("删除这一天的记录", systemImage: "trash")
-                        .font(.app(13.5))
-                        .foregroundStyle(WageView.payRed)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 11)
-                        .background(Capsule().fill(WageView.payRed.opacity(0.12)))
+                HStack(spacing: 10) {
+                    Button {
+                        // ⚠️ 先存再走：她在这一页改了一半，挪日期不该把改动丢掉
+                        save()
+                        dismiss()
+                        onMove()
+                    } label: {
+                        Label("挪到另一天", systemImage: "arrow.right.circle")
+                            .font(.app(13.5))
+                            .foregroundStyle(Theme.textSoft(scheme))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 11)
+                            .background(Capsule().fill(Theme.softFillDeep))
+                    }
+                    .buttonStyle(.plain)
+                    Button { confirmingDelete = true } label: {
+                        Label("删除", systemImage: "trash")
+                            .font(.app(13.5))
+                            .foregroundStyle(WageView.payRed)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 11)
+                            .background(Capsule().fill(WageView.payRed.opacity(0.12)))
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
         .padding(.top, 4)

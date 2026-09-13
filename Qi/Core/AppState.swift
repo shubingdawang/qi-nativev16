@@ -2716,6 +2716,7 @@ final class AppState: ObservableObject {
         case "set_shift":                     return "排了一天的班"
         case "wage_ledger":                   return "改了一笔账"
         case "wage_image":                    return "给一笔账挂了图"
+        case "wage_move_day":                 return "把一天的记录挪了日期"
         default:                              return nil
         }
     }
@@ -2733,7 +2734,7 @@ final class AppState: ObservableObject {
             return "在写日记"
         case "period_status", "log_period", "add_period_note":
             return "在看你的日子"
-        case "read_wage", "set_shift", "wage_ledger", "wage_image":
+        case "read_wage", "set_shift", "wage_ledger", "wage_image", "wage_move_day":
             return "在翻你的工资本"
         case "get_pulse_status":
             return "在感受自己的心跳"

@@ -23,7 +23,8 @@ import UIKit
 @MainActor
 enum WageTools {
 
-    static let names: Set<String> = ["read_wage", "set_shift", "wage_ledger", "wage_image"]
+    static let names: Set<String> = ["read_wage", "set_shift", "wage_ledger", "wage_image",
+                                     "wage_move_day"]
 
     static func handles(_ name: String) -> Bool { names.contains(name) }
 
@@ -88,6 +89,14 @@ enum WageTools {
                 "index": ["type": "number", "description": "她最近发的第几张图，#1 是最新那张。不填 = 1"]
             ],
             required: ["date", "id"])
+
+        add("wage_move_day",
+            "触发：她说某天记错日期了、班其实是另一天上的。动机：整份挪过去比删了重记省事，账和图都跟着走。行动：把一天的全部记录（班次、账、图）挪到另一天。\n注意：目标那天已经有记录就挪不了，先问她那天要怎么处理。",
+            [
+                "from": ["type": "string", "description": "原来记在哪天：2026-09-14 / 今天 / 昨天"],
+                "to": ["type": "string", "description": "挪到哪天"]
+            ],
+            required: ["from", "to"])
 
         return out
     }
@@ -222,6 +231,19 @@ enum WageTools {
                 ImageStore.delete(copy)
                 return (label(d) + " 没找到 id 以 " + id + " 开头的那一笔", true)
             }
+
+        case "wage_move_day":
+            guard let a = (args["from"] as? String).flatMap({ parseDate($0) }),
+                  let b = (args["to"] as? String).flatMap({ parseDate($0) }) else {
+                return ("from / to 日期看不懂（写成 2026-09-14 / 今天 / 昨天）", true)
+            }
+            guard store.day(a) != nil else { return (label(a) + " 没有记录，没什么可挪", true) }
+            guard store.day(b) == nil else {
+                return (label(b) + " 已经有记录了，挪不过去。问问她那天要删掉还是换一天。", true)
+            }
+            store.moveDay(from: a, to: b)
+            return ("挪好了：" + label(a) + " → " + label(b) + "\n"
+                    + describe(day: b, store: store, withSettings: false), false)
 
         default:
             return ("没有这个工具：" + name, true)

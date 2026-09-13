@@ -100,6 +100,7 @@ enum ToolBlurb {
         "set_shift": "为某天排班或修改班次、时间、时薪",
         "wage_ledger": "新增、修改或删除某天的一笔账",
         "wage_image": "将聊天中发送的图片添加到某笔账下",
+        "wage_move_day": "将某天的全部记录移到另一天",
         "flight_chess": "开始一局飞行棋",
         "monopoly": "开始一局大富翁",
         "create_journey": "生成一段旅程",

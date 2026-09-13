@@ -322,6 +322,25 @@ final class WageStore: ObservableObject {
         return .ok(day.entries[i].images.count)
     }
 
+    /// 把某一天的整份记录挪到另一天。
+    ///
+    /// 她要的：「有时候填错日期了。」——删了重填太麻烦，直接挪。
+    ///
+    /// ⚠️ **目标那天已经有记录就不挪**，返回 false。
+    /// 自动合并的话，两天的班次只能留一个，另一个会被悄悄吞掉；
+    /// 让她自己先处理掉那一天，比猜她想留哪个靠谱。
+    /// 图文件名不变，跟着那几笔一起过去。
+    @discardableResult
+    func moveDay(from: Date, to: Date) -> Bool {
+        let a = Self.key(from), b = Self.key(to)
+        guard a != b, let day = file.days[a], file.days[b] == nil else { return false }
+        var f = file
+        f.days[a] = nil
+        f.days[b] = day
+        file = f
+        return true
+    }
+
     /// 删掉某一天的全部记录（班次和所有账）。
     ///
     /// 她要的：「再新增一个删除功能，有时候填错日期了。」
