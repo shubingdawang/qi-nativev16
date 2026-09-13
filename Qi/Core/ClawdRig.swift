@@ -121,7 +121,7 @@ struct ClawdRigView: View {
         // 那几件是我们自己的交互（她给他戴的帽子、他搬的家具），
         // 人家的动画里没有这些。
         if let g = mood.gif, ClawdGif.exists(g),
-           item == nil, worn == nil, pose == .none {
+           item == nil, wornIDs.isEmpty, pose == .none {
             Color.clear
                 .frame(width: cols * scale, height: rows * scale)
                 .overlay(alignment: .bottom) {

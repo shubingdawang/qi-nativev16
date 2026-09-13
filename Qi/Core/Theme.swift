@@ -373,9 +373,14 @@ struct GlassSurface: View {
             // ⚠️ 磨砂和模糊有**两套**，在设置里切（见 `GlassRecipe`）。
             // 通透那档只有一套：iOS 26 上用的是系统真的液态玻璃，
             // 拿浏览器那套折射去替它是往回走。
-            case .frosted: newRecipe ? frostedNew : frosted
+            // ⚠️ 不能写成 `newRecipe ? frostedNew : frosted`：
+            // 两个 `some View` 是两种不同的类型，三元要求两边同一个类型，编译不过。
+            // 在 ViewBuilder 里用 if/else，两支才能是不同的类型。
+            case .frosted:
+                if newRecipe { frostedNew } else { frosted }
             case .clear:   clear
-            case .blur:    newRecipe ? blurNew : blur
+            case .blur:
+                if newRecipe { blurNew } else { blur }
             }
         }
         // ⚠️ 这儿原来有一层「深色下压黑」，**删了**（理由见上面）。

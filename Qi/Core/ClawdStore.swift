@@ -1886,7 +1886,7 @@ extension ClawdStore {
     /// ⚠️ **穿在身上那件不摆。** 她报的：「贝雷帽被当成家具放在房间里。」
     /// 收起来的、拎在手上的、穿在身上的，三种都不该出现在地板上。
     private func onFloor(_ f: Furniture) -> Bool {
-        !f.hidden && !f.carried && f.kind != wearing
+        !f.hidden && !f.carried && !isWearing(f.kind)
     }
 
     /// 某一间屋里摆着的东西
