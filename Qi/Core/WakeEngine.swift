@@ -111,6 +111,20 @@ final class WakeEngine: ObservableObject {
 
     private var config: WakeConfig { app?.settings.wake ?? WakeConfig() }
 
+    /// 正常档的整体非精确活跃度（次/小时）。
+    /// 控制层第一次建「自定」参数时从这儿克隆（见 `WakeCustomProfile.cloneNormal`）。
+    var normalRate: Double { config.lambdaBase <= 0 ? 1.5 : config.lambdaBase }
+
+    /// 自约叫醒到点后，**多久之内**还算按时兑现（秒）。
+    ///
+    /// ⚠️ iOS 不保证到点一定给 App 运行机会。到点那一刻会排一条通知，
+    /// 她点开（或者 App 本来就开着）就在这个窗口里兑现；
+    /// 过了这个窗口才有机会跑的，就是「那个时刻系统不可执行」——进 missed。
+    private let selfGrace: TimeInterval = 20 * 60
+    /// 承诺到期、日记解锁这种外部精确事件的窗口。**过了就安静地记成处理过**，
+    /// 不补发——文档第 12 页：precise 不补发。
+    private let externalGrace: TimeInterval = 60 * 60
+
     // MARK: 外面来叫
 
     /// App 到前台、或者被后台刷新叫醒时调一次
@@ -141,6 +155,8 @@ final class WakeEngine: ObservableObject {
         Notifier.shared.pendingNudge = false
         guard config.enabled, let app, !running else { return }
         guard state.firedToday < config.dailyLimit else { return }
+        // 他设了安静：兜底这条也是非精确的，一样不跑
+        guard WakeControl.shared.mode != .silent else { return }
         // 兜底通知那条路也得过勿扰这一关，不然绕过去了
         guard !app.dndOn else { return }
         // 静默阈值这一关**同样要过**。
@@ -174,7 +190,9 @@ final class WakeEngine: ObservableObject {
     /// 这是**兜底**：后台刷新真给了机会的话，真话早发出来了，
     /// 回到前台时会把这批全撤掉。只有系统一直不给，才轮到它出场。
     func planNudges() {
-        guard config.enabled, config.nudges else {
+        // ⚠️ 兜底那批是**非精确**的。他设了安静就不排——
+        // 不然他说了「接下来安静点」，系统照样替他排十几条「想你了」。
+        guard config.enabled, config.nudges, WakeControl.shared.mode != .silent else {
             Notifier.shared.cancelNudges()
             return
         }
@@ -213,7 +231,9 @@ final class WakeEngine: ObservableObject {
     /// 短期内稍微安静一点。**这不是冷却**，只是把 drive 往下压一点。
     func noteRun() {
         var s = state
-        s.drive = clamp(s.drive - kRun, 0, 1)
+        let ctl = WakeControl.shared
+        let k = ctl.mode == .custom ? (ctl.state.custom?.afterRun ?? kRun) : kRun
+        s.drive = clamp(s.drive - k, 0, 1)
         state = s
     }
 
@@ -232,6 +252,10 @@ final class WakeEngine: ObservableObject {
 
     /// 把从上次到现在这段时间补算完。中间攒够 θ 就醒一次。
     func advance(now: Date = Date()) {
+        // 他设的控制先过一遍期（到期回默认），调制只在这一次里算一次——
+        // 下面那个循环最多跑七天、一分钟一步，每步都去读欲望和念头池太贵。
+        WakeControl.shared.expire(now: now)
+        let mod = WakeControl.shared.modulation
         var s = state
         let elapsed = now.timeIntervalSince(s.lastTick) / 60.0   // 分钟
         guard elapsed > 0.01 else { return }
@@ -261,7 +285,7 @@ final class WakeEngine: ObservableObject {
             s.drift = s.drift * rhoX + sigmaX * sqrt(max(0, 1 - rhoX * rhoX)) * gauss()
             s.drift = clamp(s.drift, -0.40, 0.40)
 
-            let lambda = lambdaValue(drive: s.drive, tone: s.tone, drift: s.drift)
+            let lambda = lambdaValue(drive: s.drive, tone: s.tone, drift: s.drift, mod: mod)
             s.hazard += lambda * (step / 60.0)
 
             if s.hazard >= s.theta {
@@ -275,15 +299,40 @@ final class WakeEngine: ObservableObject {
 
         s.lastTick = now
         state = s
-        lambdaNow = lambdaValue(drive: s.drive, tone: s.tone, drift: s.drift)
+        lambdaNow = lambdaValue(drive: s.drive, tone: s.tone, drift: s.drift, mod: mod)
 
+        // ⚠️ **精确那条先看。** 两条路是独立的：
+        // 到了明确时刻的那一次有理由，同一刻的非精确机会让给它——
+        // 非精确本来就只是「那个时刻的一次机会」，错过就不存在。
+        if checkPrecise(now: now) { return }
         if wokeUp { opportunity(at: now) }
     }
 
-    private func lambdaValue(drive: Double, tone: Double, drift: Double) -> Double {
-        let base = config.lambdaBase <= 0 ? 1.5 : config.lambdaBase
+    /// λ(t) = clamp( λ₀ · exp[ βD(D−μD) + βT(T−μT) + βX·X ] · Mmod, λmin, λmax )
+    ///
+    /// 2.0 里多出来的全在 λ₀、边界、`Mmod` 这三处，指数那一段一个字没动：
+    ///   · **低频**：λ₀ × 0.25
+    ///   · **自定**：λ₀、λmin、λmax 换成他存的那套
+    ///   · **Mmod**：连续来源（想念、念头）按他给的 factor 调制（见 `WakeControl.modulation`）
+    /// **安静**不在这儿处理——它是在「给不给机会」那一关直接拦下（见 `opportunity`），
+    /// λ 照算，界面上看得见他本来有多想醒。
+    private func lambdaValue(drive: Double, tone: Double, drift: Double,
+                             mod: Double) -> Double {
+        var base = normalRate
+        var lo = lambdaMin, hi = lambdaMax
+        let ctl = WakeControl.shared
+        switch ctl.mode {
+        case .low:
+            base *= 0.25
+        case .custom:
+            if let p = ctl.state.custom {
+                base = p.rate; lo = p.floor; hi = p.ceiling
+            }
+        case .normal, .silent:
+            break
+        }
         let e = betaD * (drive - muD) + betaT * (tone - muT) + betaX * drift
-        return clamp(base * exp(e), lambdaMin, lambdaMax)
+        return clamp(base * exp(e) * mod, lo, hi)
     }
 
     private func rollDay(_ s: inout WakeState, now: Date) {
@@ -300,6 +349,20 @@ final class WakeEngine: ObservableObject {
     /// Wake 只负责「给他一次运行机会」，说不说话是他自己的事。
     private func opportunity(at now: Date) {
         guard config.enabled else { return }
+        // 他自己的非精确控制（唤醒 2.0）。**只拦这条路**，精确那条在 `checkPrecise`。
+        let ctl = WakeControl.shared
+        switch ctl.mode {
+        case .silent:
+            return
+        case .low:
+            // 低频档：两次非精确之间至少隔 90 分钟
+            if let last = state.lastFire, now.timeIntervalSince(last) < 90 * 60 { return }
+        case .custom:
+            if let p = ctl.state.custom, p.minGap > 0,
+               let last = state.lastFire, now.timeIntervalSince(last) < p.minGap * 60 { return }
+        case .normal:
+            break
+        }
         guard !running else { return }
         guard let app else { return }
         guard state.firedToday < config.dailyLimit else { return }
@@ -347,7 +410,7 @@ final class WakeEngine: ObservableObject {
     /// 跑一次。返回**他到底醒没醒成**——
     /// `false` = 根本没问到上游，这一次不该记在他头上。
     @discardableResult
-    private func run(app: AppState) async -> Bool {
+    private func run(app: AppState, precise: AppState.PreciseWakeContext? = nil) async -> Bool {
         // 先问问电脑上那份服务：他刚才有没有留过话
         if config.useServer, !config.serverURL.isEmpty {
             if let said = await fetchFromServer() {
@@ -385,8 +448,10 @@ final class WakeEngine: ObservableObject {
             }
             tries = attempt + 1
 
-            switch await app.wakeUpAndDecide() {
+            switch await app.wakeUpAndDecide(precise: precise) {
             case .spoke(let said):
+                // 投进这一次提示词的那几条 missed，**问成了才算告诉过**
+                WakeControl.shared.ackMissed(WakeControl.shared.lastProjectedMissed)
                 deliver(said.text, app: app, from: "本机")
                 IslandController.shared.finishWake(said: said.text)
                 WakeLog.shared.add(.init(at: Date(), kind: .spoke,
@@ -396,6 +461,7 @@ final class WakeEngine: ObservableObject {
                 return true
 
             case .silent:
+                WakeControl.shared.ackMissed(WakeControl.shared.lastProjectedMissed)
                 // 他醒了，看了一眼，决定什么都不说。**这才算一次。**
                 // 岛上那条撤掉：什么都没发生就不该给她一个勾。
                 IslandController.shared.cancelWake()
@@ -425,6 +491,155 @@ final class WakeEngine: ObservableObject {
         WakeLog.shared.add(.init(at: Date(), kind: .failed,
                                  text: why, from: "本机", tries: tries))
         return false
+    }
+
+    // MARK: 精确那条路（唤醒 2.0）
+
+    /// 她那几道闸。**精确 Wake 跳过的是他自己的非精确控制，跳不过这几道。**
+    /// 返回挡住的原因，没挡返回 nil。
+    private func herGate(_ now: Date) -> String? {
+        guard let app else { return "App 没准备好" }
+        if !config.enabled { return "她关着「自己醒来」" }
+        if app.dndOn { return "她开着勿扰" }
+        if isQuiet(now) { return "在她设的安静时段里" }
+        if state.firedToday >= config.dailyLimit { return "她设的今天次数已经用完" }
+        return nil
+    }
+
+    /// 看一眼有没有到点的精确事件，有就兑现**一个**。返回这次有没有真的开跑。
+    ///
+    /// ⚠️ 顺序：他自己约的在前，外部来源在后。
+    /// ⚠️ **幂等**：同一个事件只处理一次（自约靠状态，外部靠 `handledPrecise`）。
+    @discardableResult
+    private func checkPrecise(now: Date) -> Bool {
+        guard app != nil, !running else { return false }
+        let ctl = WakeControl.shared
+
+        // ① 他自己约的
+        for w in ctl.pendingSelfWakes where w.wakeAt <= now {
+            let late = now.timeIntervalSince(w.wakeAt)
+            if late > selfGrace {
+                // 到点那一刻系统没给运行机会。**不补 Wake**，只记下没兑现的事实。
+                let why = "到点的时候 App 没在运行（晚了 \(Int(late / 60)) 分钟才有机会）"
+                ctl.mark(w.id, .missed, why: why)
+                WakeLog.shared.add(.init(at: now, kind: .missed,
+                                         text: "「\(w.note)」— \(why)", from: "自约"))
+                continue
+            }
+            if let why = herGate(now) {
+                ctl.mark(w.id, .missed, why: why)
+                WakeLog.shared.add(.init(at: now, kind: .missed,
+                                         text: "「\(w.note)」— \(why)", from: "自约"))
+                continue
+            }
+            firePrecise(.init(source: "你自己约的", note: w.note, scheduledAt: w.wakeAt),
+                        at: now) { ok in
+                ctl.mark(w.id, ok ? .consumed : .missed,
+                         why: ok ? "" : "到点那一次没问成（上游出错）")
+            }
+            return true
+        }
+
+        // ② 外部精确来源
+        for ev in externalDue(now) {
+            let src = ev.source
+            // ⚠️ **先记成处理过，再决定跑不跑**：这一个事件就这一次，成不成都不再来。
+            ctl.noteHandled(ev.key)
+            if now.timeIntervalSince(ev.at) > externalGrace {
+                continue           // 过了窗口的老事件：安静地记过去，不补发、不刷屏
+            }
+            if !ctl.preciseEnabled(src) {
+                // ⚠️ 这是**正常终止**，不是故障——他自己关的。
+                WakeLog.shared.add(.init(at: now, kind: .missed,
+                                         text: "\(ev.note) — 他关着「\(src.rawValue)」这个来源，这一次正常拦下",
+                                         from: src.rawValue))
+                continue
+            }
+            if let why = herGate(now) {
+                WakeLog.shared.add(.init(at: now, kind: .missed,
+                                         text: "\(ev.note) — \(why)", from: src.rawValue))
+                continue
+            }
+            firePrecise(.init(source: src == .promise ? "承诺到期" : "日记解锁",
+                              note: ev.note, scheduledAt: ev.at), at: now) { _ in }
+            return true
+        }
+        return false
+    }
+
+    private struct DueEvent {
+        var key: String
+        var source: PreciseSource
+        var at: Date
+        var note: String
+    }
+
+    /// 到点了、还没处理过的外部精确事件。**来源自己说它什么时候到**，这儿只读。
+    private func externalDue(_ now: Date) -> [DueEvent] {
+        let ctl = WakeControl.shared
+        var out: [DueEvent] = []
+        let store = MemoryStore.shared
+        for p in store.promises where !p.done {
+            guard let due = p.due, var at = MemoryStore.parse(due) else { continue }
+            // ⚠️ 只写了日期的「9 月 15 日之前」，别算成那天零点——
+            // 零点在她的安静时段里，等于每一条都必然被挡。按那天上午十点算。
+            if due.count <= 10,
+               let ten = Calendar.current.date(bySettingHour: 10, minute: 0, second: 0, of: at) {
+                at = ten
+            }
+            let key = "promise-" + p.id + "-" + due
+            guard at <= now, !ctl.wasHandled(key) else { continue }
+            out.append(DueEvent(key: key, source: .promise, at: at,
+                                note: "你答应过的事到期了：" + p.text))
+        }
+        for d in store.diaries {
+            guard let u = d.unlockAt, let at = MemoryStore.parse(u) else { continue }
+            let key = "diary-" + d.id
+            guard at <= now, !ctl.wasHandled(key) else { continue }
+            out.append(DueEvent(key: key, source: .diary, at: at,
+                                note: "\(d.author) 封起来的那篇日记解锁了"))
+        }
+        return out.sorted { $0.at < $1.at }
+    }
+
+    /// 兑现一次精确 Wake。计数、失败回滚跟非精确那条是同一套规矩。
+    private func firePrecise(_ ctx: AppState.PreciseWakeContext, at now: Date,
+                             done: @escaping @MainActor (Bool) -> Void) {
+        guard let app else { return }
+        running = true
+        let before = (fired: state.firedToday, last: state.lastFire)
+        var s = state
+        s.firedToday += 1
+        s.lastFire = now
+        state = s
+        Console.log(.wake, "准点醒了一次", ctx.source + " · " + ctx.note)
+
+        Task { @MainActor in
+            let woke = await self.run(app: app, precise: ctx)
+            if !woke {
+                var back = self.state
+                back.firedToday = before.fired
+                back.lastFire = before.last
+                self.state = back
+            }
+            self.running = false
+            if woke { self.noteRun() }
+            done(woke)
+        }
+    }
+
+    /// 自约叫醒到点那一刻排一条通知。
+    ///
+    /// ⚠️ iOS 不保证到点给 App 运行机会——**通知是一定会到的**。
+    /// 她点开的那一刻 App 活过来，`advance` 就在宽限窗口里把这次兑现掉。
+    func scheduleSelfWakeNotice(_ w: SelfWake) {
+        guard config.enabled else { return }
+        let name = app?.settings.aiName.isEmpty == false ? app!.settings.aiName : "阿晏"
+        Notifier.shared.scheduleSelfWake(id: w.id, at: w.wakeAt, name: name)
+    }
+
+    func withdrawSelfWakeNotices(_ ids: [UUID]) {
+        Notifier.shared.withdrawSelfWakes(ids)
     }
 
     /// 把下一次醒的时间挪到 `afterMinutes` 分钟之后。

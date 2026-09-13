@@ -164,6 +164,8 @@ enum MessageBeats {
         // 真正记下来是在收尾那一处（`AppState`），
         // 流式的时候每来一个字都会走一遍这儿，认在这儿等于关八百次。
         text = PauseMarker.extract(text).clean
+        // 调唤醒方式那几个记号也只剥不认（认在 `AppState` 收尾那一处）
+        text = WakeControlMarker.extract(text).clean
 
         // ⚠️⚠️ **动作和心里话整段扫，不按行扫。**
         //

@@ -183,6 +183,27 @@ struct WakeHistoryDrawer: View {
                         .foregroundStyle(Theme.textMuted(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
+            case .control:
+                // 他自己调了一次怎么被叫醒（唤醒 2.0）
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("他调了唤醒方式")
+                        .font(.app(12, weight: .medium))
+                        .foregroundStyle(Theme.textSoft(scheme))
+                    Text(MD.inline(e.text))
+                        .font(.app(11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            case .missed:
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("准点叫醒没兑现")
+                        .font(.app(12, weight: .medium))
+                        .foregroundStyle(Theme.textSoft(scheme))
+                    Text(MD.inline(e.text))
+                        .font(.app(11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer(minLength: 0)
         }

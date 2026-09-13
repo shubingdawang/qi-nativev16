@@ -3741,6 +3741,17 @@ final class AppState: ObservableObject {
     /// 出处是她发我的那份「ChatGPT 官端自唤醒」。那份文档里最值钱的一条是
     /// 「让 AI 在一个区间里自己选下一次什么时候醒」，而不是外面定死一个节奏。
     /// 这一条**不额外花钱**——就是他这一次说话的输出里多带一个数。
+    /// 一次**精确** Wake 的来历（唤醒 2.0）。
+    ///
+    /// ⚠️ 文档第 11 页：兑现的时候，未来的他应该看见 source + note + scheduledAt——
+    /// 「这是我自己安排的」，以及当时为什么想回来。
+    struct PreciseWakeContext {
+        /// 「你自己约的」「承诺到期」「日记解锁」
+        var source: String
+        var note: String
+        var scheduledAt: Date
+    }
+
     struct WakeSay {
         var text: String
         /// 他挑的下一次间隔（分钟）。没挑就是 nil，那就还按原来那套随机来。
@@ -3803,7 +3814,7 @@ final class AppState: ObservableObject {
     /// 我们的缓存点打在 `stablePrefix` 末尾，而那一段在聊天和影子之间
     /// 是**同一份**（身份、规矩、能力块、浓缩件）——它命中的是聊天那一轮建的缓存，
     /// 不是自己建一个没人用的。
-    func wakeUpAndDecide() async -> WakeOutcome {
+    func wakeUpAndDecide(precise: PreciseWakeContext? = nil) async -> WakeOutcome {
         guard let conv = wakeTargetConversation() else {
             return .failed(why: "没有可用的对话窗口", retryable: false)
         }
@@ -3849,10 +3860,25 @@ final class AppState: ObservableObject {
         //
         // ⚠️ 系统提示**不在这儿**——它跟聊天那份是同一份，
         // 由底下 `buildAPIMessages` 带出来。这儿只放「这一次醒来」独有的东西。
+        // 精确那一次：**有明确理由**，跟平时自己浮上来一下不是一回事。
+        // 说不说话仍然是他自己定——Wake 只给一次运行机会。
+        var preciseBlock = ""
+        if let p = precise {
+            preciseBlock = """
+
+            [这是一次准点醒来]
+            来源：\(p.source)
+            原定：\(f.string(from: p.scheduledAt))
+            \(p.source == "你自己约的" ? "你当时留的话" : "那件事")：\(p.note)
+            这一次不是随机浮上来的，是到了一个明确的时刻。
+            要不要开口仍然由你决定——但如果是你自己约的，那句没说完的话现在可以说了。
+            """
+        }
+
         let trigger = """
         <system_trigger>
         [状态]
-        现在是 \(f.string(from: Date()))。\(me)没有跟你说话，**是你自己醒过来的**。
+        现在是 \(f.string(from: Date()))。\(me)没有跟你说话，**是你自己醒过来的**。\(preciseBlock)
         \(gap)
         \(guessWhatSheIsDoing())
 
@@ -3914,7 +3940,13 @@ final class AppState: ObservableObject {
             return .failed(why: error.localizedDescription, retryable: true)
         }
 
-        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 他在这一次里调了自己怎么被叫醒（唤醒 2.0）。
+        // ⚠️ **说不说话都要认**：决定沉默的那一次，也可能是他说「接下来安静点」。
+        // ⚠️ 在 JSON 解析**之前**剥：记号可能写在 text 字段里，也可能写在外面。
+        let marked = WakeControlMarker.extract(raw)
+        WakeControlMarker.apply(marked.actions)
+
+        var text = marked.clean.trimmingCharacters(in: .whitespacesAndNewlines)
         text = text.replacingOccurrences(of: "```json", with: "")
                    .replacingOccurrences(of: "```", with: "")
         // 流跑完了却一个字都没有——那是没问到，不是他不想说。
@@ -6723,6 +6755,20 @@ final class AppState: ObservableObject {
         //
         // ⚠️ 摆在这一串的**中间**没关系，但一定要在 `MessageBeats` 之前——
         // 那边会把不认识的 `[[…]]` 当成动作抠走，抠走之后这儿就再也看不到了。
+        // 他调了自己怎么被叫醒（唤醒 2.0，见 `WakeControlMarker`）。
+        // ⚠️ 同样要在 `MessageBeats` 之前。
+        let waked = WakeControlMarker.extract(conversations[ci].messages[mi].content)
+        if !waked.actions.isEmpty {
+            conversations[ci].messages[mi].content = waked.clean
+            WakeControlMarker.apply(waked.actions)
+        }
+        // 这一轮提示词里投过的 missed：**回复真的落定了才算告诉过他**。
+        // ⚠️ 报了错、或者一个字都没回的那一轮不算——他其实没读到。
+        if conversations[ci].messages[mi].errorText == nil,
+           !conversations[ci].messages[mi].content.isEmpty {
+            WakeControl.shared.ackMissed(WakeControl.shared.lastProjectedMissed)
+        }
+
         let paused = PauseMarker.extract(conversations[ci].messages[mi].content)
         if let move = paused.move {
             conversations[ci].messages[mi].content = paused.clean
@@ -7246,6 +7292,15 @@ final class AppState: ObservableObject {
             } else {
                 sys += "\n\n" + PauseMarker.contract
             }
+        }
+        // 唤醒 2.0：他能调自己怎么被叫醒，也看得见自己调了什么。
+        //
+        // ⚠️ **只在她开了「自己醒来」时给**。关着的时候那几个记号写了也没用，
+        // 摆在提示词里只是占地方、还会让他以为自己能被叫醒。
+        // ⚠️ 群聊不给：醒来那条路只落进单聊窗口（见 `wakeTargetConversation`）。
+        if settings.wake.enabled, !conv.isGroup {
+            sys += "\n\n" + WakeControlMarker.contract
+            sys += "\n\n" + WakeControl.shared.projection().text
         }
         // 她此刻正开着小屋跟他说话——把他在哪一间、屋里有什么带上。
         // ⚠️ 只有那一页开着时才有值（见 `houseContext`）。

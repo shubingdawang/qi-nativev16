@@ -20,6 +20,7 @@ struct WakeSettingsView: View {
 
     @EnvironmentObject var app: AppState
     @ObservedObject private var engine = WakeEngine.shared
+    @ObservedObject private var control = WakeControl.shared
     @ObservedObject private var notifier = Notifier.shared
     @Environment(\.colorScheme) private var scheme
 
@@ -37,6 +38,7 @@ struct WakeSettingsView: View {
                     serverCard
                     bannerCard
                     statsCard
+                    controlCard
                     historyCard
                 }
                 .padding(.horizontal, 16)
@@ -269,6 +271,68 @@ struct WakeSettingsView: View {
             }
             SettingsDivider()
             SettingsNote("查看这些数值不产生费用。")
+        }
+    }
+
+    // MARK: 他自己设的
+
+    /// 他自己调过的唤醒方式。**只读。**
+    ///
+    /// ⚠️⚠️ 这里没有「改」「结束」按钮，是故意的。
+    ///
+    /// 那份「让 TA 自己醒来 2.0」最后固定的是权力结构：
+    /// **他是唯一的 Wake Control 决策主体**，这一层只忠实执行。
+    /// 她这边能管的是她自己那几道闸（总开关、安静时段、勿扰、每天上限）——
+    /// 那几样上面都有，而且精确叫醒也跳不过它们。
+    /// 在这儿再给她一个「替他结束」，就又回到了「系统替他决定」。
+    ///
+    /// 但她得**看得见**：他设了安静、约了几点回来、为什么——
+    /// 不然他三个小时没动静，她只会以为坏了。
+    private var controlCard: some View {
+        let s = control.state
+        let now = Date()
+        let f = DateFormatter()
+        f.dateFormat = "M月d日 HH:mm"
+        return SettingsCard(title: "他自己设的") {
+            if let o = s.frequency, o.alive(now) {
+                statRow("非精确唤醒", o.value.rawValue + " · 剩 "
+                        + WakeControl.remain(o.expiresAt, now))
+                SettingsDivider()
+                SettingsNote("理由：" + o.reason)
+            } else {
+                statRow("非精确唤醒", "正常")
+            }
+            if let p = s.custom {
+                SettingsDivider()
+                statRow("自定参数", String(format: "第 %d 版 · %.2g 次/小时 · 间隔 %.0f 分钟",
+                                         p.revision, p.rate, p.minGap))
+            }
+            ForEach(WakeSource.allCases, id: \.self) { src in
+                if let o = s.sourceFactors[src.rawValue], o.alive(now) {
+                    SettingsDivider()
+                    statRow("来源「" + src.rawValue + "」",
+                            String(format: "%.2g · 剩 ", o.value)
+                            + WakeControl.remain(o.expiresAt, now))
+                }
+            }
+            ForEach(PreciseSource.allCases, id: \.self) { src in
+                if let o = s.preciseOff[src.rawValue], o.alive(now) {
+                    SettingsDivider()
+                    statRow("「" + src.rawValue + "」到点叫醒",
+                            "关着 · 剩 " + WakeControl.remain(o.expiresAt, now))
+                }
+            }
+            ForEach(control.pendingSelfWakes) { w in
+                SettingsDivider()
+                statRow("约好回来", f.string(from: w.wakeAt))
+            }
+            SettingsDivider()
+            SettingsNote("""
+            以上由他在对话中自行设定，到期自动恢复默认。\
+            非精确唤醒可设为低频、安静或自定参数；「安静」不影响他自己约定的准点唤醒。\
+            准点唤醒同样受上方的总开关、安静时段、勿扰和每日次数上限约束，\
+            被拦下的会在他下次运行时告知他一次。每一次设定和到期都记在下方的醒来记录里。
+            """)
         }
     }
 

@@ -144,6 +144,36 @@ final class Notifier: NSObject, ObservableObject {
             withIdentifiers: (0..<Self.maxNudges).map { Self.nudgePrefix + "\($0)" })
     }
 
+    // MARK: 他自己约的那一次（唤醒 2.0）
+
+    nonisolated private static let selfWakePrefix = "selfwake-"
+
+    /// 他约好的准点叫醒，到点排一条。
+    ///
+    /// ⚠️ **这句不能替他说话。** 那一刻他要说什么还没算出来，
+    /// 能写的只有一件真事：他约好了这会儿回来。
+    /// 他当时留的 note 也不写进来——那是写给未来的他自己看的，不是写给她的。
+    func scheduleSelfWake(id: UUID, at date: Date, name: String) {
+        guard authorized else { return }
+        let gap = date.timeIntervalSinceNow
+        guard gap > 1 else { return }
+        let content = UNMutableNotificationContent()
+        content.title = name
+        content.body = "约好这会儿回来找你"
+        content.sound = .default
+        content.userInfo = ["selfWake": true]
+        center.add(UNNotificationRequest(
+            identifier: Self.selfWakePrefix + id.uuidString,
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: gap, repeats: false)))
+    }
+
+    func withdrawSelfWakes(_ ids: [UUID]) {
+        guard !ids.isEmpty else { return }
+        center.removePendingNotificationRequests(
+            withIdentifiers: ids.map { Self.selfWakePrefix + $0.uuidString })
+    }
+
     /// 最多同时挂几条。**撤销要按 id 删，所以这个数得是固定的**——
     /// 见 `cancelNudges`。iOS 每个 App 上限 64 条，这儿远用不到。
     nonisolated static let maxNudges = 12
@@ -183,6 +213,11 @@ extension Notifier: UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse
     ) async {
         let info = response.notification.request.content.userInfo
+
+        // 他约的准点那条：**点开就行，别的什么都不用做**。
+        // App 一到前台 `WakeEngine.resume` → `advance` → 精确那条路在宽限窗口里兑现。
+        // ⚠️ 不能当兜底那条处理——那会多跑一次非精确的醒。
+        if info["selfWake"] as? Bool == true { return }
 
         // 兜底那条：点开的这一刻才真的去算他要说什么
         if info["nudge"] as? Bool == true {

@@ -16,6 +16,11 @@ struct WakeLogEntry: Codable, Identifiable, Hashable {
         case spoke      // 他说了这句
         case silent     // 他醒了，看了一眼，决定什么都不说
         case failed     // 根本没问成（上游挂了／网断了）
+        /// 他自己改了一次唤醒控制（频率、来源、约叫醒…）。
+        /// ⚠️ 文档要求「可审计」：每一次改动、每一次到期恢复都留一行。
+        case control
+        /// 一次精确 Wake 没兑现，或者被他自己关掉的来源正常拦下
+        case missed
     }
 
     var id = UUID()
