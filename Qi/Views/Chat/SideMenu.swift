@@ -411,6 +411,8 @@ struct SideMenuItem: Identifiable, Hashable {
         .init(id: "journal",   title: "手帐", icon: "book.pages"),
         .init(id: "library",   title: "书房", icon: Icon.diary),
         .init(id: "memo",      title: "备忘", icon: "note.text"),
+        // 工资：排班日历 + 每天记账。跟备忘、承诺摆一起，都是她自己过日子的东西
+        .init(id: "wage",      title: "工资", icon: "yensign.circle"),
         .init(id: "promise",   title: "承诺", icon: "hand.raised"),
         .init(id: "mood",      title: "心情", icon: Icon.heart),
         .init(id: "hobby",     title: "爱好", icon: "heart.text.square"),
