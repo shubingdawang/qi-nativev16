@@ -621,6 +621,12 @@ struct AppSettings: Codable {
     var glassOpacity: Double = 1.0
     /// 玻璃是哪一套做法
     var glassStyle: GlassStyle = .frosted
+    /// 玻璃走哪一套配方。`false` = 现在这套（系统材质为主），
+    /// `true` = 「三块玻璃的配方」那份参考的做法（见 `GlassRecipe`）。
+    ///
+    /// ⚠️ 两套**都活着**是故意的。她要的是「就看哪个更流畅」——
+    /// 那就得能当场切着比。比完了留一个、删另一个。
+    var glassNewRecipe: Bool = false
     /// 配色的浓淡。1 = 原样，往上更浓、往下更淡。
     ///
     /// 她报的：「家和兔牙的配色变得有些奇怪，怎么感觉比之前淡了很多。」
@@ -940,6 +946,7 @@ extension AppSettings {
         clawdY = (try? c.decodeIfPresent(Double.self, forKey: .clawdY)) ?? 0.66
         glassOpacity = (try? c.decodeIfPresent(Double.self, forKey: .glassOpacity)) ?? 1.0
         glassStyle = (try? c.decodeIfPresent(GlassStyle.self, forKey: .glassStyle)) ?? .frosted
+        glassNewRecipe = (try? c.decodeIfPresent(Bool.self, forKey: .glassNewRecipe)) ?? false
         glassDim = (try? c.decodeIfPresent(Double.self, forKey: .glassDim)) ?? 0.22
         themePunch = (try? c.decodeIfPresent(Double.self, forKey: .themePunch)) ?? 1.0
         nativeToolsEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .nativeToolsEnabled)) ?? true

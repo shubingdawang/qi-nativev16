@@ -39,6 +39,7 @@ final class AppState: ObservableObject {
         Look.applyNavBar(style: settings.glassStyle, opacity: settings.glassOpacity)
         Theme.preset = settings.preset
         Theme.glassStyle = settings.glassStyle
+        Theme.glassNewRecipe = settings.glassNewRecipe
         // 身体开着的时候，渴／想她／累／压着这四维读身体，别两套各算各的
         DesireEngine.mirrorsBody = settings.bodyEnabled
         // 字号：16 是基准。全 App 的字都乘这个倍率（Font.app），

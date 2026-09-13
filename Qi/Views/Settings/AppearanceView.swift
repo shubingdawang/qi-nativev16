@@ -53,6 +53,7 @@ struct AppearanceView: View {
                     presetCard
                     textColorCard
                     chatCard
+                    recipeCard
                     auroraCard
                     previewCard
                 }
@@ -630,6 +631,47 @@ struct AppearanceView: View {
     ///
     /// ⚠️ 这一档删过一次又回来了。说明里要写清楚**现在和当初不一样**——
     /// 她关掉它是因为卡，不写的话她不会再打开第二次。
+    /// 玻璃那两套配方，切着比。
+    ///
+    /// 她说的：「现在的磨砂我有点不满意，你怕糊代码就存档一下原来的
+    /// 换成她这样的，模糊和磨砂都换……就看哪个更流畅。」
+    ///
+    /// ⚠️ 两套**都活着**，不是把旧的抄进一个没人调用的文件——
+    /// 那种存档一个版本之后就烂了。切着比完，留一个删另一个。
+    private var recipeCard: some View {
+        SettingsCard(title: "玻璃配方") {
+            Toggle(isOn: Binding(
+                get: { app.settings.glassNewRecipe },
+                set: { app.settings.glassNewRecipe = $0 }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("换一套做法")
+                        .font(.app(15))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    Text("磨砂与模糊两档改用另一套参数，通透档不变")
+                        .font(.app(11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+            }
+            .tint(app.settings.accentColor)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+
+            SettingsNote("""
+            开启后，「磨砂」改为大模糊加厚底色层（浅色 42%–55%，深色为等厚的暗色层），\
+            表面保留颗粒；「模糊」改为中等模糊加薄底色层，并在上缘加一条高光线。
+
+            厚底色层的作用是让玻璃具有自身颜色，不随背后内容明暗而变化。\
+            原实现的底色层极薄，卡片后方偏暗时玻璃随之发黑，偏亮时发白。
+
+            「通透」档不受影响：该档在 iOS 26 上使用系统液态玻璃，\
+            其折射效果为系统实现，无需替换。
+
+            两套实现同时存在，可随时切回对比。
+            """, title: "说明")
+        }
+    }
+
     private var auroraCard: some View {
         SettingsCard(title: "光晕") {
             Toggle(isOn: $auroraOn) {

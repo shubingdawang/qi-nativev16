@@ -42,6 +42,9 @@ enum Theme {
     /// 玻璃用哪一套做法。同上，AppState 同步过来，
     /// 这样 GlassSurface 这种到处都在用的小 View 不必层层传设置。
     nonisolated(unsafe) static var glassStyle: GlassStyle = .frosted
+    /// 玻璃走哪一套配方。同上，AppState 同步过来。
+    /// `false` = 现在这套，`true` = 那份参考的做法（见 `GlassRecipe`）。
+    nonisolated(unsafe) static var glassNewRecipe: Bool = false
     /// 全局字号倍率。AppState 在设置变化时同步过来。
     ///
     /// 她说「设置里的字号调整没有即时显示……调完设置里的字也没跟着变，
@@ -357,6 +360,9 @@ struct GlassSurface: View {
 
     private var kind: GlassStyle { style ?? Theme.glassStyle }
 
+    /// 走不走那份参考的新配方。跟设置里那个开关是同一个值。
+    private var newRecipe: Bool { Theme.glassNewRecipe }
+
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: radius, style: .continuous)
     }
@@ -364,9 +370,12 @@ struct GlassSurface: View {
     var body: some View {
         Group {
             switch kind {
-            case .frosted: frosted
+            // ⚠️ 磨砂和模糊有**两套**，在设置里切（见 `GlassRecipe`）。
+            // 通透那档只有一套：iOS 26 上用的是系统真的液态玻璃，
+            // 拿浏览器那套折射去替它是往回走。
+            case .frosted: newRecipe ? frostedNew : frosted
             case .clear:   clear
-            case .blur:    blur
+            case .blur:    newRecipe ? blurNew : blur
             }
         }
         // ⚠️ 这儿原来有一层「深色下压黑」，**删了**（理由见上面）。
@@ -612,6 +621,56 @@ struct GlassSurface: View {
     ///
     /// 系统材质没有连续的「糊多少」，**苹果自己就是换档**。
     /// 所以滑块在这儿变成挑档：越往右越厚、背后越糊。
+    // MARK: 新配方那两支
+    //
+    // 照「三块玻璃的配方」那份参考做的。要点全在 `GlassRecipe` 的注释里。
+    //
+    // ⚠️ **这儿一样不许加 `.shadow` / `.blur` / `.drawingGroup`。**
+    // 那几样会把这一层强制离屏，而离屏就把 `Material` 的背景采样打断了——
+    // 整个 App 的玻璃会一起退化成近似纯色。这条跟旧那套是同一条。
+
+    /// 磨砂（新）：大模糊 + **厚纱** + 颗粒。
+    ///
+    /// 跟旧那支的差别只有一处，但那一处就是她说「不满意」的地方：
+    /// **纱从几乎没有（`extra * 0.10`）变成 42%~55%**，
+    /// 玻璃因此有了自己的颜色，不再被背后的画面推着走。
+    private var frostedNew: some View {
+        shape.fill(.thickMaterial)
+            .overlay {
+                shape.fill(GlassRecipe.veil(dark: scheme == .dark,
+                                            strength: strength))
+            }
+            .overlay {
+                // 深色下那一点白：没有它，厚暗纱看着是个洞，不是玻璃
+                shape.fill(GlassRecipe.sheen(dark: scheme == .dark))
+            }
+            .overlay {
+                if extra > 0.01 { shape.fill(.white.opacity(extra * 0.10)) }
+            }
+            .overlay {
+                GlassGrainLayer(radius: radius, strength: strength)
+            }
+    }
+
+    /// 模糊（新）＝ 参考里的**毛玻璃**：中模糊 + 薄纱渐变 + 上缘一线高光。
+    ///
+    /// ⚠️ 那条高光是这一档的灵魂（参考的原话）。它**不是一圈描边**：
+    /// 渐变到中间就化没，只有顶上那一线有。
+    private var blurNew: some View {
+        shape.fill(.regularMaterial)
+            .overlay {
+                shape.fill(GlassRecipe.thinVeil(dark: scheme == .dark,
+                                                strength: strength))
+            }
+            .overlay {
+                if extra > 0.01 { shape.fill(.white.opacity(extra * 0.10)) }
+            }
+            .overlay {
+                shape.strokeBorder(GlassRecipe.topLine(dark: scheme == .dark),
+                                   lineWidth: 1)
+            }
+    }
+
     private var tier: Material {
         switch blurAmount {
         case ..<0.30: return .ultraThinMaterial
