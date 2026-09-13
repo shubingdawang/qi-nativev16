@@ -2,13 +2,20 @@
 漏了 → 那件工具在开关页上还是显示模型提示词。
 多了 → 表里有个不存在的名字，纯垃圾。
 （加新工具要记得来这儿补一条，跟加家具要动五处是同一类事。）"""
-import re, io
+import re, io, glob, sys
+
+sys.stdout.reconfigure(encoding='utf-8')
 
 def names(path):
     src = io.open(path, encoding='utf-8').read()
     return set(re.findall(r'add\("([a-z_0-9]+)"', src))
 
-real = names('Qi/Core/NativeTools.swift') | names('Qi/Core/MemoryTools.swift')
+# ⚠️ **扫所有 `*Tools.swift`，别写死文件名。**
+# 原来只写了 NativeTools / MemoryTools 两个，后来加的 HealthTools、WageTools
+# 这个脚本根本看不见——它们的说明写进表里反倒被报成「不存在的名字」。
+real = set()
+for p in sorted(glob.glob('Qi/Core/*Tools.swift')):
+    real |= names(p)
 
 blurb_src = io.open('Qi/Core/ToolBlurb.swift', encoding='utf-8').read()
 listed = set(re.findall(r'^\s*"([a-z_0-9]+)":', blurb_src, re.M))

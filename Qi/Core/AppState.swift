@@ -1943,6 +1943,9 @@ final class AppState: ObservableObject {
                 native += MemoryTools.definitions(memory: settings.localMemory,
                                                   pulse: settings.localPulse)
             }
+            // 工资页（排班、记账、挂图）。纯本机，一直给——
+            // 她单独不想让他动的话，工具面板里那几件可以一件件关。
+            native += WageTools.definitions()
             // 健康和待办。**三个开关都默认关着**，她开了才给。
             if settings.healthAccess || settings.todoAccess {
                 native += HealthTools.definitions(health: settings.healthAccess,
@@ -2710,6 +2713,9 @@ final class AppState: ObservableObject {
         case "annotate_vocab":                return "记了一个词"
         case "send_file":                     return "递了一份文件"
         case "moment_patch":                  return "改了此刻"
+        case "set_shift":                     return "排了一天的班"
+        case "wage_ledger":                   return "改了一笔账"
+        case "wage_image":                    return "给一笔账挂了图"
         default:                              return nil
         }
     }
@@ -2727,6 +2733,8 @@ final class AppState: ObservableObject {
             return "在写日记"
         case "period_status", "log_period", "add_period_note":
             return "在看你的日子"
+        case "read_wage", "set_shift", "wage_ledger", "wage_image":
+            return "在翻你的工资本"
         case "get_pulse_status":
             return "在感受自己的心跳"
         case "checkpoint", "end_of_day":
@@ -4774,6 +4782,12 @@ final class AppState: ObservableObject {
                                todos: settings.todoAccess,
                                write: settings.todoWrite) {
             return await HealthTools.run(name, args: args)
+        }
+
+        // 工资页那四件。挂图要读她最近发的图，交一个闭包进去——
+        // 只有 wage_image 真的会叫它，读记录不白翻一遍聊天。
+        if WageTools.handles(name) {
+            return WageTools.run(name, args: args, recentImages: { self.recentUserImages() })
         }
 
         if MemoryTools.handles(name, memory: settings.localMemory,

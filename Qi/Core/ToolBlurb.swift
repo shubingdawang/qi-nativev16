@@ -76,6 +76,8 @@ enum ToolBlurb {
         "post_moment": "发布一条动态",
         "read_moments": "查看动态列表",
         "moment_patch": "补充或修改已发布的动态",
+        "show_image": "重新查看聊天中较早发送的图片",
+        "search_window": "按关键词搜索本窗口已收起的历史消息",
         "send_to_group_chat": "向群聊发送消息",
         "dial_call": "发起一次通话",
         "listen_voice": "将语音消息转为文字",
@@ -84,6 +86,20 @@ enum ToolBlurb {
         // MARK: 小屋 · 游戏 · 占卜
 
         "clawd_room": "查看或整理 clawd 的房间",
+
+        // MARK: 健康 · 待办
+
+        "read_health": "读取健康数据：步数、睡眠、心率等",
+        "read_todos": "读取提醒事项中的待办",
+        "read_calendar": "读取日历中的日程",
+        "add_todo": "在提醒事项中新增一条待办",
+
+        // MARK: 工资
+
+        "read_wage": "查看工资页的排班、薪资与每日记账",
+        "set_shift": "为某天排班或修改班次、时间、时薪",
+        "wage_ledger": "新增、修改或删除某天的一笔账",
+        "wage_image": "将聊天中发送的图片添加到某笔账下",
         "flight_chess": "开始一局飞行棋",
         "monopoly": "开始一局大富翁",
         "create_journey": "生成一段旅程",

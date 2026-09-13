@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 /// 工资页：一个月的排班日历，每格标当天挣多少；点进去排班、记账、看总结。
 ///
@@ -15,6 +16,8 @@ struct WageView: View {
     /// 点开来看总结的那一天（圆角弹窗）
     @State private var summary: WageDayRef?
     @State private var showSettings = false
+    /// 总结里点开放大的那张图
+    @State private var preview: String?
 
     private let cal = Calendar.current
 
@@ -34,8 +37,27 @@ struct WageView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
                     .zIndex(10)
             }
+
+            // 放大看一张图。**画在同一层 ZStack 里，不走 sheet / fullScreenCover**——
+            // 这一页订阅着 AppState，挂 presentation 会被重建撤掉（PickHosts.swift 里记过）。
+            if let name = preview {
+                ZStack {
+                    Color.black.opacity(0.85).ignoresSafeArea()
+                    if let img = ImageStore.cached(name) {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFit()
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .padding(20)
+                    }
+                }
+                .onTapGesture { preview = nil }
+                .transition(.opacity)
+                .zIndex(20)
+            }
         }
         .animation(.easeOut(duration: 0.18), value: summary?.id)
+        .animation(.easeOut(duration: 0.18), value: preview)
         .navigationTitle("工资")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -263,7 +285,8 @@ struct WageView: View {
                                     summary = nil
                                     editing = ref
                                 },
-                                onClose: { summary = nil })
+                                onClose: { summary = nil },
+                                onOpenImage: { preview = $0 })
                     .padding(.horizontal, 28)
             }
         }
@@ -316,6 +339,7 @@ struct WageSummaryCard: View {
     let day: WorkDay
     var onEdit: () -> Void
     var onClose: () -> Void
+    var onOpenImage: (String) -> Void = { _ in }
 
     @EnvironmentObject private var app: AppState
     @Environment(\.colorScheme) private var scheme
@@ -373,7 +397,7 @@ struct WageSummaryCard: View {
                     row("收入") {
                         VStack(alignment: .leading, spacing: 3) {
                             ForEach(incomes) { e in
-                                value(e.what + "收入" + WageStore.money(e.amount) + "元")
+                                item(e, e.what + "收入" + WageStore.money(e.amount) + "元")
                             }
                         }
                     }
@@ -383,7 +407,7 @@ struct WageSummaryCard: View {
                     row(group.0 == .none ? "花费" : "花费（" + group.0.rawValue + "）") {
                         VStack(alignment: .leading, spacing: 3) {
                             ForEach(group.1) { e in
-                                value(e.what + "花费" + WageStore.money(e.amount) + "元")
+                                item(e, e.what + "花费" + WageStore.money(e.amount) + "元")
                             }
                         }
                     }
@@ -447,6 +471,46 @@ struct WageSummaryCard: View {
             .foregroundStyle(Theme.textMain(scheme))
             .fixedSize(horizontal: false, vertical: true)
     }
+
+    /// 一笔：那一行字，**下面一行**是它的缩略图（她要的排法）。
+    private func item(_ e: LedgerEntry, _ line: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            value(line)
+            if !e.images.isEmpty {
+                // ⚠️ 34 点：五张加四道缝正好 190，卡片右边那一栏放得下，不折行
+                HStack(spacing: 5) {
+                    ForEach(e.images, id: \.self) { name in
+                        WageThumb(name: name, size: 34)
+                            .onTapGesture { onOpenImage(name) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// 圆角正方形的缩略图。
+///
+/// ⚠️ 走 `ImageStore.cached`，别用 `load`：总结和编辑页每次重画都会跑 body，
+/// `load` 每次都从磁盘读、重新解码一遍 JPEG。
+struct WageThumb: View {
+    let name: String
+    var size: CGFloat = 48
+
+    var body: some View {
+        Group {
+            if let img = ImageStore.cached(name) {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Color.gray.opacity(0.2)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+    }
 }
 
 // MARK: - 当天编辑
@@ -469,13 +533,31 @@ struct WageDayEditor: View {
     @State private var amountText = ""
     @State private var meal: MealKind = .none
     @State private var income = false
+    /// 两个方格子那一笔还没记进去时，先挑好的图
+    @State private var draftImages: [String] = []
+
+    // 挑图
+    @State private var picking = false
+    @State private var pickedItems: [PhotosPickerItem] = []
+    /// 这一次挑的图挂到哪：`nil` = 还没记的那一笔；否则是那一笔的 id
+    @State private var pickTarget: UUID?
+    @State private var pickLimit = LedgerEntry.maxImages
+
+    /// ⚠️ 这一次打开期间**新存下的图**。点「取消」或者下滑关掉，这些要删——
+    /// 不删的话挑了图又反悔，`Images/` 里就攒下没人认领的文件。
+    @State private var addedNow: Set<String> = []
+    /// 打开时这一天本来就挂着的图。点「完成」时被删掉了的，才真的去删文件。
+    private let original: Set<String>
+    @State private var committed = false
 
     init(date: Date) {
         self.date = date
         let s = WageStore.shared
         let t = s.settings.template(.middle)
-        _day = State(initialValue: s.day(date)
-            ?? WorkDay(shift: nil, work: t.work, breaks: t.breaks, hourly: s.settings.hourly))
+        let d = s.day(date)
+            ?? WorkDay(shift: nil, work: t.work, breaks: t.breaks, hourly: s.settings.hourly)
+        _day = State(initialValue: d)
+        original = Set(d.entries.flatMap(\.images))
     }
 
     private var title: String {
@@ -509,13 +591,98 @@ struct WageDayEditor: View {
                     Button("完成") {
                         commitDraftEntry()
                         store.put(day, on: date)
+                        committed = true
+                        // 这一次里被拿掉的图（新挑的、原来就有的都算），删文件
+                        let kept = Set(day.entries.flatMap(\.images))
+                        for n in addedNow.union(original).subtracting(kept) {
+                            ImageStore.delete(n)
+                        }
                         dismiss()
                     }
                     .fontWeight(.semibold)
                 }
             }
             .onAppear { hourlyText = WageStore.money(day.hourly) }
+            // 没点「完成」就走了（取消、下滑）：这一次新存的图全删，原来的一张不动
+            .onDisappear {
+                if !committed { for n in addedNow { ImageStore.delete(n) } }
+            }
+            .background(PhotoPickHost(open: $picking, picked: $pickedItems,
+                                      maxCount: pickLimit))
+            .onChange(of: pickedItems) { _, items in
+                guard !items.isEmpty else { return }
+                let target = pickTarget
+                Task { @MainActor in
+                    for it in items {
+                        guard let data = try? await it.loadTransferable(type: Data.self),
+                              let raw = UIImage(data: data),
+                              let name = ImageStore.save(ImageStore.downscale(raw, maxSide: 1600))
+                        else { continue }
+                        addedNow.insert(name)
+                        attach(name, to: target)
+                    }
+                    pickedItems = []
+                }
+            }
         }
+    }
+
+    /// 挂一张图上去。**超过 5 张的直接删掉那个文件**，不留孤儿。
+    private func attach(_ name: String, to target: UUID?) {
+        if let id = target, let i = day.entries.firstIndex(where: { $0.id == id }) {
+            guard day.entries[i].images.count < LedgerEntry.maxImages else {
+                ImageStore.delete(name); addedNow.remove(name); return
+            }
+            day.entries[i].images.append(name)
+        } else {
+            guard draftImages.count < LedgerEntry.maxImages else {
+                ImageStore.delete(name); addedNow.remove(name); return
+            }
+            draftImages.append(name)
+        }
+    }
+
+    private func openPicker(for target: UUID?, has: Int) {
+        pickTarget = target
+        pickLimit = max(1, LedgerEntry.maxImages - has)
+        picking = true
+    }
+
+    /// 一排缩略图 + 末尾一个加号。每张右上角一个叉。
+    private func thumbRow(_ names: [String], size: CGFloat,
+                          onAdd: @escaping () -> Void,
+                          onRemove: @escaping (String) -> Void) -> some View {
+        HStack(spacing: 6) {
+            ForEach(names, id: \.self) { n in
+                WageThumb(name: n, size: size)
+                    .overlay(alignment: .topTrailing) {
+                        Button { onRemove(n) } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.app(14))
+                                .foregroundStyle(.white, .black.opacity(0.55))
+                        }
+                        .buttonStyle(.plain)
+                        .offset(x: 5, y: -5)
+                    }
+            }
+            if names.count < LedgerEntry.maxImages {
+                Button(action: onAdd) {
+                    VStack(spacing: 1) {
+                        Image(systemName: "photo.badge.plus")
+                            .font(.app(size > 40 ? 15 : 12))
+                        Text(String(names.count) + "/5")
+                            .font(.app(9))
+                    }
+                    .foregroundStyle(Theme.textMuted(scheme))
+                    .frame(width: size, height: size)
+                    .background(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
+                        .strokeBorder(Theme.textMuted(scheme).opacity(0.35),
+                                      style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.top, 4)
     }
 
     // MARK: 班次
@@ -665,6 +832,13 @@ struct WageDayEditor: View {
                         .fill(Theme.softFillDeep))
             }
 
+            thumbRow(draftImages, size: 48,
+                     onAdd: { openPicker(for: nil, has: draftImages.count) },
+                     onRemove: { n in
+                         draftImages.removeAll { $0 == n }
+                         if addedNow.contains(n) { ImageStore.delete(n); addedNow.remove(n) }
+                     })
+
             HStack(spacing: 6) {
                 ForEach(MealKind.allCases) { m in
                     Button { meal = m } label: {
@@ -729,7 +903,18 @@ struct WageDayEditor: View {
                             }
                             .buttonStyle(.plain)
                         }
-                        .padding(.vertical, 8)
+                        .padding(.top, 8)
+                        .padding(.bottom, 4)
+                        // 那一行字的**下面一行**：这一笔的图
+                        thumbRow(e.images, size: 40,
+                                 onAdd: { openPicker(for: e.id, has: e.images.count) },
+                                 onRemove: { n in
+                                     if let i = day.entries.firstIndex(where: { $0.id == e.id }) {
+                                         day.entries[i].images.removeAll { $0 == n }
+                                     }
+                                 })
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.bottom, 8)
                         if e.id != day.entries.last?.id {
                             Divider().opacity(0.4)
                         }
@@ -753,9 +938,10 @@ struct WageDayEditor: View {
         guard canAdd, let amt = Double(amountText) else { return }
         day.entries.append(LedgerEntry(
             what: what.trimmingCharacters(in: .whitespaces),
-            amount: amt, income: income, meal: meal))
+            amount: amt, income: income, meal: meal, images: draftImages))
         what = ""
         amountText = ""
+        draftImages = []
     }
 }
 

@@ -89,7 +89,7 @@ enum MealKind: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-/// 一笔账：干了什么 + 多少钱。
+/// 一笔账：干了什么 + 多少钱 + 最多 5 张图。
 struct LedgerEntry: Codable, Hashable, Identifiable {
     var id = UUID()
     var what: String
@@ -97,6 +97,34 @@ struct LedgerEntry: Codable, Hashable, Identifiable {
     /// `false` = 花出去的，`true` = 进来的（小费、报销…）
     var income = false
     var meal: MealKind = .none
+    /// 挂在这一笔上的图（`ImageStore` 里的文件名），最多 `maxImages` 张。
+    ///
+    /// 她要的：「花费那边再增加一个可添加图片（5 张），
+    /// 缩略图放在每一条花费/收入的下面一行。」
+    var images: [String] = []
+
+    static let maxImages = 5
+}
+
+// ⚠️⚠️ **容错解码必须写，而且必须写在 extension 里、写在这个文件里。**
+//
+// `images` 是后加的。已经存过的 `wage.json` 里没有这个键——
+// Swift 合成的解码器**不认默认值**，缺一个键就整条抛错，
+// 一条抛错整份 `days` 都读不出来，她之前记的账当场全没。
+//
+// 写在 extension 里：写进结构体本身的话，逐一成员的那个初始化器会消失，
+// `LedgerEntry(what:amount:…)` 那几处全编译不过。
+// 写在这个文件里：合成的 `CodingKeys` 是 private 的，出了文件看不见。
+extension LedgerEntry {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
+        what = (try? c.decodeIfPresent(String.self, forKey: .what)) ?? ""
+        amount = (try? c.decodeIfPresent(Double.self, forKey: .amount)) ?? 0
+        income = (try? c.decodeIfPresent(Bool.self, forKey: .income)) ?? false
+        meal = (try? c.decodeIfPresent(MealKind.self, forKey: .meal)) ?? .none
+        images = (try? c.decodeIfPresent([String].self, forKey: .images)) ?? []
+    }
 }
 
 /// 某一天。**排了班才有 `shift`**；没排班也能只记账。
@@ -213,6 +241,85 @@ final class WageStore: ObservableObject {
             f.days[Self.key(d)] = day
         }
         file = f
+    }
+
+    // MARK: 给阿晏的工具用（见 `WageTools`）
+    //
+    // ⚠️ 跟页面走**同一份** `file`，他改完页面当场跟着变。
+
+    enum AttachResult { case ok(Int), full, notFound }
+
+    /// 还没有记录的那一天，先铺一个空的（没排班，时间按中班默认填着）
+    private func blankDay() -> WorkDay {
+        let t = settings.template(.middle)
+        return WorkDay(shift: nil, work: t.work, breaks: t.breaks, hourly: settings.hourly)
+    }
+
+    /// 设某一天的班。`kind == nil` = 取消这天的班（账留着）。
+    ///
+    /// ⚠️ **换了班次才重套默认时间和时薪**；还是同一个班的话，
+    /// 只改他给了的那几项——她说「今天晚走了一小时」，
+    /// 他只该动下班时间，不该把那天手改过的休息也冲回默认。
+    func setShift(on d: Date, kind: ShiftKind?, work: TimeSpan? = nil,
+                  breaks: [TimeSpan]? = nil, hourly: Double? = nil) {
+        var day = self.day(d) ?? blankDay()
+        guard let k = kind else {
+            day.shift = nil
+            put(day, on: d)
+            return
+        }
+        if day.shift != k {
+            let t = settings.template(k)
+            day.work = t.work
+            day.breaks = t.breaks
+            day.hourly = settings.hourly
+        }
+        day.shift = k
+        if let w = work { day.work = w }
+        if let b = breaks { day.breaks = b }
+        if let h = hourly { day.hourly = h }
+        put(day, on: d)
+    }
+
+    func addEntry(on d: Date, _ e: LedgerEntry) {
+        var day = self.day(d) ?? blankDay()
+        day.entries.append(e)
+        put(day, on: d)
+    }
+
+    /// 按 id 前缀找一笔（他手里拿的是前 6 位）
+    private func entryIndex(_ day: WorkDay, _ prefix: String) -> Int? {
+        let p = prefix.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !p.isEmpty else { return nil }
+        return day.entries.firstIndex { $0.id.uuidString.lowercased().hasPrefix(p) }
+    }
+
+    func updateEntry(on d: Date, idPrefix: String, what: String?, amount: Double?,
+                     income: Bool?, meal: MealKind?) -> Bool {
+        guard var day = self.day(d), let i = entryIndex(day, idPrefix) else { return false }
+        if let w = what, !w.isEmpty { day.entries[i].what = w }
+        if let a = amount, a >= 0 { day.entries[i].amount = a }
+        if let inc = income { day.entries[i].income = inc }
+        if let m = meal { day.entries[i].meal = m }
+        put(day, on: d)
+        return true
+    }
+
+    /// 删一笔。**挂在上面的图文件一起删**——它们是复制进来的，只属于这一笔。
+    func deleteEntry(on d: Date, idPrefix: String) -> LedgerEntry? {
+        guard var day = self.day(d), let i = entryIndex(day, idPrefix) else { return nil }
+        let gone = day.entries.remove(at: i)
+        for n in gone.images { ImageStore.delete(n) }
+        put(day, on: d)
+        return gone
+    }
+
+    func attachImage(on d: Date, idPrefix: String, name: String) -> AttachResult {
+        guard var day = self.day(d), let i = entryIndex(day, idPrefix) else { return .notFound }
+        guard day.entries[i].images.count < LedgerEntry.maxImages else { return .full }
+        day.entries[i].images.append(name)
+        put(day, on: d)
+        return .ok(day.entries[i].images.count)
     }
 
     func updateSettings(_ s: WageSettings) {
