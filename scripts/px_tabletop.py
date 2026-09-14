@@ -509,7 +509,7 @@ def cookies(s, R, T):
         s.decal(lambda p: (speckle(p, 6, 0.18, seed=20), chip), "cookie%d" % i)
 
 
-@item("croissant", "可颂", units=4.2, ty=0.8, h=0.9)
+@item("croissant", "可颂", units=4.4, ty=0.6, h=0.8)
 def croissant(s, R, T):
     # 可颂是**一节一节叠起来的**：中间那节最大最高，往两头一节比一节小、一节比一节低，
     # 边缘一级一级往下走（她说的「阶梯状」），节和节之间一道深线。
@@ -528,7 +528,7 @@ def croissant(s, R, T):
               M("d1", "#E5922F", colors=ramp_c[:-1], gloss=0.3, grain=0.65, streak=0.45, outline="#5E2C1C")]
     shine_m = M("shine", "#FBDD92", colors=ramp_c[5:], grain=0.5)
     RAD = 1.25
-    # 弧心在前面：中间那节在后、两头的尖朝观察者弯过来，斜俯视下看得出是个「C」
+    # 弧心在前面：中间那节在后、两头朝观察者弯过来，斜俯视下看得出是个「C」
     C = T * 1.05
     levels = [1.0, 0.82, 0.64, 0.47, 0.32]
     # ⚠️ 最外面那两节**不是椭圆**，是从倒数第二节伸出去、越来越细的尖角（见循环后面）。
@@ -547,17 +547,19 @@ def croissant(s, R, T):
         s.add(along(ellipsoid(a, c, b), tang).at(d[0], 0.2 + c * 0.85, d[2]), doughs[abs(j) % 2], g)
         s.decal((lambda p: ((p[..., 1] > 0.35 * c) & (np.abs(p[..., 2]) < 0.45 * b) & (np.abs(p[..., 0]) < 0.4 * a),
                             shine_m)), g)
-    # 两头的尖角：从第 3 节里面出发，沿弧往外、往下弯，半径收到很细
+    # 两头的尖。
+    # ⚠️ **沿第 3 节的切线往外伸，不再顺着弧继续弯**。顺着弧弯两段、尖收到很细，
+    # 两头就朝里勾成一对钩——她说「像螃蟹的蟹钳」。
+    # 现在是一个**短而粗**的圆头锥：从第 3 节里面出来，往外、往下一点，尖头留圆（半径 0.13），趴在盘子上。
     for sgn in (-1, 1):
         a0 = math.radians(sgn * 3 * 19)
-        a1 = math.radians(sgn * 4.6 * 19)
-        a2 = math.radians(sgn * 5.6 * 19)
-        base = C + R * math.sin(a0) * RAD - T * math.cos(a0) * RAD + np.array([0, 0.36, 0])
-        mid = C + R * math.sin(a1) * RAD * 0.98 - T * math.cos(a1) * RAD * 0.98 + np.array([0, 0.28, 0])
-        tip = C + R * math.sin(a2) * RAD * 0.9 - T * math.cos(a2) * RAD * 0.9 + np.array([0, 0.2, 0])
+        base = C + R * math.sin(a0) * RAD - T * math.cos(a0) * RAD + np.array([0, 0.3, 0])
+        tang = R * math.cos(a0) + T * math.sin(a0)
+        out = tang * sgn * 0.75 + R * sgn * 0.25       # 切线为主，稍微掰直一点
+        out = out / np.linalg.norm(out)
+        tip = base + out * 0.55 + np.array([0, -0.1, 0])
         g = "horn%d" % (sgn + 1)
-        s.add(round_cone(base, mid, 0.3, 0.16), doughs[1], g)
-        s.add(round_cone(mid, tip, 0.16, 0.035), doughs[1], g + "t")
+        s.add(round_cone(base, tip, 0.27, 0.13), doughs[1], g)
 
 
 @item("fruitbowl", "果盘", units=4.6, ty=0.8, h=0.95)
