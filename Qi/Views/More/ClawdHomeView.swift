@@ -1851,8 +1851,18 @@ struct ClawdHomeView: View {
                    let chosen = RoomActs.acts(for: kind.id).randomElement() {
 
                     let geo = IsoRoom.fit(in: size, as: store.projection)
-                    let p = RoomActs.spot(of: item, kindID: kind.id,
-                                          in: geo, act: chosen)
+                    let itemCell = store.cell(of: item)
+                    // 在桌上的：走到**那张桌子**前面，不是踩到桌面上去
+                    let under = FurnitureCatalog.shape(of: kind.id).mount == .table
+                        ? store.support(at: itemCell, in: item.room, except: item.id) : nil
+                    let p: CGPoint
+                    if let under {
+                        let us = FurnitureCatalog.shape(of: under.kind)
+                        p = RoomActs.besidePoint(cell: store.cell(of: under),
+                                                 w: us.w, d: us.d, in: geo)
+                    } else {
+                        p = RoomActs.spot(of: item, kindID: kind.id, in: geo, act: chosen)
+                    }
                     // 屏幕上那个点换回 0…1，走路那套还是老样子
                     let onIt = onFloor(p.x / size.width, p.y / size.height)
                     let tx = onIt.x
@@ -1912,7 +1922,16 @@ struct ClawdHomeView: View {
                         // 放回他脚边。**一定要放**——不放的话那件东西
                         // 会一直挂在他手上，屋里再也见不到它。
                         if store.carrying == kind.id {
-                            await setDown(at: CGPoint(x: clawdX, y: clawdY))
+                            if under != nil {
+                                // 从桌上拿的就**放回桌上原来那一格**
+                                lowerFrom = Date().timeIntervalSinceReferenceDate
+                                try? await Task.sleep(nanoseconds: 450_000_000)
+                                store.putBack(to: itemCell)
+                                lowerFrom = nil
+                                carryPose = .hold
+                            } else {
+                                await setDown(at: CGPoint(x: clawdX, y: clawdY))
+                            }
                         }
                         mood = .idle
                         store.clawdDoing = .idling

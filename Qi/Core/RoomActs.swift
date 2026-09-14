@@ -246,11 +246,15 @@ enum RoomActs {
             p.y -= geo.tileH * CGFloat(s.tall)
             return p
         case .beside:
-            // 站在它**靠镜头那一侧**的旁边一格——
-            // 站在背面的话他被家具挡住，动作做了她也看不见
-            let p = geo.point(cx + Double(s.w) * 0.5 + 0.6,
-                              cy + Double(s.d) * 0.5 + 0.6)
-            return p
+            return besidePoint(cell: cell, w: s.w, d: s.d, in: geo)
         }
+    }
+
+    /// 站在一块占地**靠镜头那一侧**的旁边一格——
+    /// 站在背面的话他被家具挡住，动作做了她也看不见
+    static func besidePoint(cell: (gx: Int, gy: Int), w: Int, d: Int, in geo: IsoRoom) -> CGPoint {
+        let cx = Double(cell.gx) + Double(w - 1) / 2
+        let cy = Double(cell.gy) + Double(d - 1) / 2
+        return geo.point(cx + Double(w) * 0.5 + 0.6, cy + Double(d) * 0.5 + 0.6)
     }
 }

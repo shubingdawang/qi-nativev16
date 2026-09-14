@@ -411,11 +411,23 @@ struct IsoRoomView<Clawd: View>: View {
             //
             // 走深度而不是另开一摞：整间屋只有一个画序，
             // 分成两摞的话「谁挡谁」就得在两边各判一次。
-            let layered: Double
+            var layered: Double
             switch s.mount {
             case .wall:  layered = depth - 1000
             case .table: layered = depth + 0.4
             case .floor: layered = depth
+            }
+            // ⚠️ 放在台面上的，**跟着底下那张桌子排**，画在桌子之后。
+            // 按它自己那一格排的话，摆在桌子靠里那几格时它比桌子的「最前一格」远，
+            // 先画、然后被桌子整个盖住——看着就是不在桌上。
+            if s.mount == .table,
+               let under = store.support(at: cell, in: f.room, except: f.id) {
+                let us = FurnitureCatalog.shape(of: under.kind)
+                let uc = store.cell(of: under)
+                let ud = geoRoom.projection == .flat
+                    ? Double(uc.gy + us.d - 1) + Double(uc.gx + us.w - 1) * 0.001
+                    : Double(uc.gx + us.w - 1 + uc.gy + us.d - 1)
+                layered = max(layered, ud + 0.4)
             }
             out.append(Drawable(key: f.id.uuidString, depth: layered,
                                 tall: s.tall, item: f, kind: kind))
@@ -759,10 +771,26 @@ struct IsoRoomView<Clawd: View>: View {
                 let c = store.cell(of: f)
                 let on = cell.gx >= c.gx && cell.gx < c.gx + max(1, o.w)
                     && cell.gy >= c.gy && cell.gy < c.gy + max(1, o.d)
-                if on { top = max(top, drawnH(f, o, g) * CGFloat(o.surfaceAt)) }
+                if on { top = max(top, surfaceHeight(f, o, g)) }
             }
             return -top
         }
+    }
+
+    /// 台面离地多高（屏幕上的点）。
+    ///
+    /// ⚠️⚠️ **不是「整张图高 × 0.55」。** 她报的：「咖啡在桌子的上面一格，不是桌子。」
+    ///
+    /// 斜俯视的一张桌子，图的高度 = **桌面那块菱形的纵深** + **桌子真的高度**。
+    /// 按比例乘的话把菱形那一截也算进了高度，杯子被抬高了大半格，
+    /// 看着就浮在桌子后面那一格上。减掉占地在屏幕上的那块，剩下的才是台面离地。
+    /// 平面那档同理，占地纵深是 `d × rowPitch`。
+    private func surfaceHeight(_ f: Furniture, _ s: IsoShape, _ g: IsoRoom) -> CGFloat {
+        let h = drawnH(f, s, g)
+        let foot = g.projection == .flat
+            ? CGFloat(max(1, s.d)) * g.rowPitch
+            : CGFloat(s.w + s.d) / 2 * g.tileH
+        return max(h * 0.25, h - foot)
     }
 
     /// 一件家具**画出来**有多高。
@@ -821,7 +849,12 @@ struct IsoRoomView<Clawd: View>: View {
                 // 不然她一路拖过去，到松手那一刻才知道行不行
                 onClawd = nearClawd(drag.location)
                 let t = geoRoom.tile(at: drag.location)
-                let (gx, gy) = geoRoom.clamp(Int(t.gx.rounded()), Int(t.gy.rounded()))
+                var (gx, gy) = geoRoom.clamp(Int(t.gx.rounded()), Int(t.gy.rounded()))
+                // 放桌上的东西，拖的时候就**吸到附近的台面上**——松手前就看得见落在哪
+                if s.mount == .table,
+                   let snap = store.tableSpot(in: room, gx, gy, except: item.id) {
+                    (gx, gy) = snap
+                }
                 if gx != dragCell.gx || gy != dragCell.gy {
                     dragCell = (gx, gy)
                     if app.settings.haptics {

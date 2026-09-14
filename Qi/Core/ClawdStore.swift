@@ -1985,8 +1985,11 @@ extension ClawdStore {
                                              taken: takenCells(in: room, except: id))
             else { return false }
             spot = free
+        } else if s.mount == .table {
+            // 放桌上的：附近有台面就**吸到台面上**，没有才落地
+            spot = tableSpot(in: room, gx, gy, except: id) ?? geo.clamp(gx, gy)
         } else {
-            spot = geo.clamp(gx, s.mount == .wall ? 0 : gy)
+            spot = geo.clamp(gx, 0)
         }
         // ⚠️ **写回当前这个视角那一对。**
         //
@@ -2001,6 +2004,51 @@ extension ClawdStore {
             owned[i].gy = spot.1
         }
         return true
+    }
+
+    // MARK: 台面
+
+    /// 这一格上压着哪件有台面的（桌子、柜子）。没有返回 nil。
+    func support(at c: (gx: Int, gy: Int), in room: String, except: UUID? = nil) -> Furniture? {
+        owned.first { o in
+            guard o.id != except, o.room == room, onFloor(o) else { return false }
+            let s = FurnitureCatalog.shape(of: o.kind)
+            guard s.surface, s.mount == .floor else { return false }
+            let oc = cell(of: o)
+            return c.gx >= oc.gx && c.gx < oc.gx + max(1, s.w)
+                && c.gy >= oc.gy && c.gy < oc.gy + max(1, s.d)
+        }
+    }
+
+    /// 离 (gx, gy) 最近的台面格，隔着超过 `reach` 格就算没有。
+    ///
+    /// 她报的：「现在桌子是桌子、咖啡是咖啡，咖啡在桌子的上面一格。」
+    /// 松手差一格没对准桌面，东西就落在桌子旁边的地上——
+    /// 放桌上的东西松在桌子附近，意思就是放桌上。
+    func tableSpot(in room: HomeRoom, _ gx: Int, _ gy: Int,
+                   except: UUID? = nil, reach: Int = 2) -> (Int, Int)? {
+        var best: (x: Int, y: Int, d: Int)?
+        for o in owned where o.id != except && o.room == room.rawValue && onFloor(o) {
+            let s = FurnitureCatalog.shape(of: o.kind)
+            guard s.surface, s.mount == .floor else { continue }
+            let oc = cell(of: o)
+            for x in oc.gx..<(oc.gx + max(1, s.w)) {
+                for y in oc.gy..<(oc.gy + max(1, s.d)) {
+                    let d = abs(x - gx) + abs(y - gy)
+                    if d <= reach, best == nil || d < best!.d { best = (x, y, d) }
+                }
+            }
+        }
+        return best.map { ($0.x, $0.y) }
+    }
+
+    /// 把手上那件**放回某一格**（从桌上拿起来喝完，放回原来那个位置）
+    func putBack(to c: (gx: Int, gy: Int)) {
+        defer { carrying = nil }
+        guard let kindID = carrying,
+              let i = owned.firstIndex(where: { $0.kind == kindID && $0.carried }) else { return }
+        owned[i].carried = false
+        place(owned[i].id, at: c.gx, c.gy)
     }
 
     /// 这一件在**当前视角**里摆在哪一格。
