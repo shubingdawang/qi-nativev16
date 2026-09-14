@@ -127,11 +127,57 @@ extension FurnitureCatalog {
         "umbrella": Art(flat: "it_misc_umbrella",       iso: "iso_l_umbrella")
     ]
 
-    /// 哪张图对哪件。两批合起来。
+    /// **自己画的那一批**（`scripts/px_tabletop.py`，用 pixel-art skill）。
     ///
-    /// ⚠️ 撞名的话以手写那份为准——生成的那批是后添的，
+    /// 桌上那一批：吃的、喝的、摆件、小电器。三个视角都有：
+    /// 正面 `px_<id>`、等距 `iso_l_px_<id>`（贴左墙 `iso_wl_px_` 同一张，
+    /// 贴右墙 `iso_r_px_` 是真的从另一边看），名字规矩跟资产包一样，所以不用改取图的代码。
+    ///
+    /// ⚠️ **排在最前面**：同一个 id 在这张表里有，就用这张。
+    /// 资产包的原图一张没删——哪件不满意，删掉这里那一行就退回原图。
+    static let drawnArt: [String: Art] = [
+        "coffee":          Art(flat: "px_coffee",          iso: "iso_l_px_coffee"),
+        "soda":            Art(flat: "px_soda",            iso: "iso_l_px_soda"),
+        "teapot":          Art(flat: "px_teapot",          iso: "iso_l_px_teapot"),
+        "bubbletea":       Art(flat: "px_bubbletea",       iso: "iso_l_px_bubbletea"),
+        "cake":            Art(flat: "px_cake",            iso: "iso_l_px_cake"),
+        "donut":           Art(flat: "px_donut",           iso: "iso_l_px_donut"),
+        "riceball":        Art(flat: "px_riceball",        iso: "iso_l_px_riceball"),
+        "icecream":        Art(flat: "px_icecream",        iso: "iso_l_px_icecream"),
+        "sushi":           Art(flat: "px_sushi",           iso: "iso_l_px_sushi"),
+        "ramen":           Art(flat: "px_ramen",           iso: "iso_l_px_ramen"),
+        "hotpot":          Art(flat: "px_hotpot",          iso: "iso_l_px_hotpot"),
+        "cookies":         Art(flat: "px_cookies",         iso: "iso_l_px_cookies"),
+        "croissant":       Art(flat: "px_croissant",       iso: "iso_l_px_croissant"),
+        "fruitbowl":       Art(flat: "px_fruitbowl",       iso: "iso_l_px_fruitbowl"),
+        "pancakes":        Art(flat: "px_pancakes",        iso: "iso_l_px_pancakes"),
+        "pizza":           Art(flat: "px_pizza",           iso: "iso_l_px_pizza"),
+        "sandwich":        Art(flat: "px_sandwich",        iso: "iso_l_px_sandwich"),
+        "salad":           Art(flat: "px_salad",           iso: "iso_l_px_salad"),
+        "candle":          Art(flat: "px_candle",          iso: "iso_l_px_candle"),
+        "tissue":          Art(flat: "px_tissue",          iso: "iso_l_px_tissue"),
+        "globe":           Art(flat: "px_globe",           iso: "iso_l_px_globe"),
+        "tank":            Art(flat: "px_tank",            iso: "iso_l_px_tank"),
+        "bonsai":          Art(flat: "px_bonsai",          iso: "iso_l_px_bonsai"),
+        "flowervase":      Art(flat: "px_flowervase",      iso: "iso_l_px_flowervase"),
+        "vic_vase":        Art(flat: "px_vic_vase",        iso: "iso_l_px_vic_vase"),
+        "minitree":        Art(flat: "px_minitree",        iso: "iso_l_px_minitree"),
+        "star_books":      Art(flat: "px_star_books",      iso: "iso_l_px_star_books"),
+        "speaker":         Art(flat: "px_speaker",         iso: "iso_l_px_speaker"),
+        "microwave":       Art(flat: "px_microwave",       iso: "iso_l_px_microwave"),
+        "record":          Art(flat: "px_record",          iso: "iso_l_px_record"),
+        "humid":           Art(flat: "px_humid",           iso: "iso_l_px_humid"),
+        "polaroid":        Art(flat: "px_polaroid",        iso: "iso_l_px_polaroid"),
+        "star_gramophone": Art(flat: "px_star_gramophone", iso: "iso_l_px_star_gramophone")
+    ]
+
+    /// 哪张图对哪件。三批合起来：自己画的 > 手写对照 > 生成的主题。
+    ///
+    /// ⚠️ 手写和生成的撞名以手写那份为准——生成的那批是后添的，
     /// 不该改掉已经在用的对应关系。
-    static let artTable: [String: Art] = coreArt.merging(themedArt) { core, _ in core }
+    static let artTable: [String: Art] = drawnArt.merging(
+        coreArt.merging(themedArt) { core, _ in core }
+    ) { drawn, _ in drawn }
 
     /// 同一件东西**贴右墙**那张叫什么。
     ///

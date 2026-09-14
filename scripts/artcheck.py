@@ -39,6 +39,12 @@ def table(src, name):
 
 
 rows = table(art, "coreArt") + table(themes, "themedArt")
+# 自己画的那一批（px_tabletop.py）排在最前面、盖过前两张表。
+# 被盖掉的那些原图还留在包里当退路，不算闲置。
+drawn = table(art, "drawnArt")
+covered = set(r[0] for r in drawn)
+backup = [r for r in rows if r[0] in covered]
+rows = drawn + [r for r in rows if r[0] not in covered]
 have = set(f[:-4] for f in os.listdir(RES) if f.endswith(".png"))
 
 bad = 0
@@ -113,6 +119,14 @@ for _, flat, iso in rows:
 for f in list(have):
     if f.startswith("wear_"):
         used.add(f)
+# 被自己画的那批盖掉的原图：留着当退路
+for _, flat, iso in backup:
+    for nm in (flat, iso.strip('"')):
+        if nm != "nil":
+            used.add(nm)
+            for alt in (right_of(nm), wall_left_of(nm)):
+                if alt:
+                    used.add(alt)
 spare = sorted(have - used)
 
 # 动作名也对一遍：`IsoShape.actions` 里写了、`RoomActs.act` 里没有的，

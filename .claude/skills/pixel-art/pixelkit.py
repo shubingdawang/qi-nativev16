@@ -280,6 +280,43 @@ def lathe(profile):
     return Shape(f, float(np.max(np.abs(P))) * 1.5)
 
 
+def tri_prism(r, h, round=0.0):
+    """三棱柱：xy 平面里一个尖朝上（+y）的正三角形，沿 z 拉出 ±h。饭团、三明治用。
+    `r` 是三角形中心到边的大致尺寸，`round` 圆角（饭团要圆一点）。"""
+    k = math.sqrt(3.0)
+    rr = r - round
+
+    def f(p):
+        px = np.abs(p[..., 0]) - rr
+        py = p[..., 1] + rr / k
+        m = px + k * py > 0
+        px2 = np.where(m, (px - k * py) / 2, px)
+        py2 = np.where(m, (-k * px - py) / 2, py)
+        px2 = px2 - np.clip(px2, -2 * rr, 0)
+        d2 = -np.sqrt(px2 * px2 + py2 * py2) * np.sign(py2) - round
+        w = np.stack([d2, np.abs(p[..., 2]) - h], -1)
+        return np.minimum(np.max(w, -1), 0) + _len(np.maximum(w, 0))
+    return Shape(f, math.hypot(r * 2, h))
+
+
+def speckle(p, scale=8.0, density=0.12, seed=0):
+    """随机斑点（糖粒、芝麻、面包屑、苔藓）。按 `scale` 把空间切成小格，
+    每格按哈希决定有没有一粒。返回布尔 mask，给贴花用。"""
+    q = np.floor(p * scale).astype(np.int64)
+    hsh = (q[..., 0] * 73856093) ^ (q[..., 1] * 19349663) ^ (q[..., 2] * 83492791) ^ (seed * 2654435761)
+    hsh = (hsh ^ (hsh >> 13)) * 1274126177
+    v = ((hsh ^ (hsh >> 16)) & 0xFFFF) / 65535.0
+    return v < density
+
+
+def hashv(p, scale=8.0, seed=0):
+    """每个小格一个 0..1 的随机数（选颜色用）"""
+    q = np.floor(p * scale).astype(np.int64)
+    hsh = (q[..., 0] * 73856093) ^ (q[..., 1] * 19349663) ^ (q[..., 2] * 83492791) ^ ((seed + 7) * 2654435761)
+    hsh = (hsh ^ (hsh >> 13)) * 1274126177
+    return ((hsh ^ (hsh >> 16)) & 0xFFFF) / 65535.0
+
+
 # ─────────────────────────────────────────────── 场景
 
 VIEWS = {
@@ -310,6 +347,20 @@ class Scene:
         self.light = L / np.linalg.norm(L)
         self.items: list = []
         self.decals: list = []
+
+    def axes(self):
+        """水平面上的两个方向：(屏幕右 R, 朝着观察者 T)，都是 y=0 的单位向量。
+        把手、壶嘴、正面的标签、镜头……**所有跟视角有关的摆放都用它**，
+        这样同一个模型换视角（左墙 / 右墙 / 正面）不用改。"""
+        R = np.array([self.right[0], 0.0, self.right[2]])
+        R /= np.linalg.norm(R)
+        T = np.array([-self.fwd[0], 0.0, -self.fwd[2]])
+        T /= np.linalg.norm(T)
+        return R, T
+
+    def yaw_to(self, d):
+        """让本地 +x 指向水平方向 d 要绕 y 转的角度（度），给 `.rot("y", ...)` 用"""
+        return math.degrees(math.atan2(-d[2], d[0]))
 
     def project(self, x, y, z):
         """世界坐标 → 画布上的像素位置（裁边之前）"""
@@ -538,7 +589,8 @@ def _outline(col, lev, mat, grp, dep, items, scene):
         a = (slice(0, H - dy), slice(0, W - dx))
         b = (slice(dy, H), slice(dx, W))
         diff = (grp[a] != grp[b]) & filled[a] & filled[b]
-        far = np.abs(dep[a] - dep[b]) > px * 1.5
+        dd = np.where(np.isfinite(dep), dep, 1e6)
+        far = np.abs(dd[a] - dd[b]) > px * 1.5
         m = diff & far
         back_is_b = dep[b] > dep[a]
         for sel, sl in ((m & back_is_b, b), (m & ~back_is_b, a)):
