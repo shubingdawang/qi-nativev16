@@ -50,8 +50,45 @@ def _shadow_hue(h0: float, s0: float) -> float:
     return 0.72
 
 
+# 默认色彩风格。"vivid" = 现在用的；"warm" = 第一版（偏旧、有年代感，留着对照）
+STYLE = "vivid"
+
+
+def _ramp_vivid(h0, s0, v0, n, anchor, shine):
+    """鲜亮版色阶。
+
+    她看了第一版：「有点朴素……看起来有点年代感。」年代感来自三处：
+      · 暗部一律往红棕走 → 整张像泛黄的老照片
+      · 中间调饱和度不够 → 灰
+      · 亮部被压成奶黄 → 没有干净的高光
+    所以这一版：暗部往**玫瑰紫**偏（冷一点、透一点）、中间调饱和度抬一截、
+    亮部顶到接近纯白但留一丝暖。材质本身的颜色也要给得更干净（见例子）。
+    """
+    if s0 < 0.12 or h0 < 0.2 or h0 > 0.9:
+        hs = 0.955
+    elif h0 < 0.45:
+        hs = 0.5
+    else:
+        hs = 0.76
+    # 她看了抬到 ×1.18 的那版：「现在又有点太鲜艳太饱和了」。
+    # 中间调只抬一点点，暗面的饱和度也收着——要的是干净，不是艳
+    sm = min(1, s0 * 1.04 + 0.02)
+    # ⚠️ 近白的材质（白瓷、奶油）暗面饱和度只加一点、往**淡紫灰**走：
+    # 加多了白瓷的背光面会变成一片粉，看不出是白的
+    gain = 0.2 if s0 < 0.12 else 0.38
+    hs_amt = 0.35 if s0 < 0.12 else 0.5
+    if s0 < 0.12:
+        hs = 0.8
+    dark = (_toward(h0, hs, hs_amt), min(1, sm + (1 - sm) * gain), max(0.25, v0 * 0.76))
+    # 亮端走多远看 `shine`：深色的咖啡液、木头调低，顶面不会被打成一片橘
+    light = (_toward(h0, 0.12, 0.25), sm * (1 - 0.6 * shine),
+             min(1, v0 + (1 - v0) * (0.3 + 0.65 * shine) + 0.06 * shine))
+    mid = (h0, sm, v0)
+    return dark, mid, light
+
+
 def ramp(base: str, n: int = 6, anchor: float = 0.6, warmth: float = 1.0,
-         shine: float = 0.55, depth: float = 0.8) -> list:
+         shine: float = 0.55, depth: float = 0.8, style: Optional[str] = None) -> list:
     """一种材质的色阶，暗 → 亮。
 
     参照资产包那批量出来的规律（咖啡杯：奶白 #FFFFEC → 橘 #F5B564 → 焦橘 #C96124
@@ -74,6 +111,8 @@ def ramp(base: str, n: int = 6, anchor: float = 0.6, warmth: float = 1.0,
     light = (_toward(h0, 0.13, 0.3 * warmth), s0 * (1 - 0.7 * shine),
              min(1, v0 + (1 - v0) * shine + 0.1 * shine))
     mid = (h0, s0, v0)
+    if (style or STYLE) == "vivid":
+        dark, mid, light = _ramp_vivid(h0, s0, v0, n, anchor, shine)
     out = []
     for k in range(n):
         x = k / (n - 1)
@@ -107,12 +146,13 @@ class Material:
     warmth: float = 1.0
     shine: float = 0.55
     depth: float = 0.8
+    style: Optional[str] = None
     colors: list = field(default_factory=list)
 
     def __post_init__(self):
         if not self.colors:
             self.colors = ramp(self.base, self.steps, self.anchor, self.warmth,
-                               self.shine, self.depth)
+                               self.shine, self.depth, self.style)
 
 
 # ─────────────────────────────────────────────── 基本体（SDF，全部向量化）
@@ -266,6 +306,13 @@ class Scene:
         self.light = L / np.linalg.norm(L)
         self.items: list = []
         self.decals: list = []
+
+    def project(self, x, y, z):
+        """世界坐标 → 画布上的像素位置（裁边之前）"""
+        p = np.array([x, y, z], float) - self.target
+        px = self.units / self.W
+        return (float(np.dot(p, self.right) / px + self.W / 2),
+                float(self.H / 2 - np.dot(p, self.up) / px))
 
     def add(self, shape: Shape, mat: Material, group: str = ""):
         """`group` 相同的几块算一个整体（中间不描内线）。"""
@@ -454,6 +501,9 @@ def _outline_color(m: Material):
     # 描边是**最深那档再往下压**：参照里是 #6A1B08 那种深红棕，不是黑
     r, g, b = m.colors[0]
     h, s, v = colorsys.rgb_to_hsv(r, g, b)
+    if (m.style or STYLE) == "vivid":
+        # 深梅红，不是深棕：跟玫瑰紫的暗部接得上
+        return colorsys.hsv_to_rgb(_toward(h, 0.95, 0.35), min(1, s * 1.0 + 0.15), v * 0.5)
     return colorsys.hsv_to_rgb(_toward(h, 0.02, 0.3), min(1, s * 1.1 + 0.2), v * 0.55)
 
 
@@ -585,3 +635,60 @@ def preview(images, path, zoom=4, bg=(236, 231, 222), labels=None, pad=12):
         x += i.width + pad
     sheet.convert("RGB").save(path)
     return sheet
+
+
+# ─────────────────────────────────────────────── 热气、烟
+
+def steam(img: Image.Image, x: float, y: float, wisps=3, height=30, spread=7,
+          core="#FFFFFF", edge="#F4B7A6", seed=0) -> Image.Image:
+    """在 (x, y)（画布像素，通常是杯口正上方，用 `Scene.project` 算）往上画几缕热气。
+
+    像素画里的热气不是一团雾，是**几根弯弯的细线**：
+      · 每缕是一条竖着的正弦线，一行一个像素、横向偏移取整——线是连着的台阶
+      · 底下两格宽、往上变一格；往上越来越淡，顶端断成几个点
+      · 芯是白的，靠外那侧贴一格淡暖色，浅色背景上也看得见
+    画布要留出上方空间（`Scene(height=...)` + 抬高 `target`）。
+    """
+    rng = np.random.default_rng(seed)
+    base = img.copy()
+    px = base.load()
+    W, H = base.size
+    c_core = tuple(int(v * 255) for v in hex_rgb(core))
+    c_edge = tuple(int(v * 255) for v in hex_rgb(edge))
+
+    def put(ix, iy, c, a):
+        if 0 <= ix < W and 0 <= iy < H and a > 0.02:
+            r, g, b, a0 = px[ix, iy]
+            a0 /= 255
+            na = a + a0 * (1 - a)
+            if na <= 0:
+                return
+            mix = [int((c[k] * a + (r, g, b)[k] * a0 * (1 - a)) / na) for k in range(3)]
+            px[ix, iy] = (*mix, int(na * 255))
+
+    for w in range(wisps):
+        ox = (w - (wisps - 1) / 2) * spread
+        phase = rng.uniform(0, math.tau)
+        amp = rng.uniform(1.6, 2.6)
+        freq = rng.uniform(0.16, 0.22)
+        top = height * rng.uniform(0.75, 1.0)
+        start = rng.uniform(2, 6)
+        prev = None
+        for k in range(int(top)):
+            t = k / top
+            cx = x + ox + math.sin(k * freq + phase) * amp * (0.5 + t)
+            ix, iy = int(round(cx)), int(round(y - start - k))
+            fade = min(1, (1 - t) ** 0.9 * 1.1)
+            if t > 0.7 and k % 2:
+                continue          # 顶端断成点
+            put(ix, iy, c_core, fade)
+            # 连上一行：横着跳了不止一格就补一格，线不断
+            if prev is not None and abs(ix - prev) > 1:
+                put((ix + prev) // 2, iy, c_core, fade)
+            side = 1 if math.cos(k * freq + phase) > 0 else -1
+            put(ix + side, iy, c_edge, fade * 0.8)
+            if t < 0.55:
+                put(ix - side, iy, c_core, fade * 0.9)
+            prev = ix
+    return base
+
