@@ -509,57 +509,35 @@ def cookies(s, R, T):
         s.decal(lambda p: (speckle(p, 6, 0.18, seed=20), chip), "cookie%d" % i)
 
 
-@item("croissant", "可颂", units=4.4, ty=0.6, h=0.8)
+@item("croissant", "可颂", units=4.4, ty=0.9, h=0.95)
 def croissant(s, R, T):
-    # 可颂是**一节一节叠起来的**：中间那节最大最高，往两头一节比一节小、一节比一节低，
-    # 边缘一级一级往下走（她说的「阶梯状」），节和节之间一道深线。
-    #
-    # 前两版都不对：
-    #   · 一串椭球 → 「像几个圆球」：每节是个球，而且一样大
-    #   · 一整条光滑的管子 + 画上去的折痕 → 没有台阶，轮廓是一条顺滑的弧
-    # 这版每一节是一个**横着裹在面团上的卷**（沿弧的方向薄、横过弧的方向宽），
-    # 节与节压得很紧（间距只有节宽的一半），大的压在小的上面，单独一组才描得出节间那道线。
+    # ⚠️ 可颂**不走三维模型**，是照她给的拼豆图纸直接画的二维像素（scripts/px_croissant2d.py）。
+    # 三维搭了六版（一串球 / 光滑管子 / 一节节的卷 / 尖角 / 蟹钳 / 短尖），她都说不像图纸，
+    # 最后说「也许你可以完全根据图纸修改？不要现在这个形了」。
+    # 这里只画盘子，可颂在 post 里贴到盘子正中；三个视角用同一张（光都从左上来，不镜像）。
     plate(s, color="#EEF2F6")
-    # 照她给的拼豆图纸：一个可颂用十来种颜色，从近白的淡黄一路到深棕；面上一颗一颗掺着（颗粒），
-    # 每节隆起的上沿一条亮条；节与节之间两三颗宽的深色带，连到外轮廓；轮廓只一种最深的颜色。
-    s.seam, s.seam_depth, s.seam_all, s.inner_ring, s.contour = 2, 3, True, False, True
-    ramp_c = hexes("#8E4122", "#A9542A", "#C46A31", "#DA8233", "#E9983A", "#F2AE48", "#F7C35E", "#FAD27C")
-    doughs = [M("d0", "#EFA73E", colors=ramp_c, gloss=0.3, grain=0.65, streak=0.55, outline="#5E2C1C"),
-              M("d1", "#E5922F", colors=ramp_c[:-1], gloss=0.3, grain=0.65, streak=0.45, outline="#5E2C1C")]
-    shine_m = M("shine", "#FBDD92", colors=ramp_c[5:], grain=0.5)
-    RAD = 1.25
-    # 弧心在前面：中间那节在后、两头朝观察者弯过来，斜俯视下看得出是个「C」
-    C = T * 1.05
-    levels = [1.0, 0.82, 0.64, 0.47, 0.32]
-    # ⚠️ 最外面那两节**不是椭圆**，是从倒数第二节伸出去、越来越细的尖角（见循环后面）。
-    # 她：「最下面两个依旧像椭圆」——参考图里两头是收细带尖的角，压在上一节底下。
-    order = [0, -1, 1, -2, 2, -3, 3]
-    for j in order:
-        lv = levels[abs(j)]
-        ang = math.radians(j * 19)
-        d = C + R * math.sin(ang) * RAD - T * math.cos(ang) * RAD
-        tang = R * math.cos(ang) + T * math.sin(ang)
-        # ⚠️ 每节**横着扁**：宽 > 高。竖着高的话一节一节像手指（上一版就是）
-        a = 0.3 * lv + 0.07           # 沿弧：薄
-        b = 0.66 * lv + 0.1           # 横过弧：宽
-        c = 0.36 * lv + 0.06          # 高
-        g = "roll%d" % (j + 4)
-        s.add(along(ellipsoid(a, c, b), tang).at(d[0], 0.2 + c * 0.85, d[2]), doughs[abs(j) % 2], g)
-        s.decal((lambda p: ((p[..., 1] > 0.35 * c) & (np.abs(p[..., 2]) < 0.45 * b) & (np.abs(p[..., 0]) < 0.4 * a),
-                            shine_m)), g)
-    # 两头的尖。
-    # ⚠️ **沿第 3 节的切线往外伸，不再顺着弧继续弯**。顺着弧弯两段、尖收到很细，
-    # 两头就朝里勾成一对钩——她说「像螃蟹的蟹钳」。
-    # 现在是一个**短而粗**的圆头锥：从第 3 节里面出来，往外、往下一点，尖头留圆（半径 0.13），趴在盘子上。
-    for sgn in (-1, 1):
-        a0 = math.radians(sgn * 3 * 19)
-        base = C + R * math.sin(a0) * RAD - T * math.cos(a0) * RAD + np.array([0, 0.3, 0])
-        tang = R * math.cos(a0) + T * math.sin(a0)
-        out = tang * sgn * 0.75 + R * sgn * 0.25       # 切线为主，稍微掰直一点
-        out = out / np.linalg.norm(out)
-        tip = base + out * 0.55 + np.array([0, -0.1, 0])
-        g = "horn%d" % (sgn + 1)
-        s.add(round_cone(base, tip, 0.27, 0.13), doughs[1], g)
+
+    def post(img):
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from px_croissant2d import croissant as draw
+        sprite = draw(76, 80)
+        x, y = s.project(0, 0.18, 0)
+        img = img.copy()
+        # 底下一块淡影子：压暗盘子上一个扁椭圆（不然像贴纸）
+        px = img.load()
+        rx, ry = sprite.width * 0.46, sprite.height * 0.16
+        cy0 = y + sprite.height * 0.12
+        for yy in range(int(cy0 - ry), int(cy0 + ry) + 1):
+            for xx in range(int(x - rx), int(x + rx) + 1):
+                if 0 <= xx < img.width and 0 <= yy < img.height:
+                    d = ((xx - x) / rx) ** 2 + ((yy - cy0) / ry) ** 2
+                    r_, g_, b_, a_ = px[xx, yy]
+                    if d <= 1 and a_ > 0:
+                        k = 0.86 if d < 0.55 else 0.93
+                        px[xx, yy] = (int(r_ * k), int(g_ * k * 0.99), int(b_ * k * 1.01) if b_ * k * 1.01 < 255 else 255, a_)
+        img.alpha_composite(sprite, (int(round(x - sprite.width / 2)), int(round(y - sprite.height * 0.78))))
+        return img
+    return post
 
 
 @item("fruitbowl", "果盘", units=4.6, ty=0.8, h=0.95)
