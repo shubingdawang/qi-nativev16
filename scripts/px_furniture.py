@@ -1204,7 +1204,16 @@ def render_one(args):
     s = Scene(size=size, height=height, view=(yaw, pitch), units=size / k,
               target=(0, tall * 0.5, 0))
     fn(s)
-    img = crop(s.render())
+    img = s.render()
+    # ⚠️ 横向**不裁到内容**，裁到「占地那么宽」。
+    # App 把整张图的宽度拉到占地宽——小熊、向日葵这种一格的小东西裁紧了，
+    # 会被拉满一整格，摆进屋里比沙发还显眼。以画布中线为准左右对称留白。
+    foot = (w if view == "flat" else (w + d) / 2) * 60
+    box_ = img.getbbox()
+    if box_:
+        cx = img.width / 2
+        half = max(foot / 2, cx - box_[0], box_[2] - cx) + 1
+        img = img.crop((int(cx - half), max(0, box_[1] - 1), int(math.ceil(cx + half)), min(img.height, box_[3] + 1)))
     return id, view, img
 
 
