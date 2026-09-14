@@ -60,6 +60,13 @@ def item(id, name, units=4.8, ty=1.0, h=1.0):
 
 # ─────────────────────────────── 小工具
 
+def hexes(*hs):
+    """直接给定一串颜色（暗 → 亮），不走自动色阶。
+    白纸、玻璃这种东西暗面不该往紫灰里走——走了纸是紫的、玻璃是雾的。"""
+    from pixelkit import hex_rgb
+    return [hex_rgb(h) for h in hs]
+
+
 def M(name, base, **kw):
     kw.setdefault("steps", 6)
     return Material(name, base, **kw)
@@ -79,6 +86,34 @@ def face(shape, d):
 def along(shape, d):
     """让本地 +x 指向水平方向 d（把手的环面、横放的东西）"""
     return shape.rot("y", math.degrees(math.atan2(-d[2], d[0])))
+
+
+def aim(shape, f):
+    """让基本体本地的 +y 指向任意方向 f（花盘朝前、朝上斜一点）"""
+    f = np.asarray(f, float)
+    f = f / np.linalg.norm(f)
+    el = math.degrees(math.asin(max(-1.0, min(1.0, f[1]))))
+    return shape.rot("x", 90 - el).rot("y", math.degrees(math.atan2(f[0], f[2])))
+
+
+def basis(f):
+    """垂直于 f 的两个单位向量（在花盘、切片平面里摆东西）"""
+    f = np.asarray(f, float) / np.linalg.norm(f)
+    up = np.array([0.0, 1.0, 0.0]) if abs(f[1]) < 0.9 else np.array([1.0, 0.0, 0.0])
+    e1 = np.cross(up, f)
+    e1 /= np.linalg.norm(e1)
+    e2 = np.cross(f, e1)
+    return e1, e2
+
+
+def flower_head(s, c, f, petal, core, n=6, size=0.3, group="flower"):
+    """一朵朝着 f 开的花：一圈花瓣 + 花心，都贴在垂直于 f 的平面里"""
+    e1, e2 = basis(f)
+    for k in range(n):
+        a = k / n * math.tau
+        p = c + (e1 * math.cos(a) + e2 * math.sin(a)) * size * 0.95
+        s.add(aim(ellipsoid(size * 0.62, size * 0.16, size * 0.62), f).at(*p), petal, group)
+    s.add(aim(ellipsoid(size * 0.45, size * 0.3, size * 0.45), f).at(*(c + f * 0.08)), core, group + "c")
 
 
 def huv(p, R, T):
@@ -392,37 +427,69 @@ def ramen(s, R, T):
     s.add(capsule(a + T * 0.2 + np.array([0, 1.45, 0]), b + T * 0.25 + np.array([0, 1.55, 0]), 0.06), chop, "chop")
 
 
-@item("hotpot", "小火锅", units=5.0, ty=1.2, h=1.1)
+@item("hotpot", "小火锅", units=5.0, ty=1.2, h=1.15)
 def hotpot(s, R, T):
-    stove = M("stove", "#8C8FA3", steps=6, gloss=0.4)
-    pot = M("pot", "#D8DDE3", steps=7, gloss=0.9)
-    spicy = M("spicy", "#E2584B", steps=5, shine=0.3)
-    mild = M("mild", "#F5E6C8", steps=5)
-    chili = M("chili", "#B8322B", steps=4)
-    green = M("green", "#8CCB7E", steps=4)
-    tofu = M("tofu", "#FFF8E6", steps=4)
-    s.add(cylinder(1.4, 0.5, round=0.1), stove, "stove")
-    s.add(lathe([(0, 0.5), (1.6, 0.5), (1.9, 0.7), (2.0, 1.4), (1.9, 1.4), (1.8, 0.75), (0, 0.75)]), pot, "pot")
-    s.add(cylinder(1.8, 0.1).at(0, 1.15, 0), spicy, "soup")
+    # 鸳鸯锅：黑铸铁锅、两侧耳朵、S 形隔板分开红汤白汤，里面放满东西。
+    # 她：「不像火锅」——以前是一只灰盆装一片红，没有隔板、没有吃的。
+    iron = M("iron", "#4A4C57", steps=7, gloss=0.7)
+    rimm = M("rim", "#6E7180", steps=5, gloss=0.9)
+    red = M("red", "#E0553F", steps=5, shine=0.35)
+    oil = M("oil", "#F29A3F", steps=4)
+    white = M("white", "#F4EEDC", steps=5)
+    divider = M("divider", "#B8BDC6", steps=4, gloss=1.0)
+    chili = M("chili", "#B52A22", steps=4, gloss=0.6)
+    onion = M("onion", "#7CC46E", steps=3)
+    goji = M("goji", "#E8553F", steps=3)
+    ball = M("ball", "#C8956A", steps=5, gloss=0.3)
+    mush = M("mush", "#7A4E36", steps=5, gloss=0.3)
+    stem_m = M("stem", "#F2E4C8", steps=4)
+    meat = M("meat", "#EE8C8C", steps=5)
+    fat = M("fat", "#FFE9E2", steps=3)
+    tofu = M("tofu", "#FFF7DE", steps=5)
+    leaf = M("leaf", "#7DC173", steps=5)
+    leafw = M("leafw", "#EAF4D8", steps=4)
+    s.add(lathe([(0, 0), (1.5, 0), (2.0, 0.35), (2.15, 1.1), (2.2, 1.25), (2.05, 1.25), (1.95, 1.1),
+                 (1.85, 0.45), (0, 0.45)]), iron, "pot")
+    s.decal(lambda p: ((p[..., 1] > 1.13) & (rad(p) > 2.0), rimm), "pot")
     for sgn in (-1, 1):
-        c = R * 2.05 * sgn
-        s.add(along(torus(0.22, 0.07, axis="z"), T).at(c[0], 1.25, c[2]), pot, "pot")
+        c = R * 2.35 * sgn
+        s.add(torus(0.26, 0.08, axis="y").at(c[0], 1.05, c[2]), iron, "ear")
+    s.add(cylinder(1.95, 0.1).at(0, 0.95, 0), red, "soup")
 
-    def half(p):
-        u, w = huv(p, R, T)
-        return np.hypot(u - 0.0, w - 0.0) < 0.75, mild
-    s.decal(half, "soup")
-    s.decal(lambda p: (speckle(p, 7, 0.12, seed=9) & (rad(p) > 0.8), chili), "soup")
-    for k in range(4):
-        a = k / 4 * math.tau + 0.4
-        s.add(box(0.16, 0.12, 0.16, round=0.03).at(0.35 * math.cos(a), 1.3, 0.35 * math.sin(a)), tofu, "food")
-    for k in range(5):
-        a = k / 5 * math.tau
-        s.add(ellipsoid(0.22, 0.06, 0.12).at(1.25 * math.cos(a), 1.28, 1.25 * math.sin(a)), green, "food")
+    def curve(u, w):
+        return u - 0.32 * np.sin(w * 1.7)
+
+    s.decal(lambda p: (curve(*huv(p, R, T)) > 0, white), "soup")
+    s.decal(lambda p: ((curve(*huv(p, R, T)) <= 0) & speckle(p, 9, 0.16, seed=31) & top(p, 0.05), oil), "soup")
+    s.decal(lambda p: ((curve(*huv(p, R, T)) <= 0) & speckle(p, 6, 0.07, seed=32) & top(p, 0.05), chili), "soup")
+    s.decal(lambda p: ((curve(*huv(p, R, T)) > 0) & speckle(p, 8, 0.07, seed=33) & top(p, 0.05), onion), "soup")
+    s.decal(lambda p: ((curve(*huv(p, R, T)) > 0) & speckle(p, 7, 0.03, seed=34) & top(p, 0.05), goji), "soup")
+    s.decal(lambda p: (np.abs(curve(*huv(p, R, T))) < 0.07, divider), "soup")
+
+    def put(r, t, y=1.1):
+        return R * r + T * t + np.array([0, y, 0])
+
+    # 红汤那边（屏幕左）：丸子、香菇、肉片、辣椒
+    for r, t in ((-1.1, 0.5), (-0.7, 0.95), (-1.35, -0.2)):
+        s.add(sphere(0.26).at(*put(r, t, 1.12)), ball, "ball")
+    for i, (r, t) in enumerate(((-0.6, -0.7), (-1.2, -0.95))):
+        s.add(ellipsoid(0.32, 0.14, 0.32).at(*put(r, t, 1.14)), mush, "mush%d" % i)
+        s.decal((lambda p: ((((np.abs(p[..., 0]) < 0.045) | (np.abs(p[..., 2]) < 0.045)) & (p[..., 1] > 0.06)), stem_m)),
+                "mush%d" % i)
+    for i, (r, t, ang) in enumerate(((-0.35, 0.2, 20), (-0.95, 0.05, -15))):
+        s.add(along(box(0.42, 0.04, 0.22, round=0.03), R).rot("y", ang).rot("z", 8).at(*put(r, t, 1.1)), meat, "meat%d" % i)
+        s.decal((lambda p: ((np.abs(((p[..., 0] + p[..., 2] * 0.3) * 5) % 1 - 0.5) < 0.12), fat)), "meat%d" % i)
+    # 白汤那边（屏幕右）：豆腐、青菜
+    for r, t in ((0.9, 0.55), (1.35, -0.15), (0.6, -0.25)):
+        s.add(box(0.2, 0.14, 0.2, round=0.03).rot("y", r * 40).at(*put(r, t, 1.1)), tofu, "tofu")
+    for i, (r, t, ang) in enumerate(((1.0, -0.9, 30), (0.45, 0.95, -40))):
+        c = put(r, t, 1.12)
+        s.add(along(ellipsoid(0.48, 0.07, 0.26), R).rot("y", ang).at(*c), leaf, "leaf%d" % i)
+        s.decal((lambda p: (np.abs(p[..., 2]) < 0.05, leafw)), "leaf%d" % i)
 
     def post(img):
-        x, y = s.project(0, 1.4, 0)
-        return steam(img, x, y - 2, wisps=3, height=40, spread=14, seed=5)
+        x, y = s.project(0, 1.3, 0)
+        return steam(img, x, y - 2, wisps=3, height=48, spread=16, seed=5)
     return post
 
 
@@ -442,53 +509,112 @@ def cookies(s, R, T):
         s.decal(lambda p: (speckle(p, 6, 0.18, seed=20), chip), "cookie%d" % i)
 
 
-@item("croissant", "可颂", units=4.4, ty=0.9, h=1.0)
+@item("croissant", "可颂", units=4.2, ty=0.9, h=1.0)
 def croissant(s, R, T):
+    # 可颂：**一整条**弯成月牙、中间粗两头细的面团，身上一道一道斜着的折痕。
+    # 她：「不像可颂，更像几个圆球」——拿一串椭球拼，每节都是个球。
+    # 这版是一个自己写的 SDF：沿一段弧走的管子，半径从中间往两头收，两头的尖往上翘一点；
+    # 折痕是按「在弧上走到哪儿」画的一圈圈暗线，所以线是绕着面团走的，不是贴在表面的斜条。
     plate(s, color="#EEF2F6")
-    dough = M("dough", "#EBAA5A", steps=7, gloss=0.35)
-    flake = M("flake", "#F7D39A", steps=5)
-    # 月牙：弧心放在后面，中间那节离观察者最近、两头往后弯回去。
-    # 斜俯视下「朝观察者」那个方向被压扁一半，所以弧在 T 方向上要给得比 R 方向深，
-    # 不然看上去是一排直直的球（第一版就是这样）。每节沿弧的切线方向拉长，节和节压着。
-    # ⚠️ 每一节**单独一个组**：组和组之间会描内线，节与节之间那道缝就出来了——
-    # 可颂认得出来靠的就是一节一节鼓起来。同一个组的话整条是光滑的，像香肠。
-    n = 9
-    for i in range(n):
-        t = i / (n - 1)
-        ang = math.radians(-120 + 240 * t)
-        d = R * math.sin(ang) * 1.3 + T * (math.cos(ang) * 1.45 - 0.7)
-        tang = R * math.cos(ang) - T * math.sin(ang) * 1.1
-        tang = tang / np.linalg.norm(tang)
-        size = 0.2 + 0.36 * math.sin(math.pi * t) ** 0.7
-        s.add(along(ellipsoid(size * 1.05, size * 0.85, size * 0.95), tang).at(d[0], 0.22 + size * 0.8, d[2]),
-              dough, "c%d" % i)
-        s.decal((lambda g: (lambda p: ((np.abs(np.sin(p[..., 0] * 7 + p[..., 1] * 5)) < 0.25), flake)))(i), "c%d" % i)
+    dough = M("dough", "#EDAA55", steps=7, gloss=0.4)
+    crease = M("crease", "#B86A2E", steps=4)
+    light = M("layer", "#F8D08A", steps=5)
+    RAD, SPAN = 1.55, math.radians(78)
+    C = -T * 0.95                             # 弧心在后面：中间离观察者最近，两头往后弯
+
+    def local_arc(p):
+        q = p - np.array([C[0], 0, C[2]])
+        x = q[..., 0] * R[0] + q[..., 2] * R[2]
+        z = q[..., 0] * T[0] + q[..., 2] * T[2]
+        th = np.arctan2(x, z)                 # 0 = 正对观察者
+        thc = np.clip(th, -SPAN, SPAN)
+        k = thc / SPAN
+        rr = 0.14 + 0.52 * np.cos(k * math.pi / 2) ** 0.75
+        yc = 0.66 + 0.08 * k ** 2             # 两头只翘一点点（翘高了像马蹄铁）
+        qx = np.sin(thc) * RAD
+        qz = np.cos(thc) * RAD
+        d = np.sqrt((x - qx) ** 2 + (z - qz) ** 2 + ((p[..., 1] - yc) * 1.15) ** 2) - rr
+        return d, k
+
+    from pixelkit import Shape
+    s.add(Shape(lambda p: local_arc(p)[0] * 0.8, 3.0), dough, "croissant")
+
+    def creases(p):
+        d, k = local_arc(p)
+        band = (k * 3.0 + p[..., 1] * 0.9) % 1
+        return (band < 0.08) & (np.abs(k) < 0.95), crease
+
+    def layers(p):
+        d, k = local_arc(p)
+        band = (k * 3.0 + p[..., 1] * 0.9) % 1
+        return (band > 0.13) & (band < 0.26) & (p[..., 1] > 0.8), light
+    s.decal(layers, "croissant")
+    s.decal(creases, "croissant")
 
 
-@item("fruitbowl", "果盘", units=5.0, ty=0.95, h=0.95)
+@item("fruitbowl", "果盘", units=4.8, ty=0.75, h=0.95)
 def fruitbowl(s, R, T):
-    bowl = M("bowl", "#CFE3EA", steps=6, gloss=0.6)
-    apple = M("apple", "#EC6A6A", steps=5, gloss=0.8)
-    orange = M("orange", "#F6AE4E", steps=5, gloss=0.5)
-    grape = M("grape", "#9B82C9", steps=4, gloss=0.8)
-    banana = M("banana", "#F5D76A", steps=5)
-    leaf = M("leaf", "#86C48A", steps=4)
-    stem = M("stem", "#7A5A3A", steps=3)
-    s.add(lathe([(0, 0), (0.8, 0), (0.9, 0.1), (1.9, 0.8), (1.95, 0.95), (1.8, 0.95), (0.9, 0.3), (0, 0.3)]), bowl, "bowl")
-    a = R * -0.55 + T * 0.35
-    s.add(sphere(0.55).at(a[0], 1.05, a[2]), apple, "apple")
-    s.add(capsule(np.array([a[0], 1.55, a[2]]), np.array([a[0] + 0.05, 1.8, a[2]]), 0.04), stem, "apple")
-    s.add(ellipsoid(0.22, 0.05, 0.12).at(a[0] + 0.2, 1.72, a[2]), leaf, "leaf")
-    o = R * 0.6 + T * 0.3
-    s.add(sphere(0.52).at(o[0], 1.0, o[2]), orange, "orange")
-    s.decal(lambda p: (speckle(p, 14, 0.12, seed=2), M("peel", "#F8C277", steps=3)), "orange")
+    # 切好的水果拼盘（照她给的参考）：西瓜、葡萄、苹果片、橙子片、蓝莓、芒果粒，一样一堆摆满。
+    # 她：「不像果盘」——以前是一只碗装一个苹果一个橙子一根香蕉。
+    plate(s, r=2.2, color="#FBF4EA", rim="#E7B98A")
+    melon = M("melon", "#F0605A", steps=5)
+    rind = M("rind", "#5FAE63", steps=4)
+    rindw = M("rindw", "#EAF4D0", steps=3)
+    seed_m = M("seed", "#3A2A26", steps=2)
+    grape = M("grape", "#A9D36A", steps=5, gloss=0.8)
+    appleskin = M("apple", "#E24E4E", steps=5, gloss=0.6)
+    applein = M("applein", "#FFF8E6", steps=4, shine=1.0, anchor=0.8)
+    orange = M("orange", "#F7A33A", steps=5)
+    orpith = M("pith", "#FFE7B8", steps=3)
+    blue = M("blue", "#4F5FB8", steps=5, gloss=0.7)
+    mango = M("mango", "#FFC54A", steps=5)
+    pick = M("pick", "#C9A06A", steps=3)
+
+    def P(r, t, y):
+        return R * r + T * t + np.array([0, y, 0])
+
+    # 西瓜：两块三角，立着，底下一条绿皮
+    for i, (r, t, yaw) in enumerate(((-1.15, -0.35, 15), (-0.55, -0.75, -10))):
+        c = P(r, t, 0.72)
+        shp = tri_prism(0.62, 0.16, round=0.05).rot("y", math.degrees(math.atan2(T[0], T[2])) + yaw).at(*c)
+        s.add(shp, melon, "melon%d" % i)
+        s.decal((lambda p: (p[..., 1] < -0.28, rind)), "melon%d" % i)
+        s.decal((lambda p: ((p[..., 1] >= -0.28) & (p[..., 1] < -0.2), rindw)), "melon%d" % i)
+        s.decal((lambda p: (speckle(p, 7, 0.08, seed=40 + i) & (p[..., 1] > -0.1) & (np.abs(p[..., 2]) > 0.12), seed_m)),
+                "melon%d" % i)
+    # 葡萄：一串绿的，插一根牙签
+    for k in range(10):
+        a = k * 2.4
+        rr = 0.18 + 0.05 * (k % 3)
+        c = P(0.35 + 0.28 * math.cos(a) * (k / 10), -0.75 + 0.22 * math.sin(a) * (k / 10), 0.45 + 0.1 * (k % 4))
+        s.add(sphere(0.2).at(*c), grape, "grape")
+    s.add(capsule(P(0.45, -0.8, 0.8), P(0.55, -0.95, 1.5), 0.025), pick, "pick")
+    s.add(torus(0.08, 0.02, axis="z").at(*P(0.56, -0.96, 1.6)), pick, "pick")
+    # 苹果片：两片立着的弯月，红皮白肉
+    for i, r in enumerate((1.05, 1.35)):
+        c = P(r, -0.35 - 0.12 * i, 0.5)
+        shp = aim(cylinder(0.45, 0.1), T + R * 0.3).at(*c)
+        s.add(shp, applein, "apple%d" % i)
+        s.decal((lambda p: (np.hypot(p[..., 0], p[..., 2]) > 0.37, appleskin)), "apple%d" % i)
+        s.decal((lambda p: ((np.hypot(p[..., 0] - 0.12, p[..., 2]) < 0.05), seed_m)), "apple%d" % i)
+    # 橙子片：半圆立着，一瓣一瓣
+    c = P(1.05, 0.55, 0.3)
+    s.add(aim(cylinder(0.55, 0.12), T - R * 0.25).at(*c), orange, "orange")
+
+    def seg(p):
+        ang = np.arctan2(p[..., 2], p[..., 0])
+        rr = np.hypot(p[..., 0], p[..., 2])
+        return ((np.abs(((ang / (math.tau / 8)) % 1) - 0.5) > 0.44) & (rr < 0.45)) | ((rr > 0.42) & (rr < 0.48)), orpith
+    s.decal(seg, "orange")
+    # 芒果粒：一小堆方块
+    for k in range(7):
+        c = P(-0.25 + 0.3 * (k % 3), 0.2 + 0.28 * (k // 3), 0.45 + 0.22 * (k % 2))
+        s.add(box(0.13, 0.12, 0.13, round=0.03).rot("y", 20 * k).at(*c), mango, "mango")
+    # 蓝莓：一堆
     for k in range(9):
-        c = T * -0.55 + R * (0.1 + 0.18 * ((k % 3) - 1)) + np.array([0, 0.95 + 0.2 * (k // 3), 0])
-        s.add(sphere(0.19).at(c[0], c[1], c[2]), grape, "grape")
-    pts = [R * (-1.0 + 0.5 * i) + T * (-0.25 + 0.18 * (i - 2) ** 2 * -0.3) + np.array([0, 1.25 + 0.12 * math.sin(i), 0])
-           for i in range(5)]
-    for p1, p2 in zip(pts, pts[1:]):
-        s.add(capsule(p1, p2, 0.2), banana, "banana")
+        a = k * 2.1
+        c = P(-1.0 + 0.3 * math.cos(a) * (0.4 + k / 12), 0.75 + 0.25 * math.sin(a) * (0.4 + k / 12), 0.38 + 0.05 * (k % 2))
+        s.add(sphere(0.14).at(*c), blue, "blue")
 
 
 @item("pancakes", "松饼", units=4.6, ty=0.9, h=1.0)
@@ -558,30 +684,49 @@ def sandwich(s, R, T):
             s.add(shp, m, "half%d" % k)
 
 
-@item("salad", "沙拉", units=4.8, ty=0.9, h=0.95)
+@item("salad", "沙拉", units=4.8, ty=0.95, h=1.0)
 def salad(s, R, T):
+    # 她：「沙拉没有铺满整个盘子」。菜叶铺满到碗沿、堆出一个小山，上面放小番茄、黄瓜片、玉米、鸡蛋片、面包丁、紫洋葱。
     bowl = M("bowl", "#F6EFE6", steps=6, gloss=0.7)
     band = M("band", "#9CC9B8", steps=4)
-    leaf1 = M("leaf1", "#8FD07A", steps=5)
-    leaf2 = M("leaf2", "#BFE39A", steps=5)
-    tom = M("tom", "#EF6B5E", steps=4, gloss=0.8)
-    corn = M("corn", "#FFD86B", steps=3)
+    greens = [M("g1", "#8FD07A", steps=5), M("g2", "#BFE39A", steps=5), M("g3", "#6BB36A", steps=5),
+              M("g4", "#B07AB8", steps=5)]
+    vein = M("vein", "#E6F4C8", steps=3)
+    tom = M("tom", "#EF5B4E", steps=5, gloss=0.9)
+    cuc = M("cuc", "#DDF0B8", steps=4)
+    cucskin = M("cucskin", "#5EA05A", steps=3)
+    corn = M("corn", "#FFD24A", steps=3)
     egg = M("egg", "#FFFBF0", steps=4)
-    s.add(lathe([(0, 0), (0.8, 0), (0.9, 0.1), (1.85, 0.85), (1.9, 1.0), (1.78, 1.0), (0.85, 0.3), (0, 0.3)]), bowl, "bowl")
-    s.decal(lambda p: ((p[..., 1] > 0.72) & (p[..., 1] < 0.82), band), "bowl")
-    rng = np.random.default_rng(4)
-    for k in range(14):
+    yolk = M("yolk", "#FFC43A", steps=3)
+    crouton = M("crouton", "#E2A85C", steps=4)
+    s.add(lathe([(0, 0), (0.8, 0), (0.9, 0.1), (1.95, 0.8), (2.0, 0.95), (1.88, 0.95), (0.85, 0.3), (0, 0.3)]),
+          bowl, "bowl")
+    s.decal(lambda p: ((p[..., 1] > 0.68) & (p[..., 1] < 0.78), band), "bowl")
+    rng = np.random.default_rng(11)
+    for k in range(34):
         a = rng.uniform(0, math.tau)
-        r = rng.uniform(0, 1.3)
-        s.add(ellipsoid(0.45, 0.12, 0.3).rot("z", rng.uniform(-35, 35)).rot("y", rng.uniform(0, 180))
-              .at(r * math.cos(a), 0.9 + 0.3 * (1 - r / 1.3) + rng.uniform(0, 0.15), r * math.sin(a)),
-              leaf1 if k % 2 else leaf2, "leaves")
-    for k in range(4):
-        a = k / 4 * math.tau + 0.5
-        s.add(sphere(0.2).at(0.75 * math.cos(a), 1.3, 0.75 * math.sin(a)), tom, "tom")
-    s.add(ellipsoid(0.3, 0.2, 0.25).at(0, 1.42, 0), egg, "egg")
-    s.decal(lambda p: ((np.hypot(p[..., 0], p[..., 2]) < 0.14) & (p[..., 1] > 0.1), corn), "egg")
-    s.decal(lambda p: (speckle(p, 10, 0.06, seed=12), corn), "leaves")
+        r = math.sqrt(rng.uniform(0, 1)) * 1.75
+        y = 0.75 + 0.5 * (1 - (r / 1.75) ** 2) + rng.uniform(0, 0.12)
+        g = "leaf%d" % (k % 4)
+        s.add(ellipsoid(0.5, 0.1, 0.32).rot("z", rng.uniform(-30, 30)).rot("y", rng.uniform(0, 180))
+              .at(r * math.cos(a), y, r * math.sin(a)), greens[k % 4], g)
+    for g in range(4):
+        s.decal((lambda p: (np.abs(p[..., 2]) < 0.035, vein)), "leaf%d" % g)
+
+    def P(r, t, y):
+        return R * r + T * t + np.array([0, y, 0])
+    for r, t in ((-0.8, 0.6), (0.9, 0.4), (0.1, -0.9), (-1.1, -0.4), (0.6, 1.1)):
+        s.add(sphere(0.22).at(*P(r, t, 1.28 - 0.1 * abs(r))), tom, "tom")
+    for i, (r, t) in enumerate(((0.3, 0.7), (-0.35, 1.05), (1.2, -0.3))):
+        s.add(aim(cylinder(0.26, 0.06), np.array([0.2, 1, 0.3])).at(*P(r, t, 1.3 - 0.08 * i)), cuc, "cuc%d" % i)
+        s.decal((lambda p: (np.hypot(p[..., 0], p[..., 2]) > 0.21, cucskin)), "cuc%d" % i)
+    for i, (r, t) in enumerate(((-0.2, 0.15), (0.55, -0.35))):
+        s.add(ellipsoid(0.32, 0.08, 0.26).at(*P(r, t, 1.5)), egg, "egg%d" % i)
+        s.decal((lambda p: ((np.hypot(p[..., 0], p[..., 2]) < 0.14) & (p[..., 1] > 0.02), yolk)), "egg%d" % i)
+    for r, t in ((-0.6, -0.3), (0.2, 0.9), (1.0, 0.9), (-0.9, 1.0)):
+        s.add(box(0.1, 0.09, 0.1, round=0.02).rot("y", r * 50).at(*P(r, t, 1.33)), crouton, "crouton")
+    for g in range(4):
+        s.decal((lambda p: (speckle(p, 12, 0.05, seed=50), corn)), "leaf%d" % g)
 
 
 # ═══════════════════════════════ 摆件
@@ -614,18 +759,51 @@ def candle(s, R, T):
     s.decal(sprig, "tin")
 
 
-@item("tissue", "纸巾盒", units=4.6, ty=0.9, h=0.95)
+@item("tissue", "纸巾盒", units=4.6, ty=1.0, h=1.0)
 def tissue(s, R, T):
     R, T = X, Z                      # 跟地砖对齐，正面朝 +z
-    box_m = M("box", "#F4C7C3", steps=7, gloss=0.3)
-    paper = M("paper", "#FFFFFF", steps=5, anchor=0.8)
-    dot = M("dot", "#FFF3E8", steps=3)
-    hole = M("hole", "#B98E8A", steps=3)
-    s.add(along(box(1.5, 0.75, 0.95, round=0.12), R).at(0, 0.75, 0), box_m, "box")
-    s.decal(lambda p: ((p[..., 1] > 0.7) & (np.hypot(p[..., 0] / 0.9, p[..., 2] / 0.35) < 1), hole), "box")
-    s.decal(lambda p: (speckle(p, 11, 0.1, seed=7) & (p[..., 1] < 0.68), dot), "box")
-    s.add(ellipsoid(0.8, 0.75, 0.22).rot("z", 14).at(*(R * -0.15 + np.array([0, 1.8, 0]))), paper, "tissue")
-    s.add(ellipsoid(0.55, 0.6, 0.18).rot("z", -20).at(*(R * 0.4 + np.array([0, 1.65, 0]))), paper, "tissue")
+    # 照她给的参考：奶油色的抽纸包，两头一截桃色，正面一块白标签、边上一串小绿圈；
+    # 上面抽出来一张**有褶、有压花**的纸（以前是两颗白色的球）。
+    box_m = M("box", "#FFF1DE", steps=7, gloss=0.3)
+    peach = M("peach", "#F7C39A", steps=5)
+    label = M("label", "#FFFFFF", steps=4)
+    ink = M("ink", "#9A8F9E", steps=3)
+    green = M("green", "#9ACB8E", steps=3)
+    slot = M("slot", "#D9B89A", steps=3)
+    paper = M("paper", "#FFFFFF", colors=hexes("#EBEFF5", "#F5F7FB", "#FFFFFF", "#FFFFFF", "#FFFFFF"))
+    emboss = M("emboss", "#E6EAF2", colors=hexes("#E1E6EF", "#EAEEF4", "#F0F3F8"))
+    s.add(box(1.55, 0.55, 0.95, round=0.08).at(0, 0.55, 0), box_m, "box")
+    s.decal(lambda p: (np.abs(p[..., 0]) > 1.05, peach), "box")
+    s.decal(lambda p: ((p[..., 2] > 0.9) & (np.abs(p[..., 0]) < 0.75) & (np.abs(p[..., 1]) < 0.4), label), "box")
+    s.decal(lambda p: ((p[..., 2] > 0.9) & (np.abs(p[..., 0]) < 0.5)
+                       & ((np.abs(p[..., 1] - 0.05) < 0.05) | ((np.abs(p[..., 1] + 0.15) < 0.03) & (np.abs(p[..., 0]) < 0.35)))
+                       , ink), "box")
+    s.decal(lambda p: ((p[..., 2] > 0.9) & (np.abs(np.abs(p[..., 0]) - 1.3) < 0.18) & (np.abs(np.abs(p[..., 1]) - 0.3) < 0.05)
+                       & (((p[..., 0] * 18) % 1) < 0.5), green), "box")
+    s.decal(lambda p: ((p[..., 1] > 0.5) & (np.abs(p[..., 0]) < 0.85) & (np.abs(p[..., 2]) < 0.07), slot), "box")
+    # 抽出来的纸：**一整张软的纸**，底边埋在开口里，顶上几个圆圆的起伏，纸身前后有一点波浪。
+    # 她看了三角尖那版：「纸巾依旧怪怪的」——尖太硬、描边太深，像折纸。
+    # 纸是自己写的 SDF：一块很薄的片，轮廓 = 底略窄、上沿按余弦起伏，厚度方向按正弦弯。
+    from pixelkit import Shape
+
+    def sheet(width, height, bumps, wave, phase):
+        def f(q):
+            x, y, z = q[..., 0], q[..., 1], q[..., 2]
+            top_ = height + 0.22 * np.cos(x * bumps + phase) - 0.3 * (x / width) ** 2
+            side = np.abs(x) - width * (0.8 + 0.2 * np.clip(y / height, 0, 1))
+            d2 = np.maximum(np.maximum(-y, y - top_), side)
+            dz = np.abs(z - wave * np.sin(x * 2.4 + phase) * np.clip(y / height, 0, 1)) - 0.035
+            return np.maximum(d2, dz) * 0.7
+        return Shape(f, width + height)
+
+    soft = M("paperline", "#FFFFFF", colors=paper.colors, outline="#C3CAD6")
+    for i, (w_, h_, bumps, wave, ph, rz, dz) in enumerate(((1.0, 1.15, 3.4, 0.16, 0.4, 7, -0.05),
+                                                          (0.85, 0.95, 3.9, -0.12, 2.3, -9, 0.07))):
+        shp = sheet(w_, h_, bumps, wave, ph).rot("z", rz).at(0.05 * (i * 2 - 1), 1.05, dz)
+        s.add(shp, soft, "paper%d" % i)
+        s.decal((lambda p: ((np.abs(((p[..., 0] + p[..., 1]) * 3.2) % 1 - 0.5) < 0.04)
+                            & (np.abs(((p[..., 0] - p[..., 1]) * 3.2) % 1 - 0.5) < 0.25)
+                            & (p[..., 1] > 0.12), emboss)), "paper%d" % i)
 
 
 @item("globe", "小地球仪", units=4.4, ty=1.5, h=1.3)
@@ -649,28 +827,56 @@ def globe(s, R, T):
     s.decal(continents, "globe")
 
 
-@item("tank", "小鱼缸", units=4.6, ty=1.2, h=1.05)
+@item("tank", "小鱼缸", units=4.6, ty=1.35, h=1.1)
 def tank(s, R, T):
-    water = M("water", "#C9ECF6", steps=6, gloss=1.0, alpha=0.32)
-    sand = M("sand", "#F3E1B8", steps=5)
-    fish = M("fish", "#FF9E5E", steps=5, gloss=0.6)
-    weed = M("weed", "#7CC48A", steps=4)
-    pebble = M("pebble", "#C9B7D8", steps=4)
-    rim = M("rim", "#EAF6FA", steps=4, gloss=1.0)
-    s.add(lathe([(0, 0), (0.9, 0), (1.55, 0.7), (1.6, 1.3), (1.2, 2.05), (0, 2.05)]), water, "water")
-    s.add(cylinder(1.35, 0.35).at(0, 0.0, 0), sand, "sand")
-    for k in range(5):
-        a = k / 5 * math.tau
-        s.add(sphere(0.2).at(0.9 * math.cos(a), 0.4, 0.9 * math.sin(a)), pebble, "pebble")
-    for k, (r, t) in enumerate(((-0.5, -0.4), (0.2, -0.6))):
-        c = R * r + T * t
-        for j in range(4):
-            s.add(capsule(np.array([c[0] + 0.1 * math.sin(j), 0.35 + 0.35 * j, c[2]]),
-                          np.array([c[0] + 0.1 * math.sin(j + 1), 0.7 + 0.35 * j, c[2]]), 0.07), weed, "weed%d" % k)
-    f = R * 0.3 + T * 0.2
-    s.add(along(ellipsoid(0.5, 0.32, 0.2), R).at(f[0], 1.2, f[2]), fish, "fish")
-    tf = R * -0.12 + T * 0.2
-    s.add(along(tri_prism(0.22, 0.05, round=0.02), R).rot("z", 90).at(tf[0], 1.2, tf[2]), fish, "fish")
+    # 圆鱼缸（照她给的参考）：**没有底座**，一个圆肚子的玻璃缸，口是开的。
+    # 玻璃中间透、边缘浓（pixelkit 的菲涅尔），水面以下带一点点蓝，水线一圈亮线。
+    # 里面：一条金鱼（身子、尾巴、鳍、眼睛）、一丛水草、一层彩色小石子。
+    glass = M("glass", "#DDF4FA", gloss=1.0, alpha=0.0, outline="#6FA8BA",
+              colors=hexes("#BFE6F0", "#D6F1F7", "#E8F8FB", "#F6FDFE", "#FFFFFF"))
+    water = M("water", "#8ED8EE", gloss=1.0, alpha=0.3, outline="#6FA8BA",
+              colors=hexes("#8FD3E6", "#A6DFEE", "#BDE9F4", "#D6F3F9", "#FFFFFF"))
+    line = M("waterline", "#FFFFFF", steps=3, alpha=0.85)
+    fish = M("fish", "#F4603E", steps=5, gloss=0.6)
+    fin = M("fin", "#FFB07A", steps=4)
+    eye = M("eye", "#2A2230", steps=2)
+    weed = M("weed", "#8CC45E", steps=4)
+    pebs = [M("p%d" % i, c, steps=3) for i, c in enumerate(("#F2A0A0", "#9ED3E8", "#FFE08A", "#B8E0B0", "#C9B7E8"))]
+    # ⚠️ 轮廓**沿圆弧密密地取点**。她：「鱼缸不够圆，现在的边缘是有棱角的。」
+    # 以前十几个点连成折线，每段都是直的，放大就是一圈棱。现在外壁是一段圆弧取 48 个点，
+    # 底下平一小块（放得稳）、口往里收再翻出一圈唇边。
+    RB, CY = 1.55, 1.2
+    a0 = math.asin((0.0 - CY) / RB)
+    a1 = math.asin((2.25 - CY) / RB)
+    outer = [(RB * math.cos(a), CY + RB * math.sin(a)) for a in np.linspace(a0, a1, 48)]
+    th = 0.09
+    inner = [((RB - th) * math.cos(a), CY + (RB - th) * math.sin(a)) for a in np.linspace(a1, a0 + 0.08, 48)]
+    lip_r = outer[-1][0]
+    prof = ([(0, 0.0)] + outer + [(lip_r + 0.07, 2.3), (lip_r - 0.03, 2.36)] + inner + [(0, inner[-1][1])])
+    s.add(lathe(prof), glass, "glass")
+    s.decal(lambda p: ((p[..., 1] < 1.75) & (p[..., 1] > 0.1), water), "glass")
+    s.decal(lambda p: (np.abs(p[..., 1] - 1.75) < 0.05, line), "glass")
+    rng = np.random.default_rng(6)
+    for k in range(16):
+        a = rng.uniform(0, math.tau)
+        r = math.sqrt(rng.uniform(0, 1)) * 0.95
+        s.add(ellipsoid(0.16, 0.1, 0.13).rot("y", rng.uniform(0, 90)).at(r * math.cos(a), 0.22 + rng.uniform(0, 0.06),
+                                                                        r * math.sin(a)), pebs[k % 5], "peb%d" % (k % 5))
+    base = R * -0.55 + T * -0.2
+    for j in range(6):
+        a = base + R * 0.08 * math.sin(j * 1.3)
+        b = base + R * 0.08 * math.sin((j + 1) * 1.3)
+        s.add(capsule(a + np.array([0, 0.25 + 0.2 * j, 0]), b + np.array([0, 0.45 + 0.2 * j, 0]), 0.05), weed, "weed")
+        side = R * (0.13 if j % 2 else -0.13)
+        s.add(ellipsoid(0.13, 0.05, 0.07).rot("z", 30 if j % 2 else -30).at(*(a + side + np.array([0, 0.4 + 0.2 * j, 0]))),
+              weed, "weed")
+    f = R * 0.2 + T * 0.1 + np.array([0, 1.05, 0])
+    s.add(along(ellipsoid(0.42, 0.3, 0.2), R).at(*f), fish, "fish")
+    tail = f - R * 0.45
+    for ang in (35, -35):
+        s.add(along(ellipsoid(0.26, 0.09, 0.06), R).rot("z", 0).rot("y", 0).at(*(tail + np.array([0, ang / 200, 0]))), fin, "tail")
+    s.add(along(ellipsoid(0.16, 0.12, 0.04), R).at(*(f + np.array([0, 0.32, 0]) - R * 0.05)), fin, "fin")
+    s.decal(lambda p: ((np.hypot(p[..., 0] - 0.24, p[..., 1] - 0.08) < 0.06) & (np.abs(p[..., 2]) > 0.1), eye), "fish")
 
 
 @item("bonsai", "小盆景", units=4.8, ty=1.1, h=1.0)
@@ -695,24 +901,28 @@ def bonsai(s, R, T):
     s.decal(lambda p: (speckle(p, 9, 0.2, seed=6) & (p[..., 1] > 0.05), M("hi", "#A9D98E", steps=3)), "leaves")
 
 
-@item("flowervase", "花瓶", units=4.4, ty=1.7, h=1.3)
+@item("flowervase", "花瓶", units=4.4, ty=1.8, h=1.3)
 def flowervase(s, R, T):
+    # 她：「花一般是朝前的，你这个朝上了。」花盘朝着观察者、往上仰一点，花瓣贴在垂直于朝向的面里。
     vase = M("vase", "#A9CFE3", steps=7, gloss=0.8)
+    stripe = M("stripe", "#FFFFFF", steps=3)
     stem = M("stem", "#7CB77A", steps=4)
     pink = M("pink", "#F4A6BC", steps=5)
     yellow = M("yellow", "#FFD97A", steps=5)
     white = M("white", "#FFFFFF", steps=5)
+    core1 = M("core1", "#F2A65A", steps=3)
     s.add(lathe([(0, 0), (0.55, 0), (0.85, 0.5), (0.85, 0.95), (0.4, 1.5), (0.45, 1.75), (0, 1.75)]), vase, "vase")
-    heads = [(R * -0.55 + T * 0.1, 3.0, pink), (R * 0.45 + T * 0.15, 3.15, yellow), (T * -0.3, 3.45, white),
-             (R * 0.05 + T * 0.4, 2.75, pink)]
-    for c, y, m in heads:
-        s.add(capsule(np.array([0, 1.6, 0]), c + np.array([0, y - 0.2, 0]), 0.05), stem, "stem")
-        s.add(sphere(0.2).at(c[0], y, c[2]), yellow if m is not yellow else M("core", "#F2A65A", steps=3), "core")
-        for k in range(6):
-            a = k / 6 * math.tau
-            s.add(ellipsoid(0.24, 0.1, 0.24).at(c[0] + 0.28 * math.cos(a), y - 0.02, c[2] + 0.28 * math.sin(a)), m, "petal")
+    s.decal(lambda p: ((np.abs(p[..., 1] - 0.72) < 0.05) | (np.abs(p[..., 1] - 0.88) < 0.03), stripe), "vase")
+    heads = [(-0.6, 0.15, 3.0, pink, -0.35), (0.5, 0.2, 3.15, yellow, 0.3), (-0.05, -0.2, 3.5, white, 0.0),
+             (0.1, 0.45, 2.7, pink, 0.1)]
+    for i, (r, t, y, m, lean) in enumerate(heads):
+        c = R * r + T * t + np.array([0, y, 0])
+        f = T * 0.9 + R * lean + np.array([0, 0.45, 0])
+        s.add(capsule(np.array([0, 1.6, 0]), c - f / np.linalg.norm(f) * 0.15, 0.05), stem, "stem")
+        flower_head(s, c, f, m, core1 if m is not yellow else M("core2", "#E8853A", steps=3), n=7, size=0.34,
+                    group="fl%d" % i)
     for sgn in (-1, 1):
-        s.add(ellipsoid(0.35, 0.08, 0.14).rot("z", 30 * sgn).at(*(R * 0.35 * sgn + np.array([0, 2.2, 0]))), stem, "leaf")
+        s.add(ellipsoid(0.38, 0.08, 0.15).rot("z", 30 * sgn).at(*(R * 0.35 * sgn + np.array([0, 2.2, 0]))), stem, "leaf")
 
 
 @item("vic_vase", "维多利亚·花瓶", units=4.6, ty=1.8, h=1.3)
@@ -815,31 +1025,30 @@ def microwave(s, R, T):
     glass = M("glass", "#5C6F78", steps=5, gloss=1.0)
     panel = M("panel", "#F7F7F2", steps=4)
     btn = M("btn", "#F2A38E", steps=3)
+    screen = M("screen", "#2F4A48", steps=3)
+    digit = M("digit", "#9BF0B8", steps=2, emissive=True)
     handle = M("handle", "#B9C9C2", steps=4, gloss=0.8)
-    s.add(along(box(1.9, 1.0, 1.25, round=0.14), R).at(0, 1.0, 0), body, "body")
+    feet = M("feet", "#8FA39A", steps=3)
+    s.add(box(1.9, 1.0, 1.25, round=0.14).at(0, 1.08, 0), body, "body")
+    for sx in (-1.5, 1.5):
+        for sz in (-0.9, 0.9):
+            s.add(cylinder(0.1, 0.1).at(sx, 0.0, sz), feet, "feet")
 
-    def door(p):
-        t, v = fuv(p, R, T)
-        y = p[..., 1]
-        return (t > 1.15) & (v > -1.6) & (v < 0.75) & (np.abs(y) < 0.72), glass
+    def front(p):
+        return p[..., 2] > 1.15
 
-    def shine(p):
-        t, v = fuv(p, R, T)
-        y = p[..., 1]
-        return (t > 1.15) & (np.abs((v + y * 0.8) + 0.5) < 0.12) & (v > -1.5) & (v < 0.7) & (np.abs(y) < 0.66), panel
-
-    def pnl(p):
-        t, v = fuv(p, R, T)
-        y = p[..., 1]
-        base = (t > 1.15) & (v > 1.0) & (v < 1.75) & (np.abs(y) < 0.75)
-        dots = base & (((v * 4) % 1) < 0.5) & (((y * 4) % 1) < 0.5) & (y < 0.2)
-        return dots, btn
-    s.decal(lambda p: ((fuv(p, R, T)[0] > 1.15) & (fuv(p, R, T)[1] > 0.95) & (np.abs(p[..., 1]) < 0.8), panel), "body")
-    s.decal(door, "body")
-    s.decal(shine, "body")
-    s.decal(pnl, "body")
+    s.decal(lambda p: (front(p) & (p[..., 0] > 0.95) & (np.abs(p[..., 1]) < 0.8), panel), "body")
+    s.decal(lambda p: (front(p) & (p[..., 0] > -1.6) & (p[..., 0] < 0.75) & (np.abs(p[..., 1]) < 0.72), glass), "body")
+    s.decal(lambda p: (front(p) & (np.abs((p[..., 0] + p[..., 1] * 0.8) + 0.5) < 0.1) & (p[..., 0] > -1.5)
+                       & (p[..., 0] < 0.7) & (np.abs(p[..., 1]) < 0.66), panel), "body")
+    # 她：「按键上面应该有一个小的显示屏。」
+    s.decal(lambda p: (front(p) & (p[..., 0] > 1.1) & (p[..., 0] < 1.7) & (p[..., 1] > 0.38) & (p[..., 1] < 0.66), screen), "body")
+    s.decal(lambda p: (front(p) & (p[..., 0] > 1.2) & (p[..., 0] < 1.6) & (p[..., 1] > 0.46) & (p[..., 1] < 0.58)
+                       & (((p[..., 0] * 10) % 1) < 0.6), digit), "body")
+    s.decal(lambda p: (front(p) & (p[..., 0] > 1.1) & (p[..., 0] < 1.7) & (p[..., 1] > -0.65) & (p[..., 1] < 0.25)
+                       & (((p[..., 0] * 4) % 1) < 0.55) & ((((p[..., 1] + 0.7) * 4) % 1) < 0.55), btn), "body")
     h = R * 0.85 + T * 1.3
-    s.add(box(0.06, 0.55, 0.06, round=0.03).at(h[0], 1.0, h[2]), handle, "handle")
+    s.add(box(0.06, 0.55, 0.06, round=0.03).at(h[0], 1.08, h[2]), handle, "handle")
 
 
 @item("record", "唱片机", units=5.8, ty=0.6, h=0.8)
@@ -873,26 +1082,38 @@ def record(s, R, T):
         s.add(cylinder(0.12, 0.12).at(q[0], 0.7, q[2]), knob, "knob")
 
 
-@item("humid", "加湿器", units=4.2, ty=1.3, h=1.2)
+@item("humid", "加湿器", units=4.2, ty=1.45, h=1.25)
 def humid(s, R, T):
-    body = M("body", "#F7E3EA", steps=7, gloss=0.6)
-    base = M("base", "#FFFFFF", steps=6, gloss=0.6)
-    light = M("light", "#BFE8F2", steps=3, emissive=True)
-    face_m = M("face", "#8A6A72", steps=3)
-    s.add(lathe([(0, 0), (1.0, 0), (1.05, 0.5), (0, 0.5)]), base, "base")
-    s.add(lathe([(0, 0.5), (1.05, 0.5), (1.15, 1.2), (0.95, 2.0), (0.4, 2.35), (0.25, 2.45), (0, 2.45)]), body, "body")
-    s.decal(lambda p: ((p[..., 1] > 0.22) & (p[..., 1] < 0.3), light), "base")
+    R, T = X, Z                      # 跟地砖对齐，正面朝 +z
+    # 照她给的参考：方圆的机身，正面一块水箱窗（看得见水位和气泡），底座一圈灯、一个按键，
+    # 顶上一个出雾口在冒雾。以前是一个带眼睛的蛋，她说不像加湿器。
+    body = M("body", "#FBF6F2", steps=7, gloss=0.6)
+    base = M("base", "#F2D8DE", steps=6, gloss=0.5)
+    tank = M("tank", "#CDEAF2", steps=5, gloss=0.9)
+    waterm = M("water", "#9FD6E8", steps=4, gloss=0.9)
+    bubble = M("bubble", "#FFFFFF", steps=2)
+    light = M("light", "#9EE3F2", steps=3, emissive=True)
+    button = M("button", "#E9A9B8", steps=4, gloss=0.6)
+    nozzle = M("nozzle", "#E3E6EA", steps=4, gloss=0.8)
+    s.add(box(0.95, 0.35, 0.95, round=0.25).at(0, 0.35, 0), base, "base")
+    s.decal(lambda p: ((np.abs(p[..., 1] - 0.08) < 0.05), light), "base")
+    s.add(face(cylinder(0.14, 0.08), T).at(0.0, 0.3, 0.95), button, "button")
+    s.add(box(0.9, 0.95, 0.9, round=0.3).at(0, 1.55, 0), body, "body")
 
-    def cute(p):
-        t, v = fuv(p, R, T)
-        y = p[..., 1]
-        eyes = (t > 0.7) & (((np.hypot(v - 0.32, y - 1.45) < 0.08)) | (np.hypot(v + 0.32, y - 1.45) < 0.08))
-        return eyes, face_m
-    s.decal(cute, "body")
+    def win(p):
+        return (p[..., 2] > 0.8) & (np.abs(p[..., 0]) < 0.52) & (p[..., 1] > -0.65) & (p[..., 1] < 0.45)
+
+    s.decal(lambda p: (win(p), tank), "body")
+    s.decal(lambda p: (win(p) & (p[..., 1] < 0.02), waterm), "body")
+    s.decal(lambda p: (win(p) & (np.abs(p[..., 1] - 0.02) < 0.035), bubble), "body")
+    s.decal(lambda p: (win(p) & (p[..., 1] < -0.05) & speckle(p, 10, 0.1, seed=3), bubble), "body")
+    s.add(lathe([(0, 2.4), (0.62, 2.4), (0.5, 2.62), (0, 2.62)]), body, "top")
+    s.add(cylinder(0.2, 0.22, round=0.05).at(0, 2.55, 0), nozzle, "nozzle")
+    s.decal(lambda p: (np.hypot(p[..., 0], p[..., 2]) < 0.1, M("hole", "#8A9AA6", steps=2)), "nozzle")
 
     def post(img):
-        x, y = s.project(0, 2.45, 0)
-        return steam(img, x, y - 2, wisps=2, height=46, spread=7, seed=8, edge="#CFE6F2")
+        x, y = s.project(0, 2.8, 0)
+        return steam(img, x, y - 1, wisps=3, height=50, spread=6, seed=8, edge="#CFE6F2")
     return post
 
 
@@ -926,26 +1147,53 @@ def polaroid(s, R, T):
     s.decal(lambda p: ((np.abs(p[..., 0]) < 0.48) & (p[..., 1] > -0.18), pic), "photo")
 
 
-@item("star_gramophone", "星月蓝·留声机", units=5.0, ty=1.5, h=1.25)
+@item("star_gramophone", "星月蓝·留声机", units=5.2, ty=1.55, h=1.25)
 def star_gramophone(s, R, T):
     R, T = X, Z                      # 跟地砖对齐，正面朝 +z
+    # 她：「有点敷衍」。补的细节：机身四边包金边、四角金钉、正面一块金色铭牌和一弯月亮、
+    # 撒一点星点；唱盘一圈金边、黑胶有纹路、中间奶油色标签；唱臂带唱头；侧面一只摇把；
+    # 喇叭一瓣一瓣的棱（两种金交替），喇叭颈是弯的。
     base = M("base", "#3E5A8A", steps=7, gloss=0.5)
     gold = M("gold", "#E8C47A", steps=6, gloss=1.0)
+    gold2 = M("gold2", "#D6A85C", steps=6, gloss=1.0)
     vinyl = M("vinyl", "#2C2A36", steps=4, gloss=0.9)
-    horn = M("horn", "#E8C47A", steps=7, gloss=1.0)
+    groove = M("groove", "#4A4656", steps=3)
+    label = M("label", "#FFF1D6", steps=3)
     star = M("star", "#FFE9A6", steps=3, emissive=True)
-    s.add(along(box(1.45, 0.45, 1.25, round=0.1), R).at(0, 0.45, 0), base, "base")
-    s.decal(lambda p: ((np.abs(p[..., 1] + 0.05) < 0.05), gold), "base")
-    s.decal(lambda p: (speckle(p, 8, 0.03, seed=9) & (p[..., 1] < -0.1), star), "base")
-    s.add(cylinder(1.0, 0.07).at(0, 0.9, 0), vinyl, "vinyl")
-    arm = R * 1.05 + T * -0.8
-    s.add(capsule(arm + np.array([0, 0.9, 0]), arm + np.array([0, 1.8, 0]), 0.1), gold, "neck")
-    s.add(capsule(arm + np.array([0, 1.8, 0]), R * 0.6 + T * -0.6 + np.array([0, 2.2, 0]), 0.12), gold, "neck")
-    mouth = lathe([(0, 0), (0.1, 0), (0.22, 0.45), (0.5, 0.8), (0.85, 1.0), (0.78, 1.05), (0.44, 0.88),
+    wood = M("wood", "#7A4E36", steps=4)
+    s.add(box(1.45, 0.5, 1.25, round=0.08).at(0, 0.55, 0), base, "base")
+    s.add(box(1.55, 0.06, 1.35, round=0.03).at(0, 0.06, 0), gold2, "plinth")
+    s.decal(lambda p: ((np.abs(np.abs(p[..., 0]) - 1.37) < 0.06) | (np.abs(np.abs(p[..., 1]) - 0.42) < 0.05)
+                       | (np.abs(np.abs(p[..., 2]) - 1.17) < 0.06), gold), "base")
+    s.decal(lambda p: ((p[..., 2] > 1.2) & (np.abs(p[..., 0]) < 0.45) & (np.abs(p[..., 1] + 0.05) < 0.16), gold), "base")
+    s.decal(lambda p: ((p[..., 2] > 1.2) & (np.hypot(p[..., 0] + 0.9, p[..., 1] - 0.02) < 0.2)
+                       & (np.hypot(p[..., 0] + 0.83, p[..., 1] + 0.04) > 0.17), star), "base")
+    s.decal(lambda p: (speckle(p, 9, 0.025, seed=9) & (np.abs(p[..., 1]) < 0.35), star), "base")
+    for sx in (-1.4, 1.4):
+        for sz in (-1.2, 1.2):
+            s.add(sphere(0.09).at(sx, 1.02, sz), gold, "stud")
+    s.add(cylinder(1.0, 0.06).at(-0.15, 1.05, 0.05), gold2, "platter")
+    s.add(cylinder(0.95, 0.06).at(-0.15, 1.1, 0.05), vinyl, "vinyl")
+    s.decal(lambda p: ((np.abs(((rad(p) * 7) % 1) - 0.5) < 0.1) & (rad(p) > 0.35) & top(p, 0.03), groove), "vinyl")
+    s.decal(lambda p: ((rad(p) < 0.3) & top(p, 0.03), label), "vinyl")
+    s.decal(lambda p: ((rad(p) < 0.05) & top(p, 0.03), gold), "vinyl")
+    piv = np.array([1.15, 1.05, -0.9])
+    s.add(cylinder(0.14, 0.25).at(*piv), gold, "arm")
+    tip = np.array([0.35, 1.28, 0.45])
+    s.add(capsule(piv + np.array([0, 0.25, 0]), tip, 0.045), gold, "arm")
+    s.add(box(0.07, 0.06, 0.12).at(*(tip - np.array([0, 0.05, 0]))), gold2, "arm")
+    s.add(capsule(np.array([1.45, 0.6, 0.3]), np.array([1.75, 0.6, 0.3]), 0.05), gold, "crank")
+    s.add(capsule(np.array([1.75, 0.6, 0.3]), np.array([1.75, 0.95, 0.3]), 0.05), gold, "crank")
+    s.add(capsule(np.array([1.75, 0.95, 0.3]), np.array([1.95, 0.95, 0.3]), 0.07), wood, "crank")
+    neck = [np.array([1.05, 1.05, -0.95]), np.array([1.1, 1.65, -1.0]), np.array([0.85, 2.15, -0.85]),
+            np.array([0.45, 2.4, -0.55])]
+    for i, (a, b) in enumerate(zip(neck, neck[1:])):
+        s.add(capsule(a, b, 0.12 - 0.02 * i), gold, "neck")
+    mouth = lathe([(0, 0), (0.1, 0), (0.22, 0.45), (0.5, 0.8), (0.95, 1.02), (0.88, 1.08), (0.44, 0.9),
                    (0.16, 0.5), (0, 0.5)])
-    mouth.rot("x", 40).rot("y", math.degrees(math.atan2(T[0], T[2])) - 30)
-    m0 = R * 0.6 + T * -0.6
-    s.add(mouth.at(m0[0], 2.2, m0[2]), horn, "horn")
+    aim(mouth, np.array([-0.35, 0.55, 0.75])).at(0.45, 2.35, -0.55)
+    s.add(mouth, horn := M("horn", "#E8C47A", steps=7, gloss=1.0), "horn")
+    s.decal(lambda p: (np.abs(((np.arctan2(p[..., 2], p[..., 0]) / (math.tau / 12)) % 1) - 0.5) > 0.42, gold2), "horn")
 
 
 # ═══════════════════════════════ 跑

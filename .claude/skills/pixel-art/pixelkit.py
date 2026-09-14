@@ -517,18 +517,34 @@ class Scene:
         if outline:
             _outline(col, lev, mat, grp, dep, solid, self)
         if glass:
-            gc, gl, gm, gg, gd, _, _ = self._layer(glass)
+            gc, gl, gm, gg, gd, gN, gsub = self._layer(glass)
             front = gd < dep
-            a = np.where(front, gc[..., 3], 0)
-            # 玻璃：底色按 alpha 叠，最亮那两档直接盖（反光条）
-            bright = gl >= np.maximum(0, np.array([len(glass[0][1].colors)]) - 2)
-            a = np.where(front & bright, 0.9, a)
-            col[..., :3] = col[..., :3] * (1 - a[..., None]) + gc[..., :3] * a[..., None]
-            col[..., 3] = np.maximum(col[..., 3], np.where(front, np.maximum(a, 0.55), 0))
+            # 玻璃：**中间透、边缘浓**（菲涅尔）。
+            # 她看鱼缸：「不够透明」。以前整片按一个 alpha 叠，中间也是一层灰，
+            # 里面的鱼看不见。真玻璃正对着看几乎是透的，只有转到侧面的那一圈才看得出玻璃。
+            V = -self.fwd
+            facing = np.abs(np.sum(gN * V, -1))
+            fres = np.clip(1 - facing, 0, 1) ** 2.2
+            base = gc[..., 3]
+            a = np.clip(base + (1 - base) * fres * 0.55, 0, 0.9)
+            # 最亮那一档（高光、反光条）直接盖上去
+            top_lv = np.zeros_like(gl)
+            for k, sm in gsub.items():
+                top_lv = np.where(gm == k, len(sm.colors) - 1, top_lv)
+            a = np.where(gl >= top_lv, 0.95, a)
+            a = np.where(front, a, 0)
+            # ⚠️ 按「后面那层有多不透明」来叠。后面是空的（透明）时，
+            # 以前拿透明**黑**去混，玻璃全变成灰的——她说的「不够透明」一半是这个。
+            behind = col[..., 3]
+            out_a = behind + (1 - behind) * a
+            rgb = (col[..., :3] * (behind * (1 - a))[..., None] + gc[..., :3] * a[..., None]) \
+                / np.maximum(out_a, 1e-6)[..., None]
+            col[..., :3] = np.where(front[..., None], rgb, col[..., :3])
+            col[..., 3] = np.where(front, out_a, behind)
             if outline:
                 edge = _edges(np.isfinite(gd)) & front
                 oc = np.array(_outline_color(glass[0][1]))
-                col[edge, :3] = col[edge, :3] * 0.35 + oc * 0.65
+                col[edge, :3] = col[edge, :3] * 0.3 + oc * 0.7
                 col[edge, 3] = 1
         img = (np.clip(col, 0, 1) * 255).astype(np.uint8)
         return Image.fromarray(img, "RGBA")
