@@ -34,7 +34,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from pixelkit import (Material, Scene, box, capsule, crop, cylinder, ellipsoid, hashv,
-                      lathe, speckle, sphere, steam, torus, tri_prism)
+                      lathe, round_cone, speckle, sphere, steam, torus, tri_prism)
 
 OUT = os.path.join(ROOT, "Qi", "Resources", "furniture")
 LOOK = os.path.join(ROOT, "_看一眼")
@@ -531,7 +531,9 @@ def croissant(s, R, T):
     # 弧心在前面：中间那节在后、两头的尖朝观察者弯过来，斜俯视下看得出是个「C」
     C = T * 1.05
     levels = [1.0, 0.82, 0.64, 0.47, 0.32]
-    order = [0, -1, 1, -2, 2, -3, 3, -4, 4]
+    # ⚠️ 最外面那两节**不是椭圆**，是从倒数第二节伸出去、越来越细的尖角（见循环后面）。
+    # 她：「最下面两个依旧像椭圆」——参考图里两头是收细带尖的角，压在上一节底下。
+    order = [0, -1, 1, -2, 2, -3, 3]
     for j in order:
         lv = levels[abs(j)]
         ang = math.radians(j * 19)
@@ -545,6 +547,17 @@ def croissant(s, R, T):
         s.add(along(ellipsoid(a, c, b), tang).at(d[0], 0.2 + c * 0.85, d[2]), doughs[abs(j) % 2], g)
         s.decal((lambda p: ((p[..., 1] > 0.35 * c) & (np.abs(p[..., 2]) < 0.45 * b) & (np.abs(p[..., 0]) < 0.4 * a),
                             shine_m)), g)
+    # 两头的尖角：从第 3 节里面出发，沿弧往外、往下弯，半径收到很细
+    for sgn in (-1, 1):
+        a0 = math.radians(sgn * 3 * 19)
+        a1 = math.radians(sgn * 4.6 * 19)
+        a2 = math.radians(sgn * 5.6 * 19)
+        base = C + R * math.sin(a0) * RAD - T * math.cos(a0) * RAD + np.array([0, 0.36, 0])
+        mid = C + R * math.sin(a1) * RAD * 0.98 - T * math.cos(a1) * RAD * 0.98 + np.array([0, 0.28, 0])
+        tip = C + R * math.sin(a2) * RAD * 0.9 - T * math.cos(a2) * RAD * 0.9 + np.array([0, 0.2, 0])
+        g = "horn%d" % (sgn + 1)
+        s.add(round_cone(base, mid, 0.3, 0.16), doughs[1], g)
+        s.add(round_cone(mid, tip, 0.16, 0.035), doughs[1], g + "t")
 
 
 @item("fruitbowl", "果盘", units=4.6, ty=0.8, h=0.95)
@@ -571,13 +584,16 @@ def fruitbowl(s, R, T):
     blue = M("blue", "#4F5FB8", steps=6, gloss=0.7, grain=0.35, streak=0.5)
     bluecrown = M("bluecrown", "#2F3A7A", steps=2)
     mango = M("mango", "#FFC54A", steps=6, grain=0.4, streak=0.35)
-    star = M("star", "#B9DB6A", steps=6, grain=0.3, streak=0.3)
-    starin = M("starin", "#E9F2B8", steps=3)
+    star = M("star", "#9BCB4E", steps=6, grain=0.15)
+    starin = M("starin", "#E4EFA6", steps=4, grain=0.2, shine=0.8)
+    starcore = M("starcore", "#F7F9DC", steps=2)
+    starseed = M("starseed", "#8A6A3A", colors=hexes("#6E4F2A", "#8A6A3A"))
     pick = M("pick", "#C9A06A", steps=3)
     from pixelkit import Shape
 
+    # 整盘水果往前挪 0.45：她说「水果整体应该向下移动一点，现在盘子的底下空出来了」
     def P(r, t, y):
-        return R * r + T * t + np.array([0, y, 0])
+        return R * r + T * (t + 0.45) + np.array([0, y, 0])
 
     # ── 后排 ────────────────────────────
     # 西瓜：两大块三角立着，一前一后错开
@@ -627,8 +643,20 @@ def fruitbowl(s, R, T):
         g = "star%d" % i
         s.add(aim(star_prism(0.55, 0.1), T + R * (-0.2 + 0.3 * i) + np.array([0, 0.6, 0])).rot("y", 0).at(*P(r, t, 0.55)),
               star, g)
-        s.decal((lambda p: ((np.hypot(p[..., 0], p[..., 2]) < 0.3) & (np.abs(p[..., 1]) > 0.05), starin)), g)
-        s.decal((lambda p: ((np.hypot(p[..., 0], p[..., 2]) < 0.06) & (np.abs(p[..., 1]) > 0.05), seed_m)), g)
+        def star_r(p, ro):
+            th = np.arctan2(p[..., 2], p[..., 0])
+            return ro * (0.52 + 0.48 * np.abs(np.cos(2.5 * th)) ** 2.2)
+
+        face_ = lambda p: np.abs(p[..., 1]) > 0.07          # 切面（不是侧边那圈皮）
+        rho = lambda p: np.hypot(p[..., 0], p[..., 2])
+        # 果肉：比外形小一圈的星形
+        s.decal((lambda p: (face_(p) & (rho(p) < star_r(p, 0.55) * 0.8), starin)), g)
+        # 中间的小五角星纹：五条从中心出去的短线
+        s.decal((lambda p: (face_(p) & (rho(p) < 0.24)
+                            & (np.abs(((np.arctan2(p[..., 2], p[..., 0]) / (math.tau / 5)) % 1) - 0.5) > 0.42), starcore)), g)
+        # 五颗籽：在五条线的中段
+        s.decal((lambda p: (face_(p) & (np.abs(rho(p) - 0.15) < 0.035)
+                            & (np.abs(((np.arctan2(p[..., 2], p[..., 0]) / (math.tau / 5)) % 1) - 0.5) > 0.4), starseed)), g)
     # 蓝莓：一堆挤在前面正中
     for k in range(13):
         a = k * 2.4

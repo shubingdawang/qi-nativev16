@@ -260,6 +260,32 @@ def capsule(a, b, r):
     return Shape(f, _len(b - a) + r)
 
 
+def round_cone(a, b, r1, r2):
+    """从 a（半径 r1）到 b（半径 r2）的圆头锥。可颂的尖角、牛角、胡萝卜、笔尖用它。"""
+    a = np.array(a, float)
+    b = np.array(b, float)
+    ba = b - a
+    l2 = float(np.dot(ba, ba))
+    rr = r1 - r2
+    a2 = l2 - rr * rr
+    il2 = 1.0 / l2
+
+    def f(p):
+        pa = p - a
+        y = np.sum(pa * ba, -1)
+        z = y - l2
+        xv = pa * l2 - y[..., None] * ba
+        x2 = np.sum(xv * xv, -1)
+        y2 = y * y * l2
+        z2 = z * z * l2
+        k = np.sign(rr) * rr * rr * x2
+        d_tip = np.sqrt(x2 + z2) * il2 - r2
+        d_base = np.sqrt(x2 + y2) * il2 - r1
+        d_side = (np.sqrt(x2 * a2 * il2) + y * rr) * il2 - r1
+        return np.where(np.sign(z) * a2 * z2 > k, d_tip, np.where(np.sign(y) * a2 * y2 < k, d_base, d_side))
+    return Shape(f, math.sqrt(l2) + max(r1, r2))
+
+
 def lathe(profile):
     """车床体：绕 y 轴转一圈的轮廓。`profile` = [(r, y), ...]，**首尾要落在轴上**（r=0），
     按顺序围成一个封闭多边形。杯子、瓶子、蜡烛、花瓶、蛋糕都用它。
