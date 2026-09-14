@@ -509,55 +509,50 @@ def cookies(s, R, T):
         s.decal(lambda p: (speckle(p, 6, 0.18, seed=20), chip), "cookie%d" % i)
 
 
-@item("croissant", "可颂", units=4.2, ty=0.9, h=1.0)
+@item("croissant", "可颂", units=4.2, ty=0.8, h=0.9)
 def croissant(s, R, T):
-    # 可颂：**一整条**弯成月牙、中间粗两头细的面团，身上一道一道斜着的折痕。
-    # 她：「不像可颂，更像几个圆球」——拿一串椭球拼，每节都是个球。
-    # 这版是一个自己写的 SDF：沿一段弧走的管子，半径从中间往两头收，两头的尖往上翘一点；
-    # 折痕是按「在弧上走到哪儿」画的一圈圈暗线，所以线是绕着面团走的，不是贴在表面的斜条。
+    # 可颂是**一节一节叠起来的**：中间那节最大最高，往两头一节比一节小、一节比一节低，
+    # 边缘一级一级往下走（她说的「阶梯状」），节和节之间一道深线。
+    #
+    # 前两版都不对：
+    #   · 一串椭球 → 「像几个圆球」：每节是个球，而且一样大
+    #   · 一整条光滑的管子 + 画上去的折痕 → 没有台阶，轮廓是一条顺滑的弧
+    # 这版每一节是一个**横着裹在面团上的卷**（沿弧的方向薄、横过弧的方向宽），
+    # 节与节压得很紧（间距只有节宽的一半），大的压在小的上面，单独一组才描得出节间那道线。
     plate(s, color="#EEF2F6")
-    dough = M("dough", "#EDAA55", steps=7, gloss=0.4)
-    crease = M("crease", "#B86A2E", steps=4)
-    light = M("layer", "#F8D08A", steps=5)
-    RAD, SPAN = 1.55, math.radians(78)
-    C = -T * 0.95                             # 弧心在后面：中间离观察者最近，两头往后弯
-
-    def local_arc(p):
-        q = p - np.array([C[0], 0, C[2]])
-        x = q[..., 0] * R[0] + q[..., 2] * R[2]
-        z = q[..., 0] * T[0] + q[..., 2] * T[2]
-        th = np.arctan2(x, z)                 # 0 = 正对观察者
-        thc = np.clip(th, -SPAN, SPAN)
-        k = thc / SPAN
-        rr = 0.14 + 0.52 * np.cos(k * math.pi / 2) ** 0.75
-        yc = 0.66 + 0.08 * k ** 2             # 两头只翘一点点（翘高了像马蹄铁）
-        qx = np.sin(thc) * RAD
-        qz = np.cos(thc) * RAD
-        d = np.sqrt((x - qx) ** 2 + (z - qz) ** 2 + ((p[..., 1] - yc) * 1.15) ** 2) - rr
-        return d, k
-
-    from pixelkit import Shape
-    s.add(Shape(lambda p: local_arc(p)[0] * 0.8, 3.0), dough, "croissant")
-
-    def creases(p):
-        d, k = local_arc(p)
-        band = (k * 3.0 + p[..., 1] * 0.9) % 1
-        return (band < 0.08) & (np.abs(k) < 0.95), crease
-
-    def layers(p):
-        d, k = local_arc(p)
-        band = (k * 3.0 + p[..., 1] * 0.9) % 1
-        return (band > 0.13) & (band < 0.26) & (p[..., 1] > 0.8), light
-    s.decal(layers, "croissant")
-    s.decal(creases, "croissant")
+    doughs = [M("d0", "#F0B25E", steps=7, gloss=0.45), M("d1", "#E9A452", steps=7, gloss=0.45)]
+    shine_m = M("shine", "#FBD592", steps=4)
+    RAD = 1.25
+    # 弧心在前面：中间那节在后、两头的尖朝观察者弯过来，斜俯视下看得出是个「C」
+    C = T * 1.05
+    levels = [1.0, 0.82, 0.64, 0.47, 0.32]
+    order = [0, -1, 1, -2, 2, -3, 3, -4, 4]
+    for j in order:
+        lv = levels[abs(j)]
+        ang = math.radians(j * 19)
+        d = C + R * math.sin(ang) * RAD - T * math.cos(ang) * RAD
+        tang = R * math.cos(ang) + T * math.sin(ang)
+        # ⚠️ 每节**横着扁**：宽 > 高。竖着高的话一节一节像手指（上一版就是）
+        a = 0.3 * lv + 0.07           # 沿弧：薄
+        b = 0.66 * lv + 0.1           # 横过弧：宽
+        c = 0.36 * lv + 0.06          # 高
+        g = "roll%d" % (j + 4)
+        s.add(along(ellipsoid(a, c, b), tang).at(d[0], 0.2 + c * 0.85, d[2]), doughs[abs(j) % 2], g)
+        s.decal((lambda p: ((p[..., 1] > 0.35 * c) & (np.abs(p[..., 2]) < 0.45 * b) & (np.abs(p[..., 0]) < 0.4 * a),
+                            shine_m)), g)
 
 
-@item("fruitbowl", "果盘", units=4.8, ty=0.75, h=0.95)
+@item("fruitbowl", "果盘", units=4.6, ty=0.8, h=0.95)
 def fruitbowl(s, R, T):
-    # 切好的水果拼盘（照她给的参考）：西瓜、葡萄、苹果片、橙子片、蓝莓、芒果粒，一样一堆摆满。
-    # 她：「不像果盘」——以前是一只碗装一个苹果一个橙子一根香蕉。
+    # 切好的水果拼盘，**挤满整个盘子**，按前后排：前面的压住后面的一截。
+    # 她：「太空了，水果和水果之间没有接触，可以按先后位置适当地用前一个水果遮挡后一个水果。」
+    # 照参考图的布局：
+    #   后排  西瓜（左）  葡萄（中）  苹果片（右）
+    #   中间  芒果粒（中）
+    #   前排  杨桃（左）  蓝莓（中）  橙子片（右）
+    # 每样都放大、挨着放，中心点前后错开大半个身位，前排自然盖住后排的下半截。
     plate(s, r=2.2, color="#FBF4EA", rim="#E7B98A")
-    melon = M("melon", "#F0605A", steps=5)
+    melon = M("melon", "#F0605A", steps=6)
     rind = M("rind", "#5FAE63", steps=4)
     rindw = M("rindw", "#EAF4D0", steps=3)
     seed_m = M("seed", "#3A2A26", steps=2)
@@ -567,54 +562,85 @@ def fruitbowl(s, R, T):
     orange = M("orange", "#F7A33A", steps=5)
     orpith = M("pith", "#FFE7B8", steps=3)
     blue = M("blue", "#4F5FB8", steps=5, gloss=0.7)
+    bluecrown = M("bluecrown", "#2F3A7A", steps=2)
     mango = M("mango", "#FFC54A", steps=5)
+    star = M("star", "#B9DB6A", steps=5)
+    starin = M("starin", "#E9F2B8", steps=3)
     pick = M("pick", "#C9A06A", steps=3)
+    from pixelkit import Shape
 
     def P(r, t, y):
         return R * r + T * t + np.array([0, y, 0])
 
-    # 西瓜：两块三角，立着，底下一条绿皮
-    for i, (r, t, yaw) in enumerate(((-1.15, -0.35, 15), (-0.55, -0.75, -10))):
-        c = P(r, t, 0.72)
-        shp = tri_prism(0.62, 0.16, round=0.05).rot("y", math.degrees(math.atan2(T[0], T[2])) + yaw).at(*c)
-        s.add(shp, melon, "melon%d" % i)
-        s.decal((lambda p: (p[..., 1] < -0.28, rind)), "melon%d" % i)
-        s.decal((lambda p: ((p[..., 1] >= -0.28) & (p[..., 1] < -0.2), rindw)), "melon%d" % i)
-        s.decal((lambda p: (speckle(p, 7, 0.08, seed=40 + i) & (p[..., 1] > -0.1) & (np.abs(p[..., 2]) > 0.12), seed_m)),
-                "melon%d" % i)
-    # 葡萄：一串绿的，插一根牙签
-    for k in range(10):
-        a = k * 2.4
-        rr = 0.18 + 0.05 * (k % 3)
-        c = P(0.35 + 0.28 * math.cos(a) * (k / 10), -0.75 + 0.22 * math.sin(a) * (k / 10), 0.45 + 0.1 * (k % 4))
-        s.add(sphere(0.2).at(*c), grape, "grape")
-    s.add(capsule(P(0.45, -0.8, 0.8), P(0.55, -0.95, 1.5), 0.025), pick, "pick")
-    s.add(torus(0.08, 0.02, axis="z").at(*P(0.56, -0.96, 1.6)), pick, "pick")
-    # 苹果片：两片立着的弯月，红皮白肉
-    for i, r in enumerate((1.05, 1.35)):
-        c = P(r, -0.35 - 0.12 * i, 0.5)
-        shp = aim(cylinder(0.45, 0.1), T + R * 0.3).at(*c)
-        s.add(shp, applein, "apple%d" % i)
-        s.decal((lambda p: (np.hypot(p[..., 0], p[..., 2]) > 0.37, appleskin)), "apple%d" % i)
-        s.decal((lambda p: ((np.hypot(p[..., 0] - 0.12, p[..., 2]) < 0.05), seed_m)), "apple%d" % i)
-    # 橙子片：半圆立着，一瓣一瓣
-    c = P(1.05, 0.55, 0.3)
-    s.add(aim(cylinder(0.55, 0.12), T - R * 0.25).at(*c), orange, "orange")
+    # ── 后排 ────────────────────────────
+    # 西瓜：两大块三角立着，一前一后错开
+    for i, (r, t, yaw) in enumerate(((-1.25, -0.75, 18), (-0.7, -0.95, -8))):
+        g = "melon%d" % i
+        shp = tri_prism(0.78, 0.2, round=0.05).rot("y", math.degrees(math.atan2(T[0], T[2])) + yaw).at(*P(r, t, 0.82))
+        s.add(shp, melon, g)
+        s.decal((lambda p: (p[..., 1] < -0.36, rind)), g)
+        s.decal((lambda p: ((p[..., 1] >= -0.36) & (p[..., 1] < -0.26), rindw)), g)
+        s.decal((lambda i: (lambda p: (speckle(p, 7, 0.1, seed=40 + i) & (p[..., 1] > -0.15) & (np.abs(p[..., 2]) > 0.15),
+                                       seed_m)))(i), g)
+    # 葡萄：一串绿的挤成一团，插两根牙签
+    rng = np.random.default_rng(5)
+    for k in range(16):
+        r = 0.05 + rng.uniform(-0.5, 0.5)
+        t = -1.0 + rng.uniform(-0.3, 0.3)
+        y = 0.4 + 0.22 * (k % 3) + rng.uniform(0, 0.1)
+        s.add(sphere(0.25).at(*P(r, t, y)), grape, "grape")
+    for r in (-0.15, 0.3):
+        s.add(capsule(P(r, -1.05, 0.9), P(r + 0.1, -1.15, 1.75), 0.025), pick, "pick")
+        s.add(torus(0.08, 0.02, axis="z").at(*P(r + 0.11, -1.16, 1.85)), pick, "pick")
+    # 苹果片：三片扇形排开，一片压一片
+    for i in range(3):
+        g = "apple%d" % i
+        c = P(0.95 + 0.28 * i, -0.8 + 0.12 * i, 0.55)
+        shp = aim(cylinder(0.58, 0.13), T * 1.0 + R * (0.25 - 0.2 * i) + np.array([0, 0.35, 0])).at(*c)
+        s.add(shp, applein, g)
+        s.decal((lambda p: (np.hypot(p[..., 0], p[..., 2]) > 0.49, appleskin)), g)
+        s.decal((lambda p: ((np.hypot(p[..., 0] - 0.15, p[..., 2]) < 0.06) & (p[..., 1] > 0.06), seed_m)), g)
+    # ── 中间：芒果 ──────────────────────
+    for k in range(12):
+        rr, tt = (k % 4) - 1.5, (k // 4) - 1
+        s.add(box(0.15, 0.15, 0.15, round=0.035).at(*P(0.05 + rr * 0.32, -0.15 + tt * 0.3, 0.5 + 0.1 * (2 - abs(rr)))),
+              mango, "mango")
+    # ── 前排 ────────────────────────────
+    # 杨桃：两片星形，斜着立
+    def star_prism(ro, thick):
+        def f(q):
+            x, y, z = q[..., 0], q[..., 1], q[..., 2]
+            rho = np.hypot(x, z)
+            th = np.arctan2(z, x)
+            rs = ro * (0.52 + 0.48 * np.abs(np.cos(2.5 * th)) ** 2.2)
+            return np.maximum(rho - rs, np.abs(y) - thick) * 0.7
+        return Shape(f, ro)
 
-    def seg(p):
-        ang = np.arctan2(p[..., 2], p[..., 0])
-        rr = np.hypot(p[..., 0], p[..., 2])
-        return ((np.abs(((ang / (math.tau / 8)) % 1) - 0.5) > 0.44) & (rr < 0.45)) | ((rr > 0.42) & (rr < 0.48)), orpith
-    s.decal(seg, "orange")
-    # 芒果粒：一小堆方块
-    for k in range(7):
-        c = P(-0.25 + 0.3 * (k % 3), 0.2 + 0.28 * (k // 3), 0.45 + 0.22 * (k % 2))
-        s.add(box(0.13, 0.12, 0.13, round=0.03).rot("y", 20 * k).at(*c), mango, "mango")
-    # 蓝莓：一堆
-    for k in range(9):
-        a = k * 2.1
-        c = P(-1.0 + 0.3 * math.cos(a) * (0.4 + k / 12), 0.75 + 0.25 * math.sin(a) * (0.4 + k / 12), 0.38 + 0.05 * (k % 2))
-        s.add(sphere(0.14).at(*c), blue, "blue")
+    for i, (r, t) in enumerate(((-1.3, 0.35), (-0.85, 0.7))):
+        g = "star%d" % i
+        s.add(aim(star_prism(0.55, 0.1), T + R * (-0.2 + 0.3 * i) + np.array([0, 0.6, 0])).rot("y", 0).at(*P(r, t, 0.55)),
+              star, g)
+        s.decal((lambda p: ((np.hypot(p[..., 0], p[..., 2]) < 0.3) & (np.abs(p[..., 1]) > 0.05), starin)), g)
+        s.decal((lambda p: ((np.hypot(p[..., 0], p[..., 2]) < 0.06) & (np.abs(p[..., 1]) > 0.05), seed_m)), g)
+    # 蓝莓：一堆挤在前面正中
+    for k in range(13):
+        a = k * 2.4
+        rr = 0.12 * math.sqrt(k)
+        s.add(sphere(0.2).at(*P(0.05 + rr * math.cos(a), 0.75 + rr * math.sin(a) * 0.8, 0.36 + 0.18 * (k < 4))),
+              blue, "blue%d" % (k % 3))
+    for g in range(3):
+        s.decal((lambda p: ((np.hypot(p[..., 0], p[..., 2]) < 0.06) & (p[..., 1] > 0.15), bluecrown)), "blue%d" % g)
+    # 橙子片：两片半圆立着，一前一后
+    for i, (r, t) in enumerate(((1.0, 0.4), (1.35, 0.75))):
+        g = "orange%d" % i
+        s.add(aim(cylinder(0.62, 0.12), T - R * 0.2 + np.array([0, 0.15, 0])).at(*P(r, t, 0.28)), orange, g)
+
+        def seg(p):
+            ang = np.arctan2(p[..., 2], p[..., 0])
+            rr_ = np.hypot(p[..., 0], p[..., 2])
+            return (((np.abs(((ang / (math.tau / 8)) % 1) - 0.5) > 0.44) & (rr_ < 0.5))
+                    | ((rr_ > 0.47) & (rr_ < 0.54))) & (np.abs(p[..., 1] - 0.06) > 0.04), orpith
+        s.decal(seg, g)
 
 
 @item("pancakes", "松饼", units=4.6, ty=0.9, h=1.0)
