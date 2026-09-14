@@ -91,6 +91,8 @@ struct ClawdHomeView: View {
     @State private var facingLeft = false
     /// 这一趟走多久。远一点就走久一点。
     @State private var walkSeconds: Double = 2.4
+    /// 绕路走的时候一段接一段匀速，不在每个拐点停一下
+    @State private var walkLinear = false
     @State private var bubble: String?
     @State private var bubbleTask: Task<Void, Never>?
     @State private var walkTask: Task<Void, Never>?
@@ -242,6 +244,69 @@ struct ClawdHomeView: View {
         guard abs(p.x - clawdX) > 0.0001 || abs(p.y - clawdY) > 0.0001 else { return }
         clawdX = p.x
         clawdY = p.y
+    }
+
+    /// 屋里是晚上（跟窗外、压暗用的是同一个数）
+    private var isNightNow: Bool {
+        RoomClock.night(at: Date(), mode: store.dayMode) > 0.6
+    }
+
+    /// 晚上多半去床上：这间有能躺的就挑它
+    private func nightBed() -> Furniture? {
+        guard isNightNow, Double.random(in: 0...1) < 0.6 else { return nil }
+        return store.furniture(in: store.clawdRoom).filter { f in
+            FurnitureCatalog.shape(of: f.kind).actions.contains { $0 == "躺下" || $0 == "钻被窝" }
+        }.randomElement()
+    }
+
+    /// 挑一个动作。晚上躺得下的就躺下，而且睡久一点
+    private func pickAct(for kindID: String) -> RoomAct? {
+        let acts = RoomActs.acts(for: kindID)
+        if isNightNow, let sleep = acts.first(where: { $0.name == "钻被窝" || $0.name == "躺下" }) {
+            return RoomAct(name: sleep.name, spot: sleep.spot, mood: sleep.mood,
+                           seconds: max(sleep.seconds, 20), lines: ["困了", "晚安", "呼……"])
+        }
+        return acts.randomElement()
+    }
+
+    /// 走到 (tx, ty)（都是 0…1），**绕开地上的家具**。
+    ///
+    /// 路是 `RoomPath` 在格子上找的；一段一段匀速走，拐点之间不减速。
+    /// 被拎起来或者任务取消了返回 false。
+    private func walkAround(to tx: Double, _ ty: Double, pace: Double = 3.4) async -> Bool {
+        guard let size = roomSize, size.width > 1 else { return false }
+        let geo = IsoRoom.fit(in: size, as: store.projection)
+        func cellAt(_ x: Double, _ y: Double) -> RoomPath.Cell {
+            let t = geo.tile(at: CGPoint(x: x * size.width, y: y * size.height))
+            let c = geo.clamp(Int(t.gx.rounded()), Int(t.gy.rounded()))
+            return (c.0, c.1)
+        }
+        let blocked = store.takenCells(in: store.clawdRoom)
+        var stops: [(Double, Double)] = []
+        if let cells = RoomPath.find(from: cellAt(clawdX, clawdY), to: cellAt(tx, ty),
+                                     cols: geo.across, rows: geo.size, blocked: blocked) {
+            for c in cells.dropLast() {
+                let p = geo.point(Double(c.gx), Double(c.gy))
+                stops.append(onFloor(Double(p.x / size.width), Double(p.y / size.height)))
+            }
+        }
+        stops.append((tx, ty))
+
+        let walking = store.carrying == nil
+        walkLinear = stops.count > 1
+        defer { walkLinear = false }
+        for (x, y) in stops {
+            let dist = ((x - clawdX) * (x - clawdX) + (y - clawdY) * (y - clawdY)).squareRoot()
+            guard dist > 0.002 else { continue }
+            facingLeft = x < clawdX
+            walkSeconds = max(0.35, dist * pace) + (stops.count == 1 ? 0.6 : 0)
+            mood = walking ? .walking : .hauling
+            clawdX = x
+            clawdY = y
+            try? await Task.sleep(nanoseconds: UInt64(walkSeconds * 1_000_000_000))
+            if Task.isCancelled || held { return false }
+        }
+        return true
     }
 
     /// 把一个点夹回地板里
@@ -1206,8 +1271,10 @@ struct ClawdHomeView: View {
         .offset(y: -bodyH / 2)
         .position(x: clawdX * size.width, y: clawdY * size.height)
         // 拖的时候要跟手，所以不给动画；自己走的时候才慢慢挪过去
-        .animation(held ? nil : .easeInOut(duration: walkSeconds), value: clawdX)
-        .animation(held ? nil : .easeInOut(duration: walkSeconds), value: clawdY)
+        .animation(held ? nil : (walkLinear ? .linear(duration: walkSeconds)
+                                            : .easeInOut(duration: walkSeconds)), value: clawdX)
+        .animation(held ? nil : (walkLinear ? .linear(duration: walkSeconds)
+                                            : .easeInOut(duration: walkSeconds)), value: clawdY)
         .animation(.spring(response: 0.28, dampingFraction: 0.6), value: held)
         // 不管是谁让他拿起来的（她拖给他、他自己拿吃喝），拿起来那一刻开始演「拿起」
         .onChange(of: store.carrying) { _, new in
@@ -1861,9 +1928,9 @@ struct ClawdHomeView: View {
                 if store.carrying == nil, !held,
                    let size = roomSize, size.width > 1,
                    Double.random(in: 0...1) < 0.42,
-                   let item = store.furniture(in: store.clawdRoom).randomElement(),
+                   let item = nightBed() ?? store.furniture(in: store.clawdRoom).randomElement(),
                    let kind = FurnitureCatalog.kind(item.kind),
-                   let chosen = RoomActs.acts(for: kind.id).randomElement() {
+                   let chosen = pickAct(for: kind.id) {
 
                     let geo = IsoRoom.fit(in: size, as: store.projection)
                     let itemCell = store.cell(of: item)
@@ -1883,13 +1950,8 @@ struct ClawdHomeView: View {
                     let tx = onIt.x
                     let ty = onIt.y
 
-                    facingLeft = tx < clawdX
-                    walkSeconds = 1.4
-                    mood = .walking
                     store.clawdDoing = .walking
-                    clawdX = tx
-                    clawdY = ty
-                    try? await Task.sleep(nanoseconds: 1_400_000_000)
+                    _ = await walkAround(to: tx, ty)
                     if Task.isCancelled { return }
                     guard !held else { continue }
 
@@ -1987,24 +2049,24 @@ struct ClawdHomeView: View {
                 // **只在地板上走**，而且是**菱形**的地板：
                 // 先随便挑一个深度，再按那个深度上地板有多宽挑左右。
                 let b = band
-                let targetY = Double.random(in: b.top...b.bottom)
-                let sp = span(atY: targetY)
-                let targetX = sp.hi > sp.lo
-                    ? Double.random(in: sp.lo...sp.hi)
-                    : sp.lo
-                let dist = ((targetX - clawdX) * (targetX - clawdX)
-                            + (targetY - clawdY) * (targetY - clawdY)).squareRoot()
+                // 落脚点不挑家具占着的格子（挑中了就再抽一次，最多几次）
+                var targetY = Double.random(in: b.top...b.bottom)
+                var targetX = 0.5
+                for attempt in 0..<6 {
+                    if attempt > 0 { targetY = Double.random(in: b.top...b.bottom) }
+                    let sp = span(atY: targetY)
+                    targetX = sp.hi > sp.lo ? Double.random(in: sp.lo...sp.hi) : sp.lo
+                    guard let size = roomSize, size.width > 1 else { break }
+                    let geo = IsoRoom.fit(in: size, as: store.projection)
+                    let t = geo.tile(at: CGPoint(x: targetX * size.width, y: targetY * size.height))
+                    let c = geo.clamp(Int(t.gx.rounded()), Int(t.gy.rounded()))
+                    if !store.takenCells(in: store.clawdRoom).contains("\(c.0),\(c.1)") { break }
+                }
 
-                facingLeft = targetX < clawdX
-                walkSeconds = 1.6 + dist * 3.2
                 // 走的这一路上换成"在忙活"那两帧，腿看着像在倒腾
-                mood = store.carrying == nil ? .walking : .hauling
                 // 头像底下那一行**说的是他真在做的事**
                 store.clawdDoing = store.carrying == nil ? .walking : .arranging
-                clawdX = targetX
-                clawdY = targetY
-
-                try? await Task.sleep(nanoseconds: UInt64(walkSeconds * 1_000_000_000))
+                _ = await walkAround(to: targetX, targetY, pace: 3.6)
                 if Task.isCancelled { return }
                 if mood == .walking || mood == .hauling {
                     mood = store.carrying == nil ? .idle : .carrying
