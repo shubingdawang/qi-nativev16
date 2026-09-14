@@ -167,6 +167,14 @@ struct CallView: View {
     @State private var notice: String?
     /// 他说完再见之后，留几秒给你反悔
     @State private var farewell = 0
+    /// 他这一轮正在出声（从第一段开始放，到最后一段放完）
+    @State private var speaking = false
+    /// 这一轮回复的编号。她插话打断的是哪一轮，就记在 `cutTurn` 里，
+    /// 那一轮剩下没放的就不放了
+    @State private var turn = UUID()
+    @State private var cutTurn: UUID?
+    /// 她刚才打断了他——下一句带给他知道
+    @State private var cutIn = false
 
     private var call: CallRecord? { store.active }
     private var me: String { app.settings.userName.isEmpty ? "我" : app.settings.userName }
@@ -482,6 +490,8 @@ struct CallView: View {
     ///     参考里那句话说得很实在：「录完再转只多等一两秒，稳得多」
     ///   · 录下来的那段还能存进这一句，挂了之后回听
     private func startListening() {
+        // 按住说话时他还在出声：一按下就让他停
+        if !handsFree, speaking { cutOff() }
         listening = true
         // 免提的时候把自动断句挂上。
         //
@@ -503,6 +513,9 @@ struct CallView: View {
         } else {
             recorder.onAutoStop = nil
         }
+        // 插话：他出声的时候她开口，把他停下，这一句照常录完
+        recorder.outputPlaying = { speaking }
+        recorder.onBargeIn = { cutOff() }
         do {
             try recorder.start()
         } catch {
@@ -540,10 +553,25 @@ struct CallView: View {
         }
 
         // 先把振幅序列拿走，下一次按住说话就重置了
-        let shape = recorder.samples
+        var shape = recorder.samples
         let step = recorder.sampleInterval
+        let start = recorder.speechStart
+        let heard = recorder.heardSpeech
+        let overlapped = recorder.overlappedOutput
 
-        guard let url = recorder.stop(), recorder.seconds > 0.4 else { return }
+        guard let raw = recorder.stop(), recorder.seconds - start > 0.4 else { return }
+        // 跟他出声重叠过、又没听到她开口：录进去的只有他的残响，不送识别
+        if overlapped, !heard {
+            try? FileManager.default.removeItem(at: raw)
+            return
+        }
+        var url = raw
+        // 她开口之前那一段剪掉（空白或他的残响）
+        if start > 0.8, let cut = await CallAudio.trim(raw, from: start) {
+            try? FileManager.default.removeItem(at: raw)
+            url = cut
+            shape = Array(shape.dropFirst(Int(start / step)))
+        }
         defer { try? FileManager.default.removeItem(at: url) }
 
         var text = ""
@@ -597,6 +625,43 @@ struct CallView: View {
         }
     }
 
+    /// 只等声音放完，不多留那半秒（第一段放完接第二段用）
+    private func waitForPlaybackIdle() async {
+        for _ in 0..<1200 {
+            if VoicePlayer.shared.playingName == nil,
+               !SystemVoice.shared.isSpeaking { return }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+    }
+
+    /// 放一段他的声音
+    private func play(_ v: AppState.CallVoice) {
+        switch v {
+        case .file(let url): VoicePlayer.shared.playTemp(url)
+        case .system(let text): SystemVoice.shared.enqueue(text)
+        }
+    }
+
+    private func discard(_ v: AppState.CallVoice?) {
+        if case .file(let url)? = v { try? FileManager.default.removeItem(at: url) }
+    }
+
+    /// 她打断了他：停声音，这一轮剩下的不放了
+    private func cutOff() {
+        guard speaking else { return }
+        cutTurn = turn
+        speaking = false
+        cutIn = true
+        VoicePlayer.shared.stop()
+        SystemVoice.shared.stop()
+    }
+
+    /// 他开始出声了。免提的话耳朵同时支起来——她随时能插话
+    private func startedSpeaking() {
+        speaking = true
+        if handsFree, !muted, !listening { startListening() }
+    }
+
     private func send(_ text: String, tone: String = "") async {
         let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty else { return }
@@ -614,15 +679,41 @@ struct CallView: View {
         // 光有一个「正在说话」的布尔值是不够的。我们这条链路简单，
         // 一个通话 id 就够——但检查的位置一个都不能少。
         guard let mine = store.active?.id else { return }
+
+        // 她插话的时候他那一轮可能还没回完：等那句先落下来，记录顺序不乱
+        for _ in 0..<300 where thinking {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        guard store.active?.id == mine else { return }
+        // 打字插话也算打断
+        if speaking { cutOff() }
+
         var mineLine = CallLine(fromMe: true, text: clean)
         mineLine.tone = tone
+        if cutIn {
+            mineLine.tone = tone.isEmpty ? "打断了你" : "打断了你，" + tone
+            cutIn = false
+        }
         store.addLine(mineLine)
 
         thinking = true
-        let reply = await app.speakOnCall(store.active?.lines ?? [])
+        let myTurn = UUID()
+        turn = myTurn
+        let reply = await app.speakOnCall(store.active?.lines ?? [], early: { voice in
+            // 第一句合成好了就先放。电话换了、这一轮被打断了，就不放
+            guard store.active?.id == mine, turn == myTurn, cutTurn != myTurn else {
+                discard(voice)
+                return
+            }
+            play(voice)
+            startedSpeaking()
+        })
 
         // 回来了，先看看这通电话还在不在、还是不是刚才那一通
-        guard store.active?.id == mine else { return }
+        guard store.active?.id == mine else {
+            discard(reply.tail)
+            return
+        }
         thinking = false
 
         guard !reply.text.isEmpty else {
@@ -638,23 +729,38 @@ struct CallView: View {
         if !reply.acting.isEmpty { line.tone = reply.acting.joined(separator: "·") }
         store.addLine(line)
 
-        if let file = reply.voiceFile {
+        if reply.earlyStarted {
+            // 第一句已经在放了：放完接剩下那段。被她打断了就扔掉
+            if let tail = reply.tail {
+                await waitForPlaybackIdle()
+                if cutTurn != myTurn, turn == myTurn, store.active?.id == mine {
+                    play(tail)
+                    if !speaking { startedSpeaking() }
+                } else {
+                    discard(tail)
+                }
+            }
+        } else if let file = reply.voiceFile {
             VoicePlayer.shared.toggle(file)
+            startedSpeaking()
         } else if reply.systemVoice {
             // 退到系统合成这一档**拿不到音频文件**——那套是直接出声的。
             // 所以这句没有语音条可以回听，当场念完就没了。
             SystemVoice.shared.speak(reply.text)
+            startedSpeaking()
         }
         // 换了谁念、退到系统音了，都照实说一声。
         // 悄悄换一个声音而不说，比没声音更让人错乱。
         if !reply.voiceNote.isEmpty { notice = reply.voiceNote }
 
-        // 免提：等他说完，再把耳朵支起来。
+        // 等他说完，再把耳朵支起来。
         // 这就是「他说完你说，你说完他说」那个循环合上的地方。
-        if handsFree {
+        // 她中途插话的话，耳朵早就开着了，resumeListening 自己会跳过。
+        if speaking, turn == myTurn {
             await waitForVoiceToFinish()
-            resumeListening()
+            if turn == myTurn, cutTurn != myTurn { speaking = false }
         }
+        if handsFree { resumeListening() }
 
         // 他说了再见的话，别立刻挂——留十五秒
         if reply.saidGoodbye {
@@ -690,6 +796,7 @@ struct CallView: View {
         guard store.active != nil else { return }
         guard let done = store.hangUp(by: who) else { return }
         ticker?.cancel()
+        speaking = false
         VoicePlayer.shared.stop()
         SystemVoice.shared.stop()
         if app.settings.haptics {

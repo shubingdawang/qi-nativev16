@@ -168,6 +168,15 @@ final class SystemVoice {
         synth.speak(u)
     }
 
+    /// 接在正在念的后面念，不打断前面那句（通话里第一句之后的那段）
+    func enqueue(_ text: String) {
+        guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        let u = AVSpeechUtterance(string: text)
+        u.voice = AVSpeechSynthesisVoice(language: "zh-CN")
+        u.rate = AVSpeechUtteranceDefaultSpeechRate * 0.94
+        synth.speak(u)
+    }
+
     /// 还在念吗。**免提要用**——他还在出声就开始录，录进去的是他自己。
     var isSpeaking: Bool { synth.isSpeaking }
 
@@ -245,16 +254,46 @@ final class VoicePlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
     }
 
+    /// 放一个临时文件（通话里边流边合成出来的那几段），放完或被停就删
+    func playTemp(_ url: URL) {
+        stop()
+        do {
+            if !CallAudio.inCall {
+                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
+                try AVAudioSession.sharedInstance().setActive(true)
+            }
+            let p = try AVAudioPlayer(contentsOf: url)
+            p.delegate = self
+            p.prepareToPlay()
+            p.play()
+            player = p
+            playingName = url.lastPathComponent
+            tempURL = url
+        } catch {
+            try? FileManager.default.removeItem(at: url)
+            playingName = nil
+        }
+    }
+
+    private var tempURL: URL?
+
     func stop() {
         player?.stop()
         player = nil
         playingName = nil
+        dropTemp()
+    }
+
+    private func dropTemp() {
+        if let tempURL { try? FileManager.default.removeItem(at: tempURL) }
+        tempURL = nil
     }
 
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         Task { @MainActor in
             self.playingName = nil
             self.player = nil
+            self.dropTemp()
         }
     }
 }

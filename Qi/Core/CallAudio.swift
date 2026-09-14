@@ -57,8 +57,10 @@ enum CallAudio {
 
     private static func activate() {
         let s = AVAudioSession.sharedInstance()
-        // 外放；连着蓝牙耳机的话从耳机出声（麦克风仍用手机的）
-        try? s.setCategory(.playAndRecord, mode: .default,
+        // 外放；连着蓝牙耳机的话从耳机出声（麦克风仍用手机的）。
+        // `.voiceChat` 开系统的回声消除：他从扬声器出来的声音
+        // 不会被麦克风当成她在说话——插话全靠这个。
+        try? s.setCategory(.playAndRecord, mode: .voiceChat,
                            options: [.defaultToSpeaker, .allowBluetoothA2DP])
         try? s.setActive(true)
 
@@ -69,6 +71,27 @@ enum CallAudio {
             keepAlive = p
         }
         keepAlive?.play()
+    }
+
+    /// 把录音从第 `start` 秒剪到结尾。剪不了返回 nil，调用方用原文件。
+    ///
+    /// 插话时录音机在他说话那段就开着了，前面录进去的是他的声音残响，
+    /// 送去识别会被当成她说的。
+    static func trim(_ url: URL, from start: Double) async -> URL? {
+        let asset = AVURLAsset(url: url)
+        guard let export = AVAssetExportSession(
+            asset: asset, presetName: AVAssetExportPresetAppleM4A) else { return nil }
+        let out = FileManager.default.temporaryDirectory
+            .appendingPathComponent("rec-cut-" + UUID().uuidString + ".m4a")
+        export.outputURL = out
+        export.outputFileType = .m4a
+        export.timeRange = CMTimeRange(start: CMTime(seconds: start, preferredTimescale: 600),
+                                       end: .positiveInfinity)
+        // 同 VideoDigest：老写法，闭包里只 resume，出来看文件在不在
+        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+            export.exportAsynchronously { c.resume() }
+        }
+        return FileManager.default.fileExists(atPath: out.path) ? out : nil
     }
 
     /// 一秒钟的静音 WAV，8kHz 16 位单声道，在内存里现拼，不带资源文件。

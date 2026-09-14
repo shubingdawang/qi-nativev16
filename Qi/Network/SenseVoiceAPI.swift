@@ -223,6 +223,27 @@ final class VoiceRecorder: NSObject, ObservableObject {
     /// 一直没开口的话，等这么久就放弃
     var openingPatience: Double = 8
 
+    // MARK: 插话
+    //
+    // 他在出声的时候录音机也开着。这段时间：
+    //   · 门槛抬高（本底里已经有他的残响），而且要连着 0.32 秒才算
+    //   · 一旦算她开口了 → `onBargeIn`，调用方把他的声音停掉，这一句照常录下去
+    //   · 他说完了她还没开口 → 本底重新量一遍，回到平常的判法，
+    //     「一直没开口」的耐心从他说完那一刻开始算
+
+    /// 他此刻在不在出声
+    var outputPlaying: (@MainActor () -> Bool)?
+    /// 他出声的时候她开口了
+    var onBargeIn: (@MainActor () -> Void)?
+    /// 她这一句从第几秒开始。前面那段是空白或他的残响，识别前剪掉
+    private(set) var speechStart: Double = 0
+    /// 这一段录音里听没听到她开口
+    var heardSpeech: Bool { spoke }
+    /// 这一段录音跟他出声的时间有没有重叠
+    private(set) var overlappedOutput = false
+    private var wasPlaying = false
+    private var lastPlayingAt: Double = 0
+
     /// 本底噪声。开头这么久只量不判。
     private let floorWindow: Double = 0.5
     private var noiseFloor: Double = 0
@@ -275,6 +296,10 @@ final class VoiceRecorder: NSObject, ObservableObject {
         quietRun = 0
         fired = false
         hearing = false
+        speechStart = 0
+        overlappedOutput = false
+        wasPlaying = false
+        lastPlayingAt = 0
 
         ticker = Task { @MainActor in
             while !Task.isCancelled, recording {
@@ -299,6 +324,19 @@ final class VoiceRecorder: NSObject, ObservableObject {
     private func listen(_ v: Double) {
         guard !fired else { return }
 
+        let playing = outputPlaying?() ?? false
+        if wasPlaying, !playing, !spoke {
+            // 他刚说完、她还没开口：本底按现在的安静重新量
+            floorCount = 0
+            noiseFloor = 0
+            loudRun = 0
+        }
+        wasPlaying = playing
+        if playing {
+            lastPlayingAt = seconds
+            overlappedOutput = true
+        }
+
         // ── 开头半秒：只量本底，不判 ──────────────────────
         if Double(floorCount) * sampleInterval < floorWindow {
             floorCount += 1
@@ -309,16 +347,21 @@ final class VoiceRecorder: NSObject, ObservableObject {
         // 阈值：比本底高出一截。
         // 下限 0.12 是防「本底量到了 0」的情况（戴耳机、麦被捂住）——
         // 那时候阈值会掉到 0，什么都算说话。
-        let gate = max(0.12, noiseFloor + 0.10)
+        let gate = playing ? max(0.22, noiseFloor + 0.18) : max(0.12, noiseFloor + 0.10)
+        // 连着三帧（约 0.12 秒）才算真开口。
+        // 一帧就算的话，桌子响一下、椅子挪一下都能骗过去。
+        // 他在出声时要连着八帧（约 0.32 秒）——他自己一个重音不能把自己打断
+        let need = playing ? 8 : 3
 
         if v > gate {
             loudRun += 1
             quietRun = 0
-            // 连着三帧（约 0.12 秒）才算真开口。
-            // 一帧就算的话，桌子响一下、椅子挪一下都能骗过去
-            if loudRun >= 3, !spoke {
+            if loudRun >= need, !spoke {
                 spoke = true
                 hearing = true
+                // 往前让 0.3 秒，开头那个字的起音别剪掉
+                speechStart = max(0, seconds - Double(loudRun) * sampleInterval - 0.3)
+                if playing { onBargeIn?() }
             }
         } else {
             loudRun = 0
@@ -338,7 +381,7 @@ final class VoiceRecorder: NSObject, ObservableObject {
         // ② 一直没开口 → 别让它一直录下去。
         //    这一支照样叫 `onAutoStop`，**是否当成空录音由调用方决定**——
         //    打电话那边会判 `seconds` 和识别结果，空的就不发。
-        if !spoke, seconds >= openingPatience {
+        if !spoke, !playing, seconds - lastPlayingAt >= openingPatience {
             fired = true
             onAutoStop?()
         }

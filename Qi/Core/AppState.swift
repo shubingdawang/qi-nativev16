@@ -3309,6 +3309,56 @@ final class AppState: ObservableObject {
         var systemVoice = false
         /// 这次出声有什么要跟她说的（换了谁念、退到系统音了）
         var voiceNote = ""
+        /// 第一句已经先交出去播了（见 `speakOnCall` 的 early）
+        var earlyStarted = false
+        /// 第一句之后剩下的那段。**等第一句播完再放**。
+        var tail: CallVoice? = nil
+    }
+
+    /// 通话里要放的一段声音
+    enum CallVoice {
+        /// 合成好的音频，临时文件，放完就删
+        case file(URL)
+        /// 配的音色都没通，交给系统合成当场念
+        case system(String)
+    }
+
+    /// 第一句在哪儿断。
+    ///
+    /// 断在句末标点（连着的标点一并带上），方括号里的表演提示不算；
+    /// 露出来的字少于 5 个不断——「嗯。」单独合成一次不划算。
+    /// ⚠️ 标点后面**还得再来一个字**才断：不然「好！？」可能只切到「好！」。
+    nonisolated static func firstSentenceCut(_ s: String) -> String.Index? {
+        let ends: Set<Character> = ["。", "！", "？", "!", "?", "～", "~", "…", "\n"]
+        let opens: Set<Character> = ["[", "［", "【"]
+        let closes: Set<Character> = ["]", "］", "】"]
+        var depth = 0
+        var visible = 0
+        var i = s.startIndex
+        while i < s.endIndex {
+            let c = s[i]
+            if opens.contains(c) { depth += 1 }
+            else if closes.contains(c) { depth = max(0, depth - 1) }
+            else if depth == 0 {
+                if ends.contains(c), visible >= 5 {
+                    var j = s.index(after: i)
+                    while j < s.endIndex, ends.contains(s[j]) || s[j] == "”" || s[j] == "」" {
+                        j = s.index(after: j)
+                    }
+                    return j < s.endIndex ? j : nil
+                }
+                if !c.isWhitespace, !ends.contains(c) { visible += 1 }
+            }
+            i = s.index(after: i)
+        }
+        return nil
+    }
+
+    /// 合成结果落成一个临时文件，给通话里接着放
+    private static func tempVoice(_ data: Data) -> URL? {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("callvoice-\(UUID().uuidString).mp3")
+        do { try data.write(to: url); return url } catch { return nil }
     }
 
     /// 通话里回一句。
@@ -3316,7 +3366,8 @@ final class AppState: ObservableObject {
     /// 跟聊天不一样的地方全在提示词里：**电话是用嘴说的**，
     /// 所以句子要短、不能有格式、不能有表情符号，
     /// 而且要接得快——真人打电话不会想三十秒才开口。
-    func speakOnCall(_ lines: [CallLine]) async -> CallReply {
+    func speakOnCall(_ lines: [CallLine],
+                     early: @escaping @MainActor (CallVoice) -> Void = { _ in }) async -> CallReply {
         // 用**聊天页那个他**，连身份一起带上。
         // 以前这里抓的是供应商列表第一个，提示词也只有 defaultSystemPrompt，
         // 所以电话接通了也不像他。
@@ -3359,12 +3410,36 @@ final class AppState: ObservableObject {
             messages.append(.init(role: line.fromMe ? "user" : "assistant", text: text))
         }
 
+        // 边流边出声：**第一句一凑齐就先去合成、合成完马上放**，
+        // 不等整段说完。剩下的等流结束再合成一次。
+        //
+        // ⚠️ 只切第一句，不逐句切：每句一次合成，三句话就是三次请求；
+        // 这样每轮最多两次，开口的等待已经省在第一句上了。
         var out = ""
+        var head = ""
+        var headTask: Task<TTSAPI.Spoken, Never>? = nil
+        let voiceList = voices
         do {
             let stream = ChatAPI.stream(endpoint: endpoint, apiKey: p.apiKey,
                                         model: model, messages: messages)
             for try await event in stream {
-                if case .content(let piece) = event { out += piece }
+                if case .content(let piece) = event {
+                    out += piece
+                    if headTask == nil, let cut = Self.firstSentenceCut(out) {
+                        let h = String(out[..<cut])
+                        head = h
+                        headTask = Task { @MainActor in
+                            let spoken = await TTSAPI.speak(VoiceDirection.forSpeech(h),
+                                                            using: voiceList)
+                            if let data = spoken.data, let url = AppState.tempVoice(data) {
+                                early(.file(url))
+                            } else if spoken.systemVoice {
+                                early(.system(VoiceDirection.strip(h)))
+                            }
+                            return spoken
+                        }
+                    }
+                }
                 if case .usage(let u) = event { UsageStore.shared.record(u, source: .call) }
             }
         } catch {
@@ -3384,6 +3459,37 @@ final class AppState: ObservableObject {
         // 听着像要挂了
         for word in ["再见", "拜拜", "晚安", "挂了", "先这样", "回头聊", "睡吧"] {
             if shown.contains(word) { reply.saidGoodbye = true; break }
+        }
+
+        // 第一句已经先去合成了：只合成剩下那段，存档用的语音条拼成一整条
+        if let headTask {
+            let rest = String(out.dropFirst(head.count))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            var tailSpoken: TTSAPI.Spoken? = nil
+            if !VoiceDirection.strip(rest).isEmpty {
+                tailSpoken = await TTSAPI.speak(VoiceDirection.forSpeech(rest), using: voices)
+            }
+            let headSpoken = await headTask.value
+            reply.earlyStarted = true
+
+            if let t = tailSpoken {
+                if let data = t.data, let url = Self.tempVoice(data) {
+                    reply.tail = .file(url)
+                } else if t.systemVoice {
+                    reply.tail = .system(VoiceDirection.strip(rest))
+                }
+            }
+            // 回听用的那条：两段都是合成出来的才拼（mp3 帧直接接得上）
+            if let a = headSpoken.data {
+                if let t = tailSpoken {
+                    if let b = t.data { reply.voiceFile = VoiceStore.save(a + b) }
+                } else {
+                    reply.voiceFile = VoiceStore.save(a)
+                }
+            }
+            reply.systemVoice = headSpoken.systemVoice || (tailSpoken?.systemVoice ?? false)
+            reply.voiceNote = headSpoken.note.isEmpty ? (tailSpoken?.note ?? "") : headSpoken.note
+            return reply
         }
 
         // 出声。**挨个试配着的音色，全挂了退到系统的声音**——
