@@ -32,7 +32,7 @@ R2 = math.sqrt(2)
 
 
 def coffee():
-    s = Scene(size=150, height=190, view="iso", units=4.6, target=(0, 1.35, 0))
+    s = Scene(size=150, height=240, view="iso", units=4.6, target=(0, 2.1, 0))
     cup = Material("cup", "#FFF6EA", steps=7, gloss=0.8)
     saucer = Material("saucer", "#FFF1E3", steps=7, gloss=0.6)
     accent = Material("accent", "#EE9A86", steps=5, gloss=0.4)
@@ -82,7 +82,7 @@ def coffee():
     s.decal(rim, "saucer")
     img = s.render()
     x, y = s.project(0, 1.62, 0)
-    return steam(img, x, y - 6, wisps=3, height=40, spread=9, seed=3)
+    return steam(img, x, y - 4, wisps=3, height=64, spread=10, seed=3)
 
 
 def cake():

@@ -649,7 +649,8 @@ def steam(img: Image.Image, x: float, y: float, wisps=3, height=30, spread=7,
 
     像素画里的热气不是一团雾，是**几根弯弯的细线**：
       · 每缕是一条竖着的正弦线，一行一个像素、横向偏移取整——线是连着的台阶
-      · 底下两格宽、往上变一格；往上越来越淡，顶端断成几个点
+      · **根部离开液面、又细又淡**，中段最浓最粗，往上散开变淡、顶端断成几个点
+        （根部粗的话像从咖啡里长出来的树枝）
       · 芯是白的，靠外那侧贴一格淡暖色，浅色背景上也看得见
     画布要留出上方空间（`Scene(height=...)` + 抬高 `target`）。
     """
@@ -673,26 +674,33 @@ def steam(img: Image.Image, x: float, y: float, wisps=3, height=30, spread=7,
     for w in range(wisps):
         ox = (w - (wisps - 1) / 2) * spread
         phase = rng.uniform(0, math.tau)
-        amp = rng.uniform(1.6, 2.6)
-        freq = rng.uniform(0.16, 0.22)
-        top = height * rng.uniform(0.75, 1.0)
-        start = rng.uniform(2, 6)
+        # 弯得开一点：一缕里要看得出一个完整的 S，直直的一根像头发
+        amp = rng.uniform(3.2, 4.2)
+        freq = rng.uniform(0.1, 0.13)
+        top = height * rng.uniform(0.8, 1.0)
+        # ⚠️ 离开液面一小段再开始。她看了贴着液面、底下最粗的那版：
+        # 「看起来像树枝长出来」——热气是**飘起来**的，根部不该扎在咖啡里
+        start = rng.uniform(4, 8)
         prev = None
         for k in range(int(top)):
             t = k / top
-            cx = x + ox + math.sin(k * freq + phase) * amp * (0.5 + t)
+            # 横向摆动越往上越大（热气往上散开）
+            cx = x + ox + math.sin(k * freq + phase) * amp * (0.35 + 0.9 * t)
             ix, iy = int(round(cx)), int(round(y - start - k))
-            fade = min(1, (1 - t) ** 0.9 * 1.1)
-            if t > 0.7 and k % 2:
+            # 浓淡是**两头淡、中间浓**：根部从无到有地淡进来，顶上再淡出去
+            fade = math.sin(math.pi * min(1, t * 1.1)) ** 0.55 * 0.95
+            if t > 0.72 and k % 2:
                 continue          # 顶端断成点
             put(ix, iy, c_core, fade)
             # 连上一行：横着跳了不止一格就补一格，线不断
             if prev is not None and abs(ix - prev) > 1:
                 put((ix + prev) // 2, iy, c_core, fade)
-            side = 1 if math.cos(k * freq + phase) > 0 else -1
-            put(ix + side, iy, c_edge, fade * 0.8)
-            if t < 0.55:
-                put(ix - side, iy, c_core, fade * 0.9)
+            # 粗细也是两头细、中间粗：只有中段贴一格芯和一格暖边
+            if 0.28 < t < 0.68:
+                side = 1 if math.cos(k * freq + phase) > 0 else -1
+                put(ix + side, iy, c_edge, fade * 0.7)
+                if 0.38 < t < 0.58:
+                    put(ix - side, iy, c_core, fade * 0.6)
             prev = ix
     return base
 
