@@ -203,7 +203,31 @@ extension FurnitureCatalog {
         "mushroom":        Art(flat: "px_mushroom", iso: "iso_l_px_mushroom"),
         "blocks":          Art(flat: "px_blocks", iso: "iso_l_px_blocks"),
         "frame":           Art(flat: "px_frame", iso: "iso_l_px_frame"),
-        "curtain":         Art(flat: "px_curtain", iso: "iso_l_px_curtain")
+        "curtain":         Art(flat: "px_curtain", iso: "iso_l_px_curtain"),
+        "armchair":        Art(flat: "px_armchair", iso: "iso_l_px_armchair"),
+        "bench":           Art(flat: "px_bench", iso: "iso_l_px_bench"),
+        "dining":          Art(flat: "px_dining", iso: "iso_l_px_dining"),
+        "nightstand":      Art(flat: "px_nightstand", iso: "iso_l_px_nightstand"),
+        "floorlamp":       Art(flat: "px_floorlamp", iso: "iso_l_px_floorlamp"),
+        "vanity":          Art(flat: "px_vanity", iso: "iso_l_px_vanity"),
+        "stove":           Art(flat: "px_stove", iso: "iso_l_px_stove"),
+        "kitchensink":     Art(flat: "px_kitchensink", iso: "iso_l_px_kitchensink"),
+        "coatrack":        Art(flat: "px_coatrack", iso: "iso_l_px_coatrack"),
+        "succulent":       Art(flat: "px_succulent", iso: "iso_l_px_succulent"),
+        "painting":        Art(flat: "px_painting", iso: "iso_l_px_painting"),
+        "wallclock":       Art(flat: "px_wallclock", iso: "iso_l_px_wallclock"),
+        "guitar_item":     Art(flat: "px_guitar_item", iso: "iso_l_px_guitar_item"),
+        "sakura":          Art(flat: "px_sakura", iso: "iso_l_px_sakura"),
+        "hanging":         Art(flat: "px_hanging", iso: "iso_l_px_hanging"),
+        "chime":           Art(flat: "px_chime", iso: "iso_l_px_chime"),
+        "stars":           Art(flat: "px_stars", iso: "iso_l_px_stars"),
+        "ball":            Art(flat: "px_ball", iso: "iso_l_px_ball"),
+        "plane":           Art(flat: "px_plane", iso: "iso_l_px_plane"),
+        "yarn":            Art(flat: "px_yarn", iso: "iso_l_px_yarn"),
+        "kite":            Art(flat: "px_kite", iso: "iso_l_px_kite"),
+        "slippers":        Art(flat: "px_slippers", iso: "iso_l_px_slippers"),
+        "boots":           Art(flat: "px_boots", iso: "iso_l_px_boots"),
+        "beret":           Art(flat: "px_beret", iso: "iso_l_px_beret")
     ]
 
     /// 哪张图对哪件。三批合起来：自己画的 > 手写对照 > 生成的主题。
