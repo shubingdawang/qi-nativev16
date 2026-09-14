@@ -294,10 +294,12 @@ def bubbletea(s, R, T):
 @item("cake", "小蛋糕", units=4.8, ty=1.1, h=1.05)
 def cake(s, R, T):
     plate(s, color="#EDF2F0")
-    sponge = M("sponge", "#F4C98A")
-    cream = M("cream", "#FFF8F0", gloss=0.3, anchor=0.7)
-    jam = M("jam", "#EE8A9C", steps=5)
-    berry = M("berry", "#E5505F", steps=5, gloss=0.9)
+    # 面点这一批照拼豆图纸的做法：颗粒、亮点、接触描边、去掉描边里那圈浓色（见 SKILL.md）
+    s.seam, s.seam_depth, s.seam_all, s.inner_ring, s.contour = 1, 3, True, False, True
+    sponge = M("sponge", "#F4C98A", steps=7, grain=0.6, streak=0.3)
+    cream = M("cream", "#FFF8F0", gloss=0.3, anchor=0.7, grain=0.15)
+    jam = M("jam", "#EE8A9C", steps=5, grain=0.3)
+    berry = M("berry", "#E5505F", steps=6, gloss=0.9, grain=0.25, streak=0.5)
     wax = M("wax", "#FFF3D6", steps=5)
     flame = M("flame", "#FFA32E", steps=3, emissive=True)
     stripe = M("stripe", "#86BFD3", steps=5)
@@ -496,9 +498,10 @@ def hotpot(s, R, T):
 @item("cookies", "曲奇牛奶", units=4.4, ty=1.2, h=1.1)
 def cookies(s, R, T):
     plate(s, r=1.3, color="#F4E9E1")
+    s.seam, s.seam_depth, s.seam_all, s.inner_ring, s.contour = 1, 3, True, False, True
     milk = M("milk", "#FFFFFF", steps=6, gloss=0.8)
     glass = M("glass", "#DDEFF4", steps=6, gloss=1.0)
-    cookie = M("cookie", "#E0A968", steps=5)
+    cookie = M("cookie", "#E0A968", steps=7, grain=0.7, streak=0.3)
     chip = M("chip", "#6B4430", steps=3)
     g = R * 0.95 + T * -0.6
     s.add(lathe([(0, 0), (0.55, 0), (0.62, 1.9), (0.52, 1.9), (0.48, 0.12), (0, 0.12)]).at(g[0], 0, g[2]), glass, "glass")
@@ -672,8 +675,9 @@ def fruitbowl(s, R, T):
 @item("pancakes", "松饼", units=4.6, ty=0.9, h=1.0)
 def pancakes(s, R, T):
     plate(s, color="#EAF1F5")
-    cake_m = M("pancake", "#EDBB78", steps=6)
-    syrup = M("syrup", "#C67A3A", steps=5, gloss=0.9)
+    s.seam, s.seam_depth, s.seam_all, s.inner_ring, s.contour = 1, 3, True, False, True
+    cake_m = M("pancake", "#EDBB78", steps=7, grain=0.6, streak=0.3)
+    syrup = M("syrup", "#C67A3A", steps=6, gloss=0.9, streak=0.5)
     butter = M("butter", "#FFE9A3", steps=4, gloss=0.4)
     berry = M("berry", "#6D7CC7", steps=4, gloss=0.8)
     straw = M("straw", "#E86A78", steps=4, gloss=0.8)
@@ -693,10 +697,11 @@ def pancakes(s, R, T):
 
 @item("pizza", "披萨", units=5.0, ty=0.4, h=0.75)
 def pizza(s, R, T):
-    board = M("board", "#D4A676", steps=6)
-    crust = M("crust", "#E8B06A", steps=6)
+    s.seam, s.seam_depth, s.seam_all, s.inner_ring, s.contour = 1, 3, True, False, True
+    board = M("board", "#D4A676", steps=6, grain=0.5)
+    crust = M("crust", "#E8B06A", steps=7, grain=0.65, streak=0.35)
     sauce = M("sauce", "#E8745A", steps=4)
-    cheese = M("cheese", "#FFE08A", steps=5, gloss=0.3)
+    cheese = M("cheese", "#FFE08A", steps=6, gloss=0.3, grain=0.4, streak=0.3)
     pep = M("pep", "#D24B3E", steps=4, gloss=0.4, anchor=0.4)
     basil = M("basil", "#6DB36E", steps=3)
     s.add(cylinder(2.2, 0.16, round=0.05), board, "board")
@@ -720,9 +725,10 @@ def pizza(s, R, T):
 @item("sandwich", "三明治", units=4.4, ty=0.8, h=0.9)
 def sandwich(s, R, T):
     plate(s, color="#F1ECE4")
-    bread = M("bread", "#F4DDB0", steps=6)
-    crust = M("crust", "#D29A5A", steps=5)
-    lettuce = M("lettuce", "#9AD27E", steps=4)
+    s.seam, s.seam_depth, s.seam_all, s.inner_ring, s.contour = 1, 3, True, False, True
+    bread = M("bread", "#F4DDB0", steps=7, grain=0.6)
+    crust = M("crust", "#D29A5A", steps=5, grain=0.5)
+    lettuce = M("lettuce", "#9AD27E", steps=5, grain=0.3)
     tomato = M("tomato", "#EC6A5E", steps=4)
     cheese = M("cheese", "#FFD66B", steps=4)
     ham = M("ham", "#F4A7A7", steps=4)
