@@ -148,7 +148,7 @@ extension FurnitureCatalog {
         "ramen":           Art(flat: "px_ramen",           iso: "iso_l_px_ramen"),
         "hotpot":          Art(flat: "px_hotpot",          iso: "iso_l_px_hotpot"),
         "cookies":         Art(flat: "px_cookies",         iso: "iso_l_px_cookies"),
-        "croissant":       Art(flat: "px_croissant",       iso: "iso_l_px_croissant"),
+        "macaron":         Art(flat: "px_macaron",         iso: "iso_l_px_macaron"),
         "fruitbowl":       Art(flat: "px_fruitbowl",       iso: "iso_l_px_fruitbowl"),
         "pancakes":        Art(flat: "px_pancakes",        iso: "iso_l_px_pancakes"),
         "pizza":           Art(flat: "px_pizza",           iso: "iso_l_px_pizza"),

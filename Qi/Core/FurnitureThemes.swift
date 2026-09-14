@@ -339,8 +339,8 @@ extension FurnitureCatalog {
               sprite: sp_food, category: .drink, reaction: "吸珠子"),
         .init(id: "cookies", name: "曲奇牛奶", price: 30,
               sprite: sp_food, category: .food, reaction: "泡着吃"),
-        .init(id: "croissant", name: "可颂", price: 26,
-              sprite: sp_food, category: .food, reaction: "掰一层下来"),
+        .init(id: "macaron", name: "马卡龙", price: 26,
+              sprite: sp_food, category: .food, reaction: "一口一个"),
         .init(id: "fruitbowl", name: "果盘", price: 35,
               sprite: sp_food, category: .food, reaction: "挑最红的那颗"),
         .init(id: "pancakes", name: "松饼", price: 28,
@@ -573,7 +573,7 @@ extension FurnitureCatalog {
         "hotpot":         Art(flat: "it_food_hotpot",            iso: nil),
         "bubbletea":      Art(flat: "it_food_bubble_tea",        iso: nil),
         "cookies":        Art(flat: "it_food_cookies_milk",      iso: nil),
-        "croissant":      Art(flat: "it_food_croissant",         iso: nil),
+        "macaron":        Art(flat: "it_food_croissant",         iso: nil),
         "fruitbowl":      Art(flat: "it_food_fruit_bowl",        iso: nil),
         "pancakes":       Art(flat: "it_food_pancakes",          iso: nil),
         "pizza":          Art(flat: "it_food_pizza",             iso: nil),
@@ -659,7 +659,7 @@ extension FurnitureCatalog {
         case "gothic_fire", "xmas_fire", "star_fireplace":
             return IsoShape(w: 1, d: 1, tall: 1.6,
                             actions: ["凑近看", "开灯"])
-        case "sushi", "ramen", "hotpot", "bubbletea", "cookies", "croissant",
+        case "sushi", "ramen", "hotpot", "bubbletea", "cookies", "macaron",
              "fruitbowl", "pancakes", "pizza", "sandwich", "salad":
             return IsoShape(w: 1, d: 1, tall: 0.5,
                             actions: ["闻一闻", "摸一下", "拿起来"])

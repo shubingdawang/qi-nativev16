@@ -281,7 +281,9 @@ ITEMS = [
     ("hotpot",   "小火锅", 55, F, "food", "it_food_hotpot", None, "涮一筷"),
     ("bubbletea", "奶茶",  32, "drink", "food", "it_food_bubble_tea", None, "吸珠子"),
     ("cookies",  "曲奇牛奶", 30, F, "food", "it_food_cookies_milk", None, "泡着吃"),
-    ("croissant", "可颂",  26, F, "food", "it_food_croissant", None, "掰一层下来"),
+    # 原来是可颂。画了九版她都说不像，改成马卡龙。老存档里的 croissant 读档时迁到 macaron（ClawdStore）。
+    # 正面图那一栏还指着资产包那张可颂当退路；真正用的是 FurnitureArt.drawnArt 里画的那张
+    ("macaron",  "马卡龙", 26, F, "food", "it_food_croissant", None, "一口一个"),
     ("fruitbowl", "果盘",  35, F, "food", "it_food_fruit_bowl", None, "挑最红的那颗"),
     ("pancakes", "松饼",   28, F, "food", "it_food_pancakes", None, "淋一圈糖浆"),
     ("pizza",    "披萨",   42, F, "food", "it_food_pizza", None, "拉出一条丝"),

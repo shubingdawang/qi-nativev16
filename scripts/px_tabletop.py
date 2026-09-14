@@ -509,35 +509,45 @@ def cookies(s, R, T):
         s.decal(lambda p: (speckle(p, 6, 0.18, seed=20), chip), "cookie%d" % i)
 
 
-@item("croissant", "可颂", units=4.4, ty=0.9, h=0.95)
-def croissant(s, R, T):
-    # ⚠️ 可颂**不走三维模型**，是照她给的拼豆图纸直接画的二维像素（scripts/px_croissant2d.py）。
-    # 三维搭了六版（一串球 / 光滑管子 / 一节节的卷 / 尖角 / 蟹钳 / 短尖），她都说不像图纸，
-    # 最后说「也许你可以完全根据图纸修改？不要现在这个形了」。
-    # 这里只画盘子，可颂在 post 里贴到盘子正中；三个视角用同一张（光都从左上来，不镜像）。
-    plate(s, color="#EEF2F6")
+@item("macaron", "马卡龙", units=4.4, ty=0.9, h=0.95)
+def macaron(s, R, T):
+    # 马卡龙（原来这个位置是可颂，画了九版她都不满意，换成马卡龙）。
+    # 一颗 = 上下两片圆鼓的壳 + 中间一层馅 + 壳底一圈起皱的「裙边」。
+    # 前排三颗平躺、后面两颗斜靠着立起来，粉彩五色，前面的压住后面的。
+    plate(s, r=2.1, color="#FBF6F0", rim="#F2C6CF")
+    s.seam, s.seam_depth, s.seam_all, s.inner_ring, s.contour = 1, 3, True, False, True
+    flavors = [("#F6B3C6", "#FFF6F0"), ("#BDE6CF", "#FFF4E2"), ("#CDBDEB", "#F7EEFF"),
+               ("#FFE39A", "#FFFFFF"), ("#FFC4A3", "#8A5A44")]
 
-    def post(img):
-        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        from px_croissant2d import croissant as draw
-        sprite = draw(76, 80)
-        x, y = s.project(0, 0.18, 0)
-        img = img.copy()
-        # 底下一块淡影子：压暗盘子上一个扁椭圆（不然像贴纸）
-        px = img.load()
-        rx, ry = sprite.width * 0.46, sprite.height * 0.16
-        cy0 = y + sprite.height * 0.12
-        for yy in range(int(cy0 - ry), int(cy0 + ry) + 1):
-            for xx in range(int(x - rx), int(x + rx) + 1):
-                if 0 <= xx < img.width and 0 <= yy < img.height:
-                    d = ((xx - x) / rx) ** 2 + ((yy - cy0) / ry) ** 2
-                    r_, g_, b_, a_ = px[xx, yy]
-                    if d <= 1 and a_ > 0:
-                        k = 0.86 if d < 0.55 else 0.93
-                        px[xx, yy] = (int(r_ * k), int(g_ * k * 0.99), int(b_ * k * 1.01) if b_ * k * 1.01 < 255 else 255, a_)
-        img.alpha_composite(sprite, (int(round(x - sprite.width / 2)), int(round(y - sprite.height * 0.78))))
-        return img
-    return post
+    def one(i, c, f, shell_hex, fill_hex):
+        f = np.asarray(f, float)
+        f = f / np.linalg.norm(f)
+        shell = M("shell%d" % i, shell_hex, steps=7, gloss=0.35, grain=0.2, streak=0.35)
+        foot = M("foot%d" % i, shell_hex, steps=5, grain=0.6)
+        # 夹馅夹在两片壳中间、大半在阴影里，按默认色阶会发灰——亮端拉满、原色放高
+        fill = M("fill%d" % i, fill_hex, steps=5, grain=0.15, anchor=0.8, shine=1.0)
+        dome = [(0, 0), (0.5, 0), (0.56, 0.05), (0.52, 0.14), (0.4, 0.22), (0.2, 0.27), (0, 0.28)]
+        top_ = lathe([(r, y + 0.12) for r, y in dome])
+        bot_ = lathe([(r, -y - 0.12) for r, y in reversed(dome)])
+        s.add(aim(top_, f).at(*c), shell, "m%d_top" % i)
+        s.add(aim(bot_, f).at(*c), shell, "m%d_bot" % i)
+        s.add(aim(cylinder(0.47, 0.2), f).at(*(c - f * 0.1)), fill, "m%d_fill" % i)
+        for sgn in (1, -1):
+            s.add(aim(torus(0.5, 0.045), f).at(*(c + f * 0.13 * sgn)), foot, "m%d_foot" % i)
+        s.decal((lambda p: (speckle(p, 22, 0.35, seed=60 + i), M("footlite%d" % i, shell_hex, steps=3, anchor=0.9))),
+                "m%d_foot" % i)
+
+    def P(r, t, y):
+        return R * r + T * t + np.array([0, y, 0])
+
+    up = np.array([0.0, 1.0, 0.0])
+    # 后面两颗：斜靠着立起来，脸朝前
+    one(0, P(-0.45, -0.55, 0.78), T * 0.85 + up * 0.55, *flavors[2])
+    one(1, P(0.55, -0.7, 0.8), T * 0.8 - R * 0.2 + up * 0.6, *flavors[4])
+    # 前排三颗：平躺，稍微歪一点，挨着
+    one(2, P(-0.95, 0.35, 0.44), up + R * 0.12, *flavors[0])
+    one(3, P(0.1, 0.55, 0.44), up - T * 0.1, *flavors[1])
+    one(4, P(1.05, 0.25, 0.44), up - R * 0.15, *flavors[3])
 
 
 @item("fruitbowl", "果盘", units=4.6, ty=0.8, h=0.95)

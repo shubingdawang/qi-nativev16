@@ -1184,6 +1184,12 @@ final class ClawdStore: ObservableObject {
     private func readFromDisk() {
         loaded = false
         owned = Storage.load([Furniture].self, from: "clawd-room.json") ?? []
+        // 商城里的「可颂」换成了「马卡龙」（id croissant → macaron）。
+        // 老存档里买过的那件跟着换过来，不然读出来找不到种类、屋里凭空少一件。
+        for i in owned.indices where owned[i].kind == "croissant" { owned[i].kind = "macaron" }
+        if UserDefaults.standard.string(forKey: "clawdCarrying") == "croissant" {
+            UserDefaults.standard.set("macaron", forKey: "clawdCarrying")
+        }
         // 兜底：手上没拿东西，就不该有「因为被举起来」而藏着的家具。
         //
         // `pickUp` 会把那件藏起来（不然床既在手上又在地上）。
