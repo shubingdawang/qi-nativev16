@@ -73,13 +73,17 @@ def _ramp_vivid(h0, s0, v0, n, anchor, shine):
     # 她看了抬到 ×1.18 的那版：「现在又有点太鲜艳太饱和了」。
     # 中间调只抬一点点，暗面的饱和度也收着——要的是干净，不是艳
     sm = min(1, s0 * 1.04 + 0.02)
+    # 她又说「颜色还能再淡一点」：整体往亮、往粉彩走——
+    # 原色明度往白里提两成、饱和度再收一成
+    sm *= 0.88
+    v0 = v0 + (1 - v0) * 0.22
     # ⚠️ 近白的材质（白瓷、奶油）暗面饱和度只加一点、往**淡紫灰**走：
     # 加多了白瓷的背光面会变成一片粉，看不出是白的
     gain = 0.2 if s0 < 0.12 else 0.38
     hs_amt = 0.35 if s0 < 0.12 else 0.5
     if s0 < 0.12:
         hs = 0.8
-    dark = (_toward(h0, hs, hs_amt), min(1, sm + (1 - sm) * gain), max(0.25, v0 * 0.76))
+    dark = (_toward(h0, hs, hs_amt), min(1, sm + (1 - sm) * gain), max(0.3, v0 * 0.79))
     # 亮端走多远看 `shine`：深色的咖啡液、木头调低，顶面不会被打成一片橘
     light = (_toward(h0, 0.12, 0.25), sm * (1 - 0.6 * shine),
              min(1, v0 + (1 - v0) * (0.3 + 0.65 * shine) + 0.06 * shine))
@@ -503,7 +507,7 @@ def _outline_color(m: Material):
     h, s, v = colorsys.rgb_to_hsv(r, g, b)
     if (m.style or STYLE) == "vivid":
         # 深梅红，不是深棕：跟玫瑰紫的暗部接得上
-        return colorsys.hsv_to_rgb(_toward(h, 0.95, 0.35), min(1, s * 1.0 + 0.15), v * 0.5)
+        return colorsys.hsv_to_rgb(_toward(h, 0.95, 0.35), min(1, s * 0.95 + 0.12), v * 0.6)
     return colorsys.hsv_to_rgb(_toward(h, 0.02, 0.3), min(1, s * 1.1 + 0.2), v * 0.55)
 
 
