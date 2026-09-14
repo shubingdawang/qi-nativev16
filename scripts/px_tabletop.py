@@ -633,7 +633,8 @@ def fruitbowl(s, R, T):
     # 橙子片：两片半圆立着，一前一后
     for i, (r, t) in enumerate(((1.0, 0.4), (1.35, 0.75))):
         g = "orange%d" % i
-        s.add(aim(cylinder(0.62, 0.12), T - R * 0.2 + np.array([0, 0.15, 0])).at(*P(r, t, 0.28)), orange, g)
+        # 中心抬到盘面以上：半径 0.58、中心 0.62，底边正好埋在盘沿里（再低正面视角会从盘子底下漏出来）
+        s.add(aim(cylinder(0.58, 0.12), T - R * 0.2 + np.array([0, 0.15, 0])).at(*P(r, t, 0.62)), orange, g)
 
         def seg(p):
             ang = np.arctan2(p[..., 2], p[..., 0])
