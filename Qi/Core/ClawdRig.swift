@@ -57,6 +57,8 @@ struct ClawdRigView: View {
     var mood: ClawdMood = .idle
     /// 手上那件东西。空着就是没拿
     var item: PixelSprite?
+    /// 手上那件的图（屋里摆着时用的那张）。有它就画它，`item` 只当兜底
+    var itemImage: UIImage? = nil
     /// **身上戴着的那几件**（kind id）。跟手上那件是两个槽。
     ///
     /// ⚠️ **一个位置一件，不同位置能一起戴**（见 `ClawdRig.wearSlot`）——
@@ -84,6 +86,10 @@ struct ClawdRigView: View {
     var scale: CGFloat = 4
     /// 动作进度 0…1。喝、摇这类靠它
     var beat: Double = 0
+    /// 拿起来的进度 0…1。0 = 东西还在底下、腿还弯着，1 = 拿稳了。
+    /// 放下就是倒着走一遍。
+    /// ⚠️ 排在 `beat` 后面：逐一成员初始化器按声明顺序排参数
+    var rise: Double = 1
     var shadow: Bool = false
 
     @State private var frame = 0
@@ -201,10 +207,19 @@ struct ClawdRigView: View {
 
             // 手上那件东西。**不缩小**——她说的就是这个：
             // 缩小的东西看着是「顶在头上的挂件」，不是「他举着的家具」。
-            if let item {
+            if let img = itemImage {
+                // ⚠️ 这批是画出来的图，**不关插值**（同屋里那一支）
+                Image(uiImage: img)
+                    .resizable()
+                    .frame(width: itemSize.w * scale, height: itemSize.h * scale)
+                    .rotationEffect(.degrees(plan.itemTilt), anchor: .bottom)
+                    .offset(x: plan.itemAt.x * scale, y: plan.itemAt.y * scale)
+                    .opacity(min(1, rise * 2.5))
+            } else if let item {
                 PixelSpriteView(sprite: item, scale: scale)
                     .rotationEffect(.degrees(plan.itemTilt), anchor: .bottom)
                     .offset(x: plan.itemAt.x * scale, y: plan.itemAt.y * scale)
+                    .opacity(min(1, rise * 2.5))
             }
         }
         .frame(width: cols * scale, height: rows * scale, alignment: .topLeading)
@@ -285,8 +300,27 @@ struct ClawdRigView: View {
 
     private var plan: ClawdRig.Plan {
         ClawdRig.plan(pose: pose, beat: beat,
-                      itemW: CGFloat(item?.width ?? 0),
-                      itemH: CGFloat(item?.height ?? 0))
+                      itemW: itemSize.w, itemH: itemSize.h, rise: rise)
+    }
+
+    /// 手上那件在图纸上占多大（格）。
+    ///
+    /// 字符画按它自己的格数；图按**这一档怎么拿**给宽度、按长宽比算高，
+    /// 高度有上限——一个衣柜的图瘦高瘦高，照宽度算会举出一根两倍身高的柱子。
+    private var itemSize: (w: CGFloat, h: CGFloat) {
+        if let img = itemImage, img.size.width > 0, img.size.height > 0 {
+            let ratio = img.size.height / img.size.width
+            var w: CGFloat = 9
+            var maxH: CGFloat = 12
+            switch pose {
+            case .lift:        w = 24; maxH = 18
+            case .sip, .swirl: w = 7;  maxH = 10
+            default:           break
+            }
+            let h = w * ratio
+            return h > maxH ? (maxH / ratio, maxH) : (w, h)
+        }
+        return (CGFloat(item?.width ?? 0), CGFloat(item?.height ?? 0))
     }
 
     private func start() {
@@ -555,7 +589,32 @@ enum ClawdRig {
     /// 这儿是**这一整套动作的全部数据**——加一个新姿势就在这儿加一档，
     /// 不用去碰任何一个视图。
     static func plan(pose: CarryPose, beat: Double,
-                     itemW: CGFloat, itemH: CGFloat) -> Plan {
+                     itemW: CGFloat, itemH: CGFloat, rise: Double = 1) -> Plan {
+        var p = plainPlan(pose: pose, beat: beat, itemW: itemW, itemH: itemH)
+        // ── 拿起来 / 放下去 ──────────────────────────────
+        //
+        // 以前一拿起来东西凭空出现在手上、一放下凭空消失，而且整只缩放着弹一下。
+        // 现在中间有一段：
+        //   · 举大件：腿先弯下去、东西从低处跟着手升上来，腿蹬直时正好举稳
+        //   · 拿小件：手从垂着抬到位，东西从脚边那一截升到手上
+        // 放下就把 `rise` 倒着走一遍。
+        let r = max(0, min(1, rise))
+        guard r < 1, pose != .none, pose != .cheer, pose != .wave else { return p }
+        let down = CGFloat(1 - r)
+        if p.armsUp {
+            p.squat = Int((3 * down).rounded())
+            p.itemAt.y += CGFloat(p.squat) + down * 6
+        } else {
+            p.leftArm *= r
+            p.rightArm *= r
+            p.itemAt.y += down * 6
+            p.itemTilt *= r
+        }
+        return p
+    }
+
+    private static func plainPlan(pose: CarryPose, beat: Double,
+                                  itemW: CGFloat, itemH: CGFloat) -> Plan {
         var p = Plan()
         // 图纸中线，用来把东西摆正
         let midX = CGFloat(bodyLeft + bodyRight + 1) / 2
@@ -799,6 +858,12 @@ enum ClawdRig {
     /// 能不能喝、能不能摇。动作本身不用再画。
     static func poses(for kind: FurnitureKind) -> [CarryPose] {
         let id = kind.id
+        // 先看分类：喝的、吃的都能往嘴边送（吃也是这个动作——拿到嘴边、放下）。
+        // 以前只看 id 里有没有 coffee / tea 这些字，名字没对上的饮料就只会拿着
+        if kind.category == .drink {
+            return id.contains("wine") || id.contains("酒") ? [.hold, .sip, .swirl] : [.hold, .sip]
+        }
+        if kind.category == .food { return [.hold, .sip] }
         // 喝的
         if id.contains("wine") || id.contains("酒") {
             return [.hold, .sip, .swirl]

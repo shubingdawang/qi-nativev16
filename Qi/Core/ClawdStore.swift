@@ -1102,15 +1102,34 @@ final class ClawdStore: ObservableObject {
     }
 
     /// 拿起 / 放下。放下的时候把它挪到指定位置。
-    func pickUp(_ kindID: String) {
+    func pickUp(_ kindID: String, itemID: UUID? = nil) {
         carrying = kindID
         // **举起来的那件要从屋里消失。**
         // 她报的：「举起来的东西不该还留在房间」——对，
         // 以前只设了 carrying，那件家具还原样摆在地上，
         // 于是床既在他手上、又在地上，两张。
-        if let i = owned.firstIndex(where: { $0.kind == kindID }) {
-            owned[i].carried = true
+        //
+        // ⚠️ **认准是哪一件。** 以前按种类找第一件：买了两杯咖啡、
+        // 一杯在客厅一杯在卧室，他在卧室拿起来的可能是客厅那杯——
+        // 客厅那杯凭空消失。给了 id 就按 id；没给就先找他这间屋摆着的。
+        let i = itemID.flatMap { id in owned.firstIndex { $0.id == id } }
+            ?? owned.firstIndex { $0.kind == kindID && $0.room == clawdRoom.rawValue && onFloor($0) }
+            ?? owned.firstIndex { $0.kind == kindID && !$0.carried }
+        if let i { owned[i].carried = true }
+    }
+
+    /// 手上那件画哪张图：她给这一件导的图 > 画好的正面图。
+    /// 都没有返回 nil，调用方退回字符画。
+    ///
+    /// ⚠️ 屋里摆着的时候用的就是这两张，拿起来还画字符画的话，
+    /// 一拿起来东西就换了个样子。
+    func carriedImage() -> UIImage? {
+        guard let id = carrying else { return nil }
+        if let f = owned.first(where: { $0.kind == id && $0.carried }),
+           let img = ImageStore.cached(f.imageName) {
+            return img
         }
+        return FurnitureCatalog.artImage(of: id, flat: true)
     }
 
     /// 放下。没给位置就放在他脚边。
@@ -1120,7 +1139,9 @@ final class ClawdStore: ObservableObject {
     func putDown(at point: CGPoint?) {
         defer { carrying = nil }
         guard let kindID = carrying else { return }
-        guard let i = owned.firstIndex(where: { $0.kind == kindID }) else { return }
+        // 放下的是**举着的那一件**，不是同种类的第一件
+        guard let i = owned.firstIndex(where: { $0.kind == kindID && $0.carried })
+                ?? owned.firstIndex(where: { $0.kind == kindID }) else { return }
         if let point {
             let p = Self.onFloor(point)
             owned[i].x = p.x

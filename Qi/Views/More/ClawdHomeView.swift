@@ -33,6 +33,40 @@ struct ClawdHomeView: View {
     static var floorBottom: Double { ClawdStore.floorBottom }
 
     @State private var mood: ClawdMood = .idle
+    /// 手上小件怎么拿（大件一律举过头顶，不看这个）
+    @State private var carryPose: CarryPose = .hold
+    /// 这一口喝 / 这一下摇从什么时候开始（时钟取进度，见 `carryBeat`）
+    @State private var beatFrom: TimeInterval = 0
+    /// 拿起来 / 放下去从什么时候开始
+    @State private var pickedFrom: TimeInterval = 0
+    @State private var lowerFrom: TimeInterval?
+
+    // MARK: 手上的东西
+
+    /// 喝 / 摇的进度。喝一口是一趟（0→1 停住），摇是来回转圈，举着是慢慢的呼吸
+    private func carryBeat(_ now: TimeInterval, pose: CarryPose) -> Double {
+        let t = max(0, now - beatFrom)
+        switch pose {
+        case .sip:   return min(1, t / 1.6)
+        case .swirl: return (t / 1.2).truncatingRemainder(dividingBy: 1)
+        default:     return (now / 3.2).truncatingRemainder(dividingBy: 1)
+        }
+    }
+
+    /// 拿起来 / 放下去各 0.45 秒
+    private func carryRise(_ now: TimeInterval) -> Double {
+        if let l = lowerFrom { return max(0, 1 - (now - l) / 0.45) }
+        return min(1, max(0, (now - pickedFrom) / 0.45))
+    }
+
+    /// 先把东西放低（演 0.45 秒），再真的搁到地上
+    private func setDown(at p: CGPoint) async {
+        lowerFrom = Date().timeIntervalSinceReferenceDate
+        try? await Task.sleep(nanoseconds: 450_000_000)
+        store.putDown(at: p)
+        lowerFrom = nil
+        carryPose = .hold
+    }
 
     /// 这个情绪该不该把手摆起来。
     ///
@@ -1047,7 +1081,7 @@ struct ClawdHomeView: View {
                 // 图纸从 32 加宽到 40 之后，多出来的八格全是透明边；
                 // 身子还是那 24 格，`scale` 不变它画出来就还是原来那么大。
                 // 改成 40 的话身子会当场瘦两成——她抱怨过一次他太小了。
-                if let kind = store.carriedKind, store.overhead(kind) {
+                if let kind = store.carriedKind {
                     // 举大件（床、柜子）。
                     //
                     // ⚠️⚠️ **这一档必须走 `ClawdRigView`，不能再用
@@ -1065,17 +1099,23 @@ struct ClawdHomeView: View {
                         // ⚠️ 用时钟取进度，不要拿 `@State` 计时——
                         // 这只 clawd 在小屋、聊天页、输入框上同时活着，
                         // 每秒六十次改状态整棵树跟着重画。
-                        let beat = (ctx.date.timeIntervalSinceReferenceDate / 3.2)
-                            .truncatingRemainder(dividingBy: 1)
+                        //
+                        // ⚠️ 小件也走这儿（以前是 `ClawdView` 前面贴一张字符画，
+                        // 手垂着、不会喝）。拿着、喝、摇都是骨架里真的动作。
+                        // ⚠️ 不挂缩放过渡：拿起来那一下由 `rise` 演，
+                        // 整只缩放着弹一下看着像换了个人。
+                        let now = ctx.date.timeIntervalSinceReferenceDate
+                        let pose: CarryPose = store.overhead(kind) ? .lift : carryPose
                         ClawdRigView(mood: mood,
                                      item: kind.sprite,
+                                     itemImage: store.carriedImage(),
                                      wornIDs: store.wornIDs,
-                                     pose: .lift,
+                                     pose: pose,
                                      scale: tile * 1.47 / 36,
-                                     beat: beat,
+                                     beat: carryBeat(now, pose: pose),
+                                     rise: carryRise(now),
                                      shadow: true)
                     }
-                    .transition(.scale(scale: 0.5).combined(with: .opacity))
                 } else {
                     // ⚠️ **`/ 36` 不是 `/ 32`，`1.47` 不是 `0.87`。**
                     // 除数是图纸宽度（现在 36 格），32 是它还叫 32 格那会儿的老账；
@@ -1089,12 +1129,6 @@ struct ClawdHomeView: View {
                               // 冒爱心那条早就有了（`.loving` 那一档），
                               // 缺的是手：以前不管什么情绪，手都是垂着的两块。
                               pose: ClawdHomeView.armPose(mood))
-                }
-                // 小东西还是端在手边
-                if let kind = store.carriedKind, !store.overhead(kind) {
-                    PixelSpriteView(sprite: kind.sprite, scale: tile * 1.2 / 32)
-                        .offset(y: -tile * 0.17)
-                        .transition(.scale(scale: 0.5).combined(with: .opacity))
                 }
             }
                 // 被拎起来的时候整只抬高一点、影子也跟着散开
@@ -1160,6 +1194,13 @@ struct ClawdHomeView: View {
         .animation(held ? nil : .easeInOut(duration: walkSeconds), value: clawdX)
         .animation(held ? nil : .easeInOut(duration: walkSeconds), value: clawdY)
         .animation(.spring(response: 0.28, dampingFraction: 0.6), value: held)
+        // 不管是谁让他拿起来的（她拖给他、他自己拿吃喝），拿起来那一刻开始演「拿起」
+        .onChange(of: store.carrying) { _, new in
+            guard new != nil else { return }
+            pickedFrom = Date().timeIntervalSinceReferenceDate
+            lowerFrom = nil
+            carryPose = .hold
+        }
         .onTapGesture {
             // 手上有东西的时候，点他＝**现在就放下**。
             //
@@ -1167,7 +1208,9 @@ struct ClawdHomeView: View {
             // 她递过去多半是想指个地方，不该逼她干等——
             // 点一下就搁在他脚边。
             if let kind = store.carriedKind {
-                store.putDown(at: CGPoint(x: clawdX, y: clawdY))
+                guard lowerFrom == nil else { return }      // 正在放了
+                let at = CGPoint(x: clawdX, y: clawdY)
+                Task { @MainActor in await setDown(at: at) }
                 mood = .idle
                 say(store.overhead(kind) ? "呼……放下了" : "好，搁这儿")
                 if app.settings.haptics {
@@ -1834,18 +1877,43 @@ struct ClawdHomeView: View {
                     // 举家具走的就是它），**只是这条互动路没接上**——
                     // 一罐汽水跟一台冰箱走的是同一支「站旁边做个动作」。
                     if kind.category == .food || kind.category == .drink {
-                        store.pickUp(kind.id)
+                        // 拿的是**走过去的这一件**，不是别屋同种类的那件
+                        store.pickUp(kind.id, itemID: item.id)
                         mood = .carrying
                         store.clawdDoing = kind.category == .drink
                             ? .drinking : .eating
                         say(kind.category == .drink
                             ? ["喝一口", "凉的", "唔——"].randomElement()!
                             : ["咬一口", "好吃", "唔——"].randomElement()!)
-                        try? await Task.sleep(nanoseconds: 7_000_000_000)
+                        try? await Task.sleep(nanoseconds: 900_000_000)
+
+                        // 真的喝：送到嘴边 → 放下来 → 停一下，两三口。
+                        // 红酒有一半的几率先晃两下。
+                        let can = ClawdRig.poses(for: kind)
+                        for _ in 0..<Int.random(in: 2...3) {
+                            if Task.isCancelled { return }
+                            guard !held, store.carrying == kind.id else { break }
+                            if can.contains(.swirl), Bool.random() {
+                                beatFrom = Date().timeIntervalSinceReferenceDate
+                                carryPose = .swirl
+                                try? await Task.sleep(nanoseconds: 2_400_000_000)
+                                if Task.isCancelled { return }
+                            }
+                            if can.contains(.sip) {
+                                beatFrom = Date().timeIntervalSinceReferenceDate
+                                carryPose = .sip
+                                try? await Task.sleep(nanoseconds: 1_600_000_000)
+                                if Task.isCancelled { return }
+                            }
+                            carryPose = .hold
+                            try? await Task.sleep(nanoseconds: 1_100_000_000)
+                        }
                         if Task.isCancelled { return }
                         // 放回他脚边。**一定要放**——不放的话那件东西
                         // 会一直挂在他手上，屋里再也见不到它。
-                        store.putDown(at: CGPoint(x: clawdX, y: clawdY))
+                        if store.carrying == kind.id {
+                            await setDown(at: CGPoint(x: clawdX, y: clawdY))
+                        }
                         mood = .idle
                         store.clawdDoing = .idling
                         continue
@@ -1897,7 +1965,7 @@ struct ClawdHomeView: View {
                 // 举一辈子。递给他是让他**帮忙搬**，不是让他抱着不动。
                 // 现在走完这一趟就搁在脚边，说一句放下了。
                 if let kind = store.carriedKind {
-                    store.putDown(at: CGPoint(x: clawdX, y: clawdY))
+                    await setDown(at: CGPoint(x: clawdX, y: clawdY))
                     mood = .idle
                     say(store.overhead(kind)
                         ? "呼……放这儿行吗"

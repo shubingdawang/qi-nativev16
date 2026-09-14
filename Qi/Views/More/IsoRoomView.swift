@@ -862,7 +862,7 @@ struct IsoRoomView<Clawd: View>: View {
                 // 现在松手落在他身上就交给他：他举起来、开始搬，
                 // 走到地方自己放下（`startWalking` 里那一段本来就写好了）。
                 if dropped {
-                    store.pickUp(item.kind)
+                    store.pickUp(item.kind, itemID: item.id)
                     if app.settings.haptics {
                         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
                     }

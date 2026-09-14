@@ -73,6 +73,8 @@ struct ClawdRoamer: View {
     /// 手上这件是不是他自己掏出来的。
     /// 是的话喝完会自己收起来；她塞给他的（在小屋搬起来的）就一直拿着。
     @State private var tookOutMyself = false
+    /// 拿起来的进度（见 `ClawdRigView.rise`）
+    @State private var carryRise: Double = 1
     /// 正躲在屏幕边上探头。躲着的时候不让别的地方改他的表情、也不让他自己走开。
     @State private var peeking = false
     /// 探头时身体往屏幕里倾多少度（见 `ClawdRigView.tilt`）
@@ -140,6 +142,7 @@ struct ClawdRoamer: View {
                 // 喝和摇晃是**真的在动**（`beat` 驱动），不是配一句台词。
                 ClawdRigView(mood: room.carrying == nil ? mood : .carrying,
                              item: room.carriedKind?.sprite,
+                             itemImage: room.carriedImage(),
                              // 身上穿戴的那件。**以前这一项根本没传**——
                              // 帽子买了、穿上了、存进 `ClawdStore.wearing` 了，
                              // 然后就再也没出现过（`wornKind` 全项目零处引用）。
@@ -152,6 +155,7 @@ struct ClawdRoamer: View {
                              // ⚠️ 1.1 × 1.5 = 1.65。换图纸那次欠的账：图纸从 54 格缩到 36 格（3 格/单位 → 2 格/单位），躯干跟着从 33 格变成 22 格，**scale 没跟着调，他在所有地方都缩了三分之一**。22 × s_new = 33 × s_old → 每一处 scale 都要 ×1.5 才回到原来那么大。
                              scale: 1.65,
                              beat: rigBeat,
+                             rise: carryRise,
                              shadow: true)
                     // 倾斜得有个过渡。外面那条 `.animation(value: clawdX)`
                     // 只管横向位置，管不到 tilt——不加这句探头就是硬切一下。
@@ -292,16 +296,16 @@ struct ClawdRoamer: View {
                 // 他自己拿的，只有自己拿的才会自己收。她给的他就一直拿着。
                 if room.carrying == nil, Double.random(in: 0...1) < 0.24,
                    let pick = snackOnHand() {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        room.pickUp(pick.id)
-                    }
+                    carryRise = 0
+                    room.pickUp(pick.id)
                     tookOutMyself = true
                     mood = .carrying
                     moodAt = Date()
                     // 这件东西该怎么拿：大件双手举，小件一只手端着
                     carryPose = ClawdRig.poses(for: pick).first ?? .hold
                     say(takeOutLine(pick))
-                    try? await Task.sleep(nanoseconds: 1_200_000_000)
+                    await stepRise(to: 1)
+                    try? await Task.sleep(nanoseconds: 750_000_000)
 
                     // 边走边喝：走一段、喝一口，来回两三趟
                     for _ in 0..<Int.random(in: 2...3) {
@@ -324,9 +328,12 @@ struct ClawdRoamer: View {
 
                     // 喝完收起来
                     if tookOutMyself, !held {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            room.carrying = nil
-                        }
+                        await stepRise(to: 0)
+                        // ⚠️ 是**放回去**，不是清空手上那一格。
+                        // 以前直接 `carrying = nil`，那件东西的「举着」标记没清，
+                        // 屋里再也画不出来——喝过一次的咖啡就从小屋里没了。
+                        room.putDown(at: nil)
+                        carryRise = 1
                         tookOutMyself = false
                         carryPose = .none
                         say(finishLine(pick))
@@ -516,11 +523,21 @@ struct ClawdRoamer: View {
 
     /// 她买过的、能拿着走的吃喝里随便挑一样。没买过就返回 nil，他就不掏。
     private func snackOnHand() -> FurnitureKind? {
-        room.owned
-            .filter { !$0.hidden }
+        // 只拿**他此刻那间屋里摆着的**。以前是整个家里买过的都算，
+        // 他人在卧室，也能把厨房那杯咖啡拿起来喝。
+        room.furniture(in: room.clawdRoom)
             .compactMap { FurnitureCatalog.kind($0.kind) }
             .filter { $0.category == .drink || $0.category == .food }
             .randomElement()
+    }
+
+    /// 把拿起 / 放下的进度推到 `target`，0.45 秒
+    private func stepRise(to target: Double) async {
+        let from = carryRise
+        for i in 1...9 {
+            carryRise = from + (target - from) * Double(i) / 9
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
     }
 
     /// 喝一口。
