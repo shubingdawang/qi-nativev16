@@ -25,7 +25,10 @@ jobs:
           ./scripts/make-icons.sh
 
       - name: 编译（不签名）
+        # 编译报错逐条打成 ::error 标注：标注走公开接口就读得到，
+        # 在没有 Xcode 的 Windows 上也能知道是哪个文件哪一行没编过
         run: |
+          set +e
           xcodebuild \
             -project Qi.xcodeproj \
             -scheme Qi \
@@ -37,7 +40,16 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGN_ENTITLEMENTS="" \
-            build
+            build > build.log 2>&1
+          code=$?
+          grep -E "^/.+:[0-9]+:[0-9]+: error: " build.log | sort -u | head -40 | while IFS= read -r line; do
+            f=$(echo "$line" | cut -d: -f1)
+            l=$(echo "$line" | cut -d: -f2)
+            m=$(echo "$line" | cut -d: -f5- | sed 's/^ *//')
+            echo "::error file=${f#$GITHUB_WORKSPACE/},line=$l::$m"
+          done
+          tail -40 build.log
+          exit $code
 
       - name: 打包成 ipa
         run: |

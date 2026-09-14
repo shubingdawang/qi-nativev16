@@ -83,8 +83,60 @@ enum RoomActs {
                            lines: ["趴一下", "有点困"])
 
         case "浇水":
-            return RoomAct(name: name, spot: .beside, mood: .working, seconds: 4,
+            // 有专门浇花的 gif（`.watering`），以前演的是笼统的「动手做事」
+            return RoomAct(name: name, spot: .beside, mood: .watering, seconds: 6,
                            lines: ["喝点水吧", "又长高了一点", "别蔫啊"])
+        case "照料":
+            return RoomAct(name: name, spot: .beside, mood: .gardening, seconds: 6,
+                           lines: ["修一修", "开得真好", "这片叶子黄了"])
+
+        // MARK: 跟物品配对的动作（有专门 gif 的都用上）
+        //
+        // 她要的：「动作要和物品匹配。」以前书架、钢琴、吉他、唱片机……
+        // 全是「凑近看 / 摸一下 / 动手做事」那几个笼统动作，
+        // 资源包里明明有看书、弹琴、弹吉他、听歌、打游戏、拍照、洗澡、烤东西的 gif。
+        case "看书":
+            return RoomAct(name: name, spot: .beside, mood: .reading, seconds: 10,
+                           lines: ["看到哪儿了", "这段好看", "……再看一页"])
+        case "弹琴":
+            return RoomAct(name: name, spot: .beside, mood: .piano, seconds: 9,
+                           lines: ["叮叮咚咚", "这首你听过吗", "弹错了一个音"])
+        case "弹吉他":
+            return RoomAct(name: name, spot: .beside, mood: .guitar, seconds: 9,
+                           lines: ["来一段", "调一下弦", "唱给你听"])
+        case "听歌":
+            return RoomAct(name: name, spot: .beside, mood: .listening, seconds: 9,
+                           lines: ["这首好听", "跟着晃一晃", "再放一遍"])
+        case "打游戏", "看电视":
+            return RoomAct(name: name, spot: .beside, mood: .gaming, seconds: 9,
+                           lines: ["就一局", "这关好难", "赢了！"])
+        case "拍照":
+            return RoomAct(name: name, spot: .beside, mood: .photo, seconds: 5,
+                           lines: ["咔嚓", "笑一个", "拍糊了"])
+        case "洗澡":
+            return RoomAct(name: name, spot: .onTop, mood: .shower, seconds: 10,
+                           lines: ["哗啦啦", "洗香香", "水温正好"])
+        case "做饭":
+            return RoomAct(name: name, spot: .beside, mood: .baking, seconds: 9,
+                           lines: ["做点好吃的", "香出来了", "别碰，烫"])
+        case "洗碗":
+            return RoomAct(name: name, spot: .beside, mood: .working, seconds: 6,
+                           lines: ["洗干净", "泡泡好多", "摞好了"])
+        case "写写画画":
+            return RoomAct(name: name, spot: .beside, mood: .painting, seconds: 9,
+                           lines: ["画点什么呢", "你看像不像", "再添一笔"])
+        case "烤火":
+            return RoomAct(name: name, spot: .beside, mood: .drowsy, seconds: 8,
+                           lines: ["暖和", "噼啪噼啪", "不想挪窝"])
+        case "喂鱼", "看鱼":
+            return RoomAct(name: name, spot: .beside, mood: .peeking, seconds: 6,
+                           lines: ["吃饭啦", "游过来了", "它在看我"])
+        case "转一下":
+            return RoomAct(name: name, spot: .beside, mood: .happy, seconds: 4,
+                           lines: ["转转转", "停在哪儿就去哪儿", "这是哪儿"])
+        case "抽一张":
+            return RoomAct(name: name, spot: .beside, mood: .happy, seconds: 3,
+                           lines: ["抽一张", "擦擦", "又抽出来两张"])
         case "闻一闻":
             return RoomAct(name: name, spot: .beside, mood: .happy, seconds: 3,
                            lines: ["香的", "唔——"])
@@ -94,9 +146,13 @@ enum RoomActs {
         case "开灯", "凑到灯下":
             return RoomAct(name: name, spot: .beside, mood: .happy, seconds: 4,
                            lines: ["亮了", "暖和"])
-        case "抽一本", "踮脚够":
+        case "抽一本":
+            // 抽出来就翻开看：接看书的 gif
+            return RoomAct(name: name, spot: .beside, mood: .reading, seconds: 8,
+                           lines: ["找找看", "拿到了", "这本还没看完"])
+        case "踮脚够":
             return RoomAct(name: name, spot: .beside, mood: .working, seconds: 5,
-                           lines: ["找找看", "够不着……", "拿到了"])
+                           lines: ["够不着……", "再高一点", "拿到了"])
         case "抱一下":
             return RoomAct(name: name, spot: .beside, mood: .loving, seconds: 4,
                            lines: ["抱抱", "毛茸茸的"])
@@ -218,7 +274,64 @@ enum RoomActs {
 
     /// 这件家具能做的那几个动作
     static func acts(for kindID: String) -> [RoomAct] {
-        FurnitureCatalog.shape(of: kindID).actions.map { act($0) }
+        (actionOverride(kindID) ?? FurnitureCatalog.shape(of: kindID).actions).map { act($0) }
+    }
+
+    /// 按**这一件具体是什么**改动作。
+    ///
+    /// 形状表（`IsoShape.actions`）是按「一类」给的：衣柜借的是书架那一类，
+    /// 于是衣柜的动作是「抽一本」；灶台、厨房水槽也借了书架；三角钢琴借的是桌子，
+    /// 动作是「趴桌上」。她说「动作要和物品匹配」，这里按 id 一件件纠正。
+    static func actionOverride(_ id: String) -> [String]? {
+        switch id {
+        case "stove":                           return ["做饭", "闻一闻"]
+        case "kitchensink":                     return ["洗碗", "洗把脸"]
+        case "microwave":                       return ["做饭", "盯着转", "把东西放上去"]
+        case "wardrobe", "lolita_wardrobe", "vic_wardrobe", "xred_wardrobe", "rose_wardrobe":
+            return ["拉开柜门", "照一照", "踮脚够"]
+        case "vic_sideboard", "xred_sideboard", "rose_sideboard", "star_sideboard", "ny_cabinet":
+            return ["拉开柜门", "把东西放上去"]
+        case "nightstand", "vic_night":         return ["开灯", "把东西放上去"]
+        case "shelf", "gothic_shelf", "xmas_shelf", "vic_shelf", "xred_shelf", "rose_shelf",
+             "star_shelf", "nordic_shelf":
+            return ["看书", "抽一本", "踮脚够"]
+        case "star_books":                      return ["看书", "摆正"]
+        case "vic_piano":                       return ["弹琴", "在桌边站着"]
+        case "guitar_item":                     return ["弹吉他", "摸一下"]
+        case "record", "speaker", "star_gramophone":
+            return ["听歌", "凑近看"]
+        case "console":                         return ["打游戏", "凑近看"]
+        case "tv":                              return ["看电视", "按两下"]
+        case "polaroid":                        return ["拍照", "摸一下"]
+        case "bathtub":                         return ["洗澡", "泡进去", "拍水花"]
+        case "desk", "vic_desk":                return ["写写画画", "趴桌上", "在桌边站着"]
+        case "vanity", "lolita_vanity", "vic_vanity", "xred_vanity", "rose_vanity", "star_vanity":
+            return ["照镜子", "趴桌上"]
+        case "gothic_fire", "xmas_fire", "star_fireplace":
+            return ["烤火", "凑近看"]
+        case "tank":                            return ["看鱼", "喂鱼"]
+        case "globe":                           return ["转一下", "凑近看"]
+        case "tissue":                          return ["抽一张"]
+        case "candle", "humid":                 return ["凑近看", "闻一闻"]
+        case "sunflower", "sakura", "flowervase", "vic_vase", "jp_vase", "ny_plum",
+             "rose_flower", "star_flower", "xred_flower", "sakura_bonsai", "bonsai":
+            return ["浇水", "照料", "闻一闻"]
+        default:
+            return nil
+        }
+    }
+
+    /// 吃喝有专门 gif 的那几样：他坐在桌边**直接吃/喝这一样**，不拿在手上抿
+    ///（gif 里自带碗和杯子，再拿一份在手上就是两份）
+    static func eatingGif(_ id: String) -> ClawdMood? {
+        switch id {
+        case "sushi":              return .sushi
+        case "ramen":              return .ramen
+        case "hotpot":             return .hotpot
+        case "bubbletea":          return .bubbletea
+        case "coffee", "teapot":   return .coffee
+        default:                   return nil
+        }
     }
 
     /// 他做这个动作的时候该站/坐在**屏幕上的哪个点**。

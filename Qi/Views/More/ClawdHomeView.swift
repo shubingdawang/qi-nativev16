@@ -40,6 +40,8 @@ struct ClawdHomeView: View {
     /// 拿起来 / 放下去从什么时候开始
     @State private var pickedFrom: TimeInterval = 0
     @State private var lowerFrom: TimeInterval?
+    /// 正在用专门 gif 吃喝（手上那件不画在手里，gif 里自带）
+    @State private var eatingWithGif = false
 
     // MARK: 手上的东西
 
@@ -1081,7 +1083,7 @@ struct ClawdHomeView: View {
                 // 图纸从 32 加宽到 40 之后，多出来的八格全是透明边；
                 // 身子还是那 24 格，`scale` 不变它画出来就还是原来那么大。
                 // 改成 40 的话身子会当场瘦两成——她抱怨过一次他太小了。
-                if let kind = store.carriedKind {
+                if let kind = store.carriedKind, !eatingWithGif {
                     // 举大件（床、柜子）。
                     //
                     // ⚠️⚠️ **这一档必须走 `ClawdRigView`，不能再用
@@ -1886,6 +1888,24 @@ struct ClawdHomeView: View {
                     // 拿在手上这套本来就有（`pickUp` / `carriedKind`，
                     // 举家具走的就是它），**只是这条互动路没接上**——
                     // 一罐汽水跟一台冰箱走的是同一支「站旁边做个动作」。
+                    // 有专门 gif 的吃喝（寿司、拉面、火锅、奶茶、咖啡）：
+                    // 站在桌边直接吃，桌上那份先收起来（gif 里自带），吃完放回原处
+                    if let gifMood = RoomActs.eatingGif(kind.id) {
+                        store.pickUp(kind.id, itemID: item.id)
+                        eatingWithGif = true
+                        mood = gifMood
+                        store.clawdDoing = kind.category == .drink ? .drinking : .eating
+                        say(kind.category == .drink
+                            ? ["喝一口", "好香", "唔——"].randomElement()!
+                            : ["开动了", "好吃", "唔——"].randomElement()!)
+                        try? await Task.sleep(nanoseconds: 11_000_000_000)
+                        if Task.isCancelled { eatingWithGif = false; return }
+                        if store.carrying == kind.id { store.putBack(to: itemCell) }
+                        eatingWithGif = false
+                        mood = .idle
+                        store.clawdDoing = .idling
+                        continue
+                    }
                     if kind.category == .food || kind.category == .drink {
                         // 拿的是**走过去的这一件**，不是别屋同种类的那件
                         store.pickUp(kind.id, itemID: item.id)
@@ -2189,9 +2209,16 @@ struct ClawdHomeView: View {
         }
         switch act.name {
         case "躺下", "钻被窝":     return .sleeping
-        case "抽一本", "踮脚够":   return .reading
+        case "抽一本", "踮脚够", "看书": return .reading
         case "打开看", "按两下", "打滚", "踩上去": return .playing
-        case "浇水", "摆正":       return .arranging
+        case "摆正":               return .arranging
+        case "浇水", "照料":       return .gardening
+        case "听歌", "弹琴", "弹吉他": return .music
+        case "打游戏", "看电视":   return .gaming
+        case "拍照":               return .photo
+        case "洗澡", "泡进去":     return .bathing
+        case "做饭", "洗碗":       return .cooking
+        case "写写画画":           return .painting
         default:                  return .idling
         }
     }

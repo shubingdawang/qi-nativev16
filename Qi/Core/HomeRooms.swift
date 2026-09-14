@@ -115,6 +115,13 @@ enum ClawdDoing: String, Codable, Sendable {
     case reading   = "在翻书"
     case playing   = "在玩"
     case moving    = "在换房间"
+    case music     = "在听歌"
+    case cooking   = "在做饭"
+    case bathing   = "在洗澡"
+    case gaming    = "在打游戏"
+    case photo     = "在拍照"
+    case gardening = "在侍弄花草"
+    case painting  = "在写写画画"
 
     /// 摆在头像底下那一行
     var line: String { "正" + rawValue }
