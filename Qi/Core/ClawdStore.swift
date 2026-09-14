@@ -954,6 +954,14 @@ final class ClawdStore: ObservableObject {
             }
         }
     }
+    /// 小屋白天／晚上：跟着北京时间，或者手动定死一档
+    @Published var dayMode: DayMode = .auto {
+        didSet {
+            if loaded {
+                UserDefaults.standard.set(dayMode.rawValue, forKey: "clawdDayMode")
+            }
+        }
+    }
     /// 买过的屋子主题（`RoomTheme.id`）。免费那几套不进这儿。
     @Published var ownedThemes: [String] = [] {
         didSet {
@@ -1237,6 +1245,7 @@ final class ClawdStore: ObservableObject {
         projection = RoomProjection(
             rawValue: UserDefaults.standard.string(forKey: "clawdProjection") ?? "")
             ?? .iso
+        dayMode = DayMode(rawValue: UserDefaults.standard.string(forKey: "clawdDayMode") ?? "") ?? .auto
         loaded = true
     }
 

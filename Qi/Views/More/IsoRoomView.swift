@@ -84,8 +84,14 @@ struct IsoRoomView<Clawd: View>: View {
             // 不把家具挪回来（那她又贴不了墙），改成给屋子加一道边界：
             // **超出轮廓的一律裁掉**。影子该被墙挡住的那部分自然没了，
             // 家具照样贴着墙。
+            TimelineView(.everyMinute) { tick in
+            let night = RoomClock.night(at: tick.date, mode: store.dayMode)
+            let window = windowSpot(geoRoom)
             ZStack(alignment: .topLeading) {
                 walls(geoRoom)
+                RoomWallDetail(room: geoRoom, window: window, night: night,
+                               grain: RoomFinish.isBuiltIn(store.wallpaper(of: room))
+                                   || store.wallpaper(of: room).isEmpty)
                 floor(geoRoom)
                     // ⚠️ **拖动挂在地板这一层，不挂在整块上。**
                     //
@@ -116,6 +122,9 @@ struct IsoRoomView<Clawd: View>: View {
                 // 裁进框的里沿——她报了两轮的「家具拖到边上还在边框外面」
                 // 就是这一下：框画在最后没错，可框只有一条边那么宽，
                 // 爬到框**外面**去的那一截，谁也盖不住它。
+                RoomFloorDetail(room: geoRoom, window: window, night: night,
+                                grain: RoomFinish.isBuiltIn(store.flooring(of: room))
+                                    || store.flooring(of: room).isEmpty)
                 furnitureLayer(geoRoom)
 
                 // 平面屋外面那一圈框。**立体屋没有。**
@@ -142,6 +151,10 @@ struct IsoRoomView<Clawd: View>: View {
                         .fill(frameTone)
                         .allowsHitTesting(false)
                 }
+
+                // 晚上：整间压暗，灯、蜡烛、壁炉那几件点一圈光
+                RoomNightShade(night: night, glows: night > 0.01 ? glows(geoRoom) : [])
+            }
             }
             // ⚠️ 裁进屋子的轮廓（理由见上面 ZStack 那段）。
             //
@@ -325,6 +338,77 @@ struct IsoRoomView<Clawd: View>: View {
             geoRoom.leftWallPath.stroke(Color.black.opacity(0.08), lineWidth: 1)
             geoRoom.rightWallPath.stroke(Color.black.opacity(0.08), lineWidth: 1)
 
+        }
+    }
+
+    /// 窗户开在哪面墙、哪几格。
+    ///
+    /// · 屋里有「拱窗」那件家具：它自己就是窗，不再开
+    /// · 有窗帘：窗开在窗帘后面
+    /// · 否则找一段没挂东西、没靠着高柜子的墙，离墙中间越近越好
+    private func windowSpot(_ g: IsoRoom) -> RoomWindow? {
+        let items = store.furniture(in: room)
+        if items.contains(where: { $0.kind == "star_window" }) { return nil }
+        let flat = g.projection == .flat
+        let width = flat ? 3.0 : 2.6
+
+        if let c = items.first(where: { $0.kind == "curtain" }) {
+            let cell = store.cell(of: c)
+            if flat {
+                let mid = Double(cell.gx)
+                return RoomWindow(wall: .back, u0: mid - width / 2, u1: mid + width / 2)
+            }
+            if cell.gx == 0 || cell.gy == 0 {
+                let wall: RoomWindow.Wall = cell.gx == 0 ? .left : .right
+                let mid = Double(wall == .left ? cell.gy : cell.gx)
+                return RoomWindow(wall: wall, u0: mid - width / 2, u1: mid + width / 2)
+            }
+        }
+
+        let walls: [RoomWindow.Wall] = flat ? [.back] : [.left, .right]
+        for wall in walls {
+            let n = flat ? g.cols : g.size
+            var blocked = Set<Int>()
+            for f in items {
+                let s = FurnitureCatalog.shape(of: f.kind)
+                let c = store.cell(of: f)
+                let hangs = s.mount == .wall
+                let tallFloor = s.mount == .floor && s.tall >= 1.5
+                guard hangs || tallFloor else { continue }
+                switch wall {
+                case .left:
+                    guard c.gx == 0 || (hangs && c.gx <= 1) else { continue }
+                    for k in (c.gy - 1)...(c.gy + max(s.w, s.d)) { blocked.insert(k) }
+                case .right:
+                    guard c.gy == 0 || (hangs && c.gy <= 1) else { continue }
+                    for k in (c.gx - 1)...(c.gx + max(s.w, s.d)) { blocked.insert(k) }
+                case .back:
+                    guard hangs || c.gy <= 1 else { continue }
+                    for k in (c.gx - 1)...(c.gx + max(1, s.w)) { blocked.insert(k) }
+                }
+            }
+            let cells = Int(width.rounded(.up))
+            let centre = Double(n) / 2 - Double(cells) / 2
+            let starts = (1..<max(2, n - cells)).sorted { abs(Double($0) - centre) < abs(Double($1) - centre) }
+            if let s = starts.first(where: { st in (st..<(st + cells)).allSatisfy { !blocked.contains($0) } }) {
+                let mid = Double(s) + Double(cells - 1) / 2
+                return RoomWindow(wall: wall, u0: mid - width / 2, u1: mid + width / 2)
+            }
+        }
+        return nil
+    }
+
+    /// 晚上会亮的家具：光心在屏幕上哪儿、多大
+    private func glows(_ g: IsoRoom) -> [RoomNightShade.Glow] {
+        store.furniture(in: room).compactMap { f in
+            guard let gl = RoomClock.glow(of: f.kind) else { return nil }
+            let s = FurnitureCatalog.shape(of: f.kind)
+            let cell = store.cell(of: f)
+            let c = g.point(Double(cell.gx) + Double(s.w - 1) / 2,
+                            Double(cell.gy) + Double(s.d - 1) / 2)
+            let y = c.y + g.tileBottom + mountLift(f, s, g) - drawnH(f, s, g) * gl.height
+            return RoomNightShade.Glow(center: CGPoint(x: c.x + wallHug(cell, g).x, y: y),
+                                       radius: g.tileW * gl.radius, hex: gl.hex)
         }
     }
 

@@ -635,6 +635,19 @@ struct ClawdHomeView: View {
                             }
                         }
                     }
+                    Menu("白天晚上") {
+                        ForEach(DayMode.allCases) { m in
+                            Button {
+                                store.dayMode = m
+                                notice = "小屋" + m.label
+                            } label: {
+                                Text(m.label)
+                                if store.dayMode == m {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
                     Menu("内置地面") {
                         ForEach(RoomFinish.Floor.allCases) { f in
                             Button(f.label) {

@@ -198,6 +198,15 @@ struct FloorFinishView: View {
                 p.move(to: room.point(Double(gx), -0.5))
                 p.addLine(to: room.point(Double(gx), Double(n) - 0.5))
             }
+            // 板子的接头：每条板隔几格断一下，相邻两条错开——
+            // 一条缝通到底的是条纹布，不是地板
+            for gx in 0...w {
+                let shift = (gx * 5) % 4
+                for gy in stride(from: shift, to: n, by: 4) where gy > 0 {
+                    p.move(to: room.point(max(-0.5, Double(gx) - 1), Double(gy) - 0.5))
+                    p.addLine(to: room.point(min(Double(w) - 0.5, Double(gx)), Double(gy) - 0.5))
+                }
+            }
         case .tatami:
             // 每张席一圈边
             for gx in 0...w {
