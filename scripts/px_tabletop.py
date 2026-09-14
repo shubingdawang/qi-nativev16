@@ -8,8 +8,8 @@
 
     Qi/Resources/furniture/px_<id>.png           正面（平面屋、商城、背包）
     Qi/Resources/furniture/iso_l_px_<id>.png     等距
-    Qi/Resources/furniture/iso_wl_px_<id>.png    等距·贴左墙（同上一张）
-    Qi/Resources/furniture/iso_r_px_<id>.png     等距·贴右墙（真的从另一边看，光还是从屏幕左上来）
+    Qi/Resources/furniture/iso_r_px_<id>.png     等距·靠右墙（同上一张，正面朝左下）
+    Qi/Resources/furniture/iso_wl_px_<id>.png    等距·靠左墙（从另一边看，正面朝右下，光还是从屏幕左上来）
 
 对照表在 `FurnitureArt.drawnArt`，排在资产包那两张表前面。资产包原图一张没动，删掉 drawnArt 那一行就退回去。
 
@@ -1272,11 +1272,15 @@ def render_one(args):
 
 
 def out_names(id, view):
+    # ⚠️ 朝向对应（照资产包那张床核过）：
+    #   yaw +45 渲出来正面在**左边那个面**，背靠右墙 → `iso_r_`（靠右墙）+ `iso_l_`（兜底）
+    #   yaw −45 渲出来正面在**右边那个面**，背靠左墙 → `iso_wl_`（靠左墙）
+    # 第一版把这两张接反了：靠左墙的东西正面冲着墙。
     if view == "flat":
         return ["px_" + id]
     if view == "iso_l":
-        return ["iso_l_px_" + id, "iso_wl_px_" + id]
-    return ["iso_r_px_" + id]
+        return ["iso_l_px_" + id, "iso_r_px_" + id]
+    return ["iso_wl_px_" + id]
 
 
 def sheet(imgs, path, zoom=2, cols=6):
@@ -1321,7 +1325,7 @@ def main():
     def load(i, prefix):
         f = os.path.join(OUT, prefix + i + ".png")
         return Image.open(f).convert("RGBA") if os.path.exists(f) else None
-    for prefix, title in (("iso_l_px_", "等距"), ("px_", "正面"), ("iso_r_px_", "右墙")):
+    for prefix, title in (("iso_r_px_", "靠右墙"), ("px_", "正面"), ("iso_wl_px_", "靠左墙")):
         imgs = [(ITEMS[i][0], load(i, prefix)) for i in ITEMS]
         sheet([x for x in imgs if x[1] is not None], os.path.join(LOOK, "像素_桌上全套_%s.png" % title))
 
