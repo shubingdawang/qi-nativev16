@@ -51,23 +51,37 @@ def coffee():
         r = np.hypot(p[..., 0], p[..., 2])
         return (r > 0.98) & (p[..., 1] > 0.08), crema
 
-    # 拉花：郁金香式。几层心形一圈奶泡一圈咖啡色**交替套叠**，
-    # 心尖朝着观察者，中间一道从上往下拉穿的细线——咖啡馆里拉出来就是这个样子。
-    # 只画一个实心的心，看着像贴了张贴纸（她：「看起来有点敷衍」）。
+    # 拉花：一个爱心，**心尖往下拖长、收尖**。
+    #
+    # 她：「可以画爱心的，只是拉花需要爱心尖尖的地方稍微拖长一点点、尖一点点，
+    # 因为无法突然截断。」「边上也要跟着变长呀，要做衔接。」
+    # ——拉花是手腕往前一带收掉的，**两边是一路顺着收过去接到尖上的**，
+    # 不是一个标准心形底下另外插一根尾巴。
+    # 所以不用心形公式，直接搭：上面两个圆（心瓣），下面一段两边往里弧着收的楔形，
+    # 楔形的宽度按 ((y − 尖) / 长)^1.7 变——指数大于 1，两边是往里凹的弧，尖就细长。
+    def heart_mask(p, grow=0.0):
+        u = (p[..., 0] - p[..., 2]) / R2           # 屏幕左右
+        w = -(p[..., 0] + p[..., 2]) / R2          # 屏幕上下（正 = 画面上方）
+        SX, SY, C = 0.5, 0.54, 0.48                # 横竖比例不同：斜俯视下竖向被压扁
+        x = u / SX
+        y = (w - C) / SY
+        g = grow / SX
+        lobes = ((np.hypot(x - 0.48, y - 0.1) < 0.54 + g)
+                 | (np.hypot(x + 0.48, y - 0.1) < 0.54 + g))
+        tip, top = -2.2 - g, 0.1
+        t = np.clip((y - tip) / (top - tip), 0, 1)
+        wedge = (y >= tip) & (y <= top) & (np.abs(x) <= (1.02 + g) * t ** 1.7)
+        return (lobes | wedge) & (p[..., 1] > 0.08)
+
     def heart(p):
-        top = p[..., 1] > 0.08
-        u = (p[..., 0] - p[..., 2]) / R2          # 屏幕左右
-        w = -(p[..., 0] + p[..., 2]) / R2         # 屏幕上下（负 = 靠观察者）
         r = np.hypot(p[..., 0], p[..., 2])
-        uu = u / 0.8
-        ww = (w + 0.1) / 0.8
-        # 心形「距离」：0 在心中间，1 在最外那层轮廓上
-        hv = np.sqrt(uu * uu + (ww - np.sqrt(np.abs(uu)) * 0.7) ** 2)
-        layers = ((hv < 0.3) | ((hv > 0.46) & (hv < 0.6))
-                  | ((hv > 0.76) & (hv < 0.9)) | ((hv > 1.05) & (hv < 1.15)))
-        line = (np.abs(u) < 0.05) & (w > -0.25) & (w < 1.0)
-        edge = r > 1.1
-        return top & (layers | line | edge), foam
+        edge = (r > 1.1) & (p[..., 1] > 0.08)      # 杯沿一圈薄奶泡
+        return heart_mask(p) | edge, foam
+
+    def halo(p):
+        # 心形外面贴一圈浅焦糖色，奶泡往咖啡里晕开的那一下
+        return heart_mask(p, grow=0.07), crema
+
     def lip(p):
         y = p[..., 1]
         r = np.hypot(p[..., 0], p[..., 2])
@@ -77,6 +91,7 @@ def coffee():
         r = np.hypot(p[..., 0], p[..., 2])
         return (r > 1.68) & (r < 1.8) & (p[..., 1] > 0.12), accent
     s.decal(ring, "coffee")
+    s.decal(halo, "coffee")
     s.decal(heart, "coffee")
     s.decal(lip, "cup")
     s.decal(rim, "saucer")
