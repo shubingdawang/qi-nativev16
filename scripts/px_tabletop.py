@@ -520,8 +520,13 @@ def croissant(s, R, T):
     # 这版每一节是一个**横着裹在面团上的卷**（沿弧的方向薄、横过弧的方向宽），
     # 节与节压得很紧（间距只有节宽的一半），大的压在小的上面，单独一组才描得出节间那道线。
     plate(s, color="#EEF2F6")
-    doughs = [M("d0", "#F0B25E", steps=7, gloss=0.45), M("d1", "#E9A452", steps=7, gloss=0.45)]
-    shine_m = M("shine", "#FBD592", steps=4)
+    # 照她给的拼豆图纸：一个可颂用十来种颜色，从近白的淡黄一路到深棕；面上一颗一颗掺着（颗粒），
+    # 每节隆起的上沿一条亮条；节与节之间两三颗宽的深色带，连到外轮廓；轮廓只一种最深的颜色。
+    s.seam, s.seam_depth, s.seam_all, s.inner_ring, s.contour = 2, 3, True, False, True
+    ramp_c = hexes("#8E4122", "#A9542A", "#C46A31", "#DA8233", "#E9983A", "#F2AE48", "#F7C35E", "#FAD27C")
+    doughs = [M("d0", "#EFA73E", colors=ramp_c, gloss=0.3, grain=0.65, streak=0.55, outline="#5E2C1C"),
+              M("d1", "#E5922F", colors=ramp_c[:-1], gloss=0.3, grain=0.65, streak=0.45, outline="#5E2C1C")]
+    shine_m = M("shine", "#FBDD92", colors=ramp_c[5:], grain=0.5)
     RAD = 1.25
     # 弧心在前面：中间那节在后、两头的尖朝观察者弯过来，斜俯视下看得出是个「C」
     C = T * 1.05
@@ -552,19 +557,21 @@ def fruitbowl(s, R, T):
     #   前排  杨桃（左）  蓝莓（中）  橙子片（右）
     # 每样都放大、挨着放，中心点前后错开大半个身位，前排自然盖住后排的下半截。
     plate(s, r=2.2, color="#FBF4EA", rim="#E7B98A")
-    melon = M("melon", "#F0605A", steps=6)
+    # 照拼豆图纸：每样水果自己的明暗跨度拉大、面上带颗粒、亮处点亮条；不同水果相接处都描一道线
+    s.seam, s.seam_depth, s.seam_all, s.inner_ring, s.contour = 1, 3, True, False, True
+    melon = M("melon", "#F0605A", steps=7, grain=0.45, streak=0.3)
     rind = M("rind", "#5FAE63", steps=4)
     rindw = M("rindw", "#EAF4D0", steps=3)
-    seed_m = M("seed", "#3A2A26", steps=2)
-    grape = M("grape", "#A9D36A", steps=5, gloss=0.8)
+    seed_m = M("seed", "#221A1A", colors=hexes("#221A1A", "#2E2424"))
+    grape = M("grape", "#A9D36A", steps=6, gloss=0.8, streak=0.5, grain=0.2)
     appleskin = M("apple", "#E24E4E", steps=5, gloss=0.6)
     applein = M("applein", "#FFF8E6", steps=4, shine=1.0, anchor=0.8)
-    orange = M("orange", "#F7A33A", steps=5)
+    orange = M("orange", "#F7A33A", steps=6, grain=0.4, streak=0.3)
     orpith = M("pith", "#FFE7B8", steps=3)
-    blue = M("blue", "#4F5FB8", steps=5, gloss=0.7)
+    blue = M("blue", "#4F5FB8", steps=6, gloss=0.7, grain=0.35, streak=0.5)
     bluecrown = M("bluecrown", "#2F3A7A", steps=2)
-    mango = M("mango", "#FFC54A", steps=5)
-    star = M("star", "#B9DB6A", steps=5)
+    mango = M("mango", "#FFC54A", steps=6, grain=0.4, streak=0.35)
+    star = M("star", "#B9DB6A", steps=6, grain=0.3, streak=0.3)
     starin = M("starin", "#E9F2B8", steps=3)
     pick = M("pick", "#C9A06A", steps=3)
     from pixelkit import Shape

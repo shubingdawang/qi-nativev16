@@ -151,6 +151,13 @@ class Material:
     shine: float = 0.55
     depth: float = 0.8
     style: Optional[str] = None
+    # 颗粒：同一块面上相邻两档颜色**一颗一颗掺着**（0..1）。
+    # 她给的拼豆图纸里，可颂一块面团上 A10 里夹着 G6、A26、A17——酥皮的质感全靠这个。
+    # 没有颗粒的面是一整片干净色块，看着像塑料。面包、蛋糕胚、木头、布给 0.4–0.7；瓷、玻璃、金属给 0。
+    grain: float = 0.0
+    # 高光亮条：受光最亮那一圈里，随机挑一些像素顶到最亮、再往亮里提一截（0..1）。
+    # 图纸里每一节隆起的上沿都有一条淡黄亮条、零星几颗近白的点。
+    streak: float = 0.0
     colors: list = field(default_factory=list)
 
     def __post_init__(self):
@@ -329,10 +336,22 @@ VIEWS = {
 
 class Scene:
     def __init__(self, size=96, view="iso", units=4.0, height=None,
-                 target=(0, 0, 0), light=(-0.55, 0.85, 0.45), dither=0.6):
+                 target=(0, 0, 0), light=(-0.55, 0.85, 0.45), dither=0.6,
+                 seam=1, seam_depth=2, inner_ring=True, seam_all=False, contour=False):
         """`size` 输出多少像素宽；`units` 画面宽对应世界里多少单位（决定颗粒度）。"""
         self.W = size
         self.H = height or size
+        # 节间深线：宽几个像素、压暗几档。图纸里可颂节与节之间是两三颗宽的深色带，一直连到外轮廓
+        self.seam = seam
+        self.seam_depth = seam_depth
+        # 不同组相接就描（不管前后差多少）。可颂一节压一节，前后差得少，不开这个描不出来
+        self.seam_all = seam_all
+        # 描边里面那一圈浓色。图纸的轮廓是**一种颜色一圈**，里面那圈会把台阶磨平——需要台阶感时关掉
+        self.inner_ring = inner_ring
+        # 两件东西相接时，**靠前那一侧描自己的轮廓色**（深色一圈）。
+        # 图纸里每样东西贴着别的东西的那条边都是它自己最深的颜色——可颂压在盘子上，
+        # 可颂那一圈是深棕，不是盘子被压暗的浅蓝
+        self.contour = contour
         self.units = units
         self.dither = dither
         yaw, pitch = VIEWS[view] if isinstance(view, str) else view
@@ -514,6 +533,7 @@ class Scene:
             _clean(col, lev, mat)
         if crease:
             _crease(col, lev, mat, grp, dep, N, sub, self)
+        _grain(col, lev, mat, sub)
         if outline:
             _outline(col, lev, mat, grp, dep, solid, self)
         if glass:
@@ -591,6 +611,8 @@ def _outline(col, lev, mat, grp, dep, items, scene):
     # 描边里面再贴一圈：压到这种材质的第二暗档。参照图的轮廓都是「深线 + 一道浓色」
     # 两层，只有一层深线的话东西像剪下来贴上去的
     inner = _edges(filled & ~edge) & ~edge
+    if not scene.inner_ring:
+        inner = np.zeros_like(inner)
     for i, m in matobj.items():
         mm = inner & (base_i == i)
         if mm.any() and not m.emissive:
@@ -607,18 +629,71 @@ def _outline(col, lev, mat, grp, dep, items, scene):
         diff = (grp[a] != grp[b]) & filled[a] & filled[b]
         dd = np.where(np.isfinite(dep), dep, 1e6)
         far = np.abs(dd[a] - dd[b]) > px * 1.5
-        m = diff & far
+        m = diff & (far | scene.seam_all)
         back_is_b = dep[b] > dep[a]
-        for sel, sl in ((m & back_is_b, b), (m & ~back_is_b, a)):
+        if scene.contour:
+            for sel, sl in ((m & back_is_b, a), (m & ~back_is_b, b)):
+                ys, xs = np.nonzero(sel)
+                ys = ys + sl[0].start; xs = xs + sl[1].start
+                for y, x in zip(ys, xs):
+                    mo = matobj.get(mat[y, x] // 16)
+                    if mo is not None and not mo.emissive:
+                        col[y, x, :3] = _outline_color(mo)
+        for sel, sl, sy, sx in ((m & back_is_b, b, dy, dx), (m & ~back_is_b, a, -dy, -dx)):
             ys, xs = np.nonzero(sel)
             ys = ys + sl[0].start; xs = xs + sl[1].start
-            for y, x in zip(ys, xs):
-                i = mat[y, x] // 16
-                mo = matobj.get(i)
-                if mo is None or mo.emissive:
-                    continue
-                k = max(0, lev[y, x] - 2)
-                col[y, x, :3] = np.array(mo.colors[k]) * 0.92
+            for y0, x0 in zip(ys, xs):
+                g0 = grp[y0, x0]
+                # 往靠后那一侧铺 `seam` 个像素，只铺在同一组里
+                for w in range(scene.seam):
+                    y, x = y0 + sy * w, x0 + sx * w
+                    if not (0 <= y < H and 0 <= x < W) or grp[y, x] != g0 or edge[y, x]:
+                        break
+                    i = mat[y, x] // 16
+                    mo = matobj.get(i)
+                    if mo is None or mo.emissive:
+                        break
+                    k = max(0, lev[y, x] - scene.seam_depth - (1 if w == 0 else 0))
+                    col[y, x, :3] = np.array(mo.colors[k]) * (0.9 if w == 0 else 0.96)
+
+
+def _pixhash(H, W, seed):
+    y = np.arange(H)[:, None].astype(np.int64)
+    x = np.arange(W)[None, :].astype(np.int64)
+    h = (y * 73856093) ^ (x * 19349663) ^ (seed * 83492791 + 12345)
+    h = (h ^ (h >> 13)) * 1274126177
+    return ((h ^ (h >> 16)) & 0xFFFF) / 65535.0
+
+
+def _grain(col, lev, mat, sub):
+    """颗粒和高光亮条（见 `Material.grain / streak`）。在清杂点**之后**做——
+    清杂点会把颗粒当噪点抹掉，颗粒是故意放的。"""
+    H, W = lev.shape
+    for k, sm in sub.items():
+        if sm.emissive or (sm.grain <= 0 and sm.streak <= 0):
+            continue
+        m = (mat == k) & (lev >= 0)
+        if not m.any():
+            continue
+        n = len(sm.colors)
+        cols = np.array(sm.colors)
+        if sm.grain > 0:
+            u = _pixhash(H, W, k + 1)
+            p = sm.grain * 0.22
+            up = m & (u < p) & (lev < n - 1)
+            dn = m & (u > 1 - p) & (lev > 0)
+            lev[up] += 1
+            lev[dn] -= 1
+            ch = up | dn
+            col[ch, :3] = cols[lev[ch]]
+        if sm.streak > 0:
+            u = _pixhash(H, W, k + 101)
+            # 亮条是横着的一小段：同一行相邻像素用同一个随机数（按 x//3 取）
+            u2 = np.roll(u, 1, axis=1)
+            hi = m & (lev >= n - 2) & ((u < sm.streak * 0.35) | (u2 < sm.streak * 0.25))
+            lev[hi] = n - 1
+            top_c = cols[n - 1]
+            col[hi, :3] = top_c + (1 - top_c) * 0.45
 
 
 def _crease(col, lev, mat, grp, dep, N, sub, scene):
