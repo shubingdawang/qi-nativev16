@@ -519,7 +519,7 @@ struct WageSummaryCard: View {
                 }
 
                 ForEach(spendGroups, id: \.0) { group in
-                    row(group.0 == .none ? "花费" : "花费（" + group.0.rawValue + "）") {
+                    row("花费（" + group.0.rawValue + "）") {
                         VStack(alignment: .leading, spacing: 3) {
                             ForEach(group.1) { e in
                                 item(e, e.what + "花费" + WageStore.money(e.amount) + "元")
@@ -670,6 +670,8 @@ struct WageDayEditor: View {
     @State private var income = false
     /// 两个方格子那一笔还没记进去时，先挑好的图
     @State private var draftImages: [String] = []
+    /// 正在改的那一笔。nil = 上面的格子是在记新的一笔
+    @State private var editingEntry: UUID?
 
     // 挑图
     @State private var picking = false
@@ -1047,7 +1049,12 @@ struct WageDayEditor: View {
                      onAdd: { openPicker(for: nil, has: draftImages.count) },
                      onRemove: { n in
                          draftImages.removeAll { $0 == n }
-                         if addedNow.contains(n) { ImageStore.delete(n); addedNow.remove(n) }
+                         // 还挂在某一笔上的不删文件（改到一半取消，那一笔还要用它）
+                         if addedNow.contains(n),
+                            !day.entries.contains(where: { $0.images.contains(n) }) {
+                             ImageStore.delete(n)
+                             addedNow.remove(n)
+                         }
                      })
 
             HStack(spacing: 6) {
@@ -1072,25 +1079,44 @@ struct WageDayEditor: View {
                 .frame(width: 110)
             }
 
-            Button {
-                commitDraftEntry()
-            } label: {
-                Text("记一笔")
-                    .font(.app(13.5, weight: .medium))
-                    .foregroundStyle(canAdd ? app.settings.accentColor : Theme.textMuted(scheme))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 9)
-                    .background(Capsule().fill(canAdd
-                        ? app.settings.accentColor.opacity(0.16) : Theme.softFillDeep))
+            HStack(spacing: 8) {
+                if editingEntry != nil {
+                    Button { clearDraft() } label: {
+                        Text("取消修改")
+                            .font(.app(13.5))
+                            .foregroundStyle(Theme.textSoft(scheme))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 9)
+                            .background(Capsule().fill(Theme.softFillDeep))
+                    }
+                    .buttonStyle(.plain)
+                }
+                Button {
+                    commitDraftEntry()
+                } label: {
+                    Text(editingEntry == nil ? "记一笔" : "保存修改")
+                        .font(.app(13.5, weight: .medium))
+                        .foregroundStyle(canAdd ? app.settings.accentColor : Theme.textMuted(scheme))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .background(Capsule().fill(canAdd
+                            ? app.settings.accentColor.opacity(0.16) : Theme.softFillDeep))
+                }
+                .buttonStyle(.plain)
+                .disabled(!canAdd)
             }
-            .buttonStyle(.plain)
-            .disabled(!canAdd)
+
+            if !day.entries.isEmpty {
+                Text("点击某一笔可修改")
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
 
             if !day.entries.isEmpty {
                 VStack(spacing: 0) {
                     ForEach(day.entries) { e in
                         HStack(spacing: 8) {
-                            if e.meal != .none {
+                            if !e.income {
                                 Text(e.meal.rawValue)
                                     .font(.app(10.5))
                                     .foregroundStyle(Theme.textMuted(scheme))
@@ -1107,6 +1133,7 @@ struct WageDayEditor: View {
                                 .font(.app(13.5, weight: .medium))
                                 .foregroundStyle(e.income ? WageView.payRed : Theme.textSoft(scheme))
                             Button {
+                                if editingEntry == e.id { clearDraft() }
                                 day.entries.removeAll { $0.id == e.id }
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
@@ -1116,16 +1143,25 @@ struct WageDayEditor: View {
                         }
                         .padding(.top, 8)
                         .padding(.bottom, 4)
-                        // 那一行字的**下面一行**：这一笔的图
-                        thumbRow(e.images, size: 40,
-                                 onAdd: { openPicker(for: e.id, has: e.images.count) },
-                                 onRemove: { n in
-                                     if let i = day.entries.firstIndex(where: { $0.id == e.id }) {
-                                         day.entries[i].images.removeAll { $0 == n }
-                                     }
-                                 })
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.bottom, 8)
+                        .padding(.horizontal, editingEntry == e.id ? 6 : 0)
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(editingEntry == e.id
+                                  ? app.settings.accentColor.opacity(0.12) : Color.clear))
+                        .contentShape(Rectangle())
+                        .onTapGesture { beginEdit(e) }
+                        // 那一行字的**下面一行**：这一笔的图。
+                        // 正在改的这一笔，图在上面的格子里改，这儿不摆（两处改会互相覆盖）
+                        if editingEntry != e.id {
+                            thumbRow(e.images, size: 40,
+                                     onAdd: { openPicker(for: e.id, has: e.images.count) },
+                                     onRemove: { n in
+                                         if let i = day.entries.firstIndex(where: { $0.id == e.id }) {
+                                             day.entries[i].images.removeAll { $0 == n }
+                                         }
+                                     })
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.bottom, 8)
+                        }
                         if e.id != day.entries.last?.id {
                             Divider().opacity(0.4)
                         }
@@ -1147,11 +1183,39 @@ struct WageDayEditor: View {
     /// 那一笔不该悄悄丢掉。
     private func commitDraftEntry() {
         guard canAdd, let amt = Double(amountText) else { return }
-        day.entries.append(LedgerEntry(
-            what: what.trimmingCharacters(in: .whitespaces),
-            amount: amt, income: income, meal: meal, images: draftImages))
+        let text = what.trimmingCharacters(in: .whitespaces)
+        if let id = editingEntry, let i = day.entries.firstIndex(where: { $0.id == id }) {
+            // 原地改，id 不变，顺序不变
+            day.entries[i].what = text
+            day.entries[i].amount = amt
+            day.entries[i].income = income
+            day.entries[i].meal = meal
+            day.entries[i].images = draftImages
+        } else {
+            day.entries.append(LedgerEntry(
+                what: text, amount: amt, income: income, meal: meal, images: draftImages))
+        }
+        clearDraft()
+    }
+
+    /// 把某一笔搬进上面的格子里改
+    private func beginEdit(_ e: LedgerEntry) {
+        editingEntry = e.id
+        what = e.what
+        amountText = WageStore.money(e.amount)
+        income = e.income
+        meal = e.meal
+        draftImages = e.images
+    }
+
+    /// 清空格子。改到一半取消的话，这一笔原样不动；
+    /// 改的过程中新挑的图在 addedNow 里，保存时没挂上的会被清掉
+    private func clearDraft() {
+        editingEntry = nil
         what = ""
         amountText = ""
+        meal = .none
+        income = false
         draftImages = []
     }
 }
