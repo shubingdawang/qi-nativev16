@@ -51,7 +51,8 @@ enum NativeTools {
     ///   工坊那几件（文件夹、读文件、发文件）**只在工坊给**——
     ///   絮语那边不需要，摆出来只会稀释他对别的工具的注意力。
     static func definitions(hasGroup: Bool, hasVoice: Bool = false,
-                            workshop: Bool = false) -> [[String: Any]] {
+                            workshop: Bool = false,
+                            mountEntry: Bool = false) -> [[String: Any]] {
         var out: [[String: Any]] = []
 
         func add(_ name: String, _ desc: String,
@@ -683,6 +684,16 @@ enum NativeTools {
                     "note": ["type": "string", "description": "递过去的时候说一句话"]
                 ],
                 required: ["name"])
+        }
+
+        // 按需挂载的入口。开着按需挂载时才给（见 ToolMount）
+        if mountEntry {
+            add("load_tools", ToolMount.entryDescription,
+                ["groups": ["type": "array",
+                            "items": ["type": "string",
+                                      "enum": ToolMount.groups.map(\.id)] as [String: Any],
+                            "description": "要挂上的组 id"] as [String: Any]],
+                required: ["groups"])
         }
 
         return out

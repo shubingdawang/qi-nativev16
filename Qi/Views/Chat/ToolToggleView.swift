@@ -183,6 +183,9 @@ struct ToolToggleView: View {
                 ),
                 onTap: { flip(key) })
 
+            SettingsDivider()
+            mountRow
+
             if isOpen {
                 VStack(spacing: 0) {
                     ForEach(list, id: \.name) { tool in
@@ -206,6 +209,29 @@ struct ToolToggleView: View {
             }
         }
         .background { groupBack(isOpen) }
+    }
+
+    /// 按需挂载的开关
+    private var mountRow: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("按需挂载")
+                    .font(.app(14))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Text("常驻工具每轮都带；标「按需」的按分组，聊到相关内容、提示中提到或最近用过时才带上，其余时候不占上下文")
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                    .multilineTextAlignment(.leading)
+            }
+            Spacer(minLength: 4)
+            Toggle("", isOn: $app.settings.mountToolsOnDemand)
+                .labelsHidden()
+                .tint(app.settings.accentColor)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+        .opacity(app.settings.nativeToolsEnabled ? 1 : 0.5)
+        .disabled(!app.settings.nativeToolsEnabled)
     }
 
     // MARK: 记忆库那批
@@ -375,6 +401,14 @@ struct ToolToggleView: View {
                        MemoryTools.handles(name, memory: true,
                                            pulse: app.settings.localPulse) {
                         Text("本机代替")
+                            .font(.app(10))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Theme.softFillDeep, in: Capsule())
+                            .foregroundStyle(Theme.softText)
+                    }
+                    if app.settings.mountToolsOnDemand, let g = ToolMount.group(of: name) {
+                        Text("按需·" + g.title)
                             .font(.app(10))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)

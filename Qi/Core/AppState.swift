@@ -1188,7 +1188,7 @@ final class AppState: ObservableObject {
         await ContextCompactor.compactIfNeeded(conversationID, app: self)
         let ci2 = index(of: conversationID) ?? ci
         let apiMessages = buildGroupMessages(for: member, in: conversations[ci2])
-        let toolDefs = mcpToolDefinitions(for: conversations[ci2])
+        var toolDefs = mcpToolDefinitions(for: conversations[ci2], context: apiMessages)
 
         do {
             var round = 0
@@ -1238,6 +1238,11 @@ final class AppState: ObservableObject {
                     let run = await execute(call)
                     appendToolRun(run, to: assistantID, in: conversationID)
                     apiMsgs.append(ChatAPI.OutgoingMessage(role: "tool", text: run.result, toolCallID: call.id))
+                }
+                // 他刚挂了一组：下一次请求就带上
+                if calls.contains(where: { NativeTools.shortName($0.name) == "load_tools" }),
+                   let now = index(of: conversationID) {
+                    toolDefs = mcpToolDefinitions(for: conversations[now], context: apiMsgs)
                 }
             }
         } catch {
@@ -1405,7 +1410,6 @@ final class AppState: ObservableObject {
             name: settings.aiName.isEmpty ? "阿晏" : settings.aiName,
             conversationID: conversationID)
 
-        let toolDefs = mcpToolDefinitions(for: conv)
 
         // 这一轮用谁。**可能中途换人**——主的额度满了就顶上备用那个。
         var useEndpoint = endpoint
@@ -1431,6 +1435,8 @@ final class AppState: ObservableObject {
                 // 不然底下那条流式占位气泡会一直转着下不来。
                 let latest = self.index(of: conversationID).map { self.conversations[$0] } ?? conv
                 var apiMessages = self.buildAPIMessages(from: latest)
+                // 工具表在消息拼好之后再算：按需挂载要看提示里点了哪些工具的名字
+                var toolDefs = self.mcpToolDefinitions(for: latest, context: apiMessages)
                 // 量一下这一份都花在哪儿（给「都花在哪儿」那一页看）。
                 // ⚠️ 量的是**真要发出去的这两个数组**，不照着 `buildAPIMessages`
                 // 再拼一遍——照着拼就是第二份真相，那边改了这边不改，
@@ -1536,6 +1542,11 @@ final class AppState: ObservableObject {
                                 text: "（这是刚才那个工具拿到的画面）",
                                 imageDataURLs: [pic]))
                         }
+                    }
+                    // 他刚挂了一组：下一次请求就带上
+                    if calls.contains(where: { NativeTools.shortName($0.name) == "load_tools" }) {
+                        let now = self.index(of: conversationID).map { self.conversations[$0] } ?? latest
+                        toolDefs = self.mcpToolDefinitions(for: now, context: apiMessages)
                     }
                 }
             } catch {
@@ -1900,7 +1911,8 @@ final class AppState: ObservableObject {
     }
 
     /// 把所有打开的 MCP 工具，翻译成接口认识的格式
-    func mcpToolDefinitions(for conversation: Conversation? = nil) -> [[String: Any]] {
+    func mcpToolDefinitions(for conversation: Conversation? = nil,
+                            context: [ChatAPI.OutgoingMessage] = []) -> [[String: Any]] {
         // 开了跟 claude.ai 同步的窗口，记忆工具必须放开——
         // 两边就是靠小屋这个中转站互相知道对方聊了什么的
         let blockMemory = conversation.map {
@@ -1931,11 +1943,14 @@ final class AppState: ObservableObject {
         // 总开关关了就一件都不给；单独关掉的那几件也挑出去。
         var out: [[String: Any]] = []
         if settings.nativeToolsEnabled {
+            // 按需挂载：只在有对话的时候判（没对话就整份给，不猜）
+            let mount = settings.mountToolsOnDemand && conversation != nil
             var native = NativeTools.definitions(
                 hasGroup: conversations.contains { $0.isGroup },
                 hasVoice: activeVoice != nil,
                 // 工坊那几件只在工坊给
-                workshop: conversation?.space == ChatSpace.workshop.rawValue)
+                workshop: conversation?.space == ChatSpace.workshop.rawValue,
+                mountEntry: mount)
             // 本机记忆库和本机心跳。各自有各自的开关，
             // 关着的话对应的那几个还是走原来那条路（小屋 MCP / 电脑上的 PulseEngine）。
             // 本机那份**原样给**。同步窗口收的是小屋那份（见下面的循环）。
@@ -1952,10 +1967,17 @@ final class AppState: ObservableObject {
                                                   todos: settings.todoAccess,
                                                   write: settings.todoWrite)
             }
+            let active: Set<String>? = mount
+                ? conversation.map { ToolMount.shared.activeGroups(conversation: $0, context: context) }
+                : nil
             out = native.filter { item in
                 guard let fn = item["function"] as? [String: Any],
                       let raw = fn["name"] as? String else { return true }
-                return !settings.disabledNativeTools.contains(NativeTools.shortName(raw))
+                let short = NativeTools.shortName(raw)
+                if settings.disabledNativeTools.contains(short) { return false }
+                // 分了组、这一轮这组没挂上 → 不带
+                if let active, let g = ToolMount.groupOf[short], !active.contains(g) { return false }
+                return true
             }
         }
         // ⚠️ `usable` 不是 `enabled`：够不着的那台整台不往上送。
@@ -4889,6 +4911,14 @@ final class AppState: ObservableObject {
                                todos: settings.todoAccess,
                                write: settings.todoWrite) {
             return await HealthTools.run(name, args: args)
+        }
+
+        // 按需挂载的入口
+        if name == "load_tools" {
+            let conv = activeToolConversationID.flatMap { id in
+                index(of: id).map { conversations[$0] }
+            }
+            return ToolMount.shared.load(args, conversation: conv)
         }
 
         // 工资页那四件。挂图要读她最近发的图，交一个闭包进去——

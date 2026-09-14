@@ -96,6 +96,7 @@ enum ToolBlurb {
 
         // MARK: 工资
 
+        "load_tools": "挂载平时不带的一组工具，挂上后本轮即可使用",
         "read_wage": "查看工资页的排班、薪资与每日记账",
         "set_shift": "为某天排班或修改班次、时间、时薪",
         "wage_ledger": "新增、修改或删除某天的一笔账",
