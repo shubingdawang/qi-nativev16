@@ -162,7 +162,8 @@ final class ToolMount {
             .map(\.content)
             .joined(separator: "\n")
             .lowercased()
-        for g in Self.groups where g.keywords.contains(where: { talk.contains($0) }) {
+        for g in Self.groups where g.keywords.contains(where: { talk.contains($0) })
+            || g.tools.contains(where: { talk.contains($0) }) {
             on.insert(g.id)
         }
 
