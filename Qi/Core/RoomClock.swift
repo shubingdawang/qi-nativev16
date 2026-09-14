@@ -48,14 +48,14 @@ enum RoomClock {
         switch kindID {
         case "floorlamp", "nordic_lamp", "vic_lamp", "xred_lamp", "rose_lamp", "star_lamp",
              "vic_chandelier":
-            return (3.2, 0.82, "FFD08A")
+            return (2.4, 0.82, "FFD08A")
         case "lamp", "moon", "sakura_lantern", "jp_lantern", "ny_lantern", "redlantern",
              "ocean_light", "jackolantern":
-            return (2.4, 0.6, "FFD59A")
+            return (1.8, 0.6, "FFD59A")
         case "candle", "gothic_candle":
             return (1.6, 0.7, "FFC27A")
         case "gothic_fire", "xmas_fire", "star_fireplace":
-            return (3.0, 0.35, "FFB070")
+            return (2.4, 0.35, "FFB070")
         case "tv", "console":
             return (1.8, 0.55, "BFD8FF")
         case "tank":

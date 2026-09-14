@@ -350,7 +350,7 @@ struct IsoRoomView<Clawd: View>: View {
         let items = store.furniture(in: room)
         if items.contains(where: { $0.kind == "star_window" }) { return nil }
         let flat = g.projection == .flat
-        let width = flat ? 3.0 : 2.6
+        let width = flat ? 3.6 : 3.4
 
         if let c = items.first(where: { $0.kind == "curtain" }) {
             let cell = store.cell(of: c)

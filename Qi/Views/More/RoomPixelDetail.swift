@@ -155,7 +155,7 @@ struct RoomWallDetail: View {
     private func drawWindow(_ ctx: inout GraphicsContext, _ w: RoomWindow, _ px: CGFloat) {
         let g = room
         let wall = w.wall
-        let v0 = (g.wallH * 0.36 / px).rounded() * px
+        let v0 = (g.wallH * 0.32 / px).rounded() * px
         let v1 = (g.wallH * 0.80 / px).rounded() * px
         // 沿墙一个点对应多少格
         let perPt = 1 / Double(g.projection == .flat ? g.tileW : g.tileW / 2)
@@ -280,7 +280,7 @@ struct RoomFloorDetail: View {
 
             // 窗户投在地上的光：四块（中间窗棂那道十字是暗的）
             if let w = window, night < 0.9 {
-                let a = 0.13 * (1 - night)
+                let a = 0.18 * (1 - night)
                 let warm = RoomPixel.color(night > 0.05 ? "FFD9B0" : "FFF4DA")
                 for (s0, s1) in [(0.0, 0.46), (0.54, 1.0)] {
                     for (t0, t1) in [(0.0, 0.45), (0.55, 1.0)] {
@@ -380,7 +380,7 @@ struct RoomNightShade: View {
                     for gl in glows {
                         // 一圈一圈的台阶光，不用平滑渐变
                         let base = RoomPixel.color(gl.hex)
-                        for (scale, a) in [(1.0, 0.10), (0.72, 0.12), (0.46, 0.16), (0.24, 0.20)] {
+                        for (scale, a) in [(1.0, 0.07), (0.72, 0.09), (0.46, 0.12), (0.24, 0.16)] {
                             let r = gl.radius * CGFloat(scale)
                             ctx.fill(Path(ellipseIn: CGRect(x: gl.center.x - r, y: gl.center.y - r * 0.8,
                                                             width: r * 2, height: r * 1.6)),
