@@ -339,10 +339,43 @@ def slippers(s):
         s.rect(fx - 0.1, 14.2, 1.2, 0.35, lit)      # 脚背那道带
 
 
+def hoodie(s):
+    """小卫衣：套在身子上。领口在眼睛下面，下摆一圈罗纹压到腿根，前面一个袋鼠兜、两根抽绳。
+
+    ⚠️ 不画袖子：手是单独会转的那两块（`ClawdRig` 骨架），
+    袖子画在这张固定图上的话，手一抬袖子还留在原地。
+    """
+    lit, mid, dim = "#F9CAD6", "#F2A9BC", "#D98AA0"
+    # 衣身：比躯干左右各宽一点点，从眼睛下沿到腿根
+    s.rect(1.8, 10.55, 11.4, 2.75, mid)
+    s.rect(1.8, 10.55, 0.45, 2.75, lit)          # 左边受光
+    s.rect(12.75, 10.55, 0.45, 2.75, dim)        # 右边背光
+    # 领口：帽子翻在后面露出来的那一圈
+    s.rect(3.2, 10.25, 8.6, 0.55, dim)
+    s.rect(3.6, 10.25, 7.8, 0.22, lit)
+    # 抽绳 + 绳头
+    for x in (6.2, 8.6):
+        s.rect(x, 10.8, 0.22, 1.2, "#FFFFFF")
+        s.disc(x + 0.11, 12.05, 0.2, "#FFFFFF", FINE)
+    # 袋鼠兜：梯形，一排排往下变宽
+    y = 12.1
+    for k in range(5):
+        half = 2.0 + 0.12 * k
+        s.rect(7.5 - half, y, half * 2, 0.2, dim if k == 0 else mid)
+        y += 0.2
+    s.rect(5.3, 12.1, 0.2, 1.0, dim)
+    s.rect(9.5, 12.1, 0.2, 1.0, dim)
+    # 下摆罗纹
+    s.rect(1.8, 13.05, 11.4, 0.45, dim)
+    for x in [2.2 + 0.6 * i for i in range(18)]:
+        s.rect(x, 13.1, 0.2, 0.35, mid)
+
+
 PIECES = [
     ("hat", hat), ("beret", beret), ("glasses", glasses),
     ("bowtie", bowtie), ("scarf", scarf), ("bag", bag),
     ("boots", boots), ("slippers", slippers),
+    ("hoodie", hoodie),
 ]
 
 

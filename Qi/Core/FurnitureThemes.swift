@@ -183,8 +183,6 @@ extension FurnitureCatalog {
               sprite: sp_sofa, category: .themed, reaction: "瘫成一摊"),
         .init(id: "ocean_palm", name: "海洋·棕榈", price: 120,
               sprite: sp_plant, category: .themed, reaction: "躲到叶子下"),
-        .init(id: "ocean_net", name: "海洋·渔网", price: 80,
-              sprite: sp_screen, category: .themed, reaction: "被网缠住"),
         .init(id: "ocean_board", name: "海洋·冲浪板", price: 130,
               sprite: sp_screen, category: .themed, reaction: "爬上去站好"),
         .init(id: "ocean_light", name: "海洋·灯塔", price: 160,
@@ -495,7 +493,6 @@ extension FurnitureCatalog {
         "ocean_bed":      Art(flat: "fu_ocean_bed",              iso: nil),
         "ocean_sofa":     Art(flat: "fu_ocean_sofa",             iso: nil),
         "ocean_palm":     Art(flat: "fu_ocean_palm",             iso: nil),
-        "ocean_net":      Art(flat: "fu_ocean_fishing_net",      iso: nil),
         "ocean_board":    Art(flat: "fu_ocean_surfboard",        iso: nil),
         "ocean_light":    Art(flat: "fu_ocean_lighthouse",       iso: nil),
         "autumn_bed":     Art(flat: "fu_autumn_bed",             iso: nil),
@@ -678,7 +675,7 @@ extension FurnitureCatalog {
         case "sakura_rug", "vic_rug", "xred_rug", "rose_rug", "star_rug":
             return IsoShape(w: 3, d: 3, tall: 0.0,
                             actions: ["打滚", "躺一会儿"])
-        case "coatrack", "ocean_net", "ocean_board", "gothic_mirror", "jp_door",
+        case "coatrack", "ocean_board", "gothic_mirror", "jp_door",
              "lolita_mirror", "ny_screen", "ny_couplet", "painting",
              "fucouplet", "guitar_item", "xred_mirror", "rose_frame",
              "star_window":

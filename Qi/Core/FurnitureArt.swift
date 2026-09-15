@@ -322,7 +322,6 @@ extension FurnitureCatalog {
         "nordic_lamp":     Art(flat: "px_nordic_lamp", iso: "iso_l_px_nordic_lamp"),
         "nordic_plant":    Art(flat: "px_nordic_plant", iso: "iso_l_px_nordic_plant"),
         "ocean_palm":      Art(flat: "px_ocean_palm", iso: "iso_l_px_ocean_palm"),
-        "ocean_net":       Art(flat: "px_ocean_net", iso: "iso_l_px_ocean_net"),
         "ocean_board":     Art(flat: "px_ocean_board", iso: "iso_l_px_ocean_board"),
         "ocean_light":     Art(flat: "px_ocean_light", iso: "iso_l_px_ocean_light"),
         "autumn_maple":    Art(flat: "px_autumn_maple", iso: "iso_l_px_autumn_maple"),

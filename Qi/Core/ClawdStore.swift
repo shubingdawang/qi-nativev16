@@ -1219,6 +1219,9 @@ final class ClawdStore: ObservableObject {
         // 商城里的「可颂」换成了「马卡龙」（id croissant → macaron）。
         // 老存档里买过的那件跟着换过来，不然读出来找不到种类、屋里凭空少一件。
         for i in owned.indices where owned[i].kind == "croissant" { owned[i].kind = "macaron" }
+        // 「海洋·渔网」下架了：老存档里买过的拿掉，按原价退币（读完币之后再加，见下面）
+        let nets = owned.filter { $0.kind == "ocean_net" }.count
+        owned.removeAll { $0.kind == "ocean_net" }
         if UserDefaults.standard.string(forKey: "clawdCarrying") == "croissant" {
             UserDefaults.standard.set("macaron", forKey: "clawdCarrying")
         }
@@ -1252,6 +1255,7 @@ final class ClawdStore: ObservableObject {
         } else {
             coins = UserDefaults.standard.integer(forKey: "clawdCoins")
         }
+        coins += nets * 80
         let t = UserDefaults.standard.double(forKey: "clawdCheckIn")
         lastCheckIn = t > 0 ? Date(timeIntervalSince1970: t) : nil
         linked = UserDefaults.standard.bool(forKey: "clawdLinked")

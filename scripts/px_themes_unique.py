@@ -117,25 +117,6 @@ def ocean_palm(s):
             s.add(capsule(p0, p1, 0.06 - 0.015 * j), frond, "frond")
 
 
-@U("ocean_net", "海洋·渔网", 1, 1, 2.2)
-def ocean_net(s):
-    rope = wood("rope", "#E2C79A", grain=0.2)
-    wd = wood("drift", "#C9B08A", grain=0.2)
-    shell = M("shell", "#FBE6DC", steps=4)
-    star = M("sstar", "#F2A06A", steps=4)
-    s.add(capsule(V([-0.5, 1.9, -0.05]), V([0.5, 1.9, -0.05]), 0.04), wd, "stick")
-    # 网：竖线往下收拢 + 几道横线，像挂着的一兜
-    for k in range(9):
-        x0 = -0.45 + k * 0.1125
-        s.add(capsule(V([x0, 1.88, -0.03]), V([x0 * 0.4, 0.8, 0.0]), 0.008), rope, "net")
-    for j in range(6):
-        y = 1.75 - j * 0.17
-        w_ = 0.45 - (1.88 - y) / 1.08 * 0.27
-        s.add(capsule(V([-w_, y, -0.02]), V([w_, y, -0.02]), 0.008), rope, "net")
-    for (x, y, m_) in ((-0.2, 1.3, shell), (0.15, 1.1, shell), (0.05, 1.5, star)):
-        s.add(ellipsoid(0.07, 0.07, 0.02).at(x, y, 0.02), m_, "deco")
-
-
 @U("ocean_board", "海洋·冲浪板", 1, 1, 2.2)
 def ocean_board(s):
     board = M("board", "#F6F4EE", steps=6, gloss=0.5)

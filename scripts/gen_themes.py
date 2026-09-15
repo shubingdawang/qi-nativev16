@@ -185,7 +185,6 @@ ITEMS = [
     ("ocean_bed",   "海洋·小床", 195, T, "bed",  "fu_ocean_bed", None, "听海浪声"),
     ("ocean_sofa",  "海洋·沙发", 185, T, "sofa", "fu_ocean_sofa", None, "瘫成一摊"),
     ("ocean_palm",  "海洋·棕榈", 120, T, "plant", "fu_ocean_palm", None, "躲到叶子下"),
-    ("ocean_net",   "海洋·渔网", 80,  T, "screen", "fu_ocean_fishing_net", None, "被网缠住"),
     ("ocean_board", "海洋·冲浪板", 130, T, "screen", "fu_ocean_surfboard", None, "爬上去站好"),
     ("ocean_light", "海洋·灯塔", 160, T, "lamp", "fu_ocean_lighthouse", None, "盯着光转"),
 
