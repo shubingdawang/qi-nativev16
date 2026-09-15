@@ -1256,6 +1256,46 @@ def star_gramophone(s, R, T):
 
 # ═══════════════════════════════ 跑
 
+# ═══════════════════════════════ 真实大小
+#
+# 她说的规矩：**按现实里的大小和比例**来。现实里很小的东西（弹珠、蜡烛）适当放大，
+# 不然像素太小看不见、也点不到；但**放大之后不能比现实里本来比它大的东西还大**——
+# 弹珠可以放大，但肯定不能比咖啡大。
+#
+# 以前每件都裁到内容、拉满一整格：一杯咖啡跟一只床头柜一样宽。
+# 现在每件写一个现实里**最长那一边**（米，瓶子罐子是高、盘子是宽），换算成「占一格宽的几成」，
+# 再让图里**最长那一边**等于这么多——只按宽算的话，细高的汽水瓶宽度小、个子却比茶壶还高：
+#
+#     几成 = 0.22 + 宽 × 1.8        （一格 ≈ 0.5 米）
+#
+# 0.22 + 最小那几件（易拉罐、蜡烛）≈ 0.35 是「再小就看不清」的底；后面那一项跟真实宽度成正比，
+# 所以谁比谁大的顺序一个不乱。画布左右对称留白，App 按整张图宽等于一格去摆。
+REAL_WIDTH = {
+    "coffee": 0.15, "soda": 0.20, "teapot": 0.25, "bubbletea": 0.18, "cake": 0.22,
+    "donut": 0.10, "riceball": 0.09, "icecream": 0.18, "sushi": 0.25, "ramen": 0.20,
+    "hotpot": 0.35, "cookies": 0.20, "macaron": 0.20, "fruitbowl": 0.30, "pancakes": 0.22,
+    "pizza": 0.33, "sandwich": 0.15, "salad": 0.25, "candle": 0.10, "tissue": 0.24,
+    "globe": 0.35, "tank": 0.30, "bonsai": 0.30, "flowervase": 0.30, "vic_vase": 0.35,
+    "minitree": 0.35, "star_books": 0.25, "speaker": 0.20, "microwave": 0.50,
+    "record": 0.40, "humid": 0.25, "polaroid": 0.12, "star_gramophone": 0.45,
+}
+
+
+def tile_fraction(id):
+    return min(1.0, 0.22 + REAL_WIDTH.get(id, 0.3) * 1.8)
+
+
+def pad_to_fraction(img, frac):
+    """内容最长那一边 = 画布宽 × frac，左右对称补透明；高度不补（底对齐在 App 里按图算）"""
+    from PIL import Image
+    w = int(round(max(img.width, img.height) / frac))
+    if w <= img.width:
+        return img
+    out = Image.new("RGBA", (w, img.height), (0, 0, 0, 0))
+    out.paste(img, ((w - img.width) // 2, 0))
+    return out
+
+
 def render_one(args):
     id, view = args
     name, fn, units, ty, h = ITEMS[id]
@@ -1268,6 +1308,7 @@ def render_one(args):
     if post:
         img = post(img)
     img = crop(img)
+    img = pad_to_fraction(img, tile_fraction(id))
     return id, view, img
 
 
