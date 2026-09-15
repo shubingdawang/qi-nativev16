@@ -92,7 +92,7 @@ struct WageView: View {
             }
         }
         .sheet(item: $editing) { ref in
-            WageDayEditor(date: ref.date, onMove: { moving = ref.date })
+            WageDayEditor(date: ref.date, editEntry: ref.entry, onMove: { moving = ref.date })
         }
         .sheet(isPresented: $showSettings) {
             WageSettingsSheet()
@@ -385,6 +385,10 @@ struct WageView: View {
                                 },
                                 onClose: { summary = nil },
                                 onOpenImage: { preview = $0 },
+                                onEditEntry: { id in
+                                    summary = nil
+                                    editing = WageDayRef(date: ref.date, entry: id)
+                                },
                                 onDelete: {
                                     store.deleteDay(on: ref.date)
                                     summary = nil
@@ -430,6 +434,8 @@ struct WageView: View {
 /// sheet(item:) 要一个 Identifiable 的东西，日期本身不是。
 struct WageDayRef: Identifiable, Equatable {
     let date: Date
+    /// 打开编辑页时直接进入改这一笔（总结卡里点了某一笔）
+    var entry: UUID? = nil
     var id: String { WageStore.key(date) }
 }
 
@@ -446,6 +452,8 @@ struct WageSummaryCard: View {
     var onEdit: () -> Void
     var onClose: () -> Void
     var onOpenImage: (String) -> Void = { _ in }
+    /// 点某一笔：进编辑页直接改它
+    var onEditEntry: (UUID) -> Void = { _ in }
     var onDelete: () -> Void = {}
     var onMove: () -> Void = {}
 
@@ -608,7 +616,14 @@ struct WageSummaryCard: View {
     /// 一笔：那一行字，**下面一行**是它的缩略图（她要的排法）。
     private func item(_ e: LedgerEntry, _ line: String) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            value(line)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                value(line)
+                Image(systemName: "pencil")
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { onEditEntry(e.id) }
             if !e.images.isEmpty {
                 // ⚠️ 34 点：五张加四道缝正好 190，卡片右边那一栏放得下，不折行
                 HStack(spacing: 5) {
@@ -690,8 +705,13 @@ struct WageDayEditor: View {
     private let existed: Bool
     @State private var confirmingDelete = false
 
-    init(date: Date, onMove: @escaping () -> Void = {}) {
+    /// 打开时直接改的那一笔
+    private let editEntry: UUID?
+    @FocusState private var whatFocused: Bool
+
+    init(date: Date, editEntry: UUID? = nil, onMove: @escaping () -> Void = {}) {
         self.date = date
+        self.editEntry = editEntry
         self.onMove = onMove
         let s = WageStore.shared
         let t = s.settings.template(.middle)
@@ -713,16 +733,32 @@ struct WageDayEditor: View {
         NavigationStack {
             ZStack {
                 WallpaperBackground()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        shiftCard
-                        if day.shift != nil { timeCard }
-                        ledgerCard
-                        if existed { deleteBar }
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 14) {
+                            shiftCard
+                            if day.shift != nil { timeCard }
+                            ledgerCard
+                            if existed { deleteBar }
+                        }
+                        .padding(16)
                     }
-                    .padding(16)
+                    .scrollDismissesKeyboard(.interactively)
+                    // 开始改某一笔：滚到上面那两个格子、光标放进去——
+                    // 以前点了那一行，格子在屏幕外面悄悄变了，看着就是「点了没反应」
+                    .onChange(of: editingEntry) { _, id in
+                        guard id != nil else { return }
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            proxy.scrollTo("ledgerInput", anchor: .top)
+                        }
+                        whatFocused = true
+                    }
+                    .onAppear {
+                        if let id = editEntry, let e = day.entries.first(where: { $0.id == id }) {
+                            beginEdit(e)
+                        }
+                    }
                 }
-                .scrollDismissesKeyboard(.interactively)
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
@@ -1024,11 +1060,16 @@ struct WageDayEditor: View {
 
     private var ledgerCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("记账").heading(14)
+            HStack {
+                Text(editingEntry == nil ? "记账" : "正在修改这一笔").heading(14)
+                Spacer()
+            }
+            .id("ledgerInput")
 
             // 两个方格子：干了什么 + 多少钱
             HStack(spacing: 8) {
                 TextField("干了什么，如：吃了一个汉堡", text: $what)
+                    .focused($whatFocused)
                     .font(.app(13.5))
                     .padding(.horizontal, 11)
                     .padding(.vertical, 10)
@@ -1107,7 +1148,7 @@ struct WageDayEditor: View {
             }
 
             if !day.entries.isEmpty {
-                Text("点击某一笔可修改")
+                Text("点某一笔或铅笔可修改")
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
@@ -1132,6 +1173,11 @@ struct WageDayEditor: View {
                             Text((e.income ? "+" : "-") + WageStore.money(e.amount))
                                 .font(.app(13.5, weight: .medium))
                                 .foregroundStyle(e.income ? WageView.payRed : Theme.textSoft(scheme))
+                            Button { beginEdit(e) } label: {
+                                Image(systemName: "pencil.circle.fill")
+                                    .foregroundStyle(app.settings.accentColor.opacity(0.8))
+                            }
+                            .buttonStyle(.plain)
                             Button {
                                 if editingEntry == e.id { clearDraft() }
                                 day.entries.removeAll { $0.id == e.id }
