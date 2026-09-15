@@ -85,6 +85,7 @@ enum MealKind: String, Codable, CaseIterable, Identifiable {
     case breakfast = "早餐"
     case lunch = "午餐"
     case dinner = "晚餐"
+    case lateSnack = "夜宵"
 
     var id: String { rawValue }
 }

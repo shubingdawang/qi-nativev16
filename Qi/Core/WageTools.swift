@@ -69,7 +69,7 @@ enum WageTools {
             required: ["date", "shift"])
 
         add("wage_ledger",
-            "触发：她说今天买了什么、吃了什么、花了多少、收到多少，或者让你改掉 / 删掉某一笔。动机：替她把账记在那一天下面，总结里按早午晚餐分好。行动：给某一天加一笔、改一笔、或删一笔。\n注意：改和删要 id（先 read_wage 看）。what 写成「吃了一个汉堡」这种一句话，总结里会显示成「吃了一个汉堡花费12元」。",
+            "触发：她说今天买了什么、吃了什么、花了多少、收到多少，或者让你改掉 / 删掉某一笔。动机：替她把账记在那一天下面，总结里按早餐、午餐、晚餐、夜宵分好。行动：给某一天加一笔、改一笔、或删一笔。\n注意：改和删要 id（先 read_wage 看）。what 写成「吃了一个汉堡」这种一句话，总结里会显示成「吃了一个汉堡花费12元」。",
             [
                 "date": ["type": "string", "description": "哪天：2026-09-14 / 今天 / 昨天"],
                 "action": ["type": "string", "description": "add 新增 / update 修改 / delete 删除"],
@@ -77,7 +77,7 @@ enum WageTools {
                 "what": ["type": "string", "description": "干了什么，如：吃了一个汉堡"],
                 "amount": ["type": "number", "description": "多少钱，正数"],
                 "type": ["type": "string", "description": "支出 / 收入。不填 = 支出"],
-                "meal": ["type": "string", "description": "早餐 / 午餐 / 晚餐 / 其他。不是吃的就填其他或不填"]
+                "meal": ["type": "string", "description": "早餐 / 午餐 / 晚餐 / 夜宵 / 其他。不是吃的就填其他或不填"]
             ],
             required: ["date", "action"])
 

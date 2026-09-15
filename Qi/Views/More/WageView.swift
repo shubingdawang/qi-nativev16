@@ -467,7 +467,7 @@ struct WageSummaryCard: View {
 
     /// 花费按顿分组，顺序固定：早餐、午餐、晚餐、其他
     private var spendGroups: [(MealKind, [LedgerEntry])] {
-        let order: [MealKind] = [.breakfast, .lunch, .dinner, .none]
+        let order: [MealKind] = [.breakfast, .lunch, .dinner, .lateSnack, .none]
         return order.compactMap { m in
             let items = day.entries.filter { !$0.income && $0.meal == m }
             return items.isEmpty ? nil : (m, items)
@@ -1063,7 +1063,7 @@ struct WageDayEditor: View {
                         Text(m.rawValue)
                             .font(.app(12))
                             .foregroundStyle(meal == m ? app.settings.accentColor : Theme.textSoft(scheme))
-                            .padding(.horizontal, 10)
+                            .padding(.horizontal, 7)
                             .padding(.vertical, 5)
                             .background(Capsule().fill(meal == m
                                 ? app.settings.accentColor.opacity(0.16) : Theme.softFillDeep))
