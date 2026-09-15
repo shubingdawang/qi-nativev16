@@ -131,14 +131,13 @@ def bed(s):
     B(s, -1.3, 1.3, 0.5, 0.85, -1.78, 1.78, mattress, "mattress", round=0.1)
     # 被子：加厚、蓬起来——上面鼓一个大软包，四边圆着垂下去
     B(s, -1.38, 1.38, 0.42, 1.02, -0.5, 1.86, quilt, "quilt", round=0.2)
-    s.add(ellipsoid(1.28, 0.16, 1.1).at(0, 1.0, 0.68), quilt, "quilt")
     s.decal(lambda p: (np.abs(((p[..., 0] + 1.38) / 0.69) % 1 - 0.5) > 0.47)
             | (np.abs(((p[..., 2] + 1.18) / 0.59) % 1 - 0.5) > 0.47), quilt_ln, "quilt")
     s.add(capsule(np.array([-1.32, 1.02, -0.46]), np.array([1.32, 1.02, -0.46]), 0.15), fold, "fold")
     # 方枕头，鼓鼓的：圆角很大的盒子 + 中间再鼓一点
     for x, m, g, zz in ((-0.64, pillow, "pillowA", -1.34), (0.64, pillow2, "pillowB", -1.28)):
-        s.add(box(0.56, 0.2, 0.34, round=0.18).rot("x", -14).at(x, 1.08, zz), m, g)
-        s.add(ellipsoid(0.46, 0.14, 0.26).rot("x", -14).at(x, 1.14, zz + 0.02), m, g)
+        # 枕头直接压在床垫上（底面贴着床垫顶 0.85），扁一点，下面就不会有一大块影子
+        s.add(box(0.56, 0.13, 0.34, round=0.12).rot("x", -8).at(x, 0.97, zz), m, g)
     B(s, -1.42, 1.42, 0.9, 1.14, 1.0, 1.52, throw, "throw", round=0.1)
     s.decal(lambda p: (np.abs(((p[..., 0] + 1.42) / 0.355) % 1 - 0.5) < 0.1)
             | (np.abs(((p[..., 2] + 0.26) / 0.26) % 1 - 0.5) < 0.09), throw_ln, "throw")
@@ -286,15 +285,17 @@ def stool(s):
     knit = M("knit", "#E4AE86", steps=4)
     legm = wood("leg", "#D2A06A")
     ring = wood("ring", "#B98655")
-    s.add(cylinder(0.82, 0.14, round=0.06).at(0, 0.56, 0), legm, "board")
-    s.add(lathe([(0, 0.0), (0.78, 0.0), (0.84, 0.06), (0.7, 0.18), (0, 0.22)]).at(0, 0.68, 0), seat, "seat")
+    # 坐面收小一点，腿往外撇到坐面外面——四条腿从上面看都露得出来
+    s.add(cylinder(0.6, 0.12, round=0.05).at(0, 0.58, 0), legm, "board")
+    s.add(lathe([(0, 0.0), (0.56, 0.0), (0.62, 0.05), (0.5, 0.16), (0, 0.2)]).at(0, 0.69, 0), seat, "seat")
     s.decal(lambda p: (np.abs(((np.arctan2(p[..., 2], p[..., 0]) / math.tau * 20) % 1) - 0.5) < 0.12) & (rad(p) > 0.25), knit, "seat")
     # 四条腿，斜着往外撇，前后左右各一条都看得见
-    for a in (0, 90, 180, 270):
-        x = 0.58 * math.cos(math.radians(a))
-        z = 0.58 * math.sin(math.radians(a))
-        s.add(round_cone(np.array([x * 1.22, 0.0, z * 1.22]), np.array([x, 0.58, z]), 0.06, 0.07), legm, "leg%d" % a)
-    s.add(torus(0.6, 0.035).at(0, 0.22, 0), ring, "ring")
+    # 四条腿错开 20°：正方形摆的话等距下前后两条腿在同一条竖线上，后面那条被前面挡住
+    for a in (20, 110, 200, 290):
+        x = 0.42 * math.cos(math.radians(a))
+        z = 0.42 * math.sin(math.radians(a))
+        s.add(round_cone(np.array([x * 2.0, 0.0, z * 2.0]), np.array([x, 0.6, z]), 0.055, 0.07), ring, "leg%d" % a)
+    s.add(torus(0.62, 0.028).at(0, 0.2, 0), ring, "ring")
 
 
 @item("desk", "书桌", 3, 2, 0.9)
@@ -415,18 +416,19 @@ def washer(s):
     glass = M("glass", "#8FC3DE", steps=5, gloss=1.0)
     suds = M("suds", "#FFFFFF", steps=3)
     btn = M("btn", "#F2A38E", steps=3)
-    kick = M("kick", "#E6E2DA", steps=4)
-    # 她：下面太短 → 机身加高，门下面留一截踢脚板和过滤器小门
-    B(s, -0.8, 0.8, 0.0, 1.5, -0.75, 0.75, body, "body", round=0.1)
-    s.decal(lambda p: (p[..., 2] > 0.73) & (p[..., 1] > 0.5), panel, "body")
-    s.decal(lambda p: (p[..., 2] > 0.73) & (p[..., 1] < -0.55), kick, "body")
-    s.decal(lambda p: (p[..., 2] > 0.73) & (p[..., 1] < -0.58) & (p[..., 1] > -0.7) & (p[..., 0] > 0.35) & (p[..., 0] < 0.65), ring, "body")
-    s.add(cylinder(0.08, 0.05).rot("x", 90).at(0.45, 1.36, 0.75), ring, "dial")
+    dots = [M("d%d" % i, c, steps=3) for i, c in enumerate(("#8EC3E6", "#F29A8E", "#9ED3A3"))]
+    # 她：下面还要增高，白色的 → 机身 1.8 高，门以下留一大截白
+    B(s, -0.8, 0.8, 0.0, 1.8, -0.75, 0.75, body, "body", round=0.1)
+    s.decal(lambda p: (p[..., 2] > 0.73) & (p[..., 1] > 0.62), panel, "body")
+    s.add(cylinder(0.08, 0.05).rot("x", 90).at(0.45, 1.66, 0.75), ring, "dial")
     for x in (-0.55, -0.35, -0.15):
-        s.add(box(0.06, 0.03, 0.02, round=0.01).at(x, 1.38, 0.76), btn, "btn")
-    s.add(torus(0.4, 0.06, axis="z").at(0, 0.7, 0.76), ring, "door")
-    s.add(cylinder(0.36, 0.03).rot("x", 90).at(0, 0.7, 0.72), glass, "glass")
+        s.add(box(0.06, 0.03, 0.02, round=0.01).at(x, 1.68, 0.76), btn, "btn")
+    s.add(torus(0.4, 0.06, axis="z").at(0, 1.0, 0.76), ring, "door")
+    s.add(cylinder(0.36, 0.03).rot("x", 90).at(0, 1.0, 0.72), glass, "glass")
     s.decal(lambda p: speckle(p, 12, 0.3, seed=2) & (p[..., 2] < 0.0), suds, "glass")
+    # 右下角蓝、红、绿三个小点
+    for i, x in enumerate((0.38, 0.52, 0.66)):
+        s.add(sphere(0.045).at(x, 0.2, 0.75), dots[i], "dot%d" % i)
 
 
 @item("toilet", "马桶", 2, 2, 1.0)
@@ -1133,10 +1135,12 @@ def guitar_item(s):
     for k in range(3):
         x = -0.03 + k * 0.03
         s.add(capsule(np.array([x, 0.3, 0.11]), np.array([x * 0.8, 1.8, 0.075]), 0.005), string, "str")
-    s.add(capsule(np.array([-0.25, 0, 0.25]), np.array([-0.2, 0.3, 0.05]), 0.02), stand, "stand")
-    s.add(capsule(np.array([0.25, 0, 0.25]), np.array([0.2, 0.3, 0.05]), 0.02), stand, "stand")
-    s.add(capsule(np.array([-0.25, 0.28, 0.12]), np.array([0.25, 0.28, 0.12]), 0.018), stand, "stand")
-    s.add(capsule(np.array([0, 0, -0.35]), np.array([0, 1.1, -0.03]), 0.02), stand, "stand")
+    # 支架全在琴背后（跟落地镜一样）：底下一根横托接住琴底，两条腿往后撑，一根竖杆顶住琴颈
+    s.add(capsule(np.array([-0.22, 0.06, -0.12]), np.array([0.22, 0.06, -0.12]), 0.02), stand, "stand")
+    for x in (-0.22, 0.22):
+        s.add(capsule(np.array([x, 0.06, -0.12]), np.array([x * 1.2, 0.0, -0.5]), 0.02), stand, "stand")
+    s.add(capsule(np.array([0, 0.0, -0.5]), np.array([0, 1.15, -0.1]), 0.02), stand, "stand")
+    s.add(capsule(np.array([-0.08, 1.15, -0.1]), np.array([0.08, 1.15, -0.1]), 0.02), stand, "stand")
 
 
 # ═══════════════════════════════ 小物件
