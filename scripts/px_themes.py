@@ -560,13 +560,7 @@ def porcelain_pot(s, t, m, h=0.35, r=0.22, g="pot"):
     return h
 
 
-def build_plant(s, id, kind):
-    t = theme_of(id)
-    m = mats(t)
-    h = porcelain_pot(s, t, m)
-    soil = M("soil", "#7A5A40", steps=3)
-    s.add(cylinder(0.19, 0.02).at(0, h - 0.02, 0), soil, "soil")
-    top = V([0, h, 0])
+def _build_plant_old(s, id, kind, t, m, h, top):
     if kind == "monstera":
         leaf = M("leaf", "#6FA86A", steps=6)
         for k in range(7):
@@ -735,6 +729,640 @@ def build_fireplace(s, id):
             s.add(sphere(0.03).at(x, 1.32, 0.0), fire2, "flame")
         s.add(tri_prism(0.08, 0.02).at(0.2, 1.2, 0.1), m.star, "star")
         ruffle_line(s, -0.58, 0.58, 0.28, 0.9, 1.04, M("lace", "#FFFFFF", steps=3), n=12)
+
+
+# ═══════════════════════════════ 华丽版（覆盖上面的同名骨架）
+#
+# 她：「再做华丽点，现在有点朴素了。」
+# 原来那批主题图华丽在哪：**木框描金、雕花卷草、顶上有尖饰、边上有流苏和荷叶边、
+# 布面拉扣、台面上摆满小东西**。下面每个骨架都把这几样补上。
+
+def finial(s, c, mat, h=0.14, g="finial"):
+    """柱顶的尖饰：一颗圆球 + 细颈 + 小尖"""
+    c = V(c, float)
+    s.add(sphere(h * 0.32).at(*(c + V([0, h * 0.3, 0]))), mat, g)
+    s.add(capsule(c + V([0, h * 0.55, 0]), c + V([0, h * 0.8, 0]), h * 0.1), mat, g)
+    s.add(sphere(h * 0.12).at(*(c + V([0, h, 0]))), mat, g)
+
+
+def tassel(s, c, mat, L=0.16, g="tassel"):
+    c = V(c, float)
+    s.add(sphere(0.03).at(*c), mat, g)
+    for k in range(5):
+        dx = (k - 2) * 0.012
+        s.add(capsule(c + V([dx, -0.02, 0]), c + V([dx * 1.8, -L, 0.004 * k]), 0.009), mat, g)
+
+
+def scroll_row(s, x0, x1, y, z, mat, n=9, r=0.028, g="scroll"):
+    """一排卷草：大小交替的小球，看着是一道雕花边"""
+    for k in range(n):
+        x = x0 + (x1 - x0) * k / max(1, n - 1)
+        s.add(sphere(r * (1.25 if k % 2 == 0 else 0.8)).at(x, y + (0.01 if k % 2 == 0 else 0), z), mat, g)
+
+
+def pearl_row(s, x0, x1, y, z, mat, n=12, g="pearl"):
+    scroll_row(s, x0, x1, y, z, mat, n=n, r=0.018, g=g)
+
+
+def build_bed(s, id, w, d, style="ornate"):
+    t = theme_of(id)
+    m = mats(t)
+    hw, hd = w / 2 - 0.05, d / 2 - 0.05
+    gold = m.gold if t.gold else m.frame_dk
+    B(s, -hw + 0.08, hw - 0.08, 0.35, 0.62, -hd + 0.1, hd - 0.05, M("mat", "#FBF6EE", steps=6), "mattress", round=0.08)
+    B(s, -hw + 0.03, hw - 0.03, 0.3, 0.7, -hd * 0.25, hd, m.fab, "quilt", round=0.14)
+    fabric_decal(s, "quilt", t, m)
+    # 被面上一圈描边 + 中间一块菱形拉扣
+    s.decal(lambda p: (p[..., 1] > 0.15) & ((np.abs(np.abs(p[..., 0]) - (hw - 0.15)) < 0.015)), m.accent, "quilt")
+    if t.gold or getattr(t, "ornate", False):
+        s.decal(lambda p: (p[..., 1] > 0.15) & tufts(np.stack([p[..., 0], p[..., 2], p[..., 1]], -1), 0.2, 0.018), m.fab2, "quilt")
+    s.add(capsule(V([-hw + 0.05, 0.7, -hd * 0.25]), V([hw - 0.05, 0.7, -hd * 0.25]), 0.1), m.fab2, "fold")
+    if getattr(t, "ruffle", False) or getattr(t, "ornate", False):
+        pearl_row(s, -hw + 0.06, hw - 0.06, 0.8, -hd * 0.25 + 0.08, M("lace", "#FFFFFF", steps=3), n=14)
+    for x in (-hw * 0.48, hw * 0.48):
+        s.add(box(hw * 0.42, 0.1, 0.22, round=0.09).rot("x", -8).at(x, 0.74, -hd + 0.32), m.pillow, "pillow")
+        if getattr(t, "ruffle", False):
+            ruffle_line(s, x - hw * 0.42, x + hw * 0.42, -hd + 0.55, 0.66, 0.78, M("place", "#FFFFFF", steps=3), n=6, g="place")
+    # 靠枕：一颗心 / 一颗星 / 一个方的
+    small = m.accent
+    if getattr(t, "stars", False):
+        s.add(tri_prism(0.12, 0.05).rot("x", -20).at(0, 0.88, -hd + 0.5), m.star, "cushion")
+    else:
+        s.add(box(0.13, 0.12, 0.05, round=0.06).rot("x", -20).rot("z", 12).at(0, 0.86, -hd + 0.5), small, "cushion")
+        if getattr(t, "bows", False):
+            bow(s, (0, 0.94, -hd + 0.54), M("cbow", "#FFFFFF", steps=3), 0.04, "cbow")
+    # 床尾搭一条带流苏的毯子
+    B(s, -hw + 0.02, hw - 0.02, 0.66, 0.76, hd - 0.4, hd - 0.1, m.fab2 if t.fab2 != t.fab else m.accent, "runner", round=0.05)
+    for k in range(9):
+        x = -hw + 0.1 + (2 * hw - 0.2) * k / 8
+        s.add(capsule(V([x, 0.6, hd - 0.02]), V([x, 0.42, hd + 0.02]), 0.012), gold, "fringe")
+    if getattr(t, "ruffle", False):
+        ruffle_line(s, -hw, hw, hd + 0.02, 0.1, 0.42, m.fab2, n=12, g="skirt")
+        for x in (-hw - 0.02, hw + 0.02):
+            for k in range(8):
+                z = -hd + 0.2 + (2 * hd - 0.2) * (k + 0.5) / 8
+                s.add(ellipsoid(0.04, 0.16, 0.1).at(x, 0.26, z), m.fab2, "skirt")
+    if style == "futon":
+        return
+    post_h = 1.35 if style != "canopy" else 2.1
+    for x in (-hw, hw):
+        for zz, hh in ((-hd + 0.05, post_h), (hd - 0.05, 0.78 if style != "canopy" else post_h)):
+            s.add(cylinder(0.065, hh, round=0.02).at(x, 0, zz), m.frame, "post")
+            for yy in (0.2, hh * 0.55):
+                s.add(torus(0.07, 0.022).at(x, yy, zz), gold, "postring")
+            finial(s, (x, hh, zz), gold, 0.16)
+        B(s, x - 0.04, x + 0.04, 0.2, 0.36, -hd, hd, m.frame_dk, "rail")
+    # 床头板：拱顶 + 描金边框 + 中间一块拉扣软包 + 顶上卷草
+    B(s, -hw, hw, 0.35, 1.12, -hd - 0.01, -hd + 0.07, m.frame, "head", round=0.03)
+    s.decal(lambda p: (p[..., 2] > 0.02) & (np.abs(p[..., 0]) < hw - 0.12) & (np.abs(p[..., 1]) < 0.3), m.fab2 if t.fab2 else m.fab, "head")
+    s.decal(lambda p: (p[..., 2] > 0.02) & (np.abs(p[..., 0]) < hw - 0.16) & (np.abs(p[..., 1]) < 0.26)
+            & tufts(p, 0.14, 0.018), m.fab if t.fab2 else m.accent, "head")
+    s.decal(lambda p: (p[..., 2] > 0.02) & (np.abs(np.abs(p[..., 0]) - (hw - 0.12)) < 0.018) & (np.abs(p[..., 1]) < 0.32)
+            | (p[..., 2] > 0.02) & (np.abs(np.abs(p[..., 1]) - 0.31) < 0.018) & (np.abs(p[..., 0]) < hw - 0.1), gold, "head")
+    crest(s, -hw, hw, 1.12, -hd + 0.03, 0.26, gold, "crest", n=17, r=0.04)
+    scroll_row(s, -hw * 0.5, hw * 0.5, 1.33, -hd + 0.05, gold, n=5, r=0.035, g="crest2")
+    if getattr(t, "bows", False):
+        bow(s, (0, 1.2, -hd + 0.1), m.accent, 0.09, "hbow")
+    if getattr(t, "stars", False):
+        for x in (-0.3, 0.0, 0.3):
+            s.add(tri_prism(0.06, 0.02).at(x, 1.3 + (0.12 if x == 0 else 0), -hd + 0.06), m.star, "hstar")
+    # 床尾板：矮一截，也描金、中间一朵雕花
+    B(s, -hw, hw, 0.25, 0.62, hd - 0.07, hd + 0.01, m.frame, "foot", round=0.03)
+    s.decal(lambda p: (p[..., 2] > 0.02) & (np.abs(np.abs(p[..., 1]) - 0.15) < 0.015) & (np.abs(p[..., 0]) < hw - 0.1), gold, "foot")
+    s.add(sphere(0.06).at(0, 0.5, hd + 0.03), gold, "footboss")
+    if style == "canopy":
+        for z in (-hd + 0.05, hd - 0.05):
+            B(s, -hw - 0.06, hw + 0.06, post_h - 0.1, post_h - 0.02, z - 0.05, z + 0.05, m.frame, "top")
+            s.decal(lambda p: np.abs(p[..., 1]) < 0.012, gold, "top")
+        for x in (-hw, hw):
+            B(s, x - 0.05, x + 0.05, post_h - 0.1, post_h - 0.02, -hd, hd, m.frame, "top")
+        drape = M("drape", t.fab2 if t.fab2 else "#FFFFFF", steps=6)
+        # 顶上一圈垂下来的帐幔（波浪），四角束起来的帘子，系绳挂流苏
+        for x0, x1, z in ((-hw, hw, hd - 0.02), (-hw, hw, -hd + 0.02)):
+            for k in range(7):
+                x = x0 + (x1 - x0) * (k + 0.5) / 7
+                s.add(ellipsoid((x1 - x0) / 14 * 0.9, 0.1, 0.03).at(x, post_h - 0.18, z), drape, "valance")
+        for x in (-hw + 0.08, hw - 0.08):
+            for z in (-hd + 0.12, hd - 0.12):
+                for k in range(3):
+                    dx = (k - 1) * 0.06
+                    s.add(capsule(V([x + dx, post_h - 0.12, z]), V([x * 0.96, 1.1, z]), 0.05), drape, "drape")
+                    s.add(capsule(V([x * 0.96, 1.1, z]), V([x + dx * 1.5, 0.45, z]), 0.05), drape, "drape")
+                if getattr(t, "bows", False):
+                    bow(s, (x, 1.1, z + 0.08), m.accent, 0.07, "tie")
+                else:
+                    tassel(s, (x, 1.1, z + 0.07), gold)
+        crest(s, -hw * 0.6, hw * 0.6, post_h, hd - 0.05, 0.14, gold, "crest3", n=9, r=0.035)
+        finial(s, (0, post_h + 0.14, hd - 0.05), gold, 0.14, "crownfin")
+
+
+def build_sofa(s, id, w, d, seats=2, legs="cabriole"):
+    t = theme_of(id)
+    m = mats(t)
+    hw, hd = w / 2 - 0.05, d / 2 - 0.02
+    z0, z1 = -hd, hd * 0.75
+    fancy = bool(t.gold) or getattr(t, "ornate", False)
+    gold = m.gold if t.gold else m.frame_dk
+    B(s, -hw, hw, 0.15, 0.45, z0, z1, m.fab, "base", round=0.08)
+    # 前面一道雕花木裙
+    if fancy:
+        B(s, -hw + 0.05, hw - 0.05, 0.1, 0.2, z1 - 0.02, z1 + 0.03, m.frame, "apron", round=0.02)
+        scroll_row(s, -hw + 0.15, hw - 0.15, 0.16, z1 + 0.04, gold, n=9, r=0.025, g="apronscroll")
+        s.add(sphere(0.05).at(0, 0.17, z1 + 0.05), gold, "apronboss")
+    B(s, -hw, hw, 0.4, 1.05, z0, z0 + 0.25, m.fab, "back", round=0.14)
+    if fancy:
+        # 露出来的木框：沿着靠背顶的一道描金弧线 + 中间一个大卷草顶饰
+        crest(s, -hw * 0.95, hw * 0.95, 1.02, z0 + 0.13, 0.16, gold, "crest", n=19, r=0.035)
+        finial(s, (0, 1.2, z0 + 0.13), gold, 0.12, "crestfin")
+        s.decal(lambda p: tufts(p, 0.15, 0.022) & (p[..., 2] > 0.05), m.fab2 if t.fab2 != t.fab else m.accent, "back")
+        pearl_row(s, -hw + 0.25, hw - 0.25, 0.45, z1 + 0.01, gold, n=14, g="piping")
+    for sx in (-1, 1):
+        x0, x1 = (-hw - 0.05, -hw + 0.22) if sx < 0 else (hw - 0.22, hw + 0.05)
+        B(s, x0, x1, 0.15, 0.72, z0, z1 + 0.04, m.fab, "arm%d" % (sx > 0), round=0.1)
+        s.add(capsule(V([(x0 + x1) / 2, 0.72, z0 + 0.05]), V([(x0 + x1) / 2, 0.72, z1 + 0.04]), 0.12), m.fab, "roll%d" % (sx > 0))
+        if fancy:
+            s.add(torus(0.1, 0.02, axis="z").at((x0 + x1) / 2, 0.72, z1 + 0.1), gold, "armrose")
+            s.add(sphere(0.03).at((x0 + x1) / 2, 0.72, z1 + 0.13), gold, "armrose")
+    iw = (2 * hw - 0.44) / seats
+    for k in range(seats):
+        xa = -hw + 0.22 + k * iw
+        B(s, xa + 0.01, xa + iw - 0.01, 0.42, 0.58, z0 + 0.22, z1 - 0.02, m.fab2 if getattr(t, "stripe", False) else m.fab, "seat%d" % k, round=0.07)
+        fabric_decal(s, "seat%d" % k, t, m)
+    s.add(box(0.2, 0.18, 0.07, round=0.08).rot("z", 12).at(-hw + 0.45, 0.78, z0 + 0.35), m.pillow, "pilA")
+    s.add(box(0.19, 0.17, 0.07, round=0.08).rot("z", -10).at(hw - 0.45, 0.78, z0 + 0.35), m.accent, "pilB")
+    if fancy:
+        for x, zz in ((-hw + 0.45, z0 + 0.42), (hw - 0.45, z0 + 0.42)):
+            for sx in (-1, 1):
+                tassel(s, (x + sx * 0.18, 0.62, zz), gold, 0.08, "pilt")
+    if getattr(t, "stars", False):
+        s.decal(star_dots, m.star, "pilB")
+    if getattr(t, "ruffle", False):
+        ruffle_line(s, -hw, hw, z1 + 0.06, 0.08, 0.28, m.fab2, n=14, g="skirt")
+    if getattr(t, "bows", False):
+        bow(s, (0, 0.95, z0 + 0.27), m.accent, 0.08)
+    for x in (-hw + 0.08, hw - 0.08):
+        for z in (z0 + 0.08, z1 - 0.05):
+            if legs == "cabriole":
+                cabriole(s, x, z, 0.16, gold if fancy else m.leg)
+            else:
+                C(s, x, z, 0, 0.16, 0.04, m.leg, "leg")
+
+
+def build_armchair(s, id, legs="cabriole"):
+    t = theme_of(id)
+    m = mats(t)
+    fancy = bool(t.gold) or getattr(t, "ornate", False)
+    gold = m.gold if t.gold else m.frame_dk
+    B(s, -0.42, 0.42, 0.18, 0.46, -0.4, 0.34, m.fab, "base", round=0.07)
+    B(s, -0.42, 0.42, 0.4, 1.0, -0.42, -0.2, m.fab, "back", round=0.12)
+    crest(s, -0.38, 0.38, 1.0, -0.31, 0.18, gold if fancy else m.fab, "crest", n=11, r=0.045)
+    if fancy:
+        finial(s, (0, 1.2, -0.31), gold, 0.1)
+        # 靠背中间一块椭圆的软包徽章，描金一圈
+        s.decal(lambda p: (p[..., 2] > 0.05) & (np.hypot(p[..., 0] / 0.26, (p[..., 1] - 0.05) / 0.22) < 1), m.fab2, "back")
+        s.decal(lambda p: (p[..., 2] > 0.05) & (np.abs(np.hypot(p[..., 0] / 0.26, (p[..., 1] - 0.05) / 0.22) - 1) < 0.07), gold, "back")
+        s.decal(lambda p: (p[..., 2] > 0.05) & (np.hypot(p[..., 0] / 0.26, (p[..., 1] - 0.05) / 0.22) < 0.9) & tufts(p, 0.1, 0.016), m.fab, "back")
+    for sx in (-1, 1):
+        B(s, sx * 0.3 - 0.08, sx * 0.3 + 0.08 + sx * 0.08, 0.18, 0.66, -0.4, 0.36, m.fab, "arm", round=0.08)
+        s.add(capsule(V([sx * 0.38, 0.66, -0.36]), V([sx * 0.38, 0.66, 0.36]), 0.09), m.fab, "roll")
+        if fancy:
+            s.add(torus(0.075, 0.018, axis="z").at(sx * 0.38, 0.66, 0.44), gold, "armrose")
+    B(s, -0.28, 0.28, 0.44, 0.58, -0.22, 0.34, m.fab2 if t.fab2 != "#F4EEE0" else m.fab, "seat", round=0.06)
+    fabric_decal(s, "seat", t, m)
+    s.add(box(0.16, 0.15, 0.06, round=0.07).rot("z", 8).at(0, 0.74, -0.14), m.pillow, "pil")
+    if fancy:
+        B(s, -0.4, 0.4, 0.12, 0.2, 0.33, 0.37, m.frame, "apron", round=0.02)
+        scroll_row(s, -0.3, 0.3, 0.16, 0.38, gold, n=7, r=0.022, g="apronscroll")
+    if getattr(t, "ruffle", False):
+        ruffle_line(s, -0.42, 0.42, 0.38, 0.08, 0.26, m.fab2, n=7, g="skirt")
+    if getattr(t, "bows", False):
+        bow(s, (0, 0.92, -0.17), m.accent, 0.06)
+    for x in (-0.34, 0.34):
+        for z in (-0.34, 0.28):
+            if legs == "cabriole":
+                cabriole(s, x, z, 0.2, gold if fancy else m.leg)
+            else:
+                C(s, x, z, 0, 0.2, 0.04, m.leg, "leg")
+
+
+def build_ottoman(s, id):
+    t = theme_of(id)
+    m = mats(t)
+    gold = m.gold if t.gold else m.frame_dk
+    # 坐垫抬高，荷叶边只垂到半截，四条弯腿露在下面（她：圆凳没有腿）
+    s.add(cylinder(0.4, 0.24, round=0.1).at(0, 0.44, 0), m.fab, "top")
+    s.decal(lambda p: tufts(np.stack([p[..., 0], p[..., 2], p[..., 1]], -1), 0.16, 0.025) & (p[..., 1] > 0.2), m.fab2, "top")
+    if getattr(t, "stars", False):
+        s.decal(lambda p: star_dots(p) & (p[..., 1] > 0.1), m.star, "top")
+    ruffle(s, 0, 0, 0.42, 0.42, 0.36, 0.52, m.fab2, n=18)
+    s.add(torus(0.4, 0.022).at(0, 0.56, 0), gold, "trim")
+    pearl_row(s, -0.3, 0.3, 0.57, 0.4, gold, n=9, g="pearls")
+    for k in range(4):
+        a = math.radians(45 + 90 * k)
+        tassel(s, (0.42 * math.cos(a), 0.52, 0.42 * math.sin(a)), gold, 0.1)
+    if getattr(t, "bows", False):
+        bow(s, (0, 0.56, 0.45), m.accent, 0.08)
+    # 四条弯腿从荷叶边底下伸出来，腿脚往外撇到坐垫外沿，错开 20° 免得前后两条叠在一起
+    for a in (20, 110, 200, 290):
+        c, d = math.cos(math.radians(a)), math.sin(math.radians(a))
+        s.add(capsule(V([0.26 * c, 0.4, 0.26 * d]), V([0.36 * c, 0.03, 0.36 * d]), 0.04), gold, "leg")
+        s.add(sphere(0.05).at(0.37 * c, 0.03, 0.37 * d), gold, "foot")
+
+
+def build_cabinet(s, id, kind="wardrobe"):
+    t = theme_of(id)
+    m = mats(t)
+    gold = m.gold if t.gold else m.frame_dk
+    fancy = bool(t.gold) or getattr(t, "ornate", False)
+    H = {"wardrobe": 1.85, "shelf": 1.85, "sideboard": 0.95, "night": 0.75, "cabinet": 1.25}[kind]
+    Wd = {"wardrobe": 0.46, "shelf": 0.46, "sideboard": 0.48, "night": 0.4, "cabinet": 0.48}[kind]
+    Dp = 0.3
+    y0 = 0.14
+    if kind == "shelf":
+        for sx in (-1, 1):
+            B(s, sx * Wd - 0.03, sx * Wd + 0.03, y0, H, -Dp, Dp, m.frame, "side")
+            if fancy:
+                s.decal(lambda p: np.abs(p[..., 2] - 0.27) < 0.012, gold, "side")
+        B(s, -Wd, Wd, y0, H, -Dp, -Dp + 0.04, m.frame_dk, "back")
+        B(s, -Wd, Wd, y0, y0 + 0.06, -Dp, Dp, m.frame, "bottom")
+    else:
+        B(s, -Wd, Wd, y0, H, -Dp, Dp, m.frame, "body", round=0.03)
+    # 底座：一道带卷草的木裙 + 弯脚
+    B(s, -Wd - 0.03, Wd + 0.03, y0 - 0.04, y0 + 0.02, -Dp - 0.02, Dp + 0.02, m.frame_dk, "plinth", round=0.015)
+    if fancy:
+        scroll_row(s, -Wd + 0.1, Wd - 0.1, y0 - 0.03, Dp + 0.03, gold, n=7, r=0.02, g="plinthscroll")
+    for x in (-Wd + 0.06, Wd - 0.06):
+        cabriole(s, x, Dp - 0.06, y0 - 0.02, gold, r=0.035)
+    # 顶：冠檐 + 描金 + 卷草拱 + 尖饰
+    B(s, -Wd - 0.05, Wd + 0.05, H - 0.02, H + 0.08, -Dp - 0.04, Dp + 0.04, m.frame_dk, "cap", round=0.02)
+    gold_edge(s, -Wd - 0.05, Wd + 0.05, H - 0.02, H + 0.08, -Dp - 0.04, Dp + 0.04, m, "capgold")
+    if fancy and kind in ("wardrobe", "shelf", "cabinet"):
+        crest(s, -Wd, Wd, H + 0.08, Dp - 0.02, 0.2, gold, "crest", n=13, r=0.035)
+        finial(s, (0, H + 0.28, Dp - 0.02), gold, 0.12)
+        for x in (-Wd, Wd):
+            finial(s, (x, H + 0.08, Dp), gold, 0.1, "cornerfin")
+    front = lambda p: p[..., 2] > Dp - 0.02
+    if kind in ("wardrobe", "cabinet", "sideboard", "night"):
+        n_doors = 2 if kind in ("wardrobe", "cabinet", "sideboard") else 1
+        hh = (H - y0) / 2
+
+        def panel(p, inset, top_cut=0.08):
+            x, y = p[..., 0], p[..., 1]
+            inx = (np.abs(np.abs(x) - Wd / 2) < Wd / 2 - 0.06 - inset) if n_doors == 2 else (np.abs(x) < Wd - 0.08 - inset)
+            top = hh - top_cut if kind != "night" else hh - 0.25
+            return front(p) & inx & (y > -hh + 0.1 + inset) & (y < top - inset)
+
+        s.decal(lambda p: panel(p, 0.0), gold, "body")
+        s.decal(lambda p: panel(p, 0.022), m.frame, "body")
+        s.decal(lambda p: panel(p, 0.05), gold if fancy else m.frame_dk, "body")
+        s.decal(lambda p: panel(p, 0.062), m.frame, "body")
+        # 门上一块画着花 / 星月的椭圆徽章
+        def medal(p):
+            x, y = p[..., 0], p[..., 1]
+            cx = np.where(x > 0, Wd / 2, -Wd / 2) if n_doors == 2 else 0 * x
+            return front(p) & (np.hypot((x - cx) / (Wd * 0.28), (y - 0.1 * hh) / (hh * 0.35)) < 1)
+        s.decal(lambda p: medal(p), m.fab2 if t.fab2 else m.frame, "body")
+        if getattr(t, "stars", False):
+            s.decal(lambda p: medal(p) & star_dots(p, 16), m.star, "body")
+        else:
+            s.decal(lambda p: medal(p) & speckle(p, 30, 0.25, seed=4), m.accent, "body")
+            s.decal(lambda p: medal(p) & speckle(p, 30, 0.12, seed=9), M("leafm", "#8CB88A", steps=3), "body")
+        if kind == "night":
+            s.decal(lambda p: front(p) & (np.abs(p[..., 1] - (hh - 0.15)) < 0.012) & (np.abs(p[..., 0]) < Wd - 0.06), gold, "body")
+            s.add(sphere(0.03).at(0, H - 0.2, Dp + 0.02), gold, "knob")
+        for x in ((-0.05, 0.05) if n_doors == 2 else (0.0,)):
+            s.add(sphere(0.032).at(x, (H + y0) * 0.5, Dp + 0.02), gold, "knob")
+            s.add(box(0.012, 0.03, 0.01).at(x, (H + y0) * 0.5 - 0.06, Dp + 0.01), M("keyhole", "#3A2A22", steps=2), "keyhole")
+        if getattr(t, "bows", False) and kind == "wardrobe":
+            bow(s, (0, H + 0.3, Dp - 0.02), m.accent, 0.09)
+        # 矮柜子上面摆东西：花瓶插花 + 一对烛台 / 一只小钟
+        if kind in ("sideboard", "night"):
+            vase = M("vase", "#FFFFFF", steps=4, gloss=0.6)
+            s.add(lathe([(0, 0), (0.05, 0), (0.08, 0.1), (0.035, 0.18), (0.05, 0.22), (0, 0.22)]).at(-0.15, H + 0.08, 0), vase, "vase")
+            s.decal(lambda p: np.abs(p[..., 1] - 0.1) < 0.02, gold, "vase")
+            for k in range(7):
+                a = k / 7 * math.tau
+                s.add(sphere(0.045).at(-0.15 + 0.06 * math.cos(a), H + 0.34 + 0.03 * math.sin(3 * a), 0.06 * math.sin(a)), m.accent if k % 2 else M("fl2", "#FFFFFF", steps=3), "flowers")
+            if kind == "sideboard":
+                for x in (0.2, 0.36):
+                    s.add(lathe([(0, 0), (0.04, 0), (0.015, 0.03), (0.015, 0.12), (0.03, 0.14), (0, 0.14)]).at(x, H + 0.08, 0), gold, "stick")
+                    s.add(cylinder(0.014, 0.1).at(x, H + 0.22, 0), M("wax", "#FBF6EE", steps=3), "wax")
+                    s.add(sphere(0.016).at(x, H + 0.34, 0), M("flame", "#FFD08A", steps=2, emissive=True), "flame")
+            else:
+                s.add(cylinder(0.08, 0.04).rot("x", 90).at(0.2, H + 0.18, 0), gold, "clock")
+                s.add(cylinder(0.06, 0.02).rot("x", 90).at(0.2, H + 0.18, 0.03), M("face", "#FFFDF6", steps=3), "clock")
+    else:
+        rng = np.random.default_rng(len(id))
+        pal = ["#E9A08F", "#F2CC84", "#9CC7B2", "#A9C4DE", "#D4B8DE", "#F4EBDD", "#EBB5C2", "#9DB8C4"]
+        if id.startswith("gothic"):
+            pal = ["#5A1A2A", "#3A2A48", "#6A5A3A", "#2E3A2E", "#7A6A5A"]
+        bm = [M("bk%d" % i, c, steps=4) for i, c in enumerate(pal)]
+        levels = np.linspace(y0 + 0.06, H - 0.02, 5)[:-1]
+        for li, y in enumerate(levels):
+            B(s, -Wd + 0.03, Wd - 0.03, y, y + 0.03, -Dp + 0.02, Dp, m.frame, "board")
+            if fancy:
+                s.decal(lambda p: np.abs(p[..., 2] - 0.27) < 0.012, gold, "board")
+            x = -Wd + 0.07
+            k = 0
+            stop = Wd - 0.1 if li % 2 == 0 else 0.05
+            while x < stop:
+                bw = float(rng.uniform(0.04, 0.07))
+                bh = float(rng.uniform(0.22, 0.32)) * (H / 1.9)
+                s.add(box(bw / 2, bh / 2, 0.1).at(x + bw / 2, y + 0.03 + bh / 2, 0.05), bm[int(rng.integers(len(bm)))], "b%d_%d" % (li, k))
+                x += bw + 0.004
+                k += 1
+            if li % 2 == 1:
+                # 另一半放摆件：小地球仪 / 花瓶 / 相框
+                if li == 1:
+                    s.add(sphere(0.09).at(0.25, y + 0.17, 0.05), M("globe", "#8EC3E6", steps=5), "globe")
+                    s.add(cylinder(0.05, 0.06).at(0.25, y + 0.03, 0.05), gold, "globestand")
+                else:
+                    s.add(box(0.1, 0.12, 0.015).rot("x", -10).at(0.25, y + 0.16, 0.05), gold, "pframe")
+                    s.decal(lambda p: (np.abs(p[..., 0]) < 0.07) & (np.abs(p[..., 1]) < 0.09), m.accent, "pframe")
+        s.add(lathe([(0, 0), (0.05, 0), (0.06, 0.08), (0.02, 0.14), (0, 0.14)]).at(Wd - 0.15, H + 0.08, 0), M("vase", t.accent, steps=4, gloss=0.6), "vase")
+
+
+def tea_chair(s, cx, sx, t, m, gold):
+    """茶桌边上的小椅子：椅背朝外、坐面朝桌子"""
+    B(s, cx - 0.17, cx + 0.17, 0.36, 0.44, -0.17, 0.17, m.fab, "chseat%d" % (sx > 0), round=0.04)
+    bx0, bx1 = sorted((cx + sx * 0.12, cx + sx * 0.18))
+    B(s, bx0, bx1, 0.4, 0.9, -0.17, 0.17, m.frame, "chback%d" % (sx > 0), round=0.03)
+    s.add(ellipsoid(0.03, 0.14, 0.12).at(cx + sx * 0.12, 0.68, 0), m.fab2 if t.fab2 else m.fab, "chpad%d" % (sx > 0))
+    s.add(sphere(0.045).at(cx + sx * 0.15, 0.93, 0), gold, "chfin")
+    for dx in (-0.13, 0.13):
+        for dz in (-0.13, 0.13):
+            C(s, cx + dx, dz, 0, 0.37, 0.022, gold, "chleg")
+
+
+def build_table(s, id, shape_="round", w=2, d=1, cloth=True, top_items="tea"):
+    t = theme_of(id)
+    m = mats(t)
+    gold = m.gold if t.gold else m.leg
+    hw, hd = w / 2 - 0.1, d / 2 - 0.05
+    H = 0.72
+    if shape_ == "round":
+        r = 0.46
+        s.add(cylinder(r, 0.04, round=0.015).at(0, H - 0.04, 0), m.frame_dk, "top")
+        if cloth:
+            s.add(lathe([(0, 0.0), (r + 0.02, 0.0), (r + 0.05, -0.28), (r + 0.02, -0.3), (0, -0.02)]).at(0, H + 0.01, 0), M("cloth", t.fab2, steps=6), "cloth")
+            if t.print_:
+                s.decal(lambda p: florals(p, 14, 2), m.accent, "cloth")
+            if getattr(t, "stars", False):
+                s.decal(lambda p: star_dots(p, 9), m.star, "cloth")
+            ruffle(s, 0, 0, r + 0.05, r + 0.05, H - 0.34, H - 0.22, M("lace", "#FFFFFF", steps=4), n=20, g="lace")
+            # 桌布四边挽起来，系蝴蝶结 / 挂流苏
+            for a in (0, 90, 180, 270):
+                c = V([(r + 0.07) * math.cos(math.radians(a + 45)), H - 0.16, (r + 0.07) * math.sin(math.radians(a + 45))])
+                if getattr(t, "bows", False):
+                    bow(s, c, m.accent, 0.05, "clothbow")
+                else:
+                    tassel(s, c, gold, 0.1, "clothtassel")
+        s.add(capsule(V([0, 0.1, 0]), V([0, H - 0.05, 0]), 0.05), gold, "pillar")
+        for yy in (0.25, 0.45):
+            s.add(sphere(0.07).at(0, yy, 0), gold, "pillarknot")
+        for a in (90, 210, 330):
+            cabriole(s, 0.24 * math.cos(math.radians(a)), 0.24 * math.sin(math.radians(a)), 0.15, gold)
+        for sx in (-1, 1):
+            tea_chair(s, sx * 0.8, sx, t, m, gold)
+    else:
+        B(s, -hw, hw, H - 0.05, H + 0.02, -hd, hd, m.frame_dk, "top", round=0.02)
+        if t.gold:
+            s.decal(lambda p: np.abs(p[..., 1]) < 0.012, gold, "top")
+        if cloth:
+            B(s, -hw * 0.8, hw * 0.8, H + 0.02, H + 0.03, -hd - 0.02, hd + 0.02, M("runner", t.accent, steps=4), "runner")
+            s.add(box(hw * 0.8, 0.12, 0.01).at(0, H - 0.08, hd + 0.03), M("runner2", t.accent, steps=4), "runner")
+        for x in (-hw + 0.08, hw - 0.08):
+            for z in (-hd + 0.08, hd - 0.08):
+                if t.gold:
+                    cabriole(s, x, z, H - 0.05, gold)
+                else:
+                    B(s, x - 0.035, x + 0.035, 0, H - 0.05, z - 0.035, z + 0.035, m.leg, "leg")
+        if top_items == "none":
+            B(s, 0.2, hw - 0.02, 0.05, H - 0.05, -hd + 0.03, hd - 0.03, m.frame, "drawers", round=0.02)
+            s.decal(lambda p: (p[..., 2] > hd - 0.1) & (np.abs(((p[..., 1] + 0.33) / 0.22) % 1 - 0.5) > 0.45), m.gold, "drawers")
+            for y in (0.2, 0.42, 0.62):
+                s.add(sphere(0.022).at((0.2 + hw) / 2, y, hd - 0.02), m.gold, "knob")
+            B(s, -0.45, -0.05, H + 0.02, H + 0.04, -0.15, 0.15, M("book", "#FFFDF6", steps=3), "book")
+            s.add(cylinder(0.04, 0.07).at(0.25, H + 0.02, -0.2), M("ink", "#2E3A6E", steps=3, gloss=0.8), "ink")
+            s.add(capsule(V([0.25, H + 0.09, -0.2]), V([0.35, H + 0.3, -0.25]), 0.015), M("quill", "#FFFFFF", steps=3), "quill")
+            s.add(lathe([(0, 0), (0.08, 0), (0.03, 0.05), (0.02, 0.25), (0, 0.25)]).at(0.6, H + 0.02, -0.2), m.gold, "lamp")
+            s.add(lathe([(0, 0), (0.14, 0), (0.08, 0.14), (0, 0.14)]).at(0.6, H + 0.22, -0.2), M("lshade", t.accent, steps=4), "lampshade")
+    if top_items == "tea":
+        tea_set(s, -0.12, -0.05, H + 0.05, t)
+        # 三层点心架
+        for k, (yy, rr) in enumerate(((0.05, 0.14), (0.2, 0.1), (0.33, 0.07))):
+            s.add(cylinder(rr, 0.01).at(0.22, H + yy, -0.08), M("plate", "#FFFFFF", steps=3), "stand")
+            for j in range(3 if k < 2 else 1):
+                a = j / 3 * math.tau
+                s.add(sphere(0.03).at(0.22 + rr * 0.55 * math.cos(a), H + yy + 0.03, -0.08 + rr * 0.55 * math.sin(a)),
+                      M("sweet%d" % k, (t.accent, "#F6CF7A", "#FFFFFF")[k], steps=3), "sweet")
+        s.add(capsule(V([0.22, H + 0.05, -0.08]), V([0.22, H + 0.42, -0.08]), 0.01), gold, "standpole")
+
+
+def build_cart(s, id):
+    t = theme_of(id)
+    m = mats(t)
+    gold = m.gold if t.gold else m.frame_dk
+    hw, hd = 0.8, 0.33
+    for y in (0.3, 0.75):
+        B(s, -hw, hw, y, y + 0.05, -hd, hd, m.frame, "tier%d" % int(y * 10), round=0.02)
+        gold_edge(s, -hw, hw, y, y + 0.05, -hd, hd, m, "gold")
+        scroll_row(s, -hw + 0.1, hw - 0.1, y - 0.02, hd + 0.02, gold, n=11, r=0.018, g="tscroll%d" % int(y * 10))
+    posts = [(x, z) for x in (-hw + 0.04, hw - 0.04) for z in (-hd + 0.04, hd - 0.04)]
+    for x, z in posts:
+        s.add(capsule(V([x, 0.14, z]), V([x, 0.9, z]), 0.03), gold, "post")
+        finial(s, (x, 0.9, z), gold, 0.1)
+        # ⚠️ 四个角各一只轮子，轮心就在柱子底下，轮子贴着地（她：少轮子、轮子没对上）
+        s.add(torus(0.1, 0.028, axis="z").at(x, 0.11, z + (0.03 if z > 0 else -0.03)), gold, "wheel")
+        s.add(sphere(0.03).at(x, 0.11, z + (0.04 if z > 0 else -0.04)), gold, "hub")
+    s.add(torus(0.1, 0.02, axis="x").at(-hw - 0.12, 0.88, 0), gold, "handle")
+    s.add(capsule(V([-hw, 0.88, -0.1]), V([-hw - 0.05, 0.88, -0.1]), 0.02), gold, "handle")
+    s.add(capsule(V([-hw, 0.88, 0.1]), V([-hw - 0.05, 0.88, 0.1]), 0.02), gold, "handle")
+    tea_set(s, -0.3, 0, 0.8, t)
+    s.add(cylinder(0.25, 0.02).at(0.35, 0.35, 0), M("plate", "#FFFFFF", steps=4), "plate")
+    for k in range(4):
+        a = k / 4 * math.tau
+        s.add(lathe([(0, 0), (0.05, 0), (0.05, 0.05), (0.03, 0.08), (0, 0.09)]).at(0.35 + 0.12 * math.cos(a), 0.37, 0.12 * math.sin(a)),
+              M("cake%d" % k, (t.accent, "#F6CF7A", "#FFFFFF", "#9ED3A3")[k], steps=4), "cake%d" % k)
+    s.add(lathe([(0, 0), (0.05, 0), (0.08, 0.1), (0.03, 0.18), (0, 0.18)]).at(0.4, 0.8, 0), M("vase", "#FFFFFF", steps=4, gloss=0.6), "vase")
+    for k in range(5):
+        a = k / 5 * math.tau
+        s.add(sphere(0.04).at(0.4 + 0.05 * math.cos(a), 1.02, 0.05 * math.sin(a)), m.accent, "flowers")
+    if getattr(t, "ruffle", False):
+        ruffle_line(s, -hw, hw, hd + 0.03, 0.62, 0.78, M("lace", "#FFFFFF", steps=4), n=12, g="lace")
+    if getattr(t, "bows", False):
+        bow(s, (hw, 0.78, hd + 0.04), m.accent, 0.07)
+
+
+def build_floorlamp(s, id, shade_shape="bell"):
+    t = theme_of(id)
+    m = mats(t)
+    pole = m.gold if t.gold else m.leg
+    s.add(lathe([(0, 0), (0.24, 0), (0.22, 0.04), (0.12, 0.08), (0.14, 0.12), (0.06, 0.18), (0.05, 0.24), (0, 0.26)]), pole, "base")
+    for a in (0, 120, 240):
+        cabriole(s, 0.2 * math.cos(math.radians(a)), 0.2 * math.sin(math.radians(a)), 0.12, pole, r=0.03)
+    s.add(capsule(V([0, 0.2, 0]), V([0, 1.3, 0]), 0.025), pole, "pole")
+    for y in (0.45, 0.75, 1.05):
+        s.add(sphere(0.045).at(0, y, 0), pole, "knot")
+        s.add(torus(0.05, 0.012).at(0, y + 0.06, 0), pole, "ring")
+    shade = M("shade", t.fab if id.split("_")[0] in ("star", "xred") else t.fab2, steps=6)
+    s.add(lathe([(0.0, 0.0), (0.34, 0.0), (0.3, 0.06), (0.16, 0.4), (0.0, 0.42)]).at(0, 1.2, 0), shade, "shade")
+    s.decal(lambda p: (np.abs(((np.arctan2(p[..., 2], p[..., 0]) / math.tau * 10) % 1) - 0.5) < 0.05), M("pleat", t.accent, steps=3), "shade")
+    s.add(sphere(0.07).at(0, 1.26, 0), M("bulb", "#FFE7A0", steps=3, emissive=True), "bulb")
+    s.add(torus(0.33, 0.015).at(0, 1.2, 0), pole, "rim")
+    s.add(torus(0.17, 0.012).at(0, 1.61, 0), pole, "rim2")
+    ruffle(s, 0, 0, 0.35, 0.35, 1.1, 1.2, M("fringe", t.accent if t.accent else "#FFFFFF", steps=4), n=18, g="fringe")
+    for k in range(8):
+        a = k / 8 * math.tau
+        s.add(sphere(0.022).at(0.36 * math.cos(a), 1.06, 0.36 * math.sin(a)), M("bead", "#FFFFFF", steps=3, gloss=1.0), "bead")
+    finial(s, (0, 1.62, 0), pole, 0.1)
+    if getattr(t, "stars", False):
+        s.decal(lambda p: star_dots(p, 5), m.star, "shade")
+    if t.print_:
+        s.decal(lambda p: florals(p, 14, 8), m.accent, "shade")
+    if getattr(t, "bows", False):
+        bow(s, (0, 1.55, 0.18), m.accent, 0.06)
+
+
+def build_trunk(s, id):
+    t = theme_of(id)
+    m = mats(t)
+    gold = m.gold if t.gold else m.frame_dk
+    body = M("tbody", t.fab if id.split("_")[0] == "star" else t.frame, steps=7, grain=0.05)
+    B(s, -0.45, 0.45, 0.04, 0.45, -0.28, 0.28, body, "body", round=0.02)
+    s.add(cylinder(0.28, 0.9).rot("z", 90).at(0.45, 0.45, 0), body, "lid")
+    # ⚠️ 两道金条沿着箱身往上、再**顺着弧形的盖子**绕过去（她：要贴合弧形，不是方块）
+    for x in (-0.28, 0.28):
+        B(s, x - 0.04, x + 0.04, 0.04, 0.45, -0.3, 0.3, gold, "strap")
+        s.add(torus(0.3, 0.04, axis="x").at(x, 0.45, 0), gold, "strapArc")
+        for k in range(5):
+            a = math.radians(20 + 35 * k)
+            s.add(sphere(0.02).at(x, 0.45 + 0.33 * math.sin(a), 0.33 * math.cos(a)), M("stud", "#FFF2C0", steps=2, gloss=1.0), "stud")
+    # 盖子两头包金、盖沿一道金线、正面锁扣带钥匙孔、两侧提环、四角包角
+    for x in (-0.44, 0.44):
+        s.add(cylinder(0.3, 0.03).rot("z", 90).at(x + (0.015 if x > 0 else 0.015), 0.45, 0), gold, "lidcap")
+        s.add(torus(0.08, 0.018, axis="x").at(x + (0.04 if x > 0 else -0.04), 0.28, 0), gold, "handle")
+    s.add(capsule(V([-0.45, 0.45, 0.29]), V([0.45, 0.45, 0.29]), 0.018), gold, "lip")
+    B(s, -0.08, 0.08, 0.3, 0.5, 0.28, 0.31, gold, "lock", round=0.02)
+    s.add(box(0.015, 0.03, 0.01).at(0, 0.37, 0.315), M("keyhole", "#3A2A22", steps=2), "keyhole")
+    for sx in (-1, 1):
+        for sz in (-1, 1):
+            B(s, sx * 0.45 - 0.05, sx * 0.45 + 0.05, 0.02, 0.12, sz * 0.28 - 0.05, sz * 0.28 + 0.05, gold, "corner", round=0.02)
+    if getattr(t, "stars", False):
+        s.decal(lambda p: star_dots(p, 8), m.star, "body")
+        s.decal(lambda p: star_dots(p, 8), m.star, "lid")
+        s.decal(lambda p: (p[..., 2] > 0.26) & (np.hypot(p[..., 0] + 0.16, p[..., 1] + 0.02) < 0.08) & (np.hypot(p[..., 0] + 0.13, p[..., 1]) > 0.07), m.gold, "body")
+    elif t.print_:
+        s.decal(lambda p: florals(p, 10, 12), m.accent, "body")
+        s.decal(lambda p: florals(p, 10, 13), m.accent, "lid")
+    if getattr(t, "bows", False):
+        bow(s, (0, 0.78, 0.18), M("bowr", t.accent if id.split("_")[0] != "xred" else "#C9453E", steps=5), 0.1)
+    if id.startswith("xred"):
+        for k in range(8):
+            a = k / 8 * math.pi
+            s.add(ellipsoid(0.05, 0.025, 0.03).rot("y", 20 * k).at(-0.2 + 0.05 * k, 0.76 + 0.02 * math.sin(a), 0.1), M("holly", "#3E7A4A", steps=4), "holly")
+        s.add(sphere(0.03).at(0.05, 0.8, 0.14), M("berry", "#D8453A", steps=3), "berry")
+
+
+def build_frame(s, id, kind="oval", pic="landscape"):
+    t = theme_of(id)
+    m = mats(t)
+    fr = m.gold if t.gold else m.frame
+    if kind == "oval":
+        s.add(ellipsoid(0.36, 0.48, 0.05).at(0, 0.5, -0.05), fr, "frame")
+        inner = lambda p: np.hypot(p[..., 0] / 0.28, (p[..., 1]) / 0.4) < 1
+        # 巴洛克框：外面一圈大小交替的卷草珠
+        for k in range(22):
+            a = k / 22 * math.tau
+            r = 0.035 if k % 2 == 0 else 0.022
+            s.add(sphere(r).at(0.37 * math.cos(a), 0.5 + 0.49 * math.sin(a), 0.0), fr, "baroque")
+    else:
+        B(s, -0.4, 0.4, 0.05, 0.95, -0.1, 0.0, fr, "frame", round=0.02)
+        inner = lambda p: (np.abs(p[..., 0]) < 0.32) & (np.abs(p[..., 1]) < 0.37)
+    front = lambda p: p[..., 2] > 0.0
+    if pic == "mirror":
+        s.decal(lambda p: inner(p) & front(p), M("glass", "#D6EAF0", steps=5, gloss=1.0), "frame")
+        s.decal(lambda p: inner(p) & front(p) & (np.abs(p[..., 0] + p[..., 1] * 0.5 + 0.05) < 0.03), M("shine", "#FFFFFF", steps=2), "frame")
+    else:
+        s.decal(lambda p: inner(p) & front(p), M("sky", "#BFE1F0", steps=4), "frame")
+        s.decal(lambda p: inner(p) & front(p) & (p[..., 1] < -0.05 - 0.06 * np.cos(p[..., 0] * 9)), M("hill", "#9ACB8E", steps=4), "frame")
+        s.decal(lambda p: inner(p) & front(p) & (np.abs(p[..., 0] - 0.05) < 0.08) & (p[..., 1] > -0.12) & (p[..., 1] < 0.02), M("house", "#FBF3E6", steps=3), "frame")
+        s.decal(lambda p: inner(p) & front(p) & (np.abs(p[..., 0] - 0.05) < 0.1 - (p[..., 1] - 0.02) * 1.0) & (p[..., 1] > 0.02) & (p[..., 1] < 0.1), M("roof", t.accent, steps=3), "frame")
+    crest(s, -0.22, 0.22, 0.96, 0.02, 0.14, fr, "crest", n=9, r=0.045)
+    finial(s, (0, 1.1, 0.02), fr, 0.1)
+    for sx in (-1, 1):
+        s.add(sphere(0.05).at(sx * 0.3, 0.12, 0.02), fr, "footscroll")
+    if getattr(t, "bows", False):
+        bow(s, (0, 1.02, 0.05), m.accent, 0.1)
+        for sx in (-1, 1):
+            for k in range(6):
+                s.add(sphere(0.03).at(sx * (0.12 + 0.05 * k), 0.98 - 0.09 * k, 0.05), M("rosebud", t.accent, steps=3), "garland")
+    if id.startswith("xred"):
+        green = M("holly", "#3E7A4A", steps=5)
+        for k in range(16):
+            a = k / 16 * math.tau
+            s.add(ellipsoid(0.06, 0.03, 0.03).rot("z", math.degrees(a)).at(0.4 * math.cos(a), 0.5 + 0.52 * math.sin(a), 0.03), green, "wreath")
+        bow(s, (0, 1.0, 0.06), M("bowr", "#C9453E", steps=5), 0.1)
+
+
+def porcelain_pot(s, t, m, h=0.35, r=0.22, g="pot"):
+    pot = M("pot", "#FBF6EE" if t.gold else t.frame, steps=6, gloss=0.5)
+    s.add(lathe([(0, 0.06), (r * 0.6, 0.06), (r, h * 0.45), (r * 0.85, h * 0.9), (r * 0.98, h), (0, h)]), pot, g)
+    gold = m.gold if t.gold else m.frame_dk
+    s.add(torus(r * 0.97, 0.022).at(0, h, 0), gold, g + "rim")
+    s.add(lathe([(0, 0), (r * 0.62, 0), (r * 0.5, 0.07), (0, 0.07)]), gold, g + "foot")
+    s.decal(lambda p: np.abs(p[..., 1] - h * 0.5) < 0.015, gold, g)
+    for sx in (-1, 1):
+        s.add(torus(0.05, 0.014, axis="z").at(sx * (r + 0.02), h * 0.7, 0), gold, g + "handle")
+    if t.print_:
+        s.decal(lambda p: florals(p, 14, 4) & (p[..., 1] > h * 0.2) & (p[..., 1] < h * 0.8), m.accent, g)
+    if getattr(t, "stars", False):
+        s.decal(lambda p: star_dots(p, 9), m.star, g)
+    if getattr(t, "bows", False):
+        bow(s, (0, h * 0.55, r + 0.02), m.accent, 0.07, g + "bow")
+    return h
+
+
+def build_plant(s, id, kind):
+    t = theme_of(id)
+    m = mats(t)
+    h = porcelain_pot(s, t, m)
+    soil = M("soil", "#7A5A40", steps=3)
+    s.add(cylinder(0.19, 0.02).at(0, h - 0.02, 0), soil, "soil")
+    top = V([0, h, 0])
+    if kind == "monstera":
+        build_monstera_leaves(s, top)
+        return
+    _build_plant_old(s, id, kind, t, m, h, top)
+
+
+def build_monstera_leaves(s, top):
+    """龟背竹：长叶柄挑出去，**心形大叶子**朝前摊开，叶缘往里一道道深裂，裂口之间还有小孔"""
+    leaf = M("mleaf", "#3E8A4E", steps=6)
+    leaf_lt = M("mleaflt", "#5FA86A", steps=4)
+    stem = M("mstem", "#6FA86A", steps=4)
+    hole = M("mhole", "#16281A", steps=2)
+    specs = [(-0.42, 0.55, 0.12, 30), (0.4, 0.6, 0.1, -30), (-0.15, 0.85, 0.05, 10), (0.18, 0.78, 0.2, -8), (0.0, 0.5, 0.3, 0)]
+    for k, (x, y, z, rot) in enumerate(specs):
+        tip = top + V([x, y, z])
+        mid = top + V([x * 0.4, y * 0.6, z * 0.4 - 0.02])
+        s.add(capsule(top, mid, 0.014), stem, "stem")
+        s.add(capsule(mid, tip - V([0, 0.12, 0]), 0.012), stem, "stem")
+        g = "leaf%d" % k
+        # 叶面：朝前略微往上翘的扁椭圆，本地 x-y 是叶面
+        # 叶面：朝前略微往上翘，上宽下尖的心形长叶（本地 x-y 是叶面）
+        s.add(ellipsoid(0.17, 0.25, 0.015).rot("x", -25).rot("z", rot).at(*tip), leaf, g)
+        s.add(ellipsoid(0.12, 0.12, 0.015).rot("x", -25).rot("z", rot).at(*(tip + V([0, -0.08, 0.03]))), leaf, g)
+
+        def slits(p):
+            # 龟背竹的裂口：从叶缘斜着往叶脉切进去，两边各四五道，快切到中脉才停
+            x_, y_ = p[..., 0], p[..., 1]
+            side = np.abs(x_)
+            band = np.abs(((y_ + side * 0.9) * 6.5) % 1 - 0.5) < 0.2
+            return band & (side > 0.035) & (y_ > -0.2)
+
+        s.decal(slits, hole, g)
+        s.decal(lambda p: (np.abs(p[..., 0]) < 0.014) & (p[..., 1] > -0.2), leaf_lt, g)
 
 
 # ═══════════════════════════════ 登记

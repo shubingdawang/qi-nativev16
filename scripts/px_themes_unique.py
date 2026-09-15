@@ -818,5 +818,118 @@ def star_seat(s):
     s.decal(lambda p: (p[..., 2] > 0) & ((np.abs(p[..., 0]) < 0.02) | (np.abs(np.abs(p[..., 0]) - 0.95) < 0.04) | (p[..., 1] > 0.5)), frame, "window")
 
 
+# ── 按她的第二轮意见重做的几件（同名覆盖上面那版）──────────────
+
+@U("ny_ingot", "新年·金元宝", 1, 1, 0.6)
+def ny_ingot(s):
+    gold = M("gold", "#F0C04A", steps=8, gloss=1.0)
+    gold_dk = M("gold_dk", "#C8902A", steps=5, gloss=0.8)
+    red = M("red", "#D8453A", steps=6)
+    tassel_m = M("tassel", "#E8B84A", steps=4)
+    # 元宝：椭圆的船身，两头的沿**高高翘起往里卷**，中间鼓一个圆包——
+    # 船沿用一圈小球沿着椭圆排，越靠两头越高
+    s.add(box(0.36, 0.08, 0.28, round=0.06).at(0, 0.1, 0), red, "cushion")
+    for sx in (-1, 1):
+        for sz in (-1, 1):
+            tassel(s, (sx * 0.34, 0.12, sz * 0.26), tassel_m, 0.1)
+    s.add(ellipsoid(0.3, 0.1, 0.18).at(0, 0.25, 0), gold, "boat")
+    for k in range(28):
+        a = k / 28 * math.tau
+        c = math.cos(a)
+        y = 0.3 + 0.16 * abs(c) ** 3
+        r = 0.05 + 0.03 * abs(c) ** 2
+        s.add(sphere(r).at(0.3 * c * (1 + 0.12 * abs(c)), y, 0.17 * math.sin(a)), gold, "rim")
+    for sx in (-1, 1):
+        s.add(sphere(0.07).at(sx * 0.36, 0.47, 0), gold, "curl")
+    s.add(sphere(0.14).at(0, 0.36, 0), gold, "dome")
+    s.decal(lambda p: (np.abs(p[..., 1] + 0.02) < 0.012) & (p[..., 2] > 0.05), gold_dk, "boat")
+    for x, z in ((-0.12, 0.2), (0.14, 0.22)):
+        s.add(cylinder(0.05, 0.015).rot("x", 60).at(x, 0.2, z), gold, "coin")
+
+
+@U("ny_table", "新年·火锅桌", 2, 1, 0.9)
+def ny_table(s):
+    wd = wood("wd", "#8A3A2A", grain=0.08)
+    gold = M("gold", "#E8B84A", steps=5, gloss=1.0)
+    copper = M("copper", "#E0A04A", steps=7, gloss=0.9)
+    red_soup = M("redsoup", "#D8453A", steps=4, gloss=0.4)
+    white_soup = M("whitesoup", "#F6EEDC", steps=4, gloss=0.4)
+    chili = M("chili", "#A8281E", steps=2)
+    meat = M("meat", "#F2A0A0", steps=4)
+    green = M("green", "#7DBB6E", steps=4)
+    tofu = M("tofu", "#FFF6E0", steps=3)
+    plate = M("plate", "#FFFFFF", steps=4)
+    cush = M("cush", "#D8453A", steps=5)
+    # 圆桌：红木桌面描金边，四条腿之间一圈横档
+    s.add(cylinder(0.46, 0.05, round=0.02).at(0, 0.64, 0), wd, "top")
+    s.add(torus(0.46, 0.02).at(0, 0.69, 0), gold, "rim")
+    for a in (45, 135, 225, 315):
+        c, d = math.cos(math.radians(a)), math.sin(math.radians(a))
+        s.add(capsule(V([0.34 * c, 0, 0.34 * d]), V([0.3 * c, 0.64, 0.3 * d]), 0.035), wd, "leg")
+    s.add(torus(0.32, 0.02).at(0, 0.2, 0), wd, "stretcher")
+    # 鸳鸯锅：铜锅带两只环形耳朵，中间一道 S 形隔板，一边红汤飘辣椒、一边白汤
+    s.add(lathe([(0, 0), (0.2, 0), (0.24, 0.1), (0.25, 0.14), (0.23, 0.14), (0, 0.12)]).at(0, 0.69, 0), copper, "pot")
+    for sx in (-1, 1):
+        s.add(torus(0.04, 0.012, axis="z").at(sx * 0.27, 0.8, 0), copper, "ear")
+
+    def red_half(p):
+        return p[..., 0] + 0.06 * np.sin(p[..., 2] * 14) > 0
+
+    s.add(cylinder(0.225, 0.01).at(0, 0.8, 0), white_soup, "soup")
+    s.decal(lambda p: red_half(p), red_soup, "soup")
+    s.decal(lambda p: red_half(p) & speckle(p, 30, 0.2, seed=2), chili, "soup")
+    s.decal(lambda p: (~red_half(p)) & speckle(p, 30, 0.1, seed=5), green, "soup")
+    for k in range(12):
+        zz = -0.2 + 0.4 * k / 11
+        s.add(sphere(0.012).at(-0.06 * math.sin(zz * 14), 0.815, zz), copper, "divider")
+    # 锅里浮着的肉片、豆腐、青菜
+    for x, z, mm, sz in ((0.1, 0.05, meat, 0.05), (-0.1, -0.06, tofu, 0.04), (0.12, -0.1, meat, 0.045), (-0.12, 0.08, green, 0.045)):
+        s.add(ellipsoid(sz, 0.012, sz * 0.7).at(x, 0.82, z), mm, "food")
+    # 桌上：四盘菜 + 碗筷
+    for k, (mm, col) in enumerate(((meat, "#F2A0A0"), (green, None), (tofu, None), (M("shrimp", "#F6A06A", steps=3), None))):
+        a = k / 4 * math.tau + math.radians(45)
+        c = V([0.36 * math.cos(a), 0.7, 0.36 * math.sin(a)])
+        s.add(cylinder(0.08, 0.01).at(*c), plate, "plate")
+        for j in range(3):
+            s.add(ellipsoid(0.03, 0.012, 0.02).at(c[0] + 0.02 * (j - 1), 0.72 + 0.01 * j, c[2]), mm, "dish")
+    # 两把圈椅：扶手连着椅背绕成半圈，红坐垫
+    for sx in (-1, 1):
+        cx = sx * 0.8
+        B(s, cx - 0.17, cx + 0.17, 0.36, 0.42, -0.17, 0.17, wd, "seat%d" % (sx > 0), round=0.02)
+        B(s, cx - 0.15, cx + 0.15, 0.42, 0.46, -0.15, 0.15, cush, "cush%d" % (sx > 0), round=0.02)
+        for dx in (-0.14, 0.14):
+            for dz in (-0.14, 0.14):
+                C(s, cx + dx, dz, 0, 0.36, 0.022, wd, "chleg")
+        pts = []
+        for k in range(9):
+            a = math.radians(-90 + 180 * k / 8)
+            pts.append(V([cx + sx * 0.16 * math.cos(a), 0.72, 0.16 * math.sin(a)]))
+        for a_, b_ in zip(pts, pts[1:]):
+            s.add(capsule(a_, b_, 0.02), wd, "armring")
+        for k in (0, 4, 8):
+            s.add(capsule(V([pts[k][0], 0.42, pts[k][2]]), pts[k], 0.018), wd, "spindle")
+        B(s, cx + sx * 0.14 - 0.02, cx + sx * 0.14 + 0.02, 0.44, 0.72, -0.08, 0.08, wd, "splat%d" % (sx > 0))
+        s.add(sphere(0.03).at(cx + sx * 0.16, 0.62, 0), gold, "splatboss")
+
+
+@U("lolita_mirror", "洛丽塔·蝶结镜", 1, 1, 2.2)
+def lolita_mirror(s):
+    t = TH["lolita"]
+    m = mats(t)
+    frame = M("frame", "#FCF4F2", steps=6, gloss=0.4)
+    # 镜子落到地上，支架只到镜子三分之二高、斜着撑在背后，比镜子短
+    s.add(ellipsoid(0.34, 0.8, 0.05).at(0, 0.82, -0.05), frame, "frame")
+    s.add(ellipsoid(0.27, 0.72, 0.03).at(0, 0.82, -0.01), M("glass", "#E6F2F6", steps=5, gloss=1.0), "glass")
+    s.decal(lambda p: np.abs(p[..., 0] + p[..., 1] * 0.35 + 0.05) < 0.03, M("shine", "#FFFFFF", steps=2), "glass")
+    bow(s, (0, 1.58, 0.03), m.accent, 0.14)
+    for k in range(24):
+        a = k / 24 * math.tau
+        s.add(sphere(0.024 if k % 2 else 0.032).at(0.35 * math.cos(a), 0.82 + 0.81 * math.sin(a), 0.02), m.gold if k % 2 else M("pearl", "#FFFFFF", steps=3, gloss=1.0), "pearl")
+    for k in range(6):
+        s.add(sphere(0.035).at(-0.2 + 0.08 * k, 0.08 + 0.04 * math.sin(k), 0.05), m.accent if k % 2 else M("rose2", "#FFFFFF", steps=3), "roses")
+    s.add(capsule(V([0, 1.1, -0.1]), V([0, 0.0, -0.45]), 0.028), frame, "leg")
+    s.add(capsule(V([-0.12, 0.6, -0.28]), V([0.12, 0.6, -0.28]), 0.018), frame, "brace")
+
+
 for _id, (_n, _w, _d, _t, _fn) in UNIQUE.items():
     reg(_id, _n, _w, _d, _t, _fn)
