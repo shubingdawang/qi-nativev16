@@ -1039,8 +1039,14 @@ def coatrack(s):
             hooks.append(tip)
     # 外套挂在朝前那根钩上：领口在钩下面，衣身垂下来
     h = hooks[1]
-    s.add(capsule(h + np.array([0, -0.12, 0.02]), h + np.array([0.03, -0.75, 0.08]), 0.17), coat, "coat")
-    s.add(ellipsoid(0.16, 0.06, 0.1).at(*(h + np.array([0, -0.1, 0.05]))), collar, "coat")
+    # 外套是件衣服的样子：领口挂在钩上，肩膀往两边撑开，衣身往下垂，两只袖子贴着身侧，一排扣子
+    c0 = h + np.array([0.0, -0.5, 0.06])
+    s.add(box(0.2, 0.36, 0.06, round=0.05).at(*c0), coat, "coat")
+    s.add(capsule(h + np.array([-0.18, -0.2, 0.06]), h + np.array([0.18, -0.2, 0.06]), 0.07), coat, "coat")
+    for sx in (-1, 1):
+        s.add(capsule(h + np.array([sx * 0.22, -0.22, 0.07]), h + np.array([sx * 0.25, -0.72, 0.09]), 0.055), collar, "sleeve")
+    s.add(tri_prism(0.1, 0.02).rot("z", 180).at(*(h + np.array([0, -0.2, 0.12]))), collar, "lapel")
+    s.decal(lambda p: (p[..., 2] > 0.04) & (np.abs(p[..., 0]) < 0.02) & (np.abs(((p[..., 1] + 0.3) * 6) % 1 - 0.5) < 0.18), band, "coat")
     # 帽子挂在左后那根，围巾搭在右边那根
     h2 = hooks[0]
     s.add(lathe([(0, 0), (0.2, 0), (0.18, 0.03), (0.11, 0.05), (0.12, 0.18), (0, 0.2)]).rot("x", 70).at(*(h2 + np.array([0, -0.05, 0.05]))), hat, "hat")
