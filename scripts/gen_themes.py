@@ -307,6 +307,13 @@ ITEMS = [
     ("headphones", "头戴耳机", 110, W, "small", "px_headphones", None, "跟着节奏点头"),
     ("plaidshirt", "格子衬衫", 90, W, "small", "px_plaidshirt", None, "卷起袖子"),
     ("sunglasses", "小墨镜", 75, W, "small", "px_sunglasses", None, "推到头顶上"),
+    ("suit",       "小西装", 160, W, "small", "px_suit", None, "理了理领口"),
+    ("dress_shoes", "小皮鞋", 90, W, "small", "px_dress_shoes", None, "擦得锃亮"),
+    ("tie_black",  "黑领带", 60, W, "small", "px_tie_black", None, "打个温莎结"),
+    ("tie_white",  "白领带", 60, W, "small", "px_tie_white", None, "小心别弄脏"),
+    ("tie_stripe", "条纹领带", 65, W, "small", "px_tie_stripe", None, "对着镜子系"),
+    ("tie_dot",    "波点领带", 65, W, "small", "px_tie_dot", None, "晃了晃"),
+    ("tie_damask", "暗纹领带", 70, W, "small", "px_tie_damask", None, "摸了摸花纹"),
     # ── 圣诞红（她 2026-09-08 发的第一张拼图，16 件）───────
     #
     # ⚠️ 这三套的图是 `scripts/prep_theme.py` 从整张拼图上切下来的，

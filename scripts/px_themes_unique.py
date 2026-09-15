@@ -989,16 +989,83 @@ def cap_(s):
     s.add(tri_prism(0.06, 0.02).rot("x", -60).at(0, 0.2, 0.25), white, "star")
 
 
+def tie_card(s, base, pat, kind):
+    mb = M("tiebase", base, steps=6)
+    mp = M("tiepat", pat, steps=3)
+    gold = M("gold", "#E8C47A", steps=3, gloss=1.0)
+    s.add(box(0.07, 0.06, 0.03, round=0.02).at(0, 0.9, 0), mb, "knot")
+    s.add(tri_prism(0.13, 0.02).rot("z", 180).at(0, 0.18, 0), mb, "tip")
+    B(s, -0.1, 0.1, 0.25, 0.84, -0.02, 0.02, mb, "blade", round=0.01)
+    if kind == "stripe":
+        s.decal(lambda p: np.abs(((p[..., 1] + p[..., 0]) * 6) % 1 - 0.5) < 0.12, mp, "blade")
+    elif kind == "dot":
+        s.decal(lambda p: (np.hypot(((p[..., 0] * 12) % 1) - 0.5, ((p[..., 1] * 12) % 1) - 0.5) < 0.22), mp, "blade")
+    elif kind == "damask":
+        s.decal(lambda p: (np.abs(((p[..., 0] + p[..., 1]) * 8) % 1 - 0.5) + np.abs(((p[..., 0] - p[..., 1]) * 8) % 1 - 0.5)) < 0.3, mp, "blade")
+    B(s, -0.13, 0.13, 0.6, 0.63, 0.015, 0.03, gold, "clip")
+
+
 @U("tie", "小领带", 1, 1, 0.6)
 def tie_(s):
-    navy = M("navy", "#3E5A8C", steps=6)
-    red = M("red", "#D8453A", steps=3)
-    gold = M("gold", "#E8C47A", steps=3, gloss=1.0)
-    s.add(box(0.06, 0.06, 0.03, round=0.02).at(0, 0.9, 0), navy, "knot")
-    s.add(tri_prism(0.13, 0.02).rot("z", 180).at(0, 0.18, 0), navy, "tip")
-    B(s, -0.1, 0.1, 0.25, 0.84, -0.02, 0.02, navy, "blade", round=0.01)
-    s.decal(lambda p: np.abs(((p[..., 1] + p[..., 0]) * 6) % 1 - 0.5) < 0.12, red, "blade")
-    B(s, -0.13, 0.13, 0.6, 0.63, 0.015, 0.03, gold, "clip")
+    tie_card(s, "#3E5A8C", "#D8453A", "stripe")
+
+
+@U("tie_black", "黑领带", 1, 1, 0.6)
+def tie_black_(s):
+    tie_card(s, "#26262C", "#3A3A42", "plain")
+
+
+@U("tie_white", "白领带", 1, 1, 0.6)
+def tie_white_(s):
+    tie_card(s, "#F4F2EC", "#FFFFFF", "plain")
+
+
+@U("tie_stripe", "条纹领带", 1, 1, 0.6)
+def tie_stripe_(s):
+    tie_card(s, "#2E4A3A", "#E8C47A", "stripe")
+
+
+@U("tie_dot", "波点领带", 1, 1, 0.6)
+def tie_dot_(s):
+    tie_card(s, "#B8323A", "#FFFFFF", "dot")
+
+
+@U("tie_damask", "暗纹领带", 1, 1, 0.6)
+def tie_damask_(s):
+    tie_card(s, "#5A2E4A", "#7A4868", "damask")
+
+
+@U("suit", "小西装", 1, 1, 0.6)
+def suit_(s):
+    coat = M("coat", "#4A4E5A", steps=6, grain=0.05)
+    coat_lt = M("coatlt", "#646A78", steps=4)
+    shirt = M("shirt", "#FBFBF8", steps=4)
+    btn = M("btn", "#1E1E24", steps=2)
+    # 挂在衣架上的西装外套：V 领露白衬衫、两片翻领、两只袖子、胸袋口袋巾
+    hanger = wood("hanger", "#D9A86C")
+    s.add(capsule(V([-0.3, 1.0, 0]), V([0.3, 1.0, 0]), 0.02), hanger, "hanger")
+    s.add(capsule(V([0, 1.0, 0]), V([0, 1.12, 0]), 0.01), hanger, "hanger")
+    B(s, -0.28, 0.28, 0.2, 0.95, -0.05, 0.05, coat, "body", round=0.04)
+    s.decal(lambda p: (p[..., 2] > 0.03) & (np.abs(p[..., 0]) < 0.13 - (0.3 - p[..., 1]) * 0.3) & (p[..., 1] > 0.0), shirt, "body")
+    for sx in (-1, 1):
+        s.add(capsule(V([sx * 0.3, 0.9, 0]), V([sx * 0.38, 0.3, 0.02]), 0.075), coat, "sleeve")
+        s.add(tri_prism(0.1, 0.02).rot("z", 180 + sx * 25).at(sx * 0.1, 0.72, 0.06), coat_lt, "lapel")
+    s.add(capsule(V([-0.03, 0.95, 0.06]), V([0.03, 0.6, 0.06]), 0.02), M("suittie", "#B8323A", steps=3), "tie")
+    for y in (0.45, 0.32):
+        s.add(sphere(0.02).at(0.0, y, 0.06), btn, "btn")
+    s.add(box(0.04, 0.03, 0.01).at(0.16, 0.72, 0.06), shirt, "pocketsq")
+
+
+@U("dress_shoes", "小皮鞋", 1, 1, 0.6)
+def dress_shoes_(s):
+    leather = M("leather", "#2A2226", steps=6, gloss=0.9)
+    sole = M("sole", "#141014", steps=3)
+    lace = M("lace", "#6A5A64", steps=2)
+    for x in (-0.16, 0.16):
+        B(s, x - 0.1, x + 0.1, 0.0, 0.03, -0.2, 0.26, sole, "sole", round=0.02)
+        s.add(ellipsoid(0.1, 0.08, 0.23).at(x, 0.08, 0.03), leather, "upper%d" % (x > 0))
+        for k in range(2):
+            s.add(capsule(V([x - 0.04, 0.15 - 0.01 * k, 0.02 + 0.05 * k]), V([x + 0.04, 0.15 - 0.01 * k, 0.02 + 0.05 * k]), 0.008), lace, "lace")
 
 
 @U("sneakers", "小球鞋", 1, 1, 0.6)

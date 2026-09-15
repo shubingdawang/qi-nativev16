@@ -369,6 +369,13 @@ extension FurnitureCatalog {
         "headphones":      Art(flat: "px_headphones", iso: "iso_l_px_headphones"),
         "plaidshirt":      Art(flat: "px_plaidshirt", iso: "iso_l_px_plaidshirt"),
         "sunglasses":      Art(flat: "px_sunglasses", iso: "iso_l_px_sunglasses"),
+        "suit":            Art(flat: "px_suit", iso: "iso_l_px_suit"),
+        "dress_shoes":     Art(flat: "px_dress_shoes", iso: "iso_l_px_dress_shoes"),
+        "tie_black":       Art(flat: "px_tie_black", iso: "iso_l_px_tie_black"),
+        "tie_white":       Art(flat: "px_tie_white", iso: "iso_l_px_tie_white"),
+        "tie_stripe":      Art(flat: "px_tie_stripe", iso: "iso_l_px_tie_stripe"),
+        "tie_dot":         Art(flat: "px_tie_dot", iso: "iso_l_px_tie_dot"),
+        "tie_damask":      Art(flat: "px_tie_damask", iso: "iso_l_px_tie_damask"),
         "star_window":     Art(flat: "px_star_window", iso: "iso_l_px_star_window"),
         "star_seat":       Art(flat: "px_star_seat", iso: "iso_l_px_star_seat")
     ]

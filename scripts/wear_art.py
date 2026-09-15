@@ -462,8 +462,7 @@ def bag_fancy(s):
     s.disc(12.25, 12.75, 0.34, GOLD, FINE)
     s.rect(11.75, 12.8, 0.65, 0.45, GOLD)
     s.disc(12.07, 12.7, 0.16, GEM, FINE)
-    for dx in (0.0, 0.18, 0.36):
-        s.rect(13.2 + dx, 14.6, 0.12, 0.8, GEM)
+
 
 
 def boots_fancy(s):
@@ -568,20 +567,103 @@ def cap(s):
         s.rect(x, 3.8, 0.12, 1.8, dim)
 
 
-def tie(s):
-    """小领带：领结在嘴下面（嘴 y10.8..11.8 空出来），领带垂到肚子底，斜条纹。"""
-    mid, dk, lit = "#3E5A8C", "#2C4270", "#D8453A"
-    s.rect(6.7, 11.9, 1.6, 0.6, dk)                    # 领结
-    # ⚠️ 领带尖只到肚子底（y13.35），不往两腿之间伸——
-    # 套上背带裤的时候它塞在护胸里，伸出来就是从裤裆里掉出一截
-    y = 12.5
-    widths = [1.5, 1.9, 2.1, 1.7, 0.6]
-    for k, w in enumerate(widths):
-        s.rect(7.5 - w / 2, y, w, 0.22, mid)
-        if k % 2 == 1:
-            s.rect(7.5 - w / 2, y + 0.06, w, 0.09, lit)
-        y += 0.22
-    s.rect(6.7, 13.1, 1.6, 0.14, GOLD)                 # 领带夹
+TIES = {
+    # id: (底色, 暗色, 花样色, 花样)
+    "tie":        ("#3E5A8C", "#2C4270", "#D8453A", "stripe"),   # 藏青红斜纹（原来那条）
+    "tie_black":  ("#26262C", "#141418", "#3A3A42", "plain"),
+    "tie_white":  ("#F4F2EC", "#D8D4CA", "#FFFFFF", "plain"),
+    "tie_stripe": ("#2E4A3A", "#1E3226", "#E8C47A", "stripe"),   # 墨绿金条纹
+    "tie_dot":    ("#B8323A", "#8A2028", "#FFFFFF", "dot"),      # 红底白波点
+    "tie_damask": ("#5A2E4A", "#3E1E32", "#7A4868", "damask"),   # 酒红暗纹
+}
+
+
+def make_tie(tid):
+    base, dark, pat, kind = TIES[tid]
+
+    def draw(s):
+        """领带：领结在嘴下面（嘴 y10.8..11.8 空出来），一直垂到肚子下沿、尖在腿根。
+
+        ⚠️ 领带**在最前面**（`ClawdRig.wearOrder` 里排在衬衫、背带裤、西装外面），
+        所以长度照正常领带来，不怕压住衣服——她：领带本身就是在最前面的。
+        """
+        s.rect(6.8, 11.9, 1.4, 0.6, dark)                    # 领结
+        s.rect(6.95, 11.95, 1.1, 0.14, base)
+        y = 12.5
+        widths = [1.4, 1.65, 1.85, 1.95, 2.0, 2.0, 1.9, 1.6, 1.15, 0.6]
+        for k, w in enumerate(widths):
+            x0 = 7.5 - w / 2
+            s.rect(x0, y, w, 0.22, base)
+            if kind == "stripe" and k % 3 == 1:
+                s.rect(x0, y + 0.05, w, 0.1, pat)
+            elif kind == "dot" and k % 2 == 0 and w > 0.8:
+                s.rect(7.5 - 0.45, y + 0.05, 0.14, 0.12, pat)
+                s.rect(7.5 + 0.3, y + 0.05, 0.14, 0.12, pat)
+            elif kind == "dot" and k % 2 == 1 and w > 0.8:
+                s.rect(7.5 - 0.07, y + 0.05, 0.14, 0.12, pat)
+            elif kind == "damask" and w > 0.9:
+                # 暗纹：同色系稍亮的一朵朵小菱花
+                if k % 3 == 0:
+                    s.rect(7.5 - 0.1, y, 0.2, 0.22, pat)
+                elif k % 3 == 1:
+                    s.rect(7.5 - 0.35, y + 0.04, 0.7, 0.14, pat)
+            y += 0.22
+        s.rect(x0, y - 0.22, w, 0.22, dark)                  # 领带尖那一格压暗
+        s.rect(7.5 - w / 2 + 0.1, 12.55, 0.12, 1.6, dark if base != "#F4F2EC" else "#C8C4BA")  # 左边一道暗边，有厚度
+        s.rect(6.75, 13.2, 1.5, 0.12, GOLD)                  # 领带夹
+    return draw
+
+
+def suit(s):
+    """小西装：炭灰外套，**V 领开口**露出里面的白衬衫（嘴那块留空），两片翻领，
+    胸袋插一块口袋巾，两颗扣子；裤子一直套到脚踝，裤线笔直。
+    """
+    coat, coat_lt, coat_dk = "#4A4E5A", "#646A78", "#34373F"
+    shirt = "#FBFBF8"
+    # 外套：一排排画，嘴那几行（y<11.9）中间留出 V 口子，口子里是皮肤（不画）；
+    # 嘴下面那段 V 口子里是白衬衫
+    y = 10.4
+    while y < 13.35:
+        # 嘴那几行（到 y11.85）口子只开嘴那么宽，往下才收成 V、在 y13.0 合上
+        half = 1.75 if y < 11.85 else max(0.0, 1.75 - (y - 11.85) / 1.15 * 1.75)
+        if half > 0:
+            s.rect(1.8, y, 7.5 - half - 1.8, 0.1, coat)
+            s.rect(7.5 + half, y, 13.2 - (7.5 + half), 0.1, coat)
+            if y >= 11.9:
+                s.rect(7.5 - half, y, half * 2, 0.1, shirt)
+        else:
+            s.rect(1.8, y, 11.4, 0.1, coat)
+        y += 0.1
+    s.rect(1.8, 10.4, 0.45, 2.95, coat_lt)
+    s.rect(12.75, 10.4, 0.45, 2.95, coat_dk)
+    # 翻领：沿着 V 口两边一道亮一点的斜边
+    for k in range(26):
+        yy = 10.4 + k * 0.1
+        half = 1.75 if yy < 11.85 else max(0.0, 1.75 - (yy - 11.85) / 1.15 * 1.75)
+        s.rect(7.5 - half - 0.45, yy, 0.45, 0.1, coat_lt)
+        s.rect(7.5 + half, yy, 0.45, 0.1, coat_dk)
+    # 胸袋 + 白口袋巾、两颗扣子
+    s.rect(10.3, 12.3, 1.5, 0.12, coat_dk)
+    s.rect(10.5, 12.05, 0.35, 0.25, shirt)
+    s.rect(10.9, 12.1, 0.3, 0.2, shirt)
+    for yy in (12.75, 13.1):
+        s.disc(7.5, yy, 0.13, "#1E1E24", FINE)
+    # 裤腿到脚踝，每条腿中间一道裤线
+    for fx in FEET:
+        s.rect(fx - 0.25, 13.3, 1.5, 1.3, coat)
+        s.rect(fx - 0.25, 13.3, 0.3, 1.3, coat_lt)
+        s.rect(fx + 0.45, 13.3, 0.1, 1.3, coat_dk)
+
+
+def dress_shoes(s):
+    """小皮鞋：黑亮的皮鞋，一只脚一只，鞋头一点高光、鞋带两道，两只之间留缝。"""
+    for fx in FEET:
+        s.rect(fx - 0.2, 14.05, 1.45, 1.0, "#2A2226")
+        s.rect(fx - 0.3, 14.7, 1.65, 0.45, "#2A2226")          # 鞋头往前探
+        s.rect(fx - 0.3, 15.1, 1.65, 0.2, "#141014")           # 鞋底
+        s.rect(fx - 0.1, 14.75, 0.35, 0.15, "#8A7A86")         # 鞋头高光
+        s.rect(fx + 0.3, 14.2, 0.55, 0.08, "#6A5A64")          # 鞋带
+        s.rect(fx + 0.3, 14.4, 0.55, 0.08, "#6A5A64")
 
 
 def sneakers(s):
@@ -665,9 +747,10 @@ PIECES = [
     ("bowtie", bowtie_fancy), ("scarf", scarf_fancy), ("bag", bag_fancy),
     ("boots", boots_fancy), ("slippers", slippers_fancy),
     ("hoodie", overalls),
-    ("cap", cap), ("tie", tie), ("sneakers", sneakers), ("headphones", headphones),
+    ("cap", cap), ("sneakers", sneakers), ("headphones", headphones),
+    ("suit", suit), ("dress_shoes", dress_shoes),
     ("plaidshirt", plaidshirt), ("sunglasses", sunglasses),
-]
+] + [(tid, make_tie(tid)) for tid in TIES]
 
 
 # ══════════════════════════════════════════ 身体（只给对照图用，不进包）
@@ -712,13 +795,9 @@ if __name__ == "__main__":
     # 再来一格：按穿衣顺序叠一身——鞋 → 衬衫 → 领带 → 背带裤 → 包 → 墨镜 → 帽子
     s = Sheet()
     body(s)
-    sneakers(s)
-    plaidshirt(s)
-    tie(s)
-    overalls(s)
-    bag_fancy(s)
-    sunglasses(s)
-    cap(s)
+    dress_shoes(s)
+    suit(s)
+    make_tie("tie_dot")(s)
     one = s.im.resize((CELL, CELL), Image.LANCZOS)
     sheet = sheet.resize(sheet.size)
     p = os.path.join(LOOK, "穿戴对照.png")
