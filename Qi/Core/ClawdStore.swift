@@ -1105,6 +1105,26 @@ final class ClawdStore: ObservableObject {
         return s
     }
 
+    /// 关着的灯（家具 id）。晚上只有开着的灯才亮一圈光；他「开灯」就是按这个开关
+    @Published var lightsOff: Set<UUID> = [] {
+        didSet {
+            if loaded {
+                UserDefaults.standard.set(lightsOff.map(\.uuidString), forKey: "clawdLightsOff")
+            }
+        }
+    }
+
+    /// 按一下这盏灯。返回按完之后亮不亮
+    @discardableResult
+    func toggleLight(_ id: UUID) -> Bool {
+        if lightsOff.contains(id) {
+            lightsOff.remove(id)
+            return true
+        }
+        lightsOff.insert(id)
+        return false
+    }
+
     /// 他此刻正在用的那件家具，和怎么用。家具跟着动（摇摇马摇、洗衣机震）靠它
     @Published var useItem: UUID?
     @Published var useStyle: RoomUse = .stand
@@ -1339,6 +1359,7 @@ final class ClawdStore: ObservableObject {
             rawValue: UserDefaults.standard.string(forKey: "clawdProjection") ?? "")
             ?? .iso
         dayMode = DayMode(rawValue: UserDefaults.standard.string(forKey: "clawdDayMode") ?? "") ?? .auto
+        lightsOff = Set((UserDefaults.standard.stringArray(forKey: "clawdLightsOff") ?? []).compactMap(UUID.init))
         loaded = true
     }
 
@@ -1589,8 +1610,10 @@ final class ClawdStore: ObservableObject {
         if visible.isEmpty {
             return "clawd 的房间还空着，她还没给你买东西。"
         }
-        return "clawd 的房间里现在有：" + visible.joined(separator: "、")
+        var s = "clawd 的房间里现在有：" + visible.joined(separator: "、")
             + "。（这些都是她一件件买来摆的）"
+        if !ownedClothes.isEmpty { s += "\n" + wardrobeBrief() }
+        return s
     }
 
     /// 整个家长什么样，说给他听。

@@ -428,7 +428,7 @@ struct IsoRoomView<Clawd: View>: View {
     /// 晚上会亮的家具：光心在屏幕上哪儿、多大
     private func glows(_ g: IsoRoom) -> [RoomNightShade.Glow] {
         store.furniture(in: room).compactMap { f in
-            guard let gl = RoomClock.glow(of: f.kind) else { return nil }
+            guard let gl = RoomClock.glow(of: f.kind), !store.lightsOff.contains(f.id) else { return nil }
             let s = store.shape(of: f)
             let cell = store.cell(of: f)
             let c = g.point(Double(cell.gx) + Double(s.w - 1) / 2,

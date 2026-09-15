@@ -404,8 +404,9 @@ enum RoomActs {
         case "sushi":              return .sushi
         case "ramen":              return .ramen
         case "hotpot":             return .hotpot
-        case "bubbletea":          return .bubbletea
-        case "coffee", "teapot":   return .coffee
+        // ⚠️ 咖啡、茶、奶茶**不走 gif**：她要「端着咖啡喝」——
+        // 拿起桌上那一杯、端在手上、送到脸边喝（`CarryPose.sip`），喝完放回去。
+        // gif 里自带一只别的杯子，桌上那杯还得先藏起来，看着是换了一杯。
         default:                   return nil
         }
     }

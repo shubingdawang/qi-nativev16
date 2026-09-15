@@ -2116,12 +2116,18 @@ struct ClawdHomeView: View {
                         continue
                     }
 
+                    // 「开灯」：真的去按这盏灯的开关（晚上看得出亮了、灭了）
+                    var lines = chosen.lines
+                    if chosen.name == "开灯", RoomClock.glow(of: kind.id) != nil {
+                        let on = store.toggleLight(item.id)
+                        lines = on ? ["亮了", "暖和", "这样看得清"] : ["关了", "省点电", "暗一点好睡"]
+                    }
                     mood = chosen.mood
                     using = chosen.use
                     store.useItem = item.id
                     store.useStyle = chosen.use
                     store.clawdDoing = doing(for: chosen, kind: kind)
-                    say(chosen.lines.randomElement() ?? chosen.name)
+                    say(lines.randomElement() ?? chosen.name)
                     try? await Task.sleep(
                         nanoseconds: UInt64(chosen.seconds * 1_000_000_000))
                     using = .stand
