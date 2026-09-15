@@ -462,6 +462,8 @@ struct IsoRoomView<Clawd: View>: View {
         /// clawd 那一条这两样是空的
         let item: Furniture?
         let kind: FurnitureKind?
+        /// 占地的格子范围（左闭右开）。挂墙上的、地毯没有——它们不跟人比前后
+        var rect: IsoRoom.Footprint? = nil
         var isClawd: Bool { item == nil }
     }
 
@@ -513,8 +515,13 @@ struct IsoRoomView<Clawd: View>: View {
                     : Double(uc.gx + us.w - 1 + uc.gy + us.d - 1)
                 layered = max(layered, ud + 0.4)
             }
+            // 地毯（不占高度）永远垫在最底下，只压在墙上那层之上
+            if s.mount == .floor && s.tall <= 0 { layered = -900 }
+            let rect: IsoRoom.Footprint? = (s.mount == .wall || s.tall <= 0) ? nil
+                : IsoRoom.Footprint(x0: Double(cell.gx), y0: Double(cell.gy),
+                                    x1: Double(cell.gx + max(1, s.w)), y1: Double(cell.gy + max(1, s.d)))
             out.append(Drawable(key: f.id.uuidString, depth: layered,
-                                tall: s.tall, item: f, kind: kind))
+                                tall: s.tall, item: f, kind: kind, rect: rect))
         }
 
         // clawd 也进来。**这就是「他站在床后面就该被床挡住」的全部。**
@@ -551,8 +558,13 @@ struct IsoRoomView<Clawd: View>: View {
                 }
             }
 
+            var rect: IsoRoom.Footprint? = nil
+            if let bs = boardSize, bs.width > 1, bs.height > 1 {
+                let t = geoRoom.tile(at: CGPoint(x: clawdX * bs.width, y: clawdY * bs.height))
+                rect = IsoRoom.Footprint(x0: t.gx - 0.2, y0: t.gy - 0.2, x1: t.gx + 0.7, y1: t.gy + 0.7)
+            }
             out.append(Drawable(key: "clawd", depth: d,
-                                tall: 1, item: nil, kind: nil))
+                                tall: 1, item: nil, kind: nil, rect: rect))
         }
 
         // ## clawd 进来了（上一版他永远画在最前面）
@@ -569,6 +581,10 @@ struct IsoRoomView<Clawd: View>: View {
         // ⚠️ 他的 `tall` 给 1：跟别人同一格的时候，
         // 他压在地毯上面（tall 0）、被高柜挡住（tall 2）。
 
+        if geoRoom.projection == .iso {
+            return IsoRoom.orderByFootprint(out, rect: { $0.rect }, depth: { $0.depth },
+                                            height: { $0.tall }, tie: { $0.key })
+        }
         return IsoRoom.order(out, depth: { $0.depth }, height: { $0.tall }, tie: { $0.key })
     }
 

@@ -631,6 +631,61 @@ struct IsoRoom {
     /// 拿**高度**当第二把尺子：矮的先画。
     /// 都一样就按 id 定死——**不能靠不稳定的顺序**，
     /// 那会让两件家具每次重画都换一次前后，看着像在打架。
+    /// 一件东西在地上占的那块（格坐标，左闭右开）
+    struct Footprint {
+        let x0: Double, y0: Double, x1: Double, y1: Double
+    }
+
+    /// 等距屋按**占地**排前后。
+    ///
+    /// ⚠️ 只拿一个数（最远角 gx+gy）排是错的：一张 3×4 的床最远角是 6，
+    /// 摆在床脚前面那一格的床头柜是 5——床头柜明明在前面，却先画，
+    /// 床脚压到了柜子上（她报的「床脚不应该在柜子上」）。
+    ///
+    /// 两块占地**完全错开**时前后是确定的：整块在 gx 小的那边、或整块在 gy 小的那边，就在后面。
+    /// 按这个关系连边做拓扑排序；占地叠在一起的（桌上的杯子、站在床上的他）
+    /// 没有这层关系，退回原来那个数。
+    static func orderByFootprint<T>(_ items: [T],
+                                    rect: (T) -> Footprint?,
+                                    depth: (T) -> Double,
+                                    height: (T) -> Double,
+                                    tie: (T) -> String) -> [T] {
+        let base = order(items, depth: depth, height: height, tie: tie)
+        let n = base.count
+        guard n > 1 else { return base }
+        let rects = base.map(rect)
+        // behind[i] 里是必须画在 i 之前的那些
+        var indeg = [Int](repeating: 0, count: n)
+        var next = [[Int]](repeating: [], count: n)
+        for i in 0..<n {
+            guard let a = rects[i] else { continue }
+            for j in (i + 1)..<n {
+                guard let b = rects[j] else { continue }
+                let aBehind = a.x1 <= b.x0 + 0.0001 || a.y1 <= b.y0 + 0.0001
+                let bBehind = b.x1 <= a.x0 + 0.0001 || b.y1 <= a.y0 + 0.0001
+                if aBehind && !bBehind {
+                    next[i].append(j); indeg[j] += 1
+                } else if bBehind && !aBehind {
+                    next[j].append(i); indeg[i] += 1
+                }
+            }
+        }
+        // Kahn：每次从「没人必须排在它前面」的里面挑原来那个数最小的
+        var out: [T] = []
+        out.reserveCapacity(n)
+        var used = [Bool](repeating: false, count: n)
+        for _ in 0..<n {
+            var pick = -1
+            for i in 0..<n where !used[i] && indeg[i] == 0 { pick = i; break }
+            // 有环（几乎不会）：按原顺序硬取一个
+            if pick < 0 { pick = used.firstIndex(of: false) ?? 0 }
+            used[pick] = true
+            out.append(base[pick])
+            for j in next[pick] { indeg[j] -= 1 }
+        }
+        return out
+    }
+
     static func order<T>(_ items: [T],
                          depth: (T) -> Double,
                          height: (T) -> Double,
