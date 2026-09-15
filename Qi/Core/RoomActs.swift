@@ -36,6 +36,8 @@ struct RoomAct {
     let seconds: Double
     /// 会嘀咕的几句，随机挑一句。**本地台词，不花钱**
     let lines: [String]
+    /// 身子怎么用这件家具：坐、躺、泡、骑、伸手够……（见 `RoomUse`）
+    var use: RoomUse = .stand
 
     enum Spot {
         /// 站在旁边（浇水、看电视）
@@ -45,7 +47,75 @@ struct RoomAct {
     }
 }
 
+/// 他**怎么用**这件家具——不是换个表情，是身子真的在做。
+///
+/// 她说的：「很多家具实际上根本没有 clawd 使用的动画。」
+/// 以前「坐下」是站在沙发上面、「泡进去」是整只站在浴缸上、
+/// 「开冰箱」是在旁边发呆。这里每一档对应一种身体姿势，
+/// 画法在 `ClawdHomeView.usingBody`，家具那边跟着动的在 `IsoRoomView`。
+enum RoomUse: Equatable, Sendable {
+    /// 站着（旁边做个动作）
+    case stand
+    /// 坐在上面：腿弯下去、落在坐面上
+    case sit
+    /// 躺着（床、地毯）
+    case lie
+    /// 泡在里面：只露出上半身，轻轻浮着
+    case soak
+    /// 骑着摇：他和那件家具一起前后摇
+    case ride
+    /// 坐在上面跟着震（洗衣机）
+    case jiggle
+    /// 伸手去开、去按、去够前面那件
+    case reach
+    /// 踮脚往高处够：两手举起、一颠一颠
+    case tiptoe
+    /// 照镜子：左右转身看自己
+    case mirror
+    /// 拿起来抱着（轻的小东西），放回原处
+    case hug
+}
+
 enum RoomActs {
+
+    /// 这个动作身子怎么用家具
+    static func use(for name: String) -> RoomUse {
+        switch name {
+        case "坐下", "坐边上", "瘫着", "趴扶手", "坐着换鞋": return .sit
+        case "坐上面":                                   return .jiggle
+        case "躺下", "钻被窝", "躺一会儿", "打滚":         return .lie
+        case "泡进去", "拍水花", "洗澡":                  return .soak
+        case "骑上去", "摇一摇":                          return .ride
+        case "开冰箱", "拉开柜门", "掀盖子", "挑一瓶", "按两下", "开灯",
+             "冲一下", "洗把脸", "把东西放上去", "拍一下", "喂鱼", "转一下",
+             "抽一张", "做饭", "洗碗", "摆正":              return .reach
+        case "踮脚够", "抽一本":                           return .tiptoe
+        case "照镜子", "照一照":                           return .mirror
+        case "抱一下", "拿起来":                           return .hug
+        default:                                          return .stand
+        }
+    }
+
+    /// 坐面 / 床面 / 缸里水面离地多高（世界里几格高，跟 `scripts/px_furniture.py` 的模型对得上）。
+    /// 没登记的按 `tall` 的八成。
+    static func seatHeight(_ id: String) -> Double? {
+        if id.hasSuffix("_bed") || id == "bed" || id == "bed_berry" || id == "bed_xmas" { return 0.9 }
+        if id.hasSuffix("_sofa") || id == "sofa" || id == "vic_loveseat" || id == "star_seat" { return 0.78 }
+        if id.hasSuffix("_rug") || id == "rug" { return 0.03 }
+        switch id {
+        case "armchair", "gothic_chair", "lolita_chair", "xmas_chair", "ny_chair", "vic_chair",
+             "xred_armchair", "rose_armchair", "star_armchair": return 0.58
+        case "vic_ottoman", "xred_ottoman", "rose_ottoman", "star_ottoman": return 0.5
+        case "stool":    return 0.9
+        case "bench":    return 0.64
+        case "toilet":   return 0.76
+        case "washer":   return 1.5
+        case "horse":    return 0.92
+        case "bathtub":  return 0.35
+        case "pillow":   return 0.3
+        default:         return nil
+        }
+    }
 
     /// 动作名 → 怎么演。**一张全局的表**——
     /// 「坐下」不管是坐凳子还是坐床沿，演法都一样。
@@ -53,6 +123,12 @@ enum RoomActs {
     /// 表里没有的名字会退回一个通用的「凑过去看看」，
     /// **不会因为写了个新名字就崩**。
     static func act(_ name: String) -> RoomAct {
+        var a = baseAct(name)
+        a.use = use(for: name)
+        return a
+    }
+
+    private static func baseAct(_ name: String) -> RoomAct {
         switch name {
 
         // ⚠️「躺一会儿」是地毯那件用的名字，以前**不在这张表里**——
@@ -355,8 +431,10 @@ enum RoomActs {
 
         switch act.spot {
         case .onTop:
+            // 落在**坐面 / 床面**上，不是家具最高那一截（沙发靠背、床头）
             var p = geo.point(cx, cy)
-            p.y -= geo.tileH * CGFloat(s.tall)
+            let h = seatHeight(kindID) ?? s.tall * 0.8
+            p.y -= geo.unitH * 0.72 * CGFloat(h)
             return p
         case .beside:
             return besidePoint(cell: cell, w: s.w, d: s.d, in: geo)

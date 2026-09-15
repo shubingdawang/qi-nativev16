@@ -20,6 +20,32 @@ import SwiftUI
 /// ⚠️ 平面那档**用正面的家具图**，不用等距图。
 /// 等距图摆进正面平视的屋子里才真成了立牌——
 /// 而「像立牌」正是当初画等距图要解决的那个毛病。
+/// 被 clawd 用着的家具怎么动：摇摇马绕底部前后摇，洗衣机坐上去跟着震。
+/// 跟他身上那一下用的是**同一个时钟、同一个周期**，人和马摇在一个节拍上。
+struct InUseMotion: ViewModifier {
+    let style: RoomUse
+
+    func body(content: Content) -> some View {
+        if style == .ride || style == .jiggle {
+            TimelineView(.animation) { ctx in
+                let t = ctx.date.timeIntervalSinceReferenceDate
+                content
+                    .rotationEffect(.degrees(style == .ride ? RoomMotion.rock(t) : 0), anchor: .bottom)
+                    .offset(x: style == .jiggle ? RoomMotion.shake(t) : 0)
+            }
+        } else {
+            content
+        }
+    }
+}
+
+/// 摇、震的节拍。人和家具共用
+enum RoomMotion {
+    static func rock(_ t: TimeInterval) -> Double { sin(t * 2 * .pi / 1.4) * 7 }
+    static func shake(_ t: TimeInterval) -> CGFloat { CGFloat(sin(t * 55)) * 0.9 }
+    static func bob(_ t: TimeInterval) -> CGFloat { CGFloat(sin(t * 2 * .pi / 2.2)) * 1.2 }
+}
+
 struct IsoRoomView<Clawd: View>: View {
 
     @ObservedObject var store: ClawdStore
@@ -830,6 +856,8 @@ struct IsoRoomView<Clawd: View>: View {
         // 吊兰抬了大半堵墙，就彻底摸不着了。
         //
         // `.position` 是真的把它放在那儿，可点范围跟着一起走。
+        // 他正骑着摇 / 坐着震的那一件，自己也跟着动
+        .modifier(InUseMotion(style: store.useItem == item.id ? store.useStyle : .stand))
         .position(x: c.x + wallHug(cell, geoRoom).x,
                    y: c.y + wallHug(cell, geoRoom).y
                       + mountLift(item, s, geoRoom))

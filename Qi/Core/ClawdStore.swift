@@ -1043,6 +1043,10 @@ final class ClawdStore: ObservableObject {
         wornSlots[slot] = (wornSlots[slot] == kindID) ? nil : kindID
     }
 
+    /// 他此刻正在用的那件家具，和怎么用。家具跟着动（摇摇马摇、洗衣机震）靠它
+    @Published var useItem: UUID?
+    @Published var useStyle: RoomUse = .stand
+
     @Published var carrying: String? {
         didSet {
             if loaded { UserDefaults.standard.set(carrying, forKey: "clawdCarrying") }
@@ -1073,6 +1077,26 @@ final class ClawdStore: ObservableObject {
     /// **两个页面读的是同一个判断**，所以小屋里在举床，
     /// 切到聊天页他也在举床。
     func overhead(_ kind: FurnitureKind) -> Bool {
+        // 她说的：「重的物品要举起，轻的物品拿起就可以。」
+        // 分类问不出轻重（小仙人掌和大冰箱都是「植物 / 电器」），所以问**个头**：
+        // 占两格以上、或者一人多高的才举过头顶；桌上的、墙上挂的小件、
+        // 细长但很轻的（伞、吉他、风筝）一只手拿着。
+        switch kind.id {
+        case "umbrella", "guitar_item", "kite", "hanging", "chime", "stars", "frame",
+             "painting", "wallclock", "curtain", "plane", "yarn", "ball", "pillow":
+            return false
+        default: break
+        }
+        switch kind.category {
+        case .drink, .food, .wear: return false
+        default: break
+        }
+        let s = FurnitureCatalog.shape(of: kind.id)
+        if s.mount == .table { return false }
+        return s.w * s.d >= 2 || s.tall >= 1.2
+    }
+
+    private func overheadByCategory(_ kind: FurnitureKind) -> Bool {
         switch kind.category {
         case .furniture, .plant, .gadget: return true
         case .drink, .food, .toy, .wear, .decor: return false

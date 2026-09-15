@@ -42,6 +42,8 @@ struct ClawdHomeView: View {
     @State private var lowerFrom: TimeInterval?
     /// 正在用专门 gif 吃喝（手上那件不画在手里，gif 里自带）
     @State private var eatingWithGif = false
+    /// 他正怎么用手边那件家具（坐、躺、泡、骑…）。`.stand` 就是平常站着
+    @State private var using: RoomUse = .stand
 
     // MARK: 手上的东西
 
@@ -244,6 +246,71 @@ struct ClawdHomeView: View {
         guard abs(p.x - clawdX) > 0.0001 || abs(p.y - clawdY) > 0.0001 else { return }
         clawdX = p.x
         clawdY = p.y
+    }
+
+    /// 平常那只 + 用家具时的姿势。
+    ///
+    /// 她说的：「很多家具实际上根本没有 clawd 使用的动画。」
+    /// 每一档都是身子在做：坐下腿弯、泡在缸里只露上半身、骑马跟着摇、
+    /// 开柜门伸手、踮脚往上够、照镜子左右转。
+    @ViewBuilder
+    private func usingBody(scale: CGFloat) -> some View {
+        switch using {
+        case .stand, .lie, .hug:
+            ClawdView(mood: mood, scale: scale, shadow: true,
+                      // 小屋里也要戴上。**两边都传**——只给一边的话，
+                      // 她在这儿给他戴上帽子，切到聊天页就没了。
+                      wornIDs: store.wornIDs,
+                      // 高兴的时候**手要摆起来**
+                      pose: ClawdHomeView.armPose(mood))
+        case .sit, .ride, .jiggle:
+            TimelineView(.animation) { ctx in
+                let t = ctx.date.timeIntervalSinceReferenceDate
+                ClawdRigView(mood: mood, wornIDs: store.wornIDs,
+                             pose: mood == .happy ? .wave : .none,
+                             tilt: using == .ride ? RoomMotion.rock(t) : 0,
+                             scale: scale,
+                             beat: (t / 1.2).truncatingRemainder(dividingBy: 1),
+                             legsBent: 3)
+                    .offset(x: using == .jiggle ? RoomMotion.shake(t) : 0)
+            }
+        case .soak:
+            // 泡在缸里：身子下半截藏进水里（裁掉），轻轻浮着
+            TimelineView(.animation) { ctx in
+                let t = ctx.date.timeIntervalSinceReferenceDate
+                ClawdView(mood: mood, scale: scale, shadow: false, wornIDs: store.wornIDs,
+                          pose: mood == .flail ? .cheer : .none)
+                    .mask(alignment: .top) {
+                        Rectangle().frame(height: 36 * scale * 0.56)
+                    }
+                    .offset(y: RoomMotion.bob(t) + 36 * scale * 0.12)
+            }
+        case .reach:
+            TimelineView(.animation) { ctx in
+                let t = ctx.date.timeIntervalSinceReferenceDate
+                ClawdRigView(mood: mood == .idle ? .working : mood, wornIDs: store.wornIDs,
+                             pose: .wave, scale: scale,
+                             beat: (t / 1.6).truncatingRemainder(dividingBy: 1),
+                             shadow: true)
+            }
+        case .tiptoe:
+            TimelineView(.animation) { ctx in
+                let t = ctx.date.timeIntervalSinceReferenceDate
+                let hop = abs(sin(t * 2 * .pi / 0.9))
+                ClawdRigView(mood: mood, wornIDs: store.wornIDs,
+                             pose: .cheer, scale: scale,
+                             beat: (t / 0.9).truncatingRemainder(dividingBy: 1),
+                             shadow: true)
+                    .offset(y: -CGFloat(hop) * scale * 2.5)
+            }
+        case .mirror:
+            TimelineView(.periodic(from: .now, by: 0.9)) { ctx in
+                let flip = Int(ctx.date.timeIntervalSinceReferenceDate / 0.9) % 2 == 0
+                ClawdView(mood: mood, scale: scale, shadow: true, wornIDs: store.wornIDs,
+                          pose: ClawdHomeView.armPose(mood))
+                    .scaleEffect(x: flip ? 1 : -1, y: 1)
+            }
+        }
     }
 
     /// 屋里是晚上（跟窗外、压暗用的是同一个数）
@@ -1200,15 +1267,7 @@ struct ClawdHomeView: View {
                     // ⚠️ **`/ 36` 不是 `/ 32`，`1.47` 不是 `0.87`。**
                     // 除数是图纸宽度（现在 36 格），32 是它还叫 32 格那会儿的老账；
                     // 系数 0.87 → 1.47 是 ×1.5，换图纸那次欠的账：图纸从 54 格缩到 36 格（3 格/单位 → 2 格/单位），躯干跟着从 33 格变成 22 格，**scale 没跟着调，他在所有地方都缩了三分之一**。22 × s_new = 33 × s_old → 每一处 scale 都要 ×1.5 才回到原来那么大。
-                    ClawdView(mood: mood, scale: tile * 1.47 / 36, shadow: true,
-                              // 小屋里也要戴上。**两边都传**——只给一边的话，
-                              // 她在这儿给他戴上帽子，切到聊天页就没了。
-                              wornIDs: store.wornIDs,
-                              // 高兴的时候**手要摆起来**。
-                              // 她说的「随着他的情绪联动的表情，笑、冒爱心等等都没有」——
-                              // 冒爱心那条早就有了（`.loving` 那一档），
-                              // 缺的是手：以前不管什么情绪，手都是垂着的两块。
-                              pose: ClawdHomeView.armPose(mood))
+                    usingBody(scale: tile * 1.47 / 36)
                 }
             }
                 // 被拎起来的时候整只抬高一点、影子也跟着散开
@@ -1315,6 +1374,9 @@ struct ClawdHomeView: View {
                 .onEnded { _ in
                     held = true
                     walkTask?.cancel()          // 拎着的时候别让他自己乱跑
+                    using = .stand              // 正坐着 / 泡着的也一把拎起来站好
+                    store.useItem = nil
+                    store.useStyle = .stand
                     mood = .happy
                     if app.settings.haptics {
                         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -2033,11 +2095,38 @@ struct ClawdHomeView: View {
                         continue
                     }
 
+                    // 轻的小东西「拿起来 / 抱一下」：真的拿在手上抱一会儿，再放回原处
+                    if chosen.use == .hug, !store.overhead(kind),
+                       FurnitureCatalog.shape(of: kind.id).mount != .wall {
+                        store.pickUp(kind.id, itemID: item.id)
+                        carryPose = .hold
+                        mood = chosen.name == "抱一下" ? .loving : .carrying
+                        store.clawdDoing = .playing
+                        say(chosen.lines.randomElement() ?? chosen.name)
+                        try? await Task.sleep(nanoseconds: UInt64(max(3, chosen.seconds) * 1_000_000_000))
+                        if Task.isCancelled { return }
+                        if store.carrying == kind.id {
+                            lowerFrom = Date().timeIntervalSinceReferenceDate
+                            try? await Task.sleep(nanoseconds: 450_000_000)
+                            store.putBack(to: itemCell)
+                            lowerFrom = nil
+                        }
+                        mood = .idle
+                        store.clawdDoing = .idling
+                        continue
+                    }
+
                     mood = chosen.mood
+                    using = chosen.use
+                    store.useItem = item.id
+                    store.useStyle = chosen.use
                     store.clawdDoing = doing(for: chosen, kind: kind)
                     say(chosen.lines.randomElement() ?? chosen.name)
                     try? await Task.sleep(
                         nanoseconds: UInt64(chosen.seconds * 1_000_000_000))
+                    using = .stand
+                    store.useItem = nil
+                    store.useStyle = .stand
                     if Task.isCancelled { return }
                     mood = .idle
                     store.clawdDoing = .idling

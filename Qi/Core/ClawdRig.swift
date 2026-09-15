@@ -91,6 +91,8 @@ struct ClawdRigView: View {
     /// ⚠️ 排在 `beat` 后面：逐一成员初始化器按声明顺序排参数
     var rise: Double = 1
     var shadow: Bool = false
+    /// 坐着：腿弯几格（跟举东西那档的 `squat` 是同一套弯法）
+    var legsBent: Int = 0
 
     @State private var frame = 0
     @State private var ticker: Task<Void, Never>?
@@ -100,7 +102,7 @@ struct ClawdRigView: View {
         // ⚠️ 弯腿要在**抠掉手之后**做：`stripArms` 认的是列，`bendLegs` 动的是行，
         // 反过来做也对，但两个都做完才是这一帧真正的身子。
         ClawdRig.bendLegs(ClawdRig.stripArms(frames[min(frame, frames.count - 1)].0),
-                          by: plan.squat)
+                          by: max(plan.squat, legsBent))
     }
 
     /// 图纸一共多宽多高（格）
