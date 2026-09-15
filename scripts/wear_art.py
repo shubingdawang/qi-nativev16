@@ -511,36 +511,44 @@ DENIM, DENIM_LT, DENIM_DK = "#6E92C8", "#93B2DE", "#4E6FA3"
 
 
 def overalls(s):
-    """背带裤（照她画的那张）：护胸只到嘴下面，两根背带从护胸上角的金扣**往外弯**，
-    搭到两边手和身子相接的拐角上——不往头顶走，也不碰眼睛和嘴。
+    """背带裤：护胸顶在嘴下面，裤腿一直套到脚踝（她：上一版像超短裤），
+    两根背带是**直的**，从金扣斜着拉到手臂和身子相接的拐角上。
+
+    嘴 y10.8..11.8 空出来；背带经过左右眼那一段时在 y11 以下，不碰眼睛。
     """
-    # 裤身
-    s.rect(1.8, 12.0, 11.4, 1.35, DENIM)
-    s.rect(1.8, 12.0, 0.45, 1.35, DENIM_LT)
-    s.rect(12.75, 12.0, 0.45, 1.35, DENIM_DK)
-    # 护胸：顶在嘴下沿（y11.9）
-    s.rect(4.4, 11.9, 6.2, 0.6, DENIM)
+    # 护胸
+    s.rect(4.4, 11.9, 6.2, 0.7, DENIM)
     s.rect(4.4, 11.9, 6.2, 0.14, DENIM_LT)
-    s.rect(6.4, 12.1, 2.2, 0.75, DENIM_DK)          # 胸前小口袋
-    s.rect(6.55, 12.22, 1.9, 0.52, DENIM)
+    s.rect(6.4, 12.05, 2.2, 0.75, DENIM_DK)          # 胸前小口袋
+    s.rect(6.55, 12.17, 1.9, 0.52, DENIM)
     for x in [6.6 + 0.35 * i for i in range(5)]:
-        s.rect(x, 12.15, 0.18, 0.07, GOLD_LT)
-    # 背带：从金扣出发，一段段往外、往上弯到手臂拐角（左 (2.0, 9.4)、右 (13.0, 9.4)）
-    for (bx, ex, cx) in ((4.6, 1.6, 4.1), (10.4, 13.4, 10.9)):
+        s.rect(x, 12.1, 0.18, 0.07, GOLD_LT)
+    # 裤身：两边一直高到 y11.2（跟上一版一样高），中间嘴下面那一段才低到护胸那条线
+    s.rect(1.8, 11.2, 3.8, 2.15, DENIM)
+    s.rect(9.4, 11.2, 3.8, 2.15, DENIM)
+    s.rect(5.6, 12.4, 3.8, 0.95, DENIM)
+    s.rect(1.8, 11.2, 0.45, 2.15, DENIM_LT)
+    s.rect(12.75, 11.2, 0.45, 2.15, DENIM_DK)
+    s.rect(1.8, 11.2, 3.8, 0.12, DENIM_LT)
+    s.rect(9.4, 11.2, 3.8, 0.12, DENIM_LT)
+    # 裤腿：每条腿套一截，比腿宽一点，一直到脚踝，裤脚卷一道
+    for fx in FEET:
+        s.rect(fx - 0.25, 13.3, 1.5, 1.25, DENIM)
+        s.rect(fx - 0.25, 13.3, 0.3, 1.25, DENIM_LT)
+        s.rect(fx - 0.25, 14.3, 1.5, 0.35, DENIM_LT)   # 卷起的裤脚
+        s.rect(fx - 0.25, 14.55, 1.5, 0.1, DENIM_DK)
+    s.rect(7.45, 12.6, 0.12, 0.75, DENIM_DK)          # 裤裆一道缝
+    # 背带：直线，一段段小块拼，从扣子到手臂拐角
+    for (bx, ex) in ((4.6, 1.8), (10.4, 13.2)):
         n = 22
         for i in range(n + 1):
             t = i / n
-            # 二次贝塞尔：扣子 → 控制点（外侧偏上）→ 手臂拐角
-            x = (1 - t) ** 2 * bx + 2 * (1 - t) * t * cx + t * t * ex
-            y = (1 - t) ** 2 * 12.0 + 2 * (1 - t) * t * 9.8 + t * t * 9.4   # 眼睛下沿是 y10，走过眼睛那段时带子在 y10.5 以下
-            s.rect(x - 0.3, y - 0.15, 0.6, 0.32, DENIM)
-            s.rect(x - 0.3, y - 0.15, 0.6, 0.1, DENIM_LT)
-        s.disc(bx, 12.05, 0.3, GOLD, FINE)
-        s.disc(bx, 12.05, 0.13, GOLD_LT, FINE)
-    s.rect(7.45, 12.85, 0.12, 0.5, DENIM_DK)          # 裤裆一道缝
-    for fx in FEET:
-        s.rect(fx - 0.2, 13.2, 1.4, 0.55, DENIM_LT)    # 卷起的裤脚
-        s.rect(fx - 0.2, 13.6, 1.4, 0.15, DENIM_DK)
+            x = bx + (ex - bx) * t
+            y = 11.35 + (9.3 - 11.35) * t
+            s.rect(x - 0.3, y - 0.16, 0.6, 0.34, DENIM)
+            s.rect(x - 0.3, y - 0.16, 0.6, 0.1, DENIM_LT)
+        s.disc(bx, 11.4, 0.3, GOLD, FINE)
+        s.disc(bx, 11.4, 0.13, GOLD_LT, FINE)
 
 
 def cap(s):
@@ -563,9 +571,11 @@ def cap(s):
 def tie(s):
     """小领带：领结在嘴下面（嘴 y10.8..11.8 空出来），领带垂到肚子底，斜条纹。"""
     mid, dk, lit = "#3E5A8C", "#2C4270", "#D8453A"
-    s.rect(6.85, 11.9, 1.3, 0.7, dk)                   # 领结
-    y = 12.6
-    widths = [1.3, 1.55, 1.75, 1.85, 1.85, 1.7, 1.4, 1.0, 0.55, 0.2]
+    s.rect(6.7, 11.9, 1.6, 0.6, dk)                    # 领结
+    # ⚠️ 领带尖只到肚子底（y13.35），不往两腿之间伸——
+    # 套上背带裤的时候它塞在护胸里，伸出来就是从裤裆里掉出一截
+    y = 12.5
+    widths = [1.5, 1.9, 2.1, 1.7, 0.6]
     for k, w in enumerate(widths):
         s.rect(7.5 - w / 2, y, w, 0.22, mid)
         if k % 2 == 1:
@@ -699,12 +709,16 @@ if __name__ == "__main__":
         fn(s)
         one = s.im
         sheet.paste(one, ((i % cols) * CELL, (i // cols) * CELL), one)
-    # 再来一格：帽子 + 眼镜 + 围巾一起戴
+    # 再来一格：按穿衣顺序叠一身——鞋 → 衬衫 → 领带 → 背带裤 → 包 → 墨镜 → 帽子
     s = Sheet()
     body(s)
-    scarf(s)
-    glasses(s)
-    hat(s)
+    sneakers(s)
+    plaidshirt(s)
+    tie(s)
+    overalls(s)
+    bag_fancy(s)
+    sunglasses(s)
+    cap(s)
     one = s.im.resize((CELL, CELL), Image.LANCZOS)
     sheet = sheet.resize(sheet.size)
     p = os.path.join(LOOK, "穿戴对照.png")

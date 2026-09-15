@@ -852,7 +852,9 @@ enum ClawdRig {
         case face      // 脸上：眼镜
         case neck      // 脖子：领结、围巾
         case back      // 背上：背包
-        case body      // 身上：背带裤、格子衬衫
+        case body      // 贴身那件：格子衬衫
+        case outer     // 套在外面的：背带裤
+        case scarf     // 绕在最外面的：围巾
         case feet      // 脚上：靴子、拖鞋
     }
 
@@ -860,17 +862,22 @@ enum ClawdRig {
         switch id {
         case "hat", "beret", "cap", "headphones": return .head
         case "glasses", "sunglasses": return .face
-        case "bowtie", "scarf", "tie": return .neck
+        case "bowtie", "tie":     return .neck
+        case "scarf":             return .scarf
         case "bag":               return .back
         case "boots", "slippers", "sneakers": return .feet
-        case "hoodie", "plaidshirt": return .body
+        case "plaidshirt":        return .body
+        case "hoodie":            return .outer
         default:                  return .head
         }
     }
 
     /// 画的先后。**背包在最底下**（它挂在身后），脚、脖子、脸、头往上叠。
     /// 顺序反了的话围巾会盖住下巴、帽子会被眼镜压住。
-    static let wearOrder: [WearSlot] = [.back, .body, .feet, .neck, .face, .head]
+    /// ⚠️ **穿衣服有顺序**（她说的）：贴身的衬衫 → 领带打在衬衫上 → 背带裤、外套套在外面 →
+    /// 围巾绕在外套外面 → 包的带子斜挎在所有衣服上面 → 眼镜 → 帽子。
+    /// 鞋子在最底下（跟上面几件不重叠，先画后画都行）。
+    static let wearOrder: [WearSlot] = [.feet, .body, .neck, .outer, .scarf, .back, .face, .head]
 
     /// 图纸多少格见方。**穿戴那批图也是按这个画的**
     /// （见 `scripts/wear_art.py`）。

@@ -1263,7 +1263,10 @@ final class ClawdStore: ObservableObject {
         // ⚠️ 老数据（只存了一件的那个键）搬一次，别让她开机发现帽子没了。
         if let d = UserDefaults.standard.dictionary(forKey: "clawdWornSlots")
             as? [String: String] {
-            wornSlots = d
+            // 位置表改过（背带裤挪到「外面」、围巾单独一格）：按每件现在该在的位置重新归一次
+            var fixed: [String: String] = [:]
+            for id in d.values { fixed[ClawdRig.wearSlot(id).rawValue] = id }
+            wornSlots = fixed
         } else if let one = UserDefaults.standard.string(forKey: "clawdWearing"),
                   !one.isEmpty {
             wornSlots = [ClawdRig.wearSlot(one).rawValue: one]
