@@ -334,25 +334,50 @@ def lolita_mirror(s):
 def xmas_tree(s):
     green = M("green", "#3E7A4A", steps=6)
     green2 = M("green2", "#5A9A5E", steps=5)
-    trunk = wood("trunk", "#7A4E36")
+    trunk = wood("trunk", "#7A4E36", grain=0.15)
+    pot = M("tpot", "#C9453E", steps=5)
     orn = [M("orn%d" % i, c, steps=4, gloss=0.7) for i, c in enumerate(("#D8453A", "#E8C47A", "#8EC3E6", "#F4F1EA"))]
     star = M("tstar", "#FFD76A", steps=3, emissive=True)
     snow = M("snow", "#FFFFFF", steps=3)
-    s.add(cylinder(0.08, 0.2).at(0, 0.0, 0), trunk, "trunk")
-    for i, (y, r) in enumerate(((0.2, 0.5), (0.55, 0.4), (0.85, 0.28))):
-        s.add(lathe([(0, 0), (r, 0), (0, 0.5 - 0.08 * i)]).at(0, y, 0), green if i % 2 == 0 else green2, "tier%d" % i)
+    garland = M("garland", "#E8C47A", steps=3, gloss=0.8)
+    # 树干露出一截，插在红色的树桶里
+    s.add(lathe([(0, 0), (0.13, 0), (0.15, 0.12), (0, 0.12)]), pot, "tub")
+    s.add(torus(0.15, 0.018).at(0, 0.12, 0), M("tubrim", "#E8C47A", steps=3, gloss=0.8), "tubrim")
+    s.add(cylinder(0.07, 0.55).at(0, 0.12, 0), trunk, "trunk")
+    for i, (y, r) in enumerate(((0.66, 0.4), (0.9, 0.32), (1.12, 0.24))):
+        s.add(lathe([(0, 0), (r, 0), (0, 0.46 - 0.08 * i)]).at(0, y, 0), green if i % 2 == 0 else green2, "tier%d" % i)
         s.decal(lambda p: speckle(p, 12, 0.05, seed=i), snow, "tier%d" % i)
+    # 一圈圈金色彩带
+    for k in range(40):
+        u = k / 40
+        a = u * math.tau * 2.5
+        y = 0.72 + u * 0.66
+        r = (1.6 - y) * 0.42
+        s.add(sphere(0.018).at(r * math.cos(a), y, r * math.sin(a)), garland, "garland")
     rng = np.random.default_rng(12)
-    for k in range(14):
-        y = float(rng.uniform(0.3, 1.1))
-        r = (1.3 - y) * 0.42
+    for k in range(16):
+        y = float(rng.uniform(0.72, 1.32))
+        r = (1.6 - y) * 0.42
         a = float(rng.uniform(-0.3, 3.5))
         s.add(sphere(0.04).at(r * math.cos(a), y, r * math.sin(a)), orn[k % 4], "orn")
-    s.add(tri_prism(0.1, 0.03).at(0, 1.38, 0), star, "star")
-    s.add(tri_prism(0.1, 0.03).rot("z", 180).at(0, 1.34, 0), star, "star")
-    for k, (x, z) in enumerate(((-0.35, 0.3), (0.3, 0.35))):
-        B(s, x - 0.12, x + 0.12, 0.0, 0.18, z - 0.1, z + 0.1, orn[k], "gift%d" % k, round=0.02)
-        s.decal(lambda p: (np.abs(p[..., 0]) < 0.02) | (np.abs(p[..., 2]) < 0.02), orn[3 - k], "gift%d" % k)
+    s.add(tri_prism(0.1, 0.03).at(0, 1.62, 0), star, "star")
+    s.add(tri_prism(0.1, 0.03).rot("z", 180).at(0, 1.58, 0), star, "star")
+    # 礼物**挤在树干前面**，大小不一、叠着放
+    # 用「屏幕右 × 朝前」摆，三个视角里礼物都在树干正前面挤成一堆
+    R_, T_ = s.axes()
+    def at_front(r, t):
+        q = R_ * r + T_ * t
+        return q[0], q[2]
+    gifts = []
+    for (r, t, y, hw, hh, a_, b_) in ((-0.1, 0.24, 0.0, 0.08, 0.09, 0, 1), (0.1, 0.24, 0.0, 0.07, 0.08, 2, 0),
+                                       (0.0, 0.36, 0.0, 0.06, 0.06, 1, 3), (-0.08, 0.24, 0.09, 0.05, 0.05, 3, 0)):
+        x, z = at_front(r, t)
+        gifts.append((x, y, z, hw, hh, a_, b_))
+    for k, (x, y, z, hw, hh, a_, b_) in enumerate(gifts):
+        g = "gift%d" % k
+        B(s, x - hw, x + hw, y, y + hh, z - hw, z + hw, orn[a_], g, round=0.015)
+        s.decal(lambda p: (np.abs(p[..., 0]) < 0.018) | (np.abs(p[..., 2]) < 0.018), orn[b_], g)
+        bow(s, (x, y + hh + 0.02, z), orn[b_], 0.035, g + "bow")
 
 
 @U("xmas_dining", "圣诞·长桌", 2, 1, 0.9)
@@ -914,21 +939,21 @@ def ny_table(s):
 
 @U("lolita_mirror", "洛丽塔·蝶结镜", 1, 1, 2.2)
 def lolita_mirror(s):
+    # 挂在墙上的椭圆镜（她：这种圆镜子不要支架，直接挂墙上）
     t = TH["lolita"]
     m = mats(t)
     frame = M("frame", "#FCF4F2", steps=6, gloss=0.4)
-    # 镜子落到地上，支架只到镜子三分之二高、斜着撑在背后，比镜子短
-    s.add(ellipsoid(0.34, 0.8, 0.05).at(0, 0.82, -0.05), frame, "frame")
-    s.add(ellipsoid(0.27, 0.72, 0.03).at(0, 0.82, -0.01), M("glass", "#E6F2F6", steps=5, gloss=1.0), "glass")
+    s.add(ellipsoid(0.34, 0.62, 0.05).at(0, 0.9, -0.05), frame, "frame")
+    s.add(ellipsoid(0.27, 0.55, 0.03).at(0, 0.9, -0.01), M("glass", "#E6F2F6", steps=5, gloss=1.0), "glass")
     s.decal(lambda p: np.abs(p[..., 0] + p[..., 1] * 0.35 + 0.05) < 0.03, M("shine", "#FFFFFF", steps=2), "glass")
-    bow(s, (0, 1.58, 0.03), m.accent, 0.14)
+    bow(s, (0, 1.52, 0.03), m.accent, 0.14)
     for k in range(24):
         a = k / 24 * math.tau
-        s.add(sphere(0.024 if k % 2 else 0.032).at(0.35 * math.cos(a), 0.82 + 0.81 * math.sin(a), 0.02), m.gold if k % 2 else M("pearl", "#FFFFFF", steps=3, gloss=1.0), "pearl")
-    for k in range(6):
-        s.add(sphere(0.035).at(-0.2 + 0.08 * k, 0.08 + 0.04 * math.sin(k), 0.05), m.accent if k % 2 else M("rose2", "#FFFFFF", steps=3), "roses")
-    s.add(capsule(V([0, 1.1, -0.1]), V([0, 0.0, -0.45]), 0.028), frame, "leg")
-    s.add(capsule(V([-0.12, 0.6, -0.28]), V([0.12, 0.6, -0.28]), 0.018), frame, "brace")
+        s.add(sphere(0.024 if k % 2 else 0.032).at(0.35 * math.cos(a), 0.9 + 0.63 * math.sin(a), 0.02),
+              m.gold if k % 2 else M("pearl", "#FFFFFF", steps=3, gloss=1.0), "pearl")
+    for k in range(7):
+        a = math.radians(200 + k * 20)
+        s.add(sphere(0.04).at(0.37 * math.cos(a), 0.9 + 0.64 * math.sin(a), 0.05), m.accent if k % 2 else M("rose2", "#FFFFFF", steps=3), "roses")
 
 
 for _id, (_n, _w, _d, _t, _fn) in UNIQUE.items():

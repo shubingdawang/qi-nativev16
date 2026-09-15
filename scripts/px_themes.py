@@ -783,14 +783,6 @@ def build_bed(s, id, w, d, style="ornate"):
         s.add(box(hw * 0.42, 0.1, 0.22, round=0.09).rot("x", -8).at(x, 0.74, -hd + 0.32), m.pillow, "pillow")
         if getattr(t, "ruffle", False):
             ruffle_line(s, x - hw * 0.42, x + hw * 0.42, -hd + 0.55, 0.66, 0.78, M("place", "#FFFFFF", steps=3), n=6, g="place")
-    # 靠枕：一颗心 / 一颗星 / 一个方的
-    small = m.accent
-    if getattr(t, "stars", False):
-        s.add(tri_prism(0.12, 0.05).rot("x", -20).at(0, 0.88, -hd + 0.5), m.star, "cushion")
-    else:
-        s.add(box(0.13, 0.12, 0.05, round=0.06).rot("x", -20).rot("z", 12).at(0, 0.86, -hd + 0.5), small, "cushion")
-        if getattr(t, "bows", False):
-            bow(s, (0, 0.94, -hd + 0.54), M("cbow", "#FFFFFF", steps=3), 0.04, "cbow")
     # 床尾搭一条带流苏的毯子
     B(s, -hw + 0.02, hw - 0.02, 0.66, 0.76, hd - 0.4, hd - 0.1, m.fab2 if t.fab2 != t.fab else m.accent, "runner", round=0.05)
     for k in range(9):
@@ -946,28 +938,23 @@ def build_armchair(s, id, legs="cabriole"):
 
 
 def build_ottoman(s, id):
+    """圆墩（pouf）：一只厚厚的圆软墩，顶面拉扣、腰上一圈描金，
+    荷叶边垂到快贴地，底下露出四只短短的金色圆球脚——不是细长的腿"""
     t = theme_of(id)
     m = mats(t)
     gold = m.gold if t.gold else m.frame_dk
-    # 坐垫抬高，荷叶边只垂到半截，四条弯腿露在下面（她：圆凳没有腿）
-    s.add(cylinder(0.4, 0.24, round=0.1).at(0, 0.44, 0), m.fab, "top")
-    s.decal(lambda p: tufts(np.stack([p[..., 0], p[..., 2], p[..., 1]], -1), 0.16, 0.025) & (p[..., 1] > 0.2), m.fab2, "top")
+    s.add(lathe([(0, 0.12), (0.36, 0.12), (0.42, 0.2), (0.44, 0.34), (0.42, 0.46), (0.36, 0.52), (0, 0.54)]), m.fab, "top")
+    s.decal(lambda p: (p[..., 1] > 0.38) & tufts(np.stack([p[..., 0], p[..., 2], p[..., 1]], -1), 0.14, 0.022), m.fab2, "top")
     if getattr(t, "stars", False):
-        s.decal(lambda p: star_dots(p) & (p[..., 1] > 0.1), m.star, "top")
-    ruffle(s, 0, 0, 0.42, 0.42, 0.36, 0.52, m.fab2, n=18)
-    s.add(torus(0.4, 0.022).at(0, 0.56, 0), gold, "trim")
-    pearl_row(s, -0.3, 0.3, 0.57, 0.4, gold, n=9, g="pearls")
-    for k in range(4):
-        a = math.radians(45 + 90 * k)
-        tassel(s, (0.42 * math.cos(a), 0.52, 0.42 * math.sin(a)), gold, 0.1)
+        s.decal(lambda p: star_dots(p) & (p[..., 1] > 0.3), m.star, "top")
+    s.add(torus(0.44, 0.02).at(0, 0.36, 0), gold, "trim")
+    ruffle(s, 0, 0, 0.45, 0.45, 0.08, 0.34, m.fab2, n=20, g="skirt")
+    pearl_row(s, -0.3, 0.3, 0.37, 0.45, gold, n=9, g="pearls")
     if getattr(t, "bows", False):
-        bow(s, (0, 0.56, 0.45), m.accent, 0.08)
-    # 四条弯腿从荷叶边底下伸出来，腿脚往外撇到坐垫外沿，错开 20° 免得前后两条叠在一起
+        bow(s, (0, 0.38, 0.47), m.accent, 0.08)
     for a in (20, 110, 200, 290):
         c, d = math.cos(math.radians(a)), math.sin(math.radians(a))
-        s.add(capsule(V([0.26 * c, 0.4, 0.26 * d]), V([0.36 * c, 0.03, 0.36 * d]), 0.04), gold, "leg")
-        s.add(sphere(0.05).at(0.37 * c, 0.03, 0.37 * d), gold, "foot")
-
+        s.add(sphere(0.06).at(0.3 * c, 0.06, 0.3 * d), gold, "foot")
 
 def build_cabinet(s, id, kind="wardrobe"):
     t = theme_of(id)
@@ -1333,7 +1320,35 @@ def build_plant(s, id, kind):
     if kind == "monstera":
         build_monstera_leaves(s, top)
         return
+    if kind == "fern":
+        build_fern(s, top)
+        return
     _build_plant_old(s, id, kind, t, m, h, top)
+
+
+def build_fern(s, top):
+    """波士顿蕨：一大丛细长的羽状叶从盆里拱起来、往四周垂下，每片叶子两边一排排小叶"""
+    leaf = M("fern", "#5E9A5A", steps=6)
+    leaf_lt = M("fernlt", "#86BE72", steps=4)
+    for k in range(16):
+        a = k / 16 * math.tau + (0.2 if k % 2 else 0)
+        c, d = math.cos(a), math.sin(a)
+        L = 0.5 + 0.12 * (k % 3)
+        pts = []
+        for j in range(7):
+            u = j / 6
+            r = 0.05 + u * L
+            y = 0.05 + 0.35 * math.sin(u * math.pi * 0.8) - 0.25 * u * u
+            pts.append(top + V([r * c, y, r * d]))
+        for j, (p0, p1) in enumerate(zip(pts, pts[1:])):
+            s.add(capsule(p0, p1, 0.012), leaf, "rachis")
+            # 两边的小叶：沿着叶轴一对一对，越到叶尖越小
+            mid = (p0 + p1) / 2
+            side = V([-d, 0, c])
+            size = 0.06 * (1 - j / 7)
+            for sgn in (-1, 1):
+                s.add(ellipsoid(size, 0.012, size * 0.45).rot("y", -math.degrees(a)).at(*(mid + side * sgn * size * 0.9)),
+                      leaf if (j + (sgn > 0)) % 2 else leaf_lt, "pinna")
 
 
 def build_monstera_leaves(s, top):
@@ -1464,7 +1479,7 @@ GENERIC = {
     "rose_rug": ("粉玫瑰·地毯", 3, 3, 0.0, lambda s: build_rug(s, "rose_rug")),
     "star_rug": ("星月蓝·圆地毯", 3, 3, 0.0, lambda s: build_rug(s, "star_rug", 3, 3, round_=True)),
     # 盆栽
-    "vic_plant": ("维多利亚·盆栽", 1, 1, 1.2, lambda s: build_plant(s, "vic_plant", "pothos")),
+    "vic_plant": ("维多利亚·盆栽", 1, 1, 1.2, lambda s: build_plant(s, "vic_plant", "fern")),
     "xred_flower": ("圣诞红·一品红", 1, 1, 1.2, lambda s: build_plant(s, "xred_flower", "poinsettia")),
     "xred_plant": ("圣诞红·冬青", 1, 1, 1.2, lambda s: build_plant(s, "xred_plant", "holly")),
     "rose_flower": ("粉玫瑰·玫瑰", 1, 1, 1.2, lambda s: build_plant(s, "rose_flower", "roses")),

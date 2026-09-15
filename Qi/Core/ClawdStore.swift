@@ -1632,7 +1632,7 @@ extension FurnitureCatalog {
         case "frame", "curtain", "hanging", "chime", "stars",
              "painting", "wallclock", "ny_couplet", "fucouplet",
              "doorwreath", "xmas_wreath", "autumn_wreath", "vic_frame",
-             "xred_mirror", "rose_frame", "star_window":
+             "xred_mirror", "rose_frame", "star_window", "lolita_mirror":
             return .wall
         // 摆在台面上的
         case "candle", "tissue", "polaroid", "globe", "tank", "humid",

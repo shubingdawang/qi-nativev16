@@ -316,7 +316,10 @@ struct ClawdRigView: View {
             var maxH: CGFloat = 12
             switch pose {
             case .lift:        w = 24; maxH = 18
-            case .sip, .swirl: w = 7;  maxH = 10
+            // 杯子、碗这类矮胖的小东西拿在手上要**看得清**：以前 9 格宽，
+            // 在聊天页那么小的他手里只剩一个灰点（她发的截图）
+            case .hold where ratio < 1.3: w = 13; maxH = 14
+            case .sip, .swirl: w = 9;  maxH = 12
             default:           break
             }
             let h = w * ratio
@@ -656,12 +659,20 @@ enum ClawdRig {
             p.leftArm = pose == .cheer ? p.rightArm : 0
 
         case .hold:
-            // 一只手往前伸一点，东西挨着手边、**落在地上那条线上**。
-            // 扫把、可乐都是这一档。
-            p.rightArm = 18
-            p.itemAt = CGPoint(x: CGFloat(bodyRight) + 1.5,
-                               y: handY + 1.5 - itemH * 0.55)
-            p.itemTilt = -8
+            if itemH < itemW * 1.3 {
+                // 矮胖的小东西（杯子、碗、盘子）：手抬高一点，东西**托在手上**，
+                // 手在它半腰偏下的位置，看得出是端着
+                p.rightArm = 28
+                p.itemAt = CGPoint(x: CGFloat(bodyRight) + 1.5,
+                                   y: handY - itemH * 0.62)
+                p.itemTilt = -4
+            } else {
+                // 细长的（扫把、伞、吉他）：一只手往前伸一点，东西挨着手边、**落在地上那条线上**
+                p.rightArm = 18
+                p.itemAt = CGPoint(x: CGFloat(bodyRight) + 1.5,
+                                   y: handY + 1.5 - itemH * 0.55)
+                p.itemTilt = -8
+            }
 
         case .lift:
             // 双手抬过头顶（搬床、搬柜子）。**东西不缩小**——

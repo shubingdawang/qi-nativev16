@@ -371,11 +371,134 @@ def hoodie(s):
         s.rect(x, 13.1, 0.2, 0.35, mid)
 
 
+# ══════════════════════════════════════════ 华丽版
+#
+# 她：「服装也画得华丽点。」位置和轮廓都是她一件件调过的（带子走向、围巾挂左边、
+# 鞋一只脚一只……），**一格不挪**，只在原来那件上面加花样：
+# 金边、小宝石、花纹、流苏、蝴蝶结、毛边。
+
+GOLD, GOLD_LT, GEM, PEARL = "#E8C47A", "#FFF0B8", "#F29BB8", "#FFFFFF"
+
+
+def hat_fancy(s):
+    hat(s)
+    # 帽身绞花：几道竖着的麻花纹
+    for x in (4.2, 6.2, 8.2, 10.2):
+        for y in (3.2, 3.9, 4.6):
+            s.rect(x, y, 0.3, 0.35, "#2C4F69")
+            s.rect(x + 0.3, y + 0.35, 0.3, 0.35, "#5E8FB4")
+    # 折边上一排金色小雪花点 + 顶上毛球换成带金芯的
+    for x in (3.1, 5.1, 7.1, 9.1, 11.1):
+        s.rect(x, 5.6, 0.4, 0.4, GOLD)
+        s.rect(x + 0.1, 5.7, 0.2, 0.2, GOLD_LT)
+    s.disc(7.5, 1.8, 0.3, GOLD, FINE)
+
+
+def beret_fancy(s):
+    beret(s)
+    # 帽箍一圈珍珠 + 右侧一枚金色蝴蝶结胸针（中间一颗粉宝石）
+    for x in [3.6 + 0.55 * i for i in range(15)]:
+        s.disc(x, 5.85, 0.16, PEARL, FINE)
+    for dx in (-0.7, 0.7):
+        s.disc(9.9 + dx, 4.6, 0.42, GOLD, FINE)
+    s.disc(9.9, 4.6, 0.3, GEM, FINE)
+    s.rect(9.75, 4.45, 0.15, 0.15, PEARL)
+    # 帽面上几点暗纹小花
+    for (x, y) in ((5.2, 4.2), (6.6, 3.8), (8.0, 4.3)):
+        s.disc(x, y, 0.22, "#D8708A", FINE)
+
+
+def glasses_fancy(s):
+    glasses(s)
+    # 金色细边描在黑框外沿，鼻梁上一颗粉宝石，镜腿挂一小段珍珠链
+    for cx in (4.55, 10.45):
+        s.ring(cx, 9.0, 2.08, 0.13, GOLD, FINE)
+        s.disc(cx - 1.35, 7.55, 0.18, GOLD_LT, FINE)   # 镜框左上一颗小钻
+    s.disc(7.5, 9.0, 0.3, GEM, FINE)
+    s.rect(7.4, 8.9, 0.14, 0.14, PEARL)
+    for i in range(6):
+        s.disc(1.9 + 0.22 * i * 0.5, 9.3 + 0.35 * i, 0.12, PEARL if i % 2 else GOLD, FINE)
+
+
+def bowtie_fancy(s):
+    bowtie(s)
+    # 翼面白色波点 + 中间结换成金扣镶宝石 + 两根短飘带
+    for (x, y) in ((5.1, 12.2), (6.1, 12.9), (5.4, 13.3), (8.6, 12.2), (9.7, 12.9), (9.2, 13.3)):
+        s.disc(x, y, 0.16, PEARL, FINE)
+    s.rect(6.85, 11.9, 1.3, 1.4, GOLD)
+    s.disc(7.5, 12.6, 0.36, GEM, FINE)
+    s.rect(7.35, 12.45, 0.14, 0.14, PEARL)
+    s.rect(6.7, 13.35, 0.45, 0.9, "#C0392B")
+    s.rect(7.85, 13.35, 0.45, 0.9, "#C0392B")
+
+
+def scarf_fancy(s):
+    scarf(s)
+    # 条纹：绕的那圈和垂下来的那条都加奶白色细条 + 金色流苏头
+    for x in (3.2, 5.0, 6.8, 8.6, 10.4, 12.2):
+        s.rect(x, 11.55, 0.35, 1.2, "#F4EEDC")
+    for y in (13.6, 14.4):
+        s.rect(2.9, y, 1.9, 0.3, "#F4EEDC")
+    for x in (3.05, 3.6, 4.15):
+        s.disc(x + 0.16, 16.85, 0.2, GOLD, FINE)
+
+
+def bag_fancy(s):
+    bag(s)
+    # 带子上一排金铆钉；包身金色包边、翻盖上一颗心形金扣、挂一枚小流苏
+    for i in range(0, 31, 5):
+        t = i / 30
+        s.disc(2.45 + 8.5 * t, 9.26 + 1.75 * t, 0.12, GOLD, FINE)
+    s.rect(10.5, 10.7, 3.2, 0.14, GOLD)
+    s.rect(10.5, 13.26, 3.2, 0.14, GOLD)
+    s.rect(13.56, 10.7, 0.14, 2.7, GOLD)
+    s.disc(11.9, 11.55, 0.34, GOLD, FINE)
+    s.disc(12.25, 11.55, 0.34, GOLD, FINE)
+    s.rect(11.75, 11.6, 0.65, 0.45, GOLD)
+    s.disc(12.07, 11.5, 0.16, GEM, FINE)
+    for dx in (0.0, 0.18, 0.36):
+        s.rect(13.2 + dx, 13.4, 0.12, 0.8, GEM)
+
+
+def boots_fancy(s):
+    boots(s)
+    # 靴口换成蓬蓬的白毛边、侧面一颗金扣、鞋尖一道亮边
+    for fx in FEET:
+        for k in range(4):
+            s.disc(fx - 0.2 + 0.45 * k, 13.65, 0.26, "#FFFDF6", FINE)
+        s.rect(fx + 0.95, 14.25, 0.35, 0.35, GOLD)
+        s.rect(fx - 0.5, 14.9, 2.0, 0.12, "#8A5A3C")
+
+
+def slippers_fancy(s):
+    slippers(s)
+    # 脚背上一个小蝴蝶结 + 中间一颗珍珠，鞋底一圈金线
+    for fx in FEET:
+        s.disc(fx + 0.2, 14.3, 0.22, "#F6DCE6", FINE)
+        s.disc(fx + 0.85, 14.3, 0.22, "#F6DCE6", FINE)
+        s.disc(fx + 0.52, 14.33, 0.14, PEARL, FINE)
+        s.rect(fx - 0.35, 15.38, 1.7, 0.1, GOLD)
+
+
+def hoodie_fancy(s):
+    hoodie(s)
+    # 兜上绣一颗心、下摆一圈蕾丝波浪、抽绳头换成金色
+    s.disc(7.25, 12.5, 0.3, "#E8607E", FINE)
+    s.disc(7.75, 12.5, 0.3, "#E8607E", FINE)
+    for k in range(4):
+        w = 0.9 - 0.22 * k
+        s.rect(7.5 - w / 2, 12.6 + 0.16 * k, w, 0.16, "#E8607E")
+    for x in [1.9 + 0.55 * i for i in range(21)]:
+        s.disc(x + 0.25, 13.55, 0.22, "#FFFFFF", FINE)
+    for x in (6.2, 8.6):
+        s.disc(x + 0.11, 12.05, 0.24, GOLD, FINE)
+
+
 PIECES = [
-    ("hat", hat), ("beret", beret), ("glasses", glasses),
-    ("bowtie", bowtie), ("scarf", scarf), ("bag", bag),
-    ("boots", boots), ("slippers", slippers),
-    ("hoodie", hoodie),
+    ("hat", hat_fancy), ("beret", beret_fancy), ("glasses", glasses_fancy),
+    ("bowtie", bowtie_fancy), ("scarf", scarf_fancy), ("bag", bag_fancy),
+    ("boots", boots_fancy), ("slippers", slippers_fancy),
+    ("hoodie", hoodie_fancy),
 ]
 
 
