@@ -1491,6 +1491,15 @@ final class ClawdStore: ObservableObject {
     func flipFacing(_ id: UUID) {
         guard let i = owned.firstIndex(where: { $0.id == id }) else { return }
         owned[i].facing = owned[i].facesRight ? "left" : "right"
+        // 长方形的转个向占地横竖就换了（见 `FurnitureCatalog.shape(of:projection:)`）。
+        // 原地放得下就不动；压到别的家具才挪到最近的空处
+        let c = cell(of: owned[i])
+        place(owned[i].id, at: c.gx, c.gy)
+    }
+
+    /// 这一件在当前视角下占地多大
+    func shape(of f: Furniture) -> IsoShape {
+        FurnitureCatalog.shape(of: f, projection: projection)
     }
 
     func sell(_ id: UUID) {
@@ -1587,6 +1596,23 @@ extension FurnitureCatalog {
     static func shape(of id: String) -> IsoShape {
         var s = baseShape(of: id)
         s.mount = mount(of: id)
+        return s
+    }
+
+    /// **摆在屋里的这一件**占地多大——跟它靠哪面墙有关。
+    ///
+    /// 她问：「不是有靠左墙和靠右墙两个版本吗，怎么会反？」
+    /// 图是对的，反的是**占的格子**：一张 3×4 的床，靠右墙时床头贴右墙、
+    /// 床身沿 gy 往前伸 4 格；转到靠左墙，床头贴左墙，床身就该沿 gx 伸 4 格。
+    /// 以前不管朝哪边都按「gx 3 格 × gy 4 格」占，靠左墙那张图画出来是 4×3，
+    /// 于是床伸出去一截、压到别的格子上。
+    ///
+    /// 等距屋里靠左墙（`facesRight == false`）就把宽和深对调；平面屋只有一个朝向，不调。
+    static func shape(of item: Furniture, projection: RoomProjection) -> IsoShape {
+        var s = shape(of: item.kind)
+        if projection == .iso, !item.facesRight, s.w != s.d {
+            swap(&s.w, &s.d)
+        }
         return s
     }
 
@@ -1930,6 +1956,20 @@ extension ClawdStore {
         }
     }
 
+    /// 靠左墙的长方形家具占地横竖对调之后（见 `FurnitureCatalog.shape(of:projection:)`），
+    /// 老存档里有的会压到隔壁那件上。**只理一次**：压着的挪到最近的空处，没压着的不动。
+    func settleSwappedFootprints() {
+        guard projection == .iso,
+              !UserDefaults.standard.bool(forKey: "clawdFootprintSwap1") else { return }
+        for f in owned where !f.hidden && !f.carried && !f.facesRight {
+            let s = FurnitureCatalog.shape(of: f.kind)
+            guard s.w != s.d, s.mount == .floor else { continue }
+            let c = cell(of: f)
+            place(f.id, at: c.gx, c.gy)
+        }
+        UserDefaults.standard.set(true, forKey: "clawdFootprintSwap1")
+    }
+
     /// 老家具分房间。**只分一次**，分完写回去。
     func migrateRooms() {
         for i in owned.indices where owned[i].room.isEmpty {
@@ -1965,7 +2005,7 @@ extension ClawdStore {
     func send(_ id: UUID, to room: HomeRoom) {
         guard let i = owned.firstIndex(where: { $0.id == id }) else { return }
         owned[i].room = room.rawValue
-        let s = FurnitureCatalog.shape(of: owned[i].kind)
+        let s = shape(of: owned[i])
         let geo = IsoRoom(size: Self.roomSize,
                           cols: projection == .flat ? Self.flatCols : Self.roomSize,
                           projection: projection)
@@ -1994,7 +2034,7 @@ extension ClawdStore {
         var out: Set<String> = []
         for f in owned where !f.hidden && !f.carried
             && f.room == room.rawValue && f.id != except {
-            let s = FurnitureCatalog.shape(of: f.kind)
+            let s = shape(of: f)
             // ⚠️ 只有**摆在地上**的占格子。挂墙上的和放桌上的都不占——
             // 占了的话一张桌子上摆两个杯子就会互相挤开。
             guard s.tall > 0, s.mount == .floor else { continue }
@@ -2010,7 +2050,7 @@ extension ClawdStore {
     @discardableResult
     func place(_ id: UUID, at gx: Int, _ gy: Int) -> Bool {
         guard let i = owned.firstIndex(where: { $0.id == id }) else { return false }
-        let s = FurnitureCatalog.shape(of: owned[i].kind)
+        let s = shape(of: owned[i])
         let room = HomeRoom(rawValue: owned[i].room) ?? .living
         let geo = IsoRoom(size: Self.roomSize,
                           cols: projection == .flat ? Self.flatCols : Self.roomSize,
@@ -2051,7 +2091,7 @@ extension ClawdStore {
     func support(at c: (gx: Int, gy: Int), in room: String, except: UUID? = nil) -> Furniture? {
         owned.first { o in
             guard o.id != except, o.room == room, onFloor(o) else { return false }
-            let s = FurnitureCatalog.shape(of: o.kind)
+            let s = shape(of: o)
             guard s.surface, s.mount == .floor else { return false }
             let oc = cell(of: o)
             return c.gx >= oc.gx && c.gx < oc.gx + max(1, s.w)
@@ -2068,7 +2108,7 @@ extension ClawdStore {
                    except: UUID? = nil, reach: Int = 2) -> (Int, Int)? {
         var best: (x: Int, y: Int, d: Int)?
         for o in owned where o.id != except && o.room == room.rawValue && onFloor(o) {
-            let s = FurnitureCatalog.shape(of: o.kind)
+            let s = shape(of: o)
             guard s.surface, s.mount == .floor else { continue }
             let oc = cell(of: o)
             for x in oc.gx..<(oc.gx + max(1, s.w)) {

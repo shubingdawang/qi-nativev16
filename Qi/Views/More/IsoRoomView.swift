@@ -226,6 +226,7 @@ struct IsoRoomView<Clawd: View>: View {
                 boardSize = geo.size
                 store.migrateRoom()
                 store.migrateRooms()
+                store.settleSwappedFootprints()
             }
             .onChange(of: geo.size) { _, v in boardSize = v }
         }
@@ -280,7 +281,7 @@ struct IsoRoomView<Clawd: View>: View {
             // 正在拖的那一件，把它要落的几格点亮
             if let id = dragging,
                let f = store.furniture(in: room).first(where: { $0.id == id }) {
-                let s = FurnitureCatalog.shape(of: f.kind)
+                let s = store.shape(of: f)
                 // 键得是「x,y」这种唯一的串。用 `\.0`（只有 x）的话，
                 // 一件占两行的家具会有两格键一样，SwiftUI 只画得出一格
                 ForEach(IsoRoom.cells(dragCell.gx, dragCell.gy, s.w, s.d)
@@ -396,7 +397,7 @@ struct IsoRoomView<Clawd: View>: View {
             let n = flat ? g.cols : g.size
             var blocked = Set<Int>()
             for f in items {
-                let s = FurnitureCatalog.shape(of: f.kind)
+                let s = store.shape(of: f)
                 let c = store.cell(of: f)
                 let hangs = s.mount == .wall
                 let tallFloor = s.mount == .floor && s.tall >= 1.5
@@ -428,7 +429,7 @@ struct IsoRoomView<Clawd: View>: View {
     private func glows(_ g: IsoRoom) -> [RoomNightShade.Glow] {
         store.furniture(in: room).compactMap { f in
             guard let gl = RoomClock.glow(of: f.kind) else { return nil }
-            let s = FurnitureCatalog.shape(of: f.kind)
+            let s = store.shape(of: f)
             let cell = store.cell(of: f)
             let c = g.point(Double(cell.gx) + Double(s.w - 1) / 2,
                             Double(cell.gy) + Double(s.d - 1) / 2)
@@ -501,7 +502,7 @@ struct IsoRoomView<Clawd: View>: View {
         // 就是她说的「桌子凳子对这个屋子来说特别大、clawd 完全不能住」。
         for f in store.furniture(in: room) {
             guard let kind = FurnitureCatalog.kind(f.kind) else { continue }
-            let s = FurnitureCatalog.shape(of: f.kind)
+            let s = store.shape(of: f)
             let cell = (f.id == dragging) ? dragCell : store.cell(of: f)
             // 一件占好几格的东西，**按它最靠近镜头的那一格算深度**——
             // 按中心算的话，一张床的床尾会被站在床尾旁边的人盖住
@@ -534,7 +535,7 @@ struct IsoRoomView<Clawd: View>: View {
             // 先画、然后被桌子整个盖住——看着就是不在桌上。
             if s.mount == .table,
                let under = store.support(at: cell, in: f.room, except: f.id) {
-                let us = FurnitureCatalog.shape(of: under.kind)
+                let us = store.shape(of: under)
                 let uc = store.cell(of: under)
                 let ud = geoRoom.projection == .flat
                     ? Double(uc.gy + us.d - 1) + Double(uc.gx + us.w - 1) * 0.001
@@ -576,7 +577,7 @@ struct IsoRoomView<Clawd: View>: View {
                                              Int(here.gy.rounded()))
                 for one in out {
                     guard let f = one.item else { continue }
-                    let s = FurnitureCatalog.shape(of: f.kind)
+                    let s = store.shape(of: f)
                     let cell = (f.id == dragging) ? dragCell : store.cell(of: f)
                     let onIt = hx >= cell.gx && hx < cell.gx + max(1, s.w)
                         && hy >= cell.gy && hy < cell.gy + max(1, s.d)
@@ -719,7 +720,7 @@ struct IsoRoomView<Clawd: View>: View {
 
     private func piece(_ item: Furniture, _ kind: FurnitureKind,
                        _ geoRoom: IsoRoom) -> some View {
-        let s = FurnitureCatalog.shape(of: kind.id)
+        let s = store.shape(of: item)
         let cell = (item.id == dragging) ? dragCell : store.cell(of: item)
         // 落脚点：它盖住那几格的正中间
         let c = geoRoom.point(Double(cell.gx) + Double(s.w - 1) / 2,
@@ -894,7 +895,7 @@ struct IsoRoomView<Clawd: View>: View {
             let cell = (item.id == dragging) ? dragCell : store.cell(of: item)
             var top: CGFloat = 0
             for f in store.furniture(in: room) where f.id != item.id {
-                let o = FurnitureCatalog.shape(of: f.kind)
+                let o = store.shape(of: f)
                 guard o.surface else { continue }
                 let c = store.cell(of: f)
                 let on = cell.gx >= c.gx && cell.gx < c.gx + max(1, o.w)

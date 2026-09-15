@@ -417,7 +417,7 @@ enum RoomActs {
     /// 抬多高按这件东西的高度算（`IsoShape.tall` 是以格为单位的）。
     static func spot(of item: Furniture, kindID: String,
                      in geo: IsoRoom, act: RoomAct) -> CGPoint {
-        let s = FurnitureCatalog.shape(of: kindID)
+        let s = FurnitureCatalog.shape(of: item, projection: geo.projection)
         // ⚠️⚠️ **两种视角各存各的格子，不能直接读 `item.gx / gy`。**
         //
         // `gx/gy` 是**立体屋专用**的那一对；平面屋那一对叫 `fx/fy`

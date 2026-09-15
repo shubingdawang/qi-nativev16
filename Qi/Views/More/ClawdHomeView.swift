@@ -1610,7 +1610,7 @@ struct ClawdHomeView: View {
                                         y: clawdY * size.height))
         let (hx, hy) = geo.clamp(Int(here.gx.rounded()), Int(here.gy.rounded()))
         for f in store.furniture(in: shownRoom) where f.gx >= 0 {
-            let s = FurnitureCatalog.shape(of: f.kind)
+            let s = store.shape(of: f)
             guard hx >= f.gx, hx < f.gx + max(1, s.w),
                   hy >= f.gy, hy < f.gy + max(1, s.d) else { continue }
             guard s.actions.contains(where: { $0 == "躺下" || $0 == "钻被窝" })
@@ -2001,7 +2001,7 @@ struct ClawdHomeView: View {
                         ? store.support(at: itemCell, in: item.room, except: item.id) : nil
                     let p: CGPoint
                     if let under {
-                        let us = FurnitureCatalog.shape(of: under.kind)
+                        let us = store.shape(of: under)
                         p = RoomActs.besidePoint(cell: store.cell(of: under),
                                                  w: us.w, d: us.d, in: geo)
                     } else {
