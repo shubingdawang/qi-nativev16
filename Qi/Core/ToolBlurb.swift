@@ -86,6 +86,7 @@ enum ToolBlurb {
         // MARK: 小屋 · 游戏 · 占卜
 
         "clawd_room": "查看或整理 clawd 的房间",
+        "clawd_wear": "从买过的衣服里挑着穿",
 
         // MARK: 健康 · 待办
 

@@ -2418,9 +2418,19 @@ struct ClawdHomeView: View {
                 store.clawdDoing = .arranging
                 notice = "他把" + got + "拿出来摆上了"
                 done = true
+
+            case .wear(let name):
+                // 穿衣服不算「动家里的东西」，不占那一次
+                guard store.clothes(named: name) != nil else { continue }
+                notice = "他" + store.putOn(named: name).replacingOccurrences(of: "。", with: "")
+
+            case .takeOff(let name):
+                let r = store.takeOff(named: name)
+                guard !r.hasPrefix("身上没穿") else { continue }
+                notice = "他" + r.replacingOccurrences(of: "。", with: "")
             }
         }
-        if done {
+        if done || notice != nil {
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 6_000_000_000)
                 notice = nil

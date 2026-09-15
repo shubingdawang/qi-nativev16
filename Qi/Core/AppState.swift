@@ -5001,6 +5001,21 @@ final class AppState: ObservableObject {
                 return (error.localizedDescription, true)
             }
 
+        case "clawd_wear":
+            let store = ClawdStore.shared
+            guard store.linked else { return ("她还没把你接进 clawd 那边。", false) }
+            let name = (args["name"] as? String) ?? ""
+            switch (args["action"] as? String) ?? "look" {
+            case "wear":
+                guard !name.isEmpty else { return ("穿哪一件？", true) }
+                return (store.putOn(named: name) + "\n" + store.wardrobeBrief(), false)
+            case "take_off":
+                guard !name.isEmpty else { return ("脱哪一件？", true) }
+                return (store.takeOff(named: name) + "\n" + store.wardrobeBrief(), false)
+            default:
+                return (store.wardrobeBrief(), false)
+            }
+
         case "clawd_room":
             let brief = ClawdStore.shared.roomBrief()
             if brief.isEmpty {

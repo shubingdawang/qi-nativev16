@@ -1043,6 +1043,68 @@ final class ClawdStore: ObservableObject {
         wornSlots[slot] = (wornSlots[slot] == kindID) ? nil : kindID
     }
 
+    // MARK: 他自己挑衣服穿（接入 AI 之后）
+
+    /// 她买过的衣服（去重，按买的先后）
+    var ownedClothes: [FurnitureKind] {
+        var seen = Set<String>()
+        return owned.compactMap { f -> FurnitureKind? in
+            guard let k = FurnitureCatalog.kind(f.kind), k.category == .wear,
+                  seen.insert(k.id).inserted else { return nil }
+            return k
+        }
+    }
+
+    /// 按名字找她买过的那件衣服（他说的是名字；「西装」「黑领带」这种半截的也认）
+    func clothes(named: String) -> FurnitureKind? {
+        let n = named.trimmingCharacters(in: .whitespaces)
+        guard !n.isEmpty else { return nil }
+        let all = ownedClothes
+        return all.first { $0.name == n }
+            ?? all.first { $0.name.contains(n) || n.contains($0.name) }
+            ?? all.first { $0.name.replacingOccurrences(of: "小", with: "") == n.replacingOccurrences(of: "小", with: "") }
+    }
+
+    /// 穿上一件（那个位置原来穿着别的就换下来）。返回给他看的结果
+    func putOn(named: String) -> String {
+        guard let k = clothes(named: named) else {
+            let names = ownedClothes.map(\.name)
+            return names.isEmpty ? "她还没给你买过衣服。"
+                : "没找到「\(named)」。她给你买过的：" + names.joined(separator: "、")
+        }
+        let slot = ClawdRig.wearSlot(k.id).rawValue
+        let before = wornSlots[slot].flatMap { FurnitureCatalog.kind($0)?.name }
+        wornSlots[slot] = k.id
+        if let before, before != k.name { return "换上了\(k.name)（把\(before)换下来了）。" }
+        return "穿上了\(k.name)。"
+    }
+
+    /// 脱下一件。写「全部」就全脱
+    func takeOff(named: String) -> String {
+        let n = named.trimmingCharacters(in: .whitespaces)
+        if n == "全部" || n == "都脱" || n == "所有" {
+            wornSlots = [:]
+            return "都脱下来了。"
+        }
+        guard let k = clothes(named: n), isWearing(k.id) else {
+            return "身上没穿「\(named)」。"
+        }
+        wornSlots[ClawdRig.wearSlot(k.id).rawValue] = nil
+        return "脱下了\(k.name)。"
+    }
+
+    /// 给他看的：身上穿着什么、衣柜里还有哪些
+    func wardrobeBrief() -> String {
+        let all = ownedClothes
+        guard !all.isEmpty else { return "她还没给你买过衣服。" }
+        let on = wornIDs.compactMap { FurnitureCatalog.kind($0)?.name }
+        let off = all.filter { !isWearing($0.id) }.map(\.name)
+        var s = on.isEmpty ? "你身上现在什么都没穿。" : "你身上穿着：" + on.joined(separator: "、") + "。"
+        if !off.isEmpty { s += "衣柜里还有：" + off.joined(separator: "、") + "。" }
+        s += "（同一个位置只能穿一件：帽子一顶、眼镜一副、领带或领结一条、衬衫一件、外套或背带裤一件、鞋一双。）"
+        return s
+    }
+
     /// 他此刻正在用的那件家具，和怎么用。家具跟着动（摇摇马摇、洗衣机震）靠它
     @Published var useItem: UUID?
     @Published var useStyle: RoomUse = .stand
@@ -1560,6 +1622,9 @@ final class ClawdStore: ObservableObject {
             s += "\n\n她收进柜子里的：" + away.joined(separator: "、")
             if canArrange { s += "。**这些你也能拿出来摆**" }
             s += "。"
+        }
+        if !ownedClothes.isEmpty {
+            s += "\n\n" + wardrobeBrief()
         }
         if let watching, watching != clawdRoom {
             s += "\n\n她此刻在看" + watching.rawValue

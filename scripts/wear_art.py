@@ -620,12 +620,17 @@ def suit(s):
     """
     coat, coat_lt, coat_dk = "#4A4E5A", "#646A78", "#34373F"
     shirt = "#FBFBF8"
-    # 外套：一排排画，嘴那几行（y<11.9）中间留出 V 口子，口子里是皮肤（不画）；
-    # 嘴下面那段 V 口子里是白衬衫
+    # 外套：一排排画。V 口的边是**斜的**——嘴那几行越往上开得越宽，
+    # 嘴两边原来方方的那两块就成了往下翻的三角领（她：方块太突兀，折成三角像领子）。
+    # 嘴下面那段 V 口里是白衬衫，到 y13.0 合上。
+    def half_at(y):
+        if y < 11.85:
+            return 1.75 + (11.85 - y) * 1.2
+        return max(0.0, 1.75 - (y - 11.85) / 1.15 * 1.75)
+
     y = 10.4
     while y < 13.35:
-        # 嘴那几行（到 y11.85）口子只开嘴那么宽，往下才收成 V、在 y13.0 合上
-        half = 1.75 if y < 11.85 else max(0.0, 1.75 - (y - 11.85) / 1.15 * 1.75)
+        half = half_at(y)
         if half > 0:
             s.rect(1.8, y, 7.5 - half - 1.8, 0.1, coat)
             s.rect(7.5 + half, y, 13.2 - (7.5 + half), 0.1, coat)
@@ -636,12 +641,17 @@ def suit(s):
         y += 0.1
     s.rect(1.8, 10.4, 0.45, 2.95, coat_lt)
     s.rect(12.75, 10.4, 0.45, 2.95, coat_dk)
-    # 翻领：沿着 V 口两边一道亮一点的斜边
+    # 翻领：贴着 V 口的一条三角形，上宽下窄，外沿压一道深线；中间一个小缺口（西装领的那个豁口）
     for k in range(26):
         yy = 10.4 + k * 0.1
-        half = 1.75 if yy < 11.85 else max(0.0, 1.75 - (yy - 11.85) / 1.15 * 1.75)
-        s.rect(7.5 - half - 0.45, yy, 0.45, 0.1, coat_lt)
-        s.rect(7.5 + half, yy, 0.45, 0.1, coat_dk)
+        half = half_at(yy)
+        w = max(0.25, 1.1 - k * 0.034)
+        if abs(yy - 11.3) < 0.06:
+            continue
+        s.rect(7.5 - half - w, yy, w, 0.1, coat_lt)
+        s.rect(7.5 - half - w - 0.14, yy, 0.14, 0.1, coat_dk)
+        s.rect(7.5 + half, yy, w, 0.1, coat_lt)
+        s.rect(7.5 + half + w, yy, 0.14, 0.1, coat_dk)
     # 胸袋 + 白口袋巾、两颗扣子
     s.rect(10.3, 12.3, 1.5, 0.12, coat_dk)
     s.rect(10.5, 12.05, 0.35, 0.25, shirt)

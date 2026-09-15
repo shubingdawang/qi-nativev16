@@ -392,6 +392,15 @@ enum NativeTools {
             ],
             required: ["subject"])
 
+        add("clawd_wear",
+            "触发：想换身衣服、她问你今天穿什么、或者她刚给你买了新衣服。动机：衣服是她一件件攒币给你买的，穿什么你自己挑。行动：看自己身上穿着什么、衣柜里还有哪些（look）；穿上一件（wear）；脱下一件（take_off，写「全部」就全脱）。只有她把你接进 clawd 那边之后才能用。",
+            [
+                "action": ["type": "string", "enum": ["look", "wear", "take_off"],
+                           "description": "look 看看；wear 穿上；take_off 脱下"],
+                "name": ["type": "string", "description": "衣服的名字，比如「小西装」「波点领带」。look 的时候不用填"]
+            ],
+            required: ["action"])
+
         add("clawd_room",
             "触发：她提起 clawd、提起给你布置的房间，或者你想知道她给你添了什么。动机：那些东西是她一件件攒币买来摆的，看见了就该说点什么。行动：看 clawd 房间里现在都有什么。只有她把你接进去之后你才看得到。",
             [:], required: [])

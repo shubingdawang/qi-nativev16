@@ -70,6 +70,10 @@ enum RoomMarker {
         case move(name: String, to: HomeRoom)
         /// 把收起来的某件重新摆出来
         case takeOut(name: String)
+        /// 从她买过的衣服里挑一件穿上
+        case wear(name: String)
+        /// 脱下身上某一件
+        case takeOff(name: String)
     }
 
     private static var verbs: [(String, (String) -> Act?)] {
@@ -89,7 +93,9 @@ enum RoomMarker {
                 else { return nil }
                 return .move(name: parts[0], to: r)
             }),
-            ("拿出", { body in body.isEmpty ? nil : .takeOut(name: body) })
+            ("拿出", { body in body.isEmpty ? nil : .takeOut(name: body) }),
+            ("穿", { body in body.isEmpty ? nil : .wear(name: body) }),
+            ("脱", { body in body.isEmpty ? nil : .takeOff(name: body) })
         ]
     }
 
@@ -122,6 +128,8 @@ enum RoomMarker {
         · `[[去:卧室]]` —— 你换一间待着
         · `[[搬:小床→书房]]` —— 把一件家具搬到别的屋
         · `[[拿出:小熊]]` —— 把她收起来的东西重新摆出来
+        · `[[穿:小西装]]` —— 从她给你买的衣服里挑一件穿上（同位置原来那件会换下来）
+        · `[[脱:领带]]` —— 脱下身上某一件；`[[脱:全部]]` 全脱
 
         几条边界：
 
@@ -132,6 +140,7 @@ enum RoomMarker {
         · **大部分时候什么都不用动。** 这几样是「你可以」，不是「你该」。
         · 收起来的东西你能拿出来，但**你不能替她收起来**——
           她收进柜子是她的决定。
+        · 穿什么你自己挑，想换就换，不想换就别动。
         """
     }
 }
