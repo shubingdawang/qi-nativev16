@@ -363,6 +363,12 @@ extension FurnitureCatalog {
         "bdaydecor":       Art(flat: "px_bdaydecor", iso: "iso_l_px_bdaydecor"),
         "doorwreath":      Art(flat: "px_doorwreath", iso: "iso_l_px_doorwreath"),
         "hoodie":          Art(flat: "px_hoodie", iso: "iso_l_px_hoodie"),
+        "cap":             Art(flat: "px_cap", iso: "iso_l_px_cap"),
+        "tie":             Art(flat: "px_tie", iso: "iso_l_px_tie"),
+        "sneakers":        Art(flat: "px_sneakers", iso: "iso_l_px_sneakers"),
+        "headphones":      Art(flat: "px_headphones", iso: "iso_l_px_headphones"),
+        "plaidshirt":      Art(flat: "px_plaidshirt", iso: "iso_l_px_plaidshirt"),
+        "sunglasses":      Art(flat: "px_sunglasses", iso: "iso_l_px_sunglasses"),
         "star_window":     Art(flat: "px_star_window", iso: "iso_l_px_star_window"),
         "star_seat":       Art(flat: "px_star_seat", iso: "iso_l_px_star_seat")
     ]

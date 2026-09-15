@@ -299,7 +299,14 @@ ITEMS = [
 
     # ── 乐器、衣服 ──────────────────────────────────
     ("guitar_item", "吉他", 150, TO, "screen", "it_inst_guitar", None, "拨两下"),
-    ("hoodie",     "小卫衣", 85, W, "small", "it_wear_hoodie", None, "套头上卡住"),
+    ("hoodie",     "小背带裤", 85, W, "small", "px_hoodie", None, "扣好两边的背带"),
+    # 男孩子风格的穿戴（她：clawd 代表阿晏，阿晏是男孩子）
+    ("cap",        "棒球帽", 70, W, "small", "px_cap", None, "帽檐往后一转"),
+    ("tie",        "小领带", 60, W, "small", "px_tie", None, "把领带拉正"),
+    ("sneakers",   "小球鞋", 80, W, "small", "px_sneakers", None, "原地蹦两下"),
+    ("headphones", "头戴耳机", 110, W, "small", "px_headphones", None, "跟着节奏点头"),
+    ("plaidshirt", "格子衬衫", 90, W, "small", "px_plaidshirt", None, "卷起袖子"),
+    ("sunglasses", "小墨镜", 75, W, "small", "px_sunglasses", None, "推到头顶上"),
     # ── 圣诞红（她 2026-09-08 发的第一张拼图，16 件）───────
     #
     # ⚠️ 这三套的图是 `scripts/prep_theme.py` 从整张拼图上切下来的，

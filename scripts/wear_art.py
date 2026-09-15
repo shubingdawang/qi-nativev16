@@ -286,8 +286,12 @@ def bag(s):
     # 上一版起点在 (1.6, 9.6)，落在手的中段，看着是从胳膊上长出来的。
     # 终点 (10.5, 10.75)：最后几块压进包的翻盖里，**包画在带子之后**，
     # 带子自然钻进包口，不用再补一个扣。
-    x0, y0 = 2.0, 9.0
-    x1, y1 = 10.5, 10.75
+    # ⚠️ 第三次：她说「包带挡住眼睛了，把包往下移，包带跟着调角度」。
+    # 包整体往下挪 1.2 格，带子起点压到 y9.8（还在手和身子的拐角上，手是 y9..11），
+    # 终点跟着包口到 y11.95：左眼那段（x4..5）带子上沿约 y10.3，右眼那段约 y11.7，
+    # 两只眼（y8..10）都不碰。
+    x0, y0 = 2.0, 9.8
+    x1, y1 = 10.5, 11.95
     n = 30
     for i in range(n + 1):
         t = i / n
@@ -297,12 +301,12 @@ def bag(s):
         s.rect(x, y, 0.9, 0.14, mid)       # 带面朝上那一道亮边
 
     # 包身：吊在右胯上，压住躯干右下角（躯干 x2..13 y6..13）
-    s.rect(10.5, 10.7, 3.2, 2.7, mid)
-    s.rect(10.5, 10.7, 0.4, 2.7, lit)      # 左沿高光
-    s.rect(10.5, 10.7, 3.2, 0.9, dim)      # 翻盖
-    s.rect(10.5, 11.55, 3.2, 0.22, "#4A3620")
-    s.rect(11.7, 11.3, 0.75, 0.48, lit)    # 扣子
-    s.rect(10.5, 13.1, 3.2, 0.3, dim)      # 底边
+    s.rect(10.5, 11.9, 3.2, 2.7, mid)
+    s.rect(10.5, 11.9, 0.4, 2.7, lit)      # 左沿高光
+    s.rect(10.5, 11.9, 3.2, 0.9, dim)      # 翻盖
+    s.rect(10.5, 12.75, 3.2, 0.22, "#4A3620")
+    s.rect(11.7, 12.5, 0.75, 0.48, lit)    # 扣子
+    s.rect(10.5, 14.3, 3.2, 0.3, dim)      # 底边
 
     # ⚠️ 原来这儿还有一个「带子扎进包口的扣」，**删了**。
     # 她圈出来的就是它：带子早就改道了，那块扣还留在包口上面，
@@ -323,11 +327,13 @@ FEET = (3, 5, 9, 11)
 
 def boots(s):
     """小靴子：四只脚各一只。比脚大一点点，加一道靴口。"""
+    # ⚠️ 左右挨着的两只脚只隔 1 格，靴子和鞋底都窄一点，**两只之间留一道缝**——
+    # 她：「这个鞋子中间没有断掉」，连成一块就看成一只大鞋了。
     mid, dim, cuff = "#5B3A22", "#3A2414", "#D8CBB4"
     for fx in FEET:
-        s.rect(fx - 0.35, 13.55, 1.7, 1.75, mid)    # 靴身
-        s.rect(fx - 0.35, 13.55, 1.7, 0.35, cuff)   # 靴口那一道
-        s.rect(fx - 0.5, 14.95, 2.0, 0.55, dim)     # 鞋底，往前探一点
+        s.rect(fx - 0.15, 13.55, 1.3, 1.75, mid)    # 靴身
+        s.rect(fx - 0.15, 13.55, 1.3, 0.35, cuff)   # 靴口那一道
+        s.rect(fx - 0.25, 14.95, 1.5, 0.55, dim)    # 鞋底
 
 
 def slippers(s):
@@ -448,26 +454,26 @@ def bag_fancy(s):
     # 带子上一排金铆钉；包身金色包边、翻盖上一颗心形金扣、挂一枚小流苏
     for i in range(0, 31, 5):
         t = i / 30
-        s.disc(2.45 + 8.5 * t, 9.26 + 1.75 * t, 0.12, GOLD, FINE)
-    s.rect(10.5, 10.7, 3.2, 0.14, GOLD)
-    s.rect(10.5, 13.26, 3.2, 0.14, GOLD)
-    s.rect(13.56, 10.7, 0.14, 2.7, GOLD)
-    s.disc(11.9, 11.55, 0.34, GOLD, FINE)
-    s.disc(12.25, 11.55, 0.34, GOLD, FINE)
-    s.rect(11.75, 11.6, 0.65, 0.45, GOLD)
-    s.disc(12.07, 11.5, 0.16, GEM, FINE)
+        s.disc(2.45 + 8.5 * t, 10.06 + 2.15 * t, 0.12, GOLD, FINE)
+    s.rect(10.5, 11.9, 3.2, 0.14, GOLD)
+    s.rect(10.5, 14.46, 3.2, 0.14, GOLD)
+    s.rect(13.56, 11.9, 0.14, 2.7, GOLD)
+    s.disc(11.9, 12.75, 0.34, GOLD, FINE)
+    s.disc(12.25, 12.75, 0.34, GOLD, FINE)
+    s.rect(11.75, 12.8, 0.65, 0.45, GOLD)
+    s.disc(12.07, 12.7, 0.16, GEM, FINE)
     for dx in (0.0, 0.18, 0.36):
-        s.rect(13.2 + dx, 13.4, 0.12, 0.8, GEM)
+        s.rect(13.2 + dx, 14.6, 0.12, 0.8, GEM)
 
 
 def boots_fancy(s):
     boots(s)
     # 靴口换成蓬蓬的白毛边、侧面一颗金扣、鞋尖一道亮边
     for fx in FEET:
-        for k in range(4):
-            s.disc(fx - 0.2 + 0.45 * k, 13.65, 0.26, "#FFFDF6", FINE)
-        s.rect(fx + 0.95, 14.25, 0.35, 0.35, GOLD)
-        s.rect(fx - 0.5, 14.9, 2.0, 0.12, "#8A5A3C")
+        for k in range(3):
+            s.disc(fx + 0.05 + 0.45 * k, 13.65, 0.24, "#FFFDF6", FINE)
+        s.rect(fx + 0.75, 14.25, 0.3, 0.3, GOLD)
+        s.rect(fx - 0.25, 14.9, 1.5, 0.12, "#8A5A3C")
 
 
 def slippers_fancy(s):
@@ -494,11 +500,143 @@ def hoodie_fancy(s):
         s.disc(x + 0.11, 12.05, 0.24, GOLD, FINE)
 
 
+# ══════════════════════════════════════════ 第三轮（她 2026-09-16）
+#
+# · 「这个可以改成背带裤」——卫衣那件改画背带裤，**背带跟裤子同色**
+# · 「clawd 代表阿晏，阿晏是男孩子，多一点男孩子风格的服饰」——
+#   棒球帽、领带、球鞋、头戴耳机、格子衬衫、墨镜
+# · 靴子两只一对之间要**断开**，包往下挪、带子别碰眼睛
+
+DENIM, DENIM_LT, DENIM_DK = "#6E92C8", "#93B2DE", "#4E6FA3"
+
+
+def overalls(s):
+    """背带裤：裤身兜住肚子下半截，前面一块护胸，两根背带从护胸上角**贴着眼睛外侧**往上翻到肩头。
+
+    眼睛在 x4..5 / 10..11、y8..10，背带走 x≈2.5..3.7 和 11.3..12.5，一只眼都不碰。
+    """
+    s.rect(1.8, 11.0, 11.4, 2.3, DENIM)
+    s.rect(1.8, 11.0, 0.45, 2.3, DENIM_LT)
+    s.rect(12.75, 11.0, 0.45, 2.3, DENIM_DK)
+    s.rect(3.4, 10.3, 8.2, 0.9, DENIM)
+    s.rect(3.4, 10.3, 8.2, 0.18, DENIM_LT)
+    s.rect(6.3, 10.55, 2.4, 1.2, DENIM_DK)
+    s.rect(6.45, 10.7, 2.1, 0.9, DENIM)
+    for x in [6.5 + 0.35 * i for i in range(6)]:
+        s.rect(x, 10.62, 0.18, 0.08, GOLD_LT)
+    for (x0, x1) in ((3.7, 2.5), (11.3, 12.5)):
+        n = 16
+        for i in range(n + 1):
+            t = i / n
+            x = x0 + (x1 - x0) * t
+            y = 10.4 + (6.1 - 10.4) * t
+            s.rect(x - 0.3, y, 0.62, 0.3, DENIM)
+            s.rect(x - 0.3, y, 0.14, 0.3, DENIM_LT)
+        s.disc(x0, 10.55, 0.28, GOLD, FINE)
+        s.disc(x0, 10.55, 0.12, GOLD_LT, FINE)
+    s.rect(7.45, 11.9, 0.12, 1.4, DENIM_DK)
+    for fx in FEET:
+        s.rect(fx - 0.2, 13.2, 1.4, 0.55, DENIM_LT)
+        s.rect(fx - 0.2, 13.6, 1.4, 0.15, DENIM_DK)
+
+
+def cap(s):
+    """棒球帽：扣在头顶，帽檐朝右前方伸出去，前片一颗星。"""
+    mid, lit, dim = "#3E5A8C", "#5E7EB4", "#2C4270"
+    s.dome(7.3, 3.0, 6.1, 5.4, mid, FINE)
+    s.dome(6.2, 3.4, 5.2, 3.4, lit, FINE)
+    s.rect(1.9, 5.7, 10.8, 0.55, dim)
+    y = 5.75
+    for k in range(5):
+        s.rect(11.0, y, 3.6 - 0.35 * k, 0.16, dim if k == 0 else mid)
+        y += 0.14
+    s.disc(7.3, 2.95, 0.35, dim, FINE)
+    for (dx, dy, w, h) in ((0, -0.55, 0.3, 1.3), (-0.62, -0.08, 1.54, 0.3), (-0.4, 0.2, 0.42, 0.45), (0.28, 0.2, 0.42, 0.45)):
+        s.rect(7.35 + dx, 4.3 + dy, w, h, "#FFFFFF")
+    for x in (3.2, 5.0, 9.6, 11.4):
+        s.rect(x, 3.8, 0.12, 1.8, dim)
+
+
+def tie(s):
+    """小领带：领结压在嘴下面，领带垂到肚子，斜条纹。"""
+    mid, dk, lit = "#3E5A8C", "#2C4270", "#D8453A"
+    s.rect(6.8, 10.7, 1.4, 0.85, dk)
+    y = 11.55
+    widths = [1.1, 1.35, 1.55, 1.7, 1.75, 1.75, 1.6, 1.2, 0.7, 0.3]
+    for k, w in enumerate(widths):
+        s.rect(7.5 - w / 2, y, w, 0.24, mid)
+        if k % 2 == 1:
+            s.rect(7.5 - w / 2, y + 0.06, w, 0.1, lit)
+        y += 0.24
+    s.rect(6.5, 12.4, 2.0, 0.16, GOLD)                   # 领带夹
+
+
+def sneakers(s):
+    """小球鞋：一只脚一只，白鞋身 + 蓝色勾 + 红鞋底，两只之间留缝。"""
+    for fx in FEET:
+        s.rect(fx - 0.15, 13.75, 1.3, 1.35, "#FBFBF8")
+        s.rect(fx - 0.15, 13.75, 1.3, 0.25, "#E6E6E0")
+        s.rect(fx - 0.05, 14.3, 1.1, 0.22, "#5E9ED6")
+        s.rect(fx + 0.6, 14.1, 0.35, 0.22, "#5E9ED6")
+        s.rect(fx - 0.25, 15.1, 1.5, 0.4, "#D8453A")
+        s.rect(fx + 0.2, 13.95, 0.5, 0.12, "#3E3A40")
+
+
+def headphones(s):
+    """头戴耳机：头梁从头顶绕过去，两边耳罩扣在身子两侧上沿。"""
+    band, cup, pad = "#3A3A42", "#5E9ED6", "#2A2A30"
+    for k in range(40):
+        a = math.pi * k / 39
+        x = 7.5 - 6.2 * math.cos(a)
+        y = 6.2 - 0.85 * math.sin(a)          # 头梁贴着头顶，不飘在半空
+        s.rect(x - 0.22, y - 0.22, 0.44, 0.44, band)
+    s.rect(5.8, 5.2, 3.4, 0.28, "#6A6A74")
+    for cx in (1.3, 13.7):
+        s.disc(cx, 7.4, 1.15, pad, FINE)
+        s.disc(cx, 7.4, 0.95, cup, FINE)
+        s.disc(cx - 0.25, 7.1, 0.3, "#9ED3F0", FINE)
+    s.rect(13.6, 8.5, 0.18, 1.8, band)
+
+
+def plaidshirt(s):
+    """格子衬衫：红黑格，白色小翻领，一排扣子。"""
+    base, dark, light = "#C9453E", "#5A2A2A", "#E8807A"
+    s.rect(1.8, 10.5, 11.4, 2.85, base)
+    for x in [2.2 + 1.2 * i for i in range(10)]:
+        s.rect(x, 10.5, 0.35, 2.85, dark)
+    for y in (11.1, 12.3):
+        s.rect(1.8, y, 11.4, 0.3, dark)
+    for x in [2.8 + 1.2 * i for i in range(9)]:
+        s.rect(x, 10.5, 0.12, 2.85, light)
+    for sx in (-1, 1):
+        for k in range(4):
+            w = 1.2 - 0.25 * k
+            s.rect(7.5 + (0.05 if sx > 0 else -0.05 - w), 10.35 + 0.18 * k, w, 0.18, "#FBFBF8")
+    for y in (11.2, 11.9, 12.6):
+        s.disc(7.5, y, 0.14, "#FBFBF8", FINE)
+    s.rect(1.8, 13.1, 11.4, 0.25, dark)
+
+
+def sunglasses(s):
+    """小墨镜：两块黑色圆角方镜片罩住眼睛，金色鼻梁，镜片上一道反光。"""
+    for cx in (4.55, 10.45):
+        s.rect(cx - 1.55, 7.75, 3.1, 2.5, "#1E1E24")
+        s.rect(cx - 1.35, 7.55, 2.7, 0.2, "#1E1E24")
+        s.rect(cx - 1.35, 10.25, 2.7, 0.2, "#1E1E24")
+        s.rect(cx - 1.1, 8.05, 0.5, 0.3, "#6A7A90")
+        s.rect(cx - 0.6, 8.35, 0.35, 0.3, "#6A7A90")
+    s.rect(6.1, 8.2, 2.8, 0.3, GOLD)
+    s.rect(1.3, 8.2, 1.7, 0.28, GOLD)
+    s.rect(12.0, 8.2, 1.7, 0.28, GOLD)
+
+
 PIECES = [
     ("hat", hat_fancy), ("beret", beret_fancy), ("glasses", glasses_fancy),
     ("bowtie", bowtie_fancy), ("scarf", scarf_fancy), ("bag", bag_fancy),
     ("boots", boots_fancy), ("slippers", slippers_fancy),
-    ("hoodie", hoodie_fancy),
+    ("hoodie", overalls),
+    ("cap", cap), ("tie", tie), ("sneakers", sneakers), ("headphones", headphones),
+    ("plaidshirt", plaidshirt), ("sunglasses", sunglasses),
 ]
 
 

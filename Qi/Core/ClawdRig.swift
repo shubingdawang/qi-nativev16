@@ -318,7 +318,8 @@ struct ClawdRigView: View {
             case .lift:        w = 24; maxH = 18
             // 杯子、碗这类矮胖的小东西拿在手上要**看得清**：以前 9 格宽，
             // 在聊天页那么小的他手里只剩一个灰点（她发的截图）
-            case .hold where ratio < 1.3: w = 13; maxH = 14
+            case .hold where ratio < 1.3: w = 12; maxH = 13
+            case .sip where ratio < 1.3: w = 12; maxH = 13
             case .sip, .swirl: w = 9;  maxH = 12
             default:           break
             }
@@ -660,10 +661,11 @@ enum ClawdRig {
 
         case .hold:
             if itemH < itemW * 1.3 {
-                // 矮胖的小东西（杯子、碗、盘子）：手抬高一点，东西**托在手上**，
-                // 手在它半腰偏下的位置，看得出是端着
+                // 矮胖的小东西（杯子连碟、碗、盘子）：手抬起来，东西**托在手尖上**——端着。
+                // ⚠️ 试过两只手一起端在肚子前面：他的手是身子两侧的短块，够不到正中间，
+                // 东西看着是飘在身前的。托在一只手上才读得出「端」。
                 p.rightArm = 28
-                p.itemAt = CGPoint(x: CGFloat(bodyRight) + 1.5,
+                p.itemAt = CGPoint(x: CGFloat(bodyRight) + 1.0,
                                    y: handY - itemH * 0.62)
                 p.itemTilt = -4
             } else {
@@ -712,13 +714,23 @@ enum ClawdRig {
             p.itemAt = CGPoint(x: midX - itemW / 2, y: top - itemH)
 
         case .sip:
-            // 举到嘴边喝。beat 0→1 是「凑近 → 仰头灌 → 放下」，
-            // 所以用一条先快后慢的曲线，不是匀速——匀速看着像机械臂。
+            // 端着送到嘴边喝：从手尖抬到脸边、杯口往脸这边倾一点，再放回来。
+            // beat 0→1 是「端起 → 喝 → 放下」，先快后慢，不是匀速——匀速看着像机械臂。
             let t = sin(beat * .pi)                      // 0→1→0
-            p.rightArm = 40 + 25 * t
-            p.itemAt = CGPoint(x: midX + 1.5 - itemW / 2,
-                               y: handY - 1.6 - 2 * t)
-            p.itemTilt = -20 - 45 * t
+            if itemH < itemW * 1.3 {
+                // 端着的杯子送到脸边：从手尖那个位置抬到眼睛旁边、杯口往脸这边倾
+                let x0 = CGFloat(bodyRight) + 1.0, x1 = CGFloat(bodyRight) - itemW * 0.35
+                let y0 = handY - itemH * 0.62, y1 = 17.5 - itemH * 0.55
+                p.rightArm = 28 + 34 * t
+                p.itemAt = CGPoint(x: x0 + (x1 - x0) * t, y: y0 + (y1 - y0) * t)
+                p.itemTilt = -4 - 18 * t
+            } else {
+                // 细长的（瓶子）：一只手举到嘴边仰头灌
+                p.rightArm = 40 + 25 * t
+                p.itemAt = CGPoint(x: midX + 1.5 - itemW / 2,
+                                   y: handY - 1.6 - 2 * t)
+                p.itemTilt = -20 - 45 * t
+            }
 
         case .swirl:
             // 摇酒杯。手腕小幅往复，杯子跟着划一个小圈——
@@ -836,22 +848,22 @@ enum ClawdRig {
     /// 可以一起戴）。不用另写一张「谁跟谁冲突」的表——
     /// 那种表加一件衣服就要改 N 行。
     enum WearSlot: String, CaseIterable {
-        case head      // 头上：帽子、贝雷帽
+        case head      // 头上：帽子、贝雷帽、棒球帽、耳机
         case face      // 脸上：眼镜
         case neck      // 脖子：领结、围巾
         case back      // 背上：背包
-        case body      // 身上：卫衣
+        case body      // 身上：背带裤、格子衬衫
         case feet      // 脚上：靴子、拖鞋
     }
 
     static func wearSlot(_ id: String) -> WearSlot {
         switch id {
-        case "hat", "beret":      return .head
-        case "glasses":           return .face
-        case "bowtie", "scarf":   return .neck
+        case "hat", "beret", "cap", "headphones": return .head
+        case "glasses", "sunglasses": return .face
+        case "bowtie", "scarf", "tie": return .neck
         case "bag":               return .back
-        case "boots", "slippers": return .feet
-        case "hoodie":            return .body
+        case "boots", "slippers", "sneakers": return .feet
+        case "hoodie", "plaidshirt": return .body
         default:                  return .head
         }
     }

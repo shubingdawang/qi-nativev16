@@ -769,8 +769,10 @@ def build_bed(s, id, w, d, style="ornate"):
     m = mats(t)
     hw, hd = w / 2 - 0.05, d / 2 - 0.05
     gold = m.gold if t.gold else m.frame_dk
-    B(s, -hw + 0.08, hw - 0.08, 0.35, 0.62, -hd + 0.1, hd - 0.05, M("mat", "#FBF6EE", steps=6), "mattress", round=0.08)
-    B(s, -hw + 0.03, hw - 0.03, 0.3, 0.7, -hd * 0.25, hd, m.fab, "quilt", round=0.14)
+    # 床垫加厚，一直落到床架侧板上——她：「床是悬空的，没有跟下面连接上」
+    B(s, -hw + 0.06, hw - 0.06, 0.16, 0.62, -hd + 0.1, hd - 0.05, M("mat", "#FBF6EE", steps=6), "mattress", round=0.08)
+    s.decal(lambda p: np.abs(p[..., 1] + 0.08) < 0.012, M("matline", "#E6D8C6", steps=2), "mattress")
+    B(s, -hw + 0.03, hw - 0.03, 0.22, 0.7, -hd * 0.25, hd, m.fab, "quilt", round=0.14)
     fabric_decal(s, "quilt", t, m)
     # 被面上一圈描边 + 中间一块菱形拉扣
     s.decal(lambda p: (p[..., 1] > 0.15) & ((np.abs(np.abs(p[..., 0]) - (hw - 0.15)) < 0.015)), m.accent, "quilt")
@@ -783,11 +785,18 @@ def build_bed(s, id, w, d, style="ornate"):
         s.add(box(hw * 0.42, 0.1, 0.22, round=0.09).rot("x", -8).at(x, 0.74, -hd + 0.32), m.pillow, "pillow")
         if getattr(t, "ruffle", False):
             ruffle_line(s, x - hw * 0.42, x + hw * 0.42, -hd + 0.55, 0.66, 0.78, M("place", "#FFFFFF", steps=3), n=6, g="place")
-    # 床尾搭一条带流苏的毯子
-    B(s, -hw + 0.02, hw - 0.02, 0.66, 0.76, hd - 0.4, hd - 0.1, m.fab2 if t.fab2 != t.fab else m.accent, "runner", round=0.05)
-    for k in range(9):
-        x = -hw + 0.1 + (2 * hw - 0.2) * k / 8
-        s.add(capsule(V([x, 0.6, hd - 0.02]), V([x, 0.42, hd + 0.02]), 0.012), gold, "fringe")
+    # 床尾横搭一条毯子：顶面跟被子一样宽，**两头顺着床边垂下来**，垂下来那截底下挂流苏
+    # （她：左边那块太突出，像断掉的——它得是搭着垂下去的）
+    runner = m.fab2 if t.fab2 != t.fab else m.accent
+    z0r, z1r = hd - 0.42, hd - 0.12
+    B(s, -hw + 0.03, hw - 0.03, 0.7, 0.78, z0r, z1r, runner, "runner", round=0.04)
+    for sx in (-1, 1):
+        x = sx * (hw - 0.01)
+        B(s, x - 0.03, x + 0.03, 0.34, 0.76, z0r, z1r, runner, "runnerdrop", round=0.02)
+        for k in range(6):
+            z = z0r + 0.03 + (z1r - z0r - 0.06) * k / 5
+            s.add(capsule(V([x + sx * 0.01, 0.34, z]), V([x + sx * 0.02, 0.24, z]), 0.01), gold, "fringe")
+    s.decal(lambda p: np.abs(p[..., 2]) < 0.025, gold, "runner")
     if getattr(t, "ruffle", False):
         ruffle_line(s, -hw, hw, hd + 0.02, 0.1, 0.42, m.fab2, n=12, g="skirt")
         for x in (-hw - 0.02, hw + 0.02):
@@ -803,7 +812,9 @@ def build_bed(s, id, w, d, style="ornate"):
             for yy in (0.2, hh * 0.55):
                 s.add(torus(0.07, 0.022).at(x, yy, zz), gold, "postring")
             finial(s, (x, hh, zz), gold, 0.16)
-        B(s, x - 0.04, x + 0.04, 0.2, 0.36, -hd, hd, m.frame_dk, "rail")
+        # 侧板从地面附近一直接到床垫底，床身就不是悬着的了
+        B(s, x - 0.045, x + 0.045, 0.1, 0.4, -hd, hd, m.frame_dk, "rail")
+        s.decal(lambda p: np.abs(p[..., 1]) < 0.012, gold, "rail")
     # 床头板：拱顶 + 描金边框 + 中间一块拉扣软包 + 顶上卷草
     B(s, -hw, hw, 0.35, 1.12, -hd - 0.01, -hd + 0.07, m.frame, "head", round=0.03)
     s.decal(lambda p: (p[..., 2] > 0.02) & (np.abs(p[..., 0]) < hw - 0.12) & (np.abs(p[..., 1]) < 0.3), m.fab2 if t.fab2 else m.fab, "head")

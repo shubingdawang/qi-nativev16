@@ -956,5 +956,109 @@ def lolita_mirror(s):
         s.add(sphere(0.04).at(0.37 * math.cos(a), 0.9 + 0.64 * math.sin(a), 0.05), m.accent if k % 2 else M("rose2", "#FFFFFF", steps=3), "roses")
 
 
+# ── 男孩子风格的穿戴（商城卡片上那张图）──────────────
+
+@U("hoodie", "小背带裤", 1, 1, 0.6)
+def hoodie(s):
+    denim = M("denim", "#6E92C8", steps=6, grain=0.1)
+    dk = M("denimdk", "#4E6FA3", steps=4)
+    gold = M("gold", "#E8C47A", steps=4, gloss=1.0)
+    stitch = M("stitch", "#FFF0B8", steps=2)
+    # 摊平的背带裤：两条裤腿 + 裤腰 + 护胸 + 两根背带往上翻
+    for sx in (-1, 1):
+        B(s, sx * 0.02 if sx > 0 else -0.3, 0.3 if sx > 0 else -0.02, 0.0, 0.5, -0.04, 0.04, denim, "leg%d" % (sx > 0), round=0.02)
+        B(s, sx * 0.04 if sx > 0 else -0.3, 0.3 if sx > 0 else -0.04, 0.0, 0.07, -0.05, 0.05, dk, "cuff%d" % (sx > 0), round=0.01)
+    B(s, -0.32, 0.32, 0.45, 0.72, -0.045, 0.045, denim, "waist", round=0.02)
+    B(s, -0.2, 0.2, 0.7, 1.0, -0.04, 0.04, denim, "bib", round=0.02)
+    B(s, -0.1, 0.1, 0.76, 0.92, 0.035, 0.05, dk, "pocket", round=0.01)
+    s.decal(lambda p: (p[..., 2] > 0.0) & (np.abs(np.abs(p[..., 0]) - 0.28) < 0.01), stitch, "waist")
+    for sx in (-1, 1):
+        s.add(capsule(V([sx * 0.17, 0.98, 0.0]), V([sx * 0.28, 1.35, -0.02]), 0.03), denim, "strap")
+        s.add(sphere(0.035).at(sx * 0.17, 0.96, 0.05), gold, "button")
+
+
+@U("cap", "棒球帽", 1, 1, 0.6)
+def cap_(s):
+    navy = M("navy", "#3E5A8C", steps=6)
+    dk = M("navydk", "#2C4270", steps=4)
+    white = M("white", "#FFFFFF", steps=3)
+    s.add(lathe([(0, 0), (0.3, 0), (0.29, 0.1), (0.2, 0.25), (0, 0.3)]).at(0, 0.05, 0), navy, "crown")
+    s.decal(lambda p: np.abs(((np.arctan2(p[..., 2], p[..., 0]) / math.tau * 6) % 1) - 0.5) > 0.47, dk, "crown")
+    s.add(ellipsoid(0.24, 0.02, 0.2).at(0, 0.06, 0.3), dk, "brim")
+    s.add(sphere(0.03).at(0, 0.36, 0), dk, "button")
+    s.add(tri_prism(0.06, 0.02).rot("x", -60).at(0, 0.2, 0.25), white, "star")
+
+
+@U("tie", "小领带", 1, 1, 0.6)
+def tie_(s):
+    navy = M("navy", "#3E5A8C", steps=6)
+    red = M("red", "#D8453A", steps=3)
+    gold = M("gold", "#E8C47A", steps=3, gloss=1.0)
+    s.add(box(0.06, 0.06, 0.03, round=0.02).at(0, 0.9, 0), navy, "knot")
+    s.add(tri_prism(0.13, 0.02).rot("z", 180).at(0, 0.18, 0), navy, "tip")
+    B(s, -0.1, 0.1, 0.25, 0.84, -0.02, 0.02, navy, "blade", round=0.01)
+    s.decal(lambda p: np.abs(((p[..., 1] + p[..., 0]) * 6) % 1 - 0.5) < 0.12, red, "blade")
+    B(s, -0.13, 0.13, 0.6, 0.63, 0.015, 0.03, gold, "clip")
+
+
+@U("sneakers", "小球鞋", 1, 1, 0.6)
+def sneakers_(s):
+    white = M("white", "#FBFBF8", steps=6)
+    blue = M("blue", "#5E9ED6", steps=4)
+    sole = M("sole", "#D8453A", steps=4)
+    lace = M("lace", "#3E3A40", steps=2)
+    for x in (-0.16, 0.16):
+        B(s, x - 0.1, x + 0.1, 0.0, 0.05, -0.2, 0.26, sole, "sole", round=0.02)
+        s.add(ellipsoid(0.1, 0.1, 0.22).at(x, 0.1, 0.02), white, "upper%d" % (x > 0))
+        s.decal(lambda p: (np.abs(p[..., 1] - 0.0) < 0.02) & (p[..., 2] > -0.05), blue, "upper%d" % (x > 0))
+        for k in range(3):
+            s.add(capsule(V([x - 0.05, 0.17 - 0.02 * k, 0.05 + 0.05 * k]), V([x + 0.05, 0.17 - 0.02 * k, 0.05 + 0.05 * k]), 0.01), lace, "lace")
+
+
+@U("headphones", "头戴耳机", 1, 1, 0.6)
+def headphones_(s):
+    band = M("band", "#3A3A42", steps=5, gloss=0.6)
+    cup = M("cup", "#5E9ED6", steps=6, gloss=0.5)
+    pad = M("pad", "#2A2A30", steps=3)
+    pts = []
+    for k in range(13):
+        a = math.pi * k / 12
+        pts.append(V([-0.3 * math.cos(a), 0.3 + 0.35 * math.sin(a), 0]))
+    for a_, b_ in zip(pts, pts[1:]):
+        s.add(capsule(a_, b_, 0.035), band, "band")
+    for sx in (-1, 1):
+        s.add(cylinder(0.13, 0.08).rot("z", 90).at(sx * (0.3 + (0.04 if sx > 0 else -0.04)) + (0.04 if sx < 0 else 0), 0.25, 0), cup, "cup")
+        s.add(cylinder(0.1, 0.03).rot("z", 90).at(sx * 0.27 + (0.03 if sx < 0 else 0), 0.25, 0), pad, "pad")
+
+
+@U("plaidshirt", "格子衬衫", 1, 1, 0.6)
+def plaidshirt_(s):
+    red = M("red", "#C9453E", steps=6, grain=0.05)
+    dark = M("dark", "#5A2A2A", steps=3)
+    white = M("white", "#FBFBF8", steps=3)
+    B(s, -0.25, 0.25, 0.1, 0.75, -0.04, 0.04, red, "body", round=0.03)
+    for sx in (-1, 1):
+        s.add(capsule(V([sx * 0.25, 0.7, 0]), V([sx * 0.42, 0.25, 0.01]), 0.07), red, "sleeve%d" % (sx > 0))
+    for g in ("body", "sleeve0", "sleeve1"):
+        s.decal(lambda p: (np.abs((p[..., 0] * 7) % 1 - 0.5) < 0.12) | (np.abs((p[..., 1] * 7) % 1 - 0.5) < 0.12), dark, g)
+    for sx in (-1, 1):
+        s.add(tri_prism(0.08, 0.02).rot("z", 180 + sx * 30).at(sx * 0.07, 0.72, 0.05), white, "collar")
+    for y in (0.6, 0.45, 0.3):
+        s.add(sphere(0.02).at(0, y, 0.05), white, "btn")
+
+
+@U("sunglasses", "小墨镜", 1, 1, 0.6)
+def sunglasses_(s):
+    lens = M("lens", "#1E1E24", steps=4, gloss=1.0)
+    gold = M("gold", "#E8C47A", steps=4, gloss=1.0)
+    shine = M("shine", "#6A7A90", steps=2)
+    for sx in (-1, 1):
+        g = "lens%d" % (sx > 0)
+        B(s, sx * 0.2 - 0.15, sx * 0.2 + 0.15, 0.12, 0.34, -0.02, 0.02, lens, g, round=0.05)
+        s.decal(lambda p: (p[..., 2] > 0.0) & (np.abs(p[..., 0] + p[..., 1] - 0.02) < 0.03), shine, g)
+        s.add(capsule(V([sx * 0.35, 0.28, -0.02]), V([sx * 0.38, 0.28, -0.35]), 0.015), gold, "temple")
+    s.add(capsule(V([-0.05, 0.3, 0]), V([0.05, 0.3, 0]), 0.018), gold, "bridge")
+
+
 for _id, (_n, _w, _d, _t, _fn) in UNIQUE.items():
     reg(_id, _n, _w, _d, _t, _fn)
