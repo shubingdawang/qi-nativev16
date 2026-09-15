@@ -511,32 +511,35 @@ DENIM, DENIM_LT, DENIM_DK = "#6E92C8", "#93B2DE", "#4E6FA3"
 
 
 def overalls(s):
-    """背带裤：裤身兜住肚子下半截，前面一块护胸，两根背带从护胸上角**贴着眼睛外侧**往上翻到肩头。
-
-    眼睛在 x4..5 / 10..11、y8..10，背带走 x≈2.5..3.7 和 11.3..12.5，一只眼都不碰。
+    """背带裤（照她画的那张）：护胸只到嘴下面，两根背带从护胸上角的金扣**往外弯**，
+    搭到两边手和身子相接的拐角上——不往头顶走，也不碰眼睛和嘴。
     """
-    s.rect(1.8, 11.0, 11.4, 2.3, DENIM)
-    s.rect(1.8, 11.0, 0.45, 2.3, DENIM_LT)
-    s.rect(12.75, 11.0, 0.45, 2.3, DENIM_DK)
-    s.rect(3.4, 10.3, 8.2, 0.9, DENIM)
-    s.rect(3.4, 10.3, 8.2, 0.18, DENIM_LT)
-    s.rect(6.3, 10.55, 2.4, 1.2, DENIM_DK)
-    s.rect(6.45, 10.7, 2.1, 0.9, DENIM)
-    for x in [6.5 + 0.35 * i for i in range(6)]:
-        s.rect(x, 10.62, 0.18, 0.08, GOLD_LT)
-    for (x0, x1) in ((3.7, 2.5), (11.3, 12.5)):
-        n = 16
+    # 裤身
+    s.rect(1.8, 12.0, 11.4, 1.35, DENIM)
+    s.rect(1.8, 12.0, 0.45, 1.35, DENIM_LT)
+    s.rect(12.75, 12.0, 0.45, 1.35, DENIM_DK)
+    # 护胸：顶在嘴下沿（y11.9）
+    s.rect(4.4, 11.9, 6.2, 0.6, DENIM)
+    s.rect(4.4, 11.9, 6.2, 0.14, DENIM_LT)
+    s.rect(6.4, 12.1, 2.2, 0.75, DENIM_DK)          # 胸前小口袋
+    s.rect(6.55, 12.22, 1.9, 0.52, DENIM)
+    for x in [6.6 + 0.35 * i for i in range(5)]:
+        s.rect(x, 12.15, 0.18, 0.07, GOLD_LT)
+    # 背带：从金扣出发，一段段往外、往上弯到手臂拐角（左 (2.0, 9.4)、右 (13.0, 9.4)）
+    for (bx, ex, cx) in ((4.6, 1.6, 4.1), (10.4, 13.4, 10.9)):
+        n = 22
         for i in range(n + 1):
             t = i / n
-            x = x0 + (x1 - x0) * t
-            y = 10.4 + (6.1 - 10.4) * t
-            s.rect(x - 0.3, y, 0.62, 0.3, DENIM)
-            s.rect(x - 0.3, y, 0.14, 0.3, DENIM_LT)
-        s.disc(x0, 10.55, 0.28, GOLD, FINE)
-        s.disc(x0, 10.55, 0.12, GOLD_LT, FINE)
-    s.rect(7.45, 11.9, 0.12, 1.4, DENIM_DK)
+            # 二次贝塞尔：扣子 → 控制点（外侧偏上）→ 手臂拐角
+            x = (1 - t) ** 2 * bx + 2 * (1 - t) * t * cx + t * t * ex
+            y = (1 - t) ** 2 * 12.0 + 2 * (1 - t) * t * 9.8 + t * t * 9.4   # 眼睛下沿是 y10，走过眼睛那段时带子在 y10.5 以下
+            s.rect(x - 0.3, y - 0.15, 0.6, 0.32, DENIM)
+            s.rect(x - 0.3, y - 0.15, 0.6, 0.1, DENIM_LT)
+        s.disc(bx, 12.05, 0.3, GOLD, FINE)
+        s.disc(bx, 12.05, 0.13, GOLD_LT, FINE)
+    s.rect(7.45, 12.85, 0.12, 0.5, DENIM_DK)          # 裤裆一道缝
     for fx in FEET:
-        s.rect(fx - 0.2, 13.2, 1.4, 0.55, DENIM_LT)
+        s.rect(fx - 0.2, 13.2, 1.4, 0.55, DENIM_LT)    # 卷起的裤脚
         s.rect(fx - 0.2, 13.6, 1.4, 0.15, DENIM_DK)
 
 
@@ -558,17 +561,17 @@ def cap(s):
 
 
 def tie(s):
-    """小领带：领结压在嘴下面，领带垂到肚子，斜条纹。"""
+    """小领带：领结在嘴下面（嘴 y10.8..11.8 空出来），领带垂到肚子底，斜条纹。"""
     mid, dk, lit = "#3E5A8C", "#2C4270", "#D8453A"
-    s.rect(6.8, 10.7, 1.4, 0.85, dk)
-    y = 11.55
-    widths = [1.1, 1.35, 1.55, 1.7, 1.75, 1.75, 1.6, 1.2, 0.7, 0.3]
+    s.rect(6.85, 11.9, 1.3, 0.7, dk)                   # 领结
+    y = 12.6
+    widths = [1.3, 1.55, 1.75, 1.85, 1.85, 1.7, 1.4, 1.0, 0.55, 0.2]
     for k, w in enumerate(widths):
-        s.rect(7.5 - w / 2, y, w, 0.24, mid)
+        s.rect(7.5 - w / 2, y, w, 0.22, mid)
         if k % 2 == 1:
-            s.rect(7.5 - w / 2, y + 0.06, w, 0.1, lit)
-        y += 0.24
-    s.rect(6.5, 12.4, 2.0, 0.16, GOLD)                   # 领带夹
+            s.rect(7.5 - w / 2, y + 0.06, w, 0.09, lit)
+        y += 0.22
+    s.rect(6.7, 13.1, 1.6, 0.14, GOLD)                 # 领带夹
 
 
 def sneakers(s):
@@ -599,20 +602,37 @@ def headphones(s):
 
 
 def plaidshirt(s):
-    """格子衬衫：红黑格，白色小翻领，一排扣子。"""
+    """格子衬衫：红黑格，**中间开一个 V 领把嘴那块空出来**，领口一圈白色小翻领，一排扣子。"""
     base, dark, light = "#C9453E", "#5A2A2A", "#E8807A"
-    s.rect(1.8, 10.5, 11.4, 2.85, base)
+
+    def body_rows():
+        # 一排排画：嘴那几行（y<11.9）中间留出 V 形的口子
+        y = 10.5
+        while y < 13.35:
+            if y < 11.9:
+                half = 1.8 - (y - 10.5) / 1.4 * 1.2      # 从 1.8 收到 0.6
+                yield y, [(1.8, 7.5 - half), (7.5 + half, 13.2)]
+            else:
+                yield y, [(1.8, 13.2)]
+            y += 0.1
+    for y, spans in body_rows():
+        for x0, x1 in spans:
+            s.rect(x0, y, x1 - x0, 0.1, base)
+    # 格子线：竖的深色宽线 + 细亮线，横的两道
     for x in [2.2 + 1.2 * i for i in range(10)]:
-        s.rect(x, 10.5, 0.35, 2.85, dark)
-    for y in (11.1, 12.3):
-        s.rect(1.8, y, 11.4, 0.3, dark)
-    for x in [2.8 + 1.2 * i for i in range(9)]:
-        s.rect(x, 10.5, 0.12, 2.85, light)
-    for sx in (-1, 1):
-        for k in range(4):
-            w = 1.2 - 0.25 * k
-            s.rect(7.5 + (0.05 if sx > 0 else -0.05 - w), 10.35 + 0.18 * k, w, 0.18, "#FBFBF8")
-    for y in (11.2, 11.9, 12.6):
+        for y, spans in body_rows():
+            for x0, x1 in spans:
+                if x0 <= x <= x1 - 0.35:
+                    s.rect(x, y, 0.35, 0.1, dark)
+    for y in (12.1, 12.9):
+        s.rect(1.8, y, 11.4, 0.26, dark)
+    # V 领的白色翻领：沿着口子两边
+    for k in range(14):
+        y = 10.5 + k * 0.1
+        half = 1.8 - (y - 10.5) / 1.4 * 1.2
+        s.rect(7.5 - half - 0.35, y, 0.35, 0.1, "#FBFBF8")
+        s.rect(7.5 + half, y, 0.35, 0.1, "#FBFBF8")
+    for y in (12.25, 12.75):
         s.disc(7.5, y, 0.14, "#FBFBF8", FINE)
     s.rect(1.8, 13.1, 11.4, 0.25, dark)
 
