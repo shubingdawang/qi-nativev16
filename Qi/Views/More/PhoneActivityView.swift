@@ -345,6 +345,23 @@ struct PhoneActivityView: View {
                     .foregroundStyle(Theme.textMuted(scheme))
             }
 
+            // 屏幕广播：开着的时候三秒一帧，比快捷指令截的那张新得多。
+            // 系统规定只能由她点系统那个按钮开始，App 自己开不了。
+            HStack(spacing: 10) {
+                // ⚠️ 系统按钮盖在字上面、跟字一样大（overlay 拿的是字的尺寸）：
+                // 看见的是字，点到的是系统按钮
+                Text(peek.broadcasting ? "广播中 · 点这里停" : "开始共享屏幕")
+                    .font(.app(13, weight: .medium))
+                    .foregroundStyle(app.settings.accentColor)
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(Capsule().fill(app.settings.accentColor.opacity(0.12)))
+                    .overlay { BroadcastPickerButton().opacity(0.02) }
+                Spacer()
+            }
+            Text(MD.inline("弹出的框里选「Qi」，点「开始直播」。之后在任何 App 里，他调用「看一眼屏幕」读到的都是几秒前的画面；控制中心顶上的红条点一下即可停止。"))
+                .font(.app(10.5))
+                .foregroundStyle(Theme.textMuted(scheme))
+
             if peek.ready {
                 Divider().padding(.vertical, 2)
 

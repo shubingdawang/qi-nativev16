@@ -64,7 +64,8 @@ final class ScreenPeek: ObservableObject {
     /// 只回一句「看不了」的话，她不知道该去点哪儿。
     /// 返回 nil 表示能看。
     func blockedReason() -> String? {
-        if bookmark == nil {
+        // 开着屏幕广播就不用那个文件夹（见 `liveShot`）
+        if bookmark == nil && ScreenShare.readFrame() == nil {
             return "她还没配这个。（设置 → 手机 → 让他看屏幕）"
         }
         if !sharing {
@@ -73,7 +74,24 @@ final class ScreenPeek: ObservableObject {
         return nil
     }
 
-    var ready: Bool { bookmark != nil }
+    var ready: Bool { bookmark != nil || ScreenShare.readFrame() != nil }
+
+    /// 屏幕广播交过来的最新一帧（见 `QiBroadcast/SampleHandler.swift`）。
+    ///
+    /// ⚠️ **这一条比快捷指令那张更新就用它**：广播开着的时候三秒一帧，
+    /// 快捷指令那张是她上次按的时候截的。
+    private var liveDecoded: (at: Date, image: UIImage)?
+
+    func liveShot() -> (image: UIImage, at: Date)? {
+        guard let f = ScreenShare.readFrame() else { return nil }
+        if let d = liveDecoded, d.at == f.at { return (d.image, d.at) }
+        guard let img = UIImage(data: f.jpeg) else { return nil }
+        liveDecoded = (f.at, img)
+        return (img, f.at)
+    }
+
+    /// 广播现在开着没有
+    var broadcasting: Bool { ScreenShare.readLive() }
 
     /// 她选好那个文件夹之后记下来。
     ///
@@ -179,6 +197,16 @@ final class ScreenPeek: ObservableObject {
     /// 第二个返回值是拿不到时该说的话。
     func fresh() -> (shot: (image: UIImage, at: Date)?, why: String?) {
         if let why = blockedReason() { return (nil, why) }
+        // 广播那一帧够新就直接给——它几乎总比文件夹里那张新
+        if let live = ScreenShare.readFrame(),
+           Date().timeIntervalSince(live.at) <= staleMinutes * 60,
+           let shot = liveShot() {
+            lastError = nil
+            return (shot, nil)
+        }
+        if bookmark == nil {
+            return (nil, "屏幕广播没开，最近 \(Int(staleMinutes)) 分钟里也没有新的一帧。")
+        }
         // ⚠️ **先按文件时间判过期，再决定要不要解码。**
         // 原来是先 `latest()` 把整张图解出来、然后才发现它太旧要丢掉——
         // 白解一张全屏图，而且是在主线程上、四秒一轮。
