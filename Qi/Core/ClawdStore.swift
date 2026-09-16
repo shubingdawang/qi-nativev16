@@ -1155,6 +1155,30 @@ final class ClawdStore: ObservableObject {
         }
     }
 
+    /// 关了顶灯的那几间（房间名）。
+    ///
+    /// 她说的：「没找到哪里可以开灯关灯，是因为我没有买灯吗？但是房间本身就该有灯吧。」
+    /// → 每间屋自带一盏顶灯，**默认开着**。晚上开着顶灯屋子只暗一点点，关了才是真的黑。
+    @Published var roomLightsOff: Set<String> = [] {
+        didSet {
+            if loaded {
+                UserDefaults.standard.set(Array(roomLightsOff), forKey: "clawdRoomLightsOff")
+            }
+        }
+    }
+
+    func roomLightOn(_ room: HomeRoom) -> Bool { !roomLightsOff.contains(room.rawValue) }
+
+    @discardableResult
+    func toggleRoomLight(_ room: HomeRoom) -> Bool {
+        if roomLightsOff.contains(room.rawValue) {
+            roomLightsOff.remove(room.rawValue)
+            return true
+        }
+        roomLightsOff.insert(room.rawValue)
+        return false
+    }
+
     /// 按一下这盏灯。返回按完之后亮不亮
     @discardableResult
     func toggleLight(_ id: UUID) -> Bool {
@@ -1407,6 +1431,7 @@ final class ClawdStore: ObservableObject {
             ?? .iso
         dayMode = DayMode(rawValue: UserDefaults.standard.string(forKey: "clawdDayMode") ?? "") ?? .auto
         lightsOff = Set((UserDefaults.standard.stringArray(forKey: "clawdLightsOff") ?? []).compactMap(UUID.init))
+        roomLightsOff = Set(UserDefaults.standard.stringArray(forKey: "clawdRoomLightsOff") ?? [])
         windowSide = WindowSide(rawValue: UserDefaults.standard.string(forKey: "clawdWindowSide") ?? "") ?? .both
         loaded = true
     }

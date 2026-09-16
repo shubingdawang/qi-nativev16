@@ -386,13 +386,20 @@ struct RoomNightShade: View {
 
     let night: Double
     let glows: [Glow]
+    /// 顶灯开着没有。开着：只压暗一点点、整间铺一层暖光；关着：真的黑
+    var ceilingOn: Bool = true
 
     var body: some View {
         if night > 0.01 {
             ZStack(alignment: .topLeading) {
                 Rectangle()
-                    .fill(RoomPixel.color("2A2F55").opacity(0.55 * night))
+                    .fill(RoomPixel.color("2A2F55").opacity((ceilingOn ? 0.18 : 0.62) * night))
                     .blendMode(.multiply)
+                if ceilingOn {
+                    Rectangle()
+                        .fill(RoomPixel.color("FFD9A0").opacity(0.07 * night))
+                        .blendMode(.plusLighter)
+                }
                 Canvas { ctx, _ in
                     for gl in glows {
                         // 一圈一圈的台阶光，不用平滑渐变

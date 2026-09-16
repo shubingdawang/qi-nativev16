@@ -204,7 +204,8 @@ struct IsoRoomView<Clawd: View>: View {
                 // 晚上：整间压暗，灯、蜡烛、壁炉那几件点一圈光
                 // ⚠️ 只压**屋子里**：她报的「夜晚房间外面都变成黑的了」——
                 // 平面屋的裁剪框比屋子大一圈，整块压暗会把框外那片也染黑
-                RoomNightShade(night: night, glows: night > 0.01 ? glows(geoRoom) : [])
+                RoomNightShade(night: night, glows: night > 0.01 ? glows(geoRoom) : [],
+                               ceilingOn: store.roomLightOn(room))
                     .clipShape(geoRoom.roomPath)
             }
             }

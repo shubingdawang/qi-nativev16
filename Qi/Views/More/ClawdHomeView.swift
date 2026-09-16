@@ -816,6 +816,22 @@ struct ClawdHomeView: View {
                             }
                         }
                     }
+                    Menu("墙的颜色") {
+                        ForEach(RoomTheme.palette, id: \.hex) { c in
+                            Button(c.name) {
+                                store.setWallpaper(RoomTheme.tinted(store.wallpaper(of: r), wall: true, hex: c.hex), for: r)
+                                notice = r.rawValue + "的墙换成了" + c.name
+                            }
+                        }
+                    }
+                    Menu("地板的颜色") {
+                        ForEach(RoomTheme.palette, id: \.hex) { c in
+                            Button(c.name) {
+                                store.setFlooring(RoomTheme.tinted(store.flooring(of: r), wall: false, hex: c.hex), for: r)
+                                notice = r.rawValue + "的地板换成了" + c.name
+                            }
+                        }
+                    }
                     Menu("内置地面") {
                         ForEach(RoomFinish.Floor.allCases) { f in
                             Button(f.label) {
@@ -839,6 +855,18 @@ struct ClawdHomeView: View {
                         .font(.app(12))
                         .foregroundStyle(Theme.textMain(scheme))
                 }
+
+                // 顶灯开关。每间屋自带一盏，不用买
+                Button {
+                    let on = store.toggleRoomLight(r)
+                    notice = r.rawValue + (on ? "开灯了" : "关灯了")
+                    if app.settings.haptics { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+                } label: {
+                    Image(systemName: store.roomLightOn(r) ? "lightbulb.fill" : "lightbulb")
+                        .font(.app(12))
+                        .foregroundStyle(store.roomLightOn(r) ? Color.yellow.opacity(0.9) : Theme.textMain(scheme))
+                }
+                .buttonStyle(.plain)
 
                 Image(systemName: r.icon)
                     .font(.app(12))
@@ -1207,6 +1235,11 @@ struct ClawdHomeView: View {
                 // 她报的：「家具分区太绝对了，桌子也可以摆在卧室，
                 // 但现在只能摆在餐厅。」——买下来归哪一间只是个默认，
                 // 可**改这个默认的路以前不存在**：一件东西落在餐厅就出不来了。
+                if RoomClock.glow(of: item.kind) != nil {
+                    Button(store.lightsOff.contains(item.id) ? "开灯" : "关灯") {
+                        store.toggleLight(item.id)
+                    }
+                }
                 Button("复制一件摆旁边") { say(store.duplicate(item.id)) }
                 Button("搬到别的房间") { sending = item }
                 Button("收起来") { store.toggleHidden(item.id) }

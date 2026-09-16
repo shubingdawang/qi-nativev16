@@ -144,8 +144,53 @@ extension RoomTheme {
     ]
 
     static func find(_ id: String) -> RoomTheme? {
-        all.first { $0.id == id }
+        if id.hasPrefix("c-") { return custom(id) }
+        return all.first { $0.id == id }
     }
+
+    // MARK: 她自己挑的颜色
+    //
+    // 她报的：「壁纸和地板的颜色我没法更换。」
+    // 花纹不变，只换一个色：记号写成 `#brick@c-F2C4CE`（还是那一个字符串，不加字段）。
+    // ⚠️ 墙和地是**两个记号**，各带各的色，所以同一个 `c-…` 既能当墙色也能当地色。
+
+    struct Swatch { let name: String; let hex: String }
+
+    static let palette: [Swatch] = [
+        .init(name: "奶白", hex: "F4ECDD"), .init(name: "樱粉", hex: "F2C4CE"),
+        .init(name: "蜜桃", hex: "F6CDB4"), .init(name: "奶黄", hex: "F4E1A8"),
+        .init(name: "薄荷", hex: "CFE6D4"), .init(name: "雾蓝", hex: "C9DAEA"),
+        .init(name: "薰衣草", hex: "D8CDEB"), .init(name: "燕麦", hex: "DCCBB0"),
+        .init(name: "原木", hex: "C9A57A"), .init(name: "浅灰", hex: "D9D7D3"),
+        .init(name: "深木", hex: "6E5038"), .init(name: "夜蓝", hex: "2E3550"),
+    ]
+
+    /// 把一个记号换成「同一种花纹 + 这个颜色」。她自己贴的图（不是内置记号）换成纯色/棋盘格
+    static func tinted(_ token: String, wall: Bool, hex: String) -> String {
+        let body = RoomFinish.isBuiltIn(token) ? RoomFinish.body(token)
+            : (wall ? RoomFinish.Wall.plain.rawValue : RoomFinish.Floor.checker.rawValue)
+        return String(RoomFinish.mark) + body + String(mark) + "c-" + hex
+    }
+
+    private static func custom(_ id: String) -> RoomTheme? {
+        let hex = String(id.dropFirst(2))
+        guard hex.count == 6, Int(hex, radix: 16) != nil else { return nil }
+        return RoomTheme(id: id, label: "自选", note: "",
+                         wall: .plain, floor: .checker,
+                         wallHexes: [hex, shade(hex, 0.92)],
+                         floorHexes: [hex, shade(hex, 0.93), shade(hex, 0.8)],
+                         price: 1)
+    }
+
+    /// 同一个色往暗里走一点（乘系数）
+    static func shade(_ hex: String, _ k: Double) -> String {
+        guard let (r, g, b) = rgb(hex) else { return hex }
+        func f(_ v: Double) -> Int { max(0, min(255, Int((v * k).rounded()))) }
+        return String(format: "%02X%02X%02X", f(r), f(g), f(b))
+    }
+
+    /// 自己挑的色：暗色模式下**不再压暗**——她挑的就是这个色
+    var isCustom: Bool { id.hasPrefix("c-") }
 
     /// 今天这个日子有对应的主题吗。
     ///
@@ -203,9 +248,9 @@ extension RoomTheme {
 
     /// 这套主题的墙色，按明暗模式给。空数组 = 让花纹用它自己的。
     func wallColors(_ scheme: ColorScheme) -> [String] {
-        scheme == .dark ? wallHexes.map(RoomTheme.dim) : wallHexes
+        scheme == .dark && !isCustom ? wallHexes.map(RoomTheme.dim) : wallHexes
     }
     func floorColors(_ scheme: ColorScheme) -> [String] {
-        scheme == .dark ? floorHexes.map(RoomTheme.dim) : floorHexes
+        scheme == .dark && !isCustom ? floorHexes.map(RoomTheme.dim) : floorHexes
     }
 }
