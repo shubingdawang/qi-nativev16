@@ -544,9 +544,11 @@ struct FurnitureThumb: View {
 
     var body: some View {
         if let img = FurnitureCatalog.shopImage(of: kind.id) {
+            // ⚠️ 宽也要封顶：空调、星星串这种扁长的只按高度放，会撑满整张卡（她报的缩略图太大）
             Image(uiImage: img)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: height * 1.5, maxHeight: height)
                 .frame(height: height)
         } else {
             PixelSpriteView(sprite: kind.sprite, scale: scale)

@@ -118,8 +118,8 @@ struct IsoRoomView<Clawd: View>: View {
             ZStack(alignment: .topLeading) {
                 walls(geoRoom)
                 RoomWallDetail(room: geoRoom, windows: windows, night: night,
-                               grain: RoomFinish.isBuiltIn(store.wallpaper(of: room))
-                                   || store.wallpaper(of: room).isEmpty)
+                               // 她问「这些小点点是什么」——看不出是什么的点子就是脏，关掉
+                               grain: false)
                 floor(geoRoom)
                     // ⚠️ **拖动挂在地板这一层，不挂在整块上。**
                     //
@@ -138,11 +138,20 @@ struct IsoRoomView<Clawd: View>: View {
                         // 全局的位移是**放大之后**的，除以缩放才是屋子自己的尺寸。
                         DragGesture(minimumDistance: 18, coordinateSpace: .global)
                             .onChanged { v in
+                                // 她说的：「上下固定高度，只要能放大缩小就行，
+                                // 现在这样我无法拉到最左最右了。」
+                                // → 竖着不跟手；横着先挪镜头，镜头挪到头了，
+                                //   平面屋接着挪它自己那段横向偏移，能一路拖到最左最右
                                 if store.camZoom > 1.01 {
                                     let z = store.camZoom
-                                    let want = CGSize(width: camFrom.width + v.translation.width / z,
-                                                      height: camFrom.height + v.translation.height / z)
-                                    store.camPan = store.clampPan(want, in: geo.size)
+                                    let wantX = camFrom.width + v.translation.width / z
+                                    let clamped = store.clampPan(CGSize(width: wantX, height: 0), in: geo.size)
+                                    store.camPan = clamped
+                                    if store.projection == .flat {
+                                        let cap = geoRoom.maxPan
+                                        let extra = wantX - clamped.width
+                                        store.flatPanX = min(cap, max(-cap, panFrom + extra * z))
+                                    }
                                     return
                                 }
                                 guard store.projection == .flat else { return }
@@ -164,8 +173,7 @@ struct IsoRoomView<Clawd: View>: View {
                 // 就是这一下：框画在最后没错，可框只有一条边那么宽，
                 // 爬到框**外面**去的那一截，谁也盖不住它。
                 RoomFloorDetail(room: geoRoom, windows: windows, night: night,
-                                grain: RoomFinish.isBuiltIn(store.flooring(of: room))
-                                    || store.flooring(of: room).isEmpty)
+                                grain: false)
                 furnitureLayer(geoRoom)
 
                 // 平面屋外面那一圈框。**立体屋没有。**
@@ -194,7 +202,10 @@ struct IsoRoomView<Clawd: View>: View {
                 }
 
                 // 晚上：整间压暗，灯、蜡烛、壁炉那几件点一圈光
+                // ⚠️ 只压**屋子里**：她报的「夜晚房间外面都变成黑的了」——
+                // 平面屋的裁剪框比屋子大一圈，整块压暗会把框外那片也染黑
                 RoomNightShade(night: night, glows: night > 0.01 ? glows(geoRoom) : [])
+                    .clipShape(geoRoom.roomPath)
             }
             }
             // ⚠️ 裁进屋子的轮廓（理由见上面 ZStack 那段）。
@@ -475,8 +486,9 @@ struct IsoRoomView<Clawd: View>: View {
         if side != .left {
             let blocked = blockedCells(.right)
             // 右墙两扇：一扇偏左、一扇偏右
-            if let w = place(.right, near: n * 0.28, blocked: blocked, used: out) { out.append(w) }
-            if let w = place(.right, near: n * 0.72, blocked: blocked, used: out) { out.append(w) }
+            // 她说右墙那两扇都往左挪一点，最右那扇快出屋子了
+            if let w = place(.right, near: n * 0.2, blocked: blocked, used: out) { out.append(w) }
+            if let w = place(.right, near: n * 0.58, blocked: blocked, used: out) { out.append(w) }
         }
         return out
     }
@@ -1026,6 +1038,7 @@ struct IsoRoomView<Clawd: View>: View {
         LongPressGesture(minimumDuration: 0.28)
             .onEnded { _ in
                 dragging = item.id
+                store.arranging = true
                 dragCell = store.cell(of: item)
                 if app.settings.haptics {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -1052,6 +1065,7 @@ struct IsoRoomView<Clawd: View>: View {
                 }
             }
             .onEnded { value in
+                store.arranging = false
                 guard dragging == item.id else { return }
                 dragging = nil
                 let dropped = onClawd

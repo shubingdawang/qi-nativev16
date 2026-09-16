@@ -1012,6 +1012,8 @@ final class ClawdStore: ObservableObject {
 
     /// 放大几倍。1 = 整间刚好塞满
     @Published var camZoom: CGFloat = 1
+    /// 她正按着一件家具在挪。这时候他换屋子，画面**不跟过去**（她报的）
+    @Published var arranging = false
     /// 挪了多少（屋子自己的坐标，没乘缩放）
     @Published var camPan: CGSize = .zero
 
@@ -1256,6 +1258,12 @@ final class ClawdStore: ObservableObject {
 
     /// 拿起 / 放下。放下的时候把它挪到指定位置。
     func pickUp(_ kindID: String, itemID: UUID? = nil) {
+        // ⚠️ 手上已经举着一件的话**先放下那一件**。
+        // 她报的：「他举着家具时我又拖一个东西给他，第一个举的家具就没有了，在哪都找不到。」
+        // 以前直接把 `carrying` 换成新的，旧那件还标着 carried——屋里不画、手上也不画
+        if carrying != nil, carrying != kindID || itemID != nil {
+            putDown(at: nil)
+        }
         carrying = kindID
         // **举起来的那件要从屋里消失。**
         // 她报的：「举起来的东西不该还留在房间」——对，

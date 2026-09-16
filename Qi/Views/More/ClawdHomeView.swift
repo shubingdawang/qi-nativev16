@@ -465,7 +465,20 @@ struct ClawdHomeView: View {
         // 她自己点去别间之后就不跟了——半路把她的视线拽走最讨厌。
         .onChange(of: store.clawdRoom) { _, r in
             guard following else { return }
+            // 她正在摆家具、或者放大了在看细节：不跟过去，也不再跟了
+            if store.arranging || store.camZoom > 1.01 {
+                following = false
+                return
+            }
             withAnimation(.easeInOut(duration: 0.28)) { viewing = r }
+        }
+        // 顶上那行提示过三秒自己收掉（她报的「提示不会消失」）
+        .onChange(of: notice) { _, v in
+            guard let v else { return }
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                if notice == v { withAnimation(.easeOut(duration: 0.2)) { notice = nil } }
+            }
         }
         .onDisappear {
             walkTask?.cancel()
@@ -993,6 +1006,11 @@ struct ClawdHomeView: View {
                 // 镜头：先挪（屋子自己的尺寸）再以中心放大。倒回去的算法见 `toRoom`
                 .offset(store.camPan)
                 .scaleEffect(store.camZoom)
+                // ⚠️ 放大出框的那一截**不许接触摸**：她报的「放大后刷子点不了」——
+                // 放大的屋子盖在上面那排按钮上，点击被它吃掉了。
+                // `clipped` 只管画，`contentShape` 才管点
+                .clipped()
+                .contentShape(Rectangle())
                 // 两根手指捏：放大缩小。**同时挂**，不跟家具长按、他身上的手势抢
                 .simultaneousGesture(
                     MagnifyGesture()
@@ -1323,7 +1341,7 @@ struct ClawdHomeView: View {
                                      itemImage: store.carriedImage(),
                                      wornIDs: store.wornIDs,
                                      pose: pose,
-                                     scale: tile * 1.47 / 36,
+                                     scale: tile * ClawdHomeView.bodyTiles / 36,
                                      beat: carryBeat(now, pose: pose),
                                      rise: carryRise(now),
                                      shadow: true)
@@ -1332,7 +1350,7 @@ struct ClawdHomeView: View {
                     // ⚠️ **`/ 36` 不是 `/ 32`，`1.47` 不是 `0.87`。**
                     // 除数是图纸宽度（现在 36 格），32 是它还叫 32 格那会儿的老账；
                     // 系数 0.87 → 1.47 是 ×1.5，换图纸那次欠的账：图纸从 54 格缩到 36 格（3 格/单位 → 2 格/单位），躯干跟着从 33 格变成 22 格，**scale 没跟着调，他在所有地方都缩了三分之一**。22 × s_new = 33 × s_old → 每一处 scale 都要 ×1.5 才回到原来那么大。
-                    usingBody(scale: tile * 1.47 / 36)
+                    usingBody(scale: tile * ClawdHomeView.bodyTiles / 36)
                 }
             }
                 // 被拎起来的时候整只抬高一点、影子也跟着散开
@@ -1660,6 +1678,9 @@ struct ClawdHomeView: View {
     /// ⚠️ 镜头放大、挪动过之后还要**把那层变换倒回去**：
     /// 屋子是先挪（`camPan`，屋子自己的尺寸）再以中心放大的，
     /// 倒回去就是先以中心缩回来、再减掉挪的那段。
+    /// 他在屋里多大（约几格高）。原来 1.47，她说「clawd 对小屋来说稍微有点大了」→ 1.2
+    static let bodyTiles: CGFloat = 1.2
+
     private func toRoom(_ p: CGPoint) -> CGPoint {
         let local = CGPoint(x: p.x - roomOrigin.x, y: p.y - roomOrigin.y)
         guard let s = roomSize, store.camZoom != 1 || store.camPan != .zero else { return local }
