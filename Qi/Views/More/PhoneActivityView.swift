@@ -348,9 +348,7 @@ struct PhoneActivityView: View {
             }
 
             HelpNote {
-                Text(MD.inline("说过晚安之后，本 App 将「宵禁.txt」写为 1；快捷指令自动化读取该文件，命中时关闭指定 App。
-
-⚠️ 不是系统级锁定：关闭自动化即失效。系统级需 FamilyControls 权限，须单独申请。"))
+                Text(MD.inline("说过晚安之后，本 App 将「宵禁.txt」写为 1；快捷指令自动化读取该文件，命中时关闭指定 App。\n\n⚠️ 不是系统级锁定：关闭自动化即失效。系统级需 FamilyControls 权限，须单独申请。"))
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
