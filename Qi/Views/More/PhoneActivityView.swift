@@ -51,6 +51,7 @@ struct PhoneActivityView: View {
                     .padding(.bottom, 2)
 
                 screenPeekCard
+                curfewCard
                 checkInCard
             }
             .padding(.horizontal, 16)
@@ -156,6 +157,7 @@ struct PhoneActivityView: View {
     /// 因为那种 App 没法自己触发手机做事，只能借邮件当信号线。
     /// 我们是她自己的 App，读本地文件夹就行，截图一个字节都不出这台手机。
     @ObservedObject private var here = WhereaboutsService.shared
+    @ObservedObject private var curfew = Curfew.shared
     @AppStorage("checkInPrecision") private var precision = "coarse"
 
     // MARK: 查岗
@@ -322,6 +324,87 @@ struct PhoneActivityView: View {
         peekShot = r.shot?.image
         peekAt = r.shot?.at
         peekWhy = r.why
+    }
+
+    // MARK: 宵禁
+
+    /// 说过晚安之后拦住那几个 App。
+    ///
+    /// ⚠️ **这一层只负责写一个文件**，真正把她弹回桌面的是她自己的快捷指令自动化。
+    /// 真的去锁别的 App 要 `FamilyControls` 那三个框架，**得苹果单独批一个
+    /// entitlement**，那是另一批活；这条路不用授权，今晚就能用上。
+    private var curfewCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("宵禁")
+                    .font(.app(14, weight: .semibold))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Spacer()
+                if curfew.active {
+                    Text("拦着")
+                        .font(.app(10))
+                        .foregroundStyle(StatusTone.done.color)
+                }
+            }
+
+            HelpNote {
+                Text(MD.inline("说过晚安之后，本 App 将「宵禁.txt」写为 1；快捷指令自动化读取该文件，命中时关闭指定 App。
+
+⚠️ 不是系统级锁定：关闭自动化即失效。系统级需 FamilyControls 权限，须单独申请。"))
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+
+            Toggle(isOn: $curfew.on) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("开着")
+                        .font(.app(14))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    Text(curfew.brief)
+                        .font(.app(11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+            }
+            .tint(app.settings.accentColor)
+
+            if curfew.on {
+                HStack {
+                    Text("早上几点解除")
+                        .font(.app(12))
+                        .foregroundStyle(Theme.textSoft(scheme))
+                    Spacer()
+                    Picker("", selection: $curfew.wakeHour) {
+                        ForEach(4...12, id: \.self) { h in Text("\(h):00").tag(h) }
+                    }
+                    .labelsHidden()
+                }
+
+                HStack(spacing: 10) {
+                    Button(curfew.active ? "现在放我出去" : "现在就开始") {
+                        if curfew.active { curfew.stop() } else { curfew.start(why: "她自己按的") }
+                    }
+                    .font(.app(12))
+                    Spacer()
+                }
+
+                HelpNote(title: "快捷指令怎么配") {
+                    Text(MD.inline("""
+                    一条自动化，三分钟。
+
+                    1. 快捷指令 App → 自动化 → ＋ → 「打开 App」，选要拦的那几个（小红书、抖音…）
+                    2. 操作里加「获取文件」，位置选 我的 iPhone → 栖 → `宵禁.txt`
+                    3. 加「文本」取到的内容 → 「如果 内容 开头是 1」
+                    4. 「如果」里面放「打开 App」选主屏幕，或者「显示通知：睡吧」
+                    5. 关掉「运行前询问」
+
+                    这一页的开关和「早上几点解除」随时改，文件跟着变。
+                    """))
+                        .font(.app(11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+            }
+        }
+        .glassCard()
     }
 
     private var screenPeekCard: some View {
