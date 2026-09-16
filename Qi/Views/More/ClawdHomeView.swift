@@ -44,6 +44,8 @@ struct ClawdHomeView: View {
     @State private var eatingWithGif = false
     /// 他正怎么用手边那件家具（坐、躺、泡、骑…）。`.stand` 就是平常站着
     @State private var using: RoomUse = .stand
+    /// 他正躺在哪张床上（躺着的时候按床的朝向摆身子、盖被子）
+    @State private var lyingBed: Furniture?
 
     // MARK: 手上的东西
 
@@ -257,6 +259,55 @@ struct ClawdHomeView: View {
     /// 开柜门伸手、踮脚往上够、照镜子左右转。
     @ViewBuilder
     private func usingBody(scale: CGFloat) -> some View {
+        if mood == .lying || using == .lie {
+            lyingBody(scale: scale)
+        } else {
+            standingUse(scale: scale)
+        }
+    }
+
+    /// 躺在床上：**顺着床的方向躺平、闭着眼、盖着被子**。
+    ///
+    /// 她报的：「clawd 并没有睡在床的正中央，而且变成圆的了，也没盖被子。」
+    /// 以前躺下用的是一张「趴扁」的图纸，站在哪儿就在哪儿扁下去——
+    /// 看着是一团圆的，跟床没关系。
+    ///
+    /// 现在拿闭眼那张站立图纸**转过去躺平**：等距屋里床是斜着摆的，
+    /// 靠右墙的床床头在右上（身子转 +63°），靠左墙的床头在左上（−63°），
+    /// 平面屋床头朝上（不转）。被子跟身子一起转，盖住肩膀以下。
+    private func lyingBody(scale: CGFloat) -> some View {
+        let w = 36 * scale
+        // ⚠️ 外面还有一层「朝左就左右翻」（`facingLeft`），翻过来角度会反，先抵掉
+        let angle: Double = (store.projection == .flat ? 0
+            : ((lyingBed?.facesRight ?? true) ? 63.4 : -63.4)) * (facingLeft ? -1 : 1)
+        let quilt = Color(hexString: "F4B8C4") ?? .pink
+        let edge = Color(hexString: "9A5A68") ?? .brown
+        return ZStack {
+            PixelSpriteView(sprite: ClawdSprites.blink, scale: scale)
+            // 被子：盖住肩膀往下，两边比身子宽一点，上沿翻出一道白边
+            VStack(spacing: 0) {
+                Rectangle().fill(Color.white.opacity(0.92)).frame(height: w * 0.07)
+                Rectangle().fill(quilt)
+            }
+            .frame(width: w * 0.86, height: w * 0.5)
+            .overlay(Rectangle().strokeBorder(edge, lineWidth: max(1, scale * 0.9)))
+            .offset(y: w * 0.2)
+        }
+        .frame(width: w, height: w)
+        .rotationEffect(.degrees(angle))
+        .overlay(alignment: .topTrailing) {
+            TimelineView(.periodic(from: .now, by: 1.2)) { ctx in
+                let k = Int(ctx.date.timeIntervalSinceReferenceDate / 1.2) % 3
+                Text(String(repeating: "z", count: k + 1))
+                    .font(.system(size: max(8, scale * 5), weight: .bold, design: .rounded))
+                    .foregroundStyle(Color.white.opacity(0.85))
+                    .offset(x: -w * 0.1, y: -w * 0.1)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func standingUse(scale: CGFloat) -> some View {
         switch using {
         case .stand, .lie, .hug:
             ClawdView(mood: mood, scale: scale, shadow: true,
@@ -1516,6 +1567,13 @@ struct ClawdHomeView: View {
                     // 放在能躺的东西上（床）就躺下，别站在床上发呆。
                     // 她要的：「我将它拖动到床上，他应该是上床的动画。」
                     if let act = layDownAct() {
+                        // 摆到床正中（她报的「没有睡在床的正中央」）
+                        if let bed = lyingBed, let size = roomSize {
+                            let geo = IsoRoom.fit(in: size, as: store.projection)
+                            let p = RoomActs.bedTop(of: bed, in: geo)
+                            clawdX = p.x / size.width
+                            clawdY = p.y / size.height
+                        }
                         mood = .lying
                         store.clawdDoing = .idling
                         say(act)
@@ -1744,6 +1802,7 @@ struct ClawdHomeView: View {
                   hy >= f.gy, hy < f.gy + max(1, s.d) else { continue }
             guard s.actions.contains(where: { $0 == "躺下" || $0 == "钻被窝" })
             else { continue }
+            lyingBed = f
             return ["躺一会儿", "唔……软的", "就眯一小会儿"].randomElement() ?? "躺一会儿"
         }
         return nil
@@ -2253,6 +2312,7 @@ struct ClawdHomeView: View {
                     }
                     mood = chosen.mood
                     using = chosen.use
+                    if chosen.use == .lie { lyingBed = item }
                     store.useItem = item.id
                     store.useStyle = chosen.use
                     store.clawdDoing = doing(for: chosen, kind: kind)

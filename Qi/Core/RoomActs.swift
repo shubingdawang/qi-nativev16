@@ -442,6 +442,19 @@ enum RoomActs {
         }
     }
 
+    /// 床面正中那一点（躺下的时候摆到这儿）
+    static func bedTop(of item: Furniture, in geo: IsoRoom) -> CGPoint {
+        let s = FurnitureCatalog.shape(of: item, projection: geo.projection)
+        let cell = geo.projection == .flat
+            ? item.flatCell(cols: ClawdStore.flatCols)
+            : (gx: item.gx, gy: item.gy)
+        var p = geo.point(Double(cell.gx) + Double(s.w - 1) / 2,
+                          Double(cell.gy) + Double(s.d - 1) / 2)
+        let h = seatHeight(item.kind) ?? s.tall * 0.8
+        p.y -= geo.unitH * 0.72 * CGFloat(h)
+        return p
+    }
+
     /// 站在一块占地**靠镜头那一侧**的旁边一格——
     /// 站在背面的话他被家具挡住，动作做了她也看不见
     static func besidePoint(cell: (gx: Int, gy: Int), w: Int, d: Int, in geo: IsoRoom) -> CGPoint {
