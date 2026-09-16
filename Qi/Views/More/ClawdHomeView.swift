@@ -146,6 +146,8 @@ struct ClawdHomeView: View {
     /// 拖手那个手势发生在外层，而他站在哪儿是屋子内部的坐标。
     /// 两边差的就是这个原点（见 `toRoom`）。
     @State private var roomOrigin: CGPoint = .zero
+    /// 两根手指捏的时候，捏之前是几倍（没在捏就是 nil）
+    @State private var pinchFrom: CGFloat?
     /// 这只手**此刻**是不是压在他身上。
     /// 进去的那一刻算一次，出来再进去算下一次——见 `handChip` 里那段。
     @State private var handOnHim = false
@@ -978,6 +980,47 @@ struct ClawdHomeView: View {
                     // 站在床里侧就被床挡住。见 `clawdBody`。
                     clawdBody(geo.size)
                 }
+                // 镜头：先挪（屋子自己的尺寸）再以中心放大。倒回去的算法见 `toRoom`
+                .offset(store.camPan)
+                .scaleEffect(store.camZoom)
+                // 两根手指捏：放大缩小。**同时挂**，不跟家具长按、他身上的手势抢
+                .simultaneousGesture(
+                    MagnifyGesture()
+                        .onChanged { v in
+                            let from = pinchFrom ?? store.camZoom
+                            if pinchFrom == nil { pinchFrom = from }
+                            store.camZoom = min(ClawdStore.camZoomMax,
+                                                max(1, from * v.magnification))
+                            store.camPan = store.clampPan(store.camPan, in: geo.size)
+                        }
+                        .onEnded { _ in
+                            pinchFrom = nil
+                            if store.camZoom < 1.05 {
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    store.camZoom = 1
+                                    store.camPan = .zero
+                                }
+                            }
+                        }
+                )
+                // 放大了才有：一键回到整间
+                .overlay(alignment: .bottomTrailing) {
+                    if store.camZoom > 1.01 {
+                        Button {
+                            withAnimation(.easeOut(duration: 0.25)) {
+                                store.camZoom = 1
+                                store.camPan = .zero
+                            }
+                        } label: {
+                            Label("归位", systemImage: "arrow.down.right.and.arrow.up.left")
+                                .font(.app(11, weight: .medium))
+                                .padding(.horizontal, 10).padding(.vertical, 6)
+                                .background(.ultraThinMaterial, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(10)
+                    }
+                }
 
 
 
@@ -1602,9 +1645,19 @@ struct ClawdHomeView: View {
     ///
     /// ⚠️ 手势条搬到屋子外面之后**必须过这一道**。
     /// 不换算的话拖到屋子上半截才碰得到他 —— 差的正好是屋子的原点。
+    ///
+    /// ⚠️ 镜头放大、挪动过之后还要**把那层变换倒回去**：
+    /// 屋子是先挪（`camPan`，屋子自己的尺寸）再以中心放大的，
+    /// 倒回去就是先以中心缩回来、再减掉挪的那段。
     private func toRoom(_ p: CGPoint) -> CGPoint {
-        CGPoint(x: p.x - roomOrigin.x, y: p.y - roomOrigin.y)
+        let local = CGPoint(x: p.x - roomOrigin.x, y: p.y - roomOrigin.y)
+        guard let s = roomSize, store.camZoom != 1 || store.camPan != .zero else { return local }
+        let z = store.camZoom
+        let cx = s.width / 2, cy = s.height / 2
+        return CGPoint(x: cx + (local.x - cx) / z - store.camPan.width,
+                       y: cy + (local.y - cy) / z - store.camPan.height)
     }
+
 
 
     /// 他现在站的那一格上有没有能躺的东西（床）。有就返回一句台词。

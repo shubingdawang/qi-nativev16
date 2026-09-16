@@ -997,6 +997,34 @@ final class ClawdStore: ObservableObject {
     /// 只能各写各的，于是画在右边、判定还在左边（她报的「手势没反应」）。
     @Published var flatPanX: CGFloat = 0
 
+    // MARK: 镜头：放大缩小、拖着看
+    //
+    // 她给的参考（别人的小屋）：「可以放大缩小随意移动的……用手指拖动的。」
+    //
+    // ⚠️ **镜头只是套在整间屋子外面的一层变换，屋子里的几何一点不动。**
+    // 他走路、家具摆放、深度排序全按没放大的那套算——
+    // 把缩放塞进 `IsoRoom.fit` 的话，他存的「占容器百分之几」那套位置
+    // 一放大就跟地板对不上了（地板挪了，他没挪）。
+    // 屋子里的手势拿到的是屋子自己的坐标，SwiftUI 会自己把缩放换算回去；
+    // 只有外面那一层的手势（手势条）要自己换算，见 `ClawdHomeView.toRoom`。
+    //
+    // 不存盘：每次进来都是整间看全的样子。
+
+    /// 放大几倍。1 = 整间刚好塞满
+    @Published var camZoom: CGFloat = 1
+    /// 挪了多少（屋子自己的坐标，没乘缩放）
+    @Published var camPan: CGSize = .zero
+
+    static let camZoomMax: CGFloat = 3
+
+    /// 挪的范围：放大之后多出来那一圈，**不许把屋子整个拖出画面**
+    func clampPan(_ p: CGSize, in size: CGSize) -> CGSize {
+        let mx = size.width * (1 - 1 / camZoom) / 2
+        let my = size.height * (1 - 1 / camZoom) / 2
+        return CGSize(width: min(mx, max(-mx, p.width)),
+                      height: min(my, max(-my, p.height)))
+    }
+
     // MARK: 他现在手上拿着什么、在干嘛
     //
     // 这两个状态**放在 store 里而不是各自的 View 里**，就是为了让小屋和聊天页

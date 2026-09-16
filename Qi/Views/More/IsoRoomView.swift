@@ -80,6 +80,8 @@ struct IsoRoomView<Clawd: View>: View {
     /// （见 `ClawdStore.flatPanX`）。
     /// 这一次拖之前停在哪儿
     @State private var panFrom: CGFloat = 0
+    /// 镜头拖动开始时停在哪儿
+    @State private var camFrom: CGSize = .zero
     /// 正拖着的这一件此刻悬在 clawd 身上
     @State private var onClawd = false
     /// 这一块画布多大。判「拖到他身上了没有」要用——
@@ -131,14 +133,27 @@ struct IsoRoomView<Clawd: View>: View {
                     // `\.gesture(条件 ? 手势 : nil)` 编译不过——
                     // 那个参数不收可选的手势。
                     .gesture(
-                        DragGesture(minimumDistance: 18)
+                        // ⚠️ 坐标用 `.global`：屋子在拖的过程中自己在挪，
+                        // 拿自己的坐标量位移会一边拖一边抖。
+                        // 全局的位移是**放大之后**的，除以缩放才是屋子自己的尺寸。
+                        DragGesture(minimumDistance: 18, coordinateSpace: .global)
                             .onChanged { v in
+                                if store.camZoom > 1.01 {
+                                    let z = store.camZoom
+                                    let want = CGSize(width: camFrom.width + v.translation.width / z,
+                                                      height: camFrom.height + v.translation.height / z)
+                                    store.camPan = store.clampPan(want, in: geo.size)
+                                    return
+                                }
                                 guard store.projection == .flat else { return }
                                 let cap = geoRoom.maxPan
                                 let want = panFrom + v.translation.width
                                 store.flatPanX = min(cap, max(-cap, want))
                             }
-                            .onEnded { _ in panFrom = store.flatPanX }
+                            .onEnded { _ in
+                                panFrom = store.flatPanX
+                                camFrom = store.camPan
+                            }
                     )
 
                 // ⚠️ 这一句就是「不穿模」的全部：**按离镜头的远近排好再画**。
