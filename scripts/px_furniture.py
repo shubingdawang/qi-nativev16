@@ -934,18 +934,20 @@ def nightstand(s):
     knob = M("knob", "#E0B86A", steps=4, gloss=1.0)
     clock = M("clock", "#F6B7C6", steps=5)
     face = M("face", "#FFFDF6", steps=3)
-    B(s, -0.45, 0.45, 0.08, 0.72, -0.42, 0.4, body, "body", round=0.04)
-    B(s, -0.48, 0.48, 0.7, 0.78, -0.45, 0.43, trim, "top", round=0.02)
-    for x in (-0.36, 0.36):
-        B(s, x - 0.04, x + 0.04, 0, 0.1, 0.28, 0.36, trim, "foot")
-    s.decal(lambda p: (p[..., 2] > 0.38) & (np.abs(p[..., 1] - 0.0) < 0.015), trim, "body")
-    for y in (0.22, 0.54):
+    # 床头柜：比床矮一点点就行，别缩成一个小盒子（她：床头柜有点太小了）
+    B(s, -0.46, 0.46, 0.14, 0.95, -0.42, 0.4, body, "body", round=0.04)
+    B(s, -0.5, 0.5, 0.93, 1.02, -0.45, 0.43, trim, "top", round=0.02)
+    for x in (-0.38, 0.38):
+        for z in (-0.34, 0.34):
+            B(s, x - 0.045, x + 0.045, 0, 0.16, z - 0.045, z + 0.045, trim, "foot")
+    s.decal(lambda p: (p[..., 2] > 0.38) & (np.abs(p[..., 1] - 0.03) < 0.015), trim, "body")
+    for y in (0.35, 0.72):
         s.add(sphere(0.035).at(0, y, 0.42), knob, "knob")
     # 柜上一只小闹钟
-    s.add(cylinder(0.14, 0.08).rot("x", 90).at(0.15, 0.92, -0.05), clock, "clock")
+    s.add(cylinder(0.14, 0.08).rot("x", 90).at(0.15, 1.16, -0.05), clock, "clock")
     s.decal(lambda p: (p[..., 1] > 0.06), face, "clock")
-    s.add(sphere(0.04).at(0.05, 1.07, -0.05), clock, "bell")
-    s.add(sphere(0.04).at(0.25, 1.07, -0.05), clock, "bell")
+    s.add(sphere(0.04).at(0.05, 1.31, -0.05), clock, "bell")
+    s.add(sphere(0.04).at(0.25, 1.31, -0.05), clock, "bell")
 
 
 @item("floorlamp", "落地灯", 1, 1, 1.6)

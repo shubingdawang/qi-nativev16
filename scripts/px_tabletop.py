@@ -264,6 +264,14 @@ def teapot(s, R, T):
     s.decal(band, "pot")
     s.decal(leaves, "pot")
     s.decal(flower, "pot")
+    # 配一只茶杯，摆在壶的左前方（她：茶壶可以配套放一个茶杯，在左下角，算同一个位置）
+    cup_c = -R * 1.75 + T * 1.25
+    s.add(cylinder(0.5, 0.06, round=0.02).at(cup_c[0], 0.0, cup_c[2]), china, "saucer")
+    s.add(lathe([(0, 0), (0.3, 0), (0.34, 0.1), (0.36, 0.42), (0.31, 0.42), (0.28, 0.12), (0, 0.08)])
+          .at(cup_c[0], 0.06, cup_c[2]), china, "cup")
+    handle = cup_c + R * 0.42
+    s.add(along(torus(0.15, 0.045, axis="z"), R).at(handle[0], 0.3, handle[2]), china, "cup")
+    s.decal(lambda p: ((p[..., 1] > 0.3) & (p[..., 1] < 0.38), trim), "cup")
 
 
 @item("bubbletea", "奶茶", units=4.2, ty=1.7, h=1.25)
@@ -1271,10 +1279,10 @@ def star_gramophone(s, R, T):
 # 0.22 + 最小那几件（易拉罐、蜡烛）≈ 0.35 是「再小就看不清」的底；后面那一项跟真实宽度成正比，
 # 所以谁比谁大的顺序一个不乱。画布左右对称留白，App 按整张图宽等于一格去摆。
 REAL_WIDTH = {
-    "coffee": 0.15, "soda": 0.20, "teapot": 0.25, "bubbletea": 0.18, "cake": 0.22,
+    "coffee": 0.15, "soda": 0.15, "teapot": 0.25, "bubbletea": 0.18, "cake": 0.22,
     "donut": 0.10, "riceball": 0.09, "icecream": 0.18, "sushi": 0.25, "ramen": 0.20,
     "hotpot": 0.35, "cookies": 0.20, "macaron": 0.20, "fruitbowl": 0.30, "pancakes": 0.22,
-    "pizza": 0.33, "sandwich": 0.15, "salad": 0.25, "candle": 0.10, "tissue": 0.24,
+    "pizza": 0.33, "sandwich": 0.15, "salad": 0.25, "candle": 0.07, "tissue": 0.24,
     "globe": 0.35, "tank": 0.30, "bonsai": 0.30, "flowervase": 0.30, "vic_vase": 0.35,
     "minitree": 0.35, "star_books": 0.25, "speaker": 0.20, "microwave": 0.50,
     "record": 0.40, "humid": 0.25, "polaroid": 0.12, "star_gramophone": 0.45,

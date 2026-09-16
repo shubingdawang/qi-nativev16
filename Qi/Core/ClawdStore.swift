@@ -63,6 +63,9 @@ struct Furniture: Codable, Identifiable, Hashable {
     var fx: Int = -1
     var fy: Int = -1
 
+    /// 摆在台面上时，坐在那张台面的第几个位置（见 `TableSlots`）。摆在地上的用不着
+    var slot: Int = 0
+
     var facesRight: Bool { facing == "right" }
 
     /// 老数据没有 `carried` / `facing`，不补容错解码器整间屋子会读不出来
@@ -82,6 +85,7 @@ struct Furniture: Codable, Identifiable, Hashable {
         facing = (try? c.decodeIfPresent(String.self, forKey: .facing)) ?? "left"
         fx = (try? c.decodeIfPresent(Int.self, forKey: .fx)) ?? -1
         fy = (try? c.decodeIfPresent(Int.self, forKey: .fy)) ?? -1
+        slot = (try? c.decodeIfPresent(Int.self, forKey: .slot)) ?? 0
     }
 
     /// 格子坐标。老数据没有就**由平面坐标换算一次**，
@@ -101,12 +105,12 @@ struct Furniture: Codable, Identifiable, Hashable {
     init(id: UUID = UUID(), kind: String = "", x: Double = 0.5, y: Double = 0.5,
          gx: Int = -1, gy: Int = -1, room: String = "", imageName: String = "",
          hidden: Bool = false, carried: Bool = false, boughtAt: Date = Date(),
-         facing: String = "left", fx: Int = -1, fy: Int = -1) {
+         facing: String = "left", fx: Int = -1, fy: Int = -1, slot: Int = 0) {
         self.id = id; self.kind = kind; self.x = x; self.y = y
         self.gx = gx; self.gy = gy; self.room = room; self.imageName = imageName
         self.hidden = hidden; self.carried = carried; self.boughtAt = boughtAt
         self.facing = facing
-        self.fx = fx; self.fy = fy
+        self.fx = fx; self.fy = fy; self.slot = slot
     }
 
     /// 这一件在平面屋里摆在哪一格。
@@ -2065,6 +2069,26 @@ extension ClawdStore {
         UserDefaults.standard.set(true, forKey: "clawdFootprintSwap1")
     }
 
+    /// 台面上的东西以前是「一格一件」，现在按位置摆（见 `TableSlots`）。
+    /// **只理一次**：把每张台面上的东西挨个重新坐一次位置，小的往前排。
+    func settleTableSlots() {
+        guard !UserDefaults.standard.bool(forKey: "clawdTableSlots1") else { return }
+        for f in owned where !f.hidden && !f.carried
+            && FurnitureCatalog.shape(of: f.kind).mount == .table {
+            let c = cell(of: f)
+            guard let room = HomeRoom(rawValue: f.room),
+                  let seat = tableSeat(in: room, c.gx, c.gy, except: f.id, itemID: f.kind),
+                  let i = owned.firstIndex(where: { $0.id == f.id }) else { continue }
+            if projection == .flat {
+                owned[i].fx = seat.gx; owned[i].fy = seat.gy
+            } else {
+                owned[i].gx = seat.gx; owned[i].gy = seat.gy
+            }
+            owned[i].slot = seat.slot
+        }
+        UserDefaults.standard.set(true, forKey: "clawdTableSlots1")
+    }
+
     /// 老家具分房间。**只分一次**，分完写回去。
     func migrateRooms() {
         for i in owned.indices where owned[i].room.isEmpty {
@@ -2160,8 +2184,14 @@ extension ClawdStore {
             else { return false }
             spot = free
         } else if s.mount == .table {
-            // 放桌上的：附近有台面就**吸到台面上**，没有才落地
-            spot = tableSpot(in: room, gx, gy, except: id) ?? geo.clamp(gx, gy)
+            // 放桌上的：附近有台面就**吸到台面上的一个位置**，没有才落地
+            if let seat = tableSeat(in: room, gx, gy, except: id, itemID: owned[i].kind) {
+                spot = (seat.gx, seat.gy)
+                owned[i].slot = seat.slot
+            } else {
+                spot = geo.clamp(gx, gy)
+                owned[i].slot = 0
+            }
         } else {
             spot = geo.clamp(gx, 0)
         }
@@ -2201,19 +2231,64 @@ extension ClawdStore {
     /// 放桌上的东西松在桌子附近，意思就是放桌上。
     func tableSpot(in room: HomeRoom, _ gx: Int, _ gy: Int,
                    except: UUID? = nil, reach: Int = 2) -> (Int, Int)? {
-        var best: (x: Int, y: Int, d: Int)?
+        tableSeat(in: room, gx, gy, except: except, reach: reach).map { ($0.gx, $0.gy) }
+    }
+
+    /// 台面上的一个位置：落在哪一格、是那张台面的第几个位置。
+    ///
+    /// ⚠️ **占地大的东西（微波炉 2×2）要整个放得下**，不然会有一半悬在桌子外面（她报的）。
+    /// 空位置优先；都占着就挑最近的那个（她把两件摆在一处是她的自由）。
+    func tableSeat(in room: HomeRoom, _ gx: Int, _ gy: Int,
+                   except: UUID? = nil, reach: Int = 3,
+                   itemID: String? = nil) -> (gx: Int, gy: Int, slot: Int)? {
+        let iw = itemID.map { max(1, FurnitureCatalog.shape(of: $0).w) } ?? 1
+        let idp = itemID.map { max(1, FurnitureCatalog.shape(of: $0).d) } ?? 1
+        let wantFront = itemID.map { TableSlots.small($0) } ?? true
+        var best: (gx: Int, gy: Int, slot: Int, score: Double)?
         for o in owned where o.id != except && o.room == room.rawValue && onFloor(o) {
             let s = shape(of: o)
             guard s.surface, s.mount == .floor else { continue }
             let oc = cell(of: o)
-            for x in oc.gx..<(oc.gx + max(1, s.w)) {
-                for y in oc.gy..<(oc.gy + max(1, s.d)) {
-                    let d = abs(x - gx) + abs(y - gy)
-                    if d <= reach, best == nil || d < best!.d { best = (x, y, d) }
+            let offs = TableSlots.offsets(for: o.kind, w: max(1, s.w), d: max(1, s.d))
+            let taken = Set(owned.filter {
+                $0.id != except && $0.room == room.rawValue && !$0.hidden && !$0.carried
+                    && FurnitureCatalog.shape(of: $0.kind).mount == .table
+                    && support(at: cell(of: $0), in: room.rawValue, except: $0.id)?.id == o.id
+            }.map(\.slot))
+            for (i, off) in offs.enumerated() {
+                let p = TableSlots.point(originGX: oc.gx, originGY: oc.gy, offset: off)
+                // 占地整个要落在台面里
+                let cx = Int(p.gx.rounded(.down)), cy = Int(p.gy.rounded(.down))
+                guard cx >= oc.gx, cy >= oc.gy,
+                      cx + iw <= oc.gx + max(1, s.w), cy + idp <= oc.gy + max(1, s.d)
+                else { continue }
+                var score = abs(p.gx - Double(gx)) + abs(p.gy - Double(gy))
+                if taken.contains(i) { score += 6 }
+                // 小的往前排、大的往后排
+                let rowFromFront = Double(max(1, s.d)) - off.y
+                score += wantFront ? rowFromFront * 0.35 : (Double(max(1, s.d)) - rowFromFront) * 0.35
+                if score <= Double(reach) + 6, best == nil || score < best!.score {
+                    best = (cx, cy, i, score)
                 }
             }
         }
-        return best.map { ($0.x, $0.y) }
+        return best.map { ($0.gx, $0.gy, $0.slot) }
+    }
+
+    /// 这一件在它那张台面上该偏多少（格），画的时候加上去
+    func slotOffset(of f: Furniture) -> (dx: Double, dy: Double) {
+        let s = shape(of: f)
+        guard s.mount == .table,
+              let under = support(at: cell(of: f), in: f.room, except: f.id) else { return (0, 0) }
+        let us = shape(of: under)
+        let uc = cell(of: under)
+        let offs = TableSlots.offsets(for: under.kind, w: max(1, us.w), d: max(1, us.d))
+        guard f.slot >= 0, f.slot < offs.count else { return (0, 0) }
+        let p = TableSlots.point(originGX: uc.gx, originGY: uc.gy, offset: offs[f.slot])
+        let c = cell(of: f)
+        // 这一件画在它那一格的正中；位置跟格心差多少，就是要偏多少
+        return (p.gx - Double(c.gx) - Double(max(1, s.w) - 1) / 2,
+                p.gy - Double(c.gy) - Double(max(1, s.d) - 1) / 2)
     }
 
     /// 把手上那件**放回某一格**（从桌上拿起来喝完，放回原来那个位置）

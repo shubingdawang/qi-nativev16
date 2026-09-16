@@ -227,6 +227,7 @@ struct IsoRoomView<Clawd: View>: View {
                 store.migrateRoom()
                 store.migrateRooms()
                 store.settleSwappedFootprints()
+                store.settleTableSlots()
             }
             .onChange(of: geo.size) { _, v in boardSize = v }
         }
@@ -540,7 +541,8 @@ struct IsoRoomView<Clawd: View>: View {
                 let ud = geoRoom.projection == .flat
                     ? Double(uc.gy + us.d - 1) + Double(uc.gx + us.w - 1) * 0.001
                     : Double(uc.gx + us.w - 1 + uc.gy + us.d - 1)
-                layered = max(layered, ud + 0.4)
+                // 同一张桌子上：前排那几个位置画在后排之后
+                layered = max(layered, ud + 0.4) + store.slotOffset(of: f).dy * 0.02
             }
             // 地毯（不占高度）永远垫在最底下，只压在墙上那层之上
             if s.mount == .floor && s.tall <= 0 { layered = -900 }
@@ -722,9 +724,12 @@ struct IsoRoomView<Clawd: View>: View {
                        _ geoRoom: IsoRoom) -> some View {
         let s = store.shape(of: item)
         let cell = (item.id == dragging) ? dragCell : store.cell(of: item)
-        // 落脚点：它盖住那几格的正中间
-        let c = geoRoom.point(Double(cell.gx) + Double(s.w - 1) / 2,
-                           Double(cell.gy) + Double(s.d - 1) / 2)
+        // 落脚点：它盖住那几格的正中间。
+        // 放在台面上的还要**坐到那张台面的某一个位置**上（见 `TableSlots`）——
+        // 一格只摆一件的话，床头柜上放不下两样东西，两格宽的微波炉还会悬到桌子外面
+        let off = (item.id == dragging) ? (dx: 0.0, dy: 0.0) : store.slotOffset(of: item)
+        let c = geoRoom.point(Double(cell.gx) + Double(s.w - 1) / 2 + off.dx,
+                           Double(cell.gy) + Double(s.d - 1) / 2 + off.dy)
         // 她自己的图排第一。
         //
         // 三档：**她导的图 > 我画的等距版 > 老那张正面图**。
