@@ -1618,6 +1618,138 @@ final class ClawdStore: ObservableObject {
     /// ⚠️ 只改 `facing`，**不动它在哪一格**。
     /// 贴哪面墙是看的事，在哪一格是摆的事，
     /// 一块改的话她改个朝向家具就自己跑了。
+    // MARK: 摆放工具：复制一件、整间摆法导出导入
+    //
+    // 她给的参考（别人的粉色小屋）编辑栏里有「复制／导出 JSON／导入」。
+    //
+    // ⚠️ **复制不是白给一件。** 家具是她攒币买的——
+    // 柜子里还有同款收着的就先拿那件出来，没有才按原价再买一件。
+    // 白复制的话币就没意义了。
+
+    /// 在这一件旁边再摆一件一样的。返回给她看的一句话
+    func duplicate(_ id: UUID) -> String {
+        guard let src = owned.first(where: { $0.id == id }),
+              let kind = FurnitureCatalog.kind(src.kind) else { return "找不到这件" }
+        let newID: UUID
+        let how: String
+        if let spare = owned.firstIndex(where: { $0.kind == src.kind && $0.hidden && !$0.carried }) {
+            owned[spare].hidden = false
+            owned[spare].room = src.room
+            newID = owned[spare].id
+            how = "从柜子里拿了一件出来"
+        } else {
+            guard coins >= kind.price else { return "币不够，再买一件要 \(kind.price)" }
+            coins -= kind.price
+            var item = Furniture(kind: kind.id)
+            item.room = src.room
+            owned.append(item)
+            newID = item.id
+            how = "花 \(kind.price) 币又买了一件"
+        }
+        if let i = owned.firstIndex(where: { $0.id == newID }) {
+            owned[i].facing = src.facing
+            owned[i].imageName = src.imageName
+        }
+        // 摆在右手边一格；那儿占着的话 `place` 会自己找最近的空处
+        let c = cell(of: src)
+        place(newID, at: c.gx + max(1, shape(of: src).w), c.gy)
+        return how
+    }
+
+    /// 一件东西的摆法（导出导入用）。只存位置，不存「是哪一件」——
+    /// 导进另一台手机时，拿的是那边自己买过的同款
+    struct LayoutEntry: Codable {
+        var kind: String
+        var gx: Int
+        var gy: Int
+        var fx: Int
+        var fy: Int
+        var facing: String
+        var slot: Int
+    }
+
+    struct Layout: Codable {
+        var version: Int = 1
+        var room: String
+        var wallpaper: String
+        var flooring: String
+        var items: [LayoutEntry]
+    }
+
+    /// 这一间现在的摆法，JSON 文本
+    func exportLayout(_ room: HomeRoom) -> String {
+        let items = owned.filter { $0.room == room.rawValue && !$0.hidden && !$0.carried }
+            .map { f -> LayoutEntry in
+                let c = cell(of: f)
+                return LayoutEntry(kind: f.kind,
+                                   gx: projection == .flat ? f.gx : c.gx,
+                                   gy: projection == .flat ? f.gy : c.gy,
+                                   fx: projection == .flat ? c.gx : f.fx,
+                                   fy: projection == .flat ? c.gy : f.fy,
+                                   facing: f.facing, slot: f.slot)
+            }
+        let layout = Layout(room: room.rawValue,
+                            wallpaper: RoomFinish.isBuiltIn(wallpaper(of: room)) ? wallpaper(of: room) : "",
+                            flooring: RoomFinish.isBuiltIn(flooring(of: room)) ? flooring(of: room) : "",
+                            items: items)
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return (try? enc.encode(layout)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+    }
+
+    /// 照一份摆法把这一间摆出来。
+    ///
+    /// ⚠️ **只动她买过的东西**：摆法里写了、她没有的那几样跳过，
+    /// 报一句缺了什么——不能因为导入了一份摆法就凭空多出家具。
+    /// 这一间里原来摆着、摆法里没提到的，收进柜子。
+    func importLayout(_ text: String, into room: HomeRoom) -> String {
+        guard let data = text.data(using: .utf8),
+              let layout = try? JSONDecoder().decode(Layout.self, from: data) else {
+            return "剪贴板里不是摆法（要先在「摆法 → 复制这间的摆法」复制一份）"
+        }
+        var used = Set<UUID>()
+        var missing: [String: Int] = [:]
+        var placed = 0
+        var next = owned
+        for e in layout.items {
+            // 先挑本来就在这一间的，再挑柜子里的，最后挑别的房间摆着的
+            let pick = next.indices.filter { next[$0].kind == e.kind && !used.contains(next[$0].id) && !next[$0].carried }
+                .sorted { a, b in
+                    func rank(_ f: Furniture) -> Int {
+                        f.room == room.rawValue && !f.hidden ? 0 : (f.hidden ? 1 : 2)
+                    }
+                    return rank(next[a]) < rank(next[b])
+                }.first
+            guard let i = pick else {
+                missing[e.kind, default: 0] += 1
+                continue
+            }
+            used.insert(next[i].id)
+            next[i].room = room.rawValue
+            next[i].hidden = false
+            next[i].gx = e.gx; next[i].gy = e.gy
+            next[i].fx = e.fx; next[i].fy = e.fy
+            next[i].facing = e.facing
+            next[i].slot = e.slot
+            placed += 1
+        }
+        // 这一间里摆法没提到的，收起来
+        for i in next.indices where next[i].room == room.rawValue && !next[i].hidden
+            && !next[i].carried && !used.contains(next[i].id) {
+            next[i].hidden = true
+        }
+        owned = next      // 一次写回，只落一次盘
+        if !layout.wallpaper.isEmpty { setWallpaper(layout.wallpaper, for: room) }
+        if !layout.flooring.isEmpty { setFlooring(layout.flooring, for: room) }
+
+        var msg = "摆好了 \(placed) 件"
+        if !missing.isEmpty {
+            let names = missing.map { (FurnitureCatalog.kind($0.key)?.name ?? $0.key) + "×\($0.value)" }
+            msg += "；还没买的：" + names.joined(separator: "、")
+        }
+        return msg
+    }
+
     func flipFacing(_ id: UUID) {
         guard let i = owned.firstIndex(where: { $0.id == id }) else { return }
         owned[i].facing = owned[i].facesRight ? "left" : "right"

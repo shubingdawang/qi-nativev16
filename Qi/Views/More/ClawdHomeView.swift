@@ -769,6 +769,16 @@ struct ClawdHomeView: View {
                             }
                         }
                     }
+                    // 整间的摆法：复制成一段文字、从剪贴板照着摆
+                    Menu("摆法") {
+                        Button("复制这间的摆法") {
+                            UIPasteboard.general.string = store.exportLayout(r)
+                            notice = "摆法复制好了，可以发给别人或者存起来"
+                        }
+                        Button("照剪贴板里的摆法摆") {
+                            notice = store.importLayout(UIPasteboard.general.string ?? "", into: r)
+                        }
+                    }
                     Menu("窗户") {
                         ForEach(WindowSide.allCases) { w in
                             Button {
@@ -1179,6 +1189,7 @@ struct ClawdHomeView: View {
                 // 她报的：「家具分区太绝对了，桌子也可以摆在卧室，
                 // 但现在只能摆在餐厅。」——买下来归哪一间只是个默认，
                 // 可**改这个默认的路以前不存在**：一件东西落在餐厅就出不来了。
+                Button("复制一件摆旁边") { say(store.duplicate(item.id)) }
                 Button("搬到别的房间") { sending = item }
                 Button("收起来") { store.toggleHidden(item.id) }
                 Button("卖掉，退一半的币", role: .destructive) {
