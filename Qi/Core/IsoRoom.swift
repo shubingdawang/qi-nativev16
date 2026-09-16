@@ -494,6 +494,29 @@ struct IsoRoom {
     /// 等距屋的「水平」是斜的（斜率正好 ±½，因为 `tileH = tileW / 2`），
     /// 拿屏幕的水平线去画砖缝，砖墙会横穿过整间屋，看着像贴了张纸。
     /// 照着这条底边走，缝天然就是斜的、跟墙一个方向。
+    /// 墙面上的一个点：贴哪面墙、沿墙第几格、多高（0 墙根，1 墙顶）。
+    ///
+    /// 她报的：「吊兰无法移动到最顶端……等距的吊兰也无法到最顶端，且只能放在角落。」
+    /// 以前挂墙的东西拖动时用的是**地板**的换算（`tile(at:)`）：手指在墙上，
+    /// 换算出来的格子是负的，一夹就夹回墙角；高度又写死在墙的 55% 处。
+    /// 现在沿着墙自己的底边量：左右看落在哪面墙、横着第几格、竖着多高。
+    func wallSpot(at p: CGPoint) -> (right: Bool, along: Int, v: Double) {
+        func clampV(_ v: CGFloat) -> Double { Double(min(0.95, max(0.12, v))) }
+        if projection == .flat {
+            let (a, b) = backWallBase
+            let u = min(0.999, max(0, (p.x - a.x) / max(1, b.x - a.x)))
+            return (true, Int(u * CGFloat(cols)), clampV((a.y - p.y) / max(1, wallH)))
+        }
+        let n = CGFloat(size)
+        let c = point(0, 0).offsetBy(dy: -tileH / 2)
+        let right = p.x >= c.x
+        let b = right ? point(Double(n) - 1, 0).offsetBy(dx: tileW / 2)
+                      : point(0, Double(n) - 1).offsetBy(dx: -tileW / 2)
+        let u = min(0.999, max(0, (p.x - c.x) / (b.x - c.x)))
+        let baseY = c.y + (b.y - c.y) * u
+        return (right, Int(u * n), clampV((baseY - p.y) / max(1, wallH)))
+    }
+
     var leftWallBase: (CGPoint, CGPoint) {
         let n = Double(size)
         if projection == .flat { return backWallBase }

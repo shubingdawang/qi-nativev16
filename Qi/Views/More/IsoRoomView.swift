@@ -80,6 +80,9 @@ struct IsoRoomView<Clawd: View>: View {
     /// （见 `ClawdStore.flatPanX`）。
     /// 这一次拖之前停在哪儿
     @State private var panFrom: CGFloat = 0
+    /// 拖着挂墙的东西时：多高、哪面墙
+    @State private var dragWallV: Double = 0.55
+    @State private var dragWallRight = true
     /// 镜头拖动开始时停在哪儿
     @State private var camFrom: CGSize = .zero
     /// 正拖着的这一件此刻悬在 clawd 身上
@@ -954,8 +957,9 @@ struct IsoRoomView<Clawd: View>: View {
         case .floor:
             return 0
         case .wall:
-            // 挂在墙的中上段。墙有 `wallH` 高，挂太高看着像浮在天花板上
-            return -g.wallH * 0.55
+            // 挂多高是她拖出来的（`wallV`，0 墙根 1 墙顶）
+            let v = (item.id == dragging) ? dragWallV : item.wallV
+            return -g.wallH * CGFloat(v)
         case .table:
             // ⚠️⚠️ **抬多高按底下那件「画出来多高」算，不是按它的 `tall`。**
             //
@@ -1041,6 +1045,8 @@ struct IsoRoomView<Clawd: View>: View {
                 dragging = item.id
                 store.arranging = true
                 dragCell = store.cell(of: item)
+                dragWallV = item.wallV
+                dragWallRight = item.facesRight
                 if app.settings.haptics {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 }
@@ -1051,6 +1057,16 @@ struct IsoRoomView<Clawd: View>: View {
                 // 拖到他身上了没有。**拖的过程里就得知道**——
                 // 不然她一路拖过去，到松手那一刻才知道行不行
                 onClawd = nearClawd(drag.location)
+                // 挂墙的：按墙面换算，不按地板
+                if s.mount == .wall {
+                    let w = geoRoom.wallSpot(at: drag.location)
+                    let cell = store.projection == .flat ? (w.along, 0)
+                        : (w.right ? (max(1, w.along), 0) : (0, max(1, w.along)))
+                    dragWallV = w.v
+                    dragWallRight = w.right
+                    if cell.0 != dragCell.gx || cell.1 != dragCell.gy { dragCell = cell }
+                    return
+                }
                 let t = geoRoom.tile(at: drag.location)
                 var (gx, gy) = geoRoom.clamp(Int(t.gx.rounded()), Int(t.gy.rounded()))
                 // 放桌上的东西，拖的时候就**吸到附近的台面上**——松手前就看得见落在哪
@@ -1082,6 +1098,13 @@ struct IsoRoomView<Clawd: View>: View {
                 //
                 // 分辨得很干脆：按住之后**一格都没挪过**，那就不是在拖，
                 // 是在等菜单。挪过一格的照旧当拖。
+                if s.mount == .wall, !dropped {
+                    let moved = dragCell != store.cell(of: item) || abs(dragWallV - item.wallV) > 0.03
+                    if !moved { onTapFurniture(item); return }
+                    store.hang(item.id, right: dragWallRight,
+                               along: dragWallRight ? dragCell.gx : dragCell.gy, v: dragWallV)
+                    return
+                }
                 if !dropped, dragCell == store.cell(of: item) {
                     onTapFurniture(item)
                     return

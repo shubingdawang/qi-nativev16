@@ -66,6 +66,9 @@ struct Furniture: Codable, Identifiable, Hashable {
     /// 摆在台面上时，坐在那张台面的第几个位置（见 `TableSlots`）。摆在地上的用不着
     var slot: Int = 0
 
+    /// 挂在墙上时挂多高：0 墙根、1 墙顶。以前写死在 0.55，她拖不到最上面
+    var wallV: Double = 0.55
+
     var facesRight: Bool { facing == "right" }
 
     /// 老数据没有 `carried` / `facing`，不补容错解码器整间屋子会读不出来
@@ -86,6 +89,7 @@ struct Furniture: Codable, Identifiable, Hashable {
         fx = (try? c.decodeIfPresent(Int.self, forKey: .fx)) ?? -1
         fy = (try? c.decodeIfPresent(Int.self, forKey: .fy)) ?? -1
         slot = (try? c.decodeIfPresent(Int.self, forKey: .slot)) ?? 0
+        wallV = (try? c.decodeIfPresent(Double.self, forKey: .wallV)) ?? 0.55
     }
 
     /// 格子坐标。老数据没有就**由平面坐标换算一次**，
@@ -1783,6 +1787,18 @@ final class ClawdStore: ObservableObject {
         return msg
     }
 
+    /// 挂墙的东西：挂到哪面墙、第几格、多高
+    func hang(_ id: UUID, right: Bool, along: Int, v: Double) {
+        guard let i = owned.firstIndex(where: { $0.id == id }) else { return }
+        owned[i].wallV = v
+        if projection == .iso {
+            owned[i].facing = right ? "right" : "left"
+            place(id, at: right ? max(1, along) : 0, right ? 0 : max(1, along))
+        } else {
+            place(id, at: along, 0)
+        }
+    }
+
     func flipFacing(_ id: UUID) {
         guard let i = owned.firstIndex(where: { $0.id == id }) else { return }
         owned[i].facing = owned[i].facesRight ? "left" : "right"
@@ -2396,7 +2412,12 @@ extension ClawdStore {
                 owned[i].slot = 0
             }
         } else {
-            spot = geo.clamp(gx, 0)
+            // 挂墙：`gx == 0` 那一排是左墙（沿 gy 走），其余贴右墙（沿 gx 走）
+            if gx == 0 && gy > 0 {
+                spot = geo.clamp(0, gy)
+            } else {
+                spot = geo.clamp(gx, 0)
+            }
         }
         // ⚠️ **写回当前这个视角那一对。**
         //
