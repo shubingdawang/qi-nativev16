@@ -1027,10 +1027,6 @@ final class AppState: ObservableObject {
                 BodyStore.shared.nudge(TriggerStore.shared.nudge(from: hit), quote: text)
             }
         }
-        // 她自己说「睡了」才算数（他道晚安不算）。开着宵禁的话，
-        // 这一下把状态文件写成 1，她那个快捷指令自动化照着它拦 App
-        if Curfew.soundsLikeBed(text) { Curfew.shared.start(why: "说了晚安") }
-
         let turn = UUID()
         var userMsg = ChatMessage(role: .user, content: text)
         userMsg.turnID = turn

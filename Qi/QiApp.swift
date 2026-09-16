@@ -57,9 +57,6 @@ struct QiApp: App {
                 // 读的地方一律走 app.dndOn（它自己会算过没过期），
                 // 这一下只是把界面上那面旗子也收掉。
                 app.clearExpiredDND()
-                // 宵禁到点了自己解除。⚠️ 不能只在她说晚安时写文件——
-                // 文件停在 1 上没人改的话，她第二天早上会被自己的自动化关在外面
-                Curfew.shared.settle()
                 // 身体那套落下的时间补算回来。纯算术，不花钱。
                 app.catchUpBody()
                 WakeEngine.shared.app = app
