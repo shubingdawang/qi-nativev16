@@ -246,10 +246,23 @@ struct TarotPane: View {
                     // 她最早要的是「长按移动，手放在哪张牌上就弹出哪张」。
                     // 那个做不了——见下面那段：只要牌堆上挂拖拽，
                     // 横滑就死，后面那些牌永远够不着。两件事只能留一件。
+                    GeometryReader { box in
+                    let half = max(1, box.size.width / 2)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: -26) {
                             ForEach(deck.indices, id: \.self) { i in
+                                // ⚠️ 弧形按**牌此刻在屏幕上的位置**算，不按第几张：
+                                // 她报的「塔罗牌并没有变成弧形」——横着滑的一长排，
+                                // 按下标排弧的话滑到哪儿都是一段歪线。
+                                // 离屏幕中线越远越往下沉、越往外歪，滑动时整排像在一个扇面上转
                                 cardBack(i)
+                                    .visualEffect { content, proxy in
+                                        let mid = proxy.frame(in: .scrollView(axis: .horizontal)).midX
+                                        let d = max(-1.2, min(1.2, (mid - half) / half))
+                                        return content
+                                            .rotationEffect(.degrees(Double(d) * 16), anchor: .bottom)
+                                            .offset(y: d * d * 34)
+                                    }
                             }
                         }
                         .padding(.horizontal, 30)
@@ -283,7 +296,8 @@ struct TarotPane: View {
                         //   挑牌 = 点一下抬起来、再点一下抽走
                         //          （`cardBack` 里那个 `onTapGesture`）
                     }
-                    .frame(height: 190)
+                    }
+                    .frame(height: 230)
                     // ⚠️ 牌堆**不套框**。她定的：「我希望塔罗不要被框起来，
                     // 所有牌可以放在底部。」——一副摊开的牌本来就该是摊在
                     // 桌面上的，套一层玻璃卡就成了「一张卡里面装着一副牌」。
@@ -341,7 +355,6 @@ struct TarotPane: View {
         // 一块渐变加一道白边，那不是牌背，是一块圆角矩形。
         return TarotBack(tint: app.settings.accentColor)
             .frame(width: 62, height: 100)
-            .rotationEffect(.degrees(Double(i % 7) - 3))
             // 抬起来那张要更高、更大、还带一圈光，跟已经抽走的那些分得开
             .offset(y: chosen ? -22 : (lifted ? -34 : 0))
             .scaleEffect(lifted ? 1.14 : 1)
