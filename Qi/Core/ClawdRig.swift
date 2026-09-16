@@ -869,6 +869,9 @@ enum ClawdRig {
         case "boots", "slippers", "sneakers", "dress_shoes": return .feet
         case "plaidshirt":        return .body
         case "hoodie", "suit":    return .outer
+        // 成套的：外衣 + 袖子 + 裤腿一件，跟小西装同一层（穿一套换一套）
+        case "uni_vest", "uni_blazer", "trench", "tux", "military", "blue_shirt", "white_suit", "stripe_pj":
+            return .outer
         default:                  return .head
         }
     }

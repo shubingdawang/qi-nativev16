@@ -757,6 +757,187 @@ def sunglasses(s):
     s.rect(12.0, 8.2, 1.7, 0.28, GOLD)
 
 
+
+# ══════════════════════════════════════════ 成套的衣服（照她找的参考图改的）
+#
+# 她找的是一张人形小人的换装表：学生马甲、藏青西装、棕风衣、黑礼服、军装、浅蓝衬衫、
+# 白西装、条纹睡衣……人形小人的衣服是「上衣 + 袖子 + 裤子」一件。
+# 改成 clawd 的体型：
+#   · clawd 的身子就是脸（眼睛在 y8..10），所以上衣只能从眼睛下面 y10.4 开始，
+#     嘴那块照小西装的做法开 V 口留出来
+#   · 手是身子两边的一小截（x0..2 / 13..15，y9..11），袖子套在手上，手尖露一点
+#   · 四条腿各套一截裤腿，一直到脚踝
+
+def _outfit(s, coat, coat_lt, coat_dk, inner, pants, pants_lt, pants_dk,
+            sleeve=None, cuff=None, v_close=13.0, lapel=None):
+    """一件成套的：外衣（V 口露内搭）+ 袖子 + 裤腿。返回 V 口的半宽函数，细节自己往上画"""
+    def half_at(y):
+        if y < 11.85:
+            return 1.75 + (11.85 - y) * 1.2
+        span = max(0.2, v_close - 11.85)
+        return max(0.0, 1.75 - (y - 11.85) / span * 1.75)
+
+    y = 10.4
+    while y < 13.35:
+        half = half_at(y)
+        if half > 0:
+            s.rect(1.8, y, 7.5 - half - 1.8, 0.1, coat)
+            s.rect(7.5 + half, y, 13.2 - (7.5 + half), 0.1, coat)
+            if y >= 11.9 and inner:
+                s.rect(7.5 - half, y, half * 2, 0.1, inner)
+        else:
+            s.rect(1.8, y, 11.4, 0.1, coat)
+        y += 0.1
+    s.rect(1.8, 10.4, 0.45, 2.95, coat_lt)
+    s.rect(12.75, 10.4, 0.45, 2.95, coat_dk)
+    if lapel:
+        for k in range(24):
+            yy = 10.4 + k * 0.1
+            half = half_at(yy)
+            w = max(0.2, 0.95 - k * 0.032)
+            s.rect(7.5 - half - w, yy, w, 0.1, lapel)
+            s.rect(7.5 + half, yy, w, 0.1, lapel)
+    # 袖子：套住整只手，手尖留 0.35 露出来
+    sl = sleeve or coat
+    for (x0, x1, lit_left) in ((0.35, 2.0, True), (13.0, 14.65, False)):
+        s.rect(x0, 9.0, x1 - x0, 2.0, sl)
+        s.rect(x0, 9.0, x1 - x0, 0.25, coat_lt)
+        s.rect(x0, 10.75, x1 - x0, 0.25, coat_dk)
+        if cuff:
+            cx = x0 if lit_left else x1 - 0.35
+            s.rect(cx, 9.0, 0.35, 2.0, cuff)
+    # 裤腿
+    for fx in FEET:
+        s.rect(fx - 0.25, 13.3, 1.5, 1.3, pants)
+        s.rect(fx - 0.25, 13.3, 0.3, 1.3, pants_lt)
+        s.rect(fx + 0.95, 13.3, 0.3, 1.3, pants_dk)
+    return half_at
+
+
+def uni_vest(s):
+    """学生马甲装：白衬衫短袖 + 藏青针织马甲（V 口），马甲下摆一道红白罗纹，黑裤子。"""
+    shirt, shirt_dk = "#FBFBF8", "#DCDCD6"
+    _outfit(s, "#2E3F73", "#4A5C94", "#1F2C55", shirt, "#26262C", "#3A3A42", "#18181C",
+            sleeve=shirt, cuff="#DCDCD6")
+    s.rect(1.8, 12.95, 11.4, 0.18, "#C9453E")
+    s.rect(1.8, 13.13, 11.4, 0.12, "#FBFBF8")
+    for x in (3.0, 4.2, 10.4, 11.6):
+        s.rect(x, 10.6, 0.12, 2.3, "#1F2C55")        # 针织竖纹
+    s.rect(0.35, 10.7, 1.65, 0.3, shirt_dk)
+    s.rect(13.0, 10.7, 1.65, 0.3, shirt_dk)
+
+
+def uni_blazer(s):
+    """藏青学生西装：藏青外套、白衬衫、深蓝翻领、两颗金扣、胸前一枚小校徽，蓝灰裤子。"""
+    _outfit(s, "#27366A", "#3E4F8A", "#1A2550", "#FBFBF8", "#5E6E8C", "#7888A6", "#465470",
+            cuff="#FBFBF8", lapel="#1A2550")
+    for yy in (12.6, 13.05):
+        s.disc(7.5, yy, 0.14, GOLD, FINE)
+    s.rect(10.2, 11.0, 1.2, 1.0, GOLD)
+    s.rect(10.4, 11.2, 0.8, 0.6, "#27366A")
+    s.rect(10.7, 11.35, 0.2, 0.3, GOLD_LT)
+
+
+def trench(s):
+    """棕色风衣：驼棕双排扣、肩章、腰带扣，里面白衬衫配深蓝领带，灰裤子。"""
+    coat, lt, dk = "#8A6242", "#A88062", "#634630"
+    _outfit(s, coat, lt, dk, "#FBFBF8", "#5A5A62", "#707078", "#44444A", cuff=dk, lapel=lt)
+    # 领带（窄，从 V 口里垂下来）
+    s.rect(7.25, 11.9, 0.5, 1.2, "#2E4A7A")
+    s.rect(7.35, 13.05, 0.3, 0.2, "#2E4A7A")
+    # 双排扣
+    for yy in (12.2, 12.8):
+        for x in (5.4, 9.6):
+            s.disc(x, yy, 0.13, "#3E2A1C", FINE)
+    # 腰带 + 扣
+    s.rect(1.8, 13.0, 11.4, 0.28, dk)
+    s.rect(6.9, 12.95, 1.2, 0.38, GOLD)
+    s.rect(7.15, 13.05, 0.7, 0.18, dk)
+    # 肩章
+    for x0 in (0.4, 13.0):
+        s.rect(x0, 9.0, 1.6, 0.3, dk)
+        s.disc(x0 + 0.3 if x0 < 5 else x0 + 1.3, 9.15, 0.1, GOLD, FINE)
+
+
+def tux(s):
+    """黑色礼服：黑外套、酒红色缎面翻领、白衬衫配黑领结，裤腿侧边一道酒红条。"""
+    _outfit(s, "#1E1E24", "#34343C", "#101014", "#FBFBF8", "#1E1E24", "#34343C", "#101014",
+            cuff="#FBFBF8", lapel="#8E2A38")
+    # 领结
+    s.rect(6.7, 11.95, 0.7, 0.45, "#101014")
+    s.rect(7.6, 11.95, 0.7, 0.45, "#101014")
+    s.rect(7.3, 12.02, 0.4, 0.32, "#34343C")
+    s.disc(7.5, 12.8, 0.12, "#101014", FINE)
+    for fx in FEET:
+        s.rect(fx + 0.35, 13.3, 0.2, 1.3, "#8E2A38")
+    # 胸前一朵小红花
+    s.disc(10.6, 11.3, 0.35, "#C9453E", FINE)
+    s.disc(10.6, 11.3, 0.15, "#8E2A38", FINE)
+
+
+def military(s):
+    """军装外套：墨绿立领外套、两排金扣、金色肩章流苏、胸前两道勋表，白裤子。"""
+    coat, lt, dk = "#4E6146", "#687C5E", "#384830"
+    _outfit(s, coat, lt, dk, None, "#F2F0E8", "#FFFFFF", "#D6D2C4", cuff=GOLD, v_close=11.9)
+    for yy in (11.6, 12.1, 12.6, 13.1):
+        for x in (6.4, 8.6):
+            s.disc(x, yy, 0.12, GOLD, FINE)
+    for x0 in (0.35, 13.0):
+        s.rect(x0, 8.8, 1.65, 0.35, GOLD)
+        for k in range(5):
+            s.rect(x0 + 0.1 + k * 0.32, 9.15, 0.12, 0.35, GOLD_LT)
+    for i, c in enumerate(("#C9453E", "#3E6BB4", "#E8C47A")):
+        s.rect(2.6 + i * 0.55, 11.1, 0.5, 0.25, c)
+        s.rect(2.6 + i * 0.55, 11.4, 0.5, 0.25, ("#3E6BB4", "#E8C47A", "#C9453E")[i])
+
+
+def blue_shirt(s):
+    """浅蓝衬衫：浅蓝短袖、白色小翻领、一排白扣、胸前口袋，黑裤子。"""
+    shirt, lt, dk = "#9DBDE6", "#BCD3F0", "#7898C4"
+    _outfit(s, shirt, lt, dk, "#FFFFFF", "#26262C", "#3A3A42", "#18181C",
+            v_close=12.2)
+    for yy in (12.5, 12.95):
+        s.disc(7.5, yy, 0.1, "#FFFFFF", FINE)
+    s.rect(9.9, 11.5, 1.3, 0.12, dk)
+    s.rect(9.9, 11.5, 0.12, 1.0, dk)
+    s.rect(11.08, 11.5, 0.12, 1.0, dk)
+    s.rect(9.9, 12.4, 1.3, 0.12, dk)
+
+
+def white_suit(s):
+    """白西装：米白外套、黑色细翻领边、黑衬衫配银领带，米白裤子。"""
+    coat, lt, dk = "#F2EEE4", "#FFFFFF", "#D2CCBC"
+    _outfit(s, coat, lt, dk, "#2A2A30", coat, lt, dk, cuff="#2A2A30", lapel="#E4DED0")
+    s.rect(7.3, 11.9, 0.4, 1.15, "#C8CCD4")
+    s.rect(7.38, 11.9, 0.24, 0.2, "#E8ECF2")
+    s.rect(10.3, 12.3, 1.4, 0.12, dk)
+    s.rect(10.5, 12.05, 0.35, 0.25, "#E88AA0")
+
+
+def stripe_pj(s):
+    """条纹睡衣：白底藏青横条纹上衣和长裤，领口一圈藏青滚边，胸前一个小口袋。"""
+    base, stripe = "#F6F4EE", "#4A5C94"
+    half_at = _outfit(s, base, "#FFFFFF", "#DAD6CC", base, base, "#FFFFFF", "#DAD6CC", v_close=12.4)
+    # ⚠️ 条纹**绕开 V 口**：嘴在那儿，横条纹穿过去就把嘴涂掉了
+    y = 10.55
+    while y < 13.3:
+        h = half_at(y + 0.07)
+        if h > 0:
+            s.rect(1.8, y, 7.5 - h - 1.8, 0.14, stripe)
+            s.rect(7.5 + h, y, 13.2 - (7.5 + h), 0.14, stripe)
+        else:
+            s.rect(1.8, y, 11.4, 0.14, stripe)
+        y += 0.55
+    for x0 in (0.35, 13.0):
+        for yy in (9.3, 9.85, 10.4):
+            s.rect(x0, yy, 1.65, 0.14, stripe)
+    for fx in FEET:
+        for yy in (13.55, 14.1):
+            s.rect(fx - 0.25, yy, 1.5, 0.14, stripe)
+    s.rect(9.9, 11.6, 1.2, 1.0, base)
+    s.rect(9.9, 11.6, 1.2, 0.14, stripe)
+
+
 PIECES = [
     ("hat", hat_fancy), ("beret", beret_fancy), ("glasses", glasses_fancy),
     ("bowtie", bowtie_fancy), ("scarf", scarf_fancy), ("bag", bag_fancy),
@@ -765,6 +946,9 @@ PIECES = [
     ("cap", cap), ("sneakers", sneakers), ("headphones", headphones),
     ("suit", suit), ("dress_shoes", dress_shoes),
     ("plaidshirt", plaidshirt), ("sunglasses", sunglasses),
+    ("uni_vest", uni_vest), ("uni_blazer", uni_blazer), ("trench", trench),
+    ("tux", tux), ("military", military), ("blue_shirt", blue_shirt),
+    ("white_suit", white_suit), ("stripe_pj", stripe_pj),
 ] + [(tid, make_tie(tid)) for tid in TIES]
 
 
