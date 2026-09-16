@@ -2263,9 +2263,13 @@ enum ClawdMood: String, Codable {
         case .birthday, .newYear, .springFestival, .lantern, .dragonBoat,
              .qixi, .midAutumn, .christmas, .halloween, .valentine:
             return 6.0
-        // "他在做的事"——这一类才是需要演完的
+        // "他在做的事"——这一类才是需要演完的。
+        //
+        // ⚠️ 3.5 → 25 秒。她报的：「聊天页的 clawd 动画很快就结束了……
+        // 基本上是触发一两秒就回到原来什么也没穿也没动作的待机状态……就是动画持久。」
+        // 3.5 秒连一轮 gif 都演不完几遍，别处一有动静就把它顶掉了
         default:
-            return 3.5
+            return 25
         }
     }
 

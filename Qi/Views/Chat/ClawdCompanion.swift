@@ -286,6 +286,10 @@ struct ClawdRoamer: View {
                 try? await Task.sleep(nanoseconds: UInt64.random(in: 20...45) * 1_000_000_000)
                 if Task.isCancelled { return }
                 guard !held, !poked, !busy, !peeking else { continue }
+                // ⚠️ 正在演一件事（喝咖啡、看书、弹吉他……）而且还没演够，这一轮**不走**。
+                // 一走路就换成走路的样子，走完再回来——她看到的就是动作刚开始就没了
+                if mood == .drowsy || mood == .sleeping { continue }
+                if mood.hold > 2, Date().timeIntervalSince(moodAt) < mood.hold { continue }
 
                 // 自己去掏点东西出来喝。
                 //
@@ -666,6 +670,8 @@ struct ClawdRoamer: View {
             // ⚠️ **不到钟点就不困。** 白天再安静也只是她忙，
             // 那时候他该去做自己的事，不该打哈欠（见 `bedtimeNow`）。
             guard bedtimeNow else { return }
+            pendTask?.cancel()
+            pending = nil
             mood = .drowsy
             moodAt = Date()
             say(["唔……有点困", "呼啊——", "眼睛睁不开了"].randomElement() ?? "有点困")
@@ -675,6 +681,8 @@ struct ClawdRoamer: View {
             guard !busy, !held, !peeking else { return }
             asleep = true
             walkTask?.cancel()          // 睡着了就别走了
+            pendTask?.cancel()          // 排着的动作一并作废，不然到点会把睡觉顶掉
+            pending = nil
             mood = .sleeping
             moodAt = Date()
             say("zzz")
@@ -741,6 +749,11 @@ struct ClawdRoamer: View {
             if busy { wake() } else { mood = .sleeping }
             return
         }
+        // 犯困也是长状态：她没说话就一直困着，一直到睡着或者被叫醒
+        if mood == .drowsy {
+            if busy { wake() }
+            return
+        }
         if upset { mood = .upset; return }
         guard busy else {
             // 手上抱着东西的时候，站着也得是抱着的样子
@@ -793,7 +806,11 @@ struct ClawdRoamer: View {
             return
         }
         let played = Date().timeIntervalSince(moodAt)
-        if played < mood.hold {
+        // ⚠️ 自己找事做那一类现在要演 25 秒（见 `ClawdMood.hold`）。
+        // 可**他开口、在想、在忙、情绪来了**这些得立刻演，不能排在一杯咖啡后面等半分钟
+        let urgent: Set<ClawdMood> = [.thinking, .working, .talking, .happy, .crying,
+                                      .loving, .upset, .flail]
+        if played < mood.hold, !urgent.contains(next) {
             // 还没演完，排着——**并且给它上个闹钟**。
             //
             // ⚠️ 光排队不叫号等于把动作吞了：`sync()` 是被
@@ -809,6 +826,11 @@ struct ClawdRoamer: View {
             pendTask = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
                 guard !Task.isCancelled, let queued = pending else { return }
+                // ⚠️⚠️ 睡着、犯困的时候**不许叫号**。
+                // 这就是她看到的「睡一两秒就回到待机，然后又睡」：
+                // 睡之前排着的那个动作到点了，直接把 `.sleeping` 换掉，
+                // 下一次 `sync()` 又换回睡觉，来回跳
+                guard !asleep, mood != .drowsy else { pending = nil; return }
                 settleMood(queued)
             }
             return
