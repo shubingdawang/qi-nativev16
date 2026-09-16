@@ -520,7 +520,43 @@ extension FurnitureCatalog {
     /// 商城和背包里那张缩略图：一律用正面那张，等距的斜着摆不好看。
     @MainActor
     static func shopImage(of id: String) -> UIImage? {
-        artImage(of: id, flat: true)
+        // ⚠️ 穿戴的缩略图用**戴在身上那张**（`wear_<id>`），裁到有东西的那块。
+        // 她报的：「小帽子缩略图没换，其他的缩略图也有没换的。」——
+        // 身上那张重画过好几轮，商城、柜子里还是资产包原来那张。
+        if kind(id)?.category == .wear, let img = wearThumb(id) { return img }
+        return artImage(of: id, flat: true)
+    }
+
+    @MainActor private static var wearThumbCache: [String: UIImage] = [:]
+
+    /// 身上那张图裁掉透明边
+    @MainActor
+    private static func wearThumb(_ id: String) -> UIImage? {
+        if let hit = wearThumbCache[id] { return hit }
+        guard let url = Bundle.main.url(forResource: "wear_" + id, withExtension: "png"),
+              let full = UIImage(contentsOfFile: url.path),
+              let cg = full.cgImage else { return nil }
+        let w = cg.width, h = cg.height
+        var bytes = [UInt8](repeating: 0, count: w * h * 4)
+        guard let ctx = CGContext(data: &bytes, width: w, height: h, bitsPerComponent: 8,
+                                  bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return nil }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        var minX = w, minY = h, maxX = -1, maxY = -1
+        for y in 0..<h {
+            for x in 0..<w where bytes[(y * w + x) * 4 + 3] > 8 {
+                minX = min(minX, x); maxX = max(maxX, x)
+                minY = min(minY, y); maxY = max(maxY, y)
+            }
+        }
+        guard maxX >= minX, maxY >= minY,
+              let cut = cg.cropping(to: CGRect(x: minX, y: minY,
+                                               width: maxX - minX + 1, height: maxY - minY + 1))
+        else { return nil }
+        let img = UIImage(cgImage: cut)
+        wearThumbCache[id] = img
+        return img
     }
 
     /// ⚠️ 只在主线程碰。所有取图的地方都在画面上，本来就在主线程。
