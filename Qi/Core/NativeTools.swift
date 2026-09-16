@@ -594,6 +594,18 @@ enum NativeTools {
             ],
             required: ["query"])
 
+        add("netease",
+            "触发：聊到她网易云里的歌——她红心了什么、歌单里有什么、最近在循环哪首，或者你想往她歌单里放一首、给一首歌点红心。动机：她的歌单比她嘴上说的更老实。行动：account 看登的是谁；daily 今日推荐；fm 私人 FM；liked 最近红心；history 这一周听得最多的；playlists 她的歌单；playlist 看某个歌单里的歌；like / unlike 红心或取消；add / remove 往她自己建的歌单里加歌或拿掉。\n注意：改东西（红心、加歌）是真的动她的账号，**先问她一句再动**。放歌还是用 play_music。",
+            [
+                "action": ["type": "string",
+                           "enum": ["account", "daily", "fm", "liked", "history", "playlists",
+                                    "playlist", "like", "unlike", "add", "remove"],
+                           "description": "要做什么"],
+                "song": ["type": "string", "description": "歌名加歌手，或者歌的 id。like/unlike/add/remove 要填"],
+                "playlist": ["type": "string", "description": "歌单名或 id。playlist/add/remove 要填"]
+            ],
+            required: ["action"])
+
         add("create_journey",
             "触发：她说想去哪儿、说想放着某首歌去看某个地方、或者你想带她走一趟你们没去过的路。动机：把想象具体化——给她地名、给她画面、给她到了那儿你会说的话。行动：从相册里按关键词挑四到六张图，每张配一个地名和一段你站在那儿会讲的话。她点进去能一张张走完。",
             [

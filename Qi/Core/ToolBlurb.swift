@@ -47,6 +47,7 @@ enum ToolBlurb {
         // MARK: 音乐
 
         "play_music": "播放指定歌曲",
+        "netease": "网易云账号：推荐、红心、歌单、听歌记录",
         "now_playing": "查询当前播放的歌曲",
         "song_marks": "查询歌曲上的标记",
         "talked_about_lyric": "标记某句歌词为已讨论",

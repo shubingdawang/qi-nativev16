@@ -5591,6 +5591,9 @@ final class AppState: ObservableObject {
                 return (error.localizedDescription, false)
             }
 
+        case "netease":
+            return await NeteaseAccount.tool(args)
+
         case "create_journey":
             let title = (args["title"] as? String) ?? ""
             guard let rawStops = args["stops"] as? [[String: Any]], !rawStops.isEmpty else {

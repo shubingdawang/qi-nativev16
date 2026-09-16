@@ -48,8 +48,9 @@ final class ToolMount {
     nonisolated static let groups: [ToolGroup] = [
         ToolGroup(id: "music", title: "音乐",
                   summary: "她在听的歌、划过的歌词、放一首歌",
-                  tools: ["now_playing", "song_marks", "talked_about_lyric", "play_music"],
-                  keywords: ["歌", "音乐", "听什么", "在听", "放首", "放一首", "歌词", "唱", "旋律", "专辑", "歌手"]),
+                  tools: ["now_playing", "song_marks", "talked_about_lyric", "play_music", "netease"],
+                  keywords: ["歌", "音乐", "听什么", "在听", "放首", "放一首", "歌词", "唱", "旋律", "专辑", "歌手",
+                             "网易云", "歌单", "红心", "每日推荐", "私人FM", "循环"]),
         ToolGroup(id: "reading", title: "读书",
                   summary: "她在读的书、批注和划线、生词本",
                   tools: ["reading_now", "book_marks", "talked_about_line",

@@ -300,6 +300,13 @@ struct MusicLibraryView: View {
                     Image(systemName: "chart.bar")
                 }
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    NeteaseAccountView()
+                } label: {
+                    Image(systemName: "person.crop.circle")
+                }
+            }
         }
         .alert("归到哪个歌手", isPresented: Binding(
             get: { regrouping != nil }, set: { if !$0 { regrouping = nil } }
