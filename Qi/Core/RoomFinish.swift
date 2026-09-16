@@ -46,6 +46,10 @@ enum RoomFinish {
         case wainscot
         /// 方瓷砖（厨房浴室那种）
         case tile
+        /// 蕾丝腰线：上半截细条纹，下半截素板，交界压一条带扇贝花边的腰线
+        case lace
+        /// 蝴蝶结印花墙纸：小蝴蝶结错开排
+        case bows
 
         var id: String { rawValue }
         var token: String { String(RoomFinish.mark) + rawValue }
@@ -56,6 +60,8 @@ enum RoomFinish {
             case .brick: return "砖墙"
             case .wainscot: return "木墙裙"
             case .tile: return "瓷砖"
+            case .lace: return "蕾丝腰线"
+            case .bows: return "蝴蝶结墙纸"
             }
         }
     }
@@ -73,6 +79,8 @@ enum RoomFinish {
         case tile
         /// 水磨石，撒点子
         case terrazzo
+        /// 蝴蝶结地毯：深浅两格 + 细格线 + 每格一个蝴蝶结
+        case bows
 
         var id: String { rawValue }
         var token: String { String(RoomFinish.mark) + rawValue }
@@ -83,6 +91,7 @@ enum RoomFinish {
             case .tatami: return "榻榻米"
             case .tile: return "地砖"
             case .terrazzo: return "水磨石"
+            case .bows: return "蝴蝶结地毯"
             }
         }
     }

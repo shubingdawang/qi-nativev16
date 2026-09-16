@@ -41,8 +41,115 @@ struct WallFinishView: View {
             case .tile:
                 lines(uSteps: 8, vSteps: 5)
                     .stroke(seam, lineWidth: 1)
+            case .lace:
+                lace
+            case .bows:
+                bowPrint(cols: 12, rows: 6, v0: 0, v1: 1)
+                    .fill(seam.opacity(0.75))
             }
         }
+    }
+
+    /// 蕾丝腰线：上面细条纹、下面一块深一档的素板，交界一条腰线 + 一排扇贝花边。
+    ///
+    /// 照她给的那张参考：墙上半截是粉色细条纹，腰线那儿垂一排白花边。
+    /// ⚠️ 扇贝是**沿着墙的方向**一个接一个排的（`at(u, v)` 算），
+    /// 拿屏幕横线排的话花边会横穿两面墙。
+    private var lace: some View {
+        let cut: CGFloat = 0.34
+        var panel = Path()
+        panel.move(to: at(0, 0)); panel.addLine(to: at(1, 0))
+        panel.addLine(to: at(1, cut)); panel.addLine(to: at(0, cut))
+        panel.closeSubpath()
+
+        // 上半截的细条纹：一粗一细交替
+        var stripes = Path()
+        let n = 28
+        for i in 0..<n where i % 2 == 0 {
+            let u0 = CGFloat(i) / CGFloat(n)
+            let u1 = u0 + 0.45 / CGFloat(n)
+            stripes.move(to: at(u0, cut)); stripes.addLine(to: at(u1, cut))
+            stripes.addLine(to: at(u1, 1)); stripes.addLine(to: at(u0, 1))
+            stripes.closeSubpath()
+        }
+
+        // 扇贝花边：腰线下面一排半圆（用多边形逼近，跟着墙斜）
+        var scallops = Path()
+        let k = 24
+        let depth: CGFloat = 0.05
+        for i in 0..<k {
+            let u0 = CGFloat(i) / CGFloat(k)
+            let u1 = CGFloat(i + 1) / CGFloat(k)
+            scallops.move(to: at(u0, cut))
+            for s in 1...6 {
+                let t = CGFloat(s) / 6
+                let u = u0 + (u1 - u0) * t
+                let v = cut - depth * sin(t * .pi)
+                scallops.addLine(to: at(u, v))
+            }
+            scallops.closeSubpath()
+        }
+        // 花边上的小孔
+        var holes = Path()
+        for i in 0..<k {
+            let c = at((CGFloat(i) + 0.5) / CGFloat(k), cut - depth * 0.45)
+            holes.addEllipse(in: CGRect(x: c.x - 0.9, y: c.y - 0.9, width: 1.8, height: 1.8))
+        }
+
+        var rail = Path()
+        rail.move(to: at(0, cut)); rail.addLine(to: at(1, cut))
+
+        return ZStack {
+            stripes.fill(seam.opacity(0.5))
+            panel.fill(seam.opacity(0.45))
+            scallops.fill(Color.white.opacity(0.78))
+            holes.fill(seam.opacity(0.55))
+            rail.stroke(Color.white.opacity(0.9), lineWidth: 2.2)
+            rail.stroke(seam.opacity(0.6), lineWidth: 0.6)
+        }
+    }
+
+    /// 墙上一排排的小蝴蝶结，隔一行错半个。
+    ///
+    /// 蝴蝶结 = 左右两片三角翅膀 + 中间一个结 + 两根短飘带，
+    /// 全部在墙自己的 (u, v) 坐标里画，所以跟着墙斜。
+    private func bowPrint(cols: Int, rows: Int, v0: CGFloat, v1: CGFloat) -> Path {
+        var p = Path()
+        let du = 0.30 / CGFloat(cols)          // 翅膀多宽
+        let dv = 0.30 / CGFloat(rows)          // 翅膀多高
+        for j in 0..<rows {
+            let v = v0 + (v1 - v0) * (CGFloat(j) + 0.5) / CGFloat(rows)
+            let shift: CGFloat = j % 2 == 0 ? 0.25 : 0.75
+            for i in 0..<cols {
+                let u = (CGFloat(i) + shift) / CGFloat(cols)
+                // 左翅膀
+                p.move(to: at(u, v))
+                p.addLine(to: at(u - du, v + dv * 0.55))
+                p.addLine(to: at(u - du * 0.85, v - dv * 0.5))
+                p.closeSubpath()
+                // 右翅膀
+                p.move(to: at(u, v))
+                p.addLine(to: at(u + du, v + dv * 0.55))
+                p.addLine(to: at(u + du * 0.85, v - dv * 0.5))
+                p.closeSubpath()
+                // 飘带
+                p.move(to: at(u - du * 0.08, v))
+                p.addLine(to: at(u - du * 0.45, v - dv * 0.95))
+                p.addLine(to: at(u - du * 0.25, v - dv * 0.95))
+                p.closeSubpath()
+                p.move(to: at(u + du * 0.08, v))
+                p.addLine(to: at(u + du * 0.45, v - dv * 0.95))
+                p.addLine(to: at(u + du * 0.25, v - dv * 0.95))
+                p.closeSubpath()
+                // 结
+                let a = at(u - du * 0.18, v + dv * 0.2)
+                let b = at(u + du * 0.18, v - dv * 0.2)
+                p.addEllipse(in: CGRect(x: min(a.x, b.x), y: min(a.y, b.y),
+                                        width: max(1.6, abs(b.x - a.x)),
+                                        height: max(1.6, abs(b.y - a.y))))
+            }
+        }
+        return p
     }
 
     /// 墙面上的一点。`u` 沿底边走，`v` 往上走，都是 0…1
@@ -156,7 +263,45 @@ struct FloorFinishView: View {
                 seams.stroke(seamColor, lineWidth: kind == .tile ? 1.2 : 0.8)
             }
             if kind == .terrazzo { speckles }
+            if kind == .bows { floorBows }
         }
+    }
+
+    /// 地上每格一个蝴蝶结（深浅两格里只印浅的那格，看着不挤）。
+    ///
+    /// ⚠️ 蝴蝶结**躺在地上**：用这一格自己的两条边当坐标轴（`ex` / `ey`），
+    /// 所以在斜着看的屋里它也是扁的、斜的，跟地板贴在一起。
+    /// 照着屏幕横平竖直画的话，它会像浮在地板上面的贴纸。
+    private var floorBows: some View {
+        Canvas { ctx, _ in
+            let ink = tone(2)
+            for gx in 0..<room.across {
+                for gy in 0..<room.size where (gx + gy) % 2 == 0 {
+                    let c = room.point(Double(gx), Double(gy))
+                    let r = room.point(Double(gx) + 1, Double(gy))
+                    let d = room.point(Double(gx), Double(gy) + 1)
+                    let ex = CGPoint(x: r.x - c.x, y: r.y - c.y)
+                    let ey = CGPoint(x: d.x - c.x, y: d.y - c.y)
+                    // 这一格里的一个点：x 沿 gx 方向、y 沿 gy 方向，单位是格
+                    func q(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+                        CGPoint(x: c.x + ex.x * x + ey.x * y, y: c.y + ex.y * x + ey.y * y)
+                    }
+                    // 蝴蝶结朝向屏幕横着摆：左翅沿 (-x,+y)，右翅沿 (+x,-y)
+                    let s: CGFloat = 0.21
+                    var p = Path()
+                    p.move(to: q(0, 0)); p.addLine(to: q(-s, s * 0.4)); p.addLine(to: q(-s * 0.4, s)); p.closeSubpath()
+                    p.move(to: q(0, 0)); p.addLine(to: q(s, -s * 0.4)); p.addLine(to: q(s * 0.4, -s)); p.closeSubpath()
+                    // 飘带往观察者那边垂
+                    p.move(to: q(0, 0)); p.addLine(to: q(s * 0.15, s * 0.95)); p.addLine(to: q(s * 0.35, s * 0.75)); p.closeSubpath()
+                    p.move(to: q(0, 0)); p.addLine(to: q(s * 0.95, s * 0.15)); p.addLine(to: q(s * 0.75, s * 0.35)); p.closeSubpath()
+                    ctx.fill(p, with: .color(ink.opacity(0.85)))
+                    let k = q(0, 0)
+                    ctx.fill(Path(ellipseIn: CGRect(x: k.x - 1.3, y: k.y - 1, width: 2.6, height: 2)),
+                             with: .color(ink))
+                }
+            }
+        }
+        .allowsHitTesting(false)
     }
 
     // MARK: 每一格什么颜色
@@ -176,6 +321,8 @@ struct FloorFinishView: View {
             return tone(0)
         case .terrazzo:
             return tone(0)
+        case .bows:
+            return (gx + gy) % 2 == 0 ? tone(0) : tone(1)
         }
     }
 
@@ -217,7 +364,7 @@ struct FloorFinishView: View {
                 p.move(to: room.point(-0.5, Double(gy) - 0.5))
                 p.addLine(to: room.point(Double(w) - 0.5, Double(gy) - 0.5))
             }
-        case .tile, .terrazzo:
+        case .tile, .terrazzo, .bows:
             for gx in 0...w {
                 p.move(to: room.point(Double(gx) - 0.5, -0.5))
                 p.addLine(to: room.point(Double(gx) - 0.5, Double(n) - 0.5))
@@ -277,6 +424,8 @@ struct FloorFinishView: View {
             hexes = scheme == .dark ? ["3A3A3E"] : ["E4E2DC"]
         case .terrazzo:
             hexes = scheme == .dark ? ["36353A"] : ["EAE7E0"]
+        case .bows:
+            hexes = scheme == .dark ? ["3E3630", "39322C", "6E5F86"] : ["F8ECD8", "F2E3CB", "B49AD8"]
         }
         // ⚠️ 主题的配色**盖在最外面**，花纹的层数照旧：
         // 木地板还是三档、榻榻米还是两档，只是颜色换了一组。
@@ -295,6 +444,8 @@ struct FloorFinishView: View {
         case .tatami: return Color(hexString: scheme == .dark ? "2B3124" : "9A9668") ?? .gray
         case .tile: return Color.black.opacity(scheme == .dark ? 0.35 : 0.14)
         case .terrazzo: return Color.black.opacity(scheme == .dark ? 0.45 : 0.30)
+        // 细细的格线，淡紫，跟蝴蝶结一个色系
+        case .bows: return tone(2).opacity(0.28)
         }
     }
 }
