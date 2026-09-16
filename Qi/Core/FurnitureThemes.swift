@@ -325,6 +325,31 @@ extension FurnitureCatalog {
               sprite: sp_screen, category: .decor, reaction: "扭头看一会儿"),
         .init(id: "wallclock", name: "挂钟", price: 75,
               sprite: sp_small, category: .decor, reaction: "盯着秒针"),
+        // ── 小摆件（照她给的两张参考屋：东西摆得密才好看）。图在 scripts/px_furniture.py
+        .init(id: "wallshelf", name: "墙上置物架", price: 70,
+              sprite: sp_screen, category: .decor, reaction: "踮脚够上面那盆多肉"),
+        .init(id: "bunting", name: "挂饰串", price: 55,
+              sprite: sp_screen, category: .decor, reaction: "拨一下小旗子"),
+        .init(id: "aircon", name: "空调", price: 160,
+              sprite: sp_screen, category: .gadget, reaction: "站到风口底下"),
+        .init(id: "cakestand", name: "三层点心架", price: 65,
+              sprite: sp_food, category: .food, reaction: "偷偷拿一颗马卡龙"),
+        .init(id: "perfume", name: "香水瓶", price: 50,
+              sprite: sp_small, category: .decor, reaction: "凑上去闻一闻"),
+        .init(id: "bookstack", name: "一摞书", price: 40,
+              sprite: sp_small, category: .decor, reaction: "抽最上面那本"),
+        .init(id: "bunny", name: "兔子玩偶", price: 60,
+              sprite: sp_small, category: .toy, reaction: "抱住兔子"),
+        .init(id: "ringtoy", name: "叠叠圈", price: 35,
+              sprite: sp_small, category: .toy, reaction: "把圈摘下来再套回去"),
+        .init(id: "sidetable", name: "小圆几", price: 70,
+              sprite: sp_table, category: .furniture, reaction: "把东西摆上去"),
+        .init(id: "coffeetable", name: "茶几", price: 110,
+              sprite: sp_table, category: .furniture, reaction: "趴在茶几上翻书"),
+        .init(id: "trashbin", name: "垃圾桶", price: 30,
+              sprite: sp_small, category: .furniture, reaction: "踩一下脚踏"),
+        .init(id: "tvstand", name: "电视柜", price: 120,
+              sprite: sp_table, category: .furniture, reaction: "拉开柜门看看"),
         .init(id: "flowervase", name: "花瓶", price: 70,
               sprite: sp_plant, category: .plant, reaction: "插正一点"),
         .init(id: "sushi", name: "寿司", price: 40,
@@ -742,6 +767,30 @@ extension FurnitureCatalog {
              "star_vanity", "star_table", "star_cart":
             return IsoShape(w: 2, d: 1, tall: 0.9, surface: true,
                             actions: ["趴桌上", "在桌边站着", "把东西放上去"])
+        // 小摆件那一批
+        case "wallshelf":
+            return IsoShape(w: 2, d: 1, tall: 1.0, actions: ["凑近看", "踮脚够"])
+        case "bunting":
+            return IsoShape(w: 3, d: 1, tall: 0.8, actions: ["摸一下", "凑近看"])
+        case "aircon":
+            return IsoShape(w: 2, d: 1, tall: 0.7, actions: ["凑近看", "按两下"])
+        case "cakestand":
+            return IsoShape(w: 1, d: 1, tall: 0.8, actions: ["闻一闻", "拿起来"])
+        case "perfume", "bookstack":
+            return IsoShape(w: 1, d: 1, tall: 0.5, actions: ["拿起来", "摸一下"])
+        case "bunny":
+            return IsoShape(w: 1, d: 1, tall: 0.9, actions: ["抱一下", "摆正", "说悄悄话"])
+        case "ringtoy", "trashbin":
+            return IsoShape(w: 1, d: 1, tall: 0.6, actions: ["摸一下", "凑近看"])
+        case "sidetable":
+            return IsoShape(w: 1, d: 1, tall: 0.8, surface: true,
+                            actions: ["在桌边站着", "把东西放上去"])
+        case "coffeetable":
+            return IsoShape(w: 2, d: 2, tall: 0.5, surface: true,
+                            actions: ["趴桌上", "把东西放上去"])
+        case "tvstand":
+            return IsoShape(w: 3, d: 1, tall: 0.6, surface: true,
+                            actions: ["把东西放上去", "凑近看"])
         case "nightstand", "stove", "kitchensink", "nordic_shelf",
              "gothic_shelf", "lolita_wardrobe", "xmas_shelf", "ny_cabinet",
              "vic_night", "vic_wardrobe", "vic_shelf", "vic_sideboard",

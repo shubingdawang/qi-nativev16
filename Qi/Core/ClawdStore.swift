@@ -1895,13 +1895,15 @@ extension FurnitureCatalog {
         case "frame", "curtain", "hanging", "chime", "stars",
              "painting", "wallclock", "ny_couplet", "fucouplet",
              "doorwreath", "xmas_wreath", "autumn_wreath", "vic_frame",
-             "xred_mirror", "rose_frame", "star_window", "lolita_mirror":
+             "xred_mirror", "rose_frame", "star_window", "lolita_mirror",
+             "wallshelf", "bunting", "aircon":
             return .wall
         // 摆在台面上的
         case "candle", "tissue", "polaroid", "globe", "tank", "humid",
              "speaker", "record", "bonsai", "teapot", "microwave",
              "flowervase", "minitree", "vic_vase",
-             "star_books", "star_gramophone":
+             "star_books", "star_gramophone",
+             "cakestand", "perfume", "bookstack":
             return .table
         default:
             switch kind(id)?.category {

@@ -1311,6 +1311,303 @@ def beret(s):
 
 # ═══════════════════════════════ 跑
 
+
+# ═══════════════════════════════ 小摆件（照她给的两张参考：粉色 RPG 小屋、星落小屋）
+#
+# 她说那两间屋「东西摆得密」好看。缺的是这一批小东西：墙上的置物架、挂饰串、空调，
+# 桌上的点心架、香水、一摞书，地上的兔子玩偶、叠叠圈、小圆几、茶几、垃圾桶、电视柜。
+# 一格 ≈ 0.5 米；桌上那三件照 `px_tabletop.REAL_WIDTH` 那条规矩放大到看得清。
+
+@item("wallshelf", "墙上置物架", 2, 1, 1.0)
+def wallshelf(s):
+    # 贴墙的一块木板 + 两个三角托架，板上摆一盆小多肉、一个小相框、两本书、一只小闹钟
+    board = wood("board", "#F1DCC0")
+    bracket = M("bracket", "#FFFFFF", steps=4, gloss=0.4)
+    pot = M("pot", "#F4B8C4", steps=5, gloss=0.5)
+    leaf = M("leaf", "#9CC89A", steps=5)
+    fr = wood("fr", "#E7C29A")
+    pic = M("pic", "#FBE3E8", steps=3)
+    flower = M("flower", "#F29AB0", steps=3)
+    book_a = M("book_a", "#B9A6DE", steps=5)
+    book_b = M("book_b", "#A8D4E6", steps=5)
+    clock = M("clock", "#FFF6E8", steps=5, gloss=0.6)
+    bell = M("bell", "#F2C46A", steps=4, gloss=0.8)
+    hand = M("hand", "#6B5A60", steps=2)
+    B(s, -0.9, 0.9, 0.42, 0.48, -0.22, 0.02, board, "board", round=0.015)
+    for x in (-0.65, 0.65):
+        s.add(tri_prism(0.1, 0.02).rot("z", 180).at(x, 0.36, -0.12), bracket, "bracket")
+    # 小多肉
+    s.add(lathe([(0, 0), (0.07, 0), (0.09, 0.12), (0, 0.12)]).at(-0.62, 0.48, -0.1), pot, "pot")
+    for k in range(5):
+        a = k / 5 * math.tau
+        s.add(ellipsoid(0.03, 0.06, 0.03).at(-0.62 + 0.035 * math.cos(a), 0.66, -0.1 + 0.035 * math.sin(a)), leaf, "leaf")
+    s.add(ellipsoid(0.03, 0.07, 0.03).at(-0.62, 0.69, -0.1), leaf, "leaf")
+    # 小相框（里面一朵小花）
+    B(s, -0.35, -0.13, 0.48, 0.76, -0.2, -0.16, fr, "fr", round=0.01)
+    s.decal(lambda p: (p[..., 2] > 0.0) & (np.abs(p[..., 0]) < 0.08) & (np.abs(p[..., 1]) < 0.1), pic, "fr")
+    s.decal(lambda p: (p[..., 2] > 0.0) & (np.hypot(p[..., 0], p[..., 1] + 0.01) < 0.04), flower, "fr")
+    # 两本书：一本立着、一本斜靠
+    B(s, 0.05, 0.12, 0.48, 0.78, -0.2, -0.04, book_a, "book_a")
+    s.add(box(0.035, 0.13, 0.08).rot("z", -18).at(0.19, 0.61, -0.12), book_b, "book_b")
+    # 小闹钟：圆脸 + 两个铃
+    s.add(cylinder(0.1, 0.06, round=0.02).rot("x", 90).at(0.55, 0.6, -0.1), clock, "clock")
+    for x in (-0.06, 0.06):
+        s.add(sphere(0.035).at(0.55 + x, 0.71, -0.1), bell, "bell")
+    s.add(capsule(np.array([0.55, 0.6, -0.06]), np.array([0.55, 0.66, -0.06]), 0.008), hand, "hand")
+    s.add(capsule(np.array([0.55, 0.6, -0.06]), np.array([0.59, 0.58, -0.06]), 0.008), hand, "hand")
+
+
+@item("bunting", "挂饰串", 3, 1, 0.8)
+def bunting(s):
+    # 一根弯弯的绳，挂着小旗子、两颗小星星、一只迷你小熊和一朵小花——星落小屋墙上那种
+    cord = M("cord", "#B8906A", steps=2)
+    flags = [M("fl%d" % i, c, steps=4) for i, c in enumerate(("#F6B7C6", "#FFF1C9", "#BFE3D8", "#CFC4F0"))]
+    star = M("star", "#FFE08A", steps=3)
+    bear = M("bearf", "#F2B8C2", steps=5)
+    petal = M("petal", "#FFFFFF", steps=3)
+    core = M("core", "#F6C95E", steps=3)
+    pts = [np.array([-1.4 + i * 0.2, 0.75 - 0.18 * math.sin(i / 14 * math.pi), 0.0]) for i in range(15)]
+    for a, b in zip(pts, pts[1:]):
+        s.add(capsule(a, b, 0.012), cord, "cord")
+    for i, p in enumerate(pts[1:-1]):
+        g = "item%d" % i
+        if i in (3, 9):
+            # 小星星
+            s.add(tri_prism(0.07, 0.02).at(*(p + np.array([0, -0.12, 0]))), star, g)
+            s.add(tri_prism(0.07, 0.02).rot("z", 180).at(*(p + np.array([0, -0.15, 0]))), star, g)
+        elif i == 6:
+            # 迷你小熊
+            s.add(sphere(0.08).at(*(p + np.array([0, -0.14, 0]))), bear, g)
+            for x in (-0.06, 0.06):
+                s.add(sphere(0.03).at(*(p + np.array([x, -0.07, 0]))), bear, g)
+            s.add(ellipsoid(0.07, 0.08, 0.06).at(*(p + np.array([0, -0.27, 0]))), bear, g)
+        elif i == 11:
+            # 小花
+            c = p + np.array([0, -0.14, 0])
+            for k in range(6):
+                a = k / 6 * math.tau
+                s.add(sphere(0.045).at(c[0] + 0.06 * math.cos(a), c[1] + 0.06 * math.sin(a), 0.0), petal, g)
+            s.add(sphere(0.04).at(c[0], c[1], 0.02), core, g)
+        else:
+            # 三角小旗（尖朝下）
+            s.add(tri_prism(0.08, 0.01).rot("z", 180).at(*(p + np.array([0, -0.1, 0]))), flags[i % 4], g)
+
+
+@item("aircon", "空调", 2, 1, 0.7)
+def aircon(s):
+    # 白色挂机：圆角长盒，底下一条出风口百叶，右边一块小屏写着温度，右下一颗小绿灯
+    shell = M("shell", "#FBFAF7", steps=7, gloss=0.5)
+    vent = M("vent", "#8E8A86", steps=3)
+    slat = M("slat", "#D9D3CC", steps=3)
+    screen = M("screen", "#9ED9C9", steps=3, emissive=True)
+    led = M("led", "#7ED68A", steps=2, emissive=True)
+    B(s, -0.85, 0.85, 0.28, 0.66, -0.2, 0.06, shell, "shell", round=0.08)
+    # 出风口：底边那一条深色缝，里面两片浅色导风板
+    s.decal(lambda p: (p[..., 1] < -0.1) & (p[..., 2] > 0.0), vent, "shell")
+    s.decal(lambda p: (p[..., 1] < -0.1) & (p[..., 2] > 0.0) & (np.abs(p[..., 1] + 0.145) < 0.012), slat, "shell")
+    # 面板和底壳之间一道分缝
+    s.decal(lambda p: (np.abs(p[..., 1] + 0.02) < 0.008) & (p[..., 2] > 0.1), vent, "shell")
+    s.decal(lambda p: (p[..., 2] > 0.1) & (np.abs(p[..., 0] - 0.55) < 0.11) & (np.abs(p[..., 1] - 0.05) < 0.045), screen, "shell")
+    s.decal(lambda p: (p[..., 2] > 0.1) & (np.hypot(p[..., 0] - 0.72, p[..., 1] - 0.05) < 0.02), led, "shell")
+
+
+@item("cakestand", "三层点心架", 1, 1, 0.8)
+def cakestand(s):
+    # 金色细杆穿三层白瓷盘：底层马卡龙和草莓、中层小蛋糕、顶层一颗草莓挞；顶上一个小圈
+    gold = M("gold", "#E9C46A", steps=5, gloss=0.9)
+    plate = M("plate", "#FFFFFF", steps=6, gloss=0.8)
+    rim = M("rim", "#F4B8C4", steps=3)
+    mac = [M("mac%d" % i, c, steps=5) for i, c in enumerate(("#F6B7C6", "#BFE3D8", "#FFE3A3", "#CFC4F0"))]
+    straw = M("straw", "#E8575F", steps=5, gloss=0.6)
+    cream = M("cream", "#FFF7EC", steps=4)
+    sponge = M("sponge", "#F2D29B", steps=5, grain=0.4)
+    s.add(cylinder(0.02, 0.72).at(0, 0.0, 0), gold, "rod")
+    s.add(torus(0.05, 0.015, axis="z").at(0, 0.78, 0), gold, "ring")
+    for y, r in ((0.08, 0.34), (0.32, 0.26), (0.54, 0.18)):
+        s.add(cylinder(r, 0.025, round=0.01).at(0, y, 0), plate, "plate%d" % int(y * 100))
+        s.decal(lambda p, r=r: (np.hypot(p[..., 0], p[..., 2]) > r - 0.03), rim, "plate%d" % int(y * 100))
+    for k in range(6):
+        a = k / 6 * math.tau
+        x, z = 0.22 * math.cos(a), 0.22 * math.sin(a)
+        if k % 2 == 0:
+            s.add(ellipsoid(0.055, 0.025, 0.055).at(x, 0.13, z), mac[k // 2 % 4], "mac%d" % k)
+            s.add(cylinder(0.045, 0.012).at(x, 0.135, z), cream, "mac%d" % k)
+            s.add(ellipsoid(0.055, 0.025, 0.055).at(x, 0.16, z), mac[k // 2 % 4], "mac%d" % k)
+        else:
+            s.add(ellipsoid(0.05, 0.06, 0.05).at(x, 0.15, z), straw, "straw%d" % k)
+    for k in range(3):
+        a = k / 3 * math.tau + 0.5
+        x, z = 0.15 * math.cos(a), 0.15 * math.sin(a)
+        s.add(cylinder(0.06, 0.06).at(x, 0.345, z), sponge, "cake%d" % k)
+        s.add(cylinder(0.062, 0.02, round=0.01).at(x, 0.4, z), cream, "cake%d" % k)
+        s.add(sphere(0.025).at(x, 0.43, z), straw, "cake%d" % k)
+    s.add(cylinder(0.1, 0.04).at(0, 0.565, 0), sponge, "tart")
+    s.add(ellipsoid(0.06, 0.07, 0.06).at(0, 0.65, 0), straw, "tart")
+
+
+@item("perfume", "香水瓶", 1, 1, 0.5)
+def perfume(s):
+    # 三只小瓶子挤在一起：粉色方瓶配金盖、淡紫圆瓶配气囊、一只细高的蓝瓶。
+    # 现实里一只香水瓶不到 10 厘米，照「小东西放大到点得到」那条规矩按 k 倍画
+    k = 1.7
+    pink = M("pink", "#F6B7C6", steps=5, gloss=1.0)
+    lilac = M("lilac", "#CFC4F0", steps=5, gloss=1.0)
+    blue = M("blue", "#BFE3F0", steps=5, gloss=1.0)
+    gold = M("gold", "#E9C46A", steps=4, gloss=0.9)
+    bulb = M("bulb", "#F29AB0", steps=4)
+    label = M("label", "#FFFFFF", steps=2)
+    v = lambda x, y, z: np.array([x * k, y * k, z * k])
+    s.add(box(0.08 * k, 0.1 * k, 0.05 * k, round=0.02 * k).at(-0.1 * k, 0.1 * k, 0.02 * k), pink, "pink")
+    s.decal(lambda p: (np.abs(p[..., 1]) < 0.03 * k) & (p[..., 2] > 0.02 * k), label, "pink")
+    s.add(cylinder(0.035 * k, 0.06 * k).at(-0.1 * k, 0.2 * k, 0.02 * k), gold, "cap1")
+    s.add(sphere(0.09 * k).at(0.1 * k, 0.09 * k, 0.05 * k), lilac, "lilac")
+    s.add(cylinder(0.02 * k, 0.06 * k).at(0.1 * k, 0.17 * k, 0.05 * k), gold, "neck2")
+    s.add(capsule(v(0.1, 0.23, 0.05), v(0.18, 0.2, 0.08), 0.012 * k), bulb, "tube")
+    s.add(sphere(0.035 * k).at(0.2 * k, 0.19 * k, 0.09 * k), bulb, "bulb")
+    s.add(lathe([(0, 0), (0.04 * k, 0), (0.045 * k, 0.2 * k), (0.02 * k, 0.24 * k), (0, 0.24 * k)]).at(0.0, 0.0, -0.09 * k), blue, "blue")
+    s.add(cylinder(0.02 * k, 0.05 * k).at(0.0, 0.24 * k, -0.09 * k), gold, "cap3")
+
+
+@item("bookstack", "一摞书", 1, 1, 0.5)
+def bookstack(s):
+    # 四本书交错着摞：每本书脊一个色、书页一圈奶白，最上面压一副小眼镜
+    cols = ("#B9A6DE", "#F6B7C6", "#A8D4E6", "#F2D29B")
+    pages = M("pages", "#FFF8EC", steps=3)
+    frame = M("glasses", "#6B5A60", steps=2)
+    y = 0.0
+    for i, c in enumerate(cols):
+        cover = M("cover%d" % i, c, steps=5)
+        th = 0.06 + 0.01 * (i % 2)
+        g = "book%d" % i
+        s.add(box(0.27 - 0.02 * i, th / 2, 0.19, round=0.01).rot("y", (i - 1.5) * 9).at(0.01 * (i % 2), y + th / 2, 0), cover, g)
+        s.decal(lambda p, th=th: (np.abs(p[..., 1]) < th / 2 - 0.012) & (p[..., 0] > 0.0) & (np.abs(p[..., 2]) < 0.17), pages, g)
+        y += th
+    for x in (-0.06, 0.06):
+        s.add(torus(0.04, 0.008, axis="y").at(x, y + 0.01, 0.02), frame, "glasses")
+    s.add(capsule(np.array([-0.02, y + 0.01, 0.02]), np.array([0.02, y + 0.01, 0.02]), 0.006), frame, "glasses")
+
+
+@item("bunny", "兔子玩偶", 1, 1, 0.9)
+def bunny(s):
+    # 坐着的奶白兔子：长耳朵（耳朵里粉色）、粉脸蛋、脖子上一个淡紫蝴蝶结、抱着一根小胡萝卜
+    fur = M("fur", "#FFF6EE", steps=7, grain=0.2)
+    inner = M("inner", "#F6B7C6", steps=4)
+    eye = M("eye", "#4A3A36", steps=2)
+    blush = M("blush", "#F4A3B4", steps=2)
+    bow = M("bow", "#C7B5EC", steps=4)
+    carrot = M("carrot", "#F29A55", steps=4)
+    top = M("top", "#8CC47E", steps=3)
+    s.add(ellipsoid(0.3, 0.3, 0.26).at(0, 0.3, 0), fur, "body")
+    s.add(sphere(0.25).at(0, 0.74, 0.02), fur, "head")
+    for x, tilt in ((-0.1, -8), (0.1, 12)):
+        s.add(ellipsoid(0.07, 0.24, 0.05).rot("z", tilt).at(x, 1.12, -0.02), fur, "ear%d" % int(x * 10))
+        s.add(ellipsoid(0.035, 0.17, 0.02).rot("z", tilt).at(x, 1.12, 0.02), inner, "ear%d" % int(x * 10))
+    for x in (-0.09, 0.09):
+        s.add(sphere(0.03).at(x, 0.78, 0.23), eye, "eye")
+        s.add(ellipsoid(0.05, 0.025, 0.02).at(x * 1.6, 0.68, 0.21), blush, "blush")
+    s.add(sphere(0.022).at(0, 0.7, 0.26), inner, "nose")
+    s.add(ellipsoid(0.1, 0.05, 0.04).at(-0.08, 0.5, 0.2), bow, "bow")
+    s.add(ellipsoid(0.1, 0.05, 0.04).at(0.08, 0.5, 0.2), bow, "bow")
+    s.add(sphere(0.03).at(0, 0.5, 0.24), bow, "bow")
+    s.add(round_cone(np.array([0.05, 0.22, 0.3]), np.array([-0.08, 0.4, 0.26]), 0.02, 0.05), carrot, "carrot")
+    s.add(ellipsoid(0.04, 0.05, 0.02).at(-0.1, 0.45, 0.25), top, "carrot")
+    for x in (-0.14, 0.14):
+        s.add(capsule(np.array([x, 0.42, 0.12]), np.array([x * 0.5, 0.3, 0.26]), 0.07), fur, "arm")
+        s.add(ellipsoid(0.1, 0.07, 0.14).at(x, 0.07, 0.18), fur, "foot")
+        s.add(ellipsoid(0.05, 0.03, 0.02).at(x, 0.07, 0.31), inner, "foot")
+
+
+@item("ringtoy", "叠叠圈", 1, 1, 0.7)
+def ringtoy(s):
+    # 木底座 + 木杆，五个彩虹色圆圈从大到小叠上去，顶上一颗小木球
+    base = wood("base", "#E7C29A")
+    rings = ("#F29AB0", "#F6C07A", "#FFE38A", "#A9D6A6", "#A8C8EC")
+    s.add(cylinder(0.3, 0.07, round=0.03).at(0, 0.0, 0), base, "base")
+    s.add(cylinder(0.035, 0.6).at(0, 0.05, 0), base, "rod")
+    y = 0.08
+    for i, c in enumerate(rings):
+        r = 0.24 - i * 0.035
+        s.add(torus(r - 0.035, 0.045, axis="y").at(0, y + 0.045, 0), M("ring%d" % i, c, steps=5, gloss=0.6), "ring%d" % i)
+        y += 0.09
+    s.add(sphere(0.07).at(0, y + 0.05, 0), M("topball", "#F29AB0", steps=5, gloss=0.6), "top")
+
+
+@item("sidetable", "小圆几", 1, 1, 0.8)
+def sidetable(s):
+    # 圆木桌面 + 三条弯腿 + 腿中间一块小隔板，桌沿一圈蕾丝台布垂下来
+    top = wood("top", "#E7C29A")
+    leg = wood("leg", "#C9905A")
+    lace = M("lace", "#FFFFFF", steps=4)
+    s.add(cylinder(0.38, 0.05, round=0.02).at(0, 0.72, 0), top, "top")
+    s.add(cylinder(0.4, 0.09).at(0, 0.64, 0), lace, "lace")
+    s.decal(lambda p: (np.abs(((np.arctan2(p[..., 2], p[..., 0]) / math.tau) * 24) % 1 - 0.5) < 0.18) & (p[..., 1] < -0.02), top, "lace")
+    for k in range(3):
+        a = k / 3 * math.tau + 0.3
+        foot = np.array([0.3 * math.cos(a), 0.0, 0.3 * math.sin(a)])
+        knee = np.array([0.2 * math.cos(a), 0.35, 0.2 * math.sin(a)])
+        head = np.array([0.24 * math.cos(a), 0.64, 0.24 * math.sin(a)])
+        s.add(capsule(foot, knee, 0.03), leg, "leg%d" % k)
+        s.add(capsule(knee, head, 0.03), leg, "leg%d" % k)
+    s.add(cylinder(0.2, 0.03).at(0, 0.32, 0), top, "shelf")
+
+
+@item("coffeetable", "茶几", 2, 2, 0.5)
+def coffeetable(s):
+    # 矮矮的奶油色木茶几，四条胖圆腿；桌上摊一本书、一只马克杯、一个小碟子放两块饼干
+    top = wood("top", "#F1DCC0")
+    leg = wood("leg", "#DDBB92")
+    cover = M("cover", "#C7B5EC", steps=5)
+    page = M("page", "#FFF8EC", steps=3)
+    mug = M("mug", "#FFFFFF", steps=6, gloss=0.7)
+    coffee = M("coffee", "#8A5A3C", steps=3, shine=0.1)
+    plate = M("plate", "#F6D5DC", steps=4, gloss=0.6)
+    cookie = M("cookie", "#E3A86A", steps=5, grain=0.4)
+    B(s, -0.8, 0.8, 0.36, 0.46, -0.6, 0.6, top, "top", round=0.04)
+    for x in (-0.62, 0.62):
+        for z in (-0.44, 0.44):
+            s.add(round_cone(np.array([x, 0.0, z]), np.array([x, 0.36, z]), 0.07, 0.05), leg, "leg")
+    B(s, -0.6, -0.1, 0.46, 0.5, -0.3, 0.1, cover, "book", round=0.01)
+    s.decal(lambda p: (np.abs(p[..., 0]) < 0.23) & (p[..., 1] > 0.0) & (np.abs(p[..., 0]) > 0.015), page, "book")
+    s.add(lathe([(0, 0), (0.09, 0), (0.1, 0.16), (0.085, 0.16), (0.075, 0.02), (0, 0.02)]).at(0.25, 0.46, -0.15), mug, "mug")
+    s.add(cylinder(0.075, 0.01).at(0.25, 0.6, -0.15), coffee, "coffee")
+    s.add(torus(0.04, 0.012, axis="z").at(0.36, 0.54, -0.15), mug, "mug")
+    s.add(cylinder(0.14, 0.015, round=0.005).at(0.4, 0.46, 0.25), plate, "plate")
+    for dx in (-0.05, 0.05):
+        s.add(cylinder(0.05, 0.018, round=0.008).at(0.4 + dx, 0.48, 0.25 + dx), cookie, "cookie%d" % int(dx * 100))
+
+
+@item("trashbin", "垃圾桶", 1, 1, 0.6)
+def trashbin(s):
+    # 白色带盖小垃圾桶，脚踏一块，桶身一圈粉色细条，盖子上一个小把手
+    body = M("body", "#FBF7F2", steps=7, gloss=0.5)
+    stripe = M("stripe", "#F6B7C6", steps=3)
+    pedal = M("pedal", "#C9C2BA", steps=3, gloss=0.6)
+    s.add(lathe([(0, 0), (0.17, 0), (0.2, 0.46), (0, 0.46)]).at(0, 0.0, 0), body, "body")
+    s.decal(lambda p: (np.abs(p[..., 1] - 0.36) < 0.02), stripe, "body")
+    s.add(cylinder(0.215, 0.05, round=0.02).at(0, 0.46, 0), body, "lid")
+    s.add(box(0.05, 0.015, 0.02, round=0.01).at(0, 0.53, 0), pedal, "knob")
+    s.add(box(0.08, 0.015, 0.05, round=0.01).at(0, 0.02, 0.21), pedal, "pedal")
+
+
+@item("tvstand", "电视柜", 3, 1, 0.6)
+def tvstand(s):
+    # 低矮的粉色长柜：三扇带框的柜门、金色圆把手、四只小短腿（星落小屋里电视底下那只）
+    body = M("body", "#F2C4CE", steps=6, gloss=0.3)
+    door = M("door", "#F6D2DA", steps=5)
+    knob = M("knob", "#E9C46A", steps=4, gloss=0.9)
+    leg = wood("leg", "#C9905A")
+    B(s, -1.4, 1.4, 0.1, 0.56, -0.4, 0.3, body, "body", round=0.04)
+    seam = M("seam", "#C98A98", steps=3)
+    for i, x in enumerate((-0.93, 0.0, 0.93)):
+        # 每扇门：一圈深色门缝 + 里面浅一档的门芯
+        s.decal(lambda p, x=x: (p[..., 2] > 0.3) & (np.abs(p[..., 0] - x) < 0.44) & (np.abs(p[..., 1] - 0.01) < 0.19), seam, "body")
+        s.decal(lambda p, x=x: (p[..., 2] > 0.3) & (np.abs(p[..., 0] - x) < 0.40) & (np.abs(p[..., 1] - 0.01) < 0.155), door, "body")
+        s.add(sphere(0.045).at(x + (0.3 if i < 2 else -0.3), 0.33, 0.36), knob, "knob%d" % i)
+    for x in (-1.25, 1.25):
+        for z in (-0.28, 0.18):
+            s.add(round_cone(np.array([x, 0.0, z]), np.array([x, 0.1, z]), 0.03, 0.045), leg, "leg")
+
+
 def render_one(args):
     id, view = args
     name, fn, w, d, tall = ITEMS[id]
