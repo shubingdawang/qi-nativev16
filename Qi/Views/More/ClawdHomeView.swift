@@ -767,6 +767,17 @@ struct ClawdHomeView: View {
                             }
                         }
                     }
+                    Menu("窗户") {
+                        ForEach(WindowSide.allCases) { w in
+                            Button {
+                                store.windowSide = w
+                                notice = w.label
+                            } label: {
+                                Text(w.label)
+                                if store.windowSide == w { Image(systemName: "checkmark") }
+                            }
+                        }
+                    }
                     Menu("白天晚上") {
                         ForEach(DayMode.allCases) { m in
                             Button {

@@ -10,6 +10,21 @@ import SwiftUI
 /// 阴影是一档一档的，不用渐变——渐变是矢量图的样子。
 /// ⚠️ 随机点子拿坐标算伪随机，**不用 `random()`**：body 每次重跑点子不能跳。
 
+/// 窗户开在哪边（她挑的）
+enum WindowSide: String, CaseIterable, Identifiable, Codable {
+    case both, left, right, off
+
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .both: return "两边都开"
+        case .left: return "只开左墙"
+        case .right: return "只开右墙"
+        case .off: return "不开窗"
+        }
+    }
+}
+
 /// 墙上开窗的位置
 struct RoomWindow: Equatable {
     enum Wall { case left, right, back }
@@ -80,7 +95,7 @@ enum RoomPixel {
 struct RoomWallDetail: View {
 
     let room: IsoRoom
-    let window: RoomWindow?
+    let windows: [RoomWindow]
     /// 0 白天 … 1 深夜
     let night: Double
     /// 内置墙面才撒颗粒；她自己的图不往上加东西
@@ -123,7 +138,7 @@ struct RoomWallDetail: View {
                 ctx.fill(RoomPixel.wallBand(g, wall, lo, hi, 0, px),
                          with: .color(.black.opacity(0.14)))
             }
-            if let window { drawWindow(&ctx, window, px) }
+            for window in windows { drawWindow(&ctx, window, px) }
         }
         .allowsHitTesting(false)
     }
@@ -268,7 +283,7 @@ struct RoomWallDetail: View {
 struct RoomFloorDetail: View {
 
     let room: IsoRoom
-    let window: RoomWindow?
+    let windows: [RoomWindow]
     let night: Double
     let grain: Bool
 
@@ -278,15 +293,17 @@ struct RoomFloorDetail: View {
             let px = RoomPixel.px(g)
             if grain { sprinkle(&ctx, px) }
 
-            // 窗户投在地上的光：四块（中间窗棂那道十字是暗的）
-            if let w = window, night < 0.9 {
+            // 窗户投在地上的光：每扇窗四块（中间窗棂那道十字是暗的）
+            if night < 0.9 {
                 let a = 0.18 * (1 - night)
                 let warm = RoomPixel.color(night > 0.05 ? "FFD9B0" : "FFF4DA")
-                for (s0, s1) in [(0.0, 0.46), (0.54, 1.0)] {
-                    for (t0, t1) in [(0.0, 0.45), (0.55, 1.0)] {
-                        ctx.fill(RoomPixel.quad(light(w, s0, t0), light(w, s1, t0),
-                                                light(w, s1, t1), light(w, s0, t1)),
-                                 with: .color(warm.opacity(a)))
+                for w in windows {
+                    for (s0, s1) in [(0.0, 0.46), (0.54, 1.0)] {
+                        for (t0, t1) in [(0.0, 0.45), (0.55, 1.0)] {
+                            ctx.fill(RoomPixel.quad(light(w, s0, t0), light(w, s1, t0),
+                                                    light(w, s1, t1), light(w, s0, t1)),
+                                     with: .color(warm.opacity(a)))
+                        }
                     }
                 }
             }

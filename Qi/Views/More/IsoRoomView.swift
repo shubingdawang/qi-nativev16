@@ -112,10 +112,10 @@ struct IsoRoomView<Clawd: View>: View {
             // 家具照样贴着墙。
             TimelineView(.everyMinute) { tick in
             let night = RoomClock.night(at: tick.date, mode: store.dayMode)
-            let window = windowSpot(geoRoom)
+            let windows = windowSpots(geoRoom)
             ZStack(alignment: .topLeading) {
                 walls(geoRoom)
-                RoomWallDetail(room: geoRoom, window: window, night: night,
+                RoomWallDetail(room: geoRoom, windows: windows, night: night,
                                grain: RoomFinish.isBuiltIn(store.wallpaper(of: room))
                                    || store.wallpaper(of: room).isEmpty)
                 floor(geoRoom)
@@ -148,7 +148,7 @@ struct IsoRoomView<Clawd: View>: View {
                 // 裁进框的里沿——她报了两轮的「家具拖到边上还在边框外面」
                 // 就是这一下：框画在最后没错，可框只有一条边那么宽，
                 // 爬到框**外面**去的那一截，谁也盖不住它。
-                RoomFloorDetail(room: geoRoom, window: window, night: night,
+                RoomFloorDetail(room: geoRoom, windows: windows, night: night,
                                 grain: RoomFinish.isBuiltIn(store.flooring(of: room))
                                     || store.flooring(of: room).isEmpty)
                 furnitureLayer(geoRoom)
@@ -369,33 +369,37 @@ struct IsoRoomView<Clawd: View>: View {
         }
     }
 
-    /// 窗户开在哪面墙、哪几格。
+    /// 这间屋开哪几扇窗。
     ///
-    /// · 屋里有「拱窗」那件家具：它自己就是窗，不再开
-    /// · 有窗帘：窗开在窗帘后面
-    /// · 否则找一段没挂东西、没靠着高柜子的墙，离墙中间越近越好
-    private func windowSpot(_ g: IsoRoom) -> RoomWindow? {
+    /// 她要的：「可以装三个窗户吧，左墙一个，右墙左右各一，然后我可以选择显示哪边的窗户。」
+    /// 所以左墙给一扇（居中），右墙给两扇（一左一右）；开哪边在刷子菜单里挑（`ClawdStore.windowSide`）。
+    ///
+    /// ⚠️ 挂了东西、靠着高柜子的那几格不开窗；屋里摆了「拱窗」那件家具就一扇都不开——它自己就是窗。
+    private func windowSpots(_ g: IsoRoom) -> [RoomWindow] {
+        let side = store.windowSide
+        guard side != .off else { return [] }
         let items = store.furniture(in: room)
-        if items.contains(where: { $0.kind == "star_window" }) { return nil }
+        if items.contains(where: { $0.kind == "star_window" }) { return [] }
         let flat = g.projection == .flat
-        let width = flat ? 3.6 : 3.4
+        let width = flat ? 3.6 : 3.0
 
+        // 窗帘挂在哪儿，窗就开在那儿（窗帘后面本来就该有扇窗）
         if let c = items.first(where: { $0.kind == "curtain" }) {
             let cell = store.cell(of: c)
             if flat {
                 let mid = Double(cell.gx)
-                return RoomWindow(wall: .back, u0: mid - width / 2, u1: mid + width / 2)
+                return [RoomWindow(wall: .back, u0: mid - width / 2, u1: mid + width / 2)]
             }
             if cell.gx == 0 || cell.gy == 0 {
                 let wall: RoomWindow.Wall = cell.gx == 0 ? .left : .right
-                let mid = Double(wall == .left ? cell.gy : cell.gx)
-                return RoomWindow(wall: wall, u0: mid - width / 2, u1: mid + width / 2)
+                if (wall == .left && side != .right) || (wall == .right && side != .left) {
+                    let mid = Double(wall == .left ? cell.gy : cell.gx)
+                    return [RoomWindow(wall: wall, u0: mid - width / 2, u1: mid + width / 2)]
+                }
             }
         }
 
-        let walls: [RoomWindow.Wall] = flat ? [.back] : [.left, .right]
-        for wall in walls {
-            let n = flat ? g.cols : g.size
+        func blockedCells(_ wall: RoomWindow.Wall) -> Set<Int> {
             var blocked = Set<Int>()
             for f in items {
                 let s = store.shape(of: f)
@@ -415,15 +419,51 @@ struct IsoRoomView<Clawd: View>: View {
                     for k in (c.gx - 1)...(c.gx + max(1, s.w)) { blocked.insert(k) }
                 }
             }
-            let cells = Int(width.rounded(.up))
-            let centre = Double(n) / 2 - Double(cells) / 2
-            let starts = (1..<max(2, n - cells)).sorted { abs(Double($0) - centre) < abs(Double($1) - centre) }
-            if let s = starts.first(where: { st in (st..<(st + cells)).allSatisfy { !blocked.contains($0) } }) {
-                let mid = Double(s) + Double(cells - 1) / 2
-                return RoomWindow(wall: wall, u0: mid - width / 2, u1: mid + width / 2)
-            }
+            return blocked
         }
-        return nil
+
+        /// 在这面墙上、离 `want` 最近的一段空位置开一扇
+        func place(_ wall: RoomWindow.Wall, near want: Double,
+                   blocked: Set<Int>, used: [RoomWindow]) -> RoomWindow? {
+            let n = flat ? g.cols : g.size
+            let cells = Int(width.rounded(.up))
+            let starts = (1..<max(2, n - cells)).sorted {
+                abs(Double($0) - want) < abs(Double($1) - want)
+            }
+            for st in starts {
+                guard (st..<(st + cells)).allSatisfy({ !blocked.contains($0) }) else { continue }
+                let mid = Double(st) + Double(cells - 1) / 2
+                let w = RoomWindow(wall: wall, u0: mid - width / 2, u1: mid + width / 2)
+                // 跟同一面墙上已经开的那扇留出一格
+                if used.contains(where: { $0.wall == wall && abs(($0.u0 + $0.u1) / 2 - mid) < width + 1 }) {
+                    continue
+                }
+                return w
+            }
+            return nil
+        }
+
+        if flat {
+            let blocked = blockedCells(.back)
+            let n = Double(g.cols)
+            return [place(.back, near: n * 0.3, blocked: blocked, used: []),
+                    place(.back, near: n * 0.7, blocked: blocked, used: [])]
+                .compactMap { $0 }
+        }
+
+        var out: [RoomWindow] = []
+        let n = Double(g.size)
+        if side != .right, let w = place(.left, near: n / 2 - 1.5,
+                                         blocked: blockedCells(.left), used: out) {
+            out.append(w)
+        }
+        if side != .left {
+            let blocked = blockedCells(.right)
+            // 右墙两扇：一扇偏左、一扇偏右
+            if let w = place(.right, near: n * 0.28, blocked: blocked, used: out) { out.append(w) }
+            if let w = place(.right, near: n * 0.72, blocked: blocked, used: out) { out.append(w) }
+        }
+        return out
     }
 
     /// 晚上会亮的家具：光心在屏幕上哪儿、多大

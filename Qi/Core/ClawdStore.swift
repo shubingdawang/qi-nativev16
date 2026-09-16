@@ -1109,6 +1109,13 @@ final class ClawdStore: ObservableObject {
         return s
     }
 
+    /// 窗户开在哪边（两边 / 只左 / 只右 / 不开）
+    @Published var windowSide: WindowSide = .both {
+        didSet {
+            if loaded { UserDefaults.standard.set(windowSide.rawValue, forKey: "clawdWindowSide") }
+        }
+    }
+
     /// 关着的灯（家具 id）。晚上只有开着的灯才亮一圈光；他「开灯」就是按这个开关
     @Published var lightsOff: Set<UUID> = [] {
         didSet {
@@ -1364,6 +1371,7 @@ final class ClawdStore: ObservableObject {
             ?? .iso
         dayMode = DayMode(rawValue: UserDefaults.standard.string(forKey: "clawdDayMode") ?? "") ?? .auto
         lightsOff = Set((UserDefaults.standard.stringArray(forKey: "clawdLightsOff") ?? []).compactMap(UUID.init))
+        windowSide = WindowSide(rawValue: UserDefaults.standard.string(forKey: "clawdWindowSide") ?? "") ?? .both
         loaded = true
     }
 
