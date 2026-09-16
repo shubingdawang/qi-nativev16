@@ -18,3 +18,6 @@ __pycache__/
 
 # 三张主题拼图的源图，切完就不用了
 scripts/theme3/
+
+# 新桥的密钥，绝不能进 git
+scripts/agent-bridge/bridge-token.txt

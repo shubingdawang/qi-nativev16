@@ -427,6 +427,9 @@ struct SideMenuItem: Identifiable, Hashable {
         // 还没有在左侧栏」。存了三十天的东西而没人找得到，
         // **跟没存是一回事**。
         .init(id: "trash",     title: "回收站", icon: Icon.trash),
+        // Code：在手机上直接跟电脑上那个 Claude Code 说话（会改文件那种）。
+        // 跟终端摆一起——都是「伸手去动那台电脑」的口子
+        .init(id: "code",      title: "Code", icon: "chevron.left.forwardslash.chevron.right"),
         // 终端摆在最后：平时用不着，出事的时候得找得到
         .init(id: "terminal",  title: "终端", icon: "terminal")
     ]
