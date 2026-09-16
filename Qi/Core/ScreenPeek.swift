@@ -65,7 +65,7 @@ final class ScreenPeek: ObservableObject {
     /// 返回 nil 表示能看。
     func blockedReason() -> String? {
         // 开着屏幕广播就不用那个文件夹（见 `liveShot`）
-        if bookmark == nil && ScreenShare.readFrame() == nil {
+        if bookmark == nil && cachedFrame() == nil {
             return "她还没配这个。（设置 → 手机 → 让他看屏幕）"
         }
         if !sharing {
@@ -74,7 +74,7 @@ final class ScreenPeek: ObservableObject {
         return nil
     }
 
-    var ready: Bool { bookmark != nil || ScreenShare.readFrame() != nil }
+    var ready: Bool { bookmark != nil || cachedFrame() != nil }
 
     /// 屏幕广播交过来的最新一帧（见 `QiBroadcast/SampleHandler.swift`）。
     ///
@@ -83,7 +83,7 @@ final class ScreenPeek: ObservableObject {
     private var liveDecoded: (at: Date, image: UIImage)?
 
     func liveShot() -> (image: UIImage, at: Date)? {
-        guard let f = ScreenShare.readFrame() else { return nil }
+        guard let f = cachedFrame() else { return nil }
         if let d = liveDecoded, d.at == f.at { return (d.image, d.at) }
         guard let img = UIImage(data: f.jpeg) else { return nil }
         liveDecoded = (f.at, img)
@@ -91,7 +91,28 @@ final class ScreenPeek: ObservableObject {
     }
 
     /// 广播现在开着没有
-    var broadcasting: Bool { ScreenShare.readLive() }
+    var broadcasting: Bool {
+        let now = Date()
+        if now.timeIntervalSince(liveAt) > 2 { liveCache = ScreenShare.readLive(); liveAt = now }
+        return liveCache
+    }
+    private var liveCache = false
+    private var liveAt = Date.distantPast
+
+    /// 钥匙串里那一帧，**两秒内只读一次**。
+    ///
+    /// ⚠️ `ready`、`blockedReason` 画界面的时候每次重画都要问，
+    /// 每问一次读一遍钥匙串（一帧上百 KB）会让界面发卡。
+    private var frameCache: (jpeg: Data, at: Date)?
+    private var frameAt = Date.distantPast
+    private func cachedFrame() -> (jpeg: Data, at: Date)? {
+        let now = Date()
+        if now.timeIntervalSince(frameAt) > 2 {
+            frameCache = ScreenShare.readFrame()
+            frameAt = now
+        }
+        return frameCache
+    }
 
     /// 她选好那个文件夹之后记下来。
     ///
@@ -198,7 +219,7 @@ final class ScreenPeek: ObservableObject {
     func fresh() -> (shot: (image: UIImage, at: Date)?, why: String?) {
         if let why = blockedReason() { return (nil, why) }
         // 广播那一帧够新就直接给——它几乎总比文件夹里那张新
-        if let live = ScreenShare.readFrame(),
+        if let live = cachedFrame(),
            Date().timeIntervalSince(live.at) <= staleMinutes * 60,
            let shot = liveShot() {
             lastError = nil
