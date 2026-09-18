@@ -319,7 +319,7 @@ struct MemoryLibraryView: View {
             SettingsDivider()
 
             Button { extracting = true } label: {
-                SettingsRowLabel(title: "从 claude.ai 对话提取记忆", icon: "sparkles.rectangle.stack")
+                SettingsRowLabel(title: "导入 claude.ai 对话（存档并概括）", icon: "sparkles.rectangle.stack")
             }
             .buttonStyle(.plain)
             .sheet(isPresented: $extracting) { ClaudeImportView() }

@@ -1,9 +1,15 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// 从 claude.ai 导出的对话里**挑模型提取记忆**。
+/// 从 claude.ai 导出的对话里**挑模型总结**。
 ///
 /// 她说的：「在 app 里也加入一个这个功能，就是导入的这个，然后可以自选模型来总结。」
+///
+/// ## 两档
+///
+/// · **按窗口概括**（默认）：一个窗口存成一份存档对话，调一次模型写一段概括——
+///   她说的「之前是大概讲了一下这个窗口都聊了什么」就是这一档。一个窗口一次。
+/// · **逐条提取**（每段对话后面单独勾）：把对话拆成一条条记忆收进记忆库，一块一次，次数多。
 ///
 /// 跟「从电脑导入」那一条的分工：那条把 `conversations.json` 逐段存成**存档对话**（原文，能搜）；
 /// 这一页是把原文交给模型，**提取成一条条记忆**，她勾过再收进记忆库。
@@ -27,6 +33,8 @@ struct ClaudeImportView: View {
         var msgs: [(role: String, text: String)]
         var chars: Int
         var on = true
+        /// 这一段要不要再逐条提取成记忆（次数多，默认不勾）
+        var extract = false
     }
 
     struct Found: Identifiable {
@@ -47,6 +55,8 @@ struct ClaudeImportView: View {
     /// 用哪个模型：「供应商 id|模型 id」
     @State private var pick = ""
     @State private var report: String?
+    /// 这一轮写出来的窗口概括（标题：概括）
+    @State private var summaries: [String] = []
 
     static let chunk = 24_000
 
@@ -57,7 +67,8 @@ struct ClaudeImportView: View {
     }
 
     private var calls: Int {
-        convs.filter(\.on).reduce(0) { $0 + max(1, Int(ceil(Double($1.chars) / Double(Self.chunk)))) }
+        convs.filter { $0.on && $0.extract }
+            .reduce(0) { $0 + max(1, Int(ceil(Double($1.chars) / Double(Self.chunk)))) }
     }
 
     var body: some View {
@@ -84,24 +95,32 @@ struct ClaudeImportView: View {
                     }
                     Section {
                         ForEach($convs) { $c in
-                            Toggle(isOn: $c.on) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(c.title).lineLimit(1)
-                                    Text("\(c.date) · \(c.msgs.count) 条 · \(c.chars / 1000) 千字")
-                                        .font(.caption).foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Toggle(isOn: $c.on) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(c.title).lineLimit(1)
+                                        Text("\(c.date) · \(c.msgs.count) 条 · \(c.chars / 1000) 千字")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
+                                if c.on {
+                                    Toggle("另外逐条提取成记忆", isOn: $c.extract)
+                                        .font(.caption)
                                 }
                             }
                         }
                     } header: {
-                        Text("勾要提取的对话")
+                        Text("勾要导入的对话")
                     } footer: {
-                        Text("选了 \(convs.filter(\.on).count) 段，要调 \(calls) 次模型"
+                        let n = convs.filter(\.on).count
+                        Text("选了 \(n) 段：每段存成一份存档、概括一次（\(n) 次模型）"
+                             + (calls > 0 ? "；逐条提取另调 \(calls) 次" : "")
                              + (calls > 40 ? "（有点多，挑重要的就好）" : ""))
                     }
                     Section {
                         if running == nil {
-                            Button("开始提取") { start() }
-                                .disabled(pick.isEmpty || calls == 0)
+                            Button("开始") { start() }
+                                .disabled(pick.isEmpty || !convs.contains(where: \.on))
                         } else {
                             HStack { ProgressView(); Text(progress).font(.footnote) }
                             Button("停下", role: .destructive) { running?.cancel() }
@@ -130,7 +149,7 @@ struct ClaudeImportView: View {
                     }
                 }
             }
-            .navigationTitle("从 claude.ai 提取记忆")
+            .navigationTitle("导入 claude.ai 对话")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -207,11 +226,33 @@ struct ClaudeImportView: View {
         guard parts.count == 2, let p = app.providers.first(where: { $0.id.uuidString == parts[0] }),
               let endpoint = p.chatEndpoint else { return }
         let model = parts[1]
-        let jobs = convs.filter(\.on).flatMap { c in
+        let picked = convs.filter(\.on)
+        let jobs = picked.filter(\.extract).flatMap { c in
             Self.chunks(c).enumerated().map { (i, t) in (title: c.title, text: t, part: i + 1) }
         }
         errors = []
+        summaries = []
         running = Task { @MainActor in
+            // 一、一个窗口存一份存档、概括一次
+            for (k, c) in picked.enumerated() {
+                if Task.isCancelled { break }
+                progress = "存档并概括 \(k + 1)/\(picked.count)：\(c.title)"
+                if store.transcripts.contains(where: { $0.title == c.title && $0.count == c.msgs.count }) {
+                    continue
+                }
+                var t = TranscriptFile(id: String(UUID().uuidString.prefix(8)).lowercased(),
+                                       title: c.title, imported_at: MemoryStore.now, summary: nil,
+                                       msgs: c.msgs.map { TranscriptMsg(role: $0.role, text: $0.text) })
+                do {
+                    let sum = try await summarize(c, endpoint: endpoint, key: p.apiKey, model: model)
+                    t.summary = sum
+                    summaries.append(c.title + "：" + sum)
+                } catch {
+                    errors.append("概括「\(c.title)」：\(error.localizedDescription)")
+                }
+                store.saveTranscript(t)
+            }
+            // 二、勾了「逐条提取」的再拆成一块块
             var got: [Found] = []
             for (k, job) in jobs.enumerated() {
                 if Task.isCancelled { break }
@@ -227,9 +268,42 @@ struct ClaudeImportView: View {
             found = got.filter { seen.insert($0.content).inserted }
             running = nil
             if found.isEmpty {
-                report = errors.isEmpty ? "没提取出值得记的。" : "没提取出来：" + errors.prefix(3).joined(separator: "；")
+                var lines: [String] = []
+                if !summaries.isEmpty {
+                    lines.append("存档并概括了 \(summaries.count) 个窗口，在「存档对话」里看。")
+                }
+                if !jobs.isEmpty { lines.append("逐条提取没提出值得记的。") }
+                if !errors.isEmpty { lines.append("没成的：" + errors.prefix(3).joined(separator: "；")) }
+                report = lines.isEmpty ? "这几段都已经存过了。" : lines.joined(separator: "\n")
             }
         }
+    }
+
+    /// 一个窗口概括一次。太长就从头、中间、结尾各取一段，**不是只读开头**
+    private func summarize(_ c: Conv, endpoint: URL, key: String, model: String) async throws -> String {
+        let full = c.msgs.map { $0.role + "：" + $0.text }.joined(separator: "\n")
+        let text: String
+        if full.count <= 30_000 {
+            text = full
+        } else {
+            let mid = full.index(full.startIndex, offsetBy: full.count / 2)
+            let a = full.index(mid, offsetBy: -4000), b = full.index(mid, offsetBy: 4000)
+            text = String(full.prefix(12_000)) + "\n……（中间略）……\n" + String(full[a..<b])
+                + "\n……（中间略）……\n" + String(full.suffix(10_000))
+        }
+        let system = "你是阿晏和饼饼共同记忆库的摘要器。用中文把这个对话窗口（标题：\(c.title)）概括成200字以内的一段话："
+            + "这个窗口都聊了什么、发生了什么、有什么重要的情绪节点或约定。直接输出摘要文字，不要任何前缀。"
+        var out = ""
+        for try await e in ChatAPI.stream(endpoint: endpoint, apiKey: key, model: model,
+                                          messages: [.init(role: "system", text: system),
+                                                     .init(role: "user", text: text)]) {
+            if case .content(let s) = e { out += s }
+        }
+        let sum = out.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !sum.isEmpty else {
+            throw NSError(domain: "import", code: 2, userInfo: [NSLocalizedDescriptionKey: "模型没写出东西"])
+        }
+        return String(sum.prefix(300))
     }
 
     private func extract(_ title: String, _ text: String,
