@@ -91,6 +91,8 @@ enum NeteaseAccount {
         var id: Int
         var name: String
         var artist: String
+        /// 专辑封面（有就给）
+        var pic: String = ""
 
         var line: String { "\(name) — \(artist)（id \(id)）" }
 
@@ -105,6 +107,8 @@ enum NeteaseAccount {
             let people = (j["ar"] as? [[String: Any]]) ?? (j["artists"] as? [[String: Any]]) ?? []
             self.init(id: id, name: name,
                       artist: people.compactMap { $0["name"] as? String }.joined(separator: " / "))
+            let al = (j["al"] as? [String: Any]) ?? (j["album"] as? [String: Any])
+            pic = (al?["picUrl"] as? String) ?? ""
         }
     }
 

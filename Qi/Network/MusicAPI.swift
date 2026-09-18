@@ -234,6 +234,25 @@ enum MusicSearch {
         return kept
     }
 
+    /// 网易云里一首已知 id 的歌 → 能直接放的整首。**要会员、下架的返回 nil。**
+    ///
+    /// 她要的：「今日推荐和最近红心可以点击播放吗？要会员的只放能放的，不用会员的直接放，
+    /// 还能直接导入进 App 的音乐。」——跟搜歌那条走同一个判定（`directDetail`：
+    /// 那个外链对会员歌会跳 404），不用她的 cookie、不走她的会员。
+    static func neteaseTrack(id sid: Int, title: String, artist: String,
+                             artwork: String = "") async -> Track? {
+        let d = await directDetail(sid)
+        guard d.1 else { return nil }
+        var t = Track()
+        t.title = title
+        t.artist = artist
+        t.artworkURL = artwork
+        t.previewURL = "https://music.163.com/song/media/outer/url?id=\(sid).mp3"
+        t.fullLength = true
+        t.lyrics = d.2
+        return t
+    }
+
     /// 这首能不能放 + 它的歌词
     private static func directDetail(_ sid: Int) async -> (Int, Bool, String) {
         var playable = false

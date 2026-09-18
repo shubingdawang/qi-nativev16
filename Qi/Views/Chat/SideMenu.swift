@@ -162,12 +162,21 @@ struct SideMenuShell<Content: View>: View {
                 }
             }
             .animation(.spring(response: 0.36, dampingFraction: 0.86), value: isOpen)
-            // 推开：等动画走完再挂圆角。收起：立刻摘掉（摘了才开始动）
+            // 推开：等动画走完再挂圆角。
+            // 收起：**带着圆角一起滑回去，停稳了再摘**。
+            //
+            // ⚠️ 她报的「左侧边栏划回还是有点卡顿」：上一版是收起的第一下就把圆角摘掉——
+            // 遮罩一换，整页得在动画第一帧重新画一遍，卡的正是那一下。
+            // 圆角在滑的过程中只是跟着整块平移，不用重画；等页面回到原位
+            // （圆角那时候已经在屏幕外面了）再摘，摘的那一下她看不见。
             .onChange(of: ctl.isOpen) { _, open in
-                guard open else { settled = false; return }
                 Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 420_000_000)
-                    if isOpen { withAnimation(.easeOut(duration: 0.18)) { settled = true } }
+                    try? await Task.sleep(nanoseconds: 450_000_000)
+                    if open {
+                        if isOpen { withAnimation(.easeOut(duration: 0.18)) { settled = true } }
+                    } else if !isOpen {
+                        settled = false
+                    }
                 }
             }
         }
@@ -185,7 +194,6 @@ struct SideMenuShell<Content: View>: View {
         if app.settings.haptics {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         }
-        settled = false
         withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
             ctl.isOpen = false
             drag = 0

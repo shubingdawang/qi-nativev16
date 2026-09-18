@@ -628,12 +628,22 @@ const server = http.createServer(async (req, res) => {
   return send(res, 404, { error: '没有这个端点：' + url });
 });
 
+/**
+ * 手机在同一个 WiFi 下能连到的地址。
+ *
+ * ⚠️ 她两次都填了 198.18.0.1——那是梯子开 TUN 模式时的虚拟网卡，手机连不到；
+ * 100.x 是 Tailscale 的，她不开 Tailscale 也连不到。两样都不打印了，
+ * 只留家里路由器发的那几段（192.168 / 10 / 172.16~31）。
+ */
 function lanAddresses() {
   const out = [];
   const ifs = os.networkInterfaces();
   for (const name of Object.keys(ifs)) {
     for (const a of ifs[name] || []) {
-      if (a.family === 'IPv4' && !a.internal) out.push(a.address);
+      if (a.family !== 'IPv4' || a.internal) continue;
+      const [x, y] = a.address.split('.').map(Number);
+      const home = x === 192 && y === 168 || x === 10 || (x === 172 && y >= 16 && y <= 31);
+      if (home) out.push(a.address);
     }
   }
   return out;
@@ -645,11 +655,14 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('  claude    ' + CLAUDE);
   console.log('  工作目录  ' + WORKSPACE);
   console.log('  密钥      ' + (TOKEN ? '已设（手机那边填一样的）' : '⚠️ 没设——什么都不会开'));
-  for (const ip of lanAddresses()) {
-    console.log('  接口地址  http://' + ip + ':' + PORT);
+  const ips = lanAddresses();
+  if (!ips.length) console.log('  ⚠️ 没找到家里 WiFi 的地址（192.168 开头那种）。电脑连上 WiFi 了吗？');
+  for (const ip of ips) {
+    console.log('  Code 页「接法」填   http://' + ip + ':' + PORT);
+    console.log('  当供应商用地址填    http://' + ip + ':' + PORT + '/v1');
   }
   console.log('');
-  console.log('  手机上：聊天页左边栏 → Code → 右上角填这个地址和密钥。');
+  console.log('  （只列手机能连的地址。198.18、100 开头的是梯子和 Tailscale 的，手机连不到。）');
   console.log('  关掉这个窗口桥就断了。');
   console.log('');
 });
