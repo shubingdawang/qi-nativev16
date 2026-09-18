@@ -19,6 +19,8 @@ struct MemoryLibraryView: View {
     @State private var confirmWipe = false
     @State private var pasting = false
     @State private var pasted = ""
+    /// 从 claude.ai 对话里挑模型提取记忆（见 `ClaudeImportView`）
+    @State private var extracting = false
 
     var body: some View {
         ZStack {
@@ -314,6 +316,13 @@ struct MemoryLibraryView: View {
                 SettingsRowLabel(title: "从电脑导入", icon: "square.and.arrow.down")
             }
             .buttonStyle(.plain)
+            SettingsDivider()
+
+            Button { extracting = true } label: {
+                SettingsRowLabel(title: "从 claude.ai 对话提取记忆", icon: "sparkles.rectangle.stack")
+            }
+            .buttonStyle(.plain)
+            .sheet(isPresented: $extracting) { ClaudeImportView() }
             SettingsDivider()
 
             Button {
