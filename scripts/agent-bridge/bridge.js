@@ -211,6 +211,8 @@ function run(opts, emit, onEnd) {
   args.push(...(MODES[opts.mode] || MODES.edit));
   if (opts.session) args.push('--resume', opts.session);
   if (opts.model) args.push('--model', opts.model);
+  // 聊天页、工作页那边带过来的人设（阿晏是谁、她是谁），接在 Claude Code 自己那份后面
+  if (opts.system) args.push('--append-system-prompt', opts.system);
   args.push(opts.text);
 
   const cwd = opts.cwd && fs.existsSync(opts.cwd) ? opts.cwd : WORKSPACE;
@@ -363,6 +365,178 @@ function readBody(req) {
   });
 }
 
+/* ────────────────────────── 当「供应商」用：聊天页、工作页 ──────────────────────────
+ *
+ * 她问的：「不能直接接到工作页和聊天页吗？」
+ *
+ * 能。这一段让新桥长得跟一个普通的 OpenAI 接口一样（`/v1/models`、`/v1/chat/completions`），
+ * 在「设置 → 供应商」里加一条 `http://192.168.x.x:8788/v1`、密钥填 BRIDGE_TOKEN，
+ * 聊天页和工作页就能像选模型一样选它。
+ *
+ * 跟旧桥当供应商的区别：
+ *   · 工具是 Claude Code **自己的**（读文件、改文件、跑命令），他真的在调；
+ *     每用一次，回复里会冒出一行「› Edit 某某文件」让她看见他在干什么
+ *   · App 那边传过来的工具清单**不用**——Claude Code 不认那套协议
+ *   · **会话接得上**：同一段对话（按第一句话认）第二轮开始走 `--resume`，
+ *     只把她新说的那句递过去，不用每轮把整段历史重讲一遍
+ *
+ * 模型名：sonnet / opus / haiku 是「改文件」那一档；
+ * 后面带 -all 的全放开（命令也随便跑），带 -read 的只看不动。
+ */
+
+const crypto = require('crypto');
+const CHAT_MAP = path.join(TMP, 'chat-sessions.json');
+
+function loadChatMap() {
+  try { return JSON.parse(fs.readFileSync(CHAT_MAP, 'utf8')); } catch (_) { return {}; }
+}
+function saveChatMap(m) {
+  try { fs.writeFileSync(CHAT_MAP, JSON.stringify(m)); } catch (_) {}
+}
+
+/** 一条消息里的字（OpenAI 那边 content 可能是字符串，也可能是一串 part） */
+function textOf(content) {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content.filter(p => p && p.type === 'text').map(p => p.text || '').join('\n');
+}
+
+/** 图：落到临时目录，把路径告诉他，他自己用 Read 去看 */
+function imagesOf(content) {
+  if (!Array.isArray(content)) return [];
+  const out = [];
+  for (const p of content) {
+    const u = p && p.type === 'image_url' && p.image_url && p.image_url.url;
+    const m = typeof u === 'string' && u.match(/^data:image\/(\w+);base64,(.+)$/);
+    if (!m) continue;
+    const f = path.join(TMP, 'img-' + Date.now() + '-' + out.length + '.' + (m[1] === 'jpeg' ? 'jpg' : m[1]));
+    try { fs.writeFileSync(f, Buffer.from(m[2], 'base64')); out.push(f); } catch (_) {}
+  }
+  return out;
+}
+
+function chatModel(id) {
+  const s = String(id || 'sonnet');
+  const mode = s.endsWith('-all') ? 'all' : s.endsWith('-read') ? 'read' : 'edit';
+  const model = s.replace(/-(all|read)$/, '').replace(/^claude-code-?/, '') || 'sonnet';
+  return { model, mode };
+}
+
+function sseWrite(res, obj) {
+  try { res.write('data: ' + JSON.stringify(obj) + '\n\n'); } catch (_) {}
+}
+
+function chunkOf(id, model, delta, finish) {
+  return {
+    id, object: 'chat.completion.chunk', created: Math.floor(Date.now() / 1000), model,
+    choices: [{ index: 0, delta: delta || {}, finish_reason: finish || null }],
+  };
+}
+
+async function handleChat(req, res) {
+  let body;
+  try { body = JSON.parse((await readBody(req)) || '{}'); }
+  catch (e) { return send(res, 400, { error: { message: '请求体不是 JSON' } }); }
+  const msgs = Array.isArray(body.messages) ? body.messages : [];
+  const users = msgs.filter(m => m.role === 'user');
+  if (!users.length) return send(res, 400, { error: { message: '没有她说的话' } });
+  if (running >= MAX_RUNS) {
+    return send(res, 429, { error: { message: '这台电脑上已经有 ' + running + ' 轮在跑了，等一会儿。' } });
+  }
+
+  const { model, mode } = chatModel(body.model);
+  const system = msgs.filter(m => m.role === 'system').map(m => textOf(m.content)).join('\n\n');
+  const last = users[users.length - 1];
+
+  // 这段对话是哪一段：按**第一句话 + 模型那一档**认。同一段对话每一轮第一句都一样
+  const key = crypto.createHash('sha1')
+    .update(textOf(users[0].content).slice(0, 2000) + '|' + mode).digest('hex');
+  const map = loadChatMap();
+  // App 那边钉了电脑上哪个窗口（工作区上面那一栏挑的）就接着那个；
+  // 没钉就按「同一段对话」自己认
+  const pinned = typeof body.claude_session === 'string' ? body.claude_session.trim() : '';
+  if (pinned && map[key] !== pinned) { map[key] = pinned; saveChatMap(map); }
+  const resume = pinned || map[key] || '';
+
+  let text = textOf(last.content);
+  const imgs = imagesOf(last.content);
+  if (imgs.length) text += '\n\n（她发了图，存在这几个路径，用 Read 看：' + imgs.join('、') + '）';
+  // 第一次接这段对话、而前面已经聊过几轮（比如她中途换到这个供应商）：
+  // 把前面的对话压成一段递过去，不然他什么都不知道
+  if (!resume && msgs.length > 2) {
+    const before = msgs.slice(0, msgs.lastIndexOf(last))
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .map(m => (m.role === 'user' ? '她：' : '你：') + textOf(m.content).slice(0, 1500))
+      .join('\n');
+    if (before.trim()) text = '（前面的对话）\n' + before + '\n\n（她现在说）\n' + text;
+  }
+
+  const stream = body.stream !== false;
+  const id = 'chatcmpl-' + Date.now();
+  if (stream) {
+    res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8',
+                         'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
+    sseWrite(res, chunkOf(id, model, { role: 'assistant', content: '' }));
+  }
+  let full = '';
+  let lastWasTool = false;
+  const put = (s) => {
+    full += s;
+    if (stream) sseWrite(res, chunkOf(id, model, { content: s }));
+  };
+
+  const started = Date.now();
+  console.log(new Date().toLocaleTimeString() + '  [聊天] ' + (resume ? '接着 ' + resume.slice(0, 8) : '新会话') +
+              ' · ' + mode + ' · ' + text.slice(0, 40).replace(/\s+/g, ' '));
+
+  const child = run({ text, session: resume, mode, model, system },
+    (e) => {
+      if (e.t === 'session' && e.id && map[key] !== e.id) { map[key] = e.id; saveChatMap(map); }
+      else if (e.t === 'text') {
+        if (lastWasTool) { put('\n'); lastWasTool = false; }
+        put(e.delta);
+      } else if (e.t === 'tool') {
+        // 他动了什么，一行摆出来
+        put((full && !full.endsWith('\n') ? '\n' : '') + '› ' + e.name + (e.brief ? '　' + e.brief : '') + '\n');
+        lastWasTool = true;
+      } else if (e.t === 'tool_done' && !e.ok) {
+        put('  ✗ ' + (e.brief || '没成') + '\n');
+      } else if (e.t === 'error') {
+        put('\n（桥：' + e.msg + '）');
+      }
+    },
+    (why) => {
+      console.log('  这一轮完了（' + why + '）' + Math.round((Date.now() - started) / 1000) + ' 秒');
+      if (stream) {
+        sseWrite(res, chunkOf(id, model, {}, 'stop'));
+        try { res.write('data: [DONE]\n\n'); res.end(); } catch (_) {}
+      } else {
+        send(res, 200, {
+          id, object: 'chat.completion', created: Math.floor(Date.now() / 1000), model,
+          choices: [{ index: 0, message: { role: 'assistant', content: full }, finish_reason: 'stop' }],
+        });
+      }
+    });
+  req.on('close', () => { if (!res.writableEnded) { try { child.kill(); } catch (_) {} } });
+}
+
+/** 终端那一页的命令口（跟旧桥同一个协议，ndjson 流回来） */
+async function handleShell(req, res) {
+  let cmd = '';
+  try { cmd = String(JSON.parse((await readBody(req)) || '{}').command || '').trim(); } catch (_) {}
+  if (!cmd) return send(res, 400, { error: '没给命令' });
+  res.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store' });
+  const line = (o) => { try { res.write(JSON.stringify(o) + '\n'); } catch (_) {} };
+  line({ type: 'start', cwd: WORKSPACE, command: cmd });
+  const sh = IS_WIN ? 'cmd.exe' : '/bin/sh';
+  const child = spawn(sh, IS_WIN ? ['/d', '/s', '/c', cmd] : ['-c', cmd], { cwd: WORKSPACE, windowsHide: true });
+  child.stdout.on('data', d => line({ type: 'out', text: d.toString('utf8') }));
+  child.stderr.on('data', d => line({ type: 'err', text: d.toString('utf8') }));
+  child.on('error', e => line({ type: 'err', text: String(e.message || e) }));
+  const killer = setTimeout(() => { line({ type: 'err', text: '（跑了太久，停了）' }); try { child.kill(); } catch (_) {} }, 120000);
+  child.on('close', code => { clearTimeout(killer); line({ type: 'exit', code }); try { res.end(); } catch (_) {} });
+}
+
 const server = http.createServer(async (req, res) => {
   const url = (req.url || '').split('?')[0].replace(/\/+$/, '') || '/';
   const query = new URL(req.url || '/', 'http://x').searchParams;
@@ -376,7 +550,9 @@ const server = http.createServer(async (req, res) => {
 
   if (url === '/' || url === '/v1') {
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-    return res.end('新桥是通的。聊天页左边栏 → Code。\n');
+    return res.end('新桥是通的。\n'
+      + '· 聊天页左边栏 → Code → 接法：填 http://<这台电脑 192.168 开头的地址>:' + PORT + '\n'
+      + '· 当供应商用（聊天页、工作页）：设置 → 供应商，地址填 http://<同上>:' + PORT + '/v1，密钥填 BRIDGE_TOKEN\n');
   }
 
   /* ⚠️ 除了上面那句「通了」，**所有端点都要密钥**——
@@ -388,6 +564,20 @@ const server = http.createServer(async (req, res) => {
   const auth = req.headers.authorization || '';
   if (auth !== 'Bearer ' + TOKEN) {
     return send(res, 401, { error: '密钥不对。手机那边填的要跟电脑上 BRIDGE_TOKEN 一模一样。' });
+  }
+
+  if (req.method === 'GET' && (url === '/v1/models' || url === '/models')) {
+    return send(res, 200, { object: 'list', data:
+      ['sonnet', 'opus', 'haiku', 'sonnet-all', 'opus-all', 'sonnet-read']
+        .map(id => ({ id, object: 'model', owned_by: 'claude-code' })) });
+  }
+
+  if (req.method === 'POST' && (url === '/v1/chat/completions' || url === '/chat/completions')) {
+    return handleChat(req, res);
+  }
+
+  if (req.method === 'POST' && (url === '/v1/shell' || url === '/shell')) {
+    return handleShell(req, res);
   }
 
   if (req.method === 'GET' && url === '/v1/sessions') {

@@ -1429,7 +1429,14 @@ final class AppState: ObservableObject {
             do {
                 // 到回合数了就先滚一次雪球（她把「滚雪球压缩」关掉就直接跳过）。
                 // **必须在拼消息之前**——压完之后前面那堆原文才换成浓缩件。
-                await ContextCompactor.compactIfNeeded(conversationID, app: self)
+                //
+                // ⚠️ 用的是新桥（电脑上的 Claude Code）就**不滚**：
+                // 新桥接着同一个会话说、每轮只递她新说的那句，历史在电脑上那份会话里，
+                // 压缩归 Claude Code 自己管（跟电脑上一样，快满了自动压）。
+                // 这边再滚一次只是白白多调一回模型
+                if !AgentBridge.isAgent(p) {
+                    await ContextCompactor.compactIfNeeded(conversationID, app: self)
+                }
                 // 压完之后要重新取一遍这一窗——digest 变了。
                 // 取不到就退回压之前那份，**不能 return**，
                 // 不然底下那条流式占位气泡会一直转着下不来。
@@ -1459,7 +1466,10 @@ final class AppState: ObservableObject {
                             apiKey: useKey,
                             model: useModel,
                             messages: apiMessages,
-                            tools: toolDefs
+                            tools: toolDefs,
+                            // 新桥：她钉了电脑上哪个窗口就接着那个说
+                            claudeSession: AgentBridge.isAgent(p)
+                                ? AgentBridge.pinned(conversationID) : nil
                         )
 
                         for try await event in stream {

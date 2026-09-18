@@ -94,6 +94,13 @@ struct CodeChatView: View {
         } message: {
             Text(note ?? "")
         }
+        // 「接法」没填、但供应商里已经加过新桥的话，直接借那一条的地址和密钥
+        .onAppear {
+            if !link.isSet, let p = app.providers.first(where: { AgentBridge.isAgent($0) }) {
+                link = AgentBridge.link(from: p)
+                link.save()
+            }
+        }
     }
 
     // MARK: - 顶上那一条

@@ -72,7 +72,8 @@ enum ChatAPI {
         apiKey: String,
         model: String,
         messages: [OutgoingMessage],
-        tools: [[String: Any]] = []
+        tools: [[String: Any]] = [],
+        claudeSession: String? = nil
     ) -> AsyncThrowingStream<StreamEvent, Error> {
 
         AsyncThrowingStream { continuation in
@@ -100,7 +101,8 @@ enum ChatAPI {
                         // （每行 data: 后面那段），撞名字读起来会以为是同一个东西
                         let bodyData = try buildBody(model: model, messages: messages,
                                                      tools: tools,
-                                                     wantThinking: wantThinking)
+                                                     wantThinking: wantThinking,
+                                                     claudeSession: claudeSession)
                         request.httpBody = bodyData
 
                         // 终端那一页。**只记不发**——一条都不会进提示词。
@@ -373,7 +375,8 @@ enum ChatAPI {
         model: String,
         messages: [OutgoingMessage],
         tools: [[String: Any]],
-        wantThinking: Bool
+        wantThinking: Bool,
+        claudeSession: String? = nil
     ) throws -> Data {
 
         var payload: [[String: Any]] = []
@@ -499,6 +502,10 @@ enum ChatAPI {
         if !tools.isEmpty {
             body["tools"] = tools
             body["tool_choice"] = "auto"
+        }
+        // 新桥认这个键：接着电脑上指定的那个窗口说（见 `AgentBridge.pinned`）。别的供应商不认，当多余的键忽略
+        if let claudeSession, !claudeSession.isEmpty {
+            body["claude_session"] = claudeSession
         }
 
         // ⚠️⚠️ **要思考过程得自己开口要。**
