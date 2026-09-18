@@ -146,8 +146,27 @@ struct ClawdRigView: View {
         }
     }
 
+    /// 身子这一整块（手、身子、穿戴件）此刻怎么动：往上抬多少格、歪多少度。
+    ///
+    /// ⚠️ 她报的：「喝咖啡动画时戴着的帽子没有跟着动。」
+    /// 以前只有**手和杯子**在动，身子那张图纸和扣在上面的帽子一动不动，
+    /// 看着就是杯子自己飞到脸边。现在喝的时候整个人微微仰起来一点，
+    /// 帽子跟身子在同一块里，自然就跟着走了。
+    private var bodySway: (lift: CGFloat, lean: Double) {
+        switch pose {
+        case .sip:
+            let t = sin(beat * .pi)                 // 0→1→0，跟杯子那一口同一条曲线
+            return (-0.8 * CGFloat(t), -3.5 * t)
+        case .swirl:
+            return (0, sin(beat * .pi * 2) * 2.5)   // 晃杯子：身子跟着左右轻轻摆
+        case .lift:
+            return (0.6 * CGFloat(1 - rise), 0)     // 举起来那一下先沉一下再起来
+        default:
+            return (0, 0)
+        }
+    }
+
     /// 我们自己拼的那只：手臂能转、能举家具、能穿戴。
-    /// 他们的 gif 里没有这些，所以这套留着。
     private var rigBody: some View {
         ZStack(alignment: .topLeading) {
             // ⚠️⚠️ **手在下、身子在上。顺序反了就前功尽弃。**
@@ -157,6 +176,7 @@ struct ClawdRigView: View {
             // （眼睛在第 9..11 行，手在第 8..12 行，正好撞上）。
             // 举东西的时候手是**整条画好的**（`armUp`），不转角度；
             // 平时才用会转的那只。见 `ClawdRig.armUp` 那段注释。
+            ZStack(alignment: .topLeading) {
             if plan.armsUp {
                 armUp(onLeft: true)
                 armUp(onLeft: false)
@@ -195,6 +215,12 @@ struct ClawdRigView: View {
                     ClawdWornView(id: id, scale: scale)
                 }
             }
+            }
+            // 身子和穿戴件是一块的：一起抬、一起歪。⚠️ 支点在**脚底**
+            //（图纸第 31 行），绕画布中心转的话他会整个飘起来
+            .offset(y: bodySway.lift * scale)
+            .rotationEffect(.degrees(bodySway.lean),
+                            anchor: UnitPoint(x: 0.5, y: 31.0 / rows))
 
             // 举重物会出汗。抄的参考里那两滴 `.bb-sweat`：
             // 从身子两侧的肩膀那儿甩出去，往外、往下、边飞边淡。

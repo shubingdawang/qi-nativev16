@@ -22,6 +22,8 @@ struct SideMenuShell<Content: View>: View {
 
     /// 关的时候手指往左带了多少（负数）
     @State private var drag: CGFloat = 0
+    /// **已经完全推开、动画也停了**。圆角只在这时候才挂上去（见下面那段）
+    @State private var settled = false
 
     var body: some View {
         GeometryReader { geo in
@@ -55,7 +57,13 @@ struct SideMenuShell<Content: View>: View {
                 // 再单独放一层只盖住它自己的捕捉层。
                 content
                     .frame(width: geo.size.width, height: geo.size.height)
-                    .allowsHitTesting(!isOpen)
+                    // ⚠️ 这儿以前有一句 `.allowsHitTesting(!isOpen)`，**去掉了**。
+                    //
+                    // 她报的：「左侧栏合上之后有点卡顿。」
+                    // 开关那一下这个修饰符跟着变，SwiftUI 就得把**整页聊天**
+                    // 重新过一遍——一屏几十个气泡，正好卡在动画开头那一帧。
+                    // 挡手势本来就有下面那层捕捉层（它只盖聊天页那一块），
+                    // 一件事做两遍，其中一遍还很贵。
                     .overlay {
                         // 压一层暗是为了"沉下去"。纯 alpha，不要钱。
                         Color.black.opacity(0.16 * progress)
@@ -83,6 +91,17 @@ struct SideMenuShell<Content: View>: View {
                     // **别再往这一支上挂**。正确的做法是在侧栏那一层的右边缘
                     // 单独画一道静态的圆角+阴影条，它只有一条边那么大，
                     // 跟整页无关。要做再说，现在先让它快。
+                    // ⚠️⚠️ **圆角只在完全推开、动画停了之后才挂。**
+                    //
+                    // 她要的：「想回到之前那种左侧栏滑开后聊天页是圆角的样子。」
+                    // 可圆角是个遮罩，挂着它整页就得**每帧**重新光栅化一次
+                    //（这正是她前三轮报的「非常明显的卡顿」，那时候连缩放一起撤掉了）。
+                    //
+                    // 所以拆成两段：滑的过程里一个遮罩都不挂，纯平移；
+                    // 停下来之后再挂上圆角——静止的遮罩只算一次，之后一直复用。
+                    // 收起的时候先把圆角摘掉再动，同理。
+                    .clipShape(RoundedRectangle(cornerRadius: settled ? 26 : 0,
+                                                style: .continuous))
                     .offset(x: width * progress)
                     .zIndex(1)
 
@@ -125,6 +144,14 @@ struct SideMenuShell<Content: View>: View {
                 }
             }
             .animation(.spring(response: 0.36, dampingFraction: 0.86), value: isOpen)
+            // 推开：等动画走完再挂圆角。收起：立刻摘掉（摘了才开始动）
+            .onChange(of: isOpen) { _, open in
+                guard open else { settled = false; return }
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 420_000_000)
+                    if isOpen { withAnimation(.easeOut(duration: 0.18)) { settled = true } }
+                }
+            }
         }
         // 整页铺满，上下不留白条。聊天页里那几处 padding 已经把
         // 状态栏和 home indicator 的位置让出来了。
@@ -140,6 +167,7 @@ struct SideMenuShell<Content: View>: View {
         if app.settings.haptics {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         }
+        settled = false
         withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
             isOpen = false
             drag = 0
