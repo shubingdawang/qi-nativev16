@@ -6948,6 +6948,13 @@ final class AppState: ObservableObject {
             WakeControl.shared.ackMissed(WakeControl.shared.lastProjectedMissed)
         }
 
+        // 他心情变了写的那个小签（见 `MoodTagMarker`）：存起来、从正文里剥掉
+        let mood = MoodTagMarker.extract(conversations[ci].messages[mi].content)
+        if let tag = mood.tag {
+            conversations[ci].messages[mi].content = mood.clean
+            MoodTagStore.shared.add(tag.emoji, tag.text, in: conversations[ci].id)
+        }
+
         let paused = PauseMarker.extract(conversations[ci].messages[mi].content)
         if let move = paused.move {
             conversations[ci].messages[mi].content = paused.clean
@@ -7470,6 +7477,10 @@ final class AppState: ObservableObject {
                     + "隔着门说话也是说话。"
             } else {
                 sys += "\n\n" + PauseMarker.contract
+            }
+            // 左上角的心情小签：只在聊天页（絮语）要
+            if conv.space == ChatSpace.chat.rawValue, !conv.isGroup {
+                sys += "\n\n" + MoodTagMarker.contract
             }
         }
         // 唤醒 2.0：他能调自己怎么被叫醒，也看得见自己调了什么。

@@ -333,6 +333,14 @@ struct ChatView: View {
             // 现在是能拖的悬浮窗，挂在 RootView 上——全 App 都看得见，
             // 翻到札记、设置那些页面也还在。见 MusicFloatingView。
 
+            // 左上角：他此刻的心情小签（见 `MoodTagStore`）。跟右上角那个把手同一个高度
+            if space == .chat, let conv = activeConversation {
+                MoodTagChip(conversationID: conv.id)
+                    .padding(.leading, 14)
+                    .padding(.top, 51)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+
             // 右上角那个抽屉把手，跟原来一样
             if showsDrawer {
             Button {
