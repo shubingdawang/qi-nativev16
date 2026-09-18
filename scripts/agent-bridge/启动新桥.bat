@@ -1,32 +1,32 @@
 @echo off
-chcp 65001 >nul
 cd /d "%~dp0"
-title Claude Code æ–°æ¡¥ï¼ˆå…³æ‰è¿™ä¸ªçª—å£æ¡¥å°±æ–­äº†ï¼‰
+title Claude Code ĞÂÇÅ£¨¹ØµôÕâ¸ö´°¿ÚÇÅ¾Í¶ÏÁË£©
 
-rem âš ï¸âš ï¸ è¿™ä¸ªæ–‡ä»¶é‡Œï¼Œ**ä»£ç éƒ¨åˆ†ä¸€å¾‹ç”¨è‹±æ–‡**ï¼š
-rem æ ‡ç­¾åï¼ˆ:askï¼‰ã€æ–‡ä»¶åï¼ˆbridge-token.txtï¼‰ã€å˜é‡åéƒ½ä¸è®¸å‡ºç°ä¸­æ–‡ã€‚
-rem cmd.exe è§£ææ ‡ç­¾å’Œè·¯å¾„ä¸èµ° chcp 65001ï¼Œä¸­æ–‡æŒ‰ GBK è¯»ã€æŒ‰ UTF-8 å­˜ï¼Œ
-rem ä¸¤å¤´å¯¹ä¸ä¸Šå°±æ‰¾ä¸åˆ°æ ‡ç­¾â€”â€”çª—å£ä¼šä¸€é—ªå°±æ²¡äº†ã€‚
-rem ä¸­æ–‡åªèƒ½å¾…åœ¨ echo åé¢é‚£å¥è¯é‡Œï¼ˆé‚£éƒ¨åˆ†æ˜¯ chcp ä¹‹åæ‰è¾“å‡ºçš„ï¼Œæ²¡äº‹ï¼‰ã€‚
+rem NOTE: this file is saved as GBK (the default code page of Chinese Windows),
+rem   NOT UTF-8, and it must keep CRLF line endings.
+rem   UTF-8 + chcp 65001 makes cmd.exe cut multibyte lines apart
+rem   ("... is not recognized as an internal or external command"),
+rem   and LF-only line endings make "call :ask" fail, so the window flashes and closes.
+rem   Keep labels, file names and variable names in plain English.
 
 if not exist "bridge-token.txt" call :ask
 set /p BRIDGE_TOKEN=<bridge-token.txt
 
 if "%BRIDGE_TOKEN%"=="" (
   echo.
-  echo å¯†é’¥æ˜¯ç©ºçš„ã€‚åˆ æ‰è¿™ä¸ªæ–‡ä»¶å¤¹é‡Œçš„ bridge-token.txt å†è·‘ä¸€æ¬¡å°±ä¼šé‡æ–°é—®ã€‚
+  echo ÃÜÔ¿ÊÇ¿ÕµÄ¡£É¾µôÕâ¸öÎÄ¼ş¼ĞÀïµÄ bridge-token.txt ÔÙÅÜÒ»´Î¾Í»áÖØĞÂÎÊ¡£
   echo.
   pause
   exit /b
 )
 
 echo.
-echo å¯†é’¥å·²è¯»åˆ°ã€‚æ‰‹æœºä¸Šã€ŒCode - æ¥æ³• - å¯†é’¥ã€è¦å¡«ä¸€æ¨¡ä¸€æ ·çš„ã€‚
+echo ÃÜÔ¿ÒÑ¶Áµ½¡£ÊÖ»úÉÏ¡¸Code - ½Ó·¨ - ÃÜÔ¿¡¹ÒªÌîÒ»Ä£Ò»ÑùµÄ¡£
 echo.
 
 where node >nul 2>nul
 if errorlevel 1 (
-  echo è¿™å°ç”µè„‘ä¸Šæ‰¾ä¸åˆ° nodeã€‚æ¡¥æ˜¯ node å†™çš„ï¼Œå¾—å…ˆè£… Node.jsã€‚
+  echo ÕâÌ¨µçÄÔÉÏÕÒ²»µ½ node¡£ÇÅÊÇ node Ğ´µÄ£¬µÃÏÈ×° Node.js¡£
   echo.
   pause
   exit /b
@@ -35,26 +35,26 @@ if errorlevel 1 (
 node bridge.js
 
 echo.
-echo æ¡¥åœäº†ã€‚æŒ‰ä»»æ„é”®å…³æ‰è¿™ä¸ªçª—å£ã€‚
+echo ÇÅÍ£ÁË¡£°´ÈÎÒâ¼ü¹ØµôÕâ¸ö´°¿Ú¡£
 pause >nul
 exit /b
 
 :ask
 echo.
 echo ========================================
-echo  ç¬¬ä¸€æ¬¡è·‘ï¼Œè¦å…ˆå®šä¸€ä¸ªå¯†é’¥ã€‚
+echo  µÚÒ»´ÎÅÜ£¬ÒªÏÈ¶¨Ò»¸öÃÜÔ¿¡£
 echo.
-echo  è¿™ä¸€ä¸²æ˜¯ç”¨æ¥æ‹¦ä½åˆ«äººçš„ï¼šæ‰‹æœºèƒ½é€šè¿‡è¿™åº§æ¡¥åœ¨
-echo  è¿™å°ç”µè„‘ä¸Šæ”¹æ–‡ä»¶ã€è·‘å‘½ä»¤ï¼Œæ‰€ä»¥æ²¡æœ‰å¯†é’¥
-echo  ä»€ä¹ˆå£å­éƒ½ä¸å¼€ã€‚
+echo  ÕâÒ»´®ÊÇÓÃÀ´À¹×¡±ğÈËµÄ£ºÊÖ»úÄÜÍ¨¹ıÕâ×ùÇÅÔÚ
+echo  ÕâÌ¨µçÄÔÉÏ¸ÄÎÄ¼ş¡¢ÅÜÃüÁî£¬ËùÒÔÃ»ÓĞÃÜÔ¿
+echo  Ê²Ã´¿Ú×Ó¶¼²»¿ª¡£
 echo.
-echo  è‡ªå·±ç¼–ä¸€ä¸²ï¼Œå­—æ¯æ•°å­—éƒ½è¡Œï¼Œåˆ«ç”¨ç©ºæ ¼å’Œä¸­æ–‡ã€‚
-echo  ä¾‹ï¼šqi7788abc
+echo  ×Ô¼º±àÒ»´®£¬×ÖÄ¸Êı×Ö¶¼ĞĞ£¬±ğÓÃ¿Õ¸ñºÍÖĞÎÄ¡£
+echo  Àı£ºqi7788abc
 echo ========================================
 echo.
-set /p KEY="å¯†é’¥ï¼š"
+set /p KEY="ÃÜÔ¿£º"
 >"bridge-token.txt" echo %KEY%
 echo.
-echo è®°ä¸‹æ¥äº†ï¼Œå­˜åœ¨è¿™ä¸ªæ–‡ä»¶å¤¹çš„ bridge-token.txt é‡Œã€‚
-echo è¿™ä¸ªæ–‡ä»¶ä¸ä¼šè¿›ä»“åº“ï¼ˆä»“åº“æ˜¯å…¬å¼€çš„ï¼‰ã€‚
+echo ¼ÇÏÂÀ´ÁË£¬´æÔÚÕâ¸öÎÄ¼ş¼ĞµÄ bridge-token.txt Àï¡£
+echo Õâ¸öÎÄ¼ş²»»á½ø²Ö¿â£¨²Ö¿âÊÇ¹«¿ªµÄ£©¡£
 exit /b

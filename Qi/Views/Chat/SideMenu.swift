@@ -11,9 +11,26 @@ import SwiftUI
 /// ZStack { ...聊天页... }
 ///     .sideMenuShell(isOpen: $sideOpen) { item in ... }
 /// ```
+/// 侧栏开没开。
+///
+/// ⚠️⚠️ **这个开关不能放在聊天页自己身上**（以前是 `ChatView` 的 `@State sideOpen`）。
+///
+/// 她报了好几轮的「收回左侧边栏的时候会卡顿一下」，根在这儿：
+/// 开关一变，持有它的那个 View 的 body 就要从头算一遍——而持有它的是
+/// **整个聊天页**（两千多行、一屏几十个气泡）。收起那一下正好卡在动画第一帧。
+///
+/// 现在开关放在这个小对象里：聊天页拿着它的引用但**不订阅**它
+/// （存在普通 `@State` 里，不是 `@StateObject`），只有外壳订阅。
+/// 开关一变，只有外壳这一小层重算，聊天页一行都不动。
+@MainActor
+final class SideMenuController: ObservableObject {
+    @Published var isOpen = false
+}
+
 struct SideMenuShell<Content: View>: View {
 
-    @Binding var isOpen: Bool
+    @ObservedObject var ctl: SideMenuController
+    private var isOpen: Bool { ctl.isOpen }
     var onSelect: (SideMenuItem) -> Void
     @ViewBuilder var content: Content
 
@@ -100,7 +117,8 @@ struct SideMenuShell<Content: View>: View {
                     // 所以拆成两段：滑的过程里一个遮罩都不挂，纯平移；
                     // 停下来之后再挂上圆角——静止的遮罩只算一次，之后一直复用。
                     // 收起的时候先把圆角摘掉再动，同理。
-                    .clipShape(RoundedRectangle(cornerRadius: settled ? 26 : 0,
+                    // 弧度照她给的参考图（Claude 官方那张）：跟屏幕本身的圆角差不多大
+                    .clipShape(RoundedRectangle(cornerRadius: settled ? 44 : 0,
                                                 style: .continuous))
                     .offset(x: width * progress)
                     .zIndex(1)
@@ -145,7 +163,7 @@ struct SideMenuShell<Content: View>: View {
             }
             .animation(.spring(response: 0.36, dampingFraction: 0.86), value: isOpen)
             // 推开：等动画走完再挂圆角。收起：立刻摘掉（摘了才开始动）
-            .onChange(of: isOpen) { _, open in
+            .onChange(of: ctl.isOpen) { _, open in
                 guard open else { settled = false; return }
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 420_000_000)
@@ -169,16 +187,16 @@ struct SideMenuShell<Content: View>: View {
         }
         settled = false
         withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
-            isOpen = false
+            ctl.isOpen = false
             drag = 0
         }
     }
 }
 
 extension View {
-    func sideMenuShell(isOpen: Binding<Bool>,
+    func sideMenuShell(_ ctl: SideMenuController,
                        onSelect: @escaping (SideMenuItem) -> Void) -> some View {
-        SideMenuShell(isOpen: isOpen, onSelect: onSelect) {
+        SideMenuShell(ctl: ctl, onSelect: onSelect) {
             self
         }
     }

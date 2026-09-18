@@ -1,0 +1,2 @@
+# 双击运行的 bat：CRLF 换行、GBK 编码，git 一个字节都别动（见 scripts/agent-bridge/启动新桥.bat 开头）
+*.bat -text

@@ -17,7 +17,8 @@ struct ChatView: View {
     @ObservedObject private var keyboard = KeyboardWatcher.shared
 
     @State private var drawerOpen = false
-    @State private var sideOpen = false
+    /// 侧栏开关。⚠️ 存的是**引用**、聊天页不订阅它——见 `SideMenuController`
+    @State private var side = SideMenuController()
     @State private var destination: SideMenuItem?
     @State private var showingSearch = false
     /// 输入框里的字。
@@ -416,7 +417,7 @@ struct ChatView: View {
         .simultaneousGesture(
             DragGesture(minimumDistance: 12)
                 .onEnded { v in
-                    guard showsSideMenu, !sideOpen, !drawerOpen else { return }
+                    guard showsSideMenu, !side.isOpen, !drawerOpen else { return }
                     // 她正拎着 clawd 往边上挪——那一下不是要开侧边栏
                     guard !ClawdStore.clawdHeld else { return }
                     // 屏幕左边**三分之一**起手都算。再窄下去就总是滑不出来。
@@ -430,7 +431,7 @@ struct ChatView: View {
                         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
                     }
                     withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
-                        sideOpen = true
+                        side.isOpen = true
                     }
                 }
         )
@@ -609,7 +610,7 @@ struct ChatView: View {
             Text(notice ?? "")
         }
         // 侧栏垫在整页下面。工坊那边 sideOpen 永远打不开，等于没有。
-        .sideMenuShell(isOpen: $sideOpen) { item in
+        .sideMenuShell(side) { item in
             destination = item
         }
     }
