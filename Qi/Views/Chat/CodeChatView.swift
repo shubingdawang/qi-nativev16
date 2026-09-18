@@ -302,7 +302,7 @@ struct CodeChatView: View {
 
     private var linkSheet: some View {
         NavigationStack {
-            Form {
+            QiForm {
                 Section {
                     TextField("http://192.168.x.x:8788", text: $link.host)
                         .textInputAutocapitalization(.never)
@@ -343,7 +343,7 @@ struct CodeSessionPicker: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            QiList {
                 Section {
                     Button {
                         onPick(nil); dismiss()

@@ -73,7 +73,7 @@ struct ClaudeImportView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            QiForm {
                 if convs.isEmpty {
                     Section {
                         Button {

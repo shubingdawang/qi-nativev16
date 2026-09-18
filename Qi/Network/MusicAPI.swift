@@ -569,6 +569,7 @@ final class MusicPlayer: NSObject, ObservableObject {
                 if let d = p.currentItem?.duration.seconds, d.isFinite, d > 0 {
                     self.duration = d
                 }
+                self.publishLyricLine()
             }
         }
 
@@ -710,7 +711,39 @@ final class MusicPlayer: NSObject, ObservableObject {
 
     private var remoteWired = false
 
+    /// 上一次写进锁屏的是第几句
+    private var shownLine: Int?
+
+    /// 锁屏、灵动岛上显示**当前这句歌词**。
+    ///
+    /// 她问的：「在 App 内播放音乐，在灵动岛和黑屏后的系统提示上没有显示歌词，这个能修吗？」
+    ///
+    /// ⚠️ 系统那块「正在播放」**没有歌词这一栏**，只有歌名、歌手、专辑、封面。
+    /// 国内音乐 App 的锁屏歌词都是同一个办法：**把当前这句写进「歌手」那一栏**，
+    /// 唱到下一句就换一次。歌手名挪到歌名后面，不丢。
+    /// 灵动岛展开时显示的也是这两栏，所以两处一起有了。
+    ///
+    /// 只在换句的时候写（一首歌几十次），不是每 0.3 秒写一次。
+    private func publishLyricLine() {
+        let i = currentLine
+        guard i != shownLine, let t = current else { return }
+        shownLine = i
+        var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+        if let i, lines.indices.contains(i) {
+            let text = lines[i].text.trimmingCharacters(in: .whitespaces)
+            info[MPMediaItemPropertyTitle] = t.artist.isEmpty ? t.title : t.title + " — " + t.artist
+            info[MPMediaItemPropertyArtist] = text.isEmpty ? "♪" : text
+        } else {
+            info[MPMediaItemPropertyTitle] = t.title
+            info[MPMediaItemPropertyArtist] = t.artist
+        }
+        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = progress
+        info[MPNowPlayingInfoPropertyPlaybackRate] = playing ? 1.0 : 0.0
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    }
+
     private func publishNowPlaying() {
+        shownLine = nil
         guard let t = current else {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
             return

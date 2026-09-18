@@ -182,7 +182,7 @@ struct MonopolyView: View {
 
     private var setupSheet: some View {
         NavigationStack {
-            Form {
+            QiForm {
                 Section("你") {
                     TextField("名字", text: $meName)
                     Picker("性别", selection: $meSex) { Text("女").tag("女"); Text("男").tag("男") }

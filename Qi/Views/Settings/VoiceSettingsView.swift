@@ -263,7 +263,7 @@ struct VoiceFormView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            QiForm {
                 Section("基本") {
                     TextField("名字（自己看的）", text: $voice.name)
                     SecureField("API Key", text: $voice.apiKey)

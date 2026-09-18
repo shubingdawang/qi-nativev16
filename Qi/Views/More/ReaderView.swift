@@ -310,7 +310,7 @@ struct ReaderView: View {
     /// 生词本那一页
     private var vocabSheet: some View {
         NavigationStack {
-            List {
+            QiList {
                 let list = store.vocab(for: bookID)
                 if list.isEmpty {
                     Text("尚无词条。在选句模式下点击句子两次，"
@@ -630,7 +630,8 @@ struct ReaderView: View {
 
     private var chapterList: some View {
         NavigationStack {
-            List(Array((book?.chapters ?? []).enumerated()), id: \.offset) { i, ch in
+            QiList {
+              ForEach(Array((book?.chapters ?? []).enumerated()), id: \.offset) { i, ch in
                 Button {
                     chapter = i
                     showChapters = false
@@ -648,6 +649,7 @@ struct ReaderView: View {
                         }
                     }
                 }
+              }
             }
             .navigationTitle("目录")
             .navigationBarTitleDisplayMode(.inline)

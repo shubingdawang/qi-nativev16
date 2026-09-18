@@ -67,12 +67,16 @@ enum NeteaseAccount {
 
     enum Fail: LocalizedError {
         case noCookie
+        case timedOut
         case server(Int, String)
 
         var errorDescription: String? {
             switch self {
             case .noCookie:
-                return "还没登网易云。「音乐」页 → 网易云账号，把 cookie 粘进去。"
+                return "还没登网易云。「音乐」页 → 网易云账号，把 MUSIC_U 粘进去。"
+            case .timedOut:
+                return "网易云那边一直没回话（试了两次）。开着梯子的话，多半是它把 music.163.com 绕到国外去了："
+                     + "把 music.163.com 设成直连、或者先关掉梯子再试。"
             case .server(let code, let msg):
                 if code == 301 || msg.contains("登录") {
                     return "网易云说要重新登录（\(code)）：cookie 过期了，去浏览器里重新复制一次。"
@@ -106,19 +110,38 @@ enum NeteaseAccount {
 
     // MARK: - 请求
 
-    /// 打一个网页接口。**一律 POST 表单**——这批接口 GET 有时给空。
+    /// 打一个网页接口。只读的走 GET，改东西（红心、改歌单）的走 POST 表单。
     private static func call(_ path: String, _ form: [String: String] = [:],
                              write: Bool = false) async throws -> [String: Any] {
+        // ⚠️ 她报的「请求超时」：电脑上同一个接口一秒多就回，手机上等满十五秒。
+        // 多半是手机上的梯子把 music.163.com 绕远了。等久一点、超时了再试一次，
+        // 两次都不行就直接说是网络那一段的事（见 `Fail.timedOut`），别让她以为是 cookie 错了
+        do {
+            return try await callOnce(path, form, write: write)
+        } catch let e as URLError where e.code == .timedOut || e.code == .networkConnectionLost {
+            do { return try await callOnce(path, form, write: write) }
+            catch let e2 as URLError where e2.code == .timedOut || e2.code == .networkConnectionLost {
+                throw Fail.timedOut
+            }
+        }
+    }
+
+    private static func callOnce(_ path: String, _ form: [String: String],
+                                 write: Bool) async throws -> [String: Any] {
         let cookie = Cookie.load()
         guard cookie.isSet else { throw Fail.noCookie }
 
         var q = URLComponents(string: "https://music.163.com" + path)!
+        var items: [URLQueryItem] = []
         if write, !cookie.csrf.isEmpty {
-            q.queryItems = [URLQueryItem(name: "csrf_token", value: cookie.csrf)]
+            items.append(URLQueryItem(name: "csrf_token", value: cookie.csrf))
         }
+        // 只读的走 GET（参数挂在网址上），改东西的才 POST 表单
+        if !write { items += form.map { URLQueryItem(name: $0.key, value: $0.value) } }
+        if !items.isEmpty { q.queryItems = items }
         var req = URLRequest(url: q.url!)
-        req.httpMethod = "POST"
-        req.timeoutInterval = 15
+        req.httpMethod = write ? "POST" : "GET"
+        req.timeoutInterval = 25
         req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         req.setValue("https://music.163.com", forHTTPHeaderField: "Referer")
         // ⚠️ `os=pc` 要带：不带的话每日推荐这类接口会当成网页游客，给空
@@ -128,9 +151,11 @@ enum NeteaseAccount {
                      + "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
                      forHTTPHeaderField: "User-Agent")
 
-        var body = URLComponents()
-        body.queryItems = form.map { URLQueryItem(name: $0.key, value: $0.value) }
-        req.httpBody = (body.percentEncodedQuery ?? "").data(using: .utf8)
+        if write {
+            var body = URLComponents()
+            body.queryItems = form.map { URLQueryItem(name: $0.key, value: $0.value) }
+            req.httpBody = (body.percentEncodedQuery ?? "").data(using: .utf8)
+        }
 
         let (data, _) = try await URLSession.shared.data(for: req)
         guard let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {

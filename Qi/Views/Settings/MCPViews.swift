@@ -150,7 +150,7 @@ struct MCPFormView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            QiForm {
                 Section("基本信息") {
                     TextField("名字（比如：小屋）", text: $server.name)
                     TextField("地址 https://…/mcp", text: $server.url)

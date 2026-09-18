@@ -6,7 +6,9 @@ import SwiftUI
 /// 这一页要让她一眼知道三件事：登没登上、登的是谁、cookie 过期了没有。
 struct NeteaseAccountView: View {
 
-    @State private var raw = ""
+    /// 两个框分开填（她说的：「不然我每次都要打标题，好麻烦」）
+    @State private var musicU = ""
+    @State private var csrf = ""
     @State private var cookie = NeteaseAccount.Cookie.load()
     @State private var who: String?
     @State private var daily: [NeteaseAccount.Song] = []
@@ -15,7 +17,7 @@ struct NeteaseAccountView: View {
     @State private var loading = false
 
     var body: some View {
-        Form {
+        QiForm {
             Section {
                 if cookie.isSet {
                     HStack {
@@ -29,26 +31,42 @@ struct NeteaseAccountView: View {
                         .font(.footnote)
                     }
                 }
-                TextField("粘贴 cookie（整段，或只粘 MUSIC_U 的值）", text: $raw, axis: .vertical)
-                    .lineLimit(2...5)
+                // 只粘值就行，不用写「MUSIC_U=」；整段 cookie 粘进第一个框也认得出来
+                TextField(cookie.musicU.isEmpty ? "MUSIC_U" : "MUSIC_U（已填，要换就粘新的）",
+                          text: $musicU, axis: .vertical)
+                    .lineLimit(1...4)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                TextField(cookie.csrf.isEmpty ? "__csrf" : "__csrf（已填，要换就粘新的）", text: $csrf)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 Button("存下并确认") {
-                    var c = NeteaseAccount.Cookie.parse(raw)
-                    // 只粘了 MUSIC_U 的时候，别把之前填过的 __csrf 冲掉
-                    if c.csrf.isEmpty { c.csrf = cookie.csrf }
+                    var c = cookie
+                    let u = musicU.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if u.contains("=") {
+                        // 整段 cookie 粘进来了：两样都从里面取
+                        let parsed = NeteaseAccount.Cookie.parse(u)
+                        if !parsed.musicU.isEmpty { c.musicU = parsed.musicU }
+                        if !parsed.csrf.isEmpty { c.csrf = parsed.csrf }
+                    } else if !u.isEmpty {
+                        c.musicU = u
+                    }
+                    let k = csrf.trimmingCharacters(in: .whitespacesAndNewlines)
+                        .replacingOccurrences(of: "__csrf=", with: "")
+                    if !k.isEmpty { c.csrf = k }
                     cookie = c
                     cookie.save()
-                    raw = ""
+                    musicU = ""; csrf = ""
                     Task { await refresh() }
                 }
-                .disabled(raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(musicU.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                          && csrf.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             } header: {
                 Text("网易云账号")
             } footer: {
-                Text("电脑浏览器登录 music.163.com → 按 F12 → 应用程序（Application）→ Cookie → "
-                     + "复制 MUSIC_U 和 __csrf 两项，写成「MUSIC_U=…; __csrf=…」粘进来。"
-                     + "只存在本机，不进备份。__csrf 过期后红心、改歌单会失败，重新复制一次即可。")
+                Text("电脑浏览器登录 music.163.com → 按 F12 → 应用程序（Application）→ Cookie，"
+                     + "把 MUSIC_U 和 __csrf 两项的值分别粘进上面两个框。"
+                     + "只存在本机，不进备份。__csrf 过期后红心、改歌单会失败，只换第二个框即可。")
             }
 
             if let why {

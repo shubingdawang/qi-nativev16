@@ -291,9 +291,8 @@ struct NowPlayingView: View {
                     Text(player.repeatMode.label)
                         .font(.app(11))
                 }
-                .foregroundStyle(player.repeatMode == .off
-                                 ? Theme.textMuted(scheme)
-                                 : app.settings.accentColor)
+                // 跟她设的字色走（她说原来的灰色在壁纸上看不清）
+                .foregroundStyle(Theme.textMain(scheme))
                 .padding(.horizontal, 11)
                 .padding(.vertical, 6)
                 .background(Capsule().fill(Theme.softFillDeep))

@@ -58,14 +58,37 @@ final class ScreenPeek: ObservableObject {
         sharing = UserDefaults.standard.bool(forKey: "screenPeekSharing")
         let m = UserDefaults.standard.double(forKey: "screenPeekStale")
         staleMinutes = m > 0 ? m : 10
+        // 先把栖自己那个文件夹建出来，「文件」App 里才找得到它（见 `ownFolder`）
+        _ = Self.ownFolder
     }
 
     /// 他现在到底能不能看。看不了的时候，**说清楚是哪一环没开**——
     /// 只回一句「看不了」的话，她不知道该去点哪儿。
     /// 返回 nil 表示能看。
+    /// 栖自己的那个文件夹：「文件」App → 我的 iPhone → 栖 → 给他看的屏幕。
+    ///
+    /// ⚠️ 她报的：「让他看屏幕选择文件后点击『打开』没反应。」——挑文件夹那一步
+    /// 修过一次还是卡（有的位置系统就是不肯把整个文件夹交给别的 App）。
+    /// 所以多给一条**不用挑**的路：快捷指令直接存进栖自己的文件夹，
+    /// 这里本来就是我们的地盘，不用书签、不用授权。挑了文件夹的以挑的为准。
+    static var ownFolder: URL {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let dir = docs.appendingPathComponent("给他看的屏幕", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        return dir
+    }
+
+    /// 栖自己那个文件夹里有没有截图
+    private var ownFolderHasShots: Bool {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: Self.ownFolder.path)) ?? []
+        return names.contains { ["png", "jpg", "jpeg", "heic"].contains(($0 as NSString).pathExtension.lowercased()) }
+    }
+
     func blockedReason() -> String? {
         // 开着屏幕广播就不用那个文件夹（见 `liveShot`）
-        if bookmark == nil && cachedFrame() == nil {
+        if bookmark == nil && cachedFrame() == nil && !ownFolderHasShots {
             return "她还没配这个。（设置 → 手机 → 让他看屏幕）"
         }
         if !sharing {
@@ -74,7 +97,7 @@ final class ScreenPeek: ObservableObject {
         return nil
     }
 
-    var ready: Bool { bookmark != nil || cachedFrame() != nil }
+    var ready: Bool { bookmark != nil || cachedFrame() != nil || ownFolderHasShots }
 
     /// 屏幕广播交过来的最新一帧（见 `QiBroadcast/SampleHandler.swift`）。
     ///
@@ -148,14 +171,20 @@ final class ScreenPeek: ObservableObject {
     /// 磁盘修改时间——n 个文件就是 2n 次 `resourceValues`，全在主线程上。
     /// 现在一次遍历、每个文件只取一次值。
     private func newest() -> (url: URL, at: Date)? {
-        guard let bookmark else { return nil }
-        var stale = false
-        guard let dir = try? URL(resolvingBookmarkData: bookmark,
-                                 options: [], relativeTo: nil,
-                                 bookmarkDataIsStale: &stale)
-        else {
-            lastError = "那个文件夹找不到了，重新选一次"
-            return nil
+        // 没挑文件夹就读栖自己那个（见 `ownFolder`）
+        let dir: URL
+        if let bookmark {
+            var stale = false
+            guard let d = try? URL(resolvingBookmarkData: bookmark,
+                                   options: [], relativeTo: nil,
+                                   bookmarkDataIsStale: &stale)
+            else {
+                lastError = "那个文件夹找不到了，重新选一次"
+                return nil
+            }
+            dir = d
+        } else {
+            dir = Self.ownFolder
         }
 
         let granted = dir.startAccessingSecurityScopedResource()
@@ -225,7 +254,7 @@ final class ScreenPeek: ObservableObject {
             lastError = nil
             return (shot, nil)
         }
-        if bookmark == nil {
+        if bookmark == nil && !ownFolderHasShots {
             return (nil, "屏幕广播没开，最近 \(Int(staleMinutes)) 分钟里也没有新的一帧。")
         }
         // ⚠️ **先按文件时间判过期，再决定要不要解码。**

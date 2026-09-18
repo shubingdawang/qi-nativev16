@@ -250,6 +250,42 @@ extension View {
     }
 }
 
+/// 跟着 App 主题走的 Form：壁纸透上来、每一行一块玻璃、导航栏透明。
+///
+/// 她报的：「基本上每个会打开第二个页面的功能，基本都是默认系统主题，一次性修改了吧。」
+/// 那些页面写的是裸 `Form { }` / `List { }`——系统那张灰底、系统那种行底，
+/// 跟 App 别的页面（壁纸 + 玻璃卡）一看就不是一家的。
+///
+/// ⚠️ **新写的表单一律用这两个，别再写裸的 `Form` / `List`。**
+/// 行底是挂在外面那层 `Group` 上的：它会传给里面每一个 Section 的每一行，
+/// 某一行自己另挂了 `listRowBackground` 的，以它自己的为准。
+struct QiForm<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        Form {
+            Group { content }
+                .listRowBackground(GlassRowBackground())
+        }
+        .transparentList()
+        .toolbarBackground(.hidden, for: .navigationBar)
+    }
+}
+
+/// 同上，List 版
+struct QiList<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        List {
+            Group { content }
+                .listRowBackground(GlassRowBackground())
+        }
+        .transparentList()
+        .toolbarBackground(.hidden, for: .navigationBar)
+    }
+}
+
 /// List 里每一行的磨砂底
 struct GlassRowBackground: View {
     @EnvironmentObject private var app: AppState
