@@ -145,6 +145,9 @@ final class ToolMount {
     ///
     /// `context` 是这一轮真要发出去的消息，只从里面读 system 和 tool 两种
     /// ——看提示里有没有点某件工具的名字。
+    /// 一窗里挂过的组（见 `activeGroups` 第 ⑥ 条）。键是「对话 id|压到哪一条」
+    private var sticky: [String: Set<String>] = [:]
+
     func activeGroups(conversation conv: Conversation,
                       context: [ChatAPI.OutgoingMessage]) -> Set<String> {
         var on = Set<String>()
@@ -190,6 +193,22 @@ final class ToolMount {
                 on.insert(g)
             }
         }
+
+        // ⑥ ⚠️⚠️ **挂上了就不摘，一直到这一窗下次滚雪球。**
+        //
+        // 她报的「缓存命中率是 0」，上游站长的话：「状态、时间、世界书这些动态内容
+        // 都会破坏创建的缓存，导致新一轮不会命中。」——工具表就是最大的那块动态内容：
+        // Anthropic 缓存的前缀顺序是**工具 → 系统 → 历史**，工具表差一件，后面整段作废。
+        // 以前按「最近八条提没提到」挂和摘，聊着聊着工具表每隔几句就换一次，
+        // 于是几乎每一轮都从头算。
+        //
+        // 现在只增不减：一窗里工具表只会偶尔**多**几组（多一次就重来一次），
+        // 不会来回抖。压缩那一下本来就会让历史整段重来，趁那时候重新从零算。
+        let key = conv.id.uuidString + "|" + (conv.digest?.throughID?.uuidString ?? "")
+        let before = sticky[key] ?? []
+        on.formUnion(before)
+        sticky = sticky.filter { !$0.key.hasPrefix(conv.id.uuidString + "|") || $0.key == key }
+        sticky[key] = on
         return on
     }
 

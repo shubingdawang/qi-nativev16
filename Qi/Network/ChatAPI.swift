@@ -530,7 +530,9 @@ enum ChatAPI {
             body["reasoning"] = ["max_tokens": 2048]
             body["reasoning_effort"] = "medium"
         }
-        return try JSONSerialization.data(withJSONObject: body)
+        // ⚠️ 键**排好序**再发。字典转 JSON 的顺序不固定（App 每次重启都可能换），
+        // 而缓存认的是一字不差的前缀——工具说明里两个键换个位置，整段前缀就对不上了
+        return try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
     }
 
     // MARK: 拉模型列表

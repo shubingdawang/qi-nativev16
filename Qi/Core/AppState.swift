@@ -7501,7 +7501,16 @@ final class AppState: ObservableObject {
             history = Array(history.suffix(cap))
         } else if historyCap == nil,
                   settings.contextLimit > 0, history.count > settings.contextLimit {
-            history = Array(history.suffix(settings.contextLimit))
+            // ⚠️ **一截一截地砍，不一条一条地挤。**
+            //
+            // 按条数封顶的话，超了之后她每说一句，最老那条就被挤掉一条——
+            // 历史的开头每一轮都在变，缓存认的是前缀，于是历史那块轮轮不中。
+            // 改成超了就一口气砍掉 20 条的整数倍：切口只在每二十条挪一次，
+            // 中间那十九轮前缀一字不差，全都能命中。
+            let step = 20
+            let over = history.count - settings.contextLimit
+            let drop = min(history.count - 1, ((over + step - 1) / step) * step)
+            history = Array(history.dropFirst(drop))
         }
         // 每张图的号：从最后一条往回数，#1 是最新那张。
         // 一条里有好几张的话，最后一张更"新"，所以那条里从左到右是倒着数的。
