@@ -887,7 +887,7 @@ enum ClawdSprites {
         "...................................."
     ], palette)
 
-    /// 想得更凶：小方块换个位置，看着像在冒
+    /// 想得更凶：眼睛往右瞟一格（以前这一帧漏画了眼睛，戴着帽子在想的时候眼睛一闪一闪没了）
     static let thinking2 = PixelSprite([
         "....................................",
         "....................................",
@@ -907,10 +907,10 @@ enum ClawdSprites {
         "......pppppppppppppppppppppp........",
         "......pppppppppppppppppppppp........",
         "......pppppppppppppppppppppp........",
-        "......pppppppppppppppppppppp........",
-        "......pppppppppppppppppppppp........",
-        "..pppppppppppppppppppppppppppppp....",
-        "..pppppppppppppppppppppppppppppp....",
+        "......pppppkkppppppppppkkppp........",
+        "......pppppkkppppppppppkkppp........",
+        "..pppppppppkkppppppppppkkppppppp....",
+        "..pppppppppkkppppppppppkkppppppp....",
         "..pppppppppppppppppppppppppppppp....",
         "..pppppppppppppppppppppppppppppp....",
         "......pppppppppppppppppppppp........",

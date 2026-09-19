@@ -311,15 +311,25 @@ enum MD {
         return plain(raw)
     }
 
+    /// 解析过的记下来。他回话的时候整屏气泡一秒重画好几次，
+    /// 每次都把每个气泡的 Markdown 从头解析一遍——那几十条字没变，白算
+    private final class Parsed { let v: AttributedString; init(_ v: AttributedString) { self.v = v } }
+    private static let parsedCache: NSCache<NSString, Parsed> = {
+        let c = NSCache<NSString, Parsed>()
+        c.countLimit = 1500
+        return c
+    }()
+
     private static func plain(_ raw: String) -> AttributedString {
+        let key = raw as NSString
+        if let hit = parsedCache.object(forKey: key) { return hit.v }
         // 保留原有换行，只解析行内格式
-        if let parsed = try? AttributedString(
+        let out = (try? AttributedString(
             markdown: raw,
             options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        ) {
-            return parsed
-        }
-        return AttributedString(raw)
+        )) ?? AttributedString(raw)
+        parsedCache.setObject(Parsed(out), forKey: key)
+        return out
     }
 }
 

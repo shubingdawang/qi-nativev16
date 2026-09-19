@@ -44,11 +44,13 @@ struct ProcessSheet: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dismiss) private var dismiss
 
-    /// 展开的是哪一条。`nil` = 都收着。
-    ///
-    /// ⚠️ 一次只开一条：同时开两条的话又变回「一屏全是字」，
-    /// 那就绕回她要解决的那个问题了。
-    @State private var open: String?
+    /// 展开了哪几条。可以同时开好几条（要对照前后两段的时候）。
+    @State private var open: Set<String> = []
+
+    /// 每一段的译文（按那一步的 id）。只在这张弹窗里，关了就没了——
+    /// 原文一直在，译文是看的时候临时翻的。
+    @State private var translated: [String: String] = [:]
+    @State private var translating: Set<String> = []
 
     /// 开多高。
     ///
@@ -80,11 +82,6 @@ struct ProcessSheet: View {
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("关上") { dismiss() }
-                }
-            }
         }
         .presentationDetents([.fraction(0.4), .large], selection: $height)
         .presentationDragIndicator(.visible)
@@ -210,7 +207,7 @@ struct ProcessSheet: View {
     /// 一加边框就断成一张张卡了。
     @ViewBuilder
     private func row(_ s: Step, isLast: Bool) -> some View {
-        let isOpen = open == s.id
+        let isOpen = open.contains(s.id)
         HStack(alignment: .top, spacing: 11) {
             // 左边一栏：记号 + 往下那根线
             VStack(spacing: 0) {
@@ -240,7 +237,7 @@ struct ProcessSheet: View {
             VStack(alignment: .leading, spacing: 4) {
                 Button {
                     withAnimation(.easeOut(duration: 0.18)) {
-                        open = isOpen ? nil : s.id
+                        if isOpen { open.remove(s.id) } else { open.insert(s.id) }
                     }
                 } label: {
                     HStack(alignment: .firstTextBaseline, spacing: 5) {
@@ -276,6 +273,7 @@ struct ProcessSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                    translation(s)
                 } else {
                     Text(MD.inline(oneLine(s.body)))
                         .font(.app(11))
@@ -286,6 +284,66 @@ struct ProcessSheet: View {
             .padding(.bottom, 16)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .contextMenu {
+            Button { translate(s) } label: {
+                Label(translated[s.id] == nil ? "翻译" : "重新翻",
+                      systemImage: "character.book.closed")
+            }
+            if translated[s.id] != nil {
+                Button { translated[s.id] = nil } label: {
+                    Label("收起译文", systemImage: "chevron.up")
+                }
+            }
+            Button { UIPasteboard.general.string = s.body } label: {
+                Label("拷贝", systemImage: "doc.on.doc")
+            }
+        }
+    }
+
+    /// 展开之后原文底下那一块：译文，或者「翻成中文」按钮。
+    /// 只给思考那几段摆按钮（工具的参数和结果本来就是中文居多）；长按哪一条都能翻。
+    @ViewBuilder
+    private func translation(_ s: Step) -> some View {
+        if translating.contains(s.id) {
+            Text("在翻…")
+                .font(.app(10.5))
+                .foregroundStyle(Theme.textMuted(scheme))
+        } else if let t = translated[s.id], !t.isEmpty {
+            HStack(alignment: .top, spacing: 6) {
+                Capsule()
+                    .fill(app.settings.accentColor.opacity(0.4))
+                    .frame(width: 2)
+                Text(MD.inline(t))
+                    .font(.app(12))
+                    .foregroundStyle(Theme.textSoft(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+        } else if s.icon == nil, !Translator.looksChinese(s.body) {
+            Button { translate(s) } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "character.book.closed").font(.app(9))
+                    Text("翻成中文").font(.app(9.5))
+                }
+                .foregroundStyle(app.settings.accentColor)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(Theme.softFillDeep))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func translate(_ s: Step) {
+        guard !translating.contains(s.id) else { return }
+        translating.insert(s.id)
+        // 长按翻的时候那一条可能还收着：顺手展开，不然译文看不见
+        open.insert(s.id)
+        Task { @MainActor in
+            let out = await app.translateText(s.body)
+            translated[s.id] = out.trimmingCharacters(in: .whitespacesAndNewlines)
+            translating.remove(s.id)
+        }
     }
 
     /// 工具那一条展开之后看到的：参数在上，结果在下。

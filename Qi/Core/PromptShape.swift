@@ -103,6 +103,8 @@ struct PromptShape {
             stable += TokenGuess.of(m.stablePrefix)
             dynamic += TokenGuess.of(m.text)
         }
+        // 此刻现场挂在最新那条 user 前面，也算「每轮在变」
+        for m in messages where !m.live.isEmpty { dynamic += TokenGuess.of(m.live) }
         if stable > 0 {
             out.blocks.append(.init(
                 name: "身份·规矩·能力·表情目录",

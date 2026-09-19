@@ -340,7 +340,19 @@ enum MemoryTools {
     static func run(_ name: String, args: [String: Any]) -> (text: String, failed: Bool) {
         let m = MemoryStore.shared
 
-        func s(_ k: String) -> String { (args[k] as? String) ?? "" }
+        // 参数名写岔了也认：小屋那份 checkpoint 用的是 note，他两边都见过，
+        // 常把 note 塞进本机这份（要的是 text）→ 以前直接报「要记的东西是空的」
+        let aliases: [String: [String]] = [
+            "text": ["note", "content", "summary", "body", "message", "memory"],
+            "content": ["text", "note", "body", "memory"],
+        ]
+        func s(_ k: String) -> String {
+            if let v = args[k] as? String, !v.isEmpty { return v }
+            for a in aliases[k] ?? [] {
+                if let v = args[a] as? String, !v.isEmpty { return v }
+            }
+            return ""
+        }
         func i(_ k: String, _ d: Int) -> Int {
             (args[k] as? Int) ?? (args[k] as? Double).map(Int.init) ?? d
         }

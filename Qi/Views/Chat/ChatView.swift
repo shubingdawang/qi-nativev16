@@ -1939,6 +1939,8 @@ struct MessageListView: View {
     var onJumped: () -> Void = {}
 
     @EnvironmentObject var app: AppState
+    /// 他正在蹦的字（见 `LiveStream`）。只有这一块订阅它，蹦字不惊动别的页面
+    @ObservedObject private var live = LiveStream.shared
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var scheme
     /// 离底还远不远。**只记一个布尔**，理由见下面那个 onScrollGeometryChange。
@@ -1961,7 +1963,8 @@ struct MessageListView: View {
                     if conversation.messages.isEmpty {
                         emptyHint.padding(.top, 100)
                     }
-                    ForEach(Array(conversation.messages.enumerated()), id: \.element.id) { index, message in
+                    ForEach(Array(conversation.messages.enumerated()), id: \.element.id) { index, stored in
+                        let message = live.merged(stored)
                         // 换天了就横一道。以前一整条时间线是连着的，
                         // 昨晚睡前那句和今早第一句挨在一起，看着像同一段话。
                         if let day = daybreak(at: index) {
@@ -1994,7 +1997,7 @@ struct MessageListView: View {
                     // 他开始回、但一个字还没出来的那几秒，别让屏幕空着——
                     // 那几秒最容易让人以为是断了
                     if running,
-                       let last = conversation.messages.last,
+                       let last = conversation.messages.last.map(live.merged),
                        last.role != .assistant
                         || (last.content.isEmpty && last.toolRuns.isEmpty
                             && (last.reasoning ?? "").isEmpty) {
@@ -2086,6 +2089,9 @@ struct MessageListView: View {
             }
             // 正文、思考链、工具调用，只要有一样在往外冒字，就跟着滚
             .onChange(of: conversation.scrollTick) { _, _ in
+                proxy.scrollTo("__bottom", anchor: .bottom)
+            }
+            .onChange(of: live.tick) { _, _ in
                 proxy.scrollTo("__bottom", anchor: .bottom)
             }
             .onChange(of: conversation.messages.count) { _, _ in

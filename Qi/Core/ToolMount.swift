@@ -180,8 +180,8 @@ final class ToolMount {
 
         // ④ 提示和工具返回里点了名
         let cues = context
-            .filter { $0.role == "system" || $0.role == "tool" }
-            .map { $0.stablePrefix + $0.text }
+            .filter { $0.role == "system" || $0.role == "tool" || !$0.live.isEmpty }
+            .map { $0.role == "user" ? $0.live : $0.stablePrefix + $0.text + $0.live }
             .joined(separator: "\n")
         for (tool, g) in Self.groupOf where !on.contains(g) && cues.contains(tool) {
             on.insert(g)

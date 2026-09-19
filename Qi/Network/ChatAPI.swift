@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 /// 负责跟 OpenAI 兼容接口打交道：把请求发出去，
 /// 把服务器一个字一个字吐回来的内容，变成能 for await 逐段消费的流。
@@ -21,6 +22,12 @@ enum ChatAPI {
         /// 只有系统提示会用到它。给它单独立一块，是为了把缓存标记
         /// 打在**它的末尾**而不是整条的末尾——理由见 `buildBody`。
         var stablePrefix: String = ""
+        /// 摆在这条**前面**的「此刻现场」（心跳、身体、此刻、节日……每轮在变的那些）。
+        ///
+        /// 只挂在最新那条 user 上。它以前住在系统提示的尾巴上——
+        /// 系统提示排在整段历史**前面**，它一变，后面整段历史的缓存就全作废，
+        /// 历史那个断点于是轮轮落空。挪到最后一条前面，前面的一字不差，才命中得了。
+        var live: String = ""
         var imageDataURLs: [String] = []
         /// assistant 这轮发起的工具调用
         var toolCalls: [ToolCallPayload] = []
@@ -73,7 +80,8 @@ enum ChatAPI {
         model: String,
         messages: [OutgoingMessage],
         tools: [[String: Any]] = [],
-        claudeSession: String? = nil
+        claudeSession: String? = nil,
+        cacheScope: String? = nil
     ) -> AsyncThrowingStream<StreamEvent, Error> {
 
         AsyncThrowingStream { continuation in
@@ -97,12 +105,19 @@ enum ChatAPI {
                             request.setValue("Bearer \(apiKey)",
                                              forHTTPHeaderField: "Authorization")
                         }
+                        // 同一窗每次都报同一个会话号。Claude Code 那类中转按会话号分账号，
+                        // 每次换一个（或者不报）就可能落到另一个账号上——缓存在 A 账号，
+                        // 这一轮去了 B，只写不读。她那天「缓存写入 0、命中 0%」多半就是这个
+                        if let scope = Self.scopeID(cacheScope) {
+                            request.setValue(scope, forHTTPHeaderField: "X-Claude-Code-Session-Id")
+                        }
                         // 名字不叫 payload：底下那个 SSE 循环里已经有一个 payload
                         // （每行 data: 后面那段），撞名字读起来会以为是同一个东西
                         let bodyData = try buildBody(model: model, messages: messages,
                                                      tools: tools,
                                                      wantThinking: wantThinking,
-                                                     claudeSession: claudeSession)
+                                                     claudeSession: claudeSession,
+                                                     cacheScope: wantThinking ? cacheScope : nil)
                         request.httpBody = bodyData
 
                         // 终端那一页。**只记不发**——一条都不会进提示词。
@@ -333,7 +348,7 @@ enum ChatAPI {
     static func isThinkingRejection(_ code: Int, _ body: String) -> Bool {
         guard code == 400 || code == 422 else { return false }
         let t = body.lowercased()
-        for key in ["thinking", "reasoning_effort", "reasoning"] where t.contains(key) {
+        for key in ["thinking", "reasoning_effort", "reasoning", "metadata"] where t.contains(key) {
             return true
         }
         // 有些中转只回一句「不支持的参数」，不说是哪个
@@ -371,12 +386,30 @@ enum ChatAPI {
     /// 那就退回五分钟那档，跟改之前一模一样，不会报错。
     static let cacheMark: [String: Any] = ["type": "ephemeral", "ttl": "1h"]
 
+    /// 一窗一个固定的会话号（同一窗永远同一个，换窗才换）
+    static func scopeID(_ scope: String?) -> String? {
+        guard let scope, !scope.isEmpty else { return nil }
+        let h = SHA256.hash(data: Data(("qi-cache-scope:" + scope).utf8))
+        let hex = h.map { String(format: "%02x", $0) }.joined()
+        let c = Array(hex)
+        func seg(_ a: Int, _ b: Int) -> String { String(c[a..<b]) }
+        return [seg(0, 8), seg(8, 12), seg(12, 16), seg(16, 20), seg(20, 32)].joined(separator: "-")
+    }
+
+    /// Claude Code 那套 `metadata.user_id` 的写法：user_<哈希>_account__session_<会话号>
+    static func claudeCodeUserID(_ scope: String) -> String {
+        let h = SHA256.hash(data: Data("qi-app-user".utf8))
+        let hex = h.map { String(format: "%02x", $0) }.joined()
+        return "user_" + hex + "_account__session_" + scope
+    }
+
     private static func buildBody(
         model: String,
         messages: [OutgoingMessage],
         tools: [[String: Any]],
         wantThinking: Bool,
-        claudeSession: String? = nil
+        claudeSession: String? = nil,
+        cacheScope: String? = nil
     ) throws -> Data {
 
         var payload: [[String: Any]] = []
@@ -456,19 +489,25 @@ enum ChatAPI {
             // 这条自己带了稳定前缀：摊成两块，标记打在第一块末尾。
             // 后面那块（每轮在变的）照样发，只是不进缓存。
             if !m.stablePrefix.isEmpty {
-                item["content"] = [
+                var parts: [[String: Any]] = [
                     ["type": "text", "text": m.stablePrefix,
-                     "cache_control": cacheMark] as [String: Any],
-                    ["type": "text", "text": m.text] as [String: Any]
+                     "cache_control": cacheMark] as [String: Any]
                 ]
+                // 空的文字块有的上游直接 400，没有就不摆
+                if !m.text.isEmpty {
+                    parts.append(["type": "text", "text": m.text] as [String: Any])
+                }
+                item["content"] = parts
                 payload.append(item)
                 continue
             }
 
-            if m.imageDataURLs.isEmpty {
+            if m.imageDataURLs.isEmpty && m.live.isEmpty {
                 item["content"] = m.text
             } else {
                 var parts: [[String: Any]] = []
+                // 此刻现场单独一块摆在最前面，她那句话原样跟在后面
+                if !m.live.isEmpty { parts.append(["type": "text", "text": m.live]) }
                 if !m.text.isEmpty { parts.append(["type": "text", "text": m.text]) }
                 for url in m.imageDataURLs {
                     parts.append(["type": "image_url", "image_url": ["url": url]])
@@ -506,6 +545,11 @@ enum ChatAPI {
         // 新桥认这个键：接着电脑上指定的那个窗口说（见 `AgentBridge.pinned`）。别的供应商不认，当多余的键忽略
         if let claudeSession, !claudeSession.isEmpty {
             body["claude_session"] = claudeSession
+        }
+        // 会话号也写进请求体：有的中转只看 metadata.user_id 分账号。
+        // 不认的中转报 400 的话，跟思考参数一起脱掉重发（见 `isThinkingRejection`）
+        if let scope = scopeID(cacheScope) {
+            body["metadata"] = ["user_id": claudeCodeUserID(scope)]
         }
 
         // ⚠️⚠️ **要思考过程得自己开口要。**

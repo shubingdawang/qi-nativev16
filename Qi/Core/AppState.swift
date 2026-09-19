@@ -81,6 +81,21 @@ final class AppState: ObservableObject {
     @Published var runningConversationIDs: Set<UUID> = []
 
     private var streamTasks: [UUID: Task<Void, Never>] = [:]
+    /// 重发之前他那一版说了什么。新那条一开出来就接过去当 ‹1/2› 的旧版
+    private var regenEdits: [UUID: [String]] = [:]
+
+    /// 要被重发顶掉的他那几条：老版本收起来，别直接扔
+    private func stashOldReply(_ msgs: ArraySlice<ChatMessage>, in conversationID: UUID) {
+        let his = msgs.filter { $0.role == .assistant && $0.errorText == nil }
+        let said = his.map(\.content)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
+        var older = his.first?.edits ?? []
+        if !said.isEmpty { older.append(said) }
+        if older.count > 10 { older.removeFirst(older.count - 10) }
+        regenEdits[conversationID] = older.isEmpty ? nil : older
+    }
     private var mcpClients: [UUID: MCPClient] = [:]
 
     /// 上一次真发出去的那份请求，分块量了一遍。见 `PromptShape`。
@@ -196,8 +211,12 @@ final class AppState: ObservableObject {
         }
         if pendingSaves.contains(key) { return }
         pendingSaves.insert(key)
+        // 他正在回话的时候，聊天记录那份几兆的 JSON 别每 0.4 秒编一次——
+        // 编码虽然在后台，照样抢 CPU，前台就一顿一顿的。说完那一下会再存
+        let wait: UInt64 = (key == "conversations" && !runningConversationIDs.isEmpty)
+            ? 3_000_000_000 : 400_000_000
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 400_000_000)
+            try? await Task.sleep(nanoseconds: wait)
             self.pendingSaves.remove(key)
             // ⚠️ **编码和写盘都挪到后台**（`saveAsync`）。
             //
@@ -1332,6 +1351,9 @@ final class AppState: ObservableObject {
     /// 重新生成最后一条回复
     func regenerate(_ conversationID: UUID) {
         guard let i = index(of: conversationID) else { return }
+        let firstHis = conversations[i].messages.lastIndex { $0.role != .assistant }
+            .map { $0 + 1 } ?? 0
+        stashOldReply(conversations[i].messages[firstHis...], in: conversationID)
         while let last = conversations[i].messages.last, last.role == .assistant {
             conversations[i].messages.removeLast()
         }
@@ -1354,6 +1376,10 @@ final class AppState: ObservableObject {
         let isUserMsg = conversations[i].messages[at].role == .user
         let cut = isUserMsg ? at + 1 : at
         guard cut <= conversations[i].messages.count else { return }
+        // 他那一版收进新那条的 ‹1/2› 里——她长按重发的是他，旧的也得翻得回去
+        let end = conversations[i].messages[cut...].firstIndex { $0.role == .user }
+            ?? conversations[i].messages.count
+        stashOldReply(conversations[i].messages[cut..<end], in: conversationID)
         conversations[i].messages.removeSubrange(cut...)
         runTurn(conversationID)
     }
@@ -1399,6 +1425,7 @@ final class AppState: ObservableObject {
         // 当成新一轮，又给他挂了一次头像和时间。
         let turn = UUID()
         placeholder.turnID = turn
+        placeholder.edits = regenEdits.removeValue(forKey: conversationID) ?? []
         activeToolTurnID = turn
         conversations[i].messages.append(placeholder)
         let assistantID = placeholder.id
@@ -1469,7 +1496,8 @@ final class AppState: ObservableObject {
                             tools: toolDefs,
                             // 新桥：她钉了电脑上哪个窗口就接着那个说
                             claudeSession: AgentBridge.isAgent(p)
-                                ? AgentBridge.pinned(conversationID) : nil
+                                ? AgentBridge.pinned(conversationID) : nil,
+                            cacheScope: conversationID.uuidString
                         )
 
                         for try await event in stream {
@@ -1604,38 +1632,54 @@ final class AppState: ObservableObject {
     ///
     /// ⚠️ **一定要在收尾那儿 `flushStream`**（正常结束、出错、取消三条路）。
     /// 不刷的话最后那几个字永远到不了屏幕上。
-    private static let streamFlush: TimeInterval = 0.08
+    ///
+    /// ⚠️ 现在平时刷的是 `LiveStream`，只惊动消息区，不再惊动全 App（见那个文件）。
+    /// 0.08 → 0.12：一秒八次看着照样是一个个蹦字，消息区少重画一截。
+    private static let streamFlush: TimeInterval = 0.12
 
+    // 灵动岛只在真写回去的时候推（见 `flushStream`）。以前每来一个字就推一次，
+    // 每次都要把这一窗几百条消息翻一遍找这一条
     private func appendContent(_ piece: String, to assistantID: UUID, in conversationID: UUID) {
         pendingText[assistantID, default: ""] += piece
         flushStream(assistantID, in: conversationID, force: false)
-        pushIsland(assistantID, in: conversationID)
     }
 
     private func appendReasoning(_ piece: String, to assistantID: UUID, in conversationID: UUID) {
         pendingReason[assistantID, default: ""] += piece
         flushStream(assistantID, in: conversationID, force: false)
-        pushIsland(assistantID, in: conversationID)
     }
 
     /// 把攒着的那几个字写回消息里。
     ///
     /// - Parameter force: 真的写，不看时间。收尾的时候传 true。
+    ///
+    /// ⚠️ 平时（`force == false`）只写进 `LiveStream`，**不碰 `conversations`**——
+    /// 碰一下全 App 都跟着重画（见 `LiveStream` 开头那段）。
+    /// `force == true`（要跑工具、说完、出错、按停止）才一次性写回来。
     func flushStream(_ assistantID: UUID, in conversationID: UUID, force: Bool) {
         let hasText = !(pendingText[assistantID] ?? "").isEmpty
         let hasReason = !(pendingReason[assistantID] ?? "").isEmpty
-        guard hasText || hasReason else { return }
         if !force {
+            guard hasText || hasReason else { return }
             let last = flushAt[assistantID] ?? .distantPast
             guard Date().timeIntervalSince(last) >= Self.streamFlush else { return }
+            flushAt[assistantID] = Date()
+            LiveStream.shared.add(assistantID,
+                                  text: pendingText.removeValue(forKey: assistantID) ?? "",
+                                  reason: pendingReason.removeValue(forKey: assistantID) ?? "")
+            pushIsland(assistantID, in: conversationID)
+            return
         }
+        let live = LiveStream.shared.take(assistantID)
+        let t = live.text + (pendingText.removeValue(forKey: assistantID) ?? "")
+        let r = live.reason + (pendingReason.removeValue(forKey: assistantID) ?? "")
+        guard !t.isEmpty || !r.isEmpty else { return }
         flushAt[assistantID] = Date()
-        let t = pendingText.removeValue(forKey: assistantID) ?? ""
-        let r = pendingReason.removeValue(forKey: assistantID) ?? ""
         withAssistant(assistantID, in: conversationID) {
             if !t.isEmpty { $0.content += t }
             if !r.isEmpty { $0.reasoning = ($0.reasoning ?? "") + r }
         }
+        pushIsland(assistantID, in: conversationID)
     }
 
     /// 把攒着的那几个字**丢掉不写**。
@@ -1644,6 +1688,7 @@ final class AppState: ObservableObject {
         pendingText[assistantID] = nil
         pendingReason[assistantID] = nil
         flushAt[assistantID] = nil
+        LiveStream.shared.drop(assistantID)
     }
 
     /// 这一轮完了（不管怎么完的），把攒着的那几个字清干净。
@@ -1660,8 +1705,10 @@ final class AppState: ObservableObject {
     /// 不在这儿判，免得这条热路径上多一份状态要维护。
     private func pushIsland(_ assistantID: UUID, in conversationID: UUID) {
         let state = presence(in: conversationID)
+        // 倒着找：正在说的那条就在最后面，从头翻几百条是白翻
         let text = conversation(conversationID)?.messages
-            .first(where: { $0.id == assistantID })?.content ?? ""
+            .last(where: { $0.id == assistantID })
+            .map { LiveStream.shared.merged($0).content } ?? ""
         IslandController.shared.update(activity: state.text,
                                        preview: text,
                                        conversationID: conversationID)
@@ -2311,8 +2358,9 @@ final class AppState: ObservableObject {
         guard runningConversationIDs.contains(id) else { return ("正与你同频", false) }
 
         guard let conv = conversation(id),
-              let last = conv.messages.last, last.role == .assistant
+              let raw = conv.messages.last, raw.role == .assistant
         else { return ("正在回你", true) }
+        let last = LiveStream.shared.merged(raw)
 
         // 看最近一次动的是哪类工具
         if let run = last.toolRuns.last {
@@ -4440,6 +4488,14 @@ final class AppState: ObservableObject {
     }
 
     /// 免费那两条都不通时的退路
+    /// 一段字翻成中文，不落到哪条消息上（思考链弹窗里一段一段翻用这个）。
+    /// 跟 `translate` 同一个顺序：本来是中文 → 免费的 → 最后才用模型。
+    func translateText(_ source: String) async -> String {
+        if Translator.looksChinese(source) { return source }
+        if let free = await Translator.free(source) { return free }
+        return await translateWithModel(source)
+    }
+
     private func translateWithModel(_ source: String) async -> String {
         // 杂活统一走 helperReach（她可以在设置里指定跑杂活的模型）
         guard let reach = helperReach() else { return "翻不出来，网也不通、模型也没配" }
@@ -6554,6 +6610,22 @@ final class AppState: ObservableObject {
                     }
                 }
             }
+            // 这一窗没有就去别的窗口找（search_window 也会翻别的窗口，两边得对得上）
+            if picked == nil, !kw.isEmpty {
+                let here = activeToolConversationID ?? activeID(for: .chat)
+                outer: for c in conversations.sorted(by: { $0.updatedAt > $1.updatedAt })
+                where c.id != here {
+                    for m in c.messages.reversed()
+                    where m.role == .user && !m.imageNames.isEmpty {
+                        let hay = m.imageNote + "\n" + m.content
+                        if hay.localizedCaseInsensitiveContains(kw), let n = m.imageNames.last {
+                            picked = (n, m.imageNote.isEmpty ? m.content : m.imageNote,
+                                      m.createdAt)
+                            break outer
+                        }
+                    }
+                }
+            }
             guard let shot = picked else {
                 return (kw.isEmpty && idx <= 0
                         ? "要看哪张？给个 keyword 或者 index。"
@@ -6589,8 +6661,33 @@ final class AppState: ObservableObject {
             guard let cid = activeToolConversationID ?? activeID(for: .chat),
                   let ci = index(of: cid) else { return ("找不到当前这一窗。", true) }
 
-            let all = conversations[ci].messages.filter {
-                $0.role != .system && $0.errorText == nil && !$0.isEmptyContent
+            func usable(_ msgs: [ChatMessage]) -> [ChatMessage] {
+                msgs.filter { $0.role != .system && $0.errorText == nil && !$0.isEmptyContent }
+            }
+            // 一条消息能被搜到的全部字：正文 + 图的描述 + 视频的说明。
+            // ⚠️ 她发的截图正文多半是空的，「微信聊天截图」这种字只在图的描述里——
+            // 以前只搜正文，她问「我经常截图微信给你的那个朋友还记得吗」，他怎么搜都是空
+            func said(_ m: ChatMessage) -> String {
+                var t = m.content
+                if !m.imageNames.isEmpty {
+                    t += (t.isEmpty ? "" : " ") + "[图"
+                        + (m.imageNote.isEmpty ? "" : "：" + m.imageNote) + "]"
+                }
+                if !m.videoNote.isEmpty { t += (t.isEmpty ? "" : " ") + "[视频：" + m.videoNote + "]" }
+                return t
+            }
+            var all = usable(conversations[ci].messages)
+            var whereName = "这一窗"
+            // 这一窗没有，就去她别的窗口里找（同一个她、同一个他，只是换了个窗）
+            if !all.contains(where: { said($0).localizedCaseInsensitiveContains(key) }) {
+                let others = conversations.filter { $0.id != cid && !$0.isGroup }
+                    .sorted { $0.updatedAt > $1.updatedAt }
+                if let other = others.first(where: { c in
+                    c.messages.contains { said($0).localizedCaseInsensitiveContains(key) }
+                }) {
+                    all = usable(other.messages)
+                    whereName = "另一个窗口「" + other.title + "」"
+                }
             }
             let limit = max(1, min(10, (args["limit"] as? Double).map { Int($0) } ?? 5))
             let radius = max(0, min(6, (args["radius"] as? Double).map { Int($0) } ?? 2))
@@ -6608,13 +6705,13 @@ final class AppState: ObservableObject {
             // 十有八九指的是最近那一次，不是这一窗最开头那一次。
             var hitIdx: [Int] = []
             for i in stride(from: all.count - 1, through: 0, by: -1)
-            where all[i].content.localizedCaseInsensitiveContains(key) {
+            where said(all[i]).localizedCaseInsensitiveContains(key) {
                 hitIdx.append(i)
                 if hitIdx.count >= limit { break }
             }
             guard !hitIdx.isEmpty else {
-                return ("这一窗里没搜到「\(key)」。换个词试试——"
-                        + "浓缩件开头那份索引里的词最准。", false)
+                return ("这一窗和别的窗口里都没搜到「\(key)」（正文和图的描述都翻了）。换个词试试——"
+                        + "浓缩件开头那份索引里的词最准；claude.ai 那边的存档用 search_transcripts。", false)
             }
 
             // 一条命中最多带这么多字，免得一次把整段历史捞回来——
@@ -6626,16 +6723,18 @@ final class AppState: ObservableObject {
                 var rows: [String] = []
                 for k in lo...hi {
                     let m = all[k]
-                    let body = m.content.count > perLine
-                        ? String(m.content.prefix(perLine)) + "…"
-                        : m.content
+                    let full = said(m)
+                    let body = full.count > perLine
+                        ? String(full.prefix(perLine)) + "…"
+                        : full
                     rows.append((k == i ? "▸ " : "  ") + who(m) + "：" + body)
                 }
                 blocks.append("〔第 \(i + 1) / \(all.count) 条 · "
                               + fmt.string(from: all[i].createdAt) + "〕\n"
                               + rows.joined(separator: "\n"))
             }
-            return ("在这一窗里翻到 \(hitIdx.count) 处「\(key)」（▸ 那行是命中的）：\n\n"
+            return ("在" + whereName + "里翻到 \(hitIdx.count) 处「\(key)」（▸ 那行是命中的；"
+                    + "带 [图：…] 的那条要看原图就用 show_image）：\n\n"
                     + blocks.joined(separator: "\n\n"), false)
 
         case "ask_choice":
@@ -7497,8 +7596,12 @@ final class AppState: ObservableObject {
         if !houseContext.isEmpty { sys += "\n\n" + houseContext }
 
         let dynamic = sys.trimmingCharacters(in: .whitespacesAndNewlines)
+        // ⚠️ 每轮在变的那块**不再放系统提示里**，挪到最新那条 user 前面（见底下）。
+        // 系统提示排在整段历史前面，它一变，历史那个缓存断点就轮轮落空——
+        // 她那天「命中 0%」，上下文构成里 2k 的「每轮在变」拖着后面几万字一起重算。
+        let sysAt = result.count
         if !stable.isEmpty || !dynamic.isEmpty {
-            result.append(.init(role: "system", text: dynamic,
+            result.append(.init(role: "system", text: stable.isEmpty ? dynamic : "",
                                 stablePrefix: stable, imageDataURLs: []))
         }
         var history = conv.messages.filter { $0.role != .system && $0.errorText == nil }
@@ -7695,6 +7798,15 @@ final class AppState: ObservableObject {
             if isLast { text += "\n" + Self.nowStamp() }
 
             result.append(.init(role: m.role.rawValue, text: text, imageDataURLs: urls))
+        }
+        // 此刻现场挂到最新那条 user 上；这一窗最后说话的不是她（比如他自己醒来那种），
+        // 就还放回系统提示尾巴上
+        if !stable.isEmpty, !dynamic.isEmpty {
+            if let at = result.indices.last(where: { $0 > sysAt && result[$0].role == "user" }) {
+                result[at].live = "<此刻>\n" + dynamic + "\n</此刻>"
+            } else if sysAt < result.count {
+                result[sysAt].text = dynamic
+            }
         }
         return result
     }

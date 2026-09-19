@@ -462,14 +462,42 @@ struct ToolToggleView: View {
         return modelDesc.split(separator: "。").first.map(String.init) ?? modelDesc
     }
 
+    /// 发给他的那几摊自带工具，这儿一件不漏地列出来：
+    /// 以前只列了 NativeTools，工资、健康待办是在 AppState 里另外拼上去的，
+    /// 于是他手上有、她这页却看不见也搜不到
     private var nativeTools: [(name: String, desc: String)] {
-        NativeTools.definitions(hasGroup: true, hasVoice: true).compactMap { item in
+        var defs = NativeTools.definitions(hasGroup: true, hasVoice: true)
+        defs += WageTools.definitions()
+        if app.settings.healthAccess || app.settings.todoAccess {
+            defs += HealthTools.definitions(health: app.settings.healthAccess,
+                                            todos: app.settings.todoAccess,
+                                            write: app.settings.todoWrite)
+        }
+        return defs.compactMap { item in
             guard let fn = item["function"] as? [String: Any],
                   let raw = fn["name"] as? String else { return nil }
             let short = NativeTools.shortName(raw)
             return (short, blurb(short, modelDesc: fn["description"] as? String ?? ""))
         }
-        .filter { !search.isEmpty ? $0.name.localizedCaseInsensitiveContains(search) : true }
+        .filter { matches($0.name, $0.desc) }
+    }
+
+    /// 搜中文也搜得到：比名字、比说明，还比它所在那一组的名字和关键词
+    /// （搜「工资」「上班」「记账」都能出来工资那几件）
+    private func matches(_ name: String, _ desc: String, _ more: String = "") -> Bool {
+        let q = search.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return true }
+        if name.localizedCaseInsensitiveContains(q) || desc.localizedCaseInsensitiveContains(q)
+            || more.localizedCaseInsensitiveContains(q) { return true }
+        if let gid = ToolMount.groupOf[name],
+           let g = ToolMount.groups.first(where: { $0.id == gid }) {
+            if g.title.localizedCaseInsensitiveContains(q)
+                || g.summary.localizedCaseInsensitiveContains(q) { return true }
+            if g.keywords.contains(where: { $0.localizedCaseInsensitiveContains(q) || q.contains($0) }) {
+                return true
+            }
+        }
+        return false
     }
 
     private var memoryTools: [(name: String, desc: String)] {
@@ -480,14 +508,14 @@ struct ToolToggleView: View {
             let short = NativeTools.shortName(raw)
             return (short, blurb(short, modelDesc: fn["description"] as? String ?? ""))
         }
-        .filter { !search.isEmpty ? $0.name.localizedCaseInsensitiveContains(search) : true }
+        .filter { matches($0.name, $0.desc) }
     }
 
     private func visibleIndices(of server: MCPServer) -> [Int] {
         server.tools.indices.filter { i in
-            search.isEmpty
-            || server.tools[i].name.localizedCaseInsensitiveContains(search)
-            || server.tools[i].description.localizedCaseInsensitiveContains(search)
+            matches(server.tools[i].name,
+                    ToolBlurb.of(server.tools[i].name) ?? "",
+                    server.tools[i].description)
         }
     }
 }
