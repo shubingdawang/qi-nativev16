@@ -604,6 +604,7 @@ enum MemoryTools {
             let gone = m.memories.remove(at: idx)
             m.saveMemories()
             m.note("删除", by: "阿晏", memID: gone.id, before: gone.content)
+            HouseSync.forget(gone.content)
             return ("删掉了：\(gone.content.prefix(30))…", false)
 
         case "update_memory":
@@ -624,6 +625,7 @@ enum MemoryTools {
             m.saveMemories()
             m.note("修改", by: "阿晏", memID: m.memories[idx].id,
                    before: before, after: m.memories[idx].content)
+            HouseSync.replace(before, with: m.memories[idx].content)
             return ("改好了。这条现在显示成：\(m.memories[idx].display.prefix(60))"
                     + "（错的那版划掉留着，不是作废——作废是给「那会儿是真的」用的）", false)
 

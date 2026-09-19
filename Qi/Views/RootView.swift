@@ -153,6 +153,10 @@ struct RootView: View {
         // 从横幅点进来的，直接翻到他说话的那个窗口。
         // App 已经开着的时候走这条；冷启动走上面 `onAppear` 那条。
         .onChange(of: notifier.openConversationID) { _, _ in openFromBanner() }
+        .sheet(isPresented: $notifier.openMemories) {
+            NavigationStack { MemoryLibraryView() }
+                .environmentObject(app)
+        }
 
 
     }

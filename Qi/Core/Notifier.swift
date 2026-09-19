@@ -16,6 +16,8 @@ final class Notifier: NSObject, ObservableObject {
     @Published private(set) var authorized = false
     /// 点通知点进来的那个窗口，RootView 盯着它换页
     @Published var openConversationID: UUID?
+    /// 点了「小屋有新内容」那条：打开记忆库
+    @Published var openMemories = false
 
     private let center = UNUserNotificationCenter.current()
 
@@ -65,16 +67,17 @@ final class Notifier: NSObject, ObservableObject {
     ///   这个权限。**没有的话 iOS 会悄悄降回普通级别**，不报错也不崩，
     ///   所以写在这儿是安全的：签名带上了就生效，没带就跟以前一样。
     func banner(title: String, body: String, conversationID: UUID? = nil,
-                after: TimeInterval = 0.1, urgent: Bool = false) {
+                after: TimeInterval = 0.1, urgent: Bool = false, open: String? = nil) {
         guard authorized else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         content.sound = .default
         if urgent { content.interruptionLevel = .timeSensitive }
-        if let id = conversationID {
-            content.userInfo = ["conversation": id.uuidString]
-        }
+        var info: [String: Any] = [:]
+        if let id = conversationID { info["conversation"] = id.uuidString }
+        if let open { info["open"] = open }
+        content.userInfo = info
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,
             content: content,
@@ -201,33 +204,43 @@ final class Notifier: NSObject, ObservableObject {
 extension Notifier: UNUserNotificationCenterDelegate {
 
     /// App 正开着的时候也让横幅出来——不然她盯着别的页面就错过了
+    // ⚠️ 用带 completionHandler 的那两个，**不用 async 版**，而且回主线程再交还。
+    // 她报的「横幅没法点进 App」：async 版的完成回调是在后台线程上替我们交还的，
+    // 系统那边要求在主线程，交还不对就当这一下点击没发生过。
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification
-    ) async -> UNNotificationPresentationOptions {
-        [.banner, .sound]
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        DispatchQueue.main.async { completionHandler([.banner, .sound]) }
     }
 
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse
-    ) async {
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
         let info = response.notification.request.content.userInfo
-
-        // 他约的准点那条：**点开就行，别的什么都不用做**。
-        // App 一到前台 `WakeEngine.resume` → `advance` → 精确那条路在宽限窗口里兑现。
-        // ⚠️ 不能当兜底那条处理——那会多跑一次非精确的醒。
-        if info["selfWake"] as? Bool == true { return }
-
-        // 兜底那条：点开的这一刻才真的去算他要说什么
-        if info["nudge"] as? Bool == true {
-            await MainActor.run { Notifier.shared.pendingNudge = true }
-            return
-        }
-
-        guard let raw = info["conversation"] as? String, let id = UUID(uuidString: raw) else { return }
-        await MainActor.run {
-            Notifier.shared.openConversationID = id
+        let selfWake = info["selfWake"] as? Bool == true
+        let nudge = info["nudge"] as? Bool == true
+        let open = info["open"] as? String
+        let conv = (info["conversation"] as? String).flatMap(UUID.init(uuidString:))
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+                // 他约的准点那条：**点开就行，别的什么都不用做**。
+                // App 一到前台 `WakeEngine.resume` → `advance` → 精确那条路在宽限窗口里兑现。
+                // ⚠️ 不能当兜底那条处理——那会多跑一次非精确的醒。
+                if selfWake {
+                } else if nudge {
+                    // 兜底那条：点开的这一刻才真的去算他要说什么
+                    Notifier.shared.pendingNudge = true
+                } else if open == "memory" {
+                    Notifier.shared.openMemories = true
+                } else if let conv {
+                    Notifier.shared.openConversationID = conv
+                }
+            }
+            completionHandler()
         }
     }
 }

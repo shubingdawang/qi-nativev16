@@ -66,6 +66,7 @@ enum HouseSync {
     // 「那边改了这边解不出来」的机会，而 Codable 解不出来是整条丢掉。
 
     private struct HouseMemory: Decodable {
+        var id: String?
         var content: String
         var tags: [String]?
         var level: Int?
@@ -113,12 +114,17 @@ enum HouseSync {
         let list: [HouseMemory] = try await get(base, "/api/memories", token)
         let m = MemoryStore.shared
         var have = Set(m.memories.map { key($0.content) })
+        let gone = tombstones
         var added = 0
+        // 本机删掉的那几条小屋里还在（删的时候小屋没连上）：这回补删，别拉回来
+        for one in list where gone.contains(key(one.content)) {
+            if let id = one.id { await send(base, "DELETE", "/api/memories/" + id, token, nil) }
+        }
         // ⚠️ **倒着放。** 小屋那边最新的在前面，而 `insertMemory` 是往最前面插；
         // 顺着放的话拉回来的一批在本机会变成倒序。
         for one in list.reversed() {
             let k = key(one.content)
-            guard !k.isEmpty, !have.contains(k) else { continue }
+            guard !k.isEmpty, !have.contains(k), !gone.contains(k) else { continue }
             have.insert(k)
             m.insertMemory(content: one.content,
                            tags: one.tags ?? [],
@@ -153,6 +159,71 @@ enum HouseSync {
         }
         if added > 0 { m.saveDiaries() }
         return added
+    }
+
+    // MARK: 本机删了 / 改了，小屋跟着
+
+    /// 本机删掉（或者改掉）的那些记忆的正文。
+    ///
+    /// 她报的：「我让他删掉了一条记忆，过了一会弹出横幅说一条记忆同步到本机了，
+    /// 但那是我删除的记忆。」——本机删了，小屋那份还在，
+    /// 下次拉的时候按正文一比：本机没有 → 当成 claude.ai 那边新写的，又拉回来了。
+    /// 记在这儿的一律不拉，小屋上还有就顺手删掉。
+    private static let tombKey = "houseMemoryTombstones"
+    private static var tombstones: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: tombKey) ?? []) }
+        set { UserDefaults.standard.set(Array(newValue.suffix(600)), forKey: tombKey) }
+    }
+
+    /// 本机删了一条：记下来，小屋那份也删掉（claude.ai 那边读的是小屋）
+    static func forget(_ content: String) {
+        let k = key(content)
+        guard !k.isEmpty else { return }
+        var t = tombstones
+        t.insert(k)
+        tombstones = t
+        guard let app = WakeEngine.shared.app, let (base, token) = endpoint(app) else { return }
+        Task { @MainActor in
+            guard let list: [HouseMemory] = try? await get(base, "/api/memories", token) else { return }
+            for one in list where key(one.content) == k {
+                if let id = one.id { await send(base, "DELETE", "/api/memories/" + id, token, nil) }
+            }
+        }
+    }
+
+    /// 本机改了一条的正文：旧的那句别再拉回来，小屋那份改成新的
+    static func replace(_ old: String, with new: String) {
+        let k = key(old)
+        guard !k.isEmpty, k != key(new) else { return }
+        var t = tombstones
+        t.insert(k)
+        t.remove(key(new))
+        tombstones = t
+        guard let app = WakeEngine.shared.app, let (base, token) = endpoint(app) else { return }
+        Task { @MainActor in
+            guard let list: [HouseMemory] = try? await get(base, "/api/memories", token) else { return }
+            for one in list where key(one.content) == k {
+                if let id = one.id {
+                    await send(base, "PUT", "/api/memories/" + id, token, ["content": new])
+                }
+            }
+        }
+    }
+
+    private static func send(_ base: URL, _ method: String, _ path: String,
+                             _ token: String, _ body: [String: Any]?) async {
+        var parts = URLComponents(url: base.appendingPathComponent(path),
+                                  resolvingAgainstBaseURL: false)
+        parts?.queryItems = [URLQueryItem(name: "k", value: token)]
+        guard let url = parts?.url else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        req.timeoutInterval = 20
+        if let body {
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        }
+        _ = try? await URLSession.shared.data(for: req)
     }
 
     // MARK: 零碎

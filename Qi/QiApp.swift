@@ -225,6 +225,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         if got.memories > 0 { parts.append("记忆 \(got.memories) 条") }
         if got.diaries > 0 { parts.append("日记 \(got.diaries) 篇") }
         Notifier.shared.banner(title: "小屋有新内容",
-                               body: parts.joined(separator: " · ") + "，已同步至本机。")
+                               body: parts.joined(separator: " · ") + "，已同步至本机。",
+                               open: "memory")
     }
 }

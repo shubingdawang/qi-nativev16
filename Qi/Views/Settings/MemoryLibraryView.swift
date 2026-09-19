@@ -536,8 +536,9 @@ struct MemoryListView: View {
                             }
                             Button(role: .destructive) {
                                 if let i = store.memoryIndex(mem.id) {
-                                    store.memories.remove(at: i)
+                                    let gone = store.memories.remove(at: i)
                                     store.saveMemories()
+                                    HouseSync.forget(gone.content)
                                 }
                             } label: {
                                 Label("删除", systemImage: "trash")

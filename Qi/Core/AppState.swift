@@ -6676,14 +6676,20 @@ final class AppState: ObservableObject {
                 if !m.videoNote.isEmpty { t += (t.isEmpty ? "" : " ") + "[视频：" + m.videoNote + "]" }
                 return t
             }
+            // 空格隔开的几个词，哪个对上都算（她原话怎么说的他未必记得准，多给几个说法）
+            let words = key.split(whereSeparator: { $0.isWhitespace || $0 == "、" || $0 == "，" || $0 == "," })
+                .map(String.init).filter { !$0.isEmpty }
+            func hit(_ t: String) -> Bool {
+                words.contains { t.localizedCaseInsensitiveContains($0) }
+            }
             var all = usable(conversations[ci].messages)
             var whereName = "这一窗"
             // 这一窗没有，就去她别的窗口里找（同一个她、同一个他，只是换了个窗）
-            if !all.contains(where: { said($0).localizedCaseInsensitiveContains(key) }) {
+            if !all.contains(where: { hit(said($0)) }) {
                 let others = conversations.filter { $0.id != cid && !$0.isGroup }
                     .sorted { $0.updatedAt > $1.updatedAt }
                 if let other = others.first(where: { c in
-                    c.messages.contains { said($0).localizedCaseInsensitiveContains(key) }
+                    c.messages.contains { hit(said($0)) }
                 }) {
                     all = usable(other.messages)
                     whereName = "另一个窗口「" + other.title + "」"
@@ -6705,7 +6711,7 @@ final class AppState: ObservableObject {
             // 十有八九指的是最近那一次，不是这一窗最开头那一次。
             var hitIdx: [Int] = []
             for i in stride(from: all.count - 1, through: 0, by: -1)
-            where said(all[i]).localizedCaseInsensitiveContains(key) {
+            where hit(said(all[i])) {
                 hitIdx.append(i)
                 if hitIdx.count >= limit { break }
             }
