@@ -1688,9 +1688,9 @@ struct ClawdHomeView: View {
             .padding(.vertical, 8)
             .glassBackground(radius: 20, strength: app.settings.glassOpacity)
 
-            Text(hiding ? "点家具找他" : "按住拖到他身上")
-                .font(.app(9.5))
-                .foregroundStyle(Theme.textMuted(scheme))
+            Text(hiding ? "点家具找他（不是拖手势）" : "按住拖到他身上")
+                .font(.app(hiding ? 12 : 9.5, weight: hiding ? .medium : .regular))
+                .foregroundStyle(hiding ? app.settings.accentColor : Theme.textMuted(scheme))
         }
         .padding(.top, 10)
         .padding(.horizontal, 16)
@@ -1883,6 +1883,7 @@ struct ClawdHomeView: View {
         clawdY = pt.y / size.height
         withAnimation(.easeOut(duration: 0.3)) { hiding = true }
         say("数到十…… 来找我")
+        notice = "他藏起来了 · 点屋里的家具把他找出来"
         if app.settings.haptics {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
