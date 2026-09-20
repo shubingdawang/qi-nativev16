@@ -1998,6 +1998,11 @@ final class AppState: ObservableObject {
         let hiddenHouse = houseToolsHiddenBySync(for: conversation)
         // 他能直接在这台手机上动手的那些。
         // 总开关关了就一件都不给；单独关掉的那几件也挑出去。
+        // 这一轮挂上了哪几组。**只算一次**，本机那批和小屋那批共用——
+        // 算两遍不光白费事，两遍之间还可能不一样，那工具表就抖起来了（缓存最怕这个）
+        let mountedGroups: Set<String>? = (settings.mountToolsOnDemand && conversation != nil)
+            ? conversation.map { ToolMount.shared.activeGroups(conversation: $0, context: context) }
+            : nil
         var out: [[String: Any]] = []
         if settings.nativeToolsEnabled {
             // 按需挂载：只在有对话的时候判（没对话就整份给，不猜）
@@ -2024,9 +2029,7 @@ final class AppState: ObservableObject {
                                                   todos: settings.todoAccess,
                                                   write: settings.todoWrite)
             }
-            let active: Set<String>? = mount
-                ? conversation.map { ToolMount.shared.activeGroups(conversation: $0, context: context) }
-                : nil
+            let active: Set<String>? = mount ? mountedGroups : nil
             out = native.filter { item in
                 guard let fn = item["function"] as? [String: Any],
                       let raw = fn["name"] as? String else { return true }
@@ -2039,9 +2042,15 @@ final class AppState: ObservableObject {
         }
         // ⚠️ `usable` 不是 `enabled`：够不着的那台整台不往上送。
         // 摆着他就会去调，调一次是一次扣款，回来一句「找不到主机」。
+        // ⚠️ 小屋那边的工具**也照 `mountedGroups` 过一遍**。
+        // 她报的「怎么每次还是一大堆工具发给他」：以前只过滤本机那批，
+        // 小屋的三十来件不管聊什么都整份发过去，工具表就下不来
         for server in mcpServers where server.usable {
             for tool in server.enabledTools {
                 if blockMemory && Self.memoryToolNames.contains(tool.name) { continue }
+                // 分了组、这一轮这组没挂上 → 不带。没分组的照旧一直带着
+                if let mountedGroups, let g = ToolMount.groupOf[tool.name],
+                   !mountedGroups.contains(g) { continue }
                 // 同步窗口：跟本机重名的那几件收起来，只留本机那一份。
                 if hiddenHouse.contains(tool.name) { continue }
                 // ⚠⚠ **本机记忆库开着的时候，小屋上同名的一律不送。**
