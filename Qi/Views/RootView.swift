@@ -152,6 +152,8 @@ struct RootView: View {
         }
         // 从横幅点进来的，直接翻到他说话的那个窗口。
         // App 已经开着的时候走这条；冷启动走上面 `onAppear` 那条。
+        // 系统自带翻译的宿主。看不见的一层，思考链翻译靠它（见 `AppleTranslate`）
+        .background(AppleTranslateHost())
         .onChange(of: notifier.openConversationID) { _, _ in openFromBanner() }
         .sheet(isPresented: $notifier.openMemories) {
             NavigationStack { MemoryLibraryView() }

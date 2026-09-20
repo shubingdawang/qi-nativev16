@@ -4505,7 +4505,12 @@ final class AppState: ObservableObject {
             }
             // 三、都不通了才用模型。**这一步是要花钱的**，
             //     所以放在最后，而且只在前两步都失败时才走。
-            else {
+            //
+            // ⚠️ **思考链那条不走这一步。** 她定的：思考链翻译一律机翻，
+            // 不许调模型。正文长按翻译还留着这条兜底。
+            else if reasoning {
+                out = "翻不动（系统翻译没开或者网不通）。思考链不会去调模型。"
+            } else {
                 out = await self.translateWithModel(source)
             }
 
@@ -4534,11 +4539,14 @@ final class AppState: ObservableObject {
 
     /// 免费那两条都不通时的退路
     /// 一段字翻成中文，不落到哪条消息上（思考链弹窗里一段一段翻用这个）。
-    /// 跟 `translate` 同一个顺序：本来是中文 → 免费的 → 最后才用模型。
+    ///
+    /// ⚠️ **不走模型。** 她定的：「思考链翻译就是直接不用到 ai，
+    /// 类似于机翻，就像苹果自带的翻译一样。」
+    /// 所以只走系统自带的那套和两个免费接口，都不通就说一声翻不动。
     func translateText(_ source: String) async -> String {
         if Translator.looksChinese(source) { return source }
         if let free = await Translator.free(source) { return free }
-        return await translateWithModel(source)
+        return "翻不动（系统翻译没开或者网不通）。这一条不会去调模型。"
     }
 
     private func translateWithModel(_ source: String) async -> String {

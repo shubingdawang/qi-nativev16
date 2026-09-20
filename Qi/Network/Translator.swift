@@ -7,8 +7,13 @@ import Foundation
 ///
 /// 顺序是：
 ///   1. 原文本来就是中文 → 直接原样返回，一分钱不花，也不联网
-///   2. 免费接口（Google 的 gtx，再退一步 MyMemory），都不要 key
-///   3. 都不通了，才回到模型那条路（AppState 里做，会记账）
+///   2. **系统自带的翻译**（`AppleTranslate`）：离线、免费、没有额度。
+///      她要的就是这个：「像苹果自带的翻译一样，不用调用模型」
+///   3. 免费接口（Google 的 gtx，再退一步 MyMemory），都不要 key
+///      ⚠️ Google 那个在国内连不上，所以它排在系统那套后面——
+///      以前排第一，国内每次都超时，然后一路落到模型上
+///   4. 思考链那种**到此为止**（翻不了就翻不了）；
+///      长按正文翻译那条还留着模型兜底（AppState 里做，会记账）
 enum Translator {
 
     /// 中文字符占比高就当它是中文
@@ -29,12 +34,53 @@ enum Translator {
     static func free(_ text: String, to target: String = "zh-CN") async -> String? {
         let source = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !source.isEmpty else { return nil }
-        // 太长的免费接口会截断，超过就别糟蹋了，交给模型
-        guard source.count <= 1800 else { return nil }
 
-        if let out = await google(source, to: target), !out.isEmpty { return out }
-        if let out = await myMemory(source, to: target), !out.isEmpty { return out }
-        return nil
+        // 一、系统自带的（离线、免费）。长文也不怕，它自己能吃
+        if let out = await AppleTranslate.shared.translate(source), !out.isEmpty {
+            return out
+        }
+
+        // 二、网上那两个。它们会截断长文，所以**切成段一段段翻**——
+        // 以前超过 1800 字直接放弃、交给模型，而思考链恰恰常常超过
+        var out = ""
+        for piece in cut(source, at: 1500) {
+            var one = await google(piece, to: target)
+            if one == nil || one!.isEmpty { one = await myMemory(piece, to: target) }
+            guard let one, !one.isEmpty else { return out.isEmpty ? nil : out }
+            out += (out.isEmpty ? "" : Self.br) + one
+        }
+        return out.isEmpty ? nil : out
+    }
+
+    /// 换行**走这个常量**，别在上面那行里写字面量：
+    /// 脚本改这段的时候反斜杠被吃掉一层，`"\n"` 落盘就变成真的换行，字符串跨行、编译不过
+    static let br = "\n"
+
+    /// 按空行／句号切成不超过 `limit` 个字的几段。免费接口一段段吃得下
+    static func cut(_ text: String, at limit: Int) -> [String] {
+        guard text.count > limit else { return [text] }
+        var out: [String] = []
+        var buf = ""
+        for line in text.components(separatedBy: "\n") {
+            if buf.count + line.count + 1 > limit, !buf.isEmpty {
+                out.append(buf)
+                buf = ""
+            }
+            if line.count > limit {
+                // 单行就超长：硬切
+                var rest = Substring(line)
+                while rest.count > limit {
+                    let at = rest.index(rest.startIndex, offsetBy: limit)
+                    out.append(String(rest[rest.startIndex..<at]))
+                    rest = rest[at...]
+                }
+                buf += (buf.isEmpty ? "" : "\n") + String(rest)
+            } else {
+                buf += (buf.isEmpty ? "" : "\n") + line
+            }
+        }
+        if !buf.isEmpty { out.append(buf) }
+        return out
     }
 
     // MARK: Google 那个不要 key 的端点
