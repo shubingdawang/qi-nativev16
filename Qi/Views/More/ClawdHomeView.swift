@@ -162,6 +162,10 @@ struct ClawdHomeView: View {
     @State private var touchTask: Task<Void, Never>?
     /// 正在捉迷藏：他藏起来了，屋里不画他
     @State private var hiding = false
+    /// 找了半天还没找着：把那件家具标出来（见 `hide`）
+    @State private var hintSpot: UUID?
+    /// 她点过的那几件，屏幕上报还剩几件没点
+    @State private var searched: Set<UUID> = []
     /// 藏在哪一件家具后面
     @State private var hideSpot: UUID?
     @State private var hideTask: Task<Void, Never>?
@@ -1059,14 +1063,18 @@ struct ClawdHomeView: View {
                                 if f.id == hideSpot {
                                     reveal(found: true)
                                 } else {
-                                    notice = "不在这儿…"
+                                    searched.insert(f.id)
+                                    let left = max(0, store.furniture(in: shownRoom)
+                                        .filter { $0.gx >= 0 }.count - searched.count)
+                                    notice = left > 0 ? "不在这儿…还剩 \(left) 处" : "不在这儿…"
                                     if app.settings.haptics {
                                         UIImpactFeedbackGenerator(style: .rigid)
                                             .impactOccurred()
                                     }
+                                    let shown = notice
                                     Task { @MainActor in
                                         try? await Task.sleep(nanoseconds: 1_400_000_000)
-                                        if notice == "不在这儿…" { notice = nil }
+                                        if notice == shown { notice = nil }
                                     }
                                 }
                             },
@@ -1076,7 +1084,8 @@ struct ClawdHomeView: View {
                             // 反过来也成立——她翻到别的房间的时候，
                             // 他不该也跟着出现在那儿。想知道他在哪儿，看左上角那个头像。
                             // ⚠️ 捉迷藏藏着的时候也不画——藏起来还看得见就不叫藏
-                            clawdHere: shownRoom == store.clawdRoom && !hiding) {
+                            clawdHere: shownRoom == store.clawdRoom && !hiding,
+                            hint: hintSpot) {
                     // ⚠️ 他**画在 IsoRoomView 里面**，不再叠在它上面。
                     // 那样他永远压在所有家具前面；现在他进那个深度排序，
                     // 站在床里侧就被床挡住。见 `clawdBody`。
@@ -1853,11 +1862,18 @@ struct ClawdHomeView: View {
 
     /// 他躲起来了，躲在某一件家具后面。点对了那件才算找到。
     private func hide(in size: CGSize) {
-        let here = store.furniture(in: shownRoom).filter { $0.gx >= 0 }
+        // ⚠️ **只躲在地上那些家具后面。**
+        // 挂在墙上的（吊兰那种）和摆在台面上的小件，她一根手指点不准，
+        // 躲在那儿就成了「找不到」——她报的正是这个。
+        let here = store.furniture(in: shownRoom).filter {
+            $0.gx >= 0 && FurnitureCatalog.shape(of: $0.kind).mount == .floor
+        }
         guard let spot = here.randomElement() else {
             say("这屋里没地方躲呀")
             return
         }
+        hintSpot = nil
+        searched = []
         touchTask?.cancel()
         walkTask?.cancel()
         hideSpot = spot.id
@@ -1871,8 +1887,15 @@ struct ClawdHomeView: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
         // ⚠️ 得有个头。找不到就一直躲着的话，她就永远看不到他了。
+        //
+        // 而且**中间要给提示**：二十秒还没找着，他躲的那件家具开始晃、亮一圈。
+        // 「藏得好」和「根本找不到」是两回事，她要的是前者。
         hideTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 45_000_000_000)
+            try? await Task.sleep(nanoseconds: 20_000_000_000)
+            if Task.isCancelled || !hiding { return }
+            withAnimation(.easeOut(duration: 0.3)) { hintSpot = spot.id }
+            say(["咳……这边", "有点热", "你快找到啦"].randomElement() ?? "咳……这边")
+            try? await Task.sleep(nanoseconds: 25_000_000_000)
             if Task.isCancelled || !hiding { return }
             reveal(found: false)
         }
@@ -1882,6 +1905,8 @@ struct ClawdHomeView: View {
     private func reveal(found: Bool) {
         hideTask?.cancel()
         hideSpot = nil
+        hintSpot = nil
+        searched = []
         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { hiding = false }
         mood = found ? .happy : .peeking
         say(found ? ["被找到啦", "嘿嘿", "你好厉害"].randomElement() ?? "被找到啦"

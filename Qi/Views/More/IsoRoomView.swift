@@ -61,6 +61,9 @@ struct IsoRoomView<Clawd: View>: View {
     var onTapFurniture: (Furniture) -> Void
     /// 他现在在这一间吗。不在就不画，也不进排序。
     var clawdHere: Bool = false
+    /// 捉迷藏找了半天没找着：这一件晃一下、亮一圈，告诉她「就在这儿」。
+    /// 她报的「他藏起来之后我完全无法找到他」——藏得再好，找不到就不好玩了
+    var hint: UUID? = nil
     /// clawd 本人。**由调用方给**——他的手势、朝向、走路动画都长在那边，
     /// 搬过来得连着走路那一整套一起搬，不值。
     /// 这儿只负责**把他插进正确的位置**。
@@ -939,6 +942,20 @@ struct IsoRoomView<Clawd: View>: View {
                    y: c.y + wallHug(cell, geoRoom).y
                       + mountLift(item, s, geoRoom))
         .animation(.spring(response: 0.26, dampingFraction: 0.78), value: lifted)
+        // 提示：这件后面藏着人。一圈光 + 轻轻晃
+        .overlay {
+            if hint == item.id {
+                TimelineView(.animation) { t in
+                    let phase = t.date.timeIntervalSinceReferenceDate
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(app.settings.accentColor
+                            .opacity(0.35 + 0.35 * (0.5 + 0.5 * sin(phase * 4))), lineWidth: 2)
+                        .padding(-4)
+                        .rotationEffect(.degrees(sin(phase * 7) * 2))
+                        .allowsHitTesting(false)
+                }
+            }
+        }
         .onTapGesture { onTapFurniture(item) }
         .gesture(dragGesture(item, s, geoRoom))
     }
