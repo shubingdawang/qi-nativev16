@@ -27,6 +27,8 @@ struct MessageBubbleView: View {
     var onRetry: () -> Void = {}
     /// 点了那条「过程」——弹窗由聊天页去开，见上面按钮那儿的说明。
     var onOpenProcess: () -> Void = {}
+    /// 点那张占卜卡：没抽就去抽牌，抽完了就看分析
+    var onOpenDivine: () -> Void = {}
     /// 点那行 tokens：「这一份都花在哪儿」
     var onOpenShape: () -> Void = {}
     /// 点他存图那张卡 → 打开相册。参数是存到哪儿（表情包 / 动图 / 文件夹名）
@@ -241,6 +243,15 @@ struct MessageBubbleView: View {
             HStack {
                 if isUser { Spacer(minLength: 30) }
                 noteCard(note)
+                if !isUser { Spacer(minLength: 30) }
+            }
+        }
+        // 一卦。也是单独一张卡：缩略图那一格是六芒星，点进去抽牌或者看分析
+        if let d = message.divine {
+            HStack {
+                if isUser { Spacer(minLength: 30) }
+                DivineChatCardView(card: d, tint: app.settings.accentColor,
+                                   onOpen: onOpenDivine)
                 if !isUser { Spacer(minLength: 30) }
             }
         }

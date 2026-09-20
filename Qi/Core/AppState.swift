@@ -2820,6 +2820,8 @@ final class AppState: ObservableObject {
             return "在感受自己的心跳"
         case "checkpoint", "end_of_day":
             return "在记下这一刻"
+        case "divine":
+            return "在摊一副牌"
         case "moment_patch":
             // 不写「在记录」——他做的这件事是「意识到自己还在其中」，
             // 不是把什么东西存起来
@@ -4364,7 +4366,7 @@ final class AppState: ObservableObject {
     /// 让他读一卦。
     /// 牌面和卦象是抽好的，他只负责讲——**不让他重新决定抽到什么**，
     /// 那样占卜就没意义了。
-    func interpret(_ record: DivinationRecord) async -> String {
+    func interpret(_ record: DivinationRecord, format: String = "") async -> String {
         // 杂活统一走 helperReach（她可以在设置里指定跑杂活的模型）
         guard let reach = helperReach() else { return "还没配模型，去设置里加一个。" }
         let p = reach.provider, endpoint = reach.endpoint, model = reach.model
@@ -4407,7 +4409,7 @@ final class AppState: ObservableObject {
             let stream = ChatAPI.stream(
                 endpoint: endpoint, apiKey: p.apiKey, model: model,
                 messages: [
-                    .init(role: "system", text: brief),
+                    .init(role: "system", text: brief + format),
                     .init(role: "user", text: record.briefForModel)
                 ])
             for try await event in stream {
@@ -4418,6 +4420,40 @@ final class AppState: ObservableObject {
             return "读不了：" + error.localizedDescription
         }
         return out.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // MARK: 聊天里那一卦
+
+    /// 她在聊天里点进去抽完了：牌面落回那条消息，然后他就着牌面写分析。
+    ///
+    /// ⚠️ 分析**写回同一条消息**，不另开一条（见 `DivineChatCard` 开头那段）。
+    func divineDrawn(_ record: DivinationRecord,
+                     for messageID: UUID, in conversationID: UUID) {
+        guard let ci = index(of: conversationID),
+              let mi = conversations[ci].messages.firstIndex(where: { $0.id == messageID }),
+              var card = conversations[ci].messages[mi].divine
+        else { return }
+        card.cards = record.cards
+        card.recordID = record.id
+        card.analyzing = true
+        conversations[ci].messages[mi].divine = card
+        conversations[ci].updatedAt = Date()
+
+        Task { @MainActor in
+            let raw = await self.interpret(record,
+                                           format: DivineReading.contract(count: record.cards.count))
+            let parts = DivineReading.split(raw, count: record.cards.count)
+            guard let ci2 = self.index(of: conversationID),
+                  let mi2 = self.conversations[ci2].messages.firstIndex(where: { $0.id == messageID }),
+                  var back = self.conversations[ci2].messages[mi2].divine
+            else { return }
+            back.overall = parts.overall
+            back.perCard = parts.per
+            back.analyzing = false
+            self.conversations[ci2].messages[mi2].divine = back
+            // 他自己也要知道这一卦讲了什么——不然下一句她问「所以呢」，他一脸茫然
+            DivinationStore.shared.setReading(record.id, text: raw)
+        }
     }
 
     // MARK: 翻译
@@ -6743,6 +6779,30 @@ final class AppState: ObservableObject {
                     + "带 [图：…] 的那条要看原图就用 show_image）：\n\n"
                     + blocks.joined(separator: "\n\n"), false)
 
+        case "divine":
+            // 他摆一卦，牌**她自己抽**（见 `DivineChatCard`）。
+            // 替她抽的话这就不是占卜，是他编故事。
+            let ask = ((args["question"] as? String) ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !ask.isEmpty else { return ("这一卦问的是什么？", true) }
+            let want = (args["count"] as? Double).map { Int($0) }
+                ?? (args["count"] as? Int) ?? 3
+            let spread = TarotDeck.spreads.first { $0.count == want }
+                ?? TarotDeck.suggest(for: ask)
+            guard let dcid = activeToolConversationID ?? activeID(for: .chat),
+                  let dci = index(of: dcid) else { return ("找不到当前这一窗。", true) }
+            var dcard = DivineChatCard()
+            dcard.question = ask
+            dcard.spreadID = spread.id
+            dcard.spreadName = spread.name
+            dcard.count = spread.count
+            var dmsg = toolMessage()
+            dmsg.divine = dcard
+            conversations[dci].messages.append(dmsg)
+            conversations[dci].updatedAt = Date()
+            return ("摊好了：\(spread.name)，\(spread.count) 张。她点那张卡去抽，"
+                    + "抽完你会直接拿到牌面，那时候再写分析。这条之后先别急着讲牌。", false)
+
         case "ask_choice":
             let question = (args["question"] as? String) ?? ""
             let options = (args["options"] as? [String]) ?? []
@@ -7788,6 +7848,24 @@ final class AppState: ObservableObject {
             // 这句话她打了多久。**挂在前面**——
             // 它是这句话的背景，不是这句话之后发生的事。
             if !m.typedNote.isEmpty { text = m.typedNote + " " + text }
+
+            // 这一条是一卦（见 `DivineChatCard`）：牌面和他写的分析都要落进历史，
+            // 不然她抽完，他下一轮还以为牌没抽
+            if let d = m.divine {
+                var line = "〔占卜 · \(d.spreadName)〕问的是：\(d.question)"
+                if d.cards.isEmpty {
+                    line += "\n牌摊出去了，她还没抽。**别替她说抽到了什么。**"
+                } else {
+                    for (i, c) in d.cards.enumerated() {
+                        line += "\n· \(c.position)：\(c.card.name)（\(c.reversed ? "逆位" : "正位")）"
+                        if d.perCard.indices.contains(i), !d.perCard[i].isEmpty {
+                            line += " —— 你讲的：" + d.perCard[i]
+                        }
+                    }
+                    if !d.overall.isEmpty { line += "\n你的总解：" + d.overall }
+                }
+                text += (text.isEmpty ? "" : "\n") + line
+            }
 
             // 他那一条里**真的动手做了什么**。
             // 挂在末尾，因为它是这句话之后发生的事。

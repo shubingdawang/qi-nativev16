@@ -32,6 +32,8 @@ enum ChatPanel: Identifiable {
     case process(ChatMessage)
     /// 「这一份都花在哪儿」——点那行 tokens 进来的
     case shape
+    /// 那张占卜卡：还没抽就去抽牌，抽完了就看分析
+    case divine(ChatMessage)
 
     var id: String {
         switch self {
@@ -45,6 +47,7 @@ enum ChatPanel: Identifiable {
         // 关掉再点另一条，弹出来的还是上一条的内容。
         case .process(let m): return "process-" + m.id.uuidString
         case .shape:   return "shape"
+        case .divine(let m): return "divine-" + m.id.uuidString
         }
     }
 }

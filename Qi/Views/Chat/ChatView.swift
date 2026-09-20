@@ -211,6 +211,7 @@ struct ChatView: View {
                         },
                         onRetry: { msg in app.retry(msg.id, in: conv.id) },
                         onOpenProcess: { msg in panel = .process(msg) },
+                        onOpenDivine: { msg in panel = .divine(msg) },
                         onOpenShape: { panel = .shape },
                         onOpenLibrary: { place in
                             // 存到哪儿决定开哪一栏：动图 → GIF，
@@ -490,6 +491,17 @@ struct ChatView: View {
                 // sheet 里没有现成的导航栈，这一层得自己套
                 //（见 `PromptShapeView` 开头那段）。
                 NavigationStack { PromptShapeView() }
+            case .divine(let msg):
+                // 还没抽就去抽牌；抽完了（或者他正在写）就看结果那一页
+                if let d = msg.divine, let cid = app.activeID(for: space) {
+                    if d.drawn {
+                        DivineResultView(messageID: msg.id, conversationID: cid, fallback: d)
+                    } else {
+                        DivineDrawSheet(card: d) { record in
+                            app.divineDrawn(record, for: msg.id, in: cid)
+                        }
+                    }
+                }
             }
         }
         .sheet(isPresented: $showingSearch) {
@@ -1922,6 +1934,8 @@ struct MessageListView: View {
     var onRetry: (ChatMessage) -> Void = { _ in }
     /// 点了「过程」那条。弹窗归聊天页挂，不挂在气泡上。
     var onOpenProcess: (ChatMessage) -> Void = { _ in }
+    /// 点了那张占卜卡。同样归聊天页挂
+    var onOpenDivine: (ChatMessage) -> Void = { _ in }
     var onOpenShape: () -> Void = {}
     var onOpenLibrary: (String) -> Void = { _ in }
     /// 长按头像 @ 这个人
@@ -1986,6 +2000,7 @@ struct MessageListView: View {
                             onOpenMenu: { page in onOpenMenu(message, page) },
                             onRetry: { onRetry(message) },
                             onOpenProcess: { onOpenProcess(message) },
+                            onOpenDivine: { onOpenDivine(stored) },
                             onOpenShape: onOpenShape,
                             onOpenLibrary: { place in onOpenLibrary(place) },
                             onCloseMenu: onCloseMenu,

@@ -274,6 +274,8 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     var journey: Journey? = nil
     /// 附带的小红书笔记
     var note: XHSNote? = nil
+    /// 这条是一次占卜（他摊的牌 / 她抽完的牌 / 他写的分析，三拍同一条）。见 `DivineChatCard`
+    var divine: DivineChatCard? = nil
     /// 笔记还在读的时候先摆个骨架
     var noteLoading: Bool = false
     var noteHint: String = ""
@@ -338,6 +340,7 @@ struct ChatMessage: Identifiable, Codable, Hashable {
             && videoName.isEmpty
             && gameID.isEmpty
             && callSeconds <= 0
+            && divine == nil
             && !noteLoading
             && errorText == nil
     }

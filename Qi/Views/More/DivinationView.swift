@@ -134,6 +134,10 @@ struct DivinationView: View {
 struct TarotPane: View {
 
     @Binding var question: String
+    /// 外面已经定好用哪个牌阵（聊天里点进来的那种）。给了就直接洗牌，不再问一遍
+    var preset: TarotSpread? = nil
+    /// 翻开那一下把牌面递出去（聊天那条消息要接着写分析）
+    var onDrawn: ((DivinationRecord) -> Void)? = nil
 
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
@@ -329,6 +333,10 @@ struct TarotPane: View {
                 resultCard(record)
             }
         }
+        .onAppear {
+            // 聊天里点进来的：牌阵他已经挑好了，直接摊开让她抽
+            if let preset, spread == nil { start(with: preset) }
+        }
         // 点结果里那张牌 → 翻开看大的，左右能一张张翻（她要的「牌能往后翻」）
         .sheet(item: $flipped) { d in
             TarotFlipView(cards: record?.cards ?? [d], start: d)
@@ -490,6 +498,7 @@ struct TarotPane: View {
         record = r
         revealed = true
         store.add(r)
+        onDrawn?(r)
         if app.settings.haptics {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         }
