@@ -1511,6 +1511,7 @@ final class AppState: ObservableObject {
                             case .usage(let u):
                                 self.setTokens(u.total, to: assistantID, in: conversationID)
                                 UsageStore.shared.record(u, source: .chat)
+                                self.noteCache(u, model: useModel)
                             case .rateLimit(let r):
                                 // 只有走桥那条路会给。见 `RateLimit`。
                                 RateLimitStore.shared.note(r)
@@ -1968,6 +1969,30 @@ final class AppState: ObservableObject {
     }
 
     /// 把所有打开的 MCP 工具，翻译成接口认识的格式
+    // MARK: 这条通道缓不缓
+
+    /// 模型名 → 连着几次回包里缓存读写都是 0。
+    ///
+    /// 她那边同一个中转两条通道：`[A]claude-hybrid` 缓得好好的，
+    /// `[C]claude-opus-4-6-thinking` 一次都不缓（探针测出来的）。
+    /// 不缓的通道上，「工具表挂上就不摘」只剩坏处——那一招是为了让前缀每轮一模一样好命中缓存，
+    /// 命中不了的话它就只是让工具表越攒越大（她看到的 87 件）。
+    private var cacheMiss: [String: Int] = [:]
+
+    func noteCache(_ u: TokenUsage, model: String) {
+        if u.cacheRead > 0 || u.cacheWrite > 0 {
+            cacheMiss[model] = 0
+        } else if u.input > 0 {
+            cacheMiss[model, default: 0] += 1
+        }
+    }
+
+    /// 这个模型最近连着三次都没缓存 → 当它不缓
+    func cacheless(_ model: String?) -> Bool {
+        guard let model else { return false }
+        return (cacheMiss[model] ?? 0) >= 3
+    }
+
     func mcpToolDefinitions(for conversation: Conversation? = nil,
                             context: [ChatAPI.OutgoingMessage] = []) -> [[String: Any]] {
         // 开了跟 claude.ai 同步的窗口，记忆工具必须放开——
@@ -2001,7 +2026,10 @@ final class AppState: ObservableObject {
         // 这一轮挂上了哪几组。**只算一次**，本机那批和小屋那批共用——
         // 算两遍不光白费事，两遍之间还可能不一样，那工具表就抖起来了（缓存最怕这个）
         let mountedGroups: Set<String>? = (settings.mountToolsOnDemand && conversation != nil)
-            ? conversation.map { ToolMount.shared.activeGroups(conversation: $0, context: context) }
+            ? conversation.map {
+                ToolMount.shared.activeGroups(conversation: $0, context: context,
+                                              sticky: !cacheless($0.modelID))
+            }
             : nil
         var out: [[String: Any]] = []
         if settings.nativeToolsEnabled {

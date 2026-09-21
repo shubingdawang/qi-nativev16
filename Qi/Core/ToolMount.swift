@@ -169,8 +169,11 @@ final class ToolMount {
     /// 一窗里挂过的组（见 `activeGroups` 第 ⑥ 条）。键是「对话 id|压到哪一条」
     private var sticky: [String: Set<String>] = [:]
 
+    /// - Parameter sticky: 挂上了就不摘（为缓存）。通道不缓的时候传 false：
+    ///   只带眼下用得上的那几组，工具表跟着话题走，不越攒越大
     func activeGroups(conversation conv: Conversation,
-                      context: [ChatAPI.OutgoingMessage]) -> Set<String> {
+                      context: [ChatAPI.OutgoingMessage],
+                      sticky keep: Bool = true) -> Set<String> {
         var on = Set<String>()
         let recent = conv.messages.suffix(Self.window)
 
@@ -226,7 +229,8 @@ final class ToolMount {
         // 现在只增不减：一窗里工具表只会偶尔**多**几组（多一次就重来一次），
         // 不会来回抖。压缩那一下本来就会让历史整段重来，趁那时候重新从零算。
         let key = conv.id.uuidString + "|" + (conv.digest?.throughID?.uuidString ?? "")
-        let before = sticky[key] ?? []
+        // 通道不缓：攒着没好处，只按眼下挂。记还是照记，换回缓存通道时接得上
+        let before = keep ? (sticky[key] ?? []) : []
         on.formUnion(before)
         sticky = sticky.filter { !$0.key.hasPrefix(conv.id.uuidString + "|") || $0.key == key }
         sticky[key] = on
