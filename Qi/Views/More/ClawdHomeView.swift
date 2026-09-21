@@ -1637,6 +1637,11 @@ struct ClawdHomeView: View {
                         }
                         mood = .lying
                         store.clawdDoing = .idling
+                        // 记下「正在用这张床」：排序靠它把他画在床上面（见 IsoRoomView）
+                        if let bed = lyingBed {
+                            store.useItem = bed.id
+                            store.useStyle = .lie
+                        }
                         say(act)
                         // ⚠️ **躺一会儿再起来溜达。** 立刻 `startWalking()`
                         // 的话他刚躺下就爬起来走了，等于没躺。
@@ -1646,6 +1651,8 @@ struct ClawdHomeView: View {
                             try? await Task.sleep(nanoseconds: 9_000_000_000)
                             if Task.isCancelled { return }
                             mood = .idle
+                            store.useItem = nil
+                            store.useStyle = .stand
                             startWalking()
                         }
                         return

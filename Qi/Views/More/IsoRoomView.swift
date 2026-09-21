@@ -666,6 +666,22 @@ struct IsoRoomView<Clawd: View>: View {
                 }
             }
 
+            // ⚠️⚠️ **正在用的那一件：他一律画在它上面。**
+            //
+            // 她报的：「跟浴缸的交互会变到浴缸后面去，也没有动画；
+            // 其他物品也查下是不是交互后就跑到物品后面去了。」
+            //
+            // 坐沙发、泡浴缸、躺床这几种，他的落点被抬到了**坐面的高度**
+            // （`RoomActs.spot` 的 `.onTop`）。上面那条「踩没踩在它的格子上」
+            // 拿抬高之后的点去换算格子，换出来的是**更靠里的一格**——
+            // 不在这件东西的占地里，于是按深度排到了它后面：
+            // 人被浴缸整个挡住，动画也就看不见了。
+            // 正在用哪一件是知道的（`store.useItem`），直接认它，不用猜
+            if let using = store.useItem,
+               let one = out.first(where: { $0.item?.id == using }) {
+                d = max(d, one.depth + 0.5)
+            }
+
             var rect: IsoRoom.Footprint? = nil
             if let bs = boardSize, bs.width > 1, bs.height > 1 {
                 let t = geoRoom.tile(at: CGPoint(x: clawdX * bs.width, y: clawdY * bs.height))
