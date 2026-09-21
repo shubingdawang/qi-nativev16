@@ -2586,7 +2586,9 @@ struct ClawdView: View {
                     .frame(width: CGFloat(sprites[0].0.width) * scale,
                            height: CGFloat(sprites[0].0.height) * scale)
                     .overlay(alignment: .topLeading) {
-                        ForEach(wornIDs, id: \.self) { id in
+                        // 端着道具的动作里，围巾领结先不画（见 `ClawdRig.hidesNeckwear`）
+                        ForEach(ClawdRig.shownWorn(wornIDs, mood: mood, pose: pose),
+                                id: \.self) { id in
                             ClawdWornView(id: id, scale: scale)
                         }
                     }

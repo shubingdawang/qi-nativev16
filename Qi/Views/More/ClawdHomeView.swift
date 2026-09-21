@@ -15,6 +15,9 @@ struct ClawdHomeView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var tab = 0            // 0 房间，1 柜子，2 商店
+    /// 商店里买完那一句。**买完不跳回房间**——她报的「在商店购买物品会自动回到房间的页面」，
+    /// 一次想买好几件的时候，每买一件就被拽走一次
+    @State private var shopToast: String?
     // 家具的拖拽整个搬进 `IsoRoomView` 了（它自己管落在哪一格），
     // 这儿那两个状态没人用了
     /// 地板从房间高度的百分之几开始。
@@ -305,7 +308,17 @@ struct ClawdHomeView: View {
             .offset(y: w * 0.2)
         }
         .frame(width: w, height: w)
+        // ⚠️⚠️ **绕身子的中心转，再把身子中心压到床面上。**
+        //
+        // 她报的：「拖到床上立马会触发，但现在是飞在天上的一个状态。」
+        // 这一整块是按「脚踩在床面那个点」摆的（跟站着同一套定位），
+        // 可躺平之后没有脚了——身子在图纸第 14…31 行，中心比整张图的中心低 4 行，
+        // 以前绕整张图的中心转，身子被甩到上面去，再加上整张图本来就立在床面之上，
+        // 看着就是悬在床顶上半人高。
+        // 先把身子挪到图纸正中再转，转完整块往下落半张图，身子中心就正好在床面上
+        .offset(y: -4 * scale)
         .rotationEffect(.degrees(angle))
+        .offset(y: w * 0.5 - w * 0.06)
         .overlay(alignment: .topTrailing) {
             TimelineView(.periodic(from: .now, by: 1.2)) { ctx in
                 let k = Int(ctx.date.timeIntervalSinceReferenceDate / 1.2) % 3
@@ -490,7 +503,22 @@ struct ClawdHomeView: View {
                     sheetEntry
                     cabinet
                 }
-            default: shop
+            default:
+                shop
+                    .overlay(alignment: .bottom) {
+                        if let shopToast {
+                            Text(shopToast)
+                                .font(.app(12, weight: .medium))
+                                .foregroundStyle(Theme.textMain(scheme))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 9)
+                                .background(.ultraThinMaterial, in: Capsule())
+                                .padding(.bottom, Layout.tabBarExpanded + 20)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                                .allowsHitTesting(false)
+                        }
+                    }
+                    .animation(.easeOut(duration: 0.2), value: shopToast)
             }
         }
         // ⚠️ **这一页自己画标题，不用导航栏。**
@@ -608,10 +636,9 @@ struct ClawdHomeView: View {
         .sheet(item: $shopping) { kind in
             BuyBox(kind: kind, store: store) { got, room in
                 if got > 0 {
-                    say(kind.name + "买了 " + String(got) + " 件，放进" + room.rawValue)
-                    tab = 0
+                    toastShop(kind.name + "买了 " + String(got) + " 件，放进" + room.rawValue)
                 } else {
-                    say("币不够，再攒攒")
+                    toastShop("币不够，再攒攒")
                 }
             }
             .presentationDetents([.height(400)])
@@ -2122,6 +2149,18 @@ struct ClawdHomeView: View {
         }
     }
 
+    /// 商店里那一句，两秒后自己收起来
+    private func toastShop(_ text: String) {
+        shopToast = text
+        if app.settings.haptics {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            if shopToast == text { shopToast = nil }
+        }
+    }
+
     /// 商店里的一格。**点一下买一件，长按挑数量和房间。**
     ///
     /// 她说的：「家具可以重复购买，不要点一下就放点一下就收……
@@ -2134,10 +2173,9 @@ struct ClawdHomeView: View {
         return Button {
             let got = store.buy(kind)
             if got > 0 {
-                say(kind.name + "买到了")
-                tab = 0
+                toastShop(kind.name + "买到了，放进" + HomeRoom.home(for: kind).rawValue)
             } else {
-                say("币不够，再攒攒")
+                toastShop("币不够，再攒攒")
             }
         } label: {
             VStack(spacing: 5) {

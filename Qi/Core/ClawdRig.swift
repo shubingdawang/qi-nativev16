@@ -211,7 +211,7 @@ struct ClawdRigView: View {
             // 别的「不是站着」的图还有同样的隐患，但她只报过这两张：
             // 挡多了她买的帽子会莫名其妙消失。
             if mood != .sleeping, mood != .lying {
-                ForEach(wornIDs, id: \.self) { id in
+                ForEach(ClawdRig.shownWorn(wornIDs, mood: mood, pose: pose), id: \.self) { id in
                     ClawdWornView(id: id, scale: scale)
                 }
             }
@@ -882,6 +882,35 @@ enum ClawdRig {
         case outer     // 套在外面的：背带裤
         case scarf     // 绕在最外面的：围巾
         case feet      // 脚上：靴子、拖鞋
+    }
+
+    /// 做这个动作的时候，脖子上那几件（领结、围巾）先不画。
+    ///
+    /// 她报的：「围巾在触发动画的上面，挡到动画了。」
+    /// 吃、喝、看书、弹琴、打游戏、画画、浇花……道具都端在胸口，
+    /// 正好是围巾那一圈的位置，围巾叠在最上面就把道具盖了。
+    /// 帽子、眼镜、鞋这些不碍事，照戴。
+    static func hidesNeckwear(mood: ClawdMood, pose: CarryPose = .none) -> Bool {
+        switch pose {
+        case .sip, .swirl, .hold, .lift: return true
+        default: break
+        }
+        switch mood {
+        case .eating, .coffee, .reading, .gaming, .guitar, .painting, .watering,
+             .sweeping, .carrying, .hauling, .working, .crying, .loving:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// 这一刻真要画的那几件
+    static func shownWorn(_ ids: [String], mood: ClawdMood, pose: CarryPose = .none) -> [String] {
+        guard hidesNeckwear(mood: mood, pose: pose) else { return ids }
+        return ids.filter {
+            let slot = wearSlot($0)
+            return slot != .neck && slot != .scarf
+        }
     }
 
     static func wearSlot(_ id: String) -> WearSlot {
