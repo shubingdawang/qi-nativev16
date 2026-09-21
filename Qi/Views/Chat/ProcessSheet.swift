@@ -83,6 +83,9 @@ struct ProcessSheet: View {
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
         }
+        // 系统翻译的宿主（见 `AppleTranslate`）：弹窗盖在上面的时候，
+        // 根视图那个弹不出「下载语言包」的卡片，得这一层自己来
+        .background(AppleTranslateHost())
         .presentationDetents([.fraction(0.4), .large], selection: $height)
         .presentationDragIndicator(.visible)
     }

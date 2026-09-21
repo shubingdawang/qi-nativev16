@@ -36,6 +36,12 @@ final class AppleTranslate: ObservableObject {
     /// 还没翻的。`AppleTranslateHost` 盯着它
     @Published private(set) var queue: [Job] = []
 
+    /// 挂着的宿主，后出现的在最后。**只有最后那个干活**——
+    /// 思考链是在弹窗里翻的，弹窗盖着的时候，根视图上那个弹不出「下载语言包」的卡片
+    @Published private(set) var hosts: [UUID] = []
+    func push(_ id: UUID) { hosts.removeAll { $0 == id }; hosts.append(id) }
+    func pop(_ id: UUID) { hosts.removeAll { $0 == id } }
+
     /// 这台机器上能不能用（iOS 18 起才有）
     var available: Bool {
         if #available(iOS 18.0, *) { return true }
@@ -74,6 +80,8 @@ final class AppleTranslate: ObservableObject {
 struct AppleTranslateHost: View {
 
     @ObservedObject private var store = AppleTranslate.shared
+    @State private var me = UUID()
+    private var active: Bool { store.hosts.last == me }
     /// 这一批要翻什么。`translationTask` 认的是「配置变了就重跑」，
     /// 所以每来一批就换一个新配置
     @State private var config: Any?
@@ -83,10 +91,17 @@ struct AppleTranslateHost: View {
             Color.clear
                 .frame(width: 0, height: 0)
                 .translationTask(config as? TranslationSession.Configuration) { session in
+                    guard active else { return }
                     await run(session)
                 }
+                .onAppear { store.push(me) }
+                .onDisappear { store.pop(me) }
+                .onChange(of: store.hosts) { _, _ in
+                    // 上面那个关了、轮到这个接手：还有没翻完的就接着翻
+                    if active, !store.queue.isEmpty { kick() }
+                }
                 .onChange(of: store.queue.count) { _, n in
-                    guard n > 0 else { return }
+                    guard n > 0, active else { return }
                     // 换一份新配置 = 让 translationTask 再跑一次
                     config = TranslationSession.Configuration(
                         source: nil,
@@ -94,6 +109,14 @@ struct AppleTranslateHost: View {
                 }
         } else {
             Color.clear.frame(width: 0, height: 0)
+        }
+    }
+
+    private func kick() {
+        if #available(iOS 18.0, *) {
+            config = TranslationSession.Configuration(
+                source: nil,
+                target: Locale.Language(identifier: "zh-Hans"))
         }
     }
 

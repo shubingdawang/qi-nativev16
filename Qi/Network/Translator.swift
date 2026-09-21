@@ -42,14 +42,32 @@ enum Translator {
 
         // 二、网上那两个。它们会截断长文，所以**切成段一段段翻**——
         // 以前超过 1800 字直接放弃、交给模型，而思考链恰恰常常超过
-        var out = ""
-        for piece in cut(source, at: 1500) {
-            var one = await google(piece, to: target)
-            if one == nil || one!.isEmpty { one = await myMemory(piece, to: target) }
-            guard let one, !one.isEmpty else { return out.isEmpty ? nil : out }
-            out += (out.isEmpty ? "" : Self.br) + one
+        //
+        // ⚠️ 两个接口**各切各的**：Google 一段吃得下一千五，
+        // MyMemory 一次只收五百字上下，按一千五切给它等于一段都翻不出来。
+        // 她只要个大概意思，所以翻不动的那一段就留原文，不整段作废。
+        if let g = await chunked(source, size: 1500, { await google($0, to: target) }) {
+            return g
         }
-        return out.isEmpty ? nil : out
+        return await chunked(source, size: 450, { await myMemory($0, to: target) })
+    }
+
+    /// 切段、一段段翻、再拼回去。**第一段就翻不动**才算这个接口不通（返回 nil）；
+    /// 翻到一半断了的，剩下那几段原样接在后面
+    private static func chunked(_ text: String, size: Int,
+                                _ one: (String) async -> String?) async -> String? {
+        let pieces = cut(text, at: size)
+        var out: [String] = []
+        for (i, piece) in pieces.enumerated() {
+            if let t = await one(piece), !t.isEmpty {
+                out.append(t)
+            } else if i == 0 {
+                return nil
+            } else {
+                out.append(piece)
+            }
+        }
+        return out.joined(separator: Self.br)
     }
 
     /// 换行**走这个常量**，别在上面那行里写字面量：
