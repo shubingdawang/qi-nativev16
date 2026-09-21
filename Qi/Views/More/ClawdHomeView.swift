@@ -91,6 +91,13 @@ struct ClawdHomeView: View {
     @State private var clawdY: Double = 0.78
     /// 正被拎在手上
     @State private var held = false
+    /// 她把他拖到哪件家具上松的手。溜达那一圈下一拍**先用这一件**，不等随机抽到。
+    ///
+    /// 她报的：「拖动 clawd 到物品上不会触发动画——也不是不会，是放在那过一会才触发，
+    /// 看起来像他自己触发的，而不是我拖到那让他触发的。」
+    /// 以前松手只认床（`layDownAct`），别的一律「就待这儿吧」然后回去溜达，
+    /// 过五到十几秒才轮到抽家具，抽中的还不一定是这件。
+    @State private var aimedItem: UUID?
     /// 朝哪边走。左右翻个身，看着才像在走而不是在平移。
     @State private var facingLeft = false
     /// 这一趟走多久。远一点就走久一点。
@@ -1599,7 +1606,12 @@ struct ClawdHomeView: View {
                         return
                     }
                     mood = .idle
-                    say(["就待这儿吧", "好", "这儿也不错"].randomElement() ?? "好")
+                    if let f = furnitureUnderHim() {
+                        // 放在一件家具上了：下一拍就用它（见 `aimedItem`）
+                        aimedItem = f.id
+                    } else {
+                        say(["就待这儿吧", "好", "这儿也不错"].randomElement() ?? "好")
+                    }
                     startWalking()              // 放下之后重新开始自己溜达
                 }
         )
@@ -1799,6 +1811,26 @@ struct ClawdHomeView: View {
     /// 或者从整版图里切一件新的躺具，就得回来改这儿。
     /// `actions` 那张表本来就写着「这件东西能拿它干什么」——
     /// 加新家具的时候顺手写上「躺下」，这儿自动就认。
+    /// 他脚下（或者紧挨着）是哪件家具。拖着他松手时用。
+    /// 放宽一格：她的手指盖着他，落点差一格很正常，差一格就不算的话几乎永远落空
+    private func furnitureUnderHim() -> Furniture? {
+        guard let size = roomSize, size.width > 1, size.height > 1 else { return nil }
+        let geo = IsoRoom.fit(in: size, as: store.projection)
+        let here = geo.tile(at: CGPoint(x: clawdX * size.width,
+                                        y: clawdY * size.height))
+        var best: (Furniture, Double)?
+        for f in store.furniture(in: shownRoom) where f.gx >= 0 {
+            let sh = store.shape(of: f)
+            // 到这件占地的最近距离（格）
+            let dx = max(Double(f.gx) - here.gx, 0, here.gx - Double(f.gx + max(1, sh.w) - 1))
+            let dy = max(Double(f.gy) - here.gy, 0, here.gy - Double(f.gy + max(1, sh.d) - 1))
+            let d = (dx * dx + dy * dy).squareRoot()
+            guard d <= 1.2 else { continue }
+            if best == nil || d < best!.1 { best = (f, d) }
+        }
+        return best?.0
+    }
+
     private func layDownAct() -> String? {
         guard let size = roomSize, size.width > 1, size.height > 1 else { return nil }
         let geo = IsoRoom.fit(in: size, as: store.projection)
@@ -2160,7 +2192,11 @@ struct ClawdHomeView: View {
         walkTask?.cancel()
         walkTask = Task { @MainActor in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64.random(in: 5...12) * 1_000_000_000)
+                // 她刚把他放到某件家具上：马上用，不等
+                let wait: UInt64 = aimedItem != nil
+                    ? 150_000_000
+                    : UInt64.random(in: 5...12) * 1_000_000_000
+                try? await Task.sleep(nanoseconds: wait)
                 if Task.isCancelled { return }
                 patience.relax()        // 晾着的时候气自己消，见 relax 的注释
                 if !patience.sulking, mood == .upset, Date() >= touchUntil {
@@ -2181,7 +2217,8 @@ struct ClawdHomeView: View {
                 // 等接上阿晏，这个决定才会变成他自己下的（下一轮）。
                 // 手上抱着东西、正被拎着的时候不换屋，
                 // 那会看着像东西凭空搬走了。
-                if store.carrying == nil, !held, Double.random(in: 0...1) < 0.18 {
+                if aimedItem == nil, store.carrying == nil, !held,
+                   Double.random(in: 0...1) < 0.18 {
                     let before = store.clawdRoom
                     store.wanderToAnotherRoom()
                     if store.clawdRoom != before {
@@ -2201,10 +2238,14 @@ struct ClawdHomeView: View {
                 //
                 // ⚠️ 这一整套**一分钱不花**：挑哪件、做哪个动作、嘀咕哪一句，
                 // 全是本机随机。他自己在屋里过日子，不该跟她的账单挂钩。
+                let aimed = aimedItem.flatMap { id in
+                    store.furniture(in: store.clawdRoom).first { $0.id == id }
+                }
+                aimedItem = nil
                 if store.carrying == nil, !held,
                    let size = roomSize, size.width > 1,
-                   Double.random(in: 0...1) < 0.42,
-                   let item = nightBed() ?? store.furniture(in: store.clawdRoom).randomElement(),
+                   aimed != nil || Double.random(in: 0...1) < 0.42,
+                   let item = aimed ?? nightBed() ?? store.furniture(in: store.clawdRoom).randomElement(),
                    let kind = FurnitureCatalog.kind(item.kind),
                    let chosen = pickAct(for: kind.id) {
 

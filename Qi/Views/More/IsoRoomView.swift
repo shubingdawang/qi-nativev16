@@ -151,7 +151,11 @@ struct IsoRoomView<Clawd: View>: View {
                                 if store.camZoom > 1.01 {
                                     let z = store.camZoom
                                     let wantX = camFrom.width + v.translation.width / z
-                                    let clamped = store.clampPan(CGSize(width: wantX, height: 0), in: geo.size)
+                                    // ⚠️ **放大之后竖着也跟手。**
+                                    // 「上下固定高度」说的是没放大的时候。放大了还锁着竖向，
+                                    // 她就永远到不了靠屋外那个角（她报的「放到最大只能左右移动」）
+                                    let wantY = camFrom.height + v.translation.height / z
+                                    let clamped = store.clampPan(CGSize(width: wantX, height: wantY), in: geo.size)
                                     store.camPan = clamped
                                     if store.projection == .flat {
                                         let cap = geoRoom.maxPan
