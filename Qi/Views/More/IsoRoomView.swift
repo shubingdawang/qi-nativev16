@@ -125,7 +125,8 @@ struct IsoRoomView<Clawd: View>: View {
                 walls(geoRoom)
                 RoomWallDetail(room: geoRoom, windows: windows, night: night,
                                // 她问「这些小点点是什么」——看不出是什么的点子就是脏，关掉
-                               grain: false)
+                               grain: false,
+                               curtain: store.curtainHex)
                 floor(geoRoom)
                     // ⚠️ **拖动挂在地板这一层，不挂在整块上。**
                     //

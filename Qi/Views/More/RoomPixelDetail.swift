@@ -100,6 +100,8 @@ struct RoomWallDetail: View {
     let night: Double
     /// 内置墙面才撒颗粒；她自己的图不往上加东西
     let grain: Bool
+    /// 窗帘颜色，空 = 不挂（见 `ClawdStore.curtainHex`）
+    var curtain: String = ""
 
     var body: some View {
         Canvas { ctx, _ in
@@ -138,9 +140,96 @@ struct RoomWallDetail: View {
                 ctx.fill(RoomPixel.wallBand(g, wall, lo, hi, 0, px),
                          with: .color(.black.opacity(0.14)))
             }
-            for window in windows { drawWindow(&ctx, window, px) }
+            for window in windows {
+                drawWindow(&ctx, window, px)
+                if !curtain.isEmpty { drawCurtain(&ctx, window, px) }
+            }
         }
         .allowsHitTesting(false)
+    }
+
+    /// 窗帘：顶上一根杆 + 一道帘头，两边各垂一幅，**中间空着**（窗外照样看得见）。
+    ///
+    /// 两幅是一条一条竖褶拼的：亮一条、暗一条，下摆往里收一点，
+    /// 看着是拢在两边的布，不是两块板。
+    private func drawCurtain(_ ctx: inout GraphicsContext, _ w: RoomWindow, _ px: CGFloat) {
+        let g = room
+        let wall = w.wall
+        let band = RoomPixel.wallBand
+        let base = RoomPixel.color(curtain)
+        let v0 = (g.wallH * 0.32 / px).rounded() * px
+        let v1 = (g.wallH * 0.80 / px).rounded() * px
+        let perPt = 1 / Double(g.projection == .flat ? g.tileW : g.tileW / 2)
+        let f = Double(px * 3) * perPt
+        let width = w.u1 - w.u0
+        // 每幅盖住窗户边上两成，外面再伸出去一截
+        let out = f * 2.2
+        let inner = width * 0.2
+        let top = v1 + px * 6
+        let bottom = v0 - px * 7              // 比窗台再往下垂一点
+        let fold = Double(px * 2) * perPt     // 一条褶多宽
+
+        // 杆子：深木色，两头各一个小球
+        ctx.fill(band(g, wall, w.u0 - out - fold, w.u1 + out + fold, top, top + px * 2),
+                 with: .color(RoomPixel.color("6B4A32")))
+        for u in [w.u0 - out - fold * 1.5, w.u1 + out + fold * 0.5] {
+            ctx.fill(band(g, wall, u, u + fold, top - px, top + px * 3),
+                     with: .color(RoomPixel.color("54391F")))
+        }
+
+        // 两幅
+        for side in [0, 1] {
+            let a = side == 0 ? w.u0 - out : w.u1 - inner
+            let b = side == 0 ? w.u0 + inner : w.u1 + out
+            var u = a
+            var k = 0
+            while u < b - fold * 0.2 {
+                let e = min(b, u + fold)
+                // 下摆往窗户那侧收：越靠里的褶越短一点点，像被拢起来
+                let near = side == 0 ? (u - a) / max(0.0001, b - a) : (b - e) / max(0.0001, b - a)
+                let lift = CGFloat(near) * px * 3
+                // ⚠️ 暗的那一条**实着画再压暗**，不用半透明——
+                // 半透明的话墙和窗框会从布里透出来，像一层纱
+                ctx.fill(band(g, wall, u, e, bottom + lift, top), with: .color(base))
+                if k % 2 == 1 {
+                    ctx.fill(band(g, wall, u, e, bottom + lift, top),
+                             with: .color(.black.opacity(0.08)))
+                }
+                // 褶的暗缝
+                if k % 2 == 1 {
+                    ctx.fill(band(g, wall, e - Double(px) * perPt * 0.6, e, bottom + lift, top),
+                             with: .color(.black.opacity(0.12)))
+                }
+                u = e
+                k += 1
+            }
+            // 下摆一道深边
+            ctx.fill(band(g, wall, a, b, bottom + px * 1.5, bottom + px * 2.5),
+                     with: .color(.black.opacity(0.10)))
+            // 系带：拢在窗台高度
+            let tie = (v0 + px * 4)
+            ctx.fill(band(g, wall, a, b, tie, tie + px * 2),
+                     with: .color(RoomPixel.color("D9C7A7")))
+        }
+
+        // 帘头：横一道，底边一格一格的小垂边
+        let vh = px * 5
+        ctx.fill(band(g, wall, w.u0 - out, w.u1 + out, top - vh, top),
+                 with: .color(base))
+        ctx.fill(band(g, wall, w.u0 - out, w.u1 + out, top - px, top),
+                 with: .color(.white.opacity(0.18)))
+        var u = w.u0 - out
+        var k = 0
+        while u < w.u1 + out {
+            let e = min(w.u1 + out, u + fold)
+            if k % 2 == 0 {
+                ctx.fill(band(g, wall, u, e, top - vh - px * 2, top - vh), with: .color(base))
+                ctx.fill(band(g, wall, u, e, top - vh - px * 2, top - vh),
+                         with: .color(.black.opacity(0.06)))
+            }
+            u = e
+            k += 1
+        }
     }
 
     /// 墙面颗粒：一小颗一小颗亮点暗点，像素墙纸的质感

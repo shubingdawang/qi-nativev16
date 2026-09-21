@@ -892,6 +892,24 @@ struct ClawdHomeView: View {
                             }
                         }
                     }
+                    Menu("窗帘") {
+                        Button {
+                            store.curtainHex = ""
+                            notice = "窗帘摘了"
+                        } label: {
+                            Text("不挂")
+                            if store.curtainHex.isEmpty { Image(systemName: "checkmark") }
+                        }
+                        ForEach(ClawdStore.curtainColors, id: \.hex) { c in
+                            Button {
+                                store.curtainHex = c.hex
+                                notice = "挂上了" + c.name + "的窗帘"
+                            } label: {
+                                Text(c.name)
+                                if store.curtainHex == c.hex { Image(systemName: "checkmark") }
+                            }
+                        }
+                    }
                     Menu("白天晚上") {
                         ForEach(DayMode.allCases) { m in
                             Button {

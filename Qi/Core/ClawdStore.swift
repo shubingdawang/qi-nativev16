@@ -1143,6 +1143,24 @@ final class ClawdStore: ObservableObject {
         return s
     }
 
+    /// 窗上挂的窗帘颜色（十六进制）。空 = 不挂。
+    ///
+    /// 她说的：「窗帘应该是可以加在窗户上的，所以后面不应该有背景，
+    /// 有背景就把窗户挡住了。」——以前窗帘只是一件挂墙的家具（一整块图），
+    /// 挂上去窗户就被整块盖住。现在是**挂在窗户上的**：两边两幅、顶上一道帘头，
+    /// 中间空着，窗外的天照样看得见。每扇窗都挂，刷子菜单里挑颜色。
+    @Published var curtainHex: String = "" {
+        didSet {
+            if loaded { UserDefaults.standard.set(curtainHex, forKey: "clawdCurtainHex") }
+        }
+    }
+
+    /// 窗帘能挑的颜色
+    static let curtainColors: [(name: String, hex: String)] = [
+        ("米白", "EFE3CF"), ("奶粉", "F2C4C9"), ("雾蓝", "A9BCD6"),
+        ("墨绿", "5E7A62"), ("酒红", "8E3B46"), ("燕麦", "C9B28F")
+    ]
+
     /// 窗户开在哪边（两边 / 只左 / 只右 / 不开）
     @Published var windowSide: WindowSide = .both {
         didSet {
@@ -1437,6 +1455,7 @@ final class ClawdStore: ObservableObject {
         lightsOff = Set((UserDefaults.standard.stringArray(forKey: "clawdLightsOff") ?? []).compactMap(UUID.init))
         roomLightsOff = Set(UserDefaults.standard.stringArray(forKey: "clawdRoomLightsOff") ?? [])
         windowSide = WindowSide(rawValue: UserDefaults.standard.string(forKey: "clawdWindowSide") ?? "") ?? .both
+        curtainHex = UserDefaults.standard.string(forKey: "clawdCurtainHex") ?? ""
         loaded = true
     }
 
