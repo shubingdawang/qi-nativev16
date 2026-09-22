@@ -18,6 +18,8 @@ struct RelayProbeView: View {
 
     @State private var results: [String: ProbeResult] = [:]
     @State private var running: String?
+    @State private var showHistory = false
+    @ObservedObject private var history = ProbeHistory.shared
 
     /// 拿哪个供应商去探。默认是这一窗正在用的那个。
     @State private var providerID: UUID?
@@ -72,6 +74,26 @@ struct RelayProbeView: View {
         .transparentList()
         .navigationTitle("探针")
         .navigationBarTitleDisplayMode(.inline)
+        // 屏幕底下正中：历史记录（她要的位置）
+        .safeAreaInset(edge: .bottom) {
+            Button { showHistory = true } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "clock.arrow.circlepath").font(.app(12))
+                    Text(history.items.isEmpty ? "历史记录" : "历史记录 · \(history.items.count)")
+                        .font(.app(13, weight: .medium))
+                }
+                .foregroundStyle(app.settings.accentColor)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.ultraThinMaterial, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, 8)
+        }
+        .sheet(isPresented: $showHistory) {
+            NavigationStack { ProbeHistoryView() }
+        }
     }
 
     private var head: some View {
@@ -194,6 +216,144 @@ struct RelayProbeView: View {
                                                apiKey: p.apiKey, model: modelID)
             results[probe.key] = r
             running = nil
+            history.add(ProbeHistory.Entry(
+                provider: p.name.isEmpty ? "（没名字）" : p.name,
+                model: modelID,
+                title: probe.title,
+                verdict: r.verdict,
+                shots: r.shots.enumerated().map { i, sh in
+                    let u = sh.usage
+                    return "#\(i + 1) " + (sh.ok ? "\(sh.status)" : "失败")
+                        + String(format: " · %.1fs", sh.seconds)
+                        + " · 输入 \(u.input) · 命中 \(u.cacheRead) · 写入 \(u.cacheWrite) · 输出 \(u.output)"
+                        + (sh.error.isEmpty ? "" : " · " + String(sh.error.prefix(120)))
+                },
+                ok: r.tone == .good,
+                unsure: r.tone == .unknown))
         }
+    }
+}
+
+
+// MARK: - 探针的历史记录
+
+/// 每探一次记一条。存在本机，最多留 300 条。
+@MainActor
+final class ProbeHistory: ObservableObject {
+    static let shared = ProbeHistory()
+
+    struct Entry: Codable, Identifiable {
+        var id = UUID()
+        var at = Date()
+        var provider: String
+        var model: String
+        var title: String
+        var verdict: String
+        var shots: [String]
+        var ok: Bool
+        var unsure: Bool = false
+    }
+
+    @Published private(set) var items: [Entry] = []
+    private let key = "relayProbeHistory"
+
+    init() {
+        if let d = UserDefaults.standard.data(forKey: key),
+           let v = try? JSONDecoder().decode([Entry].self, from: d) {
+            items = v
+        }
+    }
+
+    func add(_ e: Entry) {
+        items.insert(e, at: 0)
+        if items.count > 300 { items.removeLast(items.count - 300) }
+        save()
+    }
+
+    func remove(_ ids: Set<UUID>) {
+        items.removeAll { ids.contains($0.id) }
+        save()
+    }
+
+    private func save() {
+        if let d = try? JSONEncoder().encode(items) {
+            UserDefaults.standard.set(d, forKey: key)
+        }
+    }
+}
+
+/// 历史记录那一页：一条一张卡。
+/// 供应商 · 模型 / 探的什么 / 当时返回的数据 / 成功失败 + 时间
+struct ProbeHistoryView: View {
+
+    @ObservedObject private var history = ProbeHistory.shared
+    @EnvironmentObject var app: AppState
+    @Environment(\.colorScheme) private var scheme
+
+    private static let fmt: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "M月d日 HH:mm:ss"
+        return f
+    }()
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 12) {
+                if history.items.isEmpty {
+                    Text("还没有探过。")
+                        .font(.app(12))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 40)
+                }
+                ForEach(history.items) { e in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(e.provider + " · " + e.model)
+                            .font(.app(11, design: .monospaced))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                            .lineLimit(1)
+                        Text(e.title)
+                            .font(.app(14, weight: .semibold))
+                            .foregroundStyle(Theme.textMain(scheme))
+                        if !e.verdict.isEmpty {
+                            Text(MD.inline(e.verdict))
+                                .font(.app(11.5))
+                                .foregroundStyle(Theme.textSoft(scheme))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        ForEach(Array(e.shots.enumerated()), id: \.offset) { _, line in
+                            Text(line)
+                                .font(.app(9.5, design: .monospaced))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(e.ok ? Color.green : (e.unsure ? Color.orange : Color.red))
+                                .frame(width: 7, height: 7)
+                            Text(e.ok ? "成功" : (e.unsure ? "不确定" : "失败"))
+                                .font(.app(11, weight: .medium))
+                                .foregroundStyle(Theme.textMain(scheme))
+                            Spacer(minLength: 0)
+                            Text(Self.fmt.string(from: e.at))
+                                .font(.app(10.5))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassCard()
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            history.remove([e.id])
+                        } label: { Label("删掉这条", systemImage: "trash") }
+                    }
+                }
+            }
+            .padding(16)
+        }
+        .background(WallpaperBackground().ignoresSafeArea())
+        .navigationTitle("探针历史")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
