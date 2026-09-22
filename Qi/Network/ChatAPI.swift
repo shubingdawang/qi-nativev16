@@ -147,6 +147,8 @@ enum ChatAPI {
                     let began = Date()
                     // 这一趟中转到底给没给 usage。见循环后面那一段。
                     var sawUsage = false
+                    // 正文里夹着的 `<think>…</think>`，拆回思考链（见 `ThinkSplitter`）
+                    var splitter = ThinkSplitter()
                     let bytes: URLSession.AsyncBytes
                     // 这个地址上一次就说过它不认，别再白发一遍
                     let ask = !rejectsThinking(endpoint)
@@ -218,7 +220,10 @@ enum ChatAPI {
                             continuation.yield(.reasoning(piece))
                         }
                         if let c = delta["content"] as? String, !c.isEmpty {
-                            continuation.yield(.content(c))
+                            for part in splitter.feed(c) {
+                                continuation.yield(part.thinking ? .reasoning(part.text)
+                                                                 : .content(part.text))
+                            }
                         } else if let parts = delta["content"] as? [[String: Any]] {
                             // 有的中转把 Anthropic 那套块结构原样透传：
                             // content 是个数组，思考和正文各是一块。
@@ -258,6 +263,11 @@ enum ChatAPI {
                     // 这一次调用确实发生了，只是那边没告诉我们用了多少 token。
                     // 按 token 计价的那一档照样算不出钱来——那也对，
                     // 不知道就是不知道，不能编一个数出来。
+                    // 攒着没吐完的那一小截（半个标签那种）倒出来
+                    for part in splitter.flush() {
+                        continuation.yield(part.thinking ? .reasoning(part.text)
+                                                         : .content(part.text))
+                    }
                     if !sawUsage {
                         Console.log(.cost, "这个中转没返回 usage → " + model,
                                     "只记了一次调用，token 数拿不到")
@@ -275,6 +285,69 @@ enum ChatAPI {
                 }
             }
             continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    // MARK: 正文里的 <think>
+
+    /// 有的中转不走 `reasoning_content`，**把思考直接写在正文里**，用 `<think>…</think>` 包着。
+    ///
+    /// 她报的：「思考链貌似不认 think。」——那一大段「她说休息马上要结束了……我该……不要……」
+    /// 整段摊在聊天气泡里，思考链那一格反倒是空的。
+    ///
+    /// 流式是一小片一小片来的，标签可能被劈成两半（`<thi` + `nk>`），
+    /// 所以这儿**攒着尾巴**：结尾那几个字要是像半个标签，先不吐，等下一片来了再认。
+    struct ThinkSplitter {
+        struct Part { let text: String; let thinking: Bool }
+
+        private var inThink = false
+        private var tail = ""
+        private static let opens = ["<think>", "<thinking>"]
+        private static let closes = ["</think>", "</thinking>"]
+
+        mutating func feed(_ piece: String) -> [Part] {
+            var buf = tail + piece
+            tail = ""
+            var out: [Part] = []
+            while !buf.isEmpty {
+                let marks = inThink ? Self.closes : Self.opens
+                // 最早出现的那个标签
+                var hit: Range<String.Index>?
+                for m in marks {
+                    if let r = buf.range(of: m, options: .caseInsensitive),
+                       hit == nil || r.lowerBound < hit!.lowerBound { hit = r }
+                }
+                if let r = hit {
+                    let before = String(buf[buf.startIndex..<r.lowerBound])
+                    if !before.isEmpty { out.append(Part(text: before, thinking: inThink)) }
+                    buf = String(buf[r.upperBound...])
+                    inThink.toggle()
+                    continue
+                }
+                // 没有整个的标签：看结尾是不是半个
+                var keep = 0
+                for m in marks {
+                    let lower = m.lowercased()
+                    for n in stride(from: min(m.count - 1, buf.count), through: 1, by: -1) {
+                        if buf.suffix(n).lowercased() == String(lower.prefix(n)) {
+                            keep = max(keep, n)
+                            break
+                        }
+                    }
+                }
+                let cut = buf.index(buf.endIndex, offsetBy: -keep)
+                let emit = String(buf[buf.startIndex..<cut])
+                if !emit.isEmpty { out.append(Part(text: emit, thinking: inThink)) }
+                tail = String(buf[cut...])
+                buf = ""
+            }
+            return out
+        }
+
+        /// 流结束了：攒着的尾巴原样吐出去
+        mutating func flush() -> [Part] {
+            defer { tail = "" }
+            return tail.isEmpty ? [] : [Part(text: tail, thinking: inThink)]
         }
     }
 

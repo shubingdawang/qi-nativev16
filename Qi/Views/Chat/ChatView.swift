@@ -34,7 +34,20 @@ struct ChatView: View {
     /// 存回 `app.drafts` 的时机改成**离开这段对话的时候**
     /// （切窗口 / 退到后台 / 页面消失），见 `stashDraft()`。
     /// 「切去设置页再回来不能白打」照样成立，因为那时候页面已经走了 `onDisappear`。
-    @State private var draftText: String = ""
+    ///
+    /// ⚠️⚠️ **再往下一层：草稿不放 `@State`，放一个不吭声的盒子（`DraftBox`）。**
+    ///
+    /// 她又报：「打字很卡，一个字母一个字母的冒。」
+    /// 放在 `@State` 里，每敲一个字 `ChatView.body` 照样整个重跑——
+    /// 这一页两千多行，顶栏、心情小签、clawd、输入栏、几张弹窗的宿主全在里面。
+    /// 盒子里的字**变了不通知任何人**；只有两种时候才让这一页重画：
+    ///   · 从空变成不空、或者反过来（发送键要亮/灭）
+    ///   · 代码主动改了草稿（插一个 @、把识别出来的字接上），输入框得显示出来
+    @StateObject private var box = DraftBox()
+    private var draftText: String {
+        get { box.text }
+        nonmutating set { box.set(newValue) }
+    }
     /// 现在这份草稿是哪段对话的。切窗口的时候靠它把旧的存回去。
     @State private var draftOwner: UUID?
 
@@ -44,7 +57,15 @@ struct ChatView: View {
     }
     private var draftKey: UUID { activeConversation?.id ?? Self.noConversation }
     private static let noConversation = UUID()
-    private var draftBinding: Binding<String> { $draftText }
+    /// 输入框认的那一根：她敲的字只进盒子（不重画整页），顺手跑一遍「打字时要做的事」
+    private var draftBinding: Binding<String> {
+        Binding(get: { box.text },
+                set: { new in
+                    let old = box.text
+                    box.typed(new)
+                    onTyped(old, new)
+                })
+    }
 
     /// 把手里这份存回 `AppState`，再把新那段对话的取出来。
     /// 只在换窗口/离开页面的时候调，一次打字过程里一次都不会走到。
@@ -1011,32 +1032,6 @@ struct ChatView: View {
                         typingTick += 1
                     }
                 }
-                .onChange(of: draft) { old, text in
-                    // 她一开始打字，列表就滑到最底下。
-                    // 以前不滑，打字的时候最后那几条被键盘顶上去看不见了。
-                    //
-                    // ⚠️ **这儿不再递 `typingTick` 了。**
-                    // 真正需要滚的只有「输入栏长高了一行」那一下，
-                    // 而那一下 `composerHeight` 会变——就在量高度那儿递（见上面）。
-                    // 每个字递一次的话，整个消息列表要重新求值、
-                    // 还要跑一段带动画的滚动，一秒五六下，
-                    // 就是她说的「打字都一卡一卡的」。
-                    // 打字的节奏。**只递字数，不递内容**——
-                    // 写成字数不是为了省事，是为了那边拿不到内容：
-                    // 拿得到就迟早会有人顺手用上。
-                    TypingWatcher.shared.typed(from: old.count, to: text.count)
-                    // 末尾是 @ 或者 @ 后面还没打完名字，就把人列出来
-                    guard activeConversation?.isGroup == true else {
-                        mentioning = false
-                        return
-                    }
-                    if let at = text.lastIndex(of: "@") {
-                        let tail = text[text.index(after: at)...]
-                        mentioning = !tail.contains(" ") && tail.count < 12
-                    } else {
-                        mentioning = false
-                    }
-                }
                 .textFieldStyle(.plain)
                 .font(.system(size: app.settings.fontSize))
                 .lineLimit(1...6)
@@ -1600,6 +1595,35 @@ struct ChatView: View {
         }
         .buttonStyle(.plain)
         .disabled(selected.isEmpty)
+    }
+
+
+    /// 她敲了一下。以前挂在 `.onChange(of: draft)` 上——那要求整页跟着字变（见 `box`），挪出来了
+    private func onTyped(_ old: String, _ text: String) {
+                    // 她一开始打字，列表就滑到最底下。
+                    // 以前不滑，打字的时候最后那几条被键盘顶上去看不见了。
+                    //
+                    // ⚠️ **这儿不再递 `typingTick` 了。**
+                    // 真正需要滚的只有「输入栏长高了一行」那一下，
+                    // 而那一下 `composerHeight` 会变——就在量高度那儿递（见上面）。
+                    // 每个字递一次的话，整个消息列表要重新求值、
+                    // 还要跑一段带动画的滚动，一秒五六下，
+                    // 就是她说的「打字都一卡一卡的」。
+                    // 打字的节奏。**只递字数，不递内容**——
+                    // 写成字数不是为了省事，是为了那边拿不到内容：
+                    // 拿得到就迟早会有人顺手用上。
+                    TypingWatcher.shared.typed(from: old.count, to: text.count)
+                    // 末尾是 @ 或者 @ 后面还没打完名字，就把人列出来
+                    guard activeConversation?.isGroup == true else {
+                        mentioning = false
+                        return
+                    }
+                    if let at = text.lastIndex(of: "@") {
+                        let tail = text[text.index(after: at)...]
+                        mentioning = !tail.contains(" ") && tail.count < 12
+                    } else {
+                        mentioning = false
+                    }
     }
 
     /// 有文字、有表情、有图、有文件、有语音，任意一样就能发
@@ -2349,5 +2373,36 @@ extension MessageListView: Equatable {
             && a.typingTick == b.typingTick
             && a.bottomInset == b.bottomInset
             && a.jumpTo == b.jumpTo
+    }
+}
+
+
+// MARK: - 输入框里那半句
+
+/// 输入框里那半句。**字变了不通知**，只在「空↔不空」和代码主动改的时候通知（见 `ChatView.box`）。
+@MainActor
+final class DraftBox: ObservableObject {
+    private(set) var text: String = ""
+    @Published private(set) var empty = true
+    /// 代码改了一次草稿就加一。它一变，聊天页重画，输入框跟着显示新的字
+    @Published private(set) var revision = 0
+
+    /// 她自己敲的：只收字，不重画
+    func typed(_ v: String) {
+        text = v
+        refresh()
+    }
+
+    /// 代码改的：收字，并且让输入框刷新
+    func set(_ v: String) {
+        guard v != text else { return }
+        text = v
+        refresh()
+        revision &+= 1
+    }
+
+    private func refresh() {
+        let e = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if e != empty { empty = e }
     }
 }
