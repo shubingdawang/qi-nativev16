@@ -430,6 +430,21 @@ struct PhoneActivityView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            // ⚠️ **先说清楚现在读的是哪儿。**
+            //
+            // 她报的：「看屏幕这一步点击打开没反应，在栖文件夹里的『给他看的屏幕』文件夹里。」
+            // 那个文件夹就是栖自己的，**本来就在读它，根本不用挑**——
+            // 而系统的选择器对 App 自己的文件夹点「打开」常常没反应。
+            // 页面上不写这一句，她就只会觉得「挑文件夹」是必须的一步。
+            if peek.usesOwnFolder {
+                Text(peek.ownFolderShotCount > 0
+                     ? "现在读的是：我的 iPhone › 栖 › 给他看的屏幕（里面有 \(peek.ownFolderShotCount) 张）。快捷指令存到这里就行，不用挑文件夹。"
+                     : "现在读的是：我的 iPhone › 栖 › 给他看的屏幕（还是空的）。快捷指令存到这里就行，不用挑文件夹。")
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textSoft(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             HStack(spacing: 8) {
                 // ⚠️ 走 `ImportButton`，**不要在这一页上挂 `fileImporter`**。
                 //
@@ -441,7 +456,7 @@ struct PhoneActivityView: View {
                 //
                 // `ImportButton` 自己拿着弹窗、不订阅任何东西，
                 // 外面重建多少次都跟它无关。理由写在那个文件开头。
-                ImportButton(title: peek.ready ? "换个文件夹" : "挑文件夹",
+                ImportButton(title: peek.usesOwnFolder ? "改读别的文件夹" : "换个文件夹",
                              icon: "folder",
                              types: [.folder],
                              multiple: false) { result in
@@ -450,11 +465,11 @@ struct PhoneActivityView: View {
                     }
                 }
 
-                if peek.ready {
+                if !peek.usesOwnFolder {
                     Button {
                         peek.forget()
                     } label: {
-                        Text("断开")
+                        Text("改回栖的文件夹")
                             .font(.app(13))
                             .foregroundStyle(Theme.textMuted(scheme))
                             .padding(.horizontal, 12)

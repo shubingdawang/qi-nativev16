@@ -99,6 +99,15 @@ final class ScreenPeek: ObservableObject {
 
     var ready: Bool { bookmark != nil || cachedFrame() != nil || ownFolderHasShots }
 
+    /// 没挑别的文件夹：读的就是栖自己那个
+    var usesOwnFolder: Bool { bookmark == nil }
+
+    /// 栖自己那个文件夹里有几张截图（页面上告诉她读到了没有）
+    var ownFolderShotCount: Int {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: Self.ownFolder.path)) ?? []
+        return names.filter { ["png", "jpg", "jpeg", "heic"].contains(($0 as NSString).pathExtension.lowercased()) }.count
+    }
+
     /// 屏幕广播交过来的最新一帧（见 `QiBroadcast/SampleHandler.swift`）。
     ///
     /// ⚠️ **这一条比快捷指令那张更新就用它**：广播开着的时候三秒一帧，
@@ -142,6 +151,11 @@ final class ScreenPeek: ObservableObject {
     /// 跟 PhoneActivityStore 一个坑：**书签必须在权限范围之内创建**，
     /// 不然 bookmarkData() 会静默失败，界面看着像「选了没反应」。
     func remember(_ url: URL) {
+        // 挑的就是栖自己那个文件夹：本来就在读它，不用书签（有的系统版本对自家文件夹给不出书签）
+        if url.standardizedFileURL.path.hasPrefix(Self.ownFolder.standardizedFileURL.path) {
+            forget()
+            return
+        }
         let granted = url.startAccessingSecurityScopedResource()
         defer { if granted { url.stopAccessingSecurityScopedResource() } }
         if let data = try? url.bookmarkData(

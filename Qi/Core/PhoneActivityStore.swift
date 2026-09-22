@@ -117,14 +117,39 @@ final class PhoneActivityStore: ObservableObject {
         let needsStop = url.startAccessingSecurityScopedResource()
         defer { if needsStop { url.stopAccessingSecurityScopedResource() } }
 
+        // 书签旧了（文件被挪过、被整份换过）：趁这次还能打开，重新记一份
+        if stale, let fresh = try? url.bookmarkData(options: [], includingResourceValuesForKeys: nil,
+                                                     relativeTo: nil) {
+            self.bookmark = fresh
+        }
+
         guard let raw = try? String(contentsOf: url, encoding: .utf8) else {
             lastError = "读不出来，检查一下是不是纯文本"
             return
         }
         events = parse(raw)
-        lastError = events.isEmpty
-            ? "文件是空的，或者每行的格式对不上（要「日期|App名字|open」这样）"
-            : nil
+        if events.isEmpty {
+            lastError = "文件是空的，或者每行的格式对不上（要「日期|App名字|open」这样）"
+            return
+        }
+        // ⚠️ **读到的最后一条太旧，多半读错了文件。**
+        //
+        // 她报的：「手机只显示到 9 月 8 日，但文件是正常的。」
+        // 解析没错——App 记住的那一份本身就停在 9 月 8 日。快捷指令那天起在写另一份
+        // （换了位置、或者整份覆盖成了一个新文件），这边还抱着旧的那份在读。
+        // 不说一声的话，她只会看到「有记录的最后一天」一直停在那儿。
+        if let newest = events.first?.time {
+            let days = Calendar.current.dateComponents([.day], from: newest, to: Date()).day ?? 0
+            if days >= 2 {
+                let f = DateFormatter()
+                f.locale = Locale(identifier: "zh_CN")
+                f.dateFormat = "M月d日"
+                lastError = "读到的这份文件最后一条是 \(f.string(from: newest))（\(days) 天前）。"
+                    + "快捷指令可能在写另一份文件——点上面「换文件」，选快捷指令正在写的那一份。"
+                return
+            }
+        }
+        lastError = nil
     }
 
     /// 一行一条。用竖线、逗号、制表符隔开都行——
