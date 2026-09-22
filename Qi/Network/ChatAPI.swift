@@ -81,7 +81,8 @@ enum ChatAPI {
         messages: [OutgoingMessage],
         tools: [[String: Any]] = [],
         claudeSession: String? = nil,
-        cacheScope: String? = nil
+        cacheScope: String? = nil,
+        lastRound: Bool = false
     ) -> AsyncThrowingStream<StreamEvent, Error> {
 
         AsyncThrowingStream { continuation in
@@ -117,7 +118,8 @@ enum ChatAPI {
                                                      tools: tools,
                                                      wantThinking: wantThinking,
                                                      claudeSession: claudeSession,
-                                                     cacheScope: wantThinking ? cacheScope : nil)
+                                                     cacheScope: wantThinking ? cacheScope : nil,
+                                                     lastRound: lastRound)
                         request.httpBody = bodyData
 
                         // 终端那一页。**只记不发**——一条都不会进提示词。
@@ -482,7 +484,8 @@ enum ChatAPI {
         tools: [[String: Any]],
         wantThinking: Bool,
         claudeSession: String? = nil,
-        cacheScope: String? = nil
+        cacheScope: String? = nil,
+        lastRound: Bool = false
     ) throws -> Data {
 
         var payload: [[String: Any]] = []
@@ -613,7 +616,9 @@ enum ChatAPI {
         ]
         if !tools.isEmpty {
             body["tools"] = tools
-            body["tool_choice"] = "auto"
+            // 动手次数到头的最后一轮：工具表照发（历史里有工具调用，不发会报错），
+            // 但不许再调——他得把话说出来，不能调完工具就没下文了
+            body["tool_choice"] = lastRound ? "none" : "auto"
         }
         // 新桥认这个键：接着电脑上指定的那个窗口说（见 `AgentBridge.pinned`）。别的供应商不认，当多余的键忽略
         if let claudeSession, !claudeSession.isEmpty {

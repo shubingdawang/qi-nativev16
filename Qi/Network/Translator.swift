@@ -115,7 +115,8 @@ enum Translator {
         guard let url = comps?.url else { return nil }
 
         var req = URLRequest(url: url)
-        req.timeoutInterval = 12
+        // ⚠️ 5 秒。国内连不上它，以前每段干等 12 秒才换 MyMemory——她说的「翻译有点慢」
+        req.timeoutInterval = 5
         req.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
 
         guard let (data, response) = try? await URLSession.shared.data(for: req),
@@ -148,7 +149,7 @@ enum Translator {
         guard let url = comps?.url else { return nil }
 
         var req = URLRequest(url: url)
-        req.timeoutInterval = 12
+        req.timeoutInterval = 8
 
         guard let (data, response) = try? await URLSession.shared.data(for: req),
               let http = response as? HTTPURLResponse,

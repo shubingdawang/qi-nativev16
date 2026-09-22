@@ -601,6 +601,9 @@ struct AppSettings: Codable {
     var markerHex: String = "F2C94C"
     
     var contextLimit: Int = 0
+    /// 他一句话里最多来回调几轮工具。**每一轮都是一次调用**，按次计费就是一次钱。
+    /// 她定的：默认 5
+    var maxToolRounds: Int = 5
     /// 滚雪球压缩：每攒够多少条消息压一次（0 = 关，退回上面那条「直接砍」）。
     ///
     /// 她说的：「我不想换窗，所以上下文压缩是肯定的……我希望能保持一个窗口
@@ -942,6 +945,7 @@ extension AppSettings {
         readerPageMode = (try? c.decodeIfPresent(String.self, forKey: .readerPageMode)) ?? "scroll"
         markerHex = (try? c.decodeIfPresent(String.self, forKey: .markerHex)) ?? "F2C94C"
         contextLimit = (try? c.decodeIfPresent(Int.self, forKey: .contextLimit)) ?? 0
+        maxToolRounds = (try? c.decodeIfPresent(Int.self, forKey: .maxToolRounds)) ?? 5
         compactEvery = (try? c.decodeIfPresent(Int.self, forKey: .compactEvery)) ?? 60
         typewriter = (try? c.decodeIfPresent(Bool.self, forKey: .typewriter)) ?? true
         haptics = (try? c.decodeIfPresent(Bool.self, forKey: .haptics)) ?? true

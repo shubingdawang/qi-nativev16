@@ -112,6 +112,7 @@ final class AppState: ObservableObject {
     init() {
         providers = Storage.load([Provider].self, from: "providers.json") ?? []
         conversations = Storage.load([Conversation].self, from: "conversations.json") ?? []
+        Self.tidyThinkTags(&conversations)
         settings = Storage.load(AppSettings.self, from: "settings.json") ?? AppSettings()
         mcpServers = Storage.load([MCPServer].self, from: "mcp.json") ?? MCPServer.defaults
         voices = Storage.load([VoiceService].self, from: "voices.json") ?? VoiceService.defaults
@@ -1212,7 +1213,7 @@ final class AppState: ObservableObject {
         do {
             var round = 0
             var apiMsgs = apiMessages
-            while round < 6 {
+            while round < max(1, settings.maxToolRounds) + 1 {
                 round += 1
                 var pending: [Int: ChatAPI.ToolCallPayload] = [:]
                 var roundText = ""
@@ -1480,7 +1481,10 @@ final class AppState: ObservableObject {
                 // 模型可能要调工具、看完结果再接着说，所以要来回好几轮。
                 // 上限 8 轮，防止它自己跟自己没完没了。
                 var round = 0
-                while round < 8 {
+                // 一句话最多来回几轮工具（设置里调，默认 5）。每一轮都是一次调用
+                // +1：动完最后一次手，还要留一轮给他把话说出来
+                let roundCap = max(1, settings.maxToolRounds) + 1
+                while round < roundCap {
                     round += 1
                     var pending: [Int: ChatAPI.ToolCallPayload] = [:]
                     var roundText = ""
@@ -1497,7 +1501,8 @@ final class AppState: ObservableObject {
                             // 新桥：她钉了电脑上哪个窗口就接着那个说
                             claudeSession: AgentBridge.isAgent(p)
                                 ? AgentBridge.pinned(conversationID) : nil,
-                            cacheScope: conversationID.uuidString
+                            cacheScope: conversationID.uuidString,
+                            lastRound: round >= roundCap
                         )
 
                         for try await event in stream {
@@ -1969,6 +1974,34 @@ final class AppState: ObservableObject {
     }
 
     /// 把所有打开的 MCP 工具，翻译成接口认识的格式
+    // MARK: 旧消息里的 <think>
+
+    /// 那几条中转把思考写在正文里、用 `<think>…</think>` 包着的旧消息：
+    /// 标签里的字挪进思考链，正文只留标签后面那段。
+    ///
+    /// 她说的「think 整理一下吧」。新的回复流式那一层已经会拆了（`ChatAPI.ThinkSplitter`），
+    /// 这儿只管已经存下来的那些。**每次起来都过一遍**——没有标签的消息一眼就跳过，不费事
+    static func tidyThinkTags(_ all: inout [Conversation]) {
+        for ci in all.indices {
+            for mi in all[ci].messages.indices {
+                let m = all[ci].messages[mi]
+                guard m.role == .assistant,
+                      m.content.range(of: "<think", options: .caseInsensitive) != nil
+                else { continue }
+                var splitter = ChatAPI.ThinkSplitter()
+                var text = "", reason = ""
+                for part in splitter.feed(m.content) + splitter.flush() {
+                    if part.thinking { reason += part.text } else { text += part.text }
+                }
+                let r = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !r.isEmpty else { continue }
+                all[ci].messages[mi].content = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let before = (m.reasoning ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                all[ci].messages[mi].reasoning = before.isEmpty ? r : before + "\n\n" + r
+            }
+        }
+    }
+
     // MARK: 这条通道缓不缓
 
     /// 模型名 → 连着几次回包里缓存读写都是 0。
@@ -4534,12 +4567,9 @@ final class AppState: ObservableObject {
             // 三、都不通了才用模型。**这一步是要花钱的**，
             //     所以放在最后，而且只在前两步都失败时才走。
             //
-            // ⚠️ **思考链那条不走这一步。** 她定的：思考链翻译一律机翻，
-            // 不许调模型。正文长按翻译还留着这条兜底。
-            else if reasoning {
-                out = "翻不动（系统翻译没开或者网不通）。思考链不会去调模型。"
-            } else {
-                out = await self.translateWithModel(source)
+            // ⚠️ **不走这一步了，正文和思考链都一样。** 她定的：翻译一律机翻，不用模型
+            else {
+                out = "翻不动（系统翻译没开或者网不通）。翻译不会去调模型。"
             }
 
             guard let ci2 = self.index(of: conversationID),

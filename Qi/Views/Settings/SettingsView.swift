@@ -710,6 +710,31 @@ struct SettingsView: View {
 
             SettingsDivider()
 
+            HStack {
+                Text("一句话最多动几次手")
+                    .font(.app(15))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Spacer(minLength: 8)
+                Menu {
+                    ForEach([1, 2, 3, 5, 8], id: \.self) { n in
+                        Button("\(n) 次") { app.settings.maxToolRounds = n }
+                    }
+                } label: {
+                    Text("\(app.settings.maxToolRounds) 次")
+                        .font(.app(14))
+                        .foregroundStyle(Theme.textSoft(scheme))
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 9)
+
+            SettingsNote("他回一句话时最多来回调用几轮工具。每一轮都算一次调用，按次计费时每轮单独计价。"
+                         + "到了上限就不再调工具，直接说话。",
+                         title: "说明")
+
+            SettingsDivider()
+
             // 主的额度满了接着用谁
             HStack {
                 Text("备用模型")
