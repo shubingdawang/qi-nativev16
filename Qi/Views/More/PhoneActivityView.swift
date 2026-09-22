@@ -29,7 +29,8 @@ struct PhoneActivityView: View {
                     dayPager
                     summary
                     ranking
-                    Text("一共读到 \(store.events.count) 条记录")
+                    Text("一共读到 \(store.events.count) 条记录"
+                         + (store.readingOwnFolder ? " · 来自 我的 iPhone › 栖 › 手机使用记录" : ""))
                         .font(.app(10))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
@@ -438,8 +439,8 @@ struct PhoneActivityView: View {
             // 页面上不写这一句，她就只会觉得「挑文件夹」是必须的一步。
             if peek.usesOwnFolder {
                 Text(peek.ownFolderShotCount > 0
-                     ? "现在读的是：我的 iPhone › 栖 › 给他看的屏幕（里面有 \(peek.ownFolderShotCount) 张）。快捷指令存到这里就行，不用挑文件夹。"
-                     : "现在读的是：我的 iPhone › 栖 › 给他看的屏幕（还是空的）。快捷指令存到这里就行，不用挑文件夹。")
+                     ? "当前读取：我的 iPhone › 栖 › 给他看的屏幕（共 \(peek.ownFolderShotCount) 张）。快捷指令将截图存入此文件夹即可，无需另选。"
+                     : "当前读取：我的 iPhone › 栖 › 给他看的屏幕（暂无截图）。快捷指令将截图存入此文件夹即可，无需另选。")
                     .font(.app(11))
                     .foregroundStyle(Theme.textSoft(scheme))
                     .fixedSize(horizontal: false, vertical: true)

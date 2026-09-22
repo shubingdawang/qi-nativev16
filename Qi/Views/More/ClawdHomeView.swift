@@ -2135,7 +2135,7 @@ struct ClawdHomeView: View {
                     .foregroundStyle(Theme.textMuted(scheme))
                     .padding(.top, 50)
             } else {
-                Text("点一下摆出一件，都摆出去后再点一下收回一件")
+                Text("轻点摆出一件；全部摆出后，轻点收回一件。")
                     .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
@@ -2149,7 +2149,7 @@ struct ClawdHomeView: View {
             VStack(alignment: .leading, spacing: 14) {
                 // 长按那条路不写出来她找不到。同一件可以买很多份，
                 // 长按能挑数量和放进哪一间。
-                Text("点一下买一件，长按可以选数量和房间")
+                Text("轻点购买一件；长按选择数量与房间。")
                     .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
 

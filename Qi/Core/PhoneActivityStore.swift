@@ -69,10 +69,40 @@ final class PhoneActivityStore: ObservableObject {
         didSet { UserDefaults.standard.set(bookmark, forKey: "phoneActivityBookmark") }
     }
     @Published var lastError: String?
+    private var staleDummy = false
 
     init() {
         bookmark = UserDefaults.standard.data(forKey: "phoneActivityBookmark")
+        _ = Self.ownFolder
     }
+
+    /// 栖自己的「手机使用记录」文件夹。快捷指令直接往这里写，**不用挑文件**。
+    ///
+    /// 她报的：「文件没有选错，但依旧显示 9 月 8 日。」——她发来的那份确实停在 9 月 8 日，
+    /// 而她在「文件」里看到的那份写到了 9 月 23 日、分隔符还不一样（` | ` 带空格），
+    /// 是**两份同名文件**：快捷指令那天起在往另一个位置写。
+    /// 跟「让他看屏幕」一样，给一条不用挑的路：这里本来就是我们的地盘，不用书签
+    static var ownFolder: URL {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let dir = docs.appendingPathComponent("手机使用记录", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        return dir
+    }
+
+    /// 栖自己那个文件夹里的记录（文件夹里的文本文件全读，拼起来）
+    private func ownRaw() -> String? {
+        let dir = Self.ownFolder
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { return nil }
+        let texts = names.filter { !$0.hasPrefix(".") }.compactMap {
+            try? String(contentsOf: dir.appendingPathComponent($0), encoding: .utf8)
+        }
+        return texts.isEmpty ? nil : texts.joined(separator: "\n")
+    }
+
+    /// 现在读的是不是栖自己那个文件夹
+    @Published private(set) var readingOwnFolder = false
 
     /// 选好文件之后记下来，以后自动读。
     ///
@@ -106,6 +136,26 @@ final class PhoneActivityStore: ObservableObject {
 
     /// 重新读一遍
     func reload() {
+        // 栖自己那个文件夹里有记录：跟挑的那份比，**谁的最后一条新就用谁**
+        if let raw = ownRaw() {
+            let mine = parse(raw)
+            if !mine.isEmpty {
+                var picked: [PhoneEvent] = []
+                if let bookmark, let url = try? URL(resolvingBookmarkData: bookmark, options: [],
+                                                     relativeTo: nil, bookmarkDataIsStale: &staleDummy) {
+                    let ok = url.startAccessingSecurityScopedResource()
+                    if let t = try? String(contentsOf: url, encoding: .utf8) { picked = parse(t) }
+                    if ok { url.stopAccessingSecurityScopedResource() }
+                }
+                if (mine.first?.time ?? .distantPast) >= (picked.first?.time ?? .distantPast) {
+                    events = mine
+                    readingOwnFolder = true
+                    lastError = nil
+                    return
+                }
+            }
+        }
+        readingOwnFolder = false
         guard let bookmark else { return }
         var stale = false
         guard let url = try? URL(resolvingBookmarkData: bookmark,
@@ -145,7 +195,9 @@ final class PhoneActivityStore: ObservableObject {
                 f.locale = Locale(identifier: "zh_CN")
                 f.dateFormat = "M月d日"
                 lastError = "读到的这份文件最后一条是 \(f.string(from: newest))（\(days) 天前）。"
-                    + "快捷指令可能在写另一份文件——点上面「换文件」，选快捷指令正在写的那一份。"
+                    + "快捷指令在写的是另一份同名文件（在别的位置）。最省事的办法："
+                    + "把快捷指令里「追加到文本文件」的位置改成 我的 iPhone › 栖 › 手机使用记录，"
+                    + "App 会自动读那里，不用再挑文件。"
                 return
             }
         }

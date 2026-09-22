@@ -301,7 +301,7 @@ struct ProbeHistoryView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
                 if history.items.isEmpty {
-                    Text("还没有探过。")
+                    Text("暂无探测记录。")
                         .font(.app(12))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .frame(maxWidth: .infinity)

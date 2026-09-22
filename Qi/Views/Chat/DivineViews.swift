@@ -109,7 +109,7 @@ struct DivineChatCardView: View {
 
     private var subtitle: String {
         if card.analyzed { return card.preview }
-        if card.drawn { return "他正要看这几张牌。" }
+        if card.drawn { return "他正在看这几张牌。" }
         return "问的是：\(card.question)\n点一下去抽 \(card.count) 张"
     }
 }
