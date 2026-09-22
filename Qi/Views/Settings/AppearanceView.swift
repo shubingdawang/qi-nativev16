@@ -53,7 +53,6 @@ struct AppearanceView: View {
                     presetCard
                     textColorCard
                     chatCard
-                    recipeCard
                     auroraCard
                     previewCard
                 }
@@ -293,7 +292,7 @@ struct AppearanceView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 13)
 
-            SettingsNote("三档的区别在表面质感：**磨砂**表面带细颗粒，**模糊**表面平整，**通透**使用系统液态玻璃，遮挡最少、以边缘光成形。\n\n设置作用于全 App 的卡片、气泡与导航条。模糊强度由下方「模糊程度」控制。")
+            SettingsNote("三档的区别在表面质感：**磨砂**表面带细颗粒，**模糊**表面平整，**通透**使用系统液态玻璃，遮挡最少、以边缘光成形。\n\n设置作用于全 App 的卡片、气泡与导航条，切换后立即生效。")
         }
     }
 
@@ -476,12 +475,8 @@ struct AppearanceView: View {
                    note: "作用于全 App：设置页、侧边栏、札记与游戏内文字一并生效，不限于聊天气泡。",
                    live: true)
             SettingsDivider()
-            slider(title: "模糊程度",
-                   value: $app.settings.glassOpacity,
-                   range: 0...1, step: nil,
-                   readout: "\(Int(app.settings.glassOpacity * 100))%",
-                   note: "向右模糊程度提高，背景壁纸化为色块，玻璃质感更实；向左模糊程度降低，可辨认壁纸原貌。\n\n本项调整的是模糊半径，不改变图层透明度。",
-                   )
+            // 「模糊程度」滑块**删了**：玻璃照她给的配方定死（见 `GlassSurface.recipeFrosted`），
+            // 她说的「如果可以直接应用她们的玻璃设置，这个进度条可以删掉了」
             // ⚠️ **不给 `onDraft`。**
             //
             // 她报的：「模糊程度的进度条不能拖动。」
@@ -505,8 +500,6 @@ struct AppearanceView: View {
             //
             // 深色下现在改成**压壁纸**（固定 50%，在
             // `WallpaperBackground` 里），玻璃那一层一点不碰。
-            liveSample
-            SettingsDivider()
             slider(title: "自己的气泡染色",
                    value: $app.settings.bubbleTint,
                    range: 0...1, step: nil,

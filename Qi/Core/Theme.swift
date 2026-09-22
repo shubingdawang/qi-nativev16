@@ -393,11 +393,15 @@ struct GlassSurface: View {
     // 深色现在改成**压壁纸**（50%，在 `WallpaperBackground` 里）。
 
     @Environment(\.colorScheme) private var scheme
+    /// ⚠️⚠️ **从环境里读，不读 `Theme.glassStyle` 那个静态值。**
+    ///
+    /// 她报的：「换了玻璃并不是即时更换的，需要退出去一个页面再进入才换。」
+    /// 静态值改了，SwiftUI 不知道——没有任何页面会因此重画，
+    /// 只有重新进页面、重新建这一块的时候才会去读。
+    /// 环境值一变，所有读它的玻璃当场一起重画（根视图上注入，见 RootView）
+    @Environment(\.qiGlass) private var envGlass
 
-    private var kind: GlassStyle { style ?? Theme.glassStyle }
-
-    /// 走不走那份参考的新配方。跟设置里那个开关是同一个值。
-    private var newRecipe: Bool { Theme.glassNewRecipe }
+    private var kind: GlassStyle { style ?? envGlass }
 
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: radius, style: .continuous)
@@ -412,11 +416,11 @@ struct GlassSurface: View {
             // ⚠️ 不能写成 `newRecipe ? frostedNew : frosted`：
             // 两个 `some View` 是两种不同的类型，三元要求两边同一个类型，编译不过。
             // 在 ViewBuilder 里用 if/else，两支才能是不同的类型。
-            case .frosted:
-                if newRecipe { frostedNew } else { frosted }
+            // 磨砂、模糊照她给的参考定成一套（见 `recipeFrosted` / `recipeBlur`），
+            // 不再有「换一套做法」和模糊程度滑块
+            case .frosted: recipeFrosted
             case .clear:   clear
-            case .blur:
-                if newRecipe { blurNew } else { blur }
+            case .blur:    recipeBlur
             }
         }
         // ⚠️ 这儿原来有一层「深色下压黑」，**删了**（理由见上面）。
@@ -712,6 +716,65 @@ struct GlassSurface: View {
             }
     }
 
+    // MARK: 她给的那两份参考定下来的配方
+    //
+    // 她报的：「模糊和磨砂只有在导航栏的显示才是对的，设置里其他框看起来更像是白色。」
+    // 白是纱太厚：旧的磨砂用系统较厚的材质再叠 42%–55% 的白。
+    // 她那份「磨砂气泡」只给 20%–25% 的白纱、8px 的小模糊，
+    // 靠一道 1px 的白边、上缘一线内高光和左上角一团柔光读出「磨砂」。
+    //
+    // ⚠️ 这两支一样**不许加 `.shadow` / `.blur` / `.drawingGroup`**（会打断材质采样）。
+
+    /// 磨砂 = 「磨砂气泡」那份：薄材质 + 20% 上下的白纱 + 左上柔光 + 1px 白边 + 细颗粒
+    private var recipeFrosted: some View {
+        let dark = scheme == .dark
+        return shape.fill(.ultraThinMaterial)
+            .overlay {
+                shape.fill(LinearGradient(
+                    colors: dark ? [.white.opacity(0.10), .white.opacity(0.05)]
+                                 : [.white.opacity(0.26), .white.opacity(0.18)],
+                    startPoint: .top, endPoint: .bottom))
+            }
+            .overlay {
+                // radial-gradient(circle at 30% 20%, rgba(255,255,255,.4), transparent 70%)
+                shape.fill(RadialGradient(
+                    colors: [.white.opacity(dark ? 0.12 : 0.30), .white.opacity(0)],
+                    center: UnitPoint(x: 0.3, y: 0.2),
+                    startRadius: 0, endRadius: 260))
+            }
+            .overlay {
+                if extra > 0.01 { shape.fill(.white.opacity(extra * 0.10)) }
+            }
+            .overlay { GlassGrainLayer(radius: radius, strength: 1) }
+            .overlay {
+                // border: 1px solid rgba(255,255,255,.15)
+                shape.strokeBorder(.white.opacity(dark ? 0.10 : 0.18), lineWidth: 1)
+            }
+            .overlay {
+                // box-shadow: inset 0 1px 0 rgba(255,255,255,.5)
+                shape.strokeBorder(GlassRecipe.topLine(dark: dark), lineWidth: 1)
+            }
+    }
+
+    /// 模糊 = 「三块玻璃的配方」里的毛玻璃：中等模糊 + 22%→10% 的薄纱 + 上缘一线高光 + 白边
+    private var recipeBlur: some View {
+        let dark = scheme == .dark
+        return shape.fill(.thinMaterial)
+            .overlay {
+                shape.fill(GlassRecipe.thinVeil(dark: dark, strength: 1))
+            }
+            .overlay {
+                if extra > 0.01 { shape.fill(.white.opacity(extra * 0.10)) }
+            }
+            .overlay {
+                // border: 1px solid rgba(255,255,255,.35)
+                shape.strokeBorder(.white.opacity(dark ? 0.14 : 0.35), lineWidth: 1)
+            }
+            .overlay {
+                shape.strokeBorder(GlassRecipe.topLine(dark: dark), lineWidth: 1)
+            }
+    }
+
     private var tier: Material {
         switch blurAmount {
         case ..<0.30: return .ultraThinMaterial
@@ -978,5 +1041,20 @@ extension Font {
             return .system(size: scaled, weight: weight, design: design)
         }
         return .system(size: scaled, weight: weight)
+    }
+}
+
+
+// MARK: - 玻璃走环境
+
+/// 现在是哪种玻璃。根视图上注入（`RootView`），改了设置全 App 当场重画。
+private struct QiGlassKey: EnvironmentKey {
+    static let defaultValue: GlassStyle = .frosted
+}
+
+extension EnvironmentValues {
+    var qiGlass: GlassStyle {
+        get { self[QiGlassKey.self] }
+        set { self[QiGlassKey.self] = newValue }
     }
 }

@@ -117,13 +117,12 @@ enum Look {
 
         /// 这一档玻璃对应哪种系统材质
         func material() -> UIBlurEffect.Style {
+            // 跟卡片同一个厚薄（见 `GlassSurface.recipeFrosted` / `recipeBlur`）：
+            // 磨砂是薄材质 + 白纱，模糊是中等材质 + 更薄的纱
             switch style {
-            // 磨砂：糊得最厉害
-            case .frosted: return .systemThickMaterial
-            // 通透：让背后透过来，只留一点点
+            case .frosted: return .systemUltraThinMaterial
             case .clear:   return .systemUltraThinMaterial
-            // 模糊：中间那一档
-            case .blur:    return .systemMaterial
+            case .blur:    return .systemThinMaterial
             }
         }
 

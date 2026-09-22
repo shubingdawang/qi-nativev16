@@ -154,6 +154,8 @@ struct RootView: View {
         // App 已经开着的时候走这条；冷启动走上面 `onAppear` 那条。
         // 系统自带翻译的宿主。看不见的一层，思考链翻译靠它（见 `AppleTranslate`）
         .background(AppleTranslateHost())
+        // 玻璃是哪种：走环境，改了设置所有玻璃当场一起换（见 `GlassSurface.envGlass`）
+        .environment(\.qiGlass, app.settings.glassStyle)
         .onChange(of: notifier.openConversationID) { _, _ in openFromBanner() }
         .sheet(isPresented: $notifier.openMemories) {
             NavigationStack { MemoryLibraryView() }
