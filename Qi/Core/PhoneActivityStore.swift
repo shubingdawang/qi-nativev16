@@ -246,6 +246,10 @@ final class PhoneActivityStore: ObservableObject {
                 if let d = f.date(from: parts[0]) { when = d; break }
             }
             guard let when else { continue }
+            // 年份写岔了的跳过：她那份里有一行是「22026年9月20日」（多了个 2），
+            // 照读的话会在「今天」后面多出一天。晚于明天、或者早于 2015 年的都不算
+            guard when < Date().addingTimeInterval(86_400),
+                  Calendar.current.component(.year, from: when) >= 2015 else { continue }
 
             let app = parts[1]
             // App 名是空的（快捷指令偶尔会漏），这条没用
