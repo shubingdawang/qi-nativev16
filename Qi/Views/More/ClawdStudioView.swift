@@ -134,6 +134,10 @@ struct ClawdStudioView: View {
     @State private var history: [(svg: String, css: String)] = []
     /// 「一行字」那件现在要填的字
     @State private var words = ""
+    /// 「存成零件」那一下要起的名字
+    @State private var namingPart = false
+    @State private var partName = ""
+    @ObservedObject private var myParts = MyPartStore.shared
     /// 画布本身。**住在这一层**，切页签不会丢（见 `ClawdGridEditor.doc`）
     @State private var doodle = ClawdDoodle()
     /// 现在选中的那件零件。空 = 没选
@@ -178,6 +182,17 @@ struct ClawdStudioView: View {
             Button("好") { notice = nil }
         } message: {
             Text(notice ?? "")
+        }
+        .alert("存成零件", isPresented: $namingPart) {
+            TextField("零件名称", text: $partName)
+            Button("取消", role: .cancel) {}
+            Button("存") {
+                let n = partName.trimmingCharacters(in: .whitespacesAndNewlines)
+                myParts.add(name: n.isEmpty ? "我画的" : n, svg: doodle.svg())
+                notice = "已存入「零件 › 我画的零件」。"
+            }
+        } message: {
+            Text("把画布上现在画的这一块存成零件，之后在「零件」页可以反复放上去、拖动和缩放。")
         }
     }
 
@@ -428,6 +443,27 @@ struct ClawdStudioView: View {
         case 0:
             // 摆积木：**一个字的代码都不用看**。
             // 她说改代码这条路她走不了，所以这个排第一，默认就是它。
+            // 画布上方一行：把现在画的这一块存成零件（她要的「自己画一块存成零件」）
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    Button {
+                        partName = ""
+                        namingPart = true
+                    } label: {
+                        Label("存成零件", systemImage: "square.and.arrow.down")
+                            .font(.app(12, weight: .medium))
+                            .foregroundStyle(app.settings.accentColor)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(Theme.softFillDeep))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(doodle.isEmpty)
+                    .opacity(doodle.isEmpty ? 0.45 : 1)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
             ClawdGridEditor(doc: $doodle) { drawn, withBody in
                 // 画布那边一改也得存一步——
                 // 不存的话「撤销」会跳过她刚画的那一笔
@@ -438,6 +474,7 @@ struct ClawdStudioView: View {
                 svg = withBody
                     ? ClawdSVG.replaceFace(in: ClawdSVG.skeleton, with: drawn)
                     : ClawdSVG.bare(drawn)
+            }
             }
         case 1: kit
         case 2: code($svg, hint: "SVG：定义 clawd 的身体、手、腿与脸部。")
@@ -480,6 +517,30 @@ struct ClawdStudioView: View {
                                 }
                                 if !p.css.isEmpty, !css.contains(p.css) {
                                     css += "\n\n" + p.css
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 她自己画、存下来的那些。点一下放上去，跟上面那些一样能拖能缩；长按删
+                if !myParts.parts.isEmpty {
+                    section("我画的零件") {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 8)],
+                                  spacing: 8) {
+                            ForEach(myParts.parts) { mp in
+                                tapChip(mp.name) {
+                                    remember()
+                                    let id = ClawdSVG.nextPlacedID(in: svg)
+                                    svg = ClawdSVG.insert(
+                                        ClawdSVG.placed(mp.svg, name: mp.name, id: id),
+                                        into: svg)
+                                    picked = id
+                                }
+                                .contextMenu {
+                                    Button(role: .destructive) {
+                                        myParts.remove(mp.id)
+                                    } label: { Label("删除这个零件", systemImage: "trash") }
                                 }
                             }
                         }
@@ -750,5 +811,40 @@ struct TransparencyGrid: View {
             }
         }
         .allowsHitTesting(false)
+    }
+}
+
+
+// MARK: - 她自己画的零件
+
+/// 「画」那一页画好一块，存成零件，之后在「零件」页反复放。
+/// 存的是那一块的 SVG（格子坐标已经换算成 320×230 那把尺子），放上去时包一层能挪的壳。
+struct MyPart: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var name: String
+    var svg: String
+    var createdAt = Date()
+}
+
+@MainActor
+final class MyPartStore: ObservableObject {
+    static let shared = MyPartStore()
+    private static let file = "clawd-my-parts.json"
+
+    @Published private(set) var parts: [MyPart] = []
+
+    init() {
+        parts = Storage.load([MyPart].self, from: Self.file) ?? []
+    }
+
+    func add(name: String, svg: String) {
+        guard !svg.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        parts.append(MyPart(name: name, svg: svg))
+        Storage.save(parts, to: Self.file)
+    }
+
+    func remove(_ id: UUID) {
+        parts.removeAll { $0.id == id }
+        Storage.save(parts, to: Self.file)
     }
 }

@@ -460,13 +460,31 @@ enum ClawdSVG {
 
     /// 把某一件整个拿掉。
     ///
-    /// ⚠️ 零件里面不会再有 `<g>`，所以找**紧接着的第一个** `</g>` 就是它的收尾。
-    /// 哪天零件里出现了嵌套的组，这儿要改成数层数。
+    /// ⚠️ **要数层数。** 她自己画的零件里有贴纸（转过、缩过的那种），
+    /// 贴纸自带一层 `<g transform>`——找「紧接着的第一个 `</g>`」会把零件切成两半，
+    /// 留下半截标签，整张图就坏了。
     static func removePlaced(_ id: String, from svg: String) -> String {
-        guard let open = svg.range(of: "<g id=\"" + id + "\""),
-              let close = svg.range(of: "</g>", range: open.upperBound..<svg.endIndex)
-        else { return svg }
-        return svg.replacingCharacters(in: open.lowerBound..<close.upperBound, with: "")
+        guard let open = svg.range(of: "<g id=\"" + id + "\"") else { return svg }
+        var depth = 0
+        var i = open.lowerBound
+        while i < svg.endIndex {
+            if svg[i...].hasPrefix("</g>") {
+                depth -= 1
+                let end = svg.index(i, offsetBy: 4)
+                if depth == 0 {
+                    return svg.replacingCharacters(in: open.lowerBound..<end, with: "")
+                }
+                i = end
+                continue
+            }
+            if svg[i...].hasPrefix("<g"),
+               let next = svg.index(i, offsetBy: 2, limitedBy: svg.endIndex),
+               next < svg.endIndex, svg[next] == " " || svg[next] == ">" {
+                depth += 1
+            }
+            i = svg.index(after: i)
+        }
+        return svg
     }
 
     /// `escape` 的反向。读 `data-name` 的时候用
