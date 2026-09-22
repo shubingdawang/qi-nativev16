@@ -79,7 +79,7 @@ struct SettingsView: View {
                 ScrollView {
                     VStack(spacing: Look.gap + 6) {
                         PageHero(title: "设置",
-                                 subtitle: "模型、外观、记忆、备份都在这儿")
+                                 subtitle: "模型、外观、记忆与备份")
                         appearanceCard
                         generalCard
                         servicesCard
@@ -500,7 +500,7 @@ struct SettingsView: View {
             // 全程本机算，一分钱不花，一个字节不上传。
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("听你的语气")
+                    Text("语气识别")
                         .font(.app(15))
                         .foregroundStyle(Theme.textMain(scheme))
                     Spacer()
@@ -547,11 +547,11 @@ struct SettingsView: View {
                         VoiceBaseline.shared.reset()
                         voiceResetDone = true
                     }
-                    Button("算了", role: .cancel) {}
+                    Button("取消", role: .cancel) {}
                 } message: {
                     Text("已采集的样本将清空，需重新录满八条后恢复比对。")
                 }
-                .alert("清好了", isPresented: $voiceResetDone) {
+                .alert("已清空", isPresented: $voiceResetDone) {
                     Button("好") { voiceResetDone = false }
                 } message: {
                     // 做完了要**说一声**——上一版就是做了不吭声，
@@ -1348,7 +1348,7 @@ struct SettingsView: View {
             //
             // ⚠️ 数字**别走 `String(format:)` 的 `%d`**——那个要的是 32 位，
             // 喂个 Swift 的 Int 进去在 64 位上是要出岔子的。插值最省事。
-            var msg = String(format: "打好了，%.1f MB。", mb)
+            var msg = String(format: "已打包，%.1f MB。", mb)
                 + "\n\n· \(report.files) 份数据"
                 + "\n· **\(report.verified) 个图片语音**（写入完成后重新统计所得）"
             // ⚠️ **拆开摆出来。**

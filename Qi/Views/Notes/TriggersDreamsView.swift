@@ -245,7 +245,7 @@ struct TriggerEditor: View {
                         .pickerStyle(.segmented)
 
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("说了之后，身体往哪儿动")
+                            Text("触发后的身体反应")
                                 .font(.app(13, weight: .medium))
                                 .foregroundStyle(Theme.textMain(scheme))
                             ForEach(BodyField.allCases, id: \.self) { f in
@@ -257,7 +257,7 @@ struct TriggerEditor: View {
                         }
 
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("为什么这个词有分量")
+                            Text("该词的分量来源")
                                 .font(.app(13, weight: .medium))
                                 .foregroundStyle(Theme.textMain(scheme))
                             TextField("给自己留一句，三个月后还记得", text: $word.note,

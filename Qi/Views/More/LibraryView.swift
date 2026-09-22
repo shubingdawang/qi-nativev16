@@ -58,7 +58,7 @@ struct AnnotationSheet: View {
                             }
 
                             if fresh.notes.isEmpty {
-                                Text("尚无批注。记录这句话打动你的原因。")
+                                Text("尚无批注。可记录此句打动你的原因。")
                                     .font(.app(12))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
@@ -74,7 +74,7 @@ struct AnnotationSheet: View {
                                     HStack(spacing: 6) {
                                         Image(systemName: "bubble.left.and.text.bubble.right")
                                             .font(.app(12))
-                                        Text("看当时聊了什么")
+                                        Text("查看当时的对话")
                                             .font(.app(13))
                                         Spacer()
                                         Image(systemName: "chevron.right")

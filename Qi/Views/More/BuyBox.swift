@@ -94,11 +94,11 @@ struct BuyBox: View {
                 }
                 .padding(18)
             }
-            .navigationTitle("买点什么")
+            .navigationTitle("购买")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("算了") { dismiss() }
+                    Button("取消") { dismiss() }
                 }
             }
         }

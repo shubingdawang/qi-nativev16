@@ -76,7 +76,7 @@ struct MoodView: View {
                 if let e = pendingDelete { Task { await remove(e) } }
                 pendingDelete = nil
             }
-            Button("算了", role: .cancel) { pendingDelete = nil }
+            Button("取消", role: .cancel) { pendingDelete = nil }
         } message: {
             Text(pendingDelete?.displayTitle ?? "")
         }

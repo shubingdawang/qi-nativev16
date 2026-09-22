@@ -1178,7 +1178,7 @@ struct JournalPageView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("算了") { editingText = nil }
+                    Button("取消") { editingText = nil }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("好") {

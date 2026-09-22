@@ -78,7 +78,7 @@ struct ChatDrawer: View {
         )) {
             TextField("这一窗叫什么", text: $draftTitle)
             Button("取消", role: .cancel) { renaming = nil }
-            Button("改好了") {
+            Button("保存") {
                 let t = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
                 if let c = renaming, !t.isEmpty, let i = app.index(of: c.id) {
                     app.conversations[i].title = t

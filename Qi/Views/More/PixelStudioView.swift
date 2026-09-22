@@ -186,7 +186,7 @@ struct PixelStudioView: View {
                         .padding(10)
                         .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
                     HStack(spacing: 8) {
-                        Button("算了") { revising = false }
+                        Button("取消") { revising = false }
                             .font(.app(12))
                         Spacer()
                         Button("照这个改") {

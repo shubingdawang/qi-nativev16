@@ -335,7 +335,7 @@ struct NowPlayingView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("算了") { editingLyrics = false }
+                    Button("取消") { editingLyrics = false }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("存下") {
@@ -437,7 +437,7 @@ struct SongMarkSheet: View {
                                     HStack(spacing: 6) {
                                         Image(systemName: "bubble.left.and.text.bubble.right")
                                             .font(.app(12))
-                                        Text("看当时聊了什么").font(.app(13))
+                                        Text("查看当时的对话").font(.app(13))
                                         Spacer()
                                         Image(systemName: "chevron.right").font(.app(10))
                                     }

@@ -59,7 +59,7 @@ struct MemoFloatingView: View {
                 if let m = current { store.togglePin(m.id) }
                 open = false
             }
-            Button("算了", role: .cancel) {}
+            Button("取消", role: .cancel) {}
         } message: {
             Text("收起后仅不在聊天页显示，备忘页中仍保留。")
         }
@@ -198,7 +198,7 @@ struct MemoFloatingView: View {
                     Text("已完成")
                         .font(.app(12, weight: .medium))
                         .foregroundStyle(Theme.textMain(scheme))
-                    Text("点一下说手误")
+                    Text("轻点撤销完成")
                         .font(.app(9))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }

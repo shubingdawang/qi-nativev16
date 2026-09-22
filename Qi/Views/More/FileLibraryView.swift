@@ -219,7 +219,7 @@ struct FileLibraryView: View {
         .alert("新建文件夹", isPresented: $creatingFolder) {
             TextField("起个名字", text: $newFolder)
             Button("取消", role: .cancel) {}
-            Button("建好了") {
+            Button("创建") {
                 let name = newFolder.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !name.isEmpty else { return }
                 // **真的建出来**，不只是把当前视图切过去
@@ -230,7 +230,7 @@ struct FileLibraryView: View {
         } message: {
             Text("建好之后，放进来的文件会归到这个文件夹里。")
         }
-        .confirmationDialog("挪到哪儿", isPresented: Binding(
+        .confirmationDialog("移动到", isPresented: Binding(
             get: { moving != nil }, set: { if !$0 { moving = nil } }
         )) {
             ForEach(store.folders(), id: \.self) { name in
@@ -243,7 +243,7 @@ struct FileLibraryView: View {
                 if let m = moving { store.move(m, to: "") }
                 moving = nil
             }
-            Button("算了", role: .cancel) { moving = nil }
+            Button("取消", role: .cancel) { moving = nil }
         }
         .quickLookPreview($previewURL)
     }

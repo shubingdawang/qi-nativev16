@@ -99,7 +99,7 @@ struct FolderGridView: View {
         )) {
             TextField("新名字", text: $renameText)
             Button("取消", role: .cancel) { renaming = nil }
-            Button("改好了") {
+            Button("保存") {
                 if let old = renaming {
                     store.renameFolder(kind, from: old, to: renameText)
                 }
@@ -121,7 +121,7 @@ struct FolderGridView: View {
                 deletingFolder = acting
                 acting = nil
             }
-            Button("算了", role: .cancel) { acting = nil }
+            Button("取消", role: .cancel) { acting = nil }
         }
         .confirmationDialog(
             "删除文件夹「\(deletingFolder ?? "")」？",
@@ -141,7 +141,7 @@ struct FolderGridView: View {
                 }
                 deletingFolder = nil
             }
-            Button("算了", role: .cancel) { deletingFolder = nil }
+            Button("取消", role: .cancel) { deletingFolder = nil }
         } message: {
             let n = deletingFolder.map { store.list(kind, folder: $0).count } ?? 0
             Text("里面有 \(n) 张。删除后不可恢复；也可仅删除文件夹，将图片退回「未归类」。")
@@ -149,7 +149,7 @@ struct FolderGridView: View {
         .alert("新建文件夹", isPresented: $creating) {
             TextField("起个名字", text: $newName)
             Button("取消", role: .cancel) {}
-            Button("建好了") {
+            Button("创建") {
                 // 文件夹现在是独立存的，空的就是空的——
                 // 不再往 items 里塞占位空记录（那是「空文件夹显示 1」的根）
                 store.createFolder(kind, name: newName)
@@ -345,7 +345,7 @@ struct MediaGridView: View {
                              index: items.firstIndex(where: { $0.id == item.id }) ?? 0,
                              store: store)
         }
-        .confirmationDialog("挪到哪儿", isPresented: Binding(
+        .confirmationDialog("移动到", isPresented: Binding(
             get: { moving != nil },
             set: { if !$0 { moving = nil } }
         )) {
@@ -363,7 +363,7 @@ struct MediaGridView: View {
                     moving = nil
                 }
             }
-            Button("算了", role: .cancel) { moving = nil }
+            Button("取消", role: .cancel) { moving = nil }
         }
     }
 
@@ -377,7 +377,7 @@ struct MediaGridView: View {
         Task {
             await app.tagStickers(todo) { done, total in
                 Task { @MainActor in
-                    taggingText = done >= total ? "写好了" : "在看第 \(done + 1) 张，共 \(total) 张"
+                    taggingText = done >= total ? "已完成" : "在看第 \(done + 1) 张，共 \(total) 张"
                 }
             }
             await MainActor.run {

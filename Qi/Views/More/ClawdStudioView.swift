@@ -336,7 +336,7 @@ struct ClawdStudioView: View {
                     Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
                         .font(.app(15))
                         .foregroundStyle(app.settings.accentColor)
-                    Text("拖这儿挪它")
+                    Text("拖动此处移动")
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                     Text(String(format: "x %.0f　y %.0f", t.dx, t.dy))
@@ -440,8 +440,8 @@ struct ClawdStudioView: View {
                     : ClawdSVG.bare(drawn)
             }
         case 1: kit
-        case 2: code($svg, hint: "这是 SVG。clawd 的身子、手、腿、脸都在这儿。")
-        default: code($css, hint: "这是 CSS。颜色、动画都在这儿。")
+        case 2: code($svg, hint: "SVG：定义 clawd 的身体、手、腿与脸部。")
+        default: code($css, hint: "CSS：定义颜色与动画。")
         }
     }
 
@@ -668,7 +668,7 @@ struct ClawdStudioView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("算了") { saving = false }
+                    Button("取消") { saving = false }
                 }
             }
         }

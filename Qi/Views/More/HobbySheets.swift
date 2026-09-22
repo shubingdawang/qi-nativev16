@@ -82,7 +82,7 @@ struct HobbyEditor: View {
                                     .fill(Theme.softFillDeep))
                                 .overlay(alignment: .topLeading) {
                                     if reason.isEmpty {
-                                        Text("为什么喜欢/讨厌它？")
+                                        Text("喜欢或讨厌的原因")
                                             .font(.app(14))
                                             .foregroundStyle(Theme.textMuted(scheme))
                                             .padding(.horizontal, 13)

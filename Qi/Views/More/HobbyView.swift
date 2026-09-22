@@ -67,7 +67,7 @@ struct HobbyView: View {
 
                     if shown.isEmpty {
                         Text(keyword.isEmpty
-                             ? "这儿还空着。右下角加一个。"
+                             ? "暂无内容，可在右下角添加。"
                              : "没搜到")
                             .font(.app(12))
                             .foregroundStyle(Theme.textMuted(scheme))
@@ -410,7 +410,7 @@ struct HobbyView: View {
                 .font(.app(11))
                 .buttonStyle(.plain)
                 .foregroundStyle(app.settings.accentColor)
-                Button("算了") { EmotionEngine.shared.forget(h) }
+                Button("忽略") { EmotionEngine.shared.forget(h) }
                     .font(.app(11))
                     .buttonStyle(.plain)
                     .foregroundStyle(Theme.textMuted(scheme))

@@ -52,7 +52,7 @@ struct MomentsView: View {
 
     private var empty: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("这儿还什么都没有")
+            Text("暂无内容")
                 .font(.app(14, weight: .medium))
                 .foregroundStyle(Theme.textMain(scheme))
             Text("模型可在对话中直接发布一条内容，例如一句歌词、"
@@ -265,7 +265,7 @@ struct MomentsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("算了") { replyTo = nil }
+                    Button("取消") { replyTo = nil }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("发") { sendReply(m) }

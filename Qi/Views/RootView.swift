@@ -102,7 +102,7 @@ struct RootView: View {
                         Text("通话中")
                             .font(.app(12, weight: .medium))
                         Spacer(minLength: 4)
-                        Text("点一下回去")
+                        Text("轻点返回")
                             .font(.app(10.5))
                             .opacity(0.75)
                     }

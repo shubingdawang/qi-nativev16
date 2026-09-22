@@ -103,7 +103,7 @@ struct DivineChatCardView: View {
     private var title: String {
         if card.analyzing { return "在看这几张牌…" }
         if card.analyzed { return "占卜结果分析" }
-        if card.drawn { return "牌抽好了" }
+        if card.drawn { return "已抽牌" }
         return "占卜 · \(card.spreadName)"
     }
 

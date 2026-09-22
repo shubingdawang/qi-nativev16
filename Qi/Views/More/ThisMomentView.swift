@@ -130,7 +130,7 @@ struct ThisMomentView: View {
                 if let t = confirmDelete { store.delete(t.id) }
                 confirmDelete = nil
             }
-            Button("算了", role: .cancel) { confirmDelete = nil }
+            Button("取消", role: .cancel) { confirmDelete = nil }
         } message: {
             Text("与「已过去」不同：该操作表示此条不应存在，将直接删除。")
         }

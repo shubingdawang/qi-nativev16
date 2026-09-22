@@ -82,7 +82,7 @@ struct PieceBankSheet: View {
             )) {
                 TextField("比如「木床」", text: $newName)
                 Button("取消", role: .cancel) { renaming = nil }
-                Button("改好了") {
+                Button("保存") {
                     if let p = renaming { bank.rename(p.id, to: newName) }
                     renaming = nil
                 }
@@ -95,7 +95,7 @@ struct PieceBankSheet: View {
                     if let p = deleting { bank.remove(p.id) }
                     deleting = nil
                 }
-                Button("算了", role: .cancel) { deleting = nil }
+                Button("取消", role: .cancel) { deleting = nil }
             } message: {
                 // ⚠️ 这句要写清楚，不然她不敢删。
                 // 素材和「已经贴在屋里的那张」是两份文件，删这边不影响那边。

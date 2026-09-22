@@ -62,7 +62,7 @@ struct QuestView: View {
         .sheet(item: $checkingIn) { q in checkInSheet(q) }
         .alert("加一个能换的", isPresented: $addingReward) {
             TextField("换什么", text: $newReward)
-            Button("算了", role: .cancel) { newReward = "" }
+            Button("取消", role: .cancel) { newReward = "" }
             Button("加上") {
                 store.addReward(title: newReward, cost: newCost, by: "her")
                 newReward = ""
@@ -290,7 +290,7 @@ struct QuestView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("算了") { checkingIn = nil }
+                    Button("取消") { checkingIn = nil }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("交了") {

@@ -46,7 +46,7 @@ struct LogoStudioView: View {
 
     private var inputCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("想要一只什么")
+            Text("描述想要的图标")
                 .font(.app(14, weight: .semibold))
                 .foregroundStyle(Theme.textMain(scheme))
 
@@ -56,9 +56,9 @@ struct LogoStudioView: View {
                 .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
 
             Text(MD.inline("""
-            **用大白话写就行**，别写「极简」「高级感」那种词——那套规则里最要紧的一条就是别用设计术语，写得越像人话，画出来越有它自己的样子。
+            **用日常语言描述**，避免「极简」「高级感」等设计术语；描述越具体，生成结果越贴近。
 
-            **一次画一张。** 看一眼，不行再按一次；满意了就停在那儿。每按一次换一个角度和姿势，连着按不会重复。
+            **每次生成一张。** 不满意可再次生成，每次更换角度与姿势，连续生成不会重复。
             """))
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
@@ -69,7 +69,7 @@ struct LogoStudioView: View {
             } label: {
                 HStack(spacing: 7) {
                     if busy { ProgressView().scaleEffect(0.75) }
-                    Text(busy ? "画着呢…" : (made.isEmpty ? "画一张看看" : "再来一张"))
+                    Text(busy ? "生成中…" : (made.isEmpty ? "生成一张" : "再生成一张"))
                         .font(.app(14))
                 }
                 .foregroundStyle(.white)
@@ -107,7 +107,7 @@ struct LogoStudioView: View {
 
     private var grid: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(made.count == 1 ? "画好了" : "挑一张（\(made.count) 张）")
+            Text(made.count == 1 ? "已生成" : "挑一张（\(made.count) 张）")
                 .font(.app(14, weight: .semibold))
                 .foregroundStyle(Theme.textMain(scheme))
 
@@ -158,7 +158,7 @@ struct LogoStudioView: View {
             HStack(spacing: 8) {
                 pill("存到相册") {
                     UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
-                    notice = "存好了。"
+                    notice = "已保存。"
                 }
                 pill("存进图片库") {
                     if let name = ImageStore.save(image) {
@@ -202,7 +202,7 @@ struct LogoStudioView: View {
         guard let name = ImageStore.save(image) else { return }
         if key == "ai" { app.settings.aiAvatarName = name }
         else { app.settings.userAvatarName = name }
-        notice = "换好了。"
+        notice = "已更换。"
     }
 
     private func start() {

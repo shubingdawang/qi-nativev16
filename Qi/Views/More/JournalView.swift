@@ -58,7 +58,7 @@ struct JournalView: View {
                 if let p = confirmDelete { store.remove(p.id) }
                 confirmDelete = nil
             }
-            Button("算了", role: .cancel) { confirmDelete = nil }
+            Button("取消", role: .cancel) { confirmDelete = nil }
         } message: {
             Text("该页上的照片将一并删除。")
         }

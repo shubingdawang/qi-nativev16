@@ -605,7 +605,7 @@ struct ClawdHomeView: View {
                     }
                     buying = nil
                 }
-                Button("算了", role: .cancel) { buying = nil }
+                Button("取消", role: .cancel) { buying = nil }
             }
         } message: {
             Text(buying.map { $0.theme.note + "。买过之后所有房间都能用。" } ?? "")
@@ -631,7 +631,7 @@ struct ClawdHomeView: View {
                     }
                 }
             }
-            Button("算了", role: .cancel) { sending = nil }
+            Button("取消", role: .cancel) { sending = nil }
         }
         .sheet(item: $shopping) { kind in
             BuyBox(kind: kind, store: store) { got, room in
@@ -650,7 +650,7 @@ struct ClawdHomeView: View {
                 store.linked = true
                 say("他进来了")
             }
-            Button("算了", role: .cancel) { }
+            Button("取消", role: .cancel) { }
         } message: {
             // ⚠️ 这段改过一次：原来写的是「启用自动发言……内容与房间的陈设相关」。
             //
@@ -875,7 +875,7 @@ struct ClawdHomeView: View {
                     Menu("摆法") {
                         Button("复制这间的摆法") {
                             UIPasteboard.general.string = store.exportLayout(r)
-                            notice = "摆法复制好了，可以发给别人或者存起来"
+                            notice = "摆放方案已复制，可分享或保存。"
                         }
                         Button("照剪贴板里的摆法摆") {
                             notice = store.importLayout(UIPasteboard.general.string ?? "", into: r)
@@ -1006,7 +1006,7 @@ struct ClawdHomeView: View {
                         ? store.dressRoom(r, wall: img, floor: nil)
                         : store.dressRoom(r, wall: nil, floor: img)
                     notice = ok
-                        ? (decorTarget == .wall ? "墙纸贴上了" : "地板铺好了")
+                        ? (decorTarget == .wall ? "墙纸已更换" : "地板已更换")
                         : "这张图存不下来"
                     try? await Task.sleep(nanoseconds: 4_000_000_000)
                     notice = nil
@@ -1360,7 +1360,7 @@ struct ClawdHomeView: View {
                     say("卖掉了，退回一半的币")
                 }
             }
-            Button("算了", role: .cancel) { }
+            Button("取消", role: .cancel) { }
         } message: {
             Text("长按可移动至房间内任意位置")
         }
@@ -2020,7 +2020,7 @@ struct ClawdHomeView: View {
                     Text("换成我的家具图")
                         .font(.app(13, weight: .medium))
                         .foregroundStyle(Theme.textMain(scheme))
-                    Text("导入整版素材图，系统自动分割为独立家具，你只需为每件标注名称")
+                    Text("导入整版素材图，系统自动分割为独立家具，仅需为每件标注名称")
                         .font(.app(10.5))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .multilineTextAlignment(.leading)
@@ -2130,7 +2130,7 @@ struct ClawdHomeView: View {
             .padding(.bottom, Layout.tabBarExpanded + 12)
 
             if store.owned.isEmpty {
-                Text("柜子还空着，去商店买点什么")
+                Text("柜子暂无物品，可前往商店购买。")
                     .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .padding(.top, 50)

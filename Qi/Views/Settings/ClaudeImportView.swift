@@ -115,7 +115,7 @@ struct ClaudeImportView: View {
                         let n = convs.filter(\.on).count
                         Text("选了 \(n) 段：每段存成一份存档、概括一次（\(n) 次模型）"
                              + (calls > 0 ? "；逐条提取另调 \(calls) 次" : "")
-                             + (calls > 40 ? "（有点多，挑重要的就好）" : ""))
+                             + (calls > 40 ? "（数量较多，建议只选重要的）" : ""))
                     }
                     Section {
                         if running == nil {

@@ -313,7 +313,7 @@ struct MusicLibraryView: View {
         )) {
             TextField("歌手名", text: $artistDraft)
             Button("取消", role: .cancel) { regrouping = nil }
-            Button("归好了") {
+            Button("完成") {
                 if let t = regrouping { library.regroup(t.id, to: artistDraft) }
                 regrouping = nil
             }

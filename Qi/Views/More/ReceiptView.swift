@@ -659,7 +659,7 @@ struct ReceiptView: View {
                 ShareSheet(items: [item.image])
             }
             .alert("生成当日总结？", isPresented: $askWrite) {
-                Button("算了", role: .cancel) {}
+                Button("取消", role: .cancel) {}
                 Button("好") { write() }
             } message: {
                 Text("读取当日对话，生成三到五个关键词与一句留言。调用一次模型，产生一次费用。")

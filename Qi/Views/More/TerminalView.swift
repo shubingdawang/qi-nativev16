@@ -117,7 +117,7 @@ struct TerminalView: View {
                 }
             }
         }
-        .alert("复制好了", isPresented: $copied) {
+        .alert("已复制", isPresented: $copied) {
             Button("好") { copied = false }
         } message: {
             Text("可直接复制导出。内容不含密钥，也不含完整聊天记录。")

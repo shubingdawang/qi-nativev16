@@ -94,7 +94,7 @@ struct BookshelfView: View {
         })
         .alert("这叠图叫什么", isPresented: $namingManga) {
             TextField("书名", text: $mangaName)
-            Button("算了", role: .cancel) { pendingMangaFiles = [] }
+            Button("取消", role: .cancel) { pendingMangaFiles = [] }
             Button("导入") { loadManga() }
         } message: {
             Text(MD.inline("选中的 \(pendingMangaFiles.count) 张会按**文件名排序**，"
@@ -104,7 +104,7 @@ struct BookshelfView: View {
         .alert("新建书架", isPresented: $creatingShelf) {
             TextField("比如「小说」「诗」「工具书」", text: $newShelf)
             Button("取消", role: .cancel) {}
-            Button("建好了") { store.createShelf(newShelf); newShelf = "" }
+            Button("创建") { store.createShelf(newShelf); newShelf = "" }
         } message: {
             Text("书架即分类，书房中按书架数量分排显示。")
         }

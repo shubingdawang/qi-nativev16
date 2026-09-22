@@ -272,7 +272,7 @@ struct DeletableEntryList: View {
                     }
                     pending = nil
                 }
-                Button("算了", role: .cancel) { pending = nil }
+                Button("取消", role: .cancel) { pending = nil }
             } message: {
                 Text(pending?.displayTitle ?? "")
             }
@@ -402,7 +402,7 @@ struct FilteredEntryList: View {
                     }
                     pending = nil
                 }
-                Button("算了", role: .cancel) { pending = nil }
+                Button("取消", role: .cancel) { pending = nil }
             } message: {
                 Text(pending?.displayTitle ?? "")
             }
@@ -768,7 +768,7 @@ struct DiaryPane: View {
                 FilteredEntryList(
                     text: model.text, failed: model.failed,
                     keyword: keyword,
-                    emptyHint: "还没有日记，写一篇吧",
+                    emptyHint: "暂无日记",
                     onDelete: { entry in
                         await model.run(app, tool: "delete_diary", args: ["id": entry.id])
                         await model.run(app, tool: "get_diaries", args: ["limit": 50])

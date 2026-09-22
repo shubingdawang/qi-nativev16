@@ -238,7 +238,7 @@ struct MonopolyView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("算了") { showSetup = false }
+                    Button("取消") { showSetup = false }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("开始") {

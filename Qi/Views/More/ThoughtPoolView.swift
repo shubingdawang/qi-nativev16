@@ -36,7 +36,7 @@ struct ThoughtPoolView: View {
                         // 上层：闪念
                         VStack(spacing: 7) {
                             if pool.flashes.isEmpty {
-                                Text("上面没什么在飘")
+                                Text("暂无念头")
                                     .font(.app(11))
                                     .foregroundStyle(Theme.textMuted(scheme).opacity(0.7))
                                     .padding(.vertical, 14)

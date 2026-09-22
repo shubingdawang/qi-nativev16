@@ -262,7 +262,7 @@ struct LocalBodyCard: View {
                     notice = r
                 }
             }
-            Button("算了", role: .cancel) { }
+            Button("取消", role: .cancel) { }
         } message: {
             Text("将最近约二十条对话交由模型判定其对身体数值的影响。\n\n调用一次模型，产生一次费用，计入用量的「其他」项。推进本身不产生费用。")
         }

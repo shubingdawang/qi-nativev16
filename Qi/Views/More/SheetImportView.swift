@@ -152,7 +152,7 @@ struct SheetImportView: View {
                 ForEach(myKinds, id: \.0) { pair in
                     Button(pair.1) { assign(to: pair.0) }
                 }
-                Button("算了", role: .cancel) { assigning = nil }
+                Button("取消", role: .cancel) { assigning = nil }
             } message: {
                 Text("选定后该家具在房间中使用此图。可在房间中长按恢复原图。\n\n"
                      + "若该分块内包含多件家具，选择「拆开这一块」。")

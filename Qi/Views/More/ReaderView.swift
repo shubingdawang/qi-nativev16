@@ -139,7 +139,7 @@ struct ReaderView: View {
             set: { if !$0 { vocabContext = nil } }
         )) {
             TextField("这一句里哪个词", text: $vocabWord)
-            Button("算了", role: .cancel) { vocabContext = nil }
+            Button("取消", role: .cancel) { vocabContext = nil }
             Button("记下") { commitVocab() }
         } message: {
             Text(vocabWhy)
@@ -266,7 +266,7 @@ struct ReaderView: View {
     @ViewBuilder
     private var modeBlock: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("怎么一起读")
+            Text("共读说明")
                 .font(.app(12))
                 .foregroundStyle(Theme.textSoft(scheme))
             HStack(spacing: 7) {
@@ -541,7 +541,7 @@ struct ReaderView: View {
                 // 图那一章没有句子可选，这个按钮摆着只会让人白点
                 Text(book?.chapters.indices.contains(chapter) == true
                      && book?.chapters[chapter].isImages == true
-                     ? "图" : (picking ? "选好了" : "选句子"))
+                     ? "图" : (picking ? "完成" : "选句子"))
                     .font(.app(12))
                     .foregroundStyle(picking ? app.settings.accentColor
                                              : Theme.textSoft(scheme))

@@ -357,7 +357,7 @@ struct CodeSessionPicker: View {
 
                 Section("电脑上最近的窗口") {
                     if loading {
-                        HStack { ProgressView(); Text("问一下电脑…").foregroundStyle(.secondary) }
+                        HStack { ProgressView(); Text("正在查询电脑…").foregroundStyle(.secondary) }
                     } else if let why {
                         Text(why).font(.footnote).foregroundStyle(.secondary)
                     }

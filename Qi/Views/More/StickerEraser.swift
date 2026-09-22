@@ -110,10 +110,10 @@ struct StickerEraser: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("算了") { dismiss() }
+                    Button("取消") { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("好了") { save() }
+                    Button("完成") { save() }
                         .fontWeight(.semibold)
                         .disabled(strokes.isEmpty || saving)
                 }

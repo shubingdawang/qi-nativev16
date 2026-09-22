@@ -363,7 +363,7 @@ struct MemoEditor: View {
                     Button("取消") { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("好了") {
+                    Button("完成") {
                         if isNew {
                             store.add(memo.text, badge: memo.badge,
                                       author: memo.author, pinned: memo.pinned,
