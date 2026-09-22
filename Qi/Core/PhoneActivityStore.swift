@@ -124,13 +124,13 @@ final class PhoneActivityStore: ObservableObject {
         if let raw {
             events = parse(raw)
             lastError = events.isEmpty
-                ? "文件读到了，但一条也没解析出来。看看每行是不是「日期|App名字|open」这样。"
+                ? "已读取文件，但未解析出记录。请确认每行格式为「日期|App 名称|open」。"
                 : nil
             if bookmark == nil {
-                lastError = "这次读到 \(events.count) 条，但记不住这个文件，下次还得重选。把 txt 放进「文件」App 里再选会好些。"
+                lastError = "本次读取 \(events.count) 条，但无法记住该文件，下次需重新选择。建议将 txt 放入「文件」App 后再选。"
             }
         } else {
-            lastError = "打不开这个文件，换个位置试试（放进「文件」App 里最稳）"
+            lastError = "无法打开该文件。建议将文件放入「文件」App 后重新选择。"
         }
     }
 
@@ -161,7 +161,7 @@ final class PhoneActivityStore: ObservableObject {
         guard let url = try? URL(resolvingBookmarkData: bookmark,
                                  options: [], relativeTo: nil,
                                  bookmarkDataIsStale: &stale) else {
-            lastError = "找不到那个文件了，重新选一次"
+            lastError = "找不到该文件，请重新选择。"
             return
         }
         let needsStop = url.startAccessingSecurityScopedResource()
@@ -174,12 +174,12 @@ final class PhoneActivityStore: ObservableObject {
         }
 
         guard let raw = try? String(contentsOf: url, encoding: .utf8) else {
-            lastError = "读不出来，检查一下是不是纯文本"
+            lastError = "无法读取，请确认文件为纯文本格式。"
             return
         }
         events = parse(raw)
         if events.isEmpty {
-            lastError = "文件是空的，或者每行的格式对不上（要「日期|App名字|open」这样）"
+            lastError = "文件为空，或格式不符（每行应为「日期|App 名称|open」）。"
             return
         }
         // ⚠️ **读到的最后一条太旧，多半读错了文件。**
@@ -194,10 +194,10 @@ final class PhoneActivityStore: ObservableObject {
                 let f = DateFormatter()
                 f.locale = Locale(identifier: "zh_CN")
                 f.dateFormat = "M月d日"
-                lastError = "读到的这份文件最后一条是 \(f.string(from: newest))（\(days) 天前）。"
-                    + "快捷指令在写的是另一份同名文件（在别的位置）。最省事的办法："
-                    + "把快捷指令里「追加到文本文件」的位置改成 我的 iPhone › 栖 › 手机使用记录，"
-                    + "App 会自动读那里，不用再挑文件。"
+                lastError = "当前文件的最后一条记录为 \(f.string(from: newest))（\(days) 天前），"
+                    + "快捷指令可能正在写入另一份同名文件。"
+                    + "可将快捷指令中「追加到文本文件」的位置改为 我的 iPhone › 栖 › 手机使用记录，"
+                    + "App 将自动读取，无需另选文件。"
                 return
             }
         }

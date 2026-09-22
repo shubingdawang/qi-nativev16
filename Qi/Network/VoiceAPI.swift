@@ -311,7 +311,7 @@ enum WebImageSearch {
         var errorDescription: String? {
             switch self {
             case .nothing(let q): return "网上没搜到跟「\(q)」对得上的图"
-            case .network: return "连不上图库，检查一下网络"
+            case .network: return "无法连接图库，请检查网络"
             }
         }
     }

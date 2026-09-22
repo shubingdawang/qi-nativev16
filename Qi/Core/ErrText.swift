@@ -19,11 +19,11 @@ enum ErrText {
         if let d = error as? DecodingError {
             switch d {
             case .keyNotFound(let key, let ctx):
-                return "少了字段「\(key.stringValue)」" + where_(ctx)
+                return "缺少字段「\(key.stringValue)」" + where_(ctx)
             case .typeMismatch(let type, let ctx):
-                return "字段类型对不上（要的是 \(type)）" + where_(ctx)
+                return "字段类型不符（应为 \(type)）" + where_(ctx)
             case .valueNotFound(let type, let ctx):
-                return "字段是空的（要的是 \(type)）" + where_(ctx)
+                return "字段为空（应为 \(type)）" + where_(ctx)
             case .dataCorrupted(let ctx):
                 let why = ctx.debugDescription
                 return (why.isEmpty ? "内容不是预期的格式" : why) + where_(ctx)
@@ -35,7 +35,7 @@ enum ErrText {
         // 3840 = JSON 压根没解析成。最常见的是对面回了一页 HTML
         // （网关的错误页、被墙的提示页），或者干脆回了空。
         if ns.domain == NSCocoaErrorDomain, ns.code == 3840 {
-            return "对面回的不是 JSON——多半是网关的错误页或者空回复"
+            return "返回内容不是 JSON，通常为网关错误页或空响应。"
         }
         return error.localizedDescription
     }

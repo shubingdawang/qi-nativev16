@@ -164,7 +164,7 @@ final class ScreenPeek: ObservableObject {
             decoded = nil
             lastError = nil
         } else {
-            lastError = "记不住这个文件夹，换个位置试试（放进「文件」App 里最稳）"
+            lastError = "无法记住该文件夹。建议选择「文件」App 中的位置。"
         }
     }
 

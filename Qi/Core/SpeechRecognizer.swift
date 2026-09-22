@@ -58,7 +58,7 @@ final class SpeechRecognizer: ObservableObject {
         SFSpeechRecognizer.requestAuthorization { status in
             Task { @MainActor in
                 guard status == .authorized else {
-                    self.error = "没给语音识别权限。去系统设置里打开就能用。"
+                    self.error = "未授予语音识别权限，请在系统设置中开启。"
                     return
                 }
                 AVAudioApplication.requestRecordPermission { granted in

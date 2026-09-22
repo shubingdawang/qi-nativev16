@@ -25,10 +25,10 @@ enum ThemePreset: String, CaseIterable, Identifiable, Codable {
 
     var note: String {
         switch self {
-        case .original: return "跟着主题色走，什么都能染。壁纸用你自己那张。"
-        case .home:     return "整套搬 claude.ai：暖纸底、炭字、橘限量，气泡也是那边的样子。壁纸会被它接管。"
-        case .gradient: return "整屏一层渐变当底，气泡还是玻璃。两头的颜色和方向选中之后就在下面调。壁纸会被它接管。"
-        case .tutou:    return "粉兔那一套：奶粉纸底、玫红当主色、字是深梅色。气泡还是玻璃。壁纸会被它接管。"
+        case .original: return "随主题色变化，可自定义染色。壁纸使用自选图片。"
+        case .home:     return "沿用 claude.ai 配色：暖纸底色、炭黑文字、橙色点缀，气泡样式一致。启用后替换壁纸。"
+        case .gradient: return "以全屏渐变为底，气泡保持玻璃效果。选中后可在下方调整两端颜色与方向。启用后替换壁纸。"
+        case .tutou:    return "粉兔配色：奶粉底色、玫红主色、深梅文字，气泡保持玻璃效果。启用后替换壁纸。"
         }
     }
 
@@ -36,13 +36,13 @@ enum ThemePreset: String, CaseIterable, Identifiable, Codable {
     var detail: String {
         switch self {
         case .original:
-            return "什么都不接管：底还是你自己那张壁纸，颜色跟着上面调的主题色走。"
+            return "不替换任何元素：保留自选壁纸，颜色随上方主题色变化。"
         case .home:
-            return "这一档是整套的：底是 claude.ai 那张暖纸，你自己那张壁纸先让位（换回「原来的」就回来了）。气泡也跟着换——你说的话是一块浅面板，他说的话不套气泡，直接印在纸上，跟 claude.ai 一样。"
+            return "整套替换：底色为 claude.ai 暖纸色，自选壁纸暂时停用（切回「原来的」即恢复）。气泡同步更换：你的消息显示为浅色面板，他的消息不加气泡，直接排在纸面上。"
         case .gradient:
-            return "这一档整屏是一层渐变，两头的颜色和方向就在上面调。气泡还是玻璃。"
+            return "全屏渐变底色，两端颜色与方向在上方调整。气泡保持玻璃效果。"
         case .tutou:
-            return "照 tmux 那套兔牙主题的色搬的：底是奶粉色的纸，主色是那块玫红，字是深梅色。气泡还是玻璃，浮在粉纸上。你自己那张壁纸先让位（换回「原来的」就回来了）。"
+            return "沿用 tmux 兔牙主题配色：奶粉底色、玫红主色、深梅文字，气泡保持玻璃效果。自选壁纸暂时停用（切回「原来的」即恢复）。"
         }
     }
 

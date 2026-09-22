@@ -61,13 +61,13 @@ enum ChatAPI {
         var errorDescription: String? {
             switch self {
             case .badStatus(let code, let body):
-                if code == 401 { return "密钥不对（401）。检查一下设置里的 API Key。" }
-                if code == 404 { return "地址不对（404）。检查一下接口地址和路径。" }
+                if code == 401 { return "密钥无效（401），请检查设置中的 API Key。" }
+                if code == 404 { return "地址无效（404），请检查接口地址与路径。" }
                 if code == 429 { return "请求太频繁或余额不足（429）。" }
-                if code == 503 { return "服务器暂时不可用（503），过一会儿再试。" }
+                if code == 503 { return "服务器暂时不可用（503），请稍后重试。" }
                 return "接口返回 \(code)：\(body.prefix(200))"
             case .noResponse:
-                return "没收到服务器响应，检查一下网络。"
+                return "未收到服务器响应，请检查网络。"
             }
         }
     }

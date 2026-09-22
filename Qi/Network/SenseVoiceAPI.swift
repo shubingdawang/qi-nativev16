@@ -29,11 +29,11 @@ enum VoiceInputMode: String, Codable, CaseIterable, Identifiable {
     var note: String {
         switch self {
         case .onDevice:
-            return "iOS 自带的，在你手机里跑。不联网、不要密钥、一分钱不花。只出文字，听不出情绪。"
+            return "iOS 内置识别，在本机运行。无需联网与密钥，不产生费用。仅输出文字，不识别情绪。"
         case .senseVoice:
-            return "情绪听得最准：开心、难过、生气、意外都分得出，笑声哭声也认得。要 SiliconFlow 密钥，很便宜。"
+            return "情绪识别最准确：可区分开心、难过、生气、意外，并识别笑声与哭声。需 SiliconFlow 密钥，费用较低。"
         case .elevenLabs:
-            return "用你已经配好的那个密钥，不用再注册。认得出笑声这类动静，但**给不出情绪**——它没有这个能力。"
+            return "使用已配置的密钥，无需另行注册。可识别笑声等声音，**不支持情绪识别**。"
         }
     }
 
@@ -73,10 +73,10 @@ enum SenseVoiceAPI {
         var errorDescription: String? {
             switch self {
             case .needsKey:
-                return "还没填 SiliconFlow 的密钥。去「设置 → 语音输入」填一个，或者换回本机识别。"
+                return "未填写 SiliconFlow 密钥。请在「设置 → 语音输入」中填写，或改用本机识别。"
             case .badStatus(let code, let body):
-                if code == 401 { return "密钥不对（401）" }
-                if code == 429 { return "调用太频繁了（429），缓一下" }
+                if code == 401 { return "密钥无效（401）" }
+                if code == 429 { return "调用过于频繁（429），请稍后重试" }
                 return "转写失败 \(code)：\(body.prefix(140))"
             case .empty: return "没听出内容，可能太短或者太吵"
             }

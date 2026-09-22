@@ -303,7 +303,7 @@ enum BookParser {
 
         var errorDescription: String? {
             switch self {
-            case .unreadable: return "这个文件读不出来，试试 txt 或 epub"
+            case .unreadable: return "无法读取该文件，请使用 txt 或 epub 格式。"
             case .empty: return "文件里没有正文"
             }
         }

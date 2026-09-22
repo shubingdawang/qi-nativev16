@@ -66,9 +66,9 @@ enum AgentBridge {
         }
         var hint: String {
             switch self {
-            case .read: return "读文件、搜索、查网页，不动东西"
-            case .edit: return "可以改文件，命令要另外放开"
-            case .all: return "命令也随便跑"
+            case .read: return "读取文件、搜索、查阅网页，不做修改"
+            case .edit: return "可修改文件，执行命令需另行开启"
+            case .all: return "可修改文件并执行命令"
             }
         }
     }
