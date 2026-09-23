@@ -141,7 +141,12 @@ enum GlassGrain {
             // 取高位：低位的周期短，直接用会出现肉眼可见的条纹
             let v = Double((seed >> 33) % 256) / 255
             // 预乘 alpha：白色 + 随机透明度 → RGB 三个通道都等于 alpha
-            let a = UInt8(v * 30)
+            //
+            // ⚠️ **这个数跟着纱走。** 她问「为什么有白点点」——
+            // 就是这层颗粒。以前纱有 26%，颗粒埋在纱里只是一层雾面；
+            // 纱压到 10% 之后（见 `GlassSurface.recipeFrosted`），
+            // 同样的颗粒直接浮成一颗颗白点。峰值从 12% 压到 6%。
+            let a = UInt8(v * 16)
             bytes[i * 4 + 0] = a
             bytes[i * 4 + 1] = a
             bytes[i * 4 + 2] = a
@@ -176,7 +181,9 @@ struct GlassGrainLayer: View {
         Image(uiImage: GlassGrain.tile)
             .resizable(resizingMode: .tile)
             // 深色下颗粒要更淡：白点打在暗面上本来就比打在亮面上显眼
-            .opacity((scheme == .dark ? 0.42 : 0.55) * min(1, max(0.3, strength)))
+            // 连上面那层 alpha 一起算，白点峰值只剩 2% 上下：
+            // 远看是「这块表面不是光滑的」，凑近也数不出点
+            .opacity((scheme == .dark ? 0.22 : 0.34) * min(1, max(0.3, strength)))
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
             .allowsHitTesting(false)
             // ⚠️ **不加 `blendMode(.overlay)`。**
