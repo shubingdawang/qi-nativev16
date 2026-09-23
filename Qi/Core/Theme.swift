@@ -733,21 +733,41 @@ struct GlassSurface: View {
     //
     // ⚠️ 这两支一样**不许加 `.shadow` / `.blur` / `.drawingGroup`**（会打断材质采样）。
 
-    /// 磨砂 = 「磨砂气泡」那份：薄材质 + 20% 上下的白纱 + 左上柔光 + 1px 白边 + 细颗粒
+    // ⚠️⚠️ **纱是让玻璃变成实心板的唯一原因。别再往上加白。**
+    //
+    // 她两次都是同一句话：「依旧是实心的」「设置里其他框看起来更像是白色」。
+    // 她给的那两张参考（浅色一张、深色一张）里，三块玻璃**都没有自己的颜色**——
+    // 蓝天和黄花的颜色是从玻璃里透上来的，玻璃只负责把它糊开。
+    // 玻璃读出来是玻璃，靠的是**边**：一圈亮细边 + 上缘一线内高光。
+    //
+    // 所以这两支的纱一律压到「几乎没有」：
+    // 浅色最多 10%、深色最多 4%，只为压一点点对比度好让字看得清，
+    // 再多一点点，壁纸的颜色就被洗成白灰了。
+    //
+    // 以前那套是反过来的（照「厚纱让玻璃有自己的颜色」那份参考做的，
+    // 浅色 26%→18%、还压一团 30% 的柔光）——那份参考的结论对她不成立，
+    // 因为她要的就是「颜色透上来」。`GlassRecipe.veil` 那支厚纱现在没人用了。
+    //
+    // ⚠️ 一样**不许加 `.shadow` / `.blur` / `.drawingGroup`**（会打断材质采样，
+    // 玻璃会当场变成一块死板）。
+
+    /// 磨砂 ＝ 参考里的**霜态**：最薄的材质 + 一层薄到看不见的乳白 + 细砂 + 亮边
     private var recipeFrosted: some View {
         let dark = scheme == .dark
         return shape.fill(.ultraThinMaterial)
             .overlay {
+                // 乳白一层：浅色 10%→6%，深色 4%→2%。
+                // 这是「霜」那点白，不是纱——超过这个数就开始盖住壁纸了。
                 shape.fill(LinearGradient(
-                    colors: dark ? [.white.opacity(0.10), .white.opacity(0.05)]
-                                 : [.white.opacity(0.26), .white.opacity(0.18)],
+                    colors: dark ? [.white.opacity(0.04), .white.opacity(0.02)]
+                                 : [.white.opacity(0.10), .white.opacity(0.06)],
                     startPoint: .top, endPoint: .bottom))
             }
             .overlay {
-                // radial-gradient(circle at 30% 20%, rgba(255,255,255,.4), transparent 70%)
+                // 左上那团柔光：参考里它是**很淡的一点反光**，不是一块白斑
                 if !light {
                     shape.fill(RadialGradient(
-                        colors: [.white.opacity(dark ? 0.12 : 0.30), .white.opacity(0)],
+                        colors: [.white.opacity(dark ? 0.06 : 0.12), .white.opacity(0)],
                         center: UnitPoint(x: 0.3, y: 0.2),
                         startRadius: 0, endRadius: 260))
                 }
@@ -759,31 +779,34 @@ struct GlassSurface: View {
                 if !light { GlassGrainLayer(radius: radius, strength: 1) }
             }
             .overlay {
-                // border: 1px solid rgba(255,255,255,.15)
+                // 那圈亮细边——玻璃全靠它读出形状，纱压薄之后它反而要更亮
                 if !light {
-                    shape.strokeBorder(.white.opacity(dark ? 0.10 : 0.18), lineWidth: 1)
+                    shape.strokeBorder(.white.opacity(dark ? 0.22 : 0.45), lineWidth: 1)
                 }
             }
             .overlay {
-                // box-shadow: inset 0 1px 0 rgba(255,255,255,.5)
+                // 上缘一线内高光
                 shape.strokeBorder(GlassRecipe.topLine(dark: dark), lineWidth: 1)
             }
     }
 
-    /// 模糊 = 「三块玻璃的配方」里的毛玻璃：中等模糊 + 22%→10% 的薄纱 + 上缘一线高光 + 白边
+    /// 模糊 ＝ 参考里的**凝态**：糊得更狠，但颜色整个透上来，表面平整不带砂
     private var recipeBlur: some View {
         let dark = scheme == .dark
         return shape.fill(.thinMaterial)
             .overlay {
-                shape.fill(GlassRecipe.thinVeil(dark: dark, strength: 1))
+                // 比磨砂还薄——这一档的卖点是「糊」，白一加就全毁了
+                shape.fill(LinearGradient(
+                    colors: dark ? [.white.opacity(0.03), .white.opacity(0.01)]
+                                 : [.white.opacity(0.07), .white.opacity(0.03)],
+                    startPoint: .top, endPoint: .bottom))
             }
             .overlay {
                 if extra > 0.01 { shape.fill(.white.opacity(extra * 0.10)) }
             }
             .overlay {
-                // border: 1px solid rgba(255,255,255,.35)
                 if !light {
-                    shape.strokeBorder(.white.opacity(dark ? 0.14 : 0.35), lineWidth: 1)
+                    shape.strokeBorder(.white.opacity(dark ? 0.26 : 0.50), lineWidth: 1)
                 }
             }
             .overlay {
