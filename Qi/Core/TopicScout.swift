@@ -58,7 +58,8 @@ enum TopicScout {
         for q in queries(interests: interests) {
             progress("在找「\(q)」…")
             guard let r = try? await WebSearch.run(
-                q, engine: app.settings.searchEngine, key: app.settings.tavilyKey)
+                q, engine: app.settings.searchEngine, key: app.settings.tavilyKey,
+                searxHost: app.settings.searxHost)
             else { continue }
             for h in r.hits.prefix(12) {
                 guard !h.url.isEmpty, !known.contains(h.url), seen.insert(h.url).inserted

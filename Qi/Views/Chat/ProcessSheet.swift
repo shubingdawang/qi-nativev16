@@ -27,7 +27,24 @@ import SwiftUI
 /// 用中文写会跟他自己起的那个名字混在一起，看着像也是他写的。
 struct ProcessSheet: View {
 
-    let message: ChatMessage
+    /// 这一轮挂在哪条消息上。**现读现取**——他还在想的时候，这一页要跟着长。
+    ///
+    /// 她报的：「他正在输出 thinking 的时候我点进思考块，它就不再动了，
+    /// 停在我点进去那一刻，得退出去重新点才会更新。」
+    /// 以前这儿存的是一份**快照**（`let message: ChatMessage`），
+    /// 拍下来那一刻是什么样就永远是什么样。
+    let messageID: UUID
+    let conversationID: UUID
+    /// 找不到那条的时候用这份（消息被删、或者这一窗被换掉了）
+    let fallback: ChatMessage
+
+    /// 现在这一刻的那条消息：正在蹦的字也算进来（见 `LiveStream`）
+    private var message: ChatMessage {
+        guard let m = app.conversation(conversationID)?.messages
+            .last(where: { $0.id == messageID })
+        else { return fallback }
+        return live.merged(m)
+    }
 
     /// 思考正文，`[[cot:]]` 剥掉、多余空行压掉。
     ///
@@ -41,6 +58,8 @@ struct ProcessSheet: View {
     }
 
     @EnvironmentObject var app: AppState
+    /// 他正在蹦的那几个字。**这一页订阅它**，所以想到哪儿这儿就长到哪儿
+    @ObservedObject private var live = LiveStream.shared
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dismiss) private var dismiss
 

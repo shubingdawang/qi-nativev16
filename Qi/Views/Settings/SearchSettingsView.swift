@@ -32,17 +32,36 @@ struct SearchSettingsView: View {
                         }
                     }
 
-                    if app.settings.searchEngine == .tavily {
+                    if app.settings.searchEngine.needsKey {
                         SettingsCard(title: "密钥") {
-                            SecureField("Tavily API Key", text: $app.settings.tavilyKey)
+                            SecureField(app.settings.searchEngine.title + " API Key",
+                                        text: $app.settings.tavilyKey)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
                                 .font(.app(15))
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 12)
 
-                            SettingsNote("在 tavily.com 注册后获取，每月一千次免费额度。"
-                                         + "密钥仅保存在本机。", title: "说明")
+                            SettingsNote(app.settings.searchEngine.keyHint
+                                         + "\n\n各搜索源共用这一个输入框，更换搜索源后需重新填写对应密钥。",
+                                         title: "说明")
+                        }
+                    }
+
+                    if app.settings.searchEngine == .searx {
+                        SettingsCard(title: "实例地址") {
+                            TextField(WebSearch.defaultSearxHost, text: $app.settings.searxHost)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .keyboardType(.URL)
+                                .font(.app(15))
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+
+                            SettingsNote("留空则使用 " + WebSearch.defaultSearxHost
+                                         + "。可填写其他公共实例或自建实例地址；"
+                                         + "实例未开放 JSON 接口时，自动改用必应网页结果。",
+                                         title: "说明")
                         }
                     }
                 }

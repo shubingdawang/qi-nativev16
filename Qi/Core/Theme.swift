@@ -373,6 +373,14 @@ struct GlassSurface: View {
     var extra: Double = 0
     /// 强行指定一种玻璃。不传就跟着设置走。
     var style: GlassStyle? = nil
+    /// **轻量版**：一屏几十块的时候用（聊天气泡）。
+    ///
+    /// 她报的：「他一开始回复 app 就变得很卡。」
+    /// 一块玻璃现在是「系统材质 + 纱 + 柔光 + 颗粒 + 两道描边 + 边光」六七层，
+    /// 每一层都要跟着背后的画面重算。卡片一屏就几块，无所谓；
+    /// 气泡一屏几十块，每一层都乘几十倍。
+    /// 轻量版只留「材质 + 纱」，远看跟完整版分不出来。
+    var light: Bool = false
     /// 要不要那圈边（内高光 + 极细描边）。
     ///
     /// 她定的：**卡片要边，气泡和输入框不要。**
@@ -737,18 +745,24 @@ struct GlassSurface: View {
             }
             .overlay {
                 // radial-gradient(circle at 30% 20%, rgba(255,255,255,.4), transparent 70%)
-                shape.fill(RadialGradient(
-                    colors: [.white.opacity(dark ? 0.12 : 0.30), .white.opacity(0)],
-                    center: UnitPoint(x: 0.3, y: 0.2),
-                    startRadius: 0, endRadius: 260))
+                if !light {
+                    shape.fill(RadialGradient(
+                        colors: [.white.opacity(dark ? 0.12 : 0.30), .white.opacity(0)],
+                        center: UnitPoint(x: 0.3, y: 0.2),
+                        startRadius: 0, endRadius: 260))
+                }
             }
             .overlay {
                 if extra > 0.01 { shape.fill(.white.opacity(extra * 0.10)) }
             }
-            .overlay { GlassGrainLayer(radius: radius, strength: 1) }
+            .overlay {
+                if !light { GlassGrainLayer(radius: radius, strength: 1) }
+            }
             .overlay {
                 // border: 1px solid rgba(255,255,255,.15)
-                shape.strokeBorder(.white.opacity(dark ? 0.10 : 0.18), lineWidth: 1)
+                if !light {
+                    shape.strokeBorder(.white.opacity(dark ? 0.10 : 0.18), lineWidth: 1)
+                }
             }
             .overlay {
                 // box-shadow: inset 0 1px 0 rgba(255,255,255,.5)
@@ -768,7 +782,9 @@ struct GlassSurface: View {
             }
             .overlay {
                 // border: 1px solid rgba(255,255,255,.35)
-                shape.strokeBorder(.white.opacity(dark ? 0.14 : 0.35), lineWidth: 1)
+                if !light {
+                    shape.strokeBorder(.white.opacity(dark ? 0.14 : 0.35), lineWidth: 1)
+                }
             }
             .overlay {
                 shape.strokeBorder(GlassRecipe.topLine(dark: dark), lineWidth: 1)
@@ -976,9 +992,10 @@ extension View {
                          strength: Double = 1,
                          extra: Double = 0,
                          style: GlassStyle? = nil,
-                         edge: Bool = true) -> some View {
+                         edge: Bool = true,
+                         light: Bool = false) -> some View {
         background(GlassSurface(radius: radius, strength: strength,
-                                extra: extra, style: style, edge: edge))
+                                extra: extra, style: style, light: light, edge: edge))
     }
 }
 

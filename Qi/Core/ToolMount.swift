@@ -87,6 +87,18 @@ final class ToolMount {
                   tools: ["read_wage", "set_shift", "wage_ledger", "wage_image", "wage_move_day"],
                   keywords: ["工资", "上班", "下班", "排班", "早班", "中班", "晚班", "通班", "时薪",
                              "记账", "账", "花了", "花费", "多少钱", "块钱", "元", "赚", "薪"]),
+        ToolGroup(id: "self", title: "他自己的设定",
+                  summary: "改说好的规矩、写给下一个自己的交接",
+                  tools: ["set_rules", "hand_off"],
+                  keywords: ["规矩", "设定", "人设", "以后都", "记住这条", "交接", "下一个你", "换窗"]),
+        ToolGroup(id: "group", title: "群聊",
+                  summary: "往群里说一句",
+                  tools: ["send_to_group_chat"],
+                  keywords: ["群", "群聊", "大家", "叫上", "拉他们"]),
+        ToolGroup(id: "quiet", title: "勿扰",
+                  summary: "开关勿扰",
+                  tools: ["set_dnd"],
+                  keywords: ["勿扰", "别吵", "安静", "睡了", "别找我", "免打扰"]),
         ToolGroup(id: "voice", title: "语音与通话",
                   summary: "听她发的语音、发一条语音、打电话",
                   tools: ["listen_voice", "send_voice_message", "dial_call"],
@@ -116,7 +128,8 @@ final class ToolMount {
                   keywords: ["备忘", "记一下", "记下", "记得", "别忘", "要做", "做完", "答应", "欠"]),
         ToolGroup(id: "phone", title: "手机与外面",
                   summary: "看她屏幕、今天手机怎么用的、打开链接、翻话题、节日",
-                  tools: ["see_screen", "phone_today", "open_link", "browse_topics", "festivals"],
+                  tools: ["see_screen", "phone_today", "open_link", "browse_topics", "festivals",
+                          "check_in", "get_phone_activity"],
                   keywords: ["屏幕", "手机", "在刷", "在看什么", "链接", "http", "小红书", "b站", "抖音", "微博",
                              "视频", "新闻", "话题", "节日", "过节", "纪念日", "生日", "农历"]),
         ToolGroup(id: "hobby", title: "喜好",
@@ -143,7 +156,10 @@ final class ToolMount {
         ToolGroup(id: "memadmin", title: "记忆整理",
                   summary: "列出全部记忆、修改、批注、删除、看改动记录、词表",
                   tools: ["get_all_memories", "update_memory", "annotate_memory",
-                          "delete_memory", "get_memory_log", "glossary"],
+                          "delete_memory", "get_memory_log", "glossary",
+                          // 常驻里挪进来的几件：翻旧记忆、给记忆打标、提一条待她点头的
+                          "recall_entity", "surface_memories", "mark_memory",
+                          "propose_memory", "get_today_review"],
                   keywords: ["记忆", "忘掉", "删掉", "记错", "改一下", "不对", "你记的"]),
     ]
 
@@ -169,7 +185,7 @@ final class ToolMount {
     /// 一窗里挂过的组（见 `activeGroups` 第 ⑥ 条）。键是「对话 id|压到哪一条」
     private var sticky: [String: Set<String>] = [:]
 
-    /// - Parameter sticky: 挂上了就不摘（为缓存）。通道不缓的时候传 false：
+    /// - Parameter sticky: 挂上了就不摘（为缓存）。通道不缓、或者按次计费的时候传 false：
     ///   只带眼下用得上的那几组，工具表跟着话题走，不越攒越大
     func activeGroups(conversation conv: Conversation,
                       context: [ChatAPI.OutgoingMessage],

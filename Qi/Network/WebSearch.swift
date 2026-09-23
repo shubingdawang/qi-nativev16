@@ -8,6 +8,9 @@ import Foundation
 /// 那个不用密钥、不要钱，只是拿到的东西糙一些。
 enum SearchEngine: String, Codable, CaseIterable, Identifiable {
     case duck = "duck"
+    case searx = "searx"
+    case bocha = "bocha"
+    case brave = "brave"
     case tavily = "tavily"
 
     var id: String { rawValue }
@@ -15,14 +18,38 @@ enum SearchEngine: String, Codable, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .duck:   return "DuckDuckGo"
+        case .searx:  return "SearXNG"
+        case .bocha:  return "博查"
+        case .brave:  return "Brave"
         case .tavily: return "Tavily"
         }
     }
 
     var note: String {
         switch self {
-        case .duck:   return "不用密钥、不花钱。拿到的是摘要片段，够用但糙。"
-        case .tavily: return "专给模型用的，返回提炼过的答案。要密钥，每月一千次免费。"
+        case .duck:   return "不需密钥。返回摘要片段，国内连不上时自动改用必应网页结果。"
+        case .searx:  return "开源元搜索，聚合 Google、Bing、DuckDuckGo 等结果，返回 JSON。不需密钥，国内可直连；实例地址可在下方更换。"
+        case .bocha:  return "国内直连，结果干净无广告，中文质量较好。需在 bochaai.com 注册取密钥，有免费额度。"
+        case .brave:  return "每月约一千次免费额度，稳定。需注册 Brave 账号取密钥，无需绑卡。"
+        case .tavily: return "专为模型设计，返回提炼过的答案。需密钥，每月一千次免费额度。"
+        }
+    }
+
+    /// 要不要密钥
+    var needsKey: Bool {
+        switch self {
+        case .duck, .searx: return false
+        case .bocha, .brave, .tavily: return true
+        }
+    }
+
+    /// 密钥在哪儿拿
+    var keyHint: String {
+        switch self {
+        case .bocha:  return "在 bochaai.com 注册后获取。密钥仅保存在本机。"
+        case .brave:  return "在 brave.com/search/api 注册后获取，免费档无需绑卡。密钥仅保存在本机。"
+        case .tavily: return "在 tavily.com 注册后获取，每月一千次免费额度。密钥仅保存在本机。"
+        default:      return ""
         }
     }
 }
@@ -43,19 +70,40 @@ enum WebSearch {
         var errorDescription: String? {
             switch self {
             case .needsKey:
-                return "Tavily 还没填密钥。去「设置 → 联网搜索」填一个，或者换回 DuckDuckGo。"
+                return "当前搜索源未填写密钥。请在「设置 → 联网搜索」中填写，或改用 SearXNG（无需密钥）。"
             case .nothing(let q): return "没搜到「\(q)」"
             case .badStatus(let code, let body):
-                if code == 401 { return "Tavily 密钥不对（401）" }
-                if code == 429 { return "Tavily 今天的次数用完了（429）" }
+                if code == 401 { return "搜索密钥无效（401）" }
+                if code == 429 { return "搜索次数已用完（429）" }
                 return "搜索返回 \(code)：\(body.prefix(120))"
             }
         }
     }
 
-    static func run(_ query: String, engine: SearchEngine, key: String)
-    async throws -> (answer: String, hits: [SearchHit]) {
+    static func run(_ query: String, engine: SearchEngine, key: String,
+                    searxHost: String = "") async throws -> (answer: String, hits: [SearchHit]) {
         switch engine {
+        case .searx:
+            // 不要密钥。连不上（实例挂了、被墙）就退到必应的网页结果
+            do {
+                let out = try await searx(query, host: searxHost)
+                Task { @MainActor in UsageStore.shared.recordCall(.search) }
+                return out
+            } catch {
+                let out = try await bing(query)
+                Task { @MainActor in UsageStore.shared.recordCall(.search) }
+                return out
+            }
+        case .bocha:
+            guard !key.isEmpty else { throw SearchError.needsKey }
+            let out = try await bocha(query, key: key)
+            Task { @MainActor in UsageStore.shared.recordCall(.search) }
+            return out
+        case .brave:
+            guard !key.isEmpty else { throw SearchError.needsKey }
+            let out = try await brave(query, key: key)
+            Task { @MainActor in UsageStore.shared.recordCall(.search) }
+            return out
         case .tavily:
             guard !key.isEmpty else { throw SearchError.needsKey }
             let out = try await tavily(query, key: key)
@@ -122,6 +170,110 @@ enum WebSearch {
         }
         guard !answer.isEmpty || !hits.isEmpty else { throw SearchError.nothing(query) }
         return (answer, hits)
+    }
+
+    // MARK: SearXNG
+
+    /// 开源的元搜索：它自己去问 Google、Bing、DuckDuckGo 那一堆，再把结果合起来。
+    /// **不要密钥**，公共实例国内多半连得上（默认 `searx.stream`，可以换）。
+    ///
+    /// ⚠️ 有的实例把 JSON 关了（只给网页）。那种情况这儿会解不出东西，
+    /// 外面会自动退到必应那条（见 `run`）。
+    static let defaultSearxHost = "https://searx.stream"
+
+    private static func searx(_ query: String, host: String)
+    async throws -> (answer: String, hits: [SearchHit]) {
+        var base = host.trimmingCharacters(in: .whitespaces)
+        if base.isEmpty { base = defaultSearxHost }
+        if base.hasSuffix("/") { base.removeLast() }
+        let q = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+        guard let url = URL(string: base + "/search?q=" + q
+                            + "&format=json&language=zh-CN&safesearch=0")
+        else { throw SearchError.nothing(query) }
+
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 12
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: req)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw SearchError.badStatus(http.statusCode, String(data: data, encoding: .utf8) ?? "")
+        }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let results = json["results"] as? [[String: Any]], !results.isEmpty
+        else { throw SearchError.nothing(query) }
+
+        let hits = results.prefix(6).map { r in
+            SearchHit(title: (r["title"] as? String) ?? "",
+                      snippet: (r["content"] as? String) ?? "",
+                      url: (r["url"] as? String) ?? "")
+        }
+        // 它不给总结，把第一条的摘要顶上去
+        return (hits.first?.snippet ?? "", Array(hits))
+    }
+
+    // MARK: 博查
+
+    /// 国内直连的那家，专给模型用。要密钥。
+    private static func bocha(_ query: String, key: String)
+    async throws -> (answer: String, hits: [SearchHit]) {
+        guard let url = URL(string: "https://api.bochaai.com/v1/web-search") else {
+            throw SearchError.nothing(query)
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 30
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "query": query, "summary": true, "count": 6
+        ])
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse else { throw SearchError.nothing(query) }
+        guard (200..<300).contains(http.statusCode) else {
+            throw SearchError.badStatus(http.statusCode, String(data: data, encoding: .utf8) ?? "")
+        }
+        // 形状：{ data: { webPages: { value: [ {name, snippet, summary, url} ] } } }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { throw SearchError.nothing(query) }
+        let payload = (json["data"] as? [String: Any]) ?? json
+        let pages = ((payload["webPages"] as? [String: Any])?["value"] as? [[String: Any]]) ?? []
+        let hits = pages.prefix(6).map { r in
+            SearchHit(title: (r["name"] as? String) ?? "",
+                      snippet: (r["summary"] as? String) ?? (r["snippet"] as? String) ?? "",
+                      url: (r["url"] as? String) ?? "")
+        }
+        guard !hits.isEmpty else { throw SearchError.nothing(query) }
+        return (hits.first?.snippet ?? "", Array(hits))
+    }
+
+    // MARK: Brave
+
+    private static func brave(_ query: String, key: String)
+    async throws -> (answer: String, hits: [SearchHit]) {
+        let q = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+        guard let url = URL(string:
+            "https://api.search.brave.com/res/v1/web/search?q=" + q + "&count=6")
+        else { throw SearchError.nothing(query) }
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 30
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.setValue(key, forHTTPHeaderField: "X-Subscription-Token")
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse else { throw SearchError.nothing(query) }
+        guard (200..<300).contains(http.statusCode) else {
+            throw SearchError.badStatus(http.statusCode, String(data: data, encoding: .utf8) ?? "")
+        }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let results = (json["web"] as? [String: Any])?["results"] as? [[String: Any]],
+              !results.isEmpty
+        else { throw SearchError.nothing(query) }
+        let hits = results.prefix(6).map { r in
+            SearchHit(title: (r["title"] as? String) ?? "",
+                      snippet: (r["description"] as? String) ?? "",
+                      url: (r["url"] as? String) ?? "")
+        }
+        return (hits.first?.snippet ?? "", Array(hits))
     }
 
     // MARK: DuckDuckGo

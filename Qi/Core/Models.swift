@@ -438,6 +438,44 @@ struct Conversation: Identifiable, Codable, Hashable {
 
     var activeMembers: [GroupMember] { members.filter { $0.enabled } }
 
+    /// 这一窗画出来是什么样，压成一个整数。
+    ///
+    /// ⚠️ **拿它代替「逐条比消息」**。消息区那道 `==` 以前比的是整份 `Conversation`，
+    /// 一窗五百多条、每条都要比正文、工具参数、返回值这些字符串——
+    /// 她每点一下、每来一次流式刷新都要比一遍，这是「他一回话就卡」的一部分。
+    /// 这儿全是整数运算，五百条也只是几微秒。
+    ///
+    /// ⚠️ 改了会影响画面的字段，记得补进来，不然那一处改了界面不会跟着变。
+    var uiFingerprint: Int {
+        var h = Hasher()
+        h.combine(id)
+        h.combine(messages.count)
+        h.combine(isPaused)
+        h.combine(digest?.throughID)
+        h.combine(members.count)
+        for m in messages {
+            h.combine(m.id)
+            h.combine(m.content.count)
+            h.combine(m.reasoning?.count ?? 0)
+            h.combine(m.toolRuns.count)
+            h.combine(m.edits.count)
+            h.combine(m.isStreaming)
+            h.combine(m.errorText?.count ?? 0)
+            h.combine(m.starred)
+            h.combine(m.keptByHim)
+            h.combine(m.imageNames.count)
+            h.combine(m.files.count)
+            h.combine(m.totalTokens ?? 0)
+            h.combine(m.divine?.cards.count ?? -1)
+            h.combine(m.divine?.overall.count ?? -1)
+            h.combine(m.translation?.count ?? -1)
+            h.combine(m.reasoningTranslation?.count ?? -1)
+            h.combine(m.isTranslating)
+            h.combine(m.isTranslatingReasoning)
+        }
+        return h.finalize()
+    }
+
     /// 只要最后一条消息又长了一点点，这个数就会变。
     /// 正文、思考链、工具调用，任何一样在动都算，界面盯着它滚到底。
     var scrollTick: Int {
@@ -730,6 +768,8 @@ struct AppSettings: Codable {
     /// 联网搜用哪家
     var searchEngine: SearchEngine = .duck
     var tavilyKey: String = ""
+    /// SearXNG 用哪个实例（空 = 默认那个，见 `WebSearch.defaultSearxHost`）
+    var searxHost: String = ""
     /// 花多少钱怎么算。**只是按你填的单价估的，不是真实账单。**
     var pricing = Pricing()
     /// 让他自己醒来。默认关着——醒一次就是一次调用。
@@ -985,6 +1025,7 @@ extension AppSettings {
         siliconKey = (try? c.decodeIfPresent(String.self, forKey: .siliconKey)) ?? ""
         searchEngine = (try? c.decodeIfPresent(SearchEngine.self, forKey: .searchEngine)) ?? .duck
         tavilyKey = (try? c.decodeIfPresent(String.self, forKey: .tavilyKey)) ?? ""
+        searxHost = (try? c.decodeIfPresent(String.self, forKey: .searxHost)) ?? ""
         pricing = (try? c.decodeIfPresent(Pricing.self, forKey: .pricing)) ?? Pricing()
         wake = (try? c.decodeIfPresent(WakeConfig.self, forKey: .wake)) ?? WakeConfig()
         bodyEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .bodyEnabled)) ?? true

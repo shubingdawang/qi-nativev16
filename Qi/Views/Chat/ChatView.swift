@@ -507,7 +507,9 @@ struct ChatView: View {
                     GroupSetupView(conversationID: id)
                 }
             case .process(let msg):
-                ProcessSheet(message: msg)
+                if let cid = app.activeID(for: space) {
+                    ProcessSheet(messageID: msg.id, conversationID: cid, fallback: msg)
+                }
             case .shape:
                 // sheet 里没有现成的导航栈，这一层得自己套
                 //（见 `PromptShapeView` 开头那段）。
@@ -2008,6 +2010,9 @@ struct MessageListView: View {
                         if let day = daybreak(at: index) {
                             DayMark(date: day)
                         }
+                        // ⚠️ `.equatable()`：这一条没变就不重画。
+                        // 他回话的时候消息区每秒要重求值好几次，
+                        // 而变的只有最后那一条——别的几十条跟着重画是白费
                         MessageBubbleView(
                             message: message,
                             conversationID: conversation.id,
@@ -2031,6 +2036,7 @@ struct MessageListView: View {
                             showsHeader: showsHeader(at: index),
                             onMention: { onMention($0) }
                         )
+                        .equatable()
                         .id(message.id)
                     }
                     // 他开始回、但一个字还没出来的那几秒，别让屏幕空着——
@@ -2364,7 +2370,8 @@ extension ChatView {
 extension MessageListView: Equatable {
 
     nonisolated static func == (a: MessageListView, b: MessageListView) -> Bool {
-        a.conversation == b.conversation
+        // ⚠️ 比**指纹**，不逐条比消息（见 `Conversation.uiFingerprint`）
+        a.conversation.uiFingerprint == b.conversation.uiFingerprint
             && a.space == b.space
             && a.selecting == b.selecting
             && a.selected == b.selected

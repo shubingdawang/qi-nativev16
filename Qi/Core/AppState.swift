@@ -2060,8 +2060,16 @@ final class AppState: ObservableObject {
         // 算两遍不光白费事，两遍之间还可能不一样，那工具表就抖起来了（缓存最怕这个）
         let mountedGroups: Set<String>? = (settings.mountToolsOnDemand && conversation != nil)
             ? conversation.map {
-                ToolMount.shared.activeGroups(conversation: $0, context: context,
-                                              sticky: !cacheless($0.modelID))
+                // ⚠️ **按次计费也不攒。**
+                //
+                // 「挂上了就不摘」唯一的好处是让工具表每轮一模一样、好命中缓存。
+                // 她是按次计费：一次就是一次钱，缓存省的只是速度；
+                // 而攒的代价是实打实的——她那张图里工具表攒到了 84 件、17.4k。
+                // 通道本来就不缓存的时候同理。
+                ToolMount.shared.activeGroups(
+                    conversation: $0, context: context,
+                    sticky: !cacheless($0.modelID)
+                        && settings.pricing.mode != .perCall)
             }
             : nil
         var out: [[String: Any]] = []
@@ -5495,7 +5503,8 @@ final class AppState: ObservableObject {
             do {
                 let r = try await WebSearch.run(query,
                                                 engine: settings.searchEngine,
-                                                key: settings.tavilyKey)
+                                                key: settings.tavilyKey,
+                                                searxHost: settings.searxHost)
                 var out = ""
                 if !r.answer.isEmpty { out += r.answer + "\n" }
                 if !r.hits.isEmpty {

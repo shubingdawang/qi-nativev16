@@ -1796,6 +1796,9 @@ struct MessageBubbleView: View {
                     radius: 18,
                     strength: app.settings.glassOpacity * app.settings.bubbleOpacity,
                     extra: isUser ? 0.35 : 0,
+                    // 一屏几十个气泡：走轻量版（材质 + 纱 + 上缘高光），
+                    // 颗粒、柔光、描边留给卡片。见 `GlassSurface.light`
+                    light: true,
                     // 她定的：**气泡不该有边框**。
                     // 卡片要边（得从背景里分出来），
                     // 气泡不要（本来就有形状，而且一屏几十个）。
@@ -2114,5 +2117,25 @@ struct TypingBubble: View {
             }
         }
         .transition(.opacity.combined(with: .move(edge: .bottom)))
+    }
+}
+
+
+// MARK: - 这一条气泡要不要重画
+
+/// 跟 `MessageListView` 那道 `==` 同一个道理（见那儿的注释）：
+/// 十几个回调**永远比不相等**，所以手写一个，只比真能改变画面的那几样。
+///
+/// ⚠️ 回调会「旧」一拍，这是安全的：它们碰的都是 `@State` / `@EnvironmentObject`，
+/// 那两样内部是引用，旧的结构体副本读写的还是同一块存储。
+/// 真正被按值捕获的只有 `message` 和 `conversationID`——**它们在下面比着**。
+extension MessageBubbleView: Equatable {
+    nonisolated static func == (a: MessageBubbleView, b: MessageBubbleView) -> Bool {
+        a.message == b.message
+            && a.conversationID == b.conversationID
+            && a.selecting == b.selecting
+            && a.isSelected == b.isSelected
+            && a.menuOpenID == b.menuOpenID
+            && a.showsHeader == b.showsHeader
     }
 }
