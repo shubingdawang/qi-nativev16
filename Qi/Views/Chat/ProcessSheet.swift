@@ -58,8 +58,19 @@ struct ProcessSheet: View {
     }
 
     @EnvironmentObject var app: AppState
-    /// 他正在蹦的那几个字。**这一页订阅它**，所以想到哪儿这儿就长到哪儿
-    @ObservedObject private var live = LiveStream.shared
+    /// 他正在蹦的那几个字。
+    ///
+    /// ⚠️⚠️ **这儿不能写 `@ObservedObject`。**
+    ///
+    /// 她报的：「他在说话时我点开他的 thinking 依旧有点卡顿。」
+    /// 订阅了就是**他每吐一次字，这整张弹窗重画一次**——
+    /// 而重画一次要：正文里把 `[[cot:]]` 正则剥一遍、压空行、
+    /// 整段拆成字符数组切成几步、每一步再过一遍 Markdown。
+    /// 一秒几十次，就是她感觉到的那个卡。
+    ///
+    /// 改成**自己按 0.3 秒跳一下**（`beat`）：他还在说的时候一秒重画三次，
+    /// 眼睛看不出差别，活儿少了十几倍。说完就停，一点都不跳。
+    private let live = LiveStream.shared
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dismiss) private var dismiss
 
@@ -70,6 +81,11 @@ struct ProcessSheet: View {
     /// 原文一直在，译文是看的时候临时翻的。
     @State private var translated: [String: String] = [:]
     @State private var translating: Set<String> = []
+
+    /// 他还在说的时候，靠它推着这一页往前走（见上面 `live` 那段）。
+    /// 这个数变一下 = 整页重画一次，所以**只在他还在说的时候跳**。
+    @State private var beat = 0
+    @State private var wasStreaming = false
 
     /// 开多高。
     ///
@@ -105,6 +121,20 @@ struct ProcessSheet: View {
         // 系统翻译的宿主（见 `AppleTranslate`）：弹窗盖在上面的时候，
         // 根视图那个弹不出「下载语言包」的卡片，得这一层自己来
         .background(AppleTranslateHost())
+        // ⚠️ 走 `.task` 不走 `Timer` + `onReceive`：
+        // 定时器写成视图里的属性的话，**每次重画都会造一个新的**，
+        // 越堆越多（`PhoneActivityView` 那儿栽过）。`.task` 这一页一关自己就停。
+        //
+        // ⚠️ 最后那一下也要跳：他说完那一刻 `isStreaming` 才变假，
+        // 只认「正在说」的话，屏幕会停在倒数第二次跳的样子。
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                let now = message.isStreaming
+                if now || wasStreaming { beat &+= 1 }
+                if now != wasStreaming { wasStreaming = now }
+            }
+        }
         .presentationDetents([.fraction(0.4), .large], selection: $height)
         .presentationDragIndicator(.visible)
     }
@@ -137,7 +167,11 @@ struct ProcessSheet: View {
     /// 不用迁移，也不会让旧记录忽然变样。
     private var steps: [Step] {
         var out: [Step] = []
-        let full = Array(reasoning)
+        // ⚠️ `reasoning` 是个**算出来的属性**：每读一次就把整段正文
+        // 正则剥一遍、空行压一遍。这个方法里要用到它四五次，
+        // 读四五次就是白算四五遍——他还在说的时候这一页一直在重算。
+        let think = reasoning
+        let full = Array(think)
         var cut = 0
 
         // ⚠️ 老消息**一条都没标过**（`reasonMark` 全是 0）。
@@ -158,13 +192,13 @@ struct ProcessSheet: View {
         // 但那种情况下「想在前、动手在后」也只是把顺序说得保守一点，
         // 不会把不存在的思考塞到中间去。
         let firstMark = message.toolRuns.first?.reasonMark ?? 0
-        let trustworthy = firstMark > 0 || reasoning.isEmpty
+        let trustworthy = firstMark > 0 || think.isEmpty
         let marked = message.toolRuns.contains { $0.reasonMark > 0 } && trustworthy
         if !marked {
-            if !reasoning.isEmpty {
+            if !think.isEmpty {
                 out.append(Step(id: "think", icon: nil,
                                 tint: Theme.textMuted(scheme),
-                                title: "Thinking", note: "", body: reasoning))
+                                title: "Thinking", note: "", body: think))
             }
             for run in message.toolRuns {
                 out.append(Step(id: run.id.uuidString,
@@ -178,7 +212,7 @@ struct ProcessSheet: View {
             return out
         }
 
-        func think(upTo end: Int, id: String) {
+        func cutThink(upTo end: Int, id: String) {
             let to = max(cut, min(end, full.count))
             guard to > cut else { return }
             let piece = String(full[cut..<to]).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -194,7 +228,7 @@ struct ProcessSheet: View {
             // 而这儿的 `reasoning` 已经剥过了，会短一截。
             // 所以只当成「大概到这儿」用，越界的一律夹回范围内——
             // 切歪一点点比切崩了强。
-            think(upTo: run.reasonMark, id: "think\(i)")
+            cutThink(upTo: run.reasonMark, id: "think\(i)")
             out.append(Step(id: run.id.uuidString,
                             icon: run.failed
                                 ? "exclamationmark.triangle" : "wrench.and.screwdriver",
@@ -204,7 +238,7 @@ struct ProcessSheet: View {
                             body: detail(run)))
         }
         // 最后一个工具之后还想了的那一段
-        think(upTo: full.count, id: "thinkEnd")
+        cutThink(upTo: full.count, id: "thinkEnd")
         return out
     }
 
@@ -230,6 +264,11 @@ struct ProcessSheet: View {
     @ViewBuilder
     private func row(_ s: Step, isLast: Bool) -> some View {
         let isOpen = open.contains(s.id)
+        // 还在长的那一段（最后一步，而且他还在说）。
+        // 这一段每跳一下都会变长，**别让它过 Markdown、也别开选字**：
+        // 一个是每次都要把整段重新解析一遍，一个是每次都要重新量一遍可选区域。
+        // 他说完就自动换回带格式的那一支。
+        let growing = isLast && message.isStreaming
         HStack(alignment: .top, spacing: 11) {
             // 左边一栏：记号 + 往下那根线
             VStack(spacing: 0) {
@@ -289,13 +328,23 @@ struct ProcessSheet: View {
                     // 展开之后**给全的**，不掐行数。
                     // 她定过：「不是把行高固定，是根据字数来画」——
                     // 她特地点开这一条，就没有再截断她的道理。
-                    Text(MD.inline(s.body))
+                    Group {
+                        if growing {
+                            Text(s.body)
+                        } else {
+                            Text(MD.inline(s.body)).textSelection(.enabled)
+                        }
+                    }
                         .font(.app(12))
                         .foregroundStyle(Theme.textSoft(scheme))
                         .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     translation(s)
+                } else if growing {
+                    Text(oneLine(s.body))
+                        .font(.app(11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                        .lineLimit(1)
                 } else {
                     Text(MD.inline(oneLine(s.body)))
                         .font(.app(11))
