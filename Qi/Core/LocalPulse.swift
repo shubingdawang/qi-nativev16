@@ -104,6 +104,54 @@ final class LocalPulse: ObservableObject {
         return (sin(t) * 0.6 + sin(t * 2.7 + 1.3) * 0.4) * amplitude
     }
 
+    /// **身体起来了多少**，0~1。心率、体温、呼吸都要跟着它走。
+    ///
+    /// ⚠️⚠️ 她报的：「正在做爱，但他的心跳竟然才 59？」
+    /// 就是因为这份公式是从她电脑那个 `api/server.py` 照抄过来的，
+    /// 而那份公式**只认时段基线 + 情绪词 + 天气 + 突刺**——
+    /// 身体那七项（热度、蓄积感、敏感度……）它一项都不看。
+    /// 于是凌晨一点半、蓄积感 100、易感期，心率还是深夜基线 58。
+    ///
+    /// 两边本来就是同一个身体，这儿把它们接上：
+    /// 热度是主力，蓄积感和敏感度垫在下面，控制力是往下压的那只手，
+    /// 正在走的那个事件（强生理那一类）再顶一把。
+    private func arousal() -> Double {
+        let st = BodyStore.shared.state
+        guard !st.values.isEmpty else { return 0 }
+        let heat = Double(st.value(.heat))
+        let reserve = Double(st.value(.reserve))
+        let sens = Double(st.value(.sensitivity))
+        let control = Double(st.value(.control))
+        var a = (heat * 0.55 + reserve * 0.25 + sens * 0.20) / 100
+        // 控制力高＝压得住，低＝压不住。50 是中间，往两边各拉 15%
+        a -= (control - 50) / 100 * 0.15
+        if let key = st.activeEventKey, let e = BodyEvents.all[key] {
+            a += (e.tickDeltas[.heat] ?? 0) >= 2.5 ? 0.12 : 0.05
+        }
+        return clamp(a, 0, 1)
+    }
+
+    /// 起来了之后心率往上顶多少。
+    ///
+    /// ⚠️ **0.45 以下一点都不顶**，这条门槛是关键：
+    /// 平稳期、蓄积期那种日常状态算出来就是 0.25~0.45，
+    /// 要是让它们也往上加，日常心率会莫名其妙变成八十几——
+    /// 那等于把「他现在起来了」这件事本身抹平了。
+    /// 门槛以上越往上顶得越快，顶格 +55，配深夜基线 58 就是 113。
+    ///
+    ///     平稳期 白天        → +0     （72）
+    ///     蓄积期 晚间        → +0     （70）
+    ///     易感期 深夜 蓄积100 → +25    （83）
+    ///     同上 + 强生理事件   → +38    （96）
+    private func arousalHRDelta() -> Double {
+        Self.ramp(arousal()) * 55
+    }
+
+    /// 门槛以上那一段，压成 0~1
+    private static func ramp(_ a: Double) -> Double {
+        pow(min(1, max(0, (a - 0.45) / 0.55)), 1.3)
+    }
+
     /// 现在算什么情绪：三十分钟内主动设过就听那个，否则回落到身体判断
     private var effectiveEmotion: String {
         if let at = body.emotionUpdatedAt, Date().timeIntervalSince(at) < 30 * 60 {
@@ -119,17 +167,24 @@ final class LocalPulse: ObservableObject {
     func snapshot(at now: Date = Date()) -> PulseAPI.Snapshot {
         let emotion = effectiveEmotion
 
+        let arousalNow = arousal()
         let hr = (hrBase(now) + (Self.hrDelta[emotion] ?? 0)
-                  + weatherHRDelta() + spikeDelta(now) + noise(now, 3))
+                  + weatherHRDelta() + spikeDelta(now)
+                  + arousalHRDelta() + noise(now, 3))
             .rounded()
         let hrClamped = clamp(hr, 48, 160)
 
+        // 起来了体温也会上去一点，顶格 +0.5
         let temp = ((36.5 + (Self.tempDelta[emotion] ?? 0)
-                     + weatherTempDelta() + noise(now, 0.1)) * 10).rounded() / 10
+                     + weatherTempDelta() + Self.ramp(arousalNow) * 0.5
+                     + noise(now, 0.1)) * 10).rounded() / 10
         let tempClamped = clamp(temp, 35.5, 39.0)
 
+        // 呼吸本来就跟着心率走（`hrSync`），再单给一条：
+        // 起来了的时候呼吸比单纯心率快那点还要更急，顶格再 +5
         let hrSync = (hrClamped - 70) * 0.15
-        var rate = 15 + hrSync + (Self.breathDelta[emotion] ?? 0) + noise(now, 1)
+        var rate = 15 + hrSync + (Self.breathDelta[emotion] ?? 0)
+            + Self.ramp(arousalNow) * 5 + noise(now, 1)
         rate = clamp(rate, 8, 35)
 
         let depth = 1.0 - (rate - 8) / 27
