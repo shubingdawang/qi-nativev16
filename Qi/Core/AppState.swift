@@ -1690,11 +1690,25 @@ final class AppState: ObservableObject {
 
     /// 把攒着的那几个字**丢掉不写**。
     /// 只用在换备用模型那一下：那半句是断的，不该接在新的前面。
+    /// 换备用模型那一下抹掉的半句，先收在这儿。
+    ///
+    /// 她报的：「刚刚明明已经显示了完整回复，但现在变成这样了」——
+    /// 屏幕上只剩一条「网络连接已中断」，字全没了。
+    /// 那一轮是：主的额度满了 → 自动换备用 → **把断在半路的半句抹掉**
+    /// （抹是对的，不然新旧两截会拼在一起）→ 换完那次又断网 → 收场时正文是空的。
+    /// 现在抹掉的先收着，**只有在「最后一无所获」的时候才还回去**。
+    private var droppedText: [UUID: String] = [:]
+
     private func dropStreamBuffer(_ assistantID: UUID) {
+        let live = LiveStream.shared.take(assistantID)
+        let half = live.text + (pendingText[assistantID] ?? "")
+        let before = conversation(activeToolConversationID)?.messages
+            .last(where: { $0.id == assistantID })?.content ?? ""
+        let all = (before + half).trimmingCharacters(in: .whitespacesAndNewlines)
+        if !all.isEmpty { droppedText[assistantID] = all }
         pendingText[assistantID] = nil
         pendingReason[assistantID] = nil
         flushAt[assistantID] = nil
-        LiveStream.shared.drop(assistantID)
     }
 
     /// 这一轮完了（不管怎么完的），把攒着的那几个字清干净。
@@ -7126,6 +7140,7 @@ final class AppState: ObservableObject {
     }
 
     private func finishStreaming(assistantID: UUID, in conversationID: UUID) {
+        droppedText[assistantID] = nil
         // ⚠️ **第一件事：把攒着的那几个字写回去。**
         // 不刷的话最后不到 80 毫秒那一截永远到不了屏幕上，
         // 而下面那一堆洗标记、抽 promise、存库都要读 `content`。
@@ -7392,6 +7407,14 @@ final class AppState: ObservableObject {
         guard let ci = index(of: conversationID),
               let mi = conversations[ci].messages.firstIndex(where: { $0.id == assistantID })
         else { return }
+        // 换备用模型那一下抹掉的半句：这一轮最后什么都没说出来的话，还回去。
+        // 半句加一条报错，好过一条光秃秃的报错（见 `droppedText`）
+        if conversations[ci].messages[mi].content
+            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let half = droppedText[assistantID], !half.isEmpty {
+            conversations[ci].messages[mi].content = half
+        }
+        droppedText[assistantID] = nil
         // 报错要说得出问题在哪，见 ErrText。
         conversations[ci].messages[mi].errorText = ErrText.readable(error)
         conversations[ci].messages[mi].isStreaming = false

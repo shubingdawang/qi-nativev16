@@ -1985,6 +1985,15 @@ struct MessageListView: View {
     @Environment(\.colorScheme) private var scheme
     /// 离底还远不远。**只记一个布尔**，理由见下面那个 onScrollGeometryChange。
     @State private var awayFromBottom = false
+    /// 还跟不跟着往下滚。
+    ///
+    /// 她要的：「他说话时 app 会自动滚到底部，我这时候想往上翻看他上面的话，
+    /// 希望滚动到底部可以停止。」
+    ///
+    /// ⚠️ **不能拿 `awayFromBottom` 当这个闸**：他一直在吐字，内容底边本来就越跑越远，
+    /// 那个数自己就会变成「离底远」，自动滚动会被永久关掉。
+    /// 所以认**她的手**：手一拖就停；她自己回到底部、或者她发了新消息，再恢复。
+    @State private var stickToBottom = true
 
     /// 这一条是不是「这一天的第一条」。是就返回那天，好横一道分隔。
     private func daybreak(at index: Int) -> Date? {
@@ -2107,6 +2116,19 @@ struct MessageListView: View {
                 .padding(.bottom, 8)
             }
             .scrollDismissesKeyboard(.interactively)
+            // 手一拖就不再跟着滚（贴着底拖一点点不算——那多半是想看最后一句）
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 12)
+                    .onChanged { v in
+                        if v.translation.height > 0 { stickToBottom = false }
+                    }
+            )
+            // 她自己回到底了：接着跟
+            .onChange(of: awayFromBottom) { _, far in
+                if !far { stickToBottom = true }
+            }
+            // 她发了新消息：不管翻到哪儿，都跟回最底下
+            .onChange(of: typingTick) { _, _ in stickToBottom = true }
             // 回到底部。她要的：「一个圈圈上面一个↓就行，跟着玻璃变换。」
             //
             // ⚠️ 只在**离底还远**的时候出现——一直挂着的话它就成了
@@ -2114,6 +2136,7 @@ struct MessageListView: View {
             .overlay(alignment: .bottomTrailing) {
                 if awayFromBottom {
                     Button {
+                        stickToBottom = true
                         withAnimation(.easeOut(duration: 0.28)) {
                             proxy.scrollTo("__bottom", anchor: .bottom)
                         }
@@ -2133,10 +2156,18 @@ struct MessageListView: View {
                 }
             }
             // 正文、思考链、工具调用，只要有一样在往外冒字，就跟着滚
+            // ⚠️ **她自己往上翻了就别再拽回去。**
+            //
+            // 她报的：「他说话时 app 会自动滚到底部，我这时候想往上翻看他上面的话，
+            // 希望滚动到底部可以停止。」
+            // `awayFromBottom` 本来就在量「离底远不远」（底下那块量尺），
+            // 拿它当闸：她贴着底就跟着滚，翻上去了就停手。
             .onChange(of: conversation.scrollTick) { _, _ in
+                guard stickToBottom else { return }
                 proxy.scrollTo("__bottom", anchor: .bottom)
             }
             .onChange(of: live.tick) { _, _ in
+                guard stickToBottom else { return }
                 proxy.scrollTo("__bottom", anchor: .bottom)
             }
             .onChange(of: conversation.messages.count) { _, _ in
