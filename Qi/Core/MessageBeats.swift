@@ -168,6 +168,13 @@ enum MessageBeats {
         text = MoodTagMarker.extract(text).clean
         // 调唤醒方式那几个记号也只剥不认（认在 `AppState` 收尾那一处）
         text = WakeControlMarker.extract(text).clean
+        // 他给图写的那句描述、跟她许的那个承诺，也只剥不认。
+        //
+        // 她报的：「我能看见他的 img。」——这两样以前只在落库那一步剥，
+        // 而落库是**他说完那一刻**才跑的：他写得早（比如一次看四五张图，
+        // 边看边写），那几秒里标记就明晃晃挂在气泡上。
+        text = ImageNoteMarker.extract(text).clean
+        text = PromiseMarker.extract(text).clean
 
         // ⚠️⚠️ **动作和心里话整段扫，不按行扫。**
         //
