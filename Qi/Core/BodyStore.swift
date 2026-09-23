@@ -65,6 +65,8 @@ final class BodyStore: ObservableObject {
         guard !applied.isEmpty else { return }
         state = s
         save()
+        // 心率**当场**跟上这一笔，不用等下一轮结算（见 `LocalPulse.stir`）
+        LocalPulse.shared.stir(LocalPulse.stirAmount(applied))
 
         nudges.insert(BodyEntry(quote: String(quote.prefix(40)),
                                 why: n.why, deltas: applied), at: 0)

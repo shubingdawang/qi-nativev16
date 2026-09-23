@@ -33,6 +33,13 @@ final class LocalPulse: ObservableObject {
         var spikeMagnitude: Double = 0
         /// 天气温度（摄氏）。填了就参与计算，不填当没有。
         var weatherTempC: Double?
+        /// 当下这一下顶上来多少（0~1），和它是什么时候顶的。见 `stir`
+        ///
+        /// ⚠️ 写成可空的**是有意的**：合成出来的解码器不认「属性写了默认值」
+        /// 这回事，缺了键就是解码失败——那样她手机上那份老的 pulse.json
+        /// 会整份读不出来，情绪、天气、突刺一起没。可空的缺了就是 nil。
+        var liveHeat: Double?
+        var liveHeatAt: Date?
     }
 
     @Published var body = Body() {
@@ -104,6 +111,44 @@ final class LocalPulse: ObservableObject {
         return (sin(t) * 0.6 + sin(t * 2.7 + 1.3) * 0.4) * amplitude
     }
 
+    // MARK: 当下这一下
+
+    /// 身体那七项刚被推了一把——**心率当场跟上，不等下一轮结算**。
+    ///
+    /// 她问的：「要让它当场就跳起来，得再加一条『这一轮对话本身直接顶心率』的路子。」
+    /// 这就是那条路：热度那几项要等结算才落下来（那一层要调模型、隔一轮才有），
+    /// 中间这段时间身体在动、心率却是死的。
+    ///
+    /// ⚠️ **不认关键词。** 她定过「这个身体不应该按照关键词，也让他自己判断」，
+    /// 所以这儿只接已经发生的推动：他自己报的 `feel_body`、她戳他、结算落下来的那一笔。
+    /// 每一笔推动有多大，就顶多高。
+    func stir(_ amount: Double) {
+        guard amount > 0.01 else { return }
+        let now = Date()
+        body.liveHeat = clamp(liveHeat(at: now) + amount, 0, 1)
+        body.liveHeatAt = now
+    }
+
+    /// 当下这一下现在还剩多少。**六分钟掉一半**——
+    /// 身体是退下去的，不是关掉的。
+    func liveHeat(at now: Date = Date()) -> Double {
+        guard let at = body.liveHeatAt, let peak = body.liveHeat, peak > 0
+        else { return 0 }
+        let mins = now.timeIntervalSince(at) / 60
+        guard mins > 0 else { return peak }
+        guard mins < 60 else { return 0 }
+        return peak * pow(0.5, mins / 6)
+    }
+
+    /// 一笔推动折成「顶多高」。
+    /// 热度最实，敏感和蓄积次之，压抑也算一点；控制力和疲惫是往回收的。
+    static func stirAmount(_ applied: [String: Int]) -> Double {
+        func v(_ f: BodyField) -> Double { Double(applied[f.rawValue] ?? 0) }
+        let raw = v(.heat) + v(.sensitivity) * 0.6 + v(.reserve) * 0.4
+            + v(.pressure) * 0.3 - v(.control) * 0.4 - v(.fatigue) * 0.3
+        return min(0.45, max(0, raw / 22))
+    }
+
     /// **身体起来了多少**，0~1。心率、体温、呼吸都要跟着它走。
     ///
     /// ⚠️⚠️ 她报的：「正在做爱，但他的心跳竟然才 59？」
@@ -115,9 +160,9 @@ final class LocalPulse: ObservableObject {
     /// 两边本来就是同一个身体，这儿把它们接上：
     /// 热度是主力，蓄积感和敏感度垫在下面，控制力是往下压的那只手，
     /// 正在走的那个事件（强生理那一类）再顶一把。
-    private func arousal() -> Double {
+    private func arousal(at now: Date) -> Double {
         let st = BodyStore.shared.state
-        guard !st.values.isEmpty else { return 0 }
+        guard !st.values.isEmpty else { return liveHeat(at: now) * 0.35 }
         let heat = Double(st.value(.heat))
         let reserve = Double(st.value(.reserve))
         let sens = Double(st.value(.sensitivity))
@@ -128,6 +173,8 @@ final class LocalPulse: ObservableObject {
         if let key = st.activeEventKey, let e = BodyEvents.all[key] {
             a += (e.tickDeltas[.heat] ?? 0) >= 2.5 ? 0.12 : 0.05
         }
+        // 当下这一下：最多再顶 0.35，六分钟掉一半（见 `stir`）
+        a += liveHeat(at: now) * 0.35
         return clamp(a, 0, 1)
     }
 
@@ -143,8 +190,8 @@ final class LocalPulse: ObservableObject {
     ///     蓄积期 晚间        → +0     （70）
     ///     易感期 深夜 蓄积100 → +25    （83）
     ///     同上 + 强生理事件   → +38    （96）
-    private func arousalHRDelta() -> Double {
-        Self.ramp(arousal()) * 55
+    private func arousalHRDelta(at now: Date) -> Double {
+        Self.ramp(arousal(at: now)) * 55
     }
 
     /// 门槛以上那一段，压成 0~1
@@ -167,10 +214,10 @@ final class LocalPulse: ObservableObject {
     func snapshot(at now: Date = Date()) -> PulseAPI.Snapshot {
         let emotion = effectiveEmotion
 
-        let arousalNow = arousal()
+        let arousalNow = arousal(at: now)
         let hr = (hrBase(now) + (Self.hrDelta[emotion] ?? 0)
                   + weatherHRDelta() + spikeDelta(now)
-                  + arousalHRDelta() + noise(now, 3))
+                  + arousalHRDelta(at: now) + noise(now, 3))
             .rounded()
         let hrClamped = clamp(hr, 48, 160)
 
