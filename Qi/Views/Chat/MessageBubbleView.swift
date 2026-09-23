@@ -1198,6 +1198,15 @@ struct MessageBubbleView: View {
 
     private var contentSegments: [String] {
         let shownContent = parsed.clean
+        // ⚠️ **剩下的正文是空的就一段都不给。**
+        //
+        // 她报的：「我只用动作或心理的时候会显示一个空气泡。」
+        // 她整条只写了 `[[act:…]]` / `[[mind:…]]`，剥完正文就是空字符串，
+        // 而下面那句兜底（`parts.isEmpty ? [shownContent] : parts`）
+        // 会把这个空字符串当成一段正文发出去——画出来就是一个空气泡。
+        // 那几句动作和心里话自己有地方画（见 `beatsBlock` / `contentPieces`）。
+        guard !shownContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return [] }
         // ⚠️ **有中段独白就一定要切段**，哪怕她关了分段发送。
         //
         // 那几条心里话记的位置是「第几段之后」（见 `MessageBeat.at`）。
