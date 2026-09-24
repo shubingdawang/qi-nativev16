@@ -753,24 +753,31 @@ struct GlassSurface: View {
 
     /// 磨砂 ＝ 参考里的**霜态**：最薄的材质 + 一层薄到看不见的乳白 + 细砂 + 亮边
     ///
-    /// ⚠️⚠️ **材质本身要调淡**（`.opacity(0.70)`）。
+    /// ⚠️⚠️⚠️ **材质的透明度只能动一点点（0.90），别再往下压。**
     ///
-    /// 她第二次说「还是有点不够透，偏白」。上一版只是把我们自己加的白纱
-    /// 从 26% 压到 10%——可剩下那层白**是系统材质自带的**：
-    /// `.ultraThinMaterial` 在浅色下本来就是一块淡白的板，纱拿光了它还在。
+    /// 这个旋钮我开过一次头（0.70），她当场发现：
+    /// 「现在都直接透出下面的壁纸了，我要的模糊效果没有了。」
+    ///
+    /// 原因是它**不是「去白」旋钮，是「糊不糊」旋钮**：
+    /// 把材质这一笔调成 70%，等于把「糊过的画面」和「原本没糊的画面」
+    /// 按 7:3 混起来——那 30% 的清晰壁纸直接穿上来，
+    /// 糊多少都没用了。想去白就得同时失去糊，这是这条路的死结。
+    ///
+    /// 所以白只能这么处理：**纱几乎不给**（3%），材质只刮掉一丁点，
+    /// 剩下的白就认了——那是系统材质自己的颜色，换不掉。
     ///
     /// 调淡走的是 `ShapeStyle.opacity`，**不是视图的 `.opacity`**：
     /// 前者是这一笔填充自己的透明度，后者会把整层推去离屏渲染，
     /// 那会打断材质对背景的采样，玻璃当场变成一块死板（`.shadow` 那次的教训）。
     private var recipeFrosted: some View {
         let dark = scheme == .dark
-        return shape.fill(.ultraThinMaterial.opacity(dark ? 0.78 : 0.70))
+        return shape.fill(.ultraThinMaterial.opacity(dark ? 0.94 : 0.90))
             .overlay {
                 // 乳白一层：浅色 10%→6%，深色 4%→2%。
                 // 这是「霜」那点白，不是纱——超过这个数就开始盖住壁纸了。
                 shape.fill(LinearGradient(
-                    colors: dark ? [.white.opacity(0.03), .white.opacity(0.015)]
-                                 : [.white.opacity(0.07), .white.opacity(0.04)],
+                    colors: dark ? [.white.opacity(0.02), .white.opacity(0.01)]
+                                 : [.white.opacity(0.04), .white.opacity(0.02)],
                     startPoint: .top, endPoint: .bottom))
             }
             .overlay {
@@ -802,16 +809,18 @@ struct GlassSurface: View {
 
     /// 模糊 ＝ 参考里的**凝态**：糊得更狠，但颜色整个透上来，表面平整不带砂
     ///
-    /// 材质比磨砂厚一档（糊得更狠），所以也调得更淡一点，
-    /// 免得厚材质自带的那层白把颜色压没了（理由见 `recipeFrosted`）。
+    /// ⚠️ 这一档的卖点是**糊**，所以底换成更厚的 `.regularMaterial`——
+    /// 她要的「模糊的感觉」就是背后的东西化开、认不出形状。
+    /// 厚材质自带的白更多，但**不能靠调透明度去白**（理由见 `recipeFrosted`：
+    /// 那等于把没糊的画面掺回来，糊就没了），只能靠纱几乎不给。
     private var recipeBlur: some View {
         let dark = scheme == .dark
-        return shape.fill(.thinMaterial.opacity(dark ? 0.74 : 0.66))
+        return shape.fill(.regularMaterial.opacity(dark ? 0.94 : 0.88))
             .overlay {
                 // 比磨砂还薄——这一档的卖点是「糊」，白一加就全毁了
                 shape.fill(LinearGradient(
-                    colors: dark ? [.white.opacity(0.02), .white.opacity(0.01)]
-                                 : [.white.opacity(0.05), .white.opacity(0.02)],
+                    colors: dark ? [.white.opacity(0.015), .white.opacity(0.005)]
+                                 : [.white.opacity(0.03), .white.opacity(0.015)],
                     startPoint: .top, endPoint: .bottom))
             }
             .overlay {
