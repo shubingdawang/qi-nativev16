@@ -276,8 +276,9 @@ struct WageView: View {
                     Text(WageView.rateTag(rec?.multiplier ?? 1))
                         .font(.app(8, weight: .semibold))
                         .foregroundStyle(WageView.payRed)
-                        .padding(.horizontal, 3)
-                        .padding(.top, 2)
+                        // 往里挪一点，别贴着格子的圆角（她说「再往右移动一点」）
+                        .padding(.leading, 7)
+                        .padding(.top, 3)
                 }
             }
             .overlay {

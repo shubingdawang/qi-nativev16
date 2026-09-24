@@ -653,10 +653,13 @@ struct GlassSurface: View {
                 //
                 // 所以非气泡那些面在深色下**提一点白**，把那块板从底上托起来；
                 // 气泡那档一点不动（`light == true` 走的就是原来那套）。
+                // ⚠️ 深色下非气泡那些面又往上提了一档（0.09/0.05 → 0.15/0.09）：
+                // 她第四次说「模糊的深色模式还是太黑」。那些面背后是一整片深底，
+                // 玻璃没有亮的东西可糊，只能靠这一层把板从底上托起来。
                 shape.fill(LinearGradient(
                     colors: dark
                         ? (light ? [.black.opacity(0.03 * k), .black.opacity(0.015 * k)]
-                                 : [.white.opacity(0.09 * k), .white.opacity(0.05 * k)])
+                                 : [.white.opacity(0.15 * k), .white.opacity(0.09 * k)])
                         : [.white.opacity(0.12 * k), .white.opacity(0.06 * k)],
                     startPoint: .top, endPoint: .bottom))
             }
@@ -711,8 +714,16 @@ struct GlassSurface: View {
             // 上一轮刚被我钉成 1——于是这层垫的模糊一下子开到满，
             // 把液态玻璃整个埋在底下，看上去就是「液态玻璃没了」。
             //
-            // 滑块没了，这层垫的也就没有理由存在：**这一档就是系统那块真玻璃**。
-            Color.clear.glassEffect(.clear, in: shape)
+            // 滑块没了，所以这儿垫的是**一个定死的薄霜**，不再跟任何设置联动：
+            // 纯的 `.glassEffect(.clear)` 太透了（她说「液态玻璃现在有点太透了，
+            // 我想回到之前的样子」——以前那层垫的就在这个厚度上下）。
+            //
+            // ⚠️ 用 `ShapeStyle.opacity` 调这一笔填充，不给视图加 `.opacity`：
+            // 后者会离屏渲染，把液态玻璃和材质的背景采样一起打断。
+            ZStack {
+                shape.fill(.ultraThinMaterial.opacity(0.55))
+                Color.clear.glassEffect(.clear, in: shape)
+            }
         } else if liquid {
             shape.fill(.ultraThinMaterial)
         } else {
