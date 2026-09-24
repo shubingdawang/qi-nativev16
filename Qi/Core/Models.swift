@@ -668,7 +668,17 @@ struct AppSettings: Codable {
     /// 位置记下来，下次进来还在原地。
     var clawdX: Double = 0.78
     var clawdY: Double = 0.66
-    /// 玻璃的通透程度，0 最透 1 最实
+    /// 玻璃的通透程度，0 最透 1 最实。
+    ///
+    /// ⚠️⚠️ **这根滑块已经从界面上删了，这个数现在恒等于 1。**
+    ///
+    /// 删滑块的时候只删了界面，**没动存下来的值**——她那份存的是以前拖到的 0.x。
+    /// 后来配方重新开始读 `strength`，这个没人能改的旧值立刻把模糊整个抹掉了
+    ///（她报的「完全没有模糊层了」）。
+    ///
+    /// 所以读设置的时候**一律丢掉旧值**（见 `init(from:)`）。
+    /// 字段本身留着：几十处 `strength: app.settings.glassOpacity` 还在用它，
+    /// 而且以后要是再加回那根滑块，接回来只是改这一处。
     var glassOpacity: Double = 1.0
     /// 玻璃是哪一套做法
     var glassStyle: GlassStyle = .blur
@@ -1000,7 +1010,9 @@ extension AppSettings {
         handleY = (try? c.decodeIfPresent(Double.self, forKey: .handleY)) ?? 0.62
         clawdX = (try? c.decodeIfPresent(Double.self, forKey: .clawdX)) ?? 0.78
         clawdY = (try? c.decodeIfPresent(Double.self, forKey: .clawdY)) ?? 0.66
-        glassOpacity = (try? c.decodeIfPresent(Double.self, forKey: .glassOpacity)) ?? 1.0
+        // ⚠️ **不读存下来的值**，理由见 `glassOpacity` 那段：
+        // 那根滑块删了，旧值会把模糊抹掉。
+        glassOpacity = 1.0
         // 存着 "frosted" 的老设置在这儿自然落到 `.blur`（那一档删了，见 `GlassStyle`）
         glassStyle = (try? c.decodeIfPresent(GlassStyle.self, forKey: .glassStyle)) ?? .blur
         glassNewRecipe = (try? c.decodeIfPresent(Bool.self, forKey: .glassNewRecipe)) ?? false
