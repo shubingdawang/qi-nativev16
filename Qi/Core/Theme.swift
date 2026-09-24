@@ -700,17 +700,19 @@ struct GlassSurface: View {
     private func base(liquid: Bool, blur style: UIBlurEffect.Style) -> some View {
         #if compiler(>=6.2)
         if liquid, #available(iOS 26.0, *) {
-            // 液态玻璃本身没有"糊多少"这个参数，所以它以前完全不理那根滑块。
-            // 解法：**底下垫一层可调的模糊，上面盖真的液态玻璃**。
-            // 滑块往左，垫的那层几乎没有，就是纯液态玻璃（最通透）；
-            // 往右垫得越厚，背后越糊。液态玻璃那层折射和边光一直都在，
-            // 所以她喜欢的那个质感没丢。
-            ZStack {
-                BlurView(style: .light, intensity: blurAmount * 0.75)
-                    .clipShape(shape)
-                    .opacity(blurAmount)
-                Color.clear.glassEffect(.clear, in: shape)
-            }
+            // ⚠️⚠️ **这儿底下不许再垫模糊。**
+            //
+            // 她报的：「通透的液态玻璃貌似被搞没了。」是我上一轮那个修复的连带伤：
+            //
+            // 这儿本来垫着一层 `BlurView(intensity: blurAmount * 0.75)`，
+            // 为的是让「模糊程度」那根滑块也能管到液态玻璃这一档
+            //（液态玻璃自己没有「糊多少」这个参数）。
+            // 那根滑块后来删了，而 `blurAmount` 读的 `glassOpacity`
+            // 上一轮刚被我钉成 1——于是这层垫的模糊一下子开到满，
+            // 把液态玻璃整个埋在底下，看上去就是「液态玻璃没了」。
+            //
+            // 滑块没了，这层垫的也就没有理由存在：**这一档就是系统那块真玻璃**。
+            Color.clear.glassEffect(.clear, in: shape)
         } else if liquid {
             shape.fill(.ultraThinMaterial)
         } else {
