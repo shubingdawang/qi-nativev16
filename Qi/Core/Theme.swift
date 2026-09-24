@@ -781,9 +781,11 @@ struct GlassSurface: View {
             .overlay {
                 // 乳白一层：浅色 10%→6%，深色 4%→2%。
                 // 这是「霜」那点白，不是纱——超过这个数就开始盖住壁纸了。
+                // 磨砂这档要带点奶白（哑光、磨过的那种），
+                // 模糊那档是光面，几乎不给纱
                 shape.fill(LinearGradient(
-                    colors: dark ? [.white.opacity(0.02), .white.opacity(0.01)]
-                                 : [.white.opacity(0.04), .white.opacity(0.02)],
+                    colors: dark ? [.white.opacity(0.05), .white.opacity(0.03)]
+                                 : [.white.opacity(0.09), .white.opacity(0.05)],
                     startPoint: .top, endPoint: .bottom))
             }
             .overlay {
@@ -799,7 +801,12 @@ struct GlassSurface: View {
                 if extra > 0.01 { shape.fill(.white.opacity(extra * 0.10)) }
             }
             .overlay {
-                if !light { GlassGrainLayer(radius: radius, strength: 1) }
+                // ⚠️ **气泡上也要铺。**
+                // 她说「现在磨砂和模糊几乎一样」——聊天里两档的区别
+                // 全靠这层砂，而气泡走的是轻量版，原来整层跳过，
+                // 于是在她最常看的那一屏上，两档只差一点点糊，看不出来。
+                // 气泡只铺细的那层（一屏几十块，大块那层留给卡片）。
+                GlassGrainLayer(radius: radius, strength: 1, coarse: !light)
             }
             .overlay {
                 // 那圈亮细边——玻璃全靠它读出形状，纱压薄之后它反而要更亮
@@ -821,7 +828,7 @@ struct GlassSurface: View {
     /// 那等于把没糊的画面掺回来，糊就没了），只能靠纱几乎不给。
     private var recipeBlur: some View {
         let dark = scheme == .dark
-        return shape.fill(.thickMaterial)
+        return shape.fill(.regularMaterial)
             .overlay {
                 // 比磨砂还薄——这一档的卖点是「糊」，白一加就全毁了
                 shape.fill(LinearGradient(

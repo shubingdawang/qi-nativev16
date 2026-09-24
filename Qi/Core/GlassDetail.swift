@@ -127,8 +127,24 @@ struct GlassEdge: View {
 /// 透明度压到很低，让它只负责「这块表面不是光滑的」。
 enum GlassGrain {
 
-    /// 一小块噪点，平铺用。白色，透明度随机。
+    /// 一小块噪点，平铺用。**白点和暗点两种都有**。
+    ///
+    /// ⚠️⚠️ 暗点是「磨砂」和「落灰」的分界线。
+    ///
+    /// 她说的：「磨砂现在的效果是我认为的模糊，也就是毛玻璃，
+    /// 磨砂感并没有体现出来，现在磨砂和模糊几乎一样。」
+    ///
+    /// 只有白点的时候，那层砂看着像玻璃上落了灰（她上一轮问的「为什么有白点点」）；
+    /// 真的磨砂表面是**被磨出来的**——朝着光的那些小面发亮、背光的那些发暗，
+    /// 一亮一暗才有「这块表面是粗的」那个感觉。
     static let tile: UIImage = make()
+
+    /// 同一份噪点放大四倍：磨得不匀的那层。
+    static let blotch: UIImage = {
+        let t = tile
+        guard let cg = t.cgImage else { return t }
+        return UIImage(cgImage: cg, scale: 0.5, orientation: .up)
+    }()
 
     private static func make() -> UIImage {
         let n = 64
@@ -140,16 +156,16 @@ enum GlassGrain {
             seed = seed &* 6364136223846793005 &+ 1442695040888963407
             // 取高位：低位的周期短，直接用会出现肉眼可见的条纹
             let v = Double((seed >> 33) % 256) / 255
-            // 预乘 alpha：白色 + 随机透明度 → RGB 三个通道都等于 alpha
-            //
-            // ⚠️ **这个数跟着纱走。** 她问「为什么有白点点」——
-            // 就是这层颗粒。以前纱有 26%，颗粒埋在纱里只是一层雾面；
-            // 纱压到 10% 之后（见 `GlassSurface.recipeFrosted`），
-            // 同样的颗粒直接浮成一颗颗白点。峰值从 12% 压到 6%。
-            let a = UInt8(v * 16)
-            bytes[i * 4 + 0] = a
-            bytes[i * 4 + 1] = a
-            bytes[i * 4 + 2] = a
+            // 再取一位定这一粒是亮的还是暗的
+            let bright = ((seed >> 17) & 1) == 0
+            // 平方一下：大部分是几乎看不见的，少数几粒才明显——
+            // 均匀分布出来是一片噪声，不是磨痕
+            let a = UInt8(v * v * 34)
+            // 预乘 alpha：白点 RGB 三个通道都等于 alpha，暗点 RGB 全 0
+            let rgb: UInt8 = bright ? a : 0
+            bytes[i * 4 + 0] = rgb
+            bytes[i * 4 + 1] = rgb
+            bytes[i * 4 + 2] = rgb
             bytes[i * 4 + 3] = a
         }
         let space = CGColorSpaceCreateDeviceRGB()
@@ -168,23 +184,39 @@ enum GlassGrain {
     }
 }
 
-/// 铺在磨砂表面上的那层颗粒。
+/// 铺在磨砂表面上的那层砂。
+///
+/// **两层**：一层细的（磨痕本身），一层放大四倍的（磨得不匀，有深有浅）。
+/// 只有细的那层时，表面是均匀的噪声，看着像蒙了层灰；
+/// 加上大块的不匀，才是「这块玻璃被磨过」。
 struct GlassGrainLayer: View {
 
     var radius: CGFloat = Theme.cardRadius
     /// 浓度。跟着「玻璃浓度」那根滑块走一点点，但上限压得很死。
     var strength: Double = 1
+    /// 要不要那层大块的不匀。一屏几十块的时候（聊天气泡）只铺细的那层。
+    var coarse: Bool = true
 
     @Environment(\.colorScheme) private var scheme
 
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+    }
+
     var body: some View {
+        let k = min(1, max(0.3, strength))
         Image(uiImage: GlassGrain.tile)
             .resizable(resizingMode: .tile)
-            // 深色下颗粒要更淡：白点打在暗面上本来就比打在亮面上显眼
-            // 连上面那层 alpha 一起算，白点峰值只剩 2% 上下：
-            // 远看是「这块表面不是光滑的」，凑近也数不出点
-            .opacity((scheme == .dark ? 0.22 : 0.34) * min(1, max(0.3, strength)))
-            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+            // 深色下要更淡：打在暗面上本来就比打在亮面上显眼
+            .opacity((scheme == .dark ? 0.40 : 0.60) * k)
+            .overlay {
+                if coarse {
+                    Image(uiImage: GlassGrain.blotch)
+                        .resizable(resizingMode: .tile)
+                        .opacity((scheme == .dark ? 0.16 : 0.26) * k)
+                }
+            }
+            .clipShape(shape)
             .allowsHitTesting(false)
             // ⚠️ **不加 `blendMode(.overlay)`。**
             // 混合模式配上系统 material 的结果我没法在这台机器上验，
