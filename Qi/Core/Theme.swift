@@ -769,9 +769,15 @@ struct GlassSurface: View {
     /// 调淡走的是 `ShapeStyle.opacity`，**不是视图的 `.opacity`**：
     /// 前者是这一笔填充自己的透明度，后者会把整层推去离屏渲染，
     /// 那会打断材质对背景的采样，玻璃当场变成一块死板（`.shadow` 那次的教训）。
+    ///
+    /// ⚠️ **底是 `.regularMaterial`，不是 `.ultraThinMaterial`。**
+    /// 她第三次说「还是太透，不够模糊」——`ultraThin` 是系统**最薄**的一档，
+    /// 背后的东西只化开一点点，形状还认得出来，那不是磨砂玻璃。
+    /// 往上提两级到 `regular`：认不出形状，但颜色整片透上来。
+    /// 透明度也不再刮了（刮一点就少一点糊，见上面那段）。
     private var recipeFrosted: some View {
         let dark = scheme == .dark
-        return shape.fill(.ultraThinMaterial.opacity(dark ? 0.94 : 0.90))
+        return shape.fill(.regularMaterial)
             .overlay {
                 // 乳白一层：浅色 10%→6%，深色 4%→2%。
                 // 这是「霜」那点白，不是纱——超过这个数就开始盖住壁纸了。
@@ -815,7 +821,7 @@ struct GlassSurface: View {
     /// 那等于把没糊的画面掺回来，糊就没了），只能靠纱几乎不给。
     private var recipeBlur: some View {
         let dark = scheme == .dark
-        return shape.fill(.regularMaterial.opacity(dark ? 0.94 : 0.88))
+        return shape.fill(.thickMaterial)
             .overlay {
                 // 比磨砂还薄——这一档的卖点是「糊」，白一加就全毁了
                 shape.fill(LinearGradient(
