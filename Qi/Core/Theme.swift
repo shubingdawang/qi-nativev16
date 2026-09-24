@@ -643,7 +643,7 @@ struct GlassSurface: View {
                 // 「模糊的深色模式会不会太黑了」——对照液态玻璃那档确实沉了一截。
                 // 深色下材质本身已经偏暗，再压一层黑就成了黑板。
                 shape.fill(LinearGradient(
-                    colors: dark ? [.black.opacity(0.06 * k), .black.opacity(0.03 * k)]
+                    colors: dark ? [.black.opacity(0.03 * k), .black.opacity(0.015 * k)]
                                  : [.white.opacity(0.12 * k), .white.opacity(0.06 * k)],
                     startPoint: .top, endPoint: .bottom))
             }
