@@ -616,16 +616,35 @@ struct GlassSurface: View {
     /// 那等于把没糊的画面掺回来，糊就没了），只能靠纱几乎不给。
     private var recipeBlur: some View {
         let dark = scheme == .dark
-        return shape.fill(.regularMaterial)
+        // ⚠️⚠️ **`strength` 必须在这儿用上。**
+        //
+        // 她报的：「为什么输入框会透而气泡不会呢？之前一直是这个问题，
+        // 就算输入框有多透气泡都不会，是没做联动吗。」
+        //
+        // 是**真的断了**：前几轮把配方改成一组固定数值之后，
+        // 这个参数整个没人读——设置里那两根滑块（玻璃浓度、气泡不透明度）
+        // 拖了等于没拖。输入框看着透，是因为它底下压的东西少，
+        // 不是因为滑块起了作用。
+        //
+        // 接法：滑到底（1.0）就是她刚认可的那个样子，一点不动；
+        // 往左拉才开始掺进没糊的原画面——**这一档天生就是拿糊换透**
+        // （见上面那段：材质的透明度是「糊不糊」旋钮）。
+        // 「不透明度」这根滑块要的本来就是这个，所以这儿用它是对的。
+        let k = min(1, max(0.3, strength))
+        return shape.fill(.regularMaterial.opacity(0.4 + 0.6 * k))
             .overlay {
                 // ⚠️ 这一层是**拉对比度**的，不是「把玻璃调白」。
                 //
                 // 她定的：「现在是这样的，我感觉只要对比度稍微拉高一点就好。」
                 // 所以浅色加一点白、**深色加一点黑**——深色下再加白等于把画面提灰，
                 // 字反而更糊；压一点黑，白字才跳得出来。
+                //
+                // ⚠️ 深色那两个数从 0.14/0.08 降到 0.06/0.03：她说
+                // 「模糊的深色模式会不会太黑了」——对照液态玻璃那档确实沉了一截。
+                // 深色下材质本身已经偏暗，再压一层黑就成了黑板。
                 shape.fill(LinearGradient(
-                    colors: dark ? [.black.opacity(0.14), .black.opacity(0.08)]
-                                 : [.white.opacity(0.12), .white.opacity(0.06)],
+                    colors: dark ? [.black.opacity(0.06 * k), .black.opacity(0.03 * k)]
+                                 : [.white.opacity(0.12 * k), .white.opacity(0.06 * k)],
                     startPoint: .top, endPoint: .bottom))
             }
             .overlay {
