@@ -44,7 +44,9 @@ enum LinkCards {
     /// 应该读她先写的那个。
     static func detect(_ text: String) -> (url: URL, source: LinkSource)? {
         let table: [(LinkSource, String)] = [
-            (.xhs, #"https?://(www\.)?(xiaohongshu\.com|xhslink\.com)/\S+"#),
+            // ⚠️ 短链有 **.com 和 .cn 两种**。她那条是 xhslink.cn——
+            // 只认 .com 的话卡片整个不出，她看到的是一条光秃秃的链接。
+            (.xhs, #"https?://(www\.)?(xiaohongshu\.com|xhslink\.(com|cn))/\S+"#),
             (.bilibili, #"https?://(www\.|m\.)?(bilibili\.com|b23\.tv)/\S+"#),
             (.douyin, #"https?://(www\.|v\.)?(douyin\.com|iesdouyin\.com)/\S+"#)
         ]

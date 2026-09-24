@@ -752,15 +752,25 @@ struct GlassSurface: View {
     // 玻璃会当场变成一块死板）。
 
     /// 磨砂 ＝ 参考里的**霜态**：最薄的材质 + 一层薄到看不见的乳白 + 细砂 + 亮边
+    ///
+    /// ⚠️⚠️ **材质本身要调淡**（`.opacity(0.70)`）。
+    ///
+    /// 她第二次说「还是有点不够透，偏白」。上一版只是把我们自己加的白纱
+    /// 从 26% 压到 10%——可剩下那层白**是系统材质自带的**：
+    /// `.ultraThinMaterial` 在浅色下本来就是一块淡白的板，纱拿光了它还在。
+    ///
+    /// 调淡走的是 `ShapeStyle.opacity`，**不是视图的 `.opacity`**：
+    /// 前者是这一笔填充自己的透明度，后者会把整层推去离屏渲染，
+    /// 那会打断材质对背景的采样，玻璃当场变成一块死板（`.shadow` 那次的教训）。
     private var recipeFrosted: some View {
         let dark = scheme == .dark
-        return shape.fill(.ultraThinMaterial)
+        return shape.fill(.ultraThinMaterial.opacity(dark ? 0.78 : 0.70))
             .overlay {
                 // 乳白一层：浅色 10%→6%，深色 4%→2%。
                 // 这是「霜」那点白，不是纱——超过这个数就开始盖住壁纸了。
                 shape.fill(LinearGradient(
-                    colors: dark ? [.white.opacity(0.04), .white.opacity(0.02)]
-                                 : [.white.opacity(0.10), .white.opacity(0.06)],
+                    colors: dark ? [.white.opacity(0.03), .white.opacity(0.015)]
+                                 : [.white.opacity(0.07), .white.opacity(0.04)],
                     startPoint: .top, endPoint: .bottom))
             }
             .overlay {
@@ -791,14 +801,17 @@ struct GlassSurface: View {
     }
 
     /// 模糊 ＝ 参考里的**凝态**：糊得更狠，但颜色整个透上来，表面平整不带砂
+    ///
+    /// 材质比磨砂厚一档（糊得更狠），所以也调得更淡一点，
+    /// 免得厚材质自带的那层白把颜色压没了（理由见 `recipeFrosted`）。
     private var recipeBlur: some View {
         let dark = scheme == .dark
-        return shape.fill(.thinMaterial)
+        return shape.fill(.thinMaterial.opacity(dark ? 0.74 : 0.66))
             .overlay {
                 // 比磨砂还薄——这一档的卖点是「糊」，白一加就全毁了
                 shape.fill(LinearGradient(
-                    colors: dark ? [.white.opacity(0.03), .white.opacity(0.01)]
-                                 : [.white.opacity(0.07), .white.opacity(0.03)],
+                    colors: dark ? [.white.opacity(0.02), .white.opacity(0.01)]
+                                 : [.white.opacity(0.05), .white.opacity(0.02)],
                     startPoint: .top, endPoint: .bottom))
             }
             .overlay {

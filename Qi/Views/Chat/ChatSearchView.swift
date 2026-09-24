@@ -150,7 +150,7 @@ struct ChatSearchView: View {
         case .link:
             let t = m.content
             return t.contains("http://") || t.contains("https://")
-                || t.contains("xhslink.com") || t.contains("b23.tv")
+                || t.contains("xhslink.") || t.contains("b23.tv")
                 || t.contains("v.douyin.com")
         }
     }
