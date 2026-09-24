@@ -105,7 +105,7 @@ enum Look {
     @MainActor private static var lastNav: (GlassStyle, Double, Font.Design)?
 
     @MainActor
-    static func applyNavBar(style: GlassStyle = .frosted, opacity: Double = 1) {
+    static func applyNavBar(style: GlassStyle = .blur, opacity: Double = 1) {
         // 模糊程度只在跨过「几乎全透」那条线时才影响导航栏，
         // 所以按档比较，不按精确值——不然拖滑块每一帧都要重来一遍。
         let step = opacity < 0.12 ? 0.0 : 1.0
@@ -117,12 +117,11 @@ enum Look {
 
         /// 这一档玻璃对应哪种系统材质
         func material() -> UIBlurEffect.Style {
-            // 跟卡片同一个厚薄（见 `GlassSurface.recipeFrosted` / `recipeBlur`）：
-            // 磨砂是薄材质 + 白纱，模糊是中等材质 + 更薄的纱
+            // 跟卡片同一个厚薄（见 `GlassSurface.recipeBlur`）：
+            // 顶上那条和底下的卡片不是同一个厚薄的话，一眼就看得出来
             switch style {
-            case .frosted: return .systemUltraThinMaterial
-            case .clear:   return .systemUltraThinMaterial
-            case .blur:    return .systemThinMaterial
+            case .clear: return .systemUltraThinMaterial
+            case .blur:  return .systemMaterial
             }
         }
 

@@ -355,9 +355,8 @@ struct NavDrawerBar: View {
     private var handleWhite: Double {
         let base: Double
         switch app.settings.glassStyle {
-        case .frosted: base = scheme == .dark ? 0.42 : 0.92
-        case .clear:   base = scheme == .dark ? 0.30 : 0.70
-        case .blur:    base = scheme == .dark ? 0.36 : 0.82
+        case .clear: base = scheme == .dark ? 0.30 : 0.70
+        case .blur:  base = scheme == .dark ? 0.40 : 0.88
         }
         return base * min(1, app.settings.glassOpacity + 0.3)
     }

@@ -248,7 +248,7 @@ struct AppearanceView: View {
 
     private var glassCard: some View {
         SettingsCard(title: "玻璃") {
-            // 三块样品直接摆出来，各自用各自那套玻璃画，
+            // 两块样品直接摆出来，各自用各自那套玻璃画，
             // 底下垫着当前壁纸——光看名字选不出来，得看见才知道差在哪。
             HStack(spacing: 10) {
                 ForEach(GlassStyle.allCases) { s in
@@ -292,7 +292,7 @@ struct AppearanceView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 13)
 
-            SettingsNote("三档均不叠加白色底层，背景颜色直接透出，区别在表面质感：**磨砂**表面带细颗粒，**模糊**糊得更重、表面平整，**通透**使用系统液态玻璃，遮挡最少、以边缘光成形。\n\n设置作用于全 App 的卡片、气泡与导航条，切换后立即生效。")
+            SettingsNote("两档均不叠加白色底层，背景颜色直接透出：**模糊**均匀一片糊、表面平整，**通透**使用系统液态玻璃，遮挡最少、以边缘光成形。\n\n设置作用于全 App 的卡片、气泡与导航条，切换后立即生效。")
         }
     }
 

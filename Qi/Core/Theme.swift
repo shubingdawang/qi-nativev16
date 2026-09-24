@@ -41,7 +41,7 @@ enum Theme {
     nonisolated(unsafe) static var preset: ThemePreset = .original
     /// 玻璃用哪一套做法。同上，AppState 同步过来，
     /// 这样 GlassSurface 这种到处都在用的小 View 不必层层传设置。
-    nonisolated(unsafe) static var glassStyle: GlassStyle = .frosted
+    nonisolated(unsafe) static var glassStyle: GlassStyle = .blur
     /// 玻璃走哪一套配方。同上，AppState 同步过来。
     /// `false` = 现在这套，`true` = 那份参考的做法（见 `GlassRecipe`）。
     nonisolated(unsafe) static var glassNewRecipe: Bool = false
@@ -418,17 +418,10 @@ struct GlassSurface: View {
     var body: some View {
         Group {
             switch kind {
-            // ⚠️ 磨砂和模糊有**两套**，在设置里切（见 `GlassRecipe`）。
-            // 通透那档只有一套：iOS 26 上用的是系统真的液态玻璃，
-            // 拿浏览器那套折射去替它是往回走。
-            // ⚠️ 不能写成 `newRecipe ? frostedNew : frosted`：
-            // 两个 `some View` 是两种不同的类型，三元要求两边同一个类型，编译不过。
-            // 在 ViewBuilder 里用 if/else，两支才能是不同的类型。
-            // 磨砂、模糊照她给的参考定成一套（见 `recipeFrosted` / `recipeBlur`），
-            // 不再有「换一套做法」和模糊程度滑块
-            case .frosted: recipeFrosted
-            case .clear:   clear
-            case .blur:    recipeBlur
+            // 两档：通透是 iOS 26 系统真的液态玻璃（拿浏览器那套折射去替它是往回走），
+            // 模糊是锁屏上那种均匀一片糊。**磨砂那一档删了**，理由见 `GlassStyle`。
+            case .clear: clear
+            case .blur:  recipeBlur
             }
         }
         // ⚠️ 这儿原来有一层「深色下压黑」，**删了**（理由见上面）。
@@ -465,88 +458,6 @@ struct GlassSurface: View {
         //
         // 那篇文章说的第三层（很轻的阴影）不是不能做，但**得画在玻璃外面**，
         // 不能套在玻璃这一层上。留到以后单独做，现在保住玻璃本身要紧。
-    }
-
-    // 三套的区别**主要交给系统的 material**，我们自己只加很薄的一层。
-    //
-    // 上一版走反了：为了把三套拉开距离，自己往上糊了厚厚的白、
-    // 又铺了一层很重的噪点，结果磨砂看着像撒了一把沙子，
-    // 模糊变成一块不透光的灰板，通透因为把 material 压到 34%
-    // 反而什么质感都没剩下。
-    //
-    // 这版规矩很简单：
-    //   · material 用足，不压透明度——它就是 iOS 那块玻璃本身
-    //   · 自己加的白控制在很薄的一层，只用来定"这块比背后亮一点"
-    //   · 砂只是一层几乎看不见的颗粒，凑近才看得出来
-    //   · 边缘的高光才是三套之间最明显的区别
-
-    // MARK: 磨砂 —— 苹果原来那块毛玻璃（iOS 7 那一代）
-    //
-    // 上一版用 `.regularMaterial`、模糊用 `.thinMaterial`，
-    // 结果两块几乎一模一样——那几档 material 的差别本来就只有一点点浓淡，
-    // 换档换不出"两种做法"的感觉。
-    //
-    // 真正拉得开的是**老的那套 UIBlurEffect**：
-    // `.extraLight` 是糊得最狠、发白的那块，就是通知中心刚出来那几年的样子；
-    // `.light` 糊得一样狠但不发白，背后的颜色是透上来的。
-    // 这两块摆一起，一眼就能看出不是同一种东西。
-    // MARK: 磨砂
-    //
-    // 上一版只加了噪点，结果看着"像噪点"而不是"像磨砂"——因为**磨砂的重点不是颗粒**。
-    // 真的磨砂玻璃是把表面打毛，光打上去会**散射**，所以整块会发一点奶白、
-    // 边上还会有一圈更亮的晕。颗粒只是凑近才看得见的那一层，是配角。
-    //
-    // 所以这版是三层叠起来，顺序不能换：
-    //   1. 一层很淡的奶白（散射）—— 这层才是"磨砂"的主体
-    //   2. 上亮下沉的渐变（光是从上面来的）
-    //   3. 极淡的颗粒（表面打毛的痕迹），比上一版又降了一半
-    /// 磨砂。
-    ///
-    /// ⚠️ 她的原话：**「磨砂的玻璃根本不像磨砂的……就是苹果自带的磨砂就行，
-    /// 不用创新。」**
-    ///
-    /// 她说得对，我这儿一直在做多余的事：往上糊白、铺颗粒、描白边、
-    /// 再补一道暗边——四层叠完，它看着是一块**塑料片**，不是毛玻璃。
-    /// 苹果那块 `.regularMaterial` 本身就是磨砂，它自己会随深浅色变、
-    /// 会采样背后的内容、边缘该怎么处理系统都调好了。
-    /// **我加的每一层都只是在把它盖住。**
-    ///
-    /// 现在就是系统那块材质，另加一道极细的描边定个轮廓（不描边的话
-    /// 浅色壁纸上根本看不出卡片边界在哪儿）。别的一律不加。
-    private var frosted: some View {
-        shape.fill(tier)
-            // ⚠️ 她报的：「磨砂没有跟着模糊设置动了」。
-            //
-            // 上一版我把四层自制的糊料换成 `.regularMaterial` 是对的，
-            // 但顺手把那根滑块**接丢了**——系统材质没有「糊多少」这个参数。
-            //
-            // 苹果自己的做法是**换档**，不是调数值：
-            // ultraThin → thin → regular → thick，四档由薄到厚。
-            // 滑块现在选的就是这四档（见 `tier`），
-            // 所以它照样管用，而且每一档都还是苹果那块材质。
-            .overlay {
-                if extra > 0.01 {
-                    shape.fill(.white.opacity(extra * 0.10))
-                }
-            }
-            // ⚠️ **磨砂真正的表面质感在这一层。**
-            //
-            // 她说「磨砂根本就是一整块，就算换了全黑的背景也看不出磨砂质感」。
-            // 换黑底看不出来，是因为这一档**压根没有任何表面质感**——
-            // 它只是系统那块 material 加两道描边，是一块半透明的板。
-            //
-            // 她这次特意把两张参考分开标了：
-            // **模糊玻璃**是把背后糊掉（苹果那套），
-            // **磨砂玻璃**是表面被打毛、有细密的颗粒。两件事。
-            //
-            // 上上一版做过一次颗粒，她说「像撒了一把沙子」——那次又粗又重。
-            // 这次细到半个点、淡到只剩一层雾面（见 `GlassGrain`）。
-            .overlay {
-                GlassGrainLayer(radius: radius, strength: strength)
-            }
-            // 描边挪去 `GlassEdge` 统一做了，这儿不再各描各的。
-            // ⚠️ 留在这儿的话就是**两处描边叠在一起**，边会变脏变重——
-            // 而「边脏」正是那篇文章说的「一眼廉价」的第一个原因。
     }
 
     // MARK: 通透 —— iOS 那块玻璃
@@ -670,60 +581,6 @@ struct GlassSurface: View {
     /// 直到快没了——那不是"玻璃变了"，那是"玻璃不见了"。
     private var blurAmount: Double { min(1, max(0, strength)) }
 
-    /// 「浓度」那根滑块 → 苹果材质的四档。
-    ///
-    /// 系统材质没有连续的「糊多少」，**苹果自己就是换档**。
-    /// 所以滑块在这儿变成挑档：越往右越厚、背后越糊。
-    // MARK: 新配方那两支
-    //
-    // 照「三块玻璃的配方」那份参考做的。要点全在 `GlassRecipe` 的注释里。
-    //
-    // ⚠️ **这儿一样不许加 `.shadow` / `.blur` / `.drawingGroup`。**
-    // 那几样会把这一层强制离屏，而离屏就把 `Material` 的背景采样打断了——
-    // 整个 App 的玻璃会一起退化成近似纯色。这条跟旧那套是同一条。
-
-    /// 磨砂（新）：大模糊 + **厚纱** + 颗粒。
-    ///
-    /// 跟旧那支的差别只有一处，但那一处就是她说「不满意」的地方：
-    /// **纱从几乎没有（`extra * 0.10`）变成 42%~55%**，
-    /// 玻璃因此有了自己的颜色，不再被背后的画面推着走。
-    private var frostedNew: some View {
-        shape.fill(.thickMaterial)
-            .overlay {
-                shape.fill(GlassRecipe.veil(dark: scheme == .dark,
-                                            strength: strength))
-            }
-            .overlay {
-                // 深色下那一点白：没有它，厚暗纱看着是个洞，不是玻璃
-                shape.fill(GlassRecipe.sheen(dark: scheme == .dark))
-            }
-            .overlay {
-                if extra > 0.01 { shape.fill(.white.opacity(extra * 0.10)) }
-            }
-            .overlay {
-                GlassGrainLayer(radius: radius, strength: strength)
-            }
-    }
-
-    /// 模糊（新）＝ 参考里的**毛玻璃**：中模糊 + 薄纱渐变 + 上缘一线高光。
-    ///
-    /// ⚠️ 那条高光是这一档的灵魂（参考的原话）。它**不是一圈描边**：
-    /// 渐变到中间就化没，只有顶上那一线有。
-    private var blurNew: some View {
-        shape.fill(.regularMaterial)
-            .overlay {
-                shape.fill(GlassRecipe.thinVeil(dark: scheme == .dark,
-                                                strength: strength))
-            }
-            .overlay {
-                if extra > 0.01 { shape.fill(.white.opacity(extra * 0.10)) }
-            }
-            .overlay {
-                shape.strokeBorder(GlassRecipe.topLine(dark: scheme == .dark),
-                                   lineWidth: 1)
-            }
-    }
-
     // MARK: 她给的那两份参考定下来的配方
     //
     // 她报的：「模糊和磨砂只有在导航栏的显示才是对的，设置里其他框看起来更像是白色。」
@@ -751,75 +608,6 @@ struct GlassSurface: View {
     // ⚠️ 一样**不许加 `.shadow` / `.blur` / `.drawingGroup`**（会打断材质采样，
     // 玻璃会当场变成一块死板）。
 
-    /// 磨砂 ＝ 参考里的**霜态**：最薄的材质 + 一层薄到看不见的乳白 + 细砂 + 亮边
-    ///
-    /// ⚠️⚠️⚠️ **材质的透明度只能动一点点（0.90），别再往下压。**
-    ///
-    /// 这个旋钮我开过一次头（0.70），她当场发现：
-    /// 「现在都直接透出下面的壁纸了，我要的模糊效果没有了。」
-    ///
-    /// 原因是它**不是「去白」旋钮，是「糊不糊」旋钮**：
-    /// 把材质这一笔调成 70%，等于把「糊过的画面」和「原本没糊的画面」
-    /// 按 7:3 混起来——那 30% 的清晰壁纸直接穿上来，
-    /// 糊多少都没用了。想去白就得同时失去糊，这是这条路的死结。
-    ///
-    /// 所以白只能这么处理：**纱几乎不给**（3%），材质只刮掉一丁点，
-    /// 剩下的白就认了——那是系统材质自己的颜色，换不掉。
-    ///
-    /// 调淡走的是 `ShapeStyle.opacity`，**不是视图的 `.opacity`**：
-    /// 前者是这一笔填充自己的透明度，后者会把整层推去离屏渲染，
-    /// 那会打断材质对背景的采样，玻璃当场变成一块死板（`.shadow` 那次的教训）。
-    ///
-    /// ⚠️ **底是 `.regularMaterial`，不是 `.ultraThinMaterial`。**
-    /// 她第三次说「还是太透，不够模糊」——`ultraThin` 是系统**最薄**的一档，
-    /// 背后的东西只化开一点点，形状还认得出来，那不是磨砂玻璃。
-    /// 往上提两级到 `regular`：认不出形状，但颜色整片透上来。
-    /// 透明度也不再刮了（刮一点就少一点糊，见上面那段）。
-    private var recipeFrosted: some View {
-        let dark = scheme == .dark
-        return shape.fill(.regularMaterial)
-            .overlay {
-                // 乳白一层：浅色 10%→6%，深色 4%→2%。
-                // 这是「霜」那点白，不是纱——超过这个数就开始盖住壁纸了。
-                // 磨砂这档要带点奶白（哑光、磨过的那种），
-                // 模糊那档是光面，几乎不给纱
-                shape.fill(LinearGradient(
-                    colors: dark ? [.white.opacity(0.05), .white.opacity(0.03)]
-                                 : [.white.opacity(0.09), .white.opacity(0.05)],
-                    startPoint: .top, endPoint: .bottom))
-            }
-            .overlay {
-                // 左上那团柔光：参考里它是**很淡的一点反光**，不是一块白斑
-                if !light {
-                    shape.fill(RadialGradient(
-                        colors: [.white.opacity(dark ? 0.06 : 0.12), .white.opacity(0)],
-                        center: UnitPoint(x: 0.3, y: 0.2),
-                        startRadius: 0, endRadius: 260))
-                }
-            }
-            .overlay {
-                if extra > 0.01 { shape.fill(.white.opacity(extra * 0.10)) }
-            }
-            .overlay {
-                // ⚠️ **气泡上也要铺。**
-                // 她说「现在磨砂和模糊几乎一样」——聊天里两档的区别
-                // 全靠这层砂，而气泡走的是轻量版，原来整层跳过，
-                // 于是在她最常看的那一屏上，两档只差一点点糊，看不出来。
-                // 气泡只铺细的那层（一屏几十块，大块那层留给卡片）。
-                GlassGrainLayer(radius: radius, strength: 1, coarse: !light)
-            }
-            .overlay {
-                // 那圈亮细边——玻璃全靠它读出形状，纱压薄之后它反而要更亮
-                if !light {
-                    shape.strokeBorder(.white.opacity(dark ? 0.22 : 0.45), lineWidth: 1)
-                }
-            }
-            .overlay {
-                // 上缘一线内高光
-                shape.strokeBorder(GlassRecipe.topLine(dark: dark), lineWidth: 1)
-            }
-    }
-
     /// 模糊 ＝ 参考里的**凝态**：糊得更狠，但颜色整个透上来，表面平整不带砂
     ///
     /// ⚠️ 这一档的卖点是**糊**，所以底换成更厚的 `.regularMaterial`——
@@ -830,10 +618,14 @@ struct GlassSurface: View {
         let dark = scheme == .dark
         return shape.fill(.regularMaterial)
             .overlay {
-                // 比磨砂还薄——这一档的卖点是「糊」，白一加就全毁了
+                // ⚠️ 这一层是**拉对比度**的，不是「把玻璃调白」。
+                //
+                // 她定的：「现在是这样的，我感觉只要对比度稍微拉高一点就好。」
+                // 所以浅色加一点白、**深色加一点黑**——深色下再加白等于把画面提灰，
+                // 字反而更糊；压一点黑，白字才跳得出来。
                 shape.fill(LinearGradient(
-                    colors: dark ? [.white.opacity(0.015), .white.opacity(0.005)]
-                                 : [.white.opacity(0.03), .white.opacity(0.015)],
+                    colors: dark ? [.black.opacity(0.14), .black.opacity(0.08)]
+                                 : [.white.opacity(0.12), .white.opacity(0.06)],
                     startPoint: .top, endPoint: .bottom))
             }
             .overlay {
@@ -1124,7 +916,7 @@ extension Font {
 
 /// 现在是哪种玻璃。根视图上注入（`RootView`），改了设置全 App 当场重画。
 private struct QiGlassKey: EnvironmentKey {
-    static let defaultValue: GlassStyle = .frosted
+    static let defaultValue: GlassStyle = .blur
 }
 
 extension EnvironmentValues {

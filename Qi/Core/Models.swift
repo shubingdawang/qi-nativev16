@@ -515,18 +515,26 @@ enum AppearanceMode: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-/// 玻璃长什么样。三套是三种不同的做法，不是浓度的三档：
+/// 玻璃长什么样。两套是两种做法，不是浓度的两档：
 ///
-/// · **磨砂** —— 糊得厉害，表面有一层很细的颗粒，像喷砂玻璃
-/// · **通透** —— iOS 那种，几乎不糊，靠边缘那道高光把形状撑出来
-/// · **模糊** —— One UI 那种，均匀一片糊，没有边、没有颗粒
+/// · **通透** —— iOS 26 的液态玻璃，几乎不糊，靠边缘那道高光把形状撑出来
+/// · **模糊** —— 锁屏上那种，均匀一片糊，颜色透上来，没有颗粒
+///
+/// ⚠️ **磨砂那一档删了**（`frosted`）。她定的：
+/// 「直接把磨砂玻璃删了吧，就一个液态一个模糊，磨砂好像有点太难了。」
+///
+/// 前因：系统材质给不出「很糊但不白」，而磨砂的砂感靠自己铺噪点做，
+/// 出来要么像落灰要么跟模糊看不出区别——来回调了四五轮都没到位。
+/// 两档各自清楚，好过三档里有一档一直不对。
+///
+/// ⚠️ 旧设置里存着 `"frosted"` 的，解码时认不出来 → 落到默认值 `.blur`
+/// （见 `AppSettings.init(from:)` 里那句 `try?`）。不用额外写迁移。
 enum GlassStyle: String, Codable, CaseIterable, Identifiable {
-    case frosted, clear, blur
+    case clear, blur
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .frosted: return "磨砂"
         case .clear:   return "通透"
         case .blur:    return "模糊"
         }
@@ -534,9 +542,8 @@ enum GlassStyle: String, Codable, CaseIterable, Identifiable {
 
     var note: String {
         switch self {
-        case .frosted: return "糊得厉害，表面带一层细颗粒"
         case .clear:   return "几乎不糊，靠边缘那道高光成形"
-        case .blur:    return "均匀一片糊，没有边也没有颗粒"
+        case .blur:    return "均匀一片糊，颜色透上来，没有颗粒"
         }
     }
 }
@@ -664,7 +671,7 @@ struct AppSettings: Codable {
     /// 玻璃的通透程度，0 最透 1 最实
     var glassOpacity: Double = 1.0
     /// 玻璃是哪一套做法
-    var glassStyle: GlassStyle = .frosted
+    var glassStyle: GlassStyle = .blur
     /// 玻璃走哪一套配方。`false` = 现在这套（系统材质为主），
     /// `true` = 「三块玻璃的配方」那份参考的做法（见 `GlassRecipe`）。
     ///
@@ -994,7 +1001,8 @@ extension AppSettings {
         clawdX = (try? c.decodeIfPresent(Double.self, forKey: .clawdX)) ?? 0.78
         clawdY = (try? c.decodeIfPresent(Double.self, forKey: .clawdY)) ?? 0.66
         glassOpacity = (try? c.decodeIfPresent(Double.self, forKey: .glassOpacity)) ?? 1.0
-        glassStyle = (try? c.decodeIfPresent(GlassStyle.self, forKey: .glassStyle)) ?? .frosted
+        // 存着 "frosted" 的老设置在这儿自然落到 `.blur`（那一档删了，见 `GlassStyle`）
+        glassStyle = (try? c.decodeIfPresent(GlassStyle.self, forKey: .glassStyle)) ?? .blur
         glassNewRecipe = (try? c.decodeIfPresent(Bool.self, forKey: .glassNewRecipe)) ?? false
         glassDim = (try? c.decodeIfPresent(Double.self, forKey: .glassDim)) ?? 0.22
         themePunch = (try? c.decodeIfPresent(Double.self, forKey: .themePunch)) ?? 1.0
