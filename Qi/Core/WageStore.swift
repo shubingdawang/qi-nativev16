@@ -135,6 +135,15 @@ struct WorkDay: Codable, Hashable {
     var breaks: [TimeSpan]
     /// 排这一天时的时薪快照（见文件头那一段）
     var hourly: Double
+    /// 这一天算几倍工资。1 = 平常，3 = 法定节假日那种三倍。
+    ///
+    /// 她定的：「给我一个三倍工资的按钮我自己打开，
+    /// 然后小卡片显示一个小胶囊上面写 3x 工资。」
+    ///
+    /// ⚠️ 跟时薪一样是**存进这一天的快照**，不是每次现算：
+    /// 法定节日那张表只负责在排班那一下把它预先设成 3（`Festivals.statutory`），
+    /// 之后她关掉就是关掉了，明年那张表怎么变都不会回头改这一天。
+    var multiplier: Double = 1
     var entries: [LedgerEntry] = []
 
     /// 实际干了多少分钟：总时长减掉各段休息。不会是负的。
@@ -147,7 +156,25 @@ struct WorkDay: Codable, Hashable {
     /// 这一天挣多少。**没排班就是 0**，不是按空时间段算出个数。
     var pay: Double {
         guard shift != nil else { return 0 }
+        let m = multiplier > 0 ? multiplier : 1
+        return (hourly * m * Double(workedMinutes) / 60 * 100).rounded() / 100
+    }
+
+    /// 按平常算是多少（三倍那天在总结里两个数一起给，好对账）
+    var basePay: Double {
+        guard shift != nil else { return 0 }
         return (hourly * Double(workedMinutes) / 60 * 100).rounded() / 100
+    }
+
+    /// 要不要挂那个「3x 工资」的小胶囊
+    var hasBonusRate: Bool { shift != nil && multiplier > 1.001 }
+
+    /// 胶囊上写什么。整数就不拖小数点（3x 不是 3.0x）
+    var rateLabel: String {
+        let m = multiplier
+        let text = abs(m - m.rounded()) < 0.05
+            ? String(Int(m.rounded())) : String(format: "%.1f", m)
+        return text + "x 工资"
     }
 
     var spent: Double {
@@ -160,6 +187,24 @@ struct WorkDay: Codable, Hashable {
 
     /// 这一天有没有东西。空的就从存档里删掉，别攒一堆空壳。
     var isEmpty: Bool { shift == nil && entries.isEmpty }
+}
+
+// ⚠️⚠️ **跟 `LedgerEntry` 那段一样的理由：`multiplier` 是后加的键。**
+//
+// 合成的解码器不认默认值，老的 `wage.json` 里缺这个键就整条抛错，
+// 一条抛错整份 `days` 都读不出来——她排的班和记的账会当场全没。
+// 写在 extension 里、写在这个文件里，理由见 `LedgerEntry` 上面那段。
+extension WorkDay {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        shift = try? c.decodeIfPresent(ShiftKind.self, forKey: .shift)
+        work = (try? c.decodeIfPresent(TimeSpan.self, forKey: .work))
+            ?? TimeSpan(start: 13 * 60, end: 22 * 60)
+        breaks = (try? c.decodeIfPresent([TimeSpan].self, forKey: .breaks)) ?? []
+        hourly = (try? c.decodeIfPresent(Double.self, forKey: .hourly)) ?? 20
+        multiplier = (try? c.decodeIfPresent(Double.self, forKey: .multiplier)) ?? 1
+        entries = (try? c.decodeIfPresent([LedgerEntry].self, forKey: .entries)) ?? []
+    }
 }
 
 /// 设置：时薪 + 四个班各自的默认排法。
@@ -274,6 +319,9 @@ final class WageStore: ObservableObject {
             day.work = t.work
             day.breaks = t.breaks
             day.hourly = settings.hourly
+            // 法定节假日：排班那一下把三倍预先打开（跟页面上那个开关同一套规矩，
+            // 见 `WorkDay.multiplier`）。她关掉了就是关掉了，不会再自己开回来。
+            if Festivals.statutory(d) != nil { day.multiplier = 3 }
         }
         day.shift = k
         if let w = work { day.work = w }

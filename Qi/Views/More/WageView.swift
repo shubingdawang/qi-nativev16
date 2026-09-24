@@ -28,6 +28,12 @@ struct WageView: View {
     /// 日历上那个红字的颜色。**写死一个红**，她要的就是红字，不跟主题色走。
     static let payRed = Color(hexString: "E5484D") ?? .red
 
+    /// 日历格子上那个很小的角标：`3x`。整数不拖小数点。
+    static func rateTag(_ m: Double) -> String {
+        (abs(m - m.rounded()) < 0.05
+            ? String(Int(m.rounded())) : String(format: "%.1f", m)) + "x"
+    }
+
     var body: some View {
         ZStack {
             PaneScroll {
@@ -242,6 +248,15 @@ struct WageView: View {
                                 .fill(k.tint)
                                 .frame(width: 6, height: 6)
                                 .offset(x: 6, y: 1)
+                        }
+                    }
+                    // 三倍那天：日期左边一个很小的「3x」，一眼看得出这天不一样
+                    .overlay(alignment: .bottomLeading) {
+                        if rec?.hasBonusRate == true {
+                            Text(WageView.rateTag(rec?.multiplier ?? 1))
+                                .font(.app(8, weight: .semibold))
+                                .foregroundStyle(WageView.payRed)
+                                .offset(x: -7, y: 1)
                         }
                     }
                     .frame(height: 20)
@@ -497,6 +512,8 @@ struct WageSummaryCard: View {
                         HStack(spacing: 6) {
                             Circle().fill(k.tint).frame(width: 7, height: 7)
                             value(k.rawValue)
+                            // 她要的那颗小胶囊：「小卡片显示一个小胶囊上面写 3x 工资」
+                            if day.hasBonusRate { WageRatePill(text: day.rateLabel) }
                         }
                     }
                     row("时长") { value(day.work.text) }
@@ -510,9 +527,19 @@ struct WageSummaryCard: View {
                         }
                     }
                     row("总薪资") {
-                        Text(WageStore.money(day.pay))
-                            .font(.app(14, weight: .semibold))
-                            .foregroundStyle(WageView.payRed)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(WageStore.money(day.pay))
+                                .font(.app(14, weight: .semibold))
+                                .foregroundStyle(WageView.payRed)
+                            // 三倍那天把「平常是多少」也写出来，好对账
+                            if day.hasBonusRate {
+                                Text("平常 " + WageStore.money(day.basePay)
+                                     + " × " + day.rateLabel.replacingOccurrences(
+                                        of: " 工资", with: ""))
+                                    .font(.app(10.5))
+                                    .foregroundStyle(Theme.textMuted(scheme))
+                            }
+                        }
                     }
                 }
 
@@ -637,6 +664,27 @@ struct WageSummaryCard: View {
     }
 }
 
+/// 「3x 工资」那颗小胶囊。她定的：「小卡片显示一个小胶囊上面写 3x 工资。」
+///
+/// 用薪资那个红（`WageView.payRed`），跟卡片上的金额是同一个颜色——
+/// 它说的本来就是同一件事：这一天的钱不一样。
+struct WageRatePill: View {
+
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.app(9.5, weight: .semibold))
+            .foregroundStyle(WageView.payRed)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                Capsule().fill(WageView.payRed.opacity(0.14))
+            )
+            .overlay(Capsule().strokeBorder(WageView.payRed.opacity(0.35), lineWidth: 0.5))
+    }
+}
+
 /// 圆角正方形的缩略图。
 ///
 /// ⚠️ 走 `ImageStore.cached`，别用 `load`：总结和编辑页每次重画都会跑 body，
@@ -737,6 +785,7 @@ struct WageDayEditor: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 14) {
                             shiftCard
+                            if day.shift != nil { rateCard }
                             if day.shift != nil { timeCard }
                             ledgerCard
                             if existed { deleteBar }
@@ -912,9 +961,48 @@ struct WageDayEditor: View {
         day.work = t.work
         day.breaks = t.breaks
         day.hourly = store.settings.hourly
+        // 法定节假日那天**预先把三倍打开**（她关掉就是关掉了，不会再自动开回来：
+        // 这一下只发生在「换班次」那一刻，见 `WorkDay.multiplier`）
+        if holidayName != nil { day.multiplier = 3 }
         hourlyText = WageStore.money(day.hourly)
         if app.settings.haptics { UISelectionFeedbackGenerator().selectionChanged() }
     }
+
+    // MARK: 三倍工资
+
+    /// 这一天算几倍。
+    ///
+    /// 她定的：「给我一个三倍工资的按钮我自己打开。」——**开关归她**，
+    /// 我们只在法定节假日那天把它预先打开（见 `pick`），她随时能关。
+    /// 不自动算，是因为调休年年不同，猜错了就是替她把工资算错。
+    private var rateCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("三倍工资").heading(14)
+                if day.hasBonusRate { WageRatePill(text: day.rateLabel) }
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { day.multiplier > 1.001 },
+                    set: { on in
+                        day.multiplier = on ? 3 : 1
+                        if app.settings.haptics {
+                            UISelectionFeedbackGenerator().selectionChanged()
+                        }
+                    }))
+                    .labelsHidden()
+                    .tint(app.settings.accentColor)
+            }
+            Text(holidayName.map { $0 + "，按三倍计算。" }
+                 ?? "开启后这一天的薪资按时薪的三倍计算。")
+                .font(.app(11.5))
+                .foregroundStyle(Theme.textMuted(scheme))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard()
+    }
+
+    /// 这一天是不是法定节假日（是就把名字写在说明里）
+    private var holidayName: String? { Festivals.statutory(date) }
 
     // MARK: 时间
 

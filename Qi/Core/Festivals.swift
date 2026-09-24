@@ -32,6 +32,54 @@ struct Festival: Hashable, Identifiable {
 
 enum Festivals {
 
+    // MARK: 法定节假日（工资页用）
+    //
+    // 她要的：「国内法定节日的三倍工资，需要帮我给工资页加上。」
+    // 后来她自己定的做法：「给我一个三倍工资的按钮我自己打开，
+    // 然后小卡片显示一个小胶囊上面写 3x 工资。」
+    //
+    // 所以这张表**只用来把那个开关预先打开**，不自动算钱——
+    // 真正算不算三倍，以她拨的那个开关为准（存进那一天，见 `WorkDay.multiplier`）。
+    //
+    // ⚠️ **调休不在这张表里，故意的。**
+    // 国务院每年冬天才发第二年的放假安排，哪天补班、哪天挪假年年不同，
+    // 猜是猜不准的；猜错了就是替她把工资算错。
+    // 这张表只认《劳动法》里那七个**日子本身**：
+    // 元旦、春节初一到初三、清明、劳动节、端午、中秋、国庆头三天。
+    // 别的情况她自己拨。
+
+    /// 这一天是不是法定节假日。是就返回名字（「春节」「国庆节」…）。
+    static func statutory(_ date: Date) -> String? {
+        let year = cal.component(.year, from: date)
+        for (name, day) in statutoryDays(year: year)
+        where cal.isDate(day, inSameDayAs: date) { return name }
+        return nil
+    }
+
+    /// 某一年的法定节假日，一天一条（春节三天就是三条）。
+    static func statutoryDays(year: Int) -> [(String, Date)] {
+        var out: [(String, Date)] = []
+        func add(_ name: String, _ d: Date?) {
+            if let d { out.append((name, d)) }
+        }
+        add("元旦", solar(1, 1, year: year))
+        // 春节：正月初一、初二、初三
+        if let spring = lunarDate(year: year, month: 1, day: 1) {
+            for i in 0..<3 {
+                add("春节", cal.date(byAdding: .day, value: i, to: spring))
+            }
+        }
+        // ⚠️ 清明是**节气**，算出来有 ±1 天的误差（见文件头）。
+        // 差一天的年份她自己拨开关就行，不会因此算错钱。
+        add("清明节", qingming(year: year))
+        add("劳动节", solar(5, 1, year: year))
+        add("端午节", lunarDate(year: year, month: 5, day: 5))
+        add("中秋节", lunarDate(year: year, month: 8, day: 15))
+        // 国庆：10 月 1 到 3 日
+        for i in 1...3 { add("国庆节", solar(10, i, year: year)) }
+        return out
+    }
+
     private static var cal: Calendar {
         var c = Calendar(identifier: .gregorian)
         c.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
