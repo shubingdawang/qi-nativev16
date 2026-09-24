@@ -2258,23 +2258,42 @@ final class AppState: ObservableObject {
             args = obj
         }
 
-        // 本地工具不往 MCP 那边发，就在这台手机上办
-        if NativeTools.isNative(call.name) {
-            run.serverName = "本机"
-            let r = await runNative(NativeTools.shortName(call.name), args: args)
-            run.result = r.text
-            run.failed = r.failed
-            if let card = pendingCard {
-                run.cardThumb = card.thumb
-                run.cardPlace = card.place
-                run.cardThought = card.thought
-                run.cardDeleted = card.deleted
-                run.cardTrashID = card.trashID
-                pendingCard = nil
+        // 本地工具不往 MCP 那边发，就在这台手机上办。
+        //
+        // ⚠️⚠️ **不带前缀的名字也认。**
+        //
+        // 她报的那一轮：`open_link` 和 `feel` 连着两条红的
+        // 「找不到叫…的工具，可能是 MCP 没连上」。两件都在这台手机上，
+        // 只是本机工具对外叫 `app__open_link`，而他写的是 `open_link`——
+        // 网页版那边就是这么叫的，聊天记录里也都是这么写的，他照着写没有错。
+        //
+        // 认一下就完了：MCP 上没有同名的时候，按本机那件跑；
+        // 本机也不认识，再让下面那句「找不到」去说。
+        let mcpHasName = mcpServers.contains { s in
+            s.usable && s.enabledTools.contains { $0.name == call.name }
+        }
+        // MCP 上有同名的以 MCP 为准——那是她自己装的，别替她改道
+        let nativeShort: String? = NativeTools.isNative(call.name)
+            ? NativeTools.shortName(call.name)
+            : (mcpHasName ? nil : call.name)
+        if let short = nativeShort {
+            let r = await runNative(short, args: args)
+            if !(r.failed && r.text.hasPrefix(Self.noNativeTool)) {
+                run.serverName = "本机"
+                run.result = r.text
+                run.failed = r.failed
+                if let card = pendingCard {
+                    run.cardThumb = card.thumb
+                    run.cardPlace = card.place
+                    run.cardThought = card.thought
+                    run.cardDeleted = card.deleted
+                    run.cardTrashID = card.trashID
+                    pendingCard = nil
+                }
+                run.finished = true
+                noteDesire(tool: short, failed: r.failed)
+                return run
             }
-            run.finished = true
-            noteDesire(tool: NativeTools.shortName(call.name), failed: r.failed)
-            return run
         }
 
         guard let server = mcpServers.first(where: { s in
@@ -6926,9 +6945,14 @@ final class AppState: ObservableObject {
             return ("发到群聊了。", false)
 
         default:
-            return ("没有这个内置工具：\(name)", true)
+            // ⚠️ 这句话的开头是**认出来的记号**（`noNativeTool`），
+            // 上面那段拿它判断「本机也不认识这件」。改文案要连着改。
+            return (Self.noNativeTool + "：\(name)", true)
         }
     }
+
+    /// 本机不认识这件工具时那句话的开头。见 `execute` 里认名字那一段。
+    static let noNativeTool = "没有这个内置工具"
 
     /// 往回找她最近发的第 n 张图
     /// 她最近发过的图，**从新到旧**排好队，每张带一个号。
