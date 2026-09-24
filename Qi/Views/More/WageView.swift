@@ -250,15 +250,6 @@ struct WageView: View {
                                 .offset(x: 6, y: 1)
                         }
                     }
-                    // 三倍那天：日期左边一个很小的「3x」，一眼看得出这天不一样
-                    .overlay(alignment: .bottomLeading) {
-                        if rec?.hasBonusRate == true {
-                            Text(WageView.rateTag(rec?.multiplier ?? 1))
-                                .font(.app(8, weight: .semibold))
-                                .foregroundStyle(WageView.payRed)
-                                .offset(x: -7, y: 1)
-                        }
-                    }
                     .frame(height: 20)
 
                 // 中间只放金额：进来的红字 +，花出去的 -。
@@ -275,6 +266,20 @@ struct WageView: View {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(rec?.shift?.tint.opacity(0.10) ?? Color.clear)
             )
+            // 三倍那天：**整格的左上角**一个很小的「3x」。
+            //
+            // ⚠️ 别挂在日期那个数字旁边——她报的「这个 3x 的位置太奇怪了」就是那一版：
+            // 数字是居中的，角标贴着它往左伸，看上去像跟日期连成了一个词。
+            // 挂在格子角上就跟右下角那颗班次的点对称了，各占一角。
+            .overlay(alignment: .topLeading) {
+                if rec?.hasBonusRate == true {
+                    Text(WageView.rateTag(rec?.multiplier ?? 1))
+                        .font(.app(8, weight: .semibold))
+                        .foregroundStyle(WageView.payRed)
+                        .padding(.horizontal, 3)
+                        .padding(.top, 2)
+                }
+            }
             .overlay {
                 if isSource {
                     // 正在挪的那一天：虚线框出来，她知道自己在挪哪一格

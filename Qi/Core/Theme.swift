@@ -642,9 +642,22 @@ struct GlassSurface: View {
                 // ⚠️ 深色那两个数从 0.14/0.08 降到 0.06/0.03：她说
                 // 「模糊的深色模式会不会太黑了」——对照液态玻璃那档确实沉了一截。
                 // 深色下材质本身已经偏暗，再压一层黑就成了黑板。
+                //
+                // ⚠️⚠️ **深色下气泡和别的面走两套数**，这是她第三次说这件事之后定的：
+                // 「输入法、导航、设置以及其他页面还是过黑，气泡这个就刚好了。」
+                //
+                // 不是错觉，也不是两边参数不一样——是**背后的东西不一样**：
+                // 气泡后面只有一张壁纸；设置页、输入框、弹窗后面是一整片同色的深底，
+                // 同一块玻璃糊在深底上就是一块更黑的板（它只能把背后的东西糊开，
+                // 背后没有亮的东西可糊，出来就只有黑）。
+                //
+                // 所以非气泡那些面在深色下**提一点白**，把那块板从底上托起来；
+                // 气泡那档一点不动（`light == true` 走的就是原来那套）。
                 shape.fill(LinearGradient(
-                    colors: dark ? [.black.opacity(0.03 * k), .black.opacity(0.015 * k)]
-                                 : [.white.opacity(0.12 * k), .white.opacity(0.06 * k)],
+                    colors: dark
+                        ? (light ? [.black.opacity(0.03 * k), .black.opacity(0.015 * k)]
+                                 : [.white.opacity(0.09 * k), .white.opacity(0.05 * k)])
+                        : [.white.opacity(0.12 * k), .white.opacity(0.06 * k)],
                     startPoint: .top, endPoint: .bottom))
             }
             .overlay {

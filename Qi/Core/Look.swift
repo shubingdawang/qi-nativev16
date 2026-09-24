@@ -119,9 +119,12 @@ enum Look {
         func material() -> UIBlurEffect.Style {
             // 跟卡片同一个厚薄（见 `GlassSurface.recipeBlur`）：
             // 顶上那条和底下的卡片不是同一个厚薄的话，一眼就看得出来
+            // ⚠️ 模糊这一档用 `systemThinMaterial`，不用 `systemMaterial`：
+            // 她报的「导航还是过黑」——顶上那条背后是页面的深底，
+            // 厚一档的材质糊在深底上就是一条黑带。薄一档托得起来。
             switch style {
             case .clear: return .systemUltraThinMaterial
-            case .blur:  return .systemMaterial
+            case .blur:  return .systemThinMaterial
             }
         }
 
