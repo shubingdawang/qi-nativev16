@@ -1995,14 +1995,30 @@ struct MessageListView: View {
     /// 所以认**她的手**：手一拖就停；她自己回到底部、或者她发了新消息，再恢复。
     @State private var stickToBottom = true
 
-    /// 这一条是不是「这一天的第一条」。是就返回那天，好横一道分隔。
-    private func daybreak(at index: Int) -> Date? {
+    /// 这一条上面要不要横一道时间。
+    ///
+    /// 她要的：「现在是隔一天才显示一次『今天』，我想每一小时显示一次，
+    /// 这样更有时间的体现。」
+    ///
+    /// 两档：
+    ///   · **换天** —— 横一道，写「今天 14:07」这种（带日期）
+    ///   · **同一天里跨过整点** —— 横一道，只写时间「15:02」
+    ///
+    /// ⚠️ 认的是**跨没跨过整点**，不是「隔了一小时」。
+    /// 按时长算的话，14:50 和 15:40 之间隔了 50 分钟就不横线，
+    /// 可这两句一句在下午一句在傍晚——她要的是「看得出时间在走」，
+    /// 那就得按钟点走，跟人看表的方式一样。
+    private func daybreak(at index: Int) -> (date: Date, sameDay: Bool)? {
         let msgs = conversation.messages
         guard index >= 0, index < msgs.count else { return nil }
         let now = msgs[index].createdAt
-        guard index > 0 else { return now }
-        return Calendar.current.isDate(now, inSameDayAs: msgs[index - 1].createdAt)
-            ? nil : now
+        guard index > 0 else { return (now, false) }
+        let prev = msgs[index - 1].createdAt
+        let cal = Calendar.current
+        guard cal.isDate(now, inSameDayAs: prev) else { return (now, false) }
+        let unit: Set<Calendar.Component> = [.year, .month, .day, .hour]
+        return cal.dateComponents(unit, from: prev) == cal.dateComponents(unit, from: now)
+            ? nil : (now, true)
     }
 
     var body: some View {
@@ -2017,7 +2033,7 @@ struct MessageListView: View {
                         // 换天了就横一道。以前一整条时间线是连着的，
                         // 昨晚睡前那句和今早第一句挨在一起，看着像同一段话。
                         if let day = daybreak(at: index) {
-                            DayMark(date: day)
+                            DayMark(date: day.date, hourOnly: day.sameDay)
                         }
                         // ⚠️ `.equatable()`：这一条没变就不重画。
                         // 他回话的时候消息区每秒要重求值好几次，

@@ -371,6 +371,8 @@ extension SectionHeader where Trailing == EmptyView {
 struct DayMark: View {
 
     let date: Date
+    /// 同一天里跨了整点的那一道：只写时间，不重复写日期
+    var hourOnly: Bool = false
 
     @Environment(\.colorScheme) private var scheme
 
@@ -388,20 +390,28 @@ struct DayMark: View {
         .padding(.bottom, 2)
     }
 
-    /// 今天／昨天／几月几号 周几；隔年的把年份也写上
+    /// 换天那一道：今天／昨天／几月几号 周几（隔年的把年份也写上），后面跟时间。
+    /// 同一天里那几道：只有时间。
+    ///
+    /// ⚠️ 时间写**这一条真正的时刻**（14:07），不是整点（14:00）。
+    /// 整点是我们判断要不要横线的依据，不是她要看的东西——
+    /// 她要看的是「这句话是几点说的」。
     private var label: String {
-        let cal = Calendar.current
-        if cal.isDateInToday(date) { return "今天" }
-        if cal.isDateInYesterday(date) { return "昨天" }
-
         let f = DateFormatter()
         f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "HH:mm"
+        let clock = f.string(from: date)
+        if hourOnly { return clock }
+
+        let cal = Calendar.current
+        if cal.isDateInToday(date) { return "今天 " + clock }
+        if cal.isDateInYesterday(date) { return "昨天 " + clock }
         if cal.component(.year, from: date) == cal.component(.year, from: Date()) {
             f.dateFormat = "M月d日 EEEE"
         } else {
             f.dateFormat = "yyyy年M月d日 EEEE"
         }
-        return f.string(from: date)
+        return f.string(from: date) + " " + clock
     }
 }
 
