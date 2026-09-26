@@ -2317,6 +2317,31 @@ final class AppState: ObservableObject {
         for s in due { await refreshTools(for: s.id) }
     }
 
+    /// 小屋记完，本机也记一份。
+    ///
+    /// ⚠️⚠️ **这是镜像的另一半，以前只有「本机 → 小屋」那一半。**
+    ///
+    /// 她报的：「阿晏使用了工具，但并没有被经期记录。」——他那次调的是
+    /// **小屋那边**的 `log_period`（工具名旁边写着「小屋」），写进的是云上那份；
+    /// 而札记里经期那一页读的是**手机本地**那份，两边是两个库，所以她这边没变。
+    ///
+    /// 为什么会走到小屋：这几件工具**两边同名**，派发规则是「MCP 上有同名的以 MCP 为准」
+    /// （她自己装的服务器，不该替她改道）。规则不改，改成**两边各记一份**：
+    /// 云上那份给 claude.ai 用，手机这份给她看。
+    ///
+    /// ⚠️ 直接叫 `MemoryTools.run`，不走 `runNative`——后者里面还有一次
+    /// 「本机 → 小屋」的回镜像，那样就绕成一个圈了。
+    private func mirrorFromHouse(_ name: String, args: [String: Any]) {
+        // 只镜像「手机上也存着一份」的那几件。别的工具本来就只有小屋有，
+        // 本机没有对应的账本，镜像过来没地方放。
+        let both: Set<String> = ["log_period", "add_period_note"]
+        guard both.contains(name),
+              MemoryTools.handles(name, memory: settings.localMemory,
+                                  pulse: settings.localPulse)
+        else { return }
+        _ = MemoryTools.run(name, args: args)
+    }
+
     /// 真正去调一次工具
     private func execute(_ call: ChatAPI.ToolCallPayload) async -> ToolRun {
         var run = ToolRun(toolName: call.name, arguments: call.arguments)
@@ -2389,6 +2414,8 @@ final class AppState: ObservableObject {
         do {
             run.result = try await client(for: server).callTool(name: call.name, arguments: args)
             noteMCP(server.id, error: nil)
+            // 小屋办完的那几件，**本机也记一份**（见 `mirrorFromHouse`）
+            mirrorFromHouse(call.name, args: args)
         } catch {
             // ⚠️ 拆开说是哪一步、什么原因（`ErrText`）。
             // 光一句「The data couldn't be read…」他和她都看不出问题在哪。
