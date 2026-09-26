@@ -3323,7 +3323,13 @@ final class AppState: ObservableObject {
         guard let i = index(of: conversationID),
               let m = conversations[i].messages.first(where: { $0.id == messageID }),
               let hit = LinkCards.detect(m.content) else { return }
-        loadNote(hit.url, source: hit.source, in: conversationID, attachTo: messageID)
+        // ⚠️ `thenRun: false`：这个按钮只管**把卡片读回来**。
+        //
+        // 她报的：「现在这个读卡片的按钮，按了之后就直接发给他了，暂存吧。」
+        // 读卡片不经过模型、不花钱，可“让他开口”花钱——
+        // 两件事得分开，发不发由她按发送键决定。
+        loadNote(hit.url, source: hit.source, in: conversationID,
+                 attachTo: messageID, thenRun: false)
     }
 
     /// 卡片还在读的时候她就按了发送：读完了再让他开口（见 `loadNote`）
