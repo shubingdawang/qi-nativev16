@@ -2276,7 +2276,6 @@ extension ChatView {
             },
             onRetry: { msg in app.retry(msg.id, in: conv.id) },
             onOpenProcess: { msg in panel = .process(msg) },
-            onOpenBranches: { id in panel = .branches(id) },
             onOpenDivine: { msg in panel = .divine(msg) },
             onOpenShape: { panel = .shape },
             onOpenLibrary: { place in
@@ -2301,7 +2300,10 @@ extension ChatView {
             // 输入栏那块玻璃现在压在消息上面，底下留出它那么高
             bottomInset: composerHeight + 12,
             jumpTo: jumpTo,
-            onJumped: { jumpTo = nil }
+            onJumped: { jumpTo = nil },
+            // ⚠️ 参数的顺序要跟 `MessageListView` 里声明的顺序一致，
+            // 这一个声明在最后，就得摆在最后
+            onOpenBranches: { id in panel = .branches(id) }
         )
     }
 }
