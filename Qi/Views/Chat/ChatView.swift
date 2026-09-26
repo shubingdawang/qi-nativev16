@@ -2524,9 +2524,11 @@ struct BranchSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     private var branches: [ChatBranch] {
-        (app.conversation(conversationID)?.branches ?? [])
+        // ⚠️ `reversed()` 出来的是 `ReversedCollection`，不是数组——
+        // 直接当 `[ChatBranch]` 返回编译不过（CI 上就栽在这一行）。
+        Array((app.conversation(conversationID)?.branches ?? [])
             .filter { $0.afterMessageID == anchorID }
-            .reversed()
+            .reversed())
     }
 
     var body: some View {
