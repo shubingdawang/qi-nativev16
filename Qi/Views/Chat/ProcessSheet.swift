@@ -85,7 +85,6 @@ struct ProcessSheet: View {
     /// 他还在说的时候，靠它推着这一页往前走（见上面 `live` 那段）。
     /// 这个数变一下 = 整页重画一次，所以**只在他还在说的时候跳**。
     @State private var beat = 0
-    @State private var wasStreaming = false
 
     /// 开多高。
     ///
@@ -130,9 +129,18 @@ struct ProcessSheet: View {
         .task {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 300_000_000)
-                let now = message.isStreaming
-                if now || wasStreaming { beat &+= 1 }
-                if now != wasStreaming { wasStreaming = now }
+                // ⚠️⚠️ **这儿不允许再加条件。**
+                //
+                // 上一版写的是「只在 `message.isStreaming` 的时候才跳」，
+                // 结果她报：「思考块的 thinking 经常出一半就不出了，
+                // 等我退出再点进来才刷。」
+                //
+                // 那个标志在**工具轮之间会翻成 false**（他停下来去动工具那几秒），
+                // 闸一关，这一页就停在那一刻，他后面写的都看不见了。
+                //
+                // 这一页只在她看着的时候存在，一秒重画三次本来就不贵——
+                // 为了省这三次而承担「刷不出来」的风险，不划算。
+                beat &+= 1
             }
         }
         .presentationDetents([.fraction(0.4), .large], selection: $height)
