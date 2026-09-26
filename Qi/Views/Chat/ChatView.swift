@@ -175,90 +175,10 @@ struct ChatView: View {
 
             VStack(spacing: 0) {
                 if let conv = activeConversation {
-                    MessageListView(
-                        conversation: conv,
-                        space: space,
-                        selecting: selecting,
-                        selected: selected,
-                        onToggle: { id in
-                            if selected.contains(id) { selected.remove(id) } else { selected.insert(id) }
-                            if !selecting { selecting = true }
-                        },
-                        onQuote: { msg in
-                            quoting = msg
-                        },
-                        onChoice: { text in
-                            // 点了哪个，那句话就当成她说的发出去，
-                            // 同时把那张卡标成"已选"，免得回头还能再点一次
-                            guard let conv = activeConversation else { return }
-                            if let i = app.index(of: conv.id),
-                               let mi = app.conversations[i].messages.lastIndex(where: {
-                                   !$0.choices.isEmpty && $0.chosenOption.isEmpty
-                               }) {
-                                app.conversations[i].messages[mi].chosenOption = text
-                            }
-                            app.send(text: text, images: [], in: conv.id)
-                        },
-                        onSpeak: { msg in
-                            guard let id = app.activeID(for: space) else { return }
-                            Task {
-                                if let err = await app.speak(msg.id, in: id) {
-                                    notice = err
-                                }
-                            }
-                        },
-                        onOpenReader: { msg in
-                            reading = msg
-                        },
-                        onOpenJourney: { j, at in
-                            travellingAt = at
-                            travelling = j
-                        },
-                        menuOpenID: menuOpenID,
-                        onOpenMenu: { msg, page in
-                            withAnimation(.spring(response: 0.26, dampingFraction: 0.8)) {
-                                menuOpenID = msg.id
-                                menuMessage = msg
-                                // 她正翻在第几页。「删这一版」靠它才知道删哪一版。
-                                menuEditPage = page
-                            }
-                        },
-                        onCloseMenu: {
-                            withAnimation(.easeOut(duration: 0.15)) { closeMenu() }
-                        },
-                        onEdit: { msg in
-                            editText = msg.content
-                            editingMessage = msg
-                        },
-                        onRetry: { msg in app.retry(msg.id, in: conv.id) },
-                        onOpenProcess: { msg in panel = .process(msg) },
-                        onOpenBranches: { id in panel = .branches(id) },
-                        onOpenDivine: { msg in panel = .divine(msg) },
-                        onOpenShape: { panel = .shape },
-                        onOpenLibrary: { place in
-                            // 存到哪儿决定开哪一栏：动图 → GIF，
-                            // 表情包 → 表情包，别的（相册文件夹）→ 图片
-                            StickerLibraryView.openTab = place.contains("动图") ? 2
-                                : (place.contains("表情") ? 1 : 0)
-                            destination = SideMenuItem.all.first { $0.id == "sticker" }
-                        },
-                        onMention: { name in
-                            // insertMention 是原来给候选条用的，直接复用：
-                            // 光标前有 @ 就替换掉，没有就补一个
-                            if draft.hasSuffix("@") {
-                                insertMention(name)
-                            } else {
-                                draft += (draft.isEmpty || draft.hasSuffix(" ") ? "" : " ")
-                                    + "@" + name + " "
-                            }
-                        },
-                        running: app.runningConversationIDs.contains(conv.id),
-                        typingTick: typingTick,
-                        // 输入栏那块玻璃现在压在消息上面，底下留出它那么高
-                        bottomInset: composerHeight + 12,
-                        jumpTo: jumpTo,
-                        onJumped: { jumpTo = nil }
-                    )
+                    // ⚠️ 这一大坨参数**搬进 `messageList(_:)` 了**，别写回来：
+                    // 二十多个闭包参数直接摆在 `body` 里，类型检查算不完
+                    //（CI 报 unable to type-check in reasonable time）。
+                    messageList(conv)
                     // ⚠️⚠️ **这一下是打字不卡的关键。**见文件末尾那个
                     // `MessageListView: Equatable`。没它的话，她每敲一个字
                     // 整屏气泡重建一遍。
@@ -2280,6 +2200,109 @@ struct MessageListView: View {
                     .foregroundStyle(.tertiary)
             }
         }
+    }
+}
+
+// MARK: - 消息区
+
+extension ChatView {
+
+    /// 消息区那一块。
+    ///
+    /// ⚠️ **单独一个方法，不要写回 `body` 里。**
+    /// 它有二十多个闭包参数，摆在 `body` 那条本来就很长的修饰链里，
+    /// Swift 的类型检查会直接超时——CI 上报的是
+    /// 「the compiler is unable to type-check this expression in reasonable time」，
+    /// 而且报的行号指在别处（`.sheet` 那一行），很容易找错地方。
+    /// ⚠️ 返回类型是**具体的 `MessageListView`**，不是 `some View`：
+    /// `body` 那边紧接着要 `.equatable()`，而那一下要求看得见
+    /// 这个类型本身符合 `Equatable`——包成不透明类型就编译不过，
+    /// 而那一下正是「打字不卡」的关键。
+    func messageList(_ conv: Conversation) -> MessageListView {
+        MessageListView(
+            conversation: conv,
+            space: space,
+            selecting: selecting,
+            selected: selected,
+            onToggle: { id in
+                if selected.contains(id) { selected.remove(id) } else { selected.insert(id) }
+                if !selecting { selecting = true }
+            },
+            onQuote: { msg in
+                quoting = msg
+            },
+            onChoice: { text in
+                // 点了哪个，那句话就当成她说的发出去，
+                // 同时把那张卡标成"已选"，免得回头还能再点一次
+                guard let conv = activeConversation else { return }
+                if let i = app.index(of: conv.id),
+                   let mi = app.conversations[i].messages.lastIndex(where: {
+                       !$0.choices.isEmpty && $0.chosenOption.isEmpty
+                   }) {
+                    app.conversations[i].messages[mi].chosenOption = text
+                }
+                app.send(text: text, images: [], in: conv.id)
+            },
+            onSpeak: { msg in
+                guard let id = app.activeID(for: space) else { return }
+                Task {
+                    if let err = await app.speak(msg.id, in: id) {
+                        notice = err
+                    }
+                }
+            },
+            onOpenReader: { msg in
+                reading = msg
+            },
+            onOpenJourney: { j, at in
+                travellingAt = at
+                travelling = j
+            },
+            menuOpenID: menuOpenID,
+            onOpenMenu: { msg, page in
+                withAnimation(.spring(response: 0.26, dampingFraction: 0.8)) {
+                    menuOpenID = msg.id
+                    menuMessage = msg
+                    // 她正翻在第几页。「删这一版」靠它才知道删哪一版。
+                    menuEditPage = page
+                }
+            },
+            onCloseMenu: {
+                withAnimation(.easeOut(duration: 0.15)) { closeMenu() }
+            },
+            onEdit: { msg in
+                editText = msg.content
+                editingMessage = msg
+            },
+            onRetry: { msg in app.retry(msg.id, in: conv.id) },
+            onOpenProcess: { msg in panel = .process(msg) },
+            onOpenBranches: { id in panel = .branches(id) },
+            onOpenDivine: { msg in panel = .divine(msg) },
+            onOpenShape: { panel = .shape },
+            onOpenLibrary: { place in
+                // 存到哪儿决定开哪一栏：动图 → GIF，
+                // 表情包 → 表情包，别的（相册文件夹）→ 图片
+                StickerLibraryView.openTab = place.contains("动图") ? 2
+                    : (place.contains("表情") ? 1 : 0)
+                destination = SideMenuItem.all.first { $0.id == "sticker" }
+            },
+            onMention: { name in
+                // insertMention 是原来给候选条用的，直接复用：
+                // 光标前有 @ 就替换掉，没有就补一个
+                if draft.hasSuffix("@") {
+                    insertMention(name)
+                } else {
+                    draft += (draft.isEmpty || draft.hasSuffix(" ") ? "" : " ")
+                        + "@" + name + " "
+                }
+            },
+            running: app.runningConversationIDs.contains(conv.id),
+            typingTick: typingTick,
+            // 输入栏那块玻璃现在压在消息上面，底下留出它那么高
+            bottomInset: composerHeight + 12,
+            jumpTo: jumpTo,
+            onJumped: { jumpTo = nil }
+        )
     }
 }
 
