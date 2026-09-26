@@ -2145,36 +2145,47 @@ struct MessageListView: View {
     /// 本来就在同一条里，所以也只挂一次。
     /// 唯一要合并的是同一个 turn 拆出来的那两条（文字 + 表情），
     /// 那是一次发送，不该挂两个头像。
-    /// 这条底下压着几段收起来的对话
-    private func branchCount(after id: UUID) -> Int {
-        guard !conversation.branches.isEmpty else { return 0 }
-        return conversation.branches.filter { $0.afterMessageID == id }.count
-    }
-
-    /// 那一行入口：「这里收起了 N 段旧对话」。
+    /// 那一行：**直接翻整段**。
     ///
-    /// ⚠️ **单独拎出来一个方法，别写回那个 `ForEach` 里。**
-    /// 写在里面那一版把 CI 的编译器拖垮了：
-    /// 「the compiler is unable to type-check this expression in reasonable time」。
-    /// 那个 `ForEach` 的闭包本来就装着一整条气泡加十几个回调，
-    /// 再塞一段带条件的按钮，类型检查就炸了。
+    /// 她定的：「我想的是我点击那个 ‹ › 旧对话一整段可以直接切换，不是现在这样。」
+    /// 上一版是一行提示点开一张列表——多两下才换得成，而她要的是就地翻页，
+    /// 跟消息改过好几版时底下那条 ‹1/2› 一个用法。
+    ///
+    /// 换的办法是**对调**（见 `AppState.restoreBranch`）：
+    /// 收起来的那一段换进正文，正文里那一段同时被收起来。
+    /// 所以两边来回按，哪一段都不会丢。
+    ///
+    /// ⚠️ 单独一个方法，别写回那个 `ForEach` 里（类型检查会超时）。
     @ViewBuilder
     private func branchBar(_ id: UUID) -> some View {
-        let n = branchCount(after: id)
-        if n > 0 {
-            Button {
-                onOpenBranches(id)
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.uturn.backward")
-                    Text("这里收起了 \(n) 段旧对话")
+        let list = conversation.branches.filter { $0.afterMessageID == id }
+        if !list.isEmpty {
+            HStack(spacing: 10) {
+                Button {
+                    // 往回翻：换**最近**收起来的那一段
+                    if let b = list.last {
+                        app.restoreBranch(b.id, in: conversation.id)
+                    }
+                } label: {
+                    Image(systemName: "chevron.left")
                 }
-                .font(.app(10.5))
-                .foregroundStyle(Theme.textMuted(scheme))
-                .padding(.vertical, 2)
-                .frame(maxWidth: .infinity)
+                Text("旧对话 \(list.count + 1) 段")
+                Button {
+                    // 往后翻：换最早收起来的那一段（只有一段时跟左边一样，来回切）
+                    if let b = list.first {
+                        app.restoreBranch(b.id, in: conversation.id)
+                    }
+                } label: {
+                    Image(systemName: "chevron.right")
+                }
             }
+            .font(.app(10.5))
+            .foregroundStyle(Theme.textMuted(scheme))
             .buttonStyle(.plain)
+            .padding(.vertical, 2)
+            .frame(maxWidth: .infinity)
+            // 长按开那张列表：看每一段是什么、或者丢掉不要的
+            .onLongPressGesture { onOpenBranches(id) }
         }
     }
 
