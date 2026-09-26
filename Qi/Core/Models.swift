@@ -279,6 +279,14 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     /// 笔记还在读的时候先摆个骨架
     var noteLoading: Bool = false
     var noteHint: String = ""
+    /// 卡片出来之前她原本那段话（带链接和分享文案的那份）。
+    ///
+    /// 她定的：「卡片框识别出来后能不能把我原先发的带链接的这个隐藏了，
+    /// 就等于我只发了一个卡片框……如果退回暂存的话，再回到我原先发的那个链接。」
+    ///
+    /// 所以正文里那段分享文案收掉，原文存在这儿：撤回暂存时照原样退回输入框
+    /// （见 `AppState.unstage`）。
+    var noteRawText: String = ""
     /// 他抛过来的几个选项，点一下就当成你的下一句话发出去
     var choices: [String] = []
     var choiceQuestion: String = ""
@@ -1192,6 +1200,7 @@ extension ChatMessage {
         note = try? c.decodeIfPresent(XHSNote.self, forKey: .note)
         noteLoading = (try? c.decodeIfPresent(Bool.self, forKey: .noteLoading)) ?? false
         noteHint = (try? c.decodeIfPresent(String.self, forKey: .noteHint)) ?? ""
+        noteRawText = (try? c.decodeIfPresent(String.self, forKey: .noteRawText)) ?? ""
         choices = (try? c.decodeIfPresent([String].self, forKey: .choices)) ?? []
         choiceQuestion = (try? c.decodeIfPresent(String.self, forKey: .choiceQuestion)) ?? ""
         chosenOption = (try? c.decodeIfPresent(String.self, forKey: .chosenOption)) ?? ""

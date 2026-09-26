@@ -835,6 +835,24 @@ final class AppState: ObservableObject {
             pendingUserMessage[conversationID] = msg.id
         }
 
+        // ⚠️ 链接**暂存那一下就读**，不等她按发送。
+        //
+        // 她要的：「能不能我暂存发送的时候就出现啊……不管是暂存还是直接发送，
+        // 就是一个卡片框。」
+        // `thenRun: false` 是关键：这会儿只是把卡片读出来摆上，
+        // **不能顺手让他开口**——她还没按发送呢。
+        //
+        // ⚠️ 读卡片这件事**不花钱也不经过模型**：自己发一个网页请求、
+        // 就地解析而已（见 `XHSFetcher` / `LinkCards`）。所以暂存就读是安全的。
+        if let mid = pendingUserMessage[conversationID],
+           let mi = conversations[i].messages.firstIndex(where: { $0.id == mid }),
+           conversations[i].messages[mi].note == nil,
+           !conversations[i].messages[mi].noteLoading,
+           let hit = LinkCards.detect(conversations[i].messages[mi].content) {
+            loadNote(hit.url, source: hit.source, in: conversationID,
+                     attachTo: mid, thenRun: false)
+        }
+
         // ④ 视频也单独一条，理由跟语音一样：一条消息挂两段视频，
         //    她回头分不清哪张封面对应哪一段
         if !videoName.isEmpty {
@@ -907,7 +925,10 @@ final class AppState: ObservableObject {
         // ⚠️ 空行走常量，别写在 `joined(separator:)` 里——
         // 那个位置的反斜杠这一窗已经被脚本吃掉两次了。
         let gap = "\n\n"
-        let text = mine.map(\.content)
+        // ⚠️ 出过卡片的那条退回**原文**（`noteRawText`）：
+        // 正文里那段分享文案已经被收掉了，照 `content` 退的话
+        // 她撤回来会发现链接没了（见 `ChatMessage.noteRawText`）。
+        let text = mine.map { $0.noteRawText.isEmpty ? $0.content : $0.noteRawText }
             .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .joined(separator: gap)
 
@@ -955,6 +976,12 @@ final class AppState: ObservableObject {
         }
         DesireEngine.shared.touched()
 
+        // ⚠️ 先看暂存那会儿是不是已经在读了（见 `queueSend`）。
+        // 顺序反了的话正文里那串网址还在，会被认出来再读一遍。
+        if conversations[i].messages.contains(where: { $0.noteLoading }) {
+            runAfterNote.insert(conversationID)
+            return
+        }
         // 卡片贴在她那条上，不另起一条（见 `loadNote` 上面那段）
         if let hit = LinkCards.detect(msg.content) {
             loadNote(hit.url, source: hit.source, in: conversationID, attachTo: msg.id)
@@ -3299,8 +3326,47 @@ final class AppState: ObservableObject {
         loadNote(hit.url, source: hit.source, in: conversationID, attachTo: messageID)
     }
 
+    /// 卡片还在读的时候她就按了发送：读完了再让他开口（见 `loadNote`）
+    private var runAfterNote: Set<UUID> = []
+
+    /// 分享出来那段话里，除了她自己写的，其余的收掉。
+    ///
+    /// 她要的：「就等于我只发了一个卡片框。」
+    /// 各家复制出来的格式不一样，但都是同一个套路：
+    /// 标题（截断成「…」）＋ 网址 ＋ 一句「复制打开某某 App」。
+    /// 标题和封面卡片上都有，网址已经剥掉了，剩下那句话对他毫无用处。
+    ///
+    /// ⚠️ **她自己写的那半句要留着。** 她常常是「老公你看这个哈哈哈 + 链接」，
+    /// 把那半句也吞掉就成了「她什么都没说」。所以这儿只删认得出来的套话，
+    /// 删不干净宁可留着。
+    static func tidyShareText(_ text: String, title: String) -> String {
+        var out = text
+        let junk = [
+            #"把这段.*?复制.*"#, #"复制本条信息.*"#, #"复制这条.*"#,
+            #"打开【.*?】.*"#, #"打开.{0,6}APP.*"#, #"点击链接.*"#,
+            #"精彩内容等你.*"#, #"精彩笔记.*"#, #"就能看到.*"#,
+            #"—— 来自.*"#, #"【.*?】\s*$"#,
+            #"\(?来自@.*"#, #"@.{0,12}的.{0,6}动态.*"#
+        ]
+        for p in junk {
+            out = out.replacingOccurrences(of: p, with: "",
+                                           options: [.regularExpression])
+        }
+        // 标题那一截：卡片上已经有了。分享文案里的标题常被截断成「…」，
+        // 所以按前几个字对，对上就把那一段拿掉。
+        let head = String(title.prefix(10))
+        if head.count >= 4, let r = out.range(of: head) {
+            let tail = out[r.upperBound...]
+            let cut = tail.firstIndex(where: { $0 == "\n" }) ?? tail.endIndex
+            out.removeSubrange(r.lowerBound..<cut)
+        }
+        return out
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "，。、,. …·-—\n"))
+    }
+
     private func loadNote(_ link: URL, source: LinkSource, in conversationID: UUID,
-                          attachTo: UUID? = nil) {
+                          attachTo: UUID? = nil, thenRun: Bool = true) {
         guard let i = index(of: conversationID) else { return }
 
         let holderID: UUID
@@ -3337,8 +3403,21 @@ final class AppState: ObservableObject {
                 self.conversations[ci].messages[mi].noteLoading = false
                 self.conversations[ci].messages[mi].noteHint = ""
                 self.conversations[ci].messages[mi].note = note
+                // 卡片出来了，就把那段分享文案收掉——她要的是「只发了一个卡片框」。
+                // 原文存着，撤回暂存时照原样退回去（见 `ChatMessage.noteRawText`）。
+                let raw = self.conversations[ci].messages[mi].content
+                if self.conversations[ci].messages[mi].noteRawText.isEmpty {
+                    self.conversations[ci].messages[mi].noteRawText = raw
+                }
+                self.conversations[ci].messages[mi].content =
+                    Self.tidyShareText(raw, title: note.title)
                 self.conversations[ci].updatedAt = Date()
 
+                // 她按发送的时候这条还在读（见 `runAfterNote`），
+                // 或者本来就是发出去之后才读的：这会儿才让他开口
+                let shouldRun = thenRun || self.runAfterNote.contains(conversationID)
+                self.runAfterNote.remove(conversationID)
+                guard shouldRun else { return }
                 if self.conversations[ci].isGroup {
                     self.runGroupTurn(conversationID)
                 } else {
