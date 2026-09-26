@@ -496,41 +496,11 @@ struct ChatView: View {
         // 合成一个 `.sheet(item:)` 之后，同一时刻只有一个 presentation 宿主。
         // 以后再加新面板，**往 `ChatPanel` 里加一个 case**，
         // 不要再往这儿续 `.sheet`。
+        // ⚠️ 里面那一串 `switch` **搬进 `panelView(_:)` 了**，别写回来：
+        // 这儿是 `body` 的一部分，`body` 本来就长，再嵌一个八个分支的 switch
+        // 就会把类型检查顶爆（CI 报 unable to type-check in reasonable time）。
         .sheet(item: $panel) { which in
-            switch which {
-            case .model:  ModelPickerView(space: space)
-            case .prompt: SystemPromptView(space: space)
-            case .tools:  ToolToggleView()
-            case .poke:
-                if let id = app.activeID(for: space) { PokeSheet(conversationID: id) }
-            case .group:
-                if let id = app.activeID(for: space) {
-                    GroupSetupView(conversationID: id)
-                }
-            case .process(let msg):
-                if let cid = app.activeID(for: space) {
-                    ProcessSheet(messageID: msg.id, conversationID: cid, fallback: msg)
-                }
-            case .shape:
-                // sheet 里没有现成的导航栈，这一层得自己套
-                //（见 `PromptShapeView` 开头那段）。
-                NavigationStack { PromptShapeView() }
-            case .divine(let msg):
-                // 还没抽就去抽牌；抽完了（或者他正在写）就看结果那一页
-                if let d = msg.divine, let cid = app.activeID(for: space) {
-                    if d.drawn {
-                        DivineResultView(messageID: msg.id, conversationID: cid, fallback: d)
-                    } else {
-                        DivineDrawSheet(card: d) { record in
-                            app.divineDrawn(record, for: msg.id, in: cid)
-                        }
-                    }
-                }
-            case .branches(let anchor):
-                if let cid = app.activeID(for: space) {
-                    BranchSheet(anchorID: anchor, conversationID: cid)
-                }
-            }
+            panelView(which)
         }
         .sheet(isPresented: $showingSearch) {
             ChatSearchView(space: space) { convID, msgID in
@@ -2308,6 +2278,58 @@ struct MessageListView: View {
                 Text("去「设置 → 供应商」加一个")
                     .font(.app(13))
                     .foregroundStyle(.tertiary)
+            }
+        }
+    }
+}
+
+// MARK: - 那几张面板
+
+extension ChatView {
+
+    /// 现在该弹哪一张（见 `ChatPanel`）。
+    ///
+    /// ⚠️ **单独一个方法，不写回 `.sheet` 的闭包里**：那儿在 `body` 里面，
+    /// 八个分支嵌进去编译器就算不完（CI 报 unable to type-check in reasonable time）。
+    @ViewBuilder
+    func panelView(_ which: ChatPanel) -> some View {
+        switch which {
+        case .model:  ModelPickerView(space: space)
+        case .prompt: SystemPromptView(space: space)
+        case .tools:  ToolToggleView()
+        case .poke:
+            if let id = app.activeID(for: space) { PokeSheet(conversationID: id) }
+        case .group:
+            if let id = app.activeID(for: space) {
+                GroupSetupView(conversationID: id)
+            }
+        case .process(let msg):
+            if let cid = app.activeID(for: space) {
+                ProcessSheet(messageID: msg.id, conversationID: cid, fallback: msg)
+            }
+        case .shape:
+            // sheet 里没有现成的导航栈，这一层得自己套
+            //（见 `PromptShapeView` 开头那段）。
+            NavigationStack { PromptShapeView() }
+        case .divine(let msg):
+            divinePanel(msg)
+        case .branches(let anchor):
+            if let cid = app.activeID(for: space) {
+                BranchSheet(anchorID: anchor, conversationID: cid)
+            }
+        }
+    }
+
+    /// 占卜那一张：还没抽就去抽牌，抽完了（或者他正在写）就看结果
+    @ViewBuilder
+    private func divinePanel(_ msg: ChatMessage) -> some View {
+        if let d = msg.divine, let cid = app.activeID(for: space) {
+            if d.drawn {
+                DivineResultView(messageID: msg.id, conversationID: cid, fallback: d)
+            } else {
+                DivineDrawSheet(card: d) { record in
+                    app.divineDrawn(record, for: msg.id, in: cid)
+                }
             }
         }
     }
