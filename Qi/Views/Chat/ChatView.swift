@@ -2071,27 +2071,8 @@ struct MessageListView: View {
                         .equatable()
                         .id(message.id)
 
-                        // 这条底下压着一段「重发时收起来的对话」——给个入口翻回去。
-                        //
-                        // 她报的：「我希望一整段聊天都能留下来。」
-                        // 段子本身存在 `conversation.branches` 里（见 `ChatBranch`），
-                        // 这儿只是把入口摆在它当初被切走的位置上。
-                        if let n = branchCount(after: message.id), n > 0 {
-                            Button {
-                                onOpenBranches(message.id)
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "arrow.uturn.backward")
-                                        .font(.app(9))
-                                    Text("这里收起了 \(n) 段旧对话")
-                                        .font(.app(10.5))
-                                }
-                                .foregroundStyle(Theme.textMuted(scheme))
-                                .padding(.vertical, 2)
-                                .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.plain)
-                        }
+                        // 这条底下压着的那几段「重发时收起来的对话」（见 `branchBar`）
+                        branchBar(message.id)
                     }
                     // 他开始回、但一个字还没出来的那几秒，别让屏幕空着——
                     // 那几秒最容易让人以为是断了
@@ -2275,9 +2256,36 @@ struct MessageListView: View {
     /// 唯一要合并的是同一个 turn 拆出来的那两条（文字 + 表情），
     /// 那是一次发送，不该挂两个头像。
     /// 这条底下压着几段收起来的对话
-    private func branchCount(after id: UUID) -> Int? {
-        guard !conversation.branches.isEmpty else { return nil }
+    private func branchCount(after id: UUID) -> Int {
+        guard !conversation.branches.isEmpty else { return 0 }
         return conversation.branches.filter { $0.afterMessageID == id }.count
+    }
+
+    /// 那一行入口：「这里收起了 N 段旧对话」。
+    ///
+    /// ⚠️ **单独拎出来一个方法，别写回那个 `ForEach` 里。**
+    /// 写在里面那一版把 CI 的编译器拖垮了：
+    /// 「the compiler is unable to type-check this expression in reasonable time」。
+    /// 那个 `ForEach` 的闭包本来就装着一整条气泡加十几个回调，
+    /// 再塞一段带条件的按钮，类型检查就炸了。
+    @ViewBuilder
+    private func branchBar(_ id: UUID) -> some View {
+        let n = branchCount(after: id)
+        if n > 0 {
+            Button {
+                onOpenBranches(id)
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.uturn.backward")
+                    Text("这里收起了 \(n) 段旧对话")
+                }
+                .font(.app(10.5))
+                .foregroundStyle(Theme.textMuted(scheme))
+                .padding(.vertical, 2)
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     private func showsHeader(at index: Int) -> Bool {
@@ -2361,13 +2369,8 @@ extension ChatView {
                     menuItem("重发", "arrow.clockwise") {
                         if let cid { app.retry(msg.id, in: cid) }
                     }
-                    // 这条里有小红书／B 站／抖音的链接才摆：手动把内容读回来。
-                    // 发出去那一下本来就会自动读，这个是没认出来时的兜底。
-                    if LinkCards.detect(msg.content) != nil {
-                        menuItem("读链接", "link") {
-                            if let cid { app.readLink(msg.id, in: cid) }
-                        }
-                    }
+                    // 这条里有小红书／B 站／抖音的链接才摆（见 `readLinkItem`）
+                    readLinkItem(msg, cid)
                     menuItem(msg.voiceName.isEmpty ? "念出来" : "听", "speaker.wave.2") {
                         guard let cid else { return }
                         Task {
@@ -2398,6 +2401,20 @@ extension ChatView {
             .padding(.bottom, 18)
         }
         .ignoresSafeArea(.keyboard)
+    }
+
+    /// 「读链接」那一格。这条里有链接才出现。
+    ///
+    /// ⚠️ 跟 `branchBar` 一样是**被编译器逼出来的**：
+    /// 那张菜单的格子里已经十来个条目，再多一个带条件的，
+    /// 类型检查就超时（CI 上报的就是这个）。
+    @ViewBuilder
+    private func readLinkItem(_ msg: ChatMessage, _ cid: UUID?) -> some View {
+        if LinkCards.detect(msg.content) != nil {
+            menuItem("读链接", "link") {
+                if let cid { app.readLink(msg.id, in: cid) }
+            }
+        }
     }
 
     private func menuItem(_ title: String, _ icon: String,
