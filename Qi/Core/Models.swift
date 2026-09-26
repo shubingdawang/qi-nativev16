@@ -279,6 +279,13 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     /// 笔记还在读的时候先摆个骨架
     var noteLoading: Bool = false
     var noteHint: String = ""
+    /// 这一轮他末尾贴了张表情（`[[sticker:…]]`）。
+    ///
+    /// 她问过：「他发了表情包，证明他一定用了工具，但并没有显示，这是 bug 吗？」
+    /// 不是——表情走的是**标记**不是工具：他在回复最后写一行记号，
+    /// App 认出来就剥掉、另起一条表情消息，全程在本机，不多一次请求。
+    /// 记下这件事，好在「他刚才干了什么」那条线上补一步，并用小字标明没调用工具。
+    var sentSticker: Bool = false
     /// 卡片出来之前她原本那段话（带链接和分享文案的那份）。
     ///
     /// 她定的：「卡片框识别出来后能不能把我原先发的带链接的这个隐藏了，
@@ -1201,6 +1208,7 @@ extension ChatMessage {
         noteLoading = (try? c.decodeIfPresent(Bool.self, forKey: .noteLoading)) ?? false
         noteHint = (try? c.decodeIfPresent(String.self, forKey: .noteHint)) ?? ""
         noteRawText = (try? c.decodeIfPresent(String.self, forKey: .noteRawText)) ?? ""
+        sentSticker = (try? c.decodeIfPresent(Bool.self, forKey: .sentSticker)) ?? false
         choices = (try? c.decodeIfPresent([String].self, forKey: .choices)) ?? []
         choiceQuestion = (try? c.decodeIfPresent(String.self, forKey: .choiceQuestion)) ?? ""
         chosenOption = (try? c.decodeIfPresent(String.self, forKey: .chosenOption)) ?? ""

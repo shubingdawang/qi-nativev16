@@ -1317,6 +1317,8 @@ struct MessageBubbleView: View {
         if !(message.reasoning ?? "").isEmpty { return true }
         if !message.toolRuns.isEmpty { return true }
         if !message.cotTitle.isEmpty { return true }
+        // 贴了表情也算「他做了一件事」（见 `ChatMessage.sentSticker`）
+        if message.sentSticker { return true }
         if !parsed.cot.isEmpty { return true }
         if message.isStreaming && !isUser { return true }
         return false

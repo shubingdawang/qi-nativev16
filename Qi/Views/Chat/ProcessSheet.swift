@@ -217,6 +217,7 @@ struct ProcessSheet: View {
                                 note: run.serverName,
                                 body: detail(run)))
             }
+            out.append(contentsOf: stickerStep)
             return out
         }
 
@@ -247,7 +248,24 @@ struct ProcessSheet: View {
         }
         // 最后一个工具之后还想了的那一段
         cutThink(upTo: full.count, id: "thinkEnd")
+        out.append(contentsOf: stickerStep)
         return out
+    }
+
+    /// 贴表情那一步。
+    ///
+    /// ⚠️ 它**不是工具**，所以标题右边那行小字明写着「没有调用工具」——
+    /// 她问过「发了表情包就一定用了工具吧」，答案是没有：
+    /// 那是他在回复末尾写的一行标记，App 就地剥出来另起一条消息，
+    /// 不经过任何工具，也不多花一次请求（见 `ChatMessage.sentSticker`）。
+    private var stickerStep: [Step] {
+        guard message.sentSticker else { return [] }
+        return [Step(id: "sticker", icon: "face.smiling",
+                     tint: app.settings.accentColor,
+                     title: "贴了张表情", note: "没有调用工具",
+                     body: "他在这条回复最后写了一行表情标记，"
+                         + "App 认出来之后把它剥掉、另起了一条表情消息。"
+                         + "整件事在这台手机上完成，没有调用工具，也没有多发一次请求。")]
     }
 
     /// 弹窗标题用他自己起的那个名字。

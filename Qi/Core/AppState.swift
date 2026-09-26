@@ -7482,6 +7482,8 @@ final class AppState: ObservableObject {
                 $0.owner == "assistant" && $0.ready
                     && $0.id.uuidString.lowercased().hasPrefix(short.lowercased())
             }) {
+                // 在他那条上记一笔：那条线上要补一步（见 `ChatMessage.sentSticker`）
+                conversations[ci].messages[mi].sentSticker = true
                 var msg = toolMessage()
                 msg.stickerID = s.id
                 msg.senderID = conversations[ci].messages[mi].senderID
