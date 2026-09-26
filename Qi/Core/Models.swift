@@ -394,6 +394,32 @@ struct ContextDigest: Codable, Hashable {
     }
 }
 
+/// 重发那一下被**收起来**的一整段对话。
+///
+/// 她报的：「我把他比较上面的回答重新发送了，再聊几句之后回到第一次那条下面，
+/// 内容变成了新的对话，只有带 ‹2› 的留下来。我希望一整段聊天都能留下来。」
+///
+/// 以前 `retry` 是 `removeSubrange(cut...)`——切点之后**整段直接删掉**，
+/// 只把紧跟着的那一条回复收进 ‹1/2›。她那半天的聊天就是这么没的，而且撤不回来。
+///
+/// 现在那一段整段搬到这儿存着，她随时能翻回去、能换回来。
+struct ChatBranch: Codable, Identifiable, Hashable {
+    var id = UUID()
+    var createdAt = Date()
+    /// 从哪一条之后切下来的（那条本身留在正文里）
+    var afterMessageID: UUID?
+    var messages: [ChatMessage] = []
+
+    /// 列表上那行字：第一句说了什么
+    var note: String {
+        for m in messages {
+            let t = m.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty { return String(t.prefix(28)) }
+        }
+        return "\(messages.count) 条"
+    }
+}
+
 struct Conversation: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
     var title: String = "新对话"
@@ -432,6 +458,8 @@ struct Conversation: Identifiable, Codable, Hashable {
     var isGroup: Bool = false
     /// 群里都有谁，按这个顺序轮流说话
     var members: [GroupMember] = []
+    /// 重发时收起来的那些段（见 `ChatBranch`）。最多留 20 段，超了扔最早的。
+    var branches: [ChatBranch] = []
     /// 滚雪球压缩出来的浓缩件。**每窗一份，一直往下滚。**
     /// 没开压缩、或者还没到回合数，就是 nil。
     var digest: ContextDigest? = nil
@@ -453,6 +481,7 @@ struct Conversation: Identifiable, Codable, Hashable {
         h.combine(isPaused)
         h.combine(digest?.throughID)
         h.combine(members.count)
+        h.combine(branches.count)
         for m in messages {
             h.combine(m.id)
             h.combine(m.content.count)
@@ -1108,6 +1137,7 @@ extension Conversation {
         isGroup = (try? c.decodeIfPresent(Bool.self, forKey: .isGroup)) ?? false
         members = (try? c.decodeIfPresent([GroupMember].self, forKey: .members)) ?? []
         digest = try? c.decodeIfPresent(ContextDigest.self, forKey: .digest)
+        branches = (try? c.decodeIfPresent([ChatBranch].self, forKey: .branches)) ?? []
     }
 }
 

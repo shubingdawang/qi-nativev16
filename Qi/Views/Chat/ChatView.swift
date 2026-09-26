@@ -232,6 +232,7 @@ struct ChatView: View {
                         },
                         onRetry: { msg in app.retry(msg.id, in: conv.id) },
                         onOpenProcess: { msg in panel = .process(msg) },
+                        onOpenBranches: { id in panel = .branches(id) },
                         onOpenDivine: { msg in panel = .divine(msg) },
                         onOpenShape: { panel = .shape },
                         onOpenLibrary: { place in
@@ -524,6 +525,10 @@ struct ChatView: View {
                             app.divineDrawn(record, for: msg.id, in: cid)
                         }
                     }
+                }
+            case .branches(let anchor):
+                if let cid = app.activeID(for: space) {
+                    BranchSheet(anchorID: anchor, conversationID: cid)
                 }
             }
         }
@@ -1977,6 +1982,8 @@ struct MessageListView: View {
     /// 从聊天记录搜索点进来的那一条：滚过去，别停在最底下
     var jumpTo: UUID? = nil
     var onJumped: () -> Void = {}
+    /// 点了某条底下那行「收起的对话」。弹窗归聊天页挂，不挂在气泡上
+    var onOpenBranches: (UUID) -> Void = { _ in }
 
     @EnvironmentObject var app: AppState
     /// 他正在蹦的字（见 `LiveStream`）。只有这一块订阅它，蹦字不惊动别的页面
@@ -2063,6 +2070,28 @@ struct MessageListView: View {
                         )
                         .equatable()
                         .id(message.id)
+
+                        // 这条底下压着一段「重发时收起来的对话」——给个入口翻回去。
+                        //
+                        // 她报的：「我希望一整段聊天都能留下来。」
+                        // 段子本身存在 `conversation.branches` 里（见 `ChatBranch`），
+                        // 这儿只是把入口摆在它当初被切走的位置上。
+                        if let n = branchCount(after: message.id), n > 0 {
+                            Button {
+                                onOpenBranches(message.id)
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.uturn.backward")
+                                        .font(.app(9))
+                                    Text("这里收起了 \(n) 段旧对话")
+                                        .font(.app(10.5))
+                                }
+                                .foregroundStyle(Theme.textMuted(scheme))
+                                .padding(.vertical, 2)
+                                .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                     // 他开始回、但一个字还没出来的那几秒，别让屏幕空着——
                     // 那几秒最容易让人以为是断了
@@ -2245,6 +2274,12 @@ struct MessageListView: View {
     /// 本来就在同一条里，所以也只挂一次。
     /// 唯一要合并的是同一个 turn 拆出来的那两条（文字 + 表情），
     /// 那是一次发送，不该挂两个头像。
+    /// 这条底下压着几段收起来的对话
+    private func branchCount(after id: UUID) -> Int? {
+        guard !conversation.branches.isEmpty else { return nil }
+        return conversation.branches.filter { $0.afterMessageID == id }.count
+    }
+
     private func showsHeader(at index: Int) -> Bool {
         guard index > 0 else { return true }
         let msg = conversation.messages[index]
@@ -2325,6 +2360,13 @@ extension ChatView {
                     }
                     menuItem("重发", "arrow.clockwise") {
                         if let cid { app.retry(msg.id, in: cid) }
+                    }
+                    // 这条里有小红书／B 站／抖音的链接才摆：手动把内容读回来。
+                    // 发出去那一下本来就会自动读，这个是没认出来时的兜底。
+                    if LinkCards.detect(msg.content) != nil {
+                        menuItem("读链接", "link") {
+                            if let cid { app.readLink(msg.id, in: cid) }
+                        }
                     }
                     menuItem(msg.voiceName.isEmpty ? "念出来" : "听", "speaker.wave.2") {
                         guard let cid else { return }
@@ -2458,5 +2500,118 @@ final class DraftBox: ObservableObject {
     private func refresh() {
         let e = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         if e != empty { empty = e }
+    }
+}
+
+
+// MARK: - 收起来的那几段对话
+
+/// 重发那一下被切下来的整段聊天，摆在这儿供她翻回去。
+///
+/// 她报的：「我希望一整段聊天都能留下来。」
+/// 段子存在 `Conversation.branches` 里（见 `ChatBranch`），这一页只做两件事：
+/// 让她看清每一段是什么，以及把某一段**换**回正文里。
+///
+/// ⚠️ 「换」不是「插」：换回去的时候，现在正文里那一段会照样被收起来，
+/// 所以她可以反复来回切，哪一段都不会丢。
+struct BranchSheet: View {
+
+    let anchorID: UUID
+    let conversationID: UUID
+
+    @EnvironmentObject private var app: AppState
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.dismiss) private var dismiss
+
+    private var branches: [ChatBranch] {
+        (app.conversation(conversationID)?.branches ?? [])
+            .filter { $0.afterMessageID == anchorID }
+            .reversed()
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                WallpaperBackground()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if branches.isEmpty {
+                            Text("这儿没有收起来的对话了。")
+                                .font(.app(12))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                                .padding(.top, 24)
+                        }
+                        ForEach(branches) { b in card(b) }
+                    }
+                    .padding(16)
+                }
+            }
+            .navigationTitle("收起的对话")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func card(_ b: ChatBranch) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(Self.when(b.createdAt))
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                Spacer()
+                Text("\(b.messages.count) 条")
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+            // 前几句摆出来，她一眼认得出是哪一段
+            ForEach(Array(b.messages.prefix(4).enumerated()), id: \.offset) { _, m in
+                HStack(alignment: .top, spacing: 6) {
+                    Text(m.role == .user ? "我" : "他")
+                        .font(.app(10, weight: .semibold))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                        .frame(width: 14, alignment: .leading)
+                    Text(Self.oneLine(m.content))
+                        .font(.app(12))
+                        .foregroundStyle(Theme.textSoft(scheme))
+                        .lineLimit(2)
+                }
+            }
+            if b.messages.count > 4 {
+                Text("…")
+                    .font(.app(12))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+            HStack(spacing: 14) {
+                Button("换回这一段") {
+                    app.restoreBranch(b.id, in: conversationID)
+                    dismiss()
+                }
+                .font(.app(13, weight: .medium))
+                .foregroundStyle(app.settings.accentColor)
+                Button("丢掉") {
+                    app.dropBranch(b.id, in: conversationID)
+                }
+                .font(.app(13))
+                .foregroundStyle(Theme.textMuted(scheme))
+                Spacer()
+            }
+            .padding(.top, 2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard()
+    }
+
+    private static func oneLine(_ t: String) -> String {
+        let s = t.replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return s.isEmpty ? "（图片或语音）" : s
+    }
+
+    private static func when(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = Calendar.current.isDateInToday(d) ? "今天 HH:mm" : "M月d日 HH:mm"
+        return f.string(from: d)
     }
 }

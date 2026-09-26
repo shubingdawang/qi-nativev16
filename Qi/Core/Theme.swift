@@ -632,7 +632,10 @@ struct GlassSurface: View {
         // 滑到底就是这套配方本身；往左拉才掺进没糊的原画面（见下面 `strength`）
         let k = min(1, max(0.3, strength))
         // 气泡走她的 20%，卡片和输入框那类面走 10%–30% 之间取中
-        let veil = light ? (dark ? 0.10 : 0.20) : (dark ? 0.09 : 0.15)
+        // 气泡比她那份再厚一档（.20 → .30）：
+        // 她看完说「气泡依旧是透的」——EVE 那份底下是深色壁纸，
+        // 20% 的白就能读出来；她这张壁纸本身就淡，同样的白盖上去跟没盖一样。
+        let veil = light ? (dark ? 0.18 : 0.30) : (dark ? 0.09 : 0.15)
         let edgeWhite = light ? (dark ? 0.18 : 0.30) : (dark ? 0.14 : 0.20)
         return shape.fill(.ultraThinMaterial.opacity(0.4 + 0.6 * k))
             .overlay {

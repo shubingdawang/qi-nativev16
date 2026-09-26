@@ -46,9 +46,13 @@ enum LinkCards {
         let table: [(LinkSource, String)] = [
             // ⚠️ 短链有 **.com 和 .cn 两种**。她那条是 xhslink.cn——
             // 只认 .com 的话卡片整个不出，她看到的是一条光秃秃的链接。
-            (.xhs, #"https?://(www\.)?(xiaohongshu\.com|xhslink\.(com|cn))/\S+"#),
-            (.bilibili, #"https?://(www\.|m\.)?(bilibili\.com|b23\.tv)/\S+"#),
-            (.douyin, #"https?://(www\.|v\.)?(douyin\.com|iesdouyin\.com)/\S+"#)
+            //
+            // ⚠️ `https?://` 那一截写成**可有可无**：分享出来的那段话里
+            // 有时候是光秃秃的 `xhslink.cn/o/xxx`（各家 App 复制出来的格式不一样），
+            // 认死了协议头就会整条漏掉。补协议头的活儿交给下面 `url(from:)`。
+            (.xhs, #"(https?://)?(www\.)?(xiaohongshu\.com|xhslink\.(com|cn))/\S+"#),
+            (.bilibili, #"(https?://)?(www\.|m\.)?(bilibili\.com|b23\.tv)/\S+"#),
+            (.douyin, #"(https?://)?(www\.|v\.)?(douyin\.com|iesdouyin\.com)/\S+"#)
         ]
         var best: (Int, URL, LinkSource)?
         for (source, pattern) in table {
@@ -56,6 +60,8 @@ enum LinkCards {
             var raw = String(text[r])
             // 中文标点常常被粘在链接尾巴上
             while let last = raw.last, "，。、）】」,.)]".contains(last) { raw.removeLast() }
+            // 没写协议头的补上，不然 `URL(string:)` 出来的东西没法请求
+            if !raw.lowercased().hasPrefix("http") { raw = "https://" + raw }
             guard let url = URL(string: raw) else { continue }
             let at = text.distance(from: text.startIndex, to: r.lowerBound)
             if best == nil || at < best!.0 { best = (at, url, source) }

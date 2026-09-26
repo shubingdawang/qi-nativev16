@@ -1381,8 +1381,60 @@ final class AppState: ObservableObject {
         let end = conversations[i].messages[cut...].firstIndex { $0.role == .user }
             ?? conversations[i].messages.count
         stashOldReply(conversations[i].messages[cut..<end], in: conversationID)
-        conversations[i].messages.removeSubrange(cut...)
+        // ⚠️⚠️ **切下来的那一段收起来，不许直接删。**
+        //
+        // 她报的：「我把他比较上面的回答重新发送了……我希望一整段聊天都能留下来。」
+        // 以前这儿是 `removeSubrange(cut...)`，切点之后那半天的聊天当场没了，
+        // 而且撤不回来——只有紧跟的那一条被收进 ‹1/2›。
+        // 现在整段搬进 `branches`，她能翻回去看，也能换回来（见 `restoreBranch`）。
+        archiveTail(from: cut, in: i)
         runTurn(conversationID)
+    }
+
+    /// 把第 `cut` 条往后的整段收进分支，正文里留下切点之前的部分。
+    @discardableResult
+    private func archiveTail(from cut: Int, in i: Int) -> UUID? {
+        guard cut < conversations[i].messages.count else { return nil }
+        let tail = Array(conversations[i].messages[cut...])
+        conversations[i].messages.removeSubrange(cut...)
+        var b = ChatBranch()
+        b.afterMessageID = conversations[i].messages.last?.id
+        b.messages = tail
+        conversations[i].branches.append(b)
+        if conversations[i].branches.count > 20 {
+            conversations[i].branches.removeFirst(
+                conversations[i].branches.count - 20)
+        }
+        return b.id
+    }
+
+    /// 换回收起来的那一段。
+    ///
+    /// **是换不是插**：现在正文里那一段（切点之后的）同样收起来，
+    /// 两边可以反复来回换，哪一段都不会丢。
+    func restoreBranch(_ branchID: UUID, in conversationID: UUID) {
+        guard let i = index(of: conversationID),
+              let bi = conversations[i].branches.firstIndex(where: { $0.id == branchID })
+        else { return }
+        let branch = conversations[i].branches.remove(at: bi)
+        // 切点：那条消息在正文里的下一格；找不着（她把那条删了）就接在最后
+        let cut: Int
+        if let anchor = branch.afterMessageID,
+           let ai = conversations[i].messages.firstIndex(where: { $0.id == anchor }) {
+            cut = ai + 1
+        } else {
+            cut = conversations[i].messages.count
+        }
+        archiveTail(from: cut, in: i)
+        conversations[i].messages.insert(contentsOf: branch.messages,
+                                         at: min(cut, conversations[i].messages.count))
+        conversations[i].updatedAt = Date()
+    }
+
+    /// 丢掉一段收起来的（她确认不要了）
+    func dropBranch(_ branchID: UUID, in conversationID: UUID) {
+        guard let i = index(of: conversationID) else { return }
+        conversations[i].branches.removeAll { $0.id == branchID }
     }
 
     func cancelStream(for id: UUID) {
@@ -3236,6 +3288,17 @@ final class AppState: ObservableObject {
     ///
     /// 她对——她发的是「这个东西」，不是「这个东西的网址」。
     /// 网址是取件码，取到了就该收起来。
+    /// 手动读某一条里的链接（长按菜单里那个「读链接」）。
+    ///
+    /// 发出去那一下本来就会自动认（见 `send` / `flushPending`），
+    /// 这个是兜底：格式古怪没认出来、或者那次读失败了，她可以自己点一下重来。
+    func readLink(_ messageID: UUID, in conversationID: UUID) {
+        guard let i = index(of: conversationID),
+              let m = conversations[i].messages.first(where: { $0.id == messageID }),
+              let hit = LinkCards.detect(m.content) else { return }
+        loadNote(hit.url, source: hit.source, in: conversationID, attachTo: messageID)
+    }
+
     private func loadNote(_ link: URL, source: LinkSource, in conversationID: UUID,
                           attachTo: UUID? = nil) {
         guard let i = index(of: conversationID) else { return }
@@ -3286,9 +3349,13 @@ final class AppState: ObservableObject {
                       let mi = self.conversations[ci].messages.firstIndex(where: { $0.id == holderID })
                 else { return }
                 self.conversations[ci].messages[mi].noteLoading = false
-                self.conversations[ci].messages[mi].noteHint = ""
-                self.conversations[ci].messages[mi].content =
-                    link.absoluteString + "\n（" + error.localizedDescription + "）"
+                // ⚠️ **不许拿报错去盖掉她写的话。**
+                //
+                // 以前这儿是 `content = 网址 + 报错`：读不出来那一下，
+                // 她打的字连同她说的那句「老公你看这个」一起没了，而且撤不回来。
+                // 现在原文留着，报错只写在卡片那行提示里。
+                self.conversations[ci].messages[mi].noteHint =
+                    "这条没读出来（" + ErrText.readable(error) + "）"
             }
         }
     }
