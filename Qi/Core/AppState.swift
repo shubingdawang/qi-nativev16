@@ -2449,13 +2449,67 @@ final class AppState: ObservableObject {
     /// 写完就不再变，历史那一段还能整段复用。绝对时间只挂在最后一条上
     /// （见下面 nowStamp），它后面没有别的内容，改了也不作废前面的缓存。
     static func gapNote(from previous: Date?, to now: Date) -> String {
-        guard let previous else { return "" }
-        let s = now.timeIntervalSince(previous)
-        if s < 30 * 60 { return "" }
-        if s < 3600 { return "（隔了 \(Int(s / 60)) 分钟）" }
-        if s < 86400 { return "（隔了 \(Int(s / 3600)) 小时）" }
-        let d = Int(s / 86400)
-        return d < 30 ? "（隔了 \(d) 天）" : "（隔了很久，\(d) 天）"
+        // ⚠️⚠️ **换天了就先写日期，再写间隔和钟点。**
+        //
+        // 她说的：「他还是没什么时间观念，总是错误地看时间。」
+        //
+        // 以前这儿只有「隔了 6 小时」。他要知道「那句是昨晚说的还是今早说的」，
+        // 只能把一串「隔了 X 小时」从最后一条往回加——一加就错，
+        // 而且他根本不知道起点是几点。现在每次换天都钉一个日期，
+        // 隔得久的那一句再带上**钟点和时段**（「凌晨 01:54」），他不用再算。
+        //
+        // 全都只看这一条自己的 `createdAt`：写完就不变，历史那段照样整段复用缓存。
+        let cal = Calendar.current
+        var parts: [String] = []
+        if previous == nil || !cal.isDate(previous!, inSameDayAs: now) {
+            parts.append(dayLabel(now))
+        }
+        if let previous {
+            let s = now.timeIntervalSince(previous)
+            if s >= 30 * 60 {
+                let gap: String
+                if s < 3600 { gap = "隔了 \(Int(s / 60)) 分钟" }
+                else if s < 86400 { gap = "隔了 \(Int(s / 3600)) 小时" }
+                else {
+                    let d = Int(s / 86400)
+                    gap = d < 30 ? "隔了 \(d) 天" : "隔了很久，\(d) 天"
+                }
+                parts.append(gap + " · " + clockLabel(now))
+            }
+        }
+        return parts.isEmpty ? "" : "（" + parts.joined(separator: "，") + "）"
+    }
+
+    /// 「9月27日 周六」
+    static func dayLabel(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "M月d日 EEE"
+        return f.string(from: d)
+    }
+
+    /// 「凌晨 01:54」——**钟点前面一定带时段**。
+    ///
+    /// 光写「01:54」他常常读成下午一点；写成「凌晨」就不会。
+    /// 中文里人自己说时间也是这么说的。
+    static func clockLabel(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "HH:mm"
+        return partOfDay(d) + " " + f.string(from: d)
+    }
+
+    static func partOfDay(_ d: Date) -> String {
+        switch Calendar.current.component(.hour, from: d) {
+        case 0..<5:   return "凌晨"
+        case 5..<8:   return "清早"
+        case 8..<11:  return "上午"
+        case 11..<13: return "中午"
+        case 13..<17: return "下午"
+        case 17..<19: return "傍晚"
+        case 19..<23: return "晚上"
+        default:      return "深夜"
+        }
     }
 
     /// 现在几点。**只挂在最后一条上**，别放进系统提示词。
@@ -2468,8 +2522,12 @@ final class AppState: ObservableObject {
         f.locale = Locale(identifier: "zh_CN")
         // **年份必须写**。不写的话他会拿训练时候的年份顶上，
         // 她看到的就是「2026 年的事被说成 2025 年」。
-        f.dateFormat = "yyyy年M月d日 EEEE HH:mm"
-        return "（现在是 \(f.string(from: date))）"
+        f.dateFormat = "yyyy年M月d日 EEEE"
+        // ⚠️ 时段写在钟点前面（「凌晨 01:56」），理由见 `clockLabel`。
+        // ⚠️ 最后那半句是写给他的：**以这里为准，别自己推**。
+        // 他有自己「感觉现在大概几点」的倾向，不明说的话会拿那个感觉盖掉这里的数。
+        return "（现在是 \(f.string(from: date)) \(clockLabel(date))。"
+            + "时间以这里为准，不要自己推算）"
     }
 
     /// 这条是她**说**的，不是打的。
