@@ -5897,9 +5897,12 @@ final class AppState: ObservableObject {
             // 她说「他无法使用小红书」就是这个。走的是同一套抓取，
             // 认的也是同一份正则，所以两边看到的内容是一样的。
             let raw = (args["url"] as? String) ?? ""
+            // 那三家之外的网址：走通用的读网页（见 `WebPageReader`）。
+            //
+            // 她报的：一条 Notion 链接，他只能回「读不了，只认三家」。
+            // 她要的是「所有链接都能打开，有需要开 VPN 的先提醒我开」。
             guard let hit = LinkCards.detect(raw) else {
-                return ("这条链接读不了。只认小红书、B 站、抖音三家；"
-                        + "别的网址用 web_search。", true)
+                return await readAnyLink(raw)
             }
             do {
                 var note = try await LinkCards.fetch(hit.url, source: hit.source)
@@ -7185,6 +7188,43 @@ final class AppState: ObservableObject {
             // ⚠️ 这句话的开头是**认出来的记号**（`noNativeTool`），
             // 上面那段拿它判断「本机也不认识这件」。改文案要连着改。
             return (Self.noNativeTool + "：\(name)", true)
+        }
+    }
+
+    /// 读一条任意网址（小红书／B 站／抖音之外的）。
+    ///
+    /// 读得到：标题 + 正文给他。连不上：告诉他多半要开 VPN，让他跟她说一声。
+    /// 连上了但是空的：多半要登录或者没公开分享——这种**不说 VPN**，
+    /// 说了她开了也没用，只会白折腾一趟。
+    private func readAnyLink(_ raw: String) async -> (text: String, failed: Bool) {
+        // 她那句话里可能夹着别的字，把第一个网址抠出来
+        let pattern = #"(https?://)?([A-Za-z0-9-]+\.)+[A-Za-z]{2,}(/[^\s，。、）】」]*)?"#
+        guard let r = raw.range(of: pattern, options: .regularExpression) else {
+            return ("没从这段话里找到网址。", true)
+        }
+        var s = String(raw[r])
+        if !s.lowercased().hasPrefix("http") { s = "https://" + s }
+        guard let url = URL(string: s) else { return ("这个网址格式不对：" + s, true) }
+        let host = url.host ?? s
+
+        do {
+            let page = try await WebPageReader.read(url)
+            var out = "【" + (page.title.isEmpty ? host : page.title) + "】"
+            out += "（" + host + " · " + page.via + "）\n\n" + page.text
+            return (out, false)
+        } catch WebPageReader.Failure.unreachable(let h, _) {
+            let sure = WebPageReader.likelyNeedsVPN(h)
+            return ("「\(h)」连不上"
+                    + (sure ? "——这个站在国内一般要开 VPN 才打得开。"
+                            : "，多半是这个站在国内打不开，要开 VPN。")
+                    + "跟她说一声：把 VPN 打开之后再把链接发一次，你再读。"
+                    + "别装作看过，也别自己编里面写了什么。", true)
+        } catch WebPageReader.Failure.empty(let h) {
+            return ("「\(h)」打开了，但里面没有能读的正文——"
+                    + "多半是要登录才看得到，或者这页没有公开分享。"
+                    + "这种开 VPN 也没用；可以请她截图给你，或者把内容直接贴过来。", true)
+        } catch {
+            return ("没读到：" + error.localizedDescription, true)
         }
     }
 

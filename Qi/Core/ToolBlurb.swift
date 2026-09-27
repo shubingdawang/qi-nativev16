@@ -156,7 +156,7 @@ enum ToolBlurb {
         "feel_body": "由模型自行判定这一轮对身体数值的影响",
         "keep_line": "收藏你说过的某一句，并记下缘由",
         "make_game": "生成一份 HTML 存入游戏间，点开即玩",
-        "open_link": "读取小红书、B 站、抖音链接的内容与配图",
+        "open_link": "读取链接的内容：小红书、B 站、抖音带配图，其他网页读标题与正文",
         "search_memories": "按关键词、标签或重要程度检索记忆",
         "get_all_memories": "列出全部记忆",
         "recall_entity": "按人物或事物检索相关记忆，按时间排列",
