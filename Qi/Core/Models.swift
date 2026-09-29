@@ -279,6 +279,13 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     /// 笔记还在读的时候先摆个骨架
     var noteLoading: Bool = false
     var noteHint: String = ""
+    /// 他嘴上说了「记下了 / 存好了 / 设好了」，可这一轮**一个工具都没调**。
+    ///
+    /// 那份《人机前端开发踩坑手册》开篇那句：**模型说做了 ≠ 工具做了**。
+    /// 她抓到过好几次（「她抓到我又犯了——说『记下来了』但什么都没做」）。
+    /// 空着 = 没这回事；有字 = 他说的那几个字，气泡底下用小字标出来，
+    /// 下一轮也会让他知道那件事其实没做成（见 `buildAPIMessages`）。
+    var unbackedClaim: String = ""
     /// 这一轮他末尾贴了张表情（`[[sticker:…]]`）。
     ///
     /// 她问过：「他发了表情包，证明他一定用了工具，但并没有显示，这是 bug 吗？」
@@ -1209,6 +1216,7 @@ extension ChatMessage {
         noteHint = (try? c.decodeIfPresent(String.self, forKey: .noteHint)) ?? ""
         noteRawText = (try? c.decodeIfPresent(String.self, forKey: .noteRawText)) ?? ""
         sentSticker = (try? c.decodeIfPresent(Bool.self, forKey: .sentSticker)) ?? false
+        unbackedClaim = (try? c.decodeIfPresent(String.self, forKey: .unbackedClaim)) ?? ""
         choices = (try? c.decodeIfPresent([String].self, forKey: .choices)) ?? []
         choiceQuestion = (try? c.decodeIfPresent(String.self, forKey: .choiceQuestion)) ?? ""
         chosenOption = (try? c.decodeIfPresent(String.self, forKey: .chosenOption)) ?? ""

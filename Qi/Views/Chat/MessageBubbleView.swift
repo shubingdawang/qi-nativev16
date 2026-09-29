@@ -427,6 +427,9 @@ struct MessageBubbleView: View {
 
                 // 改过的话，底下挂一个 ‹1/3› ——翻得回去看原来写的什么。
                 // **只是看**，翻到旧版不会改数据，松手回到最新那版。
+                // 他说了「记下了」却没调工具（见 `claimNote`）
+                claimNote
+
                 if !message.edits.isEmpty {
                     editHistoryBar
                 }
@@ -471,6 +474,22 @@ struct MessageBubbleView: View {
     }
 
     // MARK: 组件
+
+    /// 他嘴上说了「记下了 / 存好了 / 设好了」，可这一轮一个工具都没调。
+    ///
+    /// 手册里那句：**没有证据就保持未知或失败，不要为了体验把未完成投影成成功。**
+    /// 不替他圆，明说出来；也不写成警告——一行淡淡的小字就够了。
+    @ViewBuilder
+    private var claimNote: some View {
+        if !isUser, !message.unbackedClaim.isEmpty {
+            HStack(spacing: 4) {
+                Image(systemName: "exclamationmark.circle")
+                Text("他说「" + message.unbackedClaim + "」，但这一轮没有调用工具，实际没做成")
+            }
+            .font(.app(10.5))
+            .foregroundStyle(Theme.textMuted(scheme))
+        }
+    }
 
     /// 那段被切掉的代述展开了没有
     @State private var fakeOpen = false
