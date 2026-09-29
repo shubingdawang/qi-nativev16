@@ -550,6 +550,43 @@ struct TranscriptFile: Codable {
 /// 也多一次往返）；坏处是格式他可能写歪，所以这里认得宽松一点：
 /// `[[promise:...]]`、`[promise:...]`、`[[承诺:...]]`、`[承诺:...]` 都收，
 /// 中英文冒号也都认。
+/// 他把「存档」写成了一行字：`[[checkpoint:……]]`。
+///
+/// 她报的：「他的 checkpoint 经常不成功。」截图里那一行原样挂在气泡上——
+/// 他以为自己存过档了，其实什么都没发生（那份《人机前端踩坑手册》第一页那句：
+/// **模型说做了 ≠ 工具做了**）。
+///
+/// 为什么会写成字：存档那件工具不是每轮都挂着（见 `ToolMount`），
+/// 没挂的那一轮他看不到它，就照着记忆里的样子写了一行标记。
+/// 与其跟他较劲让他别这么写，不如**认下来替他真的存上**——
+/// 这一行里写的就是他要存的那句话，意图清清楚楚。
+enum CheckpointMarker {
+
+    private static let pattern =
+        #"\[{1,2}\s*(?:checkpoint|存档|进度点)\s*[:：]\s*([^\]]{1,600}?)\s*\]{1,2}"#
+
+    static func extract(_ text: String) -> (clean: String, note: String) {
+        guard let regex = try? NSRegularExpression(
+            pattern: pattern, options: [.caseInsensitive]) else { return (text, "") }
+        let ns = text as NSString
+        let matches = regex.matches(in: text, range: NSRange(location: 0, length: ns.length))
+        guard !matches.isEmpty else { return (text, "") }
+        // 一条里写了好几行的，以最后那行为准（他改过口）
+        var note = ""
+        for m in matches where m.numberOfRanges > 1 {
+            let r = m.range(at: 1)
+            guard r.location != NSNotFound else { continue }
+            let one = ns.substring(with: r).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !one.isEmpty { note = one }
+        }
+        var clean = regex.stringByReplacingMatches(
+            in: text, range: NSRange(location: 0, length: ns.length), withTemplate: "")
+        clean = clean.replacingOccurrences(
+            of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
+        return (clean.trimmingCharacters(in: .whitespacesAndNewlines), note)
+    }
+}
+
 enum PromiseMarker {
 
     private static let pattern =

@@ -7470,6 +7470,29 @@ final class AppState: ObservableObject {
             }
         }
 
+        // 他把存档写成了一行 [[checkpoint:…]]：**替他真的存上**（见 `CheckpointMarker`）。
+        //
+        // 走的是跟调工具同一条路——本机存一份、再镜像到小屋，
+        // claude.ai 那边读的就是小屋那份。然后在「他刚才干了什么」那条线上记一步，
+        // 写明是从标记替他存的，不是他调的工具：两件事不能混成一件。
+        let cp = CheckpointMarker.extract(conversations[ci].messages[mi].content)
+        if !cp.note.isEmpty {
+            conversations[ci].messages[mi].content = cp.clean
+            let args: [String: Any] = ["text": cp.note]
+            if MemoryTools.handles("checkpoint", memory: settings.localMemory,
+                                   pulse: settings.localPulse) {
+                _ = MemoryTools.run("checkpoint", args: args)
+            }
+            mirrorToHouse("checkpoint", args: args, in: conversations[ci])
+            var run = ToolRun(toolName: "checkpoint", arguments: "")
+            run.serverName = "替他存的"
+            run.result = "他在正文里写了一行存档标记，没有调工具；App 认出来替他存上了：\n"
+                + cp.note
+            run.finished = true
+            run.reasonMark = (conversations[ci].messages[mi].reasoning ?? "").count
+            conversations[ci].messages[mi].toolRuns.append(run)
+        }
+
         // 他写的 [[img:...]] 抠出来，挂到**她最近那条带图的消息**上。
         //
         // 挂在她那条上而不是他这条上，是因为淡出的时候要替换的正是她那条：

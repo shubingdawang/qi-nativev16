@@ -175,6 +175,7 @@ enum MessageBeats {
         // 边看边写），那几秒里标记就明晃晃挂在气泡上。
         text = ImageNoteMarker.extract(text).clean
         text = PromiseMarker.extract(text).clean
+        text = CheckpointMarker.extract(text).clean
 
         // ⚠️⚠️ **动作和心里话整段扫，不按行扫。**
         //
@@ -312,7 +313,8 @@ enum MessageBeats {
     private static let receiptPattern = #"〔这一条里你真的动手了：[^〕]{0,200}〕"#
 
     /// 三个开标记。顺序不要改：`hideTornTail` 拿它们当前缀比。
-    private static let opens = ["[[act:", "[[mind:", "[[cot:", "[[用:", "[[留:"]
+    private static let opens = ["[[act:", "[[mind:", "[[cot:", "[[用:", "[[留:",
+                                "[[checkpoint:", "[[存档:"]
 
     /// 掉队的那一个（写了开标记、没写闭标记）。找到就把它到串尾括出来。
     ///

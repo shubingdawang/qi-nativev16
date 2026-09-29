@@ -1926,7 +1926,8 @@ struct MessageListView: View {
                         emptyHint.padding(.top, 100)
                     }
                     ForEach(Array(conversation.messages.enumerated()), id: \.element.id) { index, stored in
-                        let message = live.merged(stored)
+                        // tokens 那行挂在这一轮**最后一条**下面（见 `tokenPlaced`）
+                        let message = tokenPlaced(live.merged(stored), at: index)
                         // 换天了就横一道。以前一整条时间线是连着的，
                         // 昨晚睡前那句和今早第一句挨在一起，看着像同一段话。
                         if let day = daybreak(at: index) {
@@ -2145,6 +2146,34 @@ struct MessageListView: View {
     /// 本来就在同一条里，所以也只挂一次。
     /// 唯一要合并的是同一个 turn 拆出来的那两条（文字 + 表情），
     /// 那是一次发送，不该挂两个头像。
+    /// tokens 那行挂在哪一条下面。
+    ///
+    /// 她报的：「游戏在 token 显示的下面。」
+    /// 工具生出来的那几条（游戏卡、表情、存图卡）是**单独成条**的，排在他那句话后面；
+    /// 而 tokens 记在他那句话身上，于是那行小字夹在中间，卡片反而掉到了它下面。
+    /// tokens 说的是「这一轮花了多少」，该挂在这一轮的末尾。
+    ///
+    /// 只动显示用的这一份拷贝，存下来的数据不改。
+    private func tokenPlaced(_ m: ChatMessage, at index: Int) -> ChatMessage {
+        guard let turn = m.turnID, m.role == .assistant else { return m }
+        let msgs = conversation.messages
+        var out = m
+        // 同一轮后面还有他的消息：这条不挂
+        if index + 1 < msgs.count, msgs[index + 1].turnID == turn,
+           msgs[index + 1].role == .assistant {
+            out.totalTokens = nil
+            return out
+        }
+        // 这一轮最后一条：自己没记就借这一轮里记了的那条
+        if out.totalTokens == nil, index > 0,
+           let t = msgs[..<index].last(where: {
+               $0.turnID == turn && $0.totalTokens != nil
+           })?.totalTokens {
+            out.totalTokens = t
+        }
+        return out
+    }
+
     /// 那一行：**直接翻整段**。
     ///
     /// 她定的：「我想的是我点击那个 ‹ › 旧对话一整段可以直接切换，不是现在这样。」
