@@ -32,9 +32,8 @@ struct SplashView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                // 雾后面那扇窗：清楚的壁纸
-                WallpaperBackground()
-
+                // 雾后面就是 App 本身：擦开的地方看见的就是进去以后的样子，
+                // 雾滑走时底下不用换一张图
                 fogSheet(size: geo.size)
                     .offset(y: slide)
 
@@ -70,7 +69,7 @@ struct SplashView: View {
                         sim.wipe(at: v.location)
                     }
                     .onEnded { v in
-                        defer { dragStart = nil }
+                        defer { dragStart = nil; sim.liftFinger() }
                         guard !leaving else { return }
                         let moved = hypot(v.translation.width, v.translation.height)
                         let quick = Date().timeIntervalSince(dragStart ?? Date()) < 0.3
@@ -106,21 +105,25 @@ struct SplashView: View {
                     // 先整片是雾
                     gc.fill(Path(CGRect(origin: .zero, size: sz)), with: .color(.black))
                     gc.blendMode = .destinationOut
+                    // 雾擦开的边从来不是硬的：整层带一点虚
+                    gc.addFilter(.blur(radius: 5))
                     let now = tl.date
-                    // 手指擦开的、水珠带开的：越新越清楚，慢慢又起雾
+                    // 手指擦开的、水珠带开的：一段一段连成笔画。越新越清楚，慢慢又起雾
                     for m in sim.marks {
                         let clear = sim.clearness(of: m, now: now)
                         guard clear > 0.01 else { continue }
-                        let r = m.r
-                        let rect = CGRect(x: m.p.x - r, y: m.p.y - r, width: r * 2, height: r * 2)
-                        gc.fill(Path(ellipseIn: rect), with: .color(.black.opacity(clear)))
+                        var line = Path()
+                        line.move(to: m.from ?? m.p)
+                        line.addLine(to: m.p)
+                        gc.stroke(line, with: .color(.black.opacity(clear)),
+                                  style: StrokeStyle(lineWidth: m.r * 2, lineCap: .round))
                     }
-                    // 雾上写着的那个「栖」
+                    // 雾上有人用手指写过的那个「栖」：只透一点，边是虚的
                     var ink = gc
-                    ink.opacity = 0.55
-                    ink.draw(Text("栖").font(.system(size: min(sz.width, sz.height) * 0.36,
-                                                      weight: .ultraLight, design: .serif)),
-                             at: CGPoint(x: sz.width / 2, y: sz.height * 0.42))
+                    ink.opacity = 0.32
+                    ink.draw(Text("栖").font(.system(size: min(sz.width, sz.height) * 0.26,
+                                                      weight: .light)),
+                             at: CGPoint(x: sz.width / 2, y: sz.height * 0.40))
                 }
             }
         }
@@ -132,11 +135,11 @@ struct SplashView: View {
             let w = d.r * 1.6, h = d.r * 2
             let rect = CGRect(x: d.x - w / 2, y: d.y - h / 2, width: w, height: h)
             let body = Path(ellipseIn: rect)
-            gc.fill(body, with: .color(.white.opacity(0.16)))
-            gc.stroke(body, with: .color(.black.opacity(0.18)), lineWidth: 0.8)
+            gc.fill(body, with: .color(.white.opacity(0.10)))
+            gc.stroke(body, with: .color(.black.opacity(0.10)), lineWidth: 0.6)
             let hl = CGRect(x: rect.minX + w * 0.22, y: rect.minY + h * 0.18,
                             width: w * 0.28, height: h * 0.22)
-            gc.fill(Path(ellipseIn: hl), with: .color(.white.opacity(0.7)))
+            gc.fill(Path(ellipseIn: hl), with: .color(.white.opacity(0.55)))
         }
     }
 
@@ -162,6 +165,8 @@ final class FogSim {
 
     struct Mark {
         var p: CGPoint
+        /// 这一段从哪儿连过来（同一笔的上一点）。没有就是一个点
+        var from: CGPoint?
         var r: CGFloat
         var born: Date
         /// 手指擦的（算进「擦开了多少」），还是水珠带的（不算）
@@ -184,6 +189,8 @@ final class FogSim {
     private var last: Date?
     private var size: CGSize = .zero
     private var handArea: CGFloat = 0
+    /// 这一笔上一次落在哪儿。松手清掉
+    private var lastHand: CGPoint?
 
     /// 擦开的地方多久起满雾
     private let refog: Double = 7
@@ -205,13 +212,21 @@ final class FogSim {
     }
 
     func wipe(at p: CGPoint) {
-        // 跟上一笔离得太近就不另加一个点，省得一秒攒几百个
-        if let lastMark = marks.last(where: { $0.byHand }),
-           hypot(lastMark.p.x - p.x, lastMark.p.y - p.y) < 6 { return }
-        let r: CGFloat = 34
-        marks.append(Mark(p: p, r: r, born: Date(), byHand: true))
-        handArea += .pi * r * r * 0.55
+        let r: CGFloat = 30
+        if let from = lastHand {
+            // 跟上一点离得太近就先不记，省得一秒攒几百段
+            let d = hypot(from.x - p.x, from.y - p.y)
+            guard d >= 8 else { return }
+            marks.append(Mark(p: p, from: from, r: r, born: Date(), byHand: true))
+            handArea += d * r * 2 * 0.8
+        } else {
+            marks.append(Mark(p: p, from: nil, r: r, born: Date(), byHand: true))
+            handArea += .pi * r * r * 0.8
+        }
+        lastHand = p
     }
+
+    func liftFinger() { lastHand = nil }
 
     func step(_ now: Date, size: CGSize) {
         self.size = size
@@ -240,10 +255,11 @@ final class FogSim {
             // 横向是一格一格抖的（十一赫兹量化），不是平滑的正弦——水珠碰到玻璃上的颗粒
             let tick = Double(Int(now.timeIntervalSinceReferenceDate * 11))
             drops[i].x += CGFloat(sin(tick * 1.7 + drops[i].seed)) * 0.35
-            // 一路带开一道雾
-            if drops[i].y - drops[i].lastTrailY > 5 {
+            // 一路带开一道雾（连成一条线，不是一串珠子）
+            if drops[i].y - drops[i].lastTrailY > 6 {
                 marks.append(Mark(p: CGPoint(x: drops[i].x, y: drops[i].y),
-                                  r: drops[i].r * 0.9, born: now, byHand: false))
+                                  from: CGPoint(x: drops[i].x, y: drops[i].lastTrailY),
+                                  r: drops[i].r * 0.7, born: now, byHand: false))
                 drops[i].lastTrailY = drops[i].y
             }
             // 半路又被卡住

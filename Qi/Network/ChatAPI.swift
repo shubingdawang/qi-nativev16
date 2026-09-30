@@ -93,7 +93,7 @@ enum ChatAPI {
                     /// 拆成一个闭包是为了**能原地重发一次**：
                     /// 有的中转站不认「我要思考过程」那几个键，会回 400。
                     /// 那时候脱掉再来一次，她那边什么都不用管。
-                    func send(_ wantThinking: Bool) async throws
+                    func send(_ wantThinking: Bool, capped: Bool = true) async throws
                         -> URLSession.AsyncBytes {
                         var request = URLRequest(url: endpoint)
                         request.httpMethod = "POST"
@@ -119,7 +119,8 @@ enum ChatAPI {
                                                      wantThinking: wantThinking,
                                                      claudeSession: claudeSession,
                                                      cacheScope: wantThinking ? cacheScope : nil,
-                                                     lastRound: lastRound)
+                                                     lastRound: lastRound,
+                                                     capped: capped && !noCap.contains(endpoint.absoluteString))
                         request.httpBody = bodyData
 
                         // 终端那一页。**只记不发**——一条都不会进提示词。
@@ -151,9 +152,10 @@ enum ChatAPI {
                     var sawUsage = false
                     // 正文里夹着的 `<think>…</think>`，拆回思考链（见 `ThinkSplitter`）
                     var splitter = ThinkSplitter()
-                    let bytes: URLSession.AsyncBytes
+                    var bytes: URLSession.AsyncBytes
                     // 这个地址上一次就说过它不认，别再白发一遍
                     let ask = !rejectsThinking(endpoint)
+                    do {
                     do {
                         bytes = try await send(ask)
                     } catch let e as APIError {
@@ -165,6 +167,23 @@ enum ChatAPI {
                         Console.log(.warn, "这个中转不收思考参数 → " + model,
                                     "已经脱掉重发，这一轮不会有思考链")
                         bytes = try await send(false)
+                    }
+                    } catch let e as APIError {
+                        // 中转自己出错（5xx，比如 do_request_failed）：多半是对面那一下没接上。
+                        // 等两秒原样再来一次；还不行就去掉「一次写一万六」再来一次——
+                        // 有的中转接的上游不收这么大的数，只会报 500，不说为什么
+                        guard case .badStatus(let code, _) = e, (500..<600).contains(code) else { throw e }
+                        Console.log(.warn, "HTTP \(code) · " + model, "两秒后自动重发")
+                        try await Task.sleep(nanoseconds: 2_000_000_000)
+                        do {
+                            bytes = try await send(ask && !rejectsThinking(endpoint))
+                        } catch let e2 as APIError {
+                            guard case .badStatus(let c2, _) = e2, (500..<600).contains(c2),
+                                  model.lowercased().contains("claude") else { throw e2 }
+                            Console.log(.warn, "HTTP \(c2) · " + model, "去掉长度上限再发一次")
+                            bytes = try await send(ask && !rejectsThinking(endpoint), capped: false)
+                            noCap.insert(endpoint.absoluteString)
+                        }
                     }
 
                     for try await line in bytes.lines {
@@ -413,6 +432,9 @@ enum ChatAPI {
     /// 只存在内存里：她换了中转站或者对面升级了，重开一次 App 就重新试。
     private static var noThinking = Set<String>()
 
+    /// 这些地址带上 `max_tokens` 会报 5xx，去掉才通。只存在内存里
+    private static var noCap = Set<String>()
+
     static func rejectsThinking(_ endpoint: URL) -> Bool {
         noThinking.contains(endpoint.absoluteString)
     }
@@ -485,7 +507,8 @@ enum ChatAPI {
         wantThinking: Bool,
         claudeSession: String? = nil,
         cacheScope: String? = nil,
-        lastRound: Bool = false
+        lastRound: Bool = false,
+        capped: Bool = true
     ) throws -> Data {
 
         var payload: [[String: Any]] = []
@@ -657,7 +680,7 @@ enum ChatAPI {
         // 一整页 HTML 是塞在工具参数里的，写到一半就被砍了——工具拿到的是半截。
         //
         // 只给 Claude 家的开到一万六：别家（比如 DeepSeek）上限低，写大了直接报 400。
-        if model.lowercased().contains("claude") {
+        if capped && model.lowercased().contains("claude") {
             body["max_tokens"] = 16000
         }
         if wantThinking {
