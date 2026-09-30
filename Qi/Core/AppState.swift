@@ -1608,7 +1608,7 @@ final class AppState: ObservableObject {
                                 if let argsPiece { call.arguments += argsPiece }
                                 pending[idx] = call
                             case .finish(let why):
-                                roundFinish = why
+                                roundFinish = why ?? ""
                             }
                         }
                     } catch {
