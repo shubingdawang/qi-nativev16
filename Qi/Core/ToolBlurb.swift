@@ -43,6 +43,7 @@ enum ToolBlurb {
         "delete_photo_from_folder": "从相册文件夹中删除图片",
         "delete_folder": "删除相册文件夹",
         "draw_pixel": "生成一张像素画",
+        "draw_image": "用设置里的作图模型画一张图",
 
         // MARK: 音乐
 

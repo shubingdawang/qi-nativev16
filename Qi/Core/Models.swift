@@ -677,6 +677,13 @@ struct AppSettings: Codable {
     /// **不是他在说话**的活。以前一律「挑第一个能用的供应商」——
     /// 那可能挑到一个不会看图的，或者一个很贵的。现在她自己指。
     var helperModel: String = ""
+    /// 作图用哪个模型（`供应商 id|模型名`）。空着 = 自动挑名字里带 image 的那个。
+    ///
+    /// 她要的：「新增一个需要作图时使用设置里设置的作图模型。」
+    /// 以前画画只会自动挑第一个名字里带 image 的，她指定不了。
+    var drawModel: String = ""
+    /// 开屏那扇雾窗要不要（见 `SplashView`）。默认开
+    var splashOn: Bool = true
     /// 话题池：开不开、多久抓一轮、用哪个模型筛。
     ///
     /// ⚠️ **模型单独一个字段，不跟 `helperModel` 共用。**
@@ -1051,6 +1058,8 @@ extension AppSettings {
         modelBySpace = (try? c.decodeIfPresent([String: String].self, forKey: .modelBySpace)) ?? [:]
         fallbackModel = (try? c.decodeIfPresent(String.self, forKey: .fallbackModel)) ?? ""
         helperModel = (try? c.decodeIfPresent(String.self, forKey: .helperModel)) ?? ""
+        drawModel = (try? c.decodeIfPresent(String.self, forKey: .drawModel)) ?? ""
+        splashOn = (try? c.decodeIfPresent(Bool.self, forKey: .splashOn)) ?? true
         topicPoolOn = (try? c.decodeIfPresent(Bool.self, forKey: .topicPoolOn)) ?? false
         topicModel = (try? c.decodeIfPresent(String.self, forKey: .topicModel)) ?? ""
         topicEveryHours = (try? c.decodeIfPresent(Double.self, forKey: .topicEveryHours)) ?? 6

@@ -50,6 +50,7 @@ struct AppearanceView: View {
                     accentCard
                     fontCard
                     glassCard
+                    splashCard
                     presetCard
                     textColorCard
                     chatCard
@@ -241,6 +242,23 @@ struct AppearanceView: View {
         case "serif":      return .serif
         case "monospaced": return .monospaced
         default:           return .default
+        }
+    }
+
+    // MARK: 开屏
+
+    /// 开屏那扇雾窗开不开（见 `SplashView`）
+    private var splashCard: some View {
+        SettingsCard(title: "开屏") {
+            Toggle(isOn: $app.settings.splashOn) {
+                Text("雾窗")
+                    .font(.app(15))
+                    .foregroundStyle(Theme.textMain(scheme))
+            }
+            .tint(app.settings.accentColor)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            SettingsNote("打开 App 时先是一扇起了雾的窗：手指划过擦开雾气，擦开大约四成或轻点一下进入。只在冷启动时出现。")
         }
     }
 

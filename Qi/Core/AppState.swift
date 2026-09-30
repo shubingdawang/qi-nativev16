@@ -1642,6 +1642,7 @@ final class AppState: ObservableObject {
                         continue
                     }
 
+                    self.lastFinish[assistantID] = roundFinish
                     if Task.isCancelled { break }
                     if pending.isEmpty { break }   // 没有要调的工具，这轮就是最终回答
 
@@ -5462,12 +5463,9 @@ final class AppState: ObservableObject {
         case "draw_pixel":
             let subject = (args["subject"] as? String) ?? ""
             guard !subject.isEmpty else { return ("要画什么？", true) }
-            guard let painter = providers.first(where: { p in
-                p.enabled && p.enabledModels.contains { $0.id.lowercased().contains("image") }
-            }), let model = painter.enabledModels
-                .first(where: { $0.id.lowercased().contains("image") })?.id
-            else {
-                return ("还没有能画图的模型，让饼饼去设置里开一个带 image 的。", true)
+            // 走设置里的「作图模型」（见 `drawReach`）
+            guard let (painter, model) = drawReach() else {
+                return ("还没有能画图的模型，让饼饼去设置里的「作图模型」选一个。", true)
             }
             do {
                 let raw = try await PixelGen.generate(
@@ -5492,6 +5490,30 @@ final class AppState: ObservableObject {
                 return ("画好发过去了。", false)
             } catch {
                 return (error.localizedDescription, true)
+            }
+
+        case "draw_image":
+            // 普通作图：照片、插画、海报都行，不限像素风。走设置里的「作图模型」
+            let prompt = ((args["prompt"] as? String) ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !prompt.isEmpty else { return ("要画什么？", true) }
+            guard let (painter, model) = drawReach() else {
+                return ("还没有能画图的模型，让饼饼去设置里的「作图模型」选一个。", true)
+            }
+            do {
+                let raw = try await PixelGen.generate(prompt: prompt, reference: nil,
+                                                      provider: painter, model: model)
+                guard let name = ImageStore.savePNG(raw) else {
+                    return ("画出来了但存不下，空间可能满了。", true)
+                }
+                if let cid = activeToolConversationID, let i = index(of: cid) {
+                    var msg = toolMessage((args["note"] as? String) ?? "")
+                    msg.imageNames = [name]
+                    conversations[i].messages.append(msg)
+                }
+                return ("画好发过去了（用的是 \(model)）。", false)
+            } catch {
+                return ("没画出来：" + error.localizedDescription, true)
             }
 
         case "clawd_wear":
@@ -7534,6 +7556,10 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// 每条回复最后那一轮是怎么结束的（`stop` / `length` / `tool_calls`…），
+    /// 回复空了的时候写进那行说明里，好知道是被截断还是上游本来就没给
+    private var lastFinish: [UUID: String] = [:]
+
     private func finishStreaming(assistantID: UUID, in conversationID: UUID) {
         droppedText[assistantID] = nil
         // ⚠️ **第一件事：把攒着的那几个字写回去。**
@@ -7553,6 +7579,13 @@ final class AppState: ObservableObject {
               let mi = conversations[ci].messages.firstIndex(where: { $0.id == assistantID })
         else { return }
         conversations[ci].messages[mi].isStreaming = false
+        // 下面那一串洗标记、剥承诺、切代述……开始之前的原文。
+        // 洗完要是一个字都不剩了，就还回这一份（见最后那段）
+        let rawBeforeTidy = conversations[ci].messages[mi].content
+        let finishReason = lastFinish.removeValue(forKey: assistantID) ?? ""
+
+        // 他把整页 HTML 直接写在正文里：替他存成一张游戏卡（见 `htmlBlock`）
+        pullHTMLCard(ci: ci, mi: mi)
 
         // 他在话里写的 [[promise:...]] 抠出来落进承诺页，标记本身剥掉——
         // 她看到的还是一句正常的话，不该看见我们内部的记号
@@ -7732,16 +7765,80 @@ final class AppState: ObservableObject {
         // 以前只看「正文空、思考也空」——那一轮他去写 HTML，工具那一步失败了，
         // 没说出字，于是连同 token 数和工具记录整条被抹掉，
         // 她连发生了什么都看不到，只能以为他又光说不做。
+        // ⚠️⚠️ **收尾那几步不许把一段非空的回复洗成空的。**
+        //
+        // 她第二次报 HTML 那一轮「一个字都没回出来」——可标题是他写在正文里的，
+        // 说明正文**确实到过**，是在洗标记、剥承诺这些步骤里没的。
+        // 哪一步吞的一时查不出来，所以兜一道底：洗完空了，就还回洗之前那份原文。
+        if conversations[ci].messages[mi].content
+            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !rawBeforeTidy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            conversations[ci].messages[mi].content = rawBeforeTidy
+            Console.log(.warn, "收尾把回复洗空了，已还原原文",
+                        "结束原因：" + (finishReason.isEmpty ? "未知" : finishReason))
+        }
+
         let m = conversations[ci].messages[mi]
         if m.isEmptyContent, m.reasoning == nil {
             if m.toolRuns.isEmpty, (m.totalTokens ?? 0) == 0 {
                 conversations[ci].messages.remove(at: mi)
             } else if m.toolRuns.isEmpty {
-                // 花了钱、一个字都没回出来：留着，挂一句说明和「重试」
+                // 花了钱、一个字都没回出来：留着，挂一句说明和「重试」。
+                // 结束原因写出来：`length` 是写太长被截断，`stop` 是上游本来就没给字
+                let why: String
+                switch finishReason {
+                case "length": why = "写的东西太长，到输出上限被截断了"
+                case "stop", "end_turn": why = "上游正常结束，但没有给出任何文字"
+                case "": why = "上游没有说明结束原因"
+                default: why = "结束原因：" + finishReason
+                }
                 conversations[ci].messages[mi].errorText =
-                    "这一轮花了 token，但一个字都没回出来（多半是写的东西太长被截断了）。"
+                    "这一轮花了 token，但一个字都没回出来（" + why + "）。"
             }
         }
+    }
+
+    /// 他把整页 HTML 直接写在正文里（```html … ``` 或者 <!DOCTYPE html> 开头）：
+    /// 替他存成一张游戏卡，正文里那一大段换成一句话。
+    ///
+    /// 她报的：「为什么一直光说不做。」做网页那件工具没挂上的时候，
+    /// 他只能把代码写在正文里——那样她看到的是一屏代码，不是一个能点开的东西。
+    /// 现在不管他走没走工具，写出来的 HTML 都变成卡片。
+    private func pullHTMLCard(ci: Int, mi: Int) {
+        let text = conversations[ci].messages[mi].content
+        guard let r = Self.htmlBlock(in: text) else { return }
+        let html = String(text[r.inner])
+        guard html.count > 200 else { return }
+        let title = conversations[ci].messages[mi].cotTitle
+        guard let g = GameStore.shared.add(name: title.isEmpty ? "他做的网页" : title,
+                                           html: html) else { return }
+        var rest = text
+        rest.replaceSubrange(r.whole, with: "（做好了，点下面那张卡就能打开）")
+        conversations[ci].messages[mi].content = rest
+        var card = ChatMessage(role: .assistant)
+        card.turnID = conversations[ci].messages[mi].turnID
+        card.gameID = g.id.uuidString
+        card.gameName = g.name
+        conversations[ci].messages.insert(card, at: mi + 1)
+    }
+
+    /// 正文里那一整页 HTML 在哪（`whole` 连着代码围栏，`inner` 是 HTML 本身）
+    static func htmlBlock(in text: String)
+        -> (whole: Range<String.Index>, inner: Range<String.Index>)? {
+        if let open = text.range(of: "```html", options: .caseInsensitive),
+           let close = text.range(of: "```", range: open.upperBound..<text.endIndex) {
+            let body = text[open.upperBound..<close.lowerBound]
+            if body.lowercased().contains("<html") || body.lowercased().contains("<body")
+                || body.lowercased().contains("<!doctype") {
+                return (open.lowerBound..<close.upperBound, open.upperBound..<close.lowerBound)
+            }
+        }
+        if let start = text.range(of: "<!DOCTYPE html", options: .caseInsensitive) {
+            let end = text.range(of: "</html>", options: [.caseInsensitive, .backwards])
+                .map { $0.upperBound } ?? text.endIndex
+            return (start.lowerBound..<end, start.lowerBound..<end)
+        }
+        return nil
     }
 
     /// 这个错是不是「额度/限流」那一类。
@@ -7770,6 +7867,21 @@ final class AppState: ObservableObject {
     ///
     /// 她指了就用她指的；没指就还是「第一个能用的」那条老路。
     /// **所有杂活都从这儿出**——以后再加一件，不用又去挑一次供应商。
+    /// 作图用哪个模型：她在设置里指了就用她指的，没指就挑名字里带 image 的第一个。
+    func drawReach() -> (provider: Provider, model: String)? {
+        let saved = settings.drawModel
+        if !saved.isEmpty, let cut = saved.firstIndex(of: "|"),
+           let pid = UUID(uuidString: String(saved[saved.startIndex..<cut])),
+           let p = provider(pid), p.enabled {
+            return (p, String(saved[saved.index(after: cut)...]))
+        }
+        guard let p = providers.first(where: { p in
+            p.enabled && p.enabledModels.contains { $0.id.lowercased().contains("image") }
+        }), let m = p.enabledModels.first(where: { $0.id.lowercased().contains("image") })
+        else { return nil }
+        return (p, m.id)
+    }
+
     func helperReach() -> (provider: Provider, endpoint: URL, model: String)? {
         let saved = settings.helperModel
         if !saved.isEmpty, let cut = saved.firstIndex(of: "|"),

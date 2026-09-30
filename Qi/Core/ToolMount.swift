@@ -78,9 +78,14 @@ final class ToolMount {
                   tools: ["post_moment", "read_moments", "moment_patch"],
                   keywords: ["动态", "朋友圈", "发了条", "发条", "评论"]),
         ToolGroup(id: "games", title: "游戏与画画",
-                  summary: "飞行棋、大富翁、做小游戏、画像素画、clawd 的小屋",
-                  tools: ["flight_chess", "monopoly", "make_game", "draw_pixel", "clawd_room", "clawd_wear"],
+                  summary: "飞行棋、大富翁、做小游戏和网页（HTML）、画图、画像素画、clawd 的小屋",
+                  tools: ["flight_chess", "monopoly", "make_game", "draw_image", "draw_pixel",
+                          "clawd_room", "clawd_wear"],
+                  // ⚠️ 「html」「网页」必须在这儿：做网页用的也是 make_game。
+                  // 以前没有这几个词，她说「做个 HTML」的时候这组根本没挂上，
+                  // 他手里没有工具，只能光说不做，或者把整页代码直接写进正文里。
                   keywords: ["游戏", "飞行棋", "大富翁", "玩", "掷", "骰子", "画", "像素", "clawd", "小屋", "404",
+                             "html", "HTML", "网页", "页面", "做一个", "做个", "图", "照片", "生成",
                              "衣服", "穿", "换一身", "西装", "领带", "帽子", "背带裤"]),
         ToolGroup(id: "wage", title: "工资",
                   summary: "排班、薪资、每日记账和账上的图",

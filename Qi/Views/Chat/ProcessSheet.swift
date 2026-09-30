@@ -85,6 +85,29 @@ struct ProcessSheet: View {
     /// 他还在说的时候，靠它推着这一页往前走（见上面 `live` 那段）。
     /// 这个数变一下 = 整页重画一次，所以**只在他还在说的时候跳**。
     @State private var beat = 0
+    /// 上一次重画时内容有多长（见 `contentSignature`）。
+    /// ⚠️ 不是 `@State`：写它不该触发重画，它只是个记账本
+    @State private var lastSignatureBox = SignatureBox()
+    private var lastSignature: Int {
+        get { lastSignatureBox.value }
+        nonmutating set { lastSignatureBox.value = newValue }
+    }
+
+    /// 一个装数的小盒子。`@State` 里放引用类型，改里面的数不会触发重画
+    final class SignatureBox { var value = -1 }
+
+    /// 这条消息现在「长什么样」——正文、思考、工具各有多长，拼成一个数
+    private var contentSignature: Int {
+        let m = message
+        var h = Hasher()
+        h.combine(m.content.count)
+        h.combine((m.reasoning ?? "").count)
+        h.combine(m.toolRuns.count)
+        h.combine(m.toolRuns.last?.result.count ?? 0)
+        h.combine(m.isStreaming)
+        h.combine(m.stepTranslations.count)
+        return h.finalize()
+    }
 
     /// 开多高。
     ///
@@ -147,7 +170,16 @@ struct ProcessSheet: View {
                 //
                 // 这一页只在她看着的时候存在，一秒重画三次本来就不贵——
                 // 为了省这三次而承担「刷不出来」的风险，不划算。
-                beat &+= 1
+                //
+                // ⚠️ 但**没有新字就别重画**：她报「点开 thinking 思考链就变得很卡」。
+                // 上一版不管有没有变化都三分之一秒重画一次，而每次重画要把整段思考
+                // 正则剥一遍、切一遍、每段重新排版——思考一长（这回他在思考里写了整页 HTML）
+                // 就是一直在白算。这儿只比几个长度，便宜；变了才让它重画。
+                let now = contentSignature
+                if now != lastSignature {
+                    lastSignature = now
+                    beat &+= 1
+                }
             }
         }
         .presentationDetents([.fraction(0.4), .large], selection: $height)
@@ -365,7 +397,7 @@ struct ProcessSheet: View {
                         if growing {
                             Text(s.body)
                         } else {
-                            Text(MD.inline(s.body)).textSelection(.enabled)
+                            Text(Self.rendered(s.body)).textSelection(.enabled)
                         }
                     }
                         .font(.app(12))
@@ -379,7 +411,7 @@ struct ProcessSheet: View {
                         .foregroundStyle(Theme.textMuted(scheme))
                         .lineLimit(1)
                 } else {
-                    Text(MD.inline(oneLine(s.body)))
+                    Text(Self.rendered(oneLine(s.body)))
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .lineLimit(1)
@@ -464,6 +496,25 @@ struct ProcessSheet: View {
     private func savedTranslation(_ s: Step) -> String? {
         if let t = translated[s.id], !t.isEmpty { return t }
         return message.stepTranslations[Self.key(s.body)]
+    }
+
+    /// 排过版的段落记下来：同一段字不再每次重新解析一遍 Markdown。
+    /// ⚠️ 用 `NSCache`：内存紧的时候系统会自己清，不会越攒越大
+    /// ⚠️ 存的是 `AttributedString` 本身（装在一个小盒子里），不转成 `NSAttributedString`：
+    /// 转一道会丢掉 SwiftUI 那一层的属性（批注的红色就在那一层）。
+    final class Rendered { let value: AttributedString; init(_ v: AttributedString) { value = v } }
+    nonisolated(unsafe) private static let mdCache: NSCache<NSString, Rendered> = {
+        let c = NSCache<NSString, Rendered>()
+        c.countLimit = 200
+        return c
+    }()
+
+    static func rendered(_ text: String) -> AttributedString {
+        let key = text as NSString
+        if let hit = mdCache.object(forKey: key) { return hit.value }
+        let out = MD.inline(text)
+        mdCache.setObject(Rendered(out), forKey: key)
+        return out
     }
 
     /// 一段原文的指纹（FNV-1a）。

@@ -10,6 +10,8 @@ struct RootView: View {
     @ObservedObject private var calls = CallStore.shared
     @State private var selection = 0
     @State private var navOpen = false
+    /// 开屏那扇雾窗已经擦开了没有。**只在冷启动这一次**是 false
+    @State private var splashDone = false
 
     var body: some View {
         ZStack {
@@ -126,6 +128,8 @@ struct RootView: View {
             app.noteMissedCall(m.call, note: m.note)
             calls.missed = nil
         }
+        // 开屏：一扇起了雾的窗（见 `SplashView`）。压在所有东西上面，擦开就走
+        .overlay { splashLayer }
         .onAppear {
             // 札记、设置这些页面导航常驻，不然翻着翻着就出不去了
             if selection > 1 { navOpen = true }
@@ -174,6 +178,13 @@ struct RootView: View {
         notifier.openConversationID = nil
         selection = 0
         app.setActive(id, for: .chat)
+    }
+
+    @ViewBuilder
+    private var splashLayer: some View {
+        if app.settings.splashOn && !splashDone {
+            SplashView { splashDone = true }
+        }
     }
 }
 

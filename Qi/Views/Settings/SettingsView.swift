@@ -827,6 +827,37 @@ struct SettingsView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 9)
 
+            SettingsDivider()
+
+            // 作图那个模型
+            HStack {
+                Text("作图模型")
+                    .font(.app(15))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Spacer(minLength: 8)
+                Menu {
+                    Button("自动选择") { app.settings.drawModel = "" }
+                    ForEach(app.providers.filter { $0.enabled }) { p in
+                        ForEach(p.enabledModels.isEmpty ? p.models : p.enabledModels) { m in
+                            Button(p.name + " · " + m.displayName) {
+                                app.settings.drawModel = p.id.uuidString + "|" + m.id
+                            }
+                        }
+                    }
+                } label: {
+                    Text(modelLabel(app.settings.drawModel, empty: "自动选择"))
+                        .font(.app(14))
+                        .foregroundStyle(Theme.textSoft(scheme))
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 9)
+
+            SettingsNote("""
+            作图模型用于他画图（普通图片和像素画）。选「自动选择」时，取第一个名称里带 image 的模型。
+            """)
+
             SettingsNote("""
             辅助模型承担非对话类任务：为表情生成关键词、翻译、通话摘要、图像识别、视频抽帧识别。
 
