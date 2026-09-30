@@ -716,7 +716,8 @@ struct SettingsView: View {
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer(minLength: 8)
                 Menu {
-                    ForEach([1, 2, 3, 5, 8], id: \.self) { n in
+                    // 她要的：最多到 50。做 HTML、翻长图这种活一轮要动很多次手
+                    ForEach([1, 2, 3, 5, 8, 12, 20, 30, 50], id: \.self) { n in
                         Button("\(n) 次") { app.settings.maxToolRounds = n }
                     }
                 } label: {

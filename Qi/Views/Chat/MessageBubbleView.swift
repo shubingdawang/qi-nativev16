@@ -349,9 +349,16 @@ struct MessageBubbleView: View {
                     .padding(.leading, 2)
                 }
 
-                // 引用了谁的哪句话
-                if !message.quotedText.isEmpty {
+                // 引用了谁的哪句话。
+                //
+                // ⚠️ 有正文的时候**不在这儿画**——挪进第一个文字气泡里了
+                // （见 `inlineQuote`）。她要的：「消息应该跟引用的句子在同一个气泡框」。
+                // 只有这条没字（引用 + 一张图）的时候，才单独摆这一块。
+                if !message.quotedText.isEmpty,
+                   message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     quoteBlock
+                        .contentShape(Rectangle())
+                        .onTapGesture { jumpToQuote() }
                 }
 
                 if !message.imageNames.isEmpty {
@@ -414,7 +421,7 @@ struct MessageBubbleView: View {
                     // 一段一段分开发，跟原来那样，不是糊成一大坨
                     ForEach(contentPieces) { piece in
                         switch piece {
-                        case .text(_, let seg): bubble(seg)
+                        case .text(let i, let seg): bubble(seg, withQuote: i == 0)
                         case .beat(_, let b): BeatLine(beat: b, isUser: isUser)
                         }
                     }
@@ -508,8 +515,11 @@ struct MessageBubbleView: View {
         return out
     }
 
-    private func bubble(_ text: String) -> some View {
+    private func bubble(_ text: String, withQuote: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 7) {
+            // 引用那句放在同一个气泡里、正文上面（见 `inlineQuote`）
+            if withQuote, !message.quotedText.isEmpty { inlineQuote }
+
             // fillWidth: false —— 气泡跟着字数走，不再一律撑成最长的那行
             MarkdownText(text: text, fontSize: app.settings.fontSize, fillWidth: false)
                 .foregroundStyle(Theme.textMain(scheme))
@@ -1149,6 +1159,42 @@ struct MessageBubbleView: View {
         .padding(.vertical, 7)
         .frame(maxWidth: 240, alignment: .leading)
         .glassBackground(radius: 12, strength: app.settings.glassOpacity * 0.8)
+    }
+
+    /// 引用那句，放在气泡里正文上面。
+    ///
+    /// 她要的：「消息应该跟引用的句子在同一个气泡框，拉长引用的这根线，
+    /// 然后引用的字小、真正说的话字大，就跟现在的字号一样。」
+    /// 所以：竖线跟着引用那几行一起长（`fixedSize` 里的 `frame(maxHeight:)`），
+    /// 引用的字比正文小三号，正文不动。点它跳到那句原话那儿（见 `ChatJump`）。
+    private var inlineQuote: some View {
+        Button { jumpToQuote() } label: {
+            HStack(alignment: .top, spacing: 7) {
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(app.settings.accentColor.opacity(0.6))
+                    .frame(width: 3)
+                    .frame(maxHeight: .infinity)
+                VStack(alignment: .leading, spacing: 1) {
+                    if !message.quotedName.isEmpty {
+                        Text(message.quotedName)
+                            .font(.app(max(9, app.settings.fontSize - 5), weight: .medium))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
+                    Text(MD.inline(message.quotedText))
+                        .font(.app(max(10, app.settings.fontSize - 3)))
+                        .foregroundStyle(Theme.textSoft(scheme))
+                        .lineLimit(3)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func jumpToQuote() {
+        ChatJump.shared.goToQuote(of: message, in: app.conversation(conversationID))
     }
 
     /// 按空行把回复切成几段，每段单独一个气泡。

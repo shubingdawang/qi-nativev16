@@ -46,26 +46,108 @@ enum Translator {
         // ⚠️ 两个接口**各切各的**：Google 一段吃得下一千五，
         // MyMemory 一次只收五百字上下，按一千五切给它等于一段都翻不出来。
         // 她只要个大概意思，所以翻不动的那一段就留原文，不整段作废。
-        if let g = await chunked(source, size: 1500, { await google($0, to: target) }) {
+        //
+        // ⚠️ 顺序是**按国内能不能连上**排的。她报的「思考链翻译太慢了」：
+        // 系统翻译用不了的时候，以前第二个试的是 Google——国内连不上，
+        // 每次干等 5 秒超时；再轮到 MyMemory，一次只吃四五百字，
+        // 一段段排队翻、每段最多再等 8 秒。长一点的思考要等半分钟以上。
+        //
+        // 现在第二个试**微软**（Edge 浏览器自带翻译用的那个端点）：国内直连，
+        // 一次能吃几万字，基本一两秒就回来。Google 失败过一次就记下来，
+        // 十分钟内不再去撞；MyMemory 各段**同时**翻，不再排队。
+        if let m = await microsoft(source, to: target), !m.isEmpty {
+            return m
+        }
+        if !googleCoolingDown,
+           let g = await chunked(source, size: 1500, { await google($0, to: target) }) {
             return g
         }
         return await chunked(source, size: 450, { await myMemory($0, to: target) })
     }
 
+    // MARK: 微软（Edge 自带翻译那个），不要 key
+
+    /// 令牌大约十分钟有效。拿一次缓存着，快到期了再换。
+    nonisolated(unsafe) private static var msToken: (value: String, at: Date)?
+
+    private static func msAuth() async -> String? {
+        if let t = msToken, Date().timeIntervalSince(t.at) < 8 * 60 { return t.value }
+        guard let url = URL(string: "https://edge.microsoft.com/translate/auth") else { return nil }
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 5
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode)
+        else { return nil }
+        let token = String(decoding: data, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty, token.count > 20 else { return nil }
+        msToken = (token, Date())
+        return token
+    }
+
+    private static func microsoft(_ text: String, to target: String) async -> String? {
+        guard let token = await msAuth() else { return nil }
+        // 微软那边简体中文叫 zh-Hans
+        let to = target.hasPrefix("zh") ? "zh-Hans" : target
+        var comps = URLComponents(
+            string: "https://api-edge.cognitive.microsofttranslator.com/translate")
+        comps?.queryItems = [.init(name: "api-version", value: "3.0"),
+                             .init(name: "to", value: to)]
+        guard let url = comps?.url else { return nil }
+        // 一次最多五万字；思考链再长也远不到，**不用切**。
+        // 为了保险还是按一万字一段切，一次请求一起送过去
+        let pieces = cut(text, at: 10_000)
+        let body = pieces.map { ["Text": $0] }
+        guard let payload = try? JSONSerialization.data(withJSONObject: body) else { return nil }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 12
+        req.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = payload
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse
+        else { return nil }
+        if http.statusCode == 401 { msToken = nil }
+        guard (200..<300).contains(http.statusCode),
+              let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+        else { return nil }
+        let out = arr.compactMap { item -> String? in
+            (item["translations"] as? [[String: Any]])?.first?["text"] as? String
+        }
+        guard out.count == pieces.count else { return nil }
+        return out.joined(separator: Self.br).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Google 最近一次失败的时间。**十分钟内不再去撞**——国内基本连不上，
+    /// 每次都要干等超时（见上面 `free` 那段）
+    nonisolated(unsafe) private static var googleFailedAt: Date?
+    private static var googleCoolingDown: Bool {
+        guard let t = googleFailedAt else { return false }
+        return Date().timeIntervalSince(t) < 10 * 60
+    }
+
     /// 切段、一段段翻、再拼回去。**第一段就翻不动**才算这个接口不通（返回 nil）；
     /// 翻到一半断了的，剩下那几段原样接在后面
     private static func chunked(_ text: String, size: Int,
-                                _ one: (String) async -> String?) async -> String? {
+                                _ one: @escaping @Sendable (String) async -> String?) async -> String? {
         let pieces = cut(text, at: size)
-        var out: [String] = []
-        for (i, piece) in pieces.enumerated() {
-            if let t = await one(piece), !t.isEmpty {
-                out.append(t)
-            } else if i == 0 {
-                return nil
-            } else {
-                out.append(piece)
+        // 第一段先单独试：它都翻不出来，就当这个接口不通，别白发一堆请求
+        guard let head = await one(pieces[0]), !head.isEmpty else { return nil }
+        guard pieces.count > 1 else { return head }
+        // 剩下的**同时**翻，按原来的顺序拼回去（以前一段段排队，慢就慢在这儿）
+        var rest = [String?](repeating: nil, count: pieces.count)
+        await withTaskGroup(of: (Int, String?).self) { group in
+            for i in 1..<pieces.count {
+                let piece = pieces[i]
+                group.addTask { (i, await one(piece)) }
             }
+            for await (i, t) in group { rest[i] = t }
+        }
+        var out = [head]
+        for i in 1..<pieces.count {
+            let t = rest[i] ?? ""
+            out.append(t.isEmpty ? pieces[i] : t)
         }
         return out.joined(separator: Self.br)
     }
@@ -122,7 +204,10 @@ enum Translator {
         guard let (data, response) = try? await URLSession.shared.data(for: req),
               let http = response as? HTTPURLResponse,
               (200..<300).contains(http.statusCode)
-        else { return nil }
+        else {
+            googleFailedAt = Date()
+            return nil
+        }
 
         // 返回长这样：[[["译文","原文",null,null,10],[...]],null,"en", …]
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [Any],

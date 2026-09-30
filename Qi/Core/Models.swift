@@ -279,6 +279,13 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     /// 笔记还在读的时候先摆个骨架
     var noteLoading: Bool = false
     var noteHint: String = ""
+    /// 思考链那几段的译文。键是那一段原文的指纹（见 `ProcessSheet.key`），值是译文。
+    ///
+    /// 她报的：「思考链的翻译不是一直在的，退出就消失了，需要重新翻译。」
+    /// 以前译文只放在弹窗自己的状态里，一关就没了。现在存进这条消息，跟着它落盘。
+    /// 按**原文**认而不是按第几段认：他还在想的时候段落会变长、会拆开，
+    /// 原文变了译文就该作废，指纹对不上自然就不显示了。
+    var stepTranslations: [String: String] = [:]
     /// 他嘴上说了「记下了 / 存好了 / 设好了」，可这一轮**一个工具都没调**。
     ///
     /// 那份《人机前端开发踩坑手册》开篇那句：**模型说做了 ≠ 工具做了**。
@@ -1217,6 +1224,8 @@ extension ChatMessage {
         noteRawText = (try? c.decodeIfPresent(String.self, forKey: .noteRawText)) ?? ""
         sentSticker = (try? c.decodeIfPresent(Bool.self, forKey: .sentSticker)) ?? false
         unbackedClaim = (try? c.decodeIfPresent(String.self, forKey: .unbackedClaim)) ?? ""
+        stepTranslations = (try? c.decodeIfPresent([String: String].self,
+                                                   forKey: .stepTranslations)) ?? [:]
         choices = (try? c.decodeIfPresent([String].self, forKey: .choices)) ?? []
         choiceQuestion = (try? c.decodeIfPresent(String.self, forKey: .choiceQuestion)) ?? ""
         chosenOption = (try? c.decodeIfPresent(String.self, forKey: .chosenOption)) ?? ""

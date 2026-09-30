@@ -94,6 +94,13 @@ struct ProcessSheet: View {
     @State private var height: PresentationDetent = .fraction(0.4)
 
     var body: some View {
+        // ⚠️⚠️ **这一行删不得。**
+        //
+        // 她第三次报：「思考块点进去 thinking 依旧不会继续显示，要重新点进去才出现。」
+        // 上一版让 `beat` 每 0.3 秒跳一次，可 body 里**一次都没读过它**——
+        // SwiftUI 只在 body 用到的状态变了才重画，没读就当它没变过。
+        // 等于那个心跳一直在跳，但没接到任何东西上。读一下，它才算数。
+        let _ = beat
         NavigationStack {
             ZStack {
                 WallpaperBackground()
@@ -383,11 +390,15 @@ struct ProcessSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contextMenu {
             Button { translate(s) } label: {
-                Label(translated[s.id] == nil ? "翻译" : "重新翻",
+                Label(savedTranslation(s) == nil ? "翻译" : "重新翻",
                       systemImage: "character.book.closed")
             }
-            if translated[s.id] != nil {
-                Button { translated[s.id] = nil } label: {
+            if savedTranslation(s) != nil {
+                Button {
+                    translated[s.id] = nil
+                    app.saveStepTranslation("", key: Self.key(s.body),
+                                            message: messageID, in: conversationID)
+                } label: {
                     Label("收起译文", systemImage: "chevron.up")
                 }
             }
@@ -405,7 +416,7 @@ struct ProcessSheet: View {
             Text("在翻…")
                 .font(.app(10.5))
                 .foregroundStyle(Theme.textMuted(scheme))
-        } else if let t = translated[s.id], !t.isEmpty {
+        } else if let t = savedTranslation(s), !t.isEmpty {
             HStack(alignment: .top, spacing: 6) {
                 Capsule()
                     .fill(app.settings.accentColor.opacity(0.4))
@@ -438,9 +449,34 @@ struct ProcessSheet: View {
         open.insert(s.id)
         Task { @MainActor in
             let out = await app.translateText(s.body)
-            translated[s.id] = out.trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            translated[s.id] = out
             translating.remove(s.id)
+            // 存进这条消息：关了再开还在（见 `ChatMessage.stepTranslations`）
+            if !out.isEmpty {
+                app.saveStepTranslation(out, key: Self.key(s.body),
+                                        message: messageID, in: conversationID)
+            }
         }
+    }
+
+    /// 这一段的译文：这次刚翻的优先，没有就看存在消息里的
+    private func savedTranslation(_ s: Step) -> String? {
+        if let t = translated[s.id], !t.isEmpty { return t }
+        return message.stepTranslations[Self.key(s.body)]
+    }
+
+    /// 一段原文的指纹（FNV-1a）。
+    ///
+    /// ⚠️ **不能用 `hashValue`**：Swift 每次启动都换一个随机种子，
+    /// 同一段字今天和明天算出来不一样，存下的译文就再也对不上了。
+    static func key(_ text: String) -> String {
+        var h: UInt64 = 0xcbf29ce484222325
+        for b in text.utf8 {
+            h ^= UInt64(b)
+            h = h &* 0x100000001b3
+        }
+        return String(h, radix: 16)
     }
 
     /// 工具那一条展开之后看到的：参数在上，结果在下。

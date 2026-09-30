@@ -484,60 +484,11 @@ struct ChatView: View {
             browsing = BrowserLink(url: url)
             return .handled
         })
+        // 编辑页（文字 + 图）单独成一页，见 `MessageEditSheet`
         .sheet(item: $editingMessage) { msg in
-            NavigationStack {
-                ZStack {
-                    WallpaperBackground()
-                    VStack {
-                        TextEditor(text: $editText)
-                            .scrollContentBackground(.hidden)
-                            .font(.system(size: app.settings.fontSize))
-                            .padding(12)
-                            .glassCard(padding: 0)
-                            .padding(16)
-                        Spacer()
-                    }
-                }
-                .navigationTitle("编辑")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button("取消") { editingMessage = nil }
-                    }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        // 改自己那条的时候，两个按钮：存着、改完重发。
-                        //
-                        // 她问的：「claude code 里可以在模型回复前打断，
-                        // 然后自己修改好再发，我的 app 可以吗？」
-                        //
-                        // 以前要点两次：存一次，再长按一次点「重发」。
-                        // 而第二步藏在长按菜单里，**根本看不出来要去那里找**。
-                        //
-                        // ⚠️ 两个都留着：有时候她只是想把错字改了，
-                        // 不想再花一次钱重跑一轮。
-                        HStack(spacing: 14) {
-                            Button("存着") {
-                                if let id = app.activeID(for: space) {
-                                    app.editMessage(msg.id, in: id, text: editText)
-                                }
-                                editingMessage = nil
-                            }
-                            if msg.role == .user {
-                                Button("改完重发") {
-                                    if let id = app.activeID(for: space) {
-                                        app.editMessage(msg.id, in: id, text: editText)
-                                        // `retry` 自己会先 `cancelStream`，
-                                        // 正在说着的那一轮不用她先去按停。
-                                        app.retry(msg.id, in: id)
-                                    }
-                                    editingMessage = nil
-                                }
-                                .fontWeight(.semibold)
-                            }
-                        }
-                    }
-                }
-            }
+            MessageEditSheet(message: msg,
+                             conversationID: app.activeID(for: space),
+                             onClose: { editingMessage = nil })
         }
         .alert("提示", isPresented: Binding(
             get: { notice != nil },
@@ -1874,6 +1825,10 @@ struct MessageListView: View {
     var onJumped: () -> Void = {}
     /// 点了某条底下那行「收起的对话」。弹窗归聊天页挂，不挂在气泡上
     var onOpenBranches: (UUID) -> Void = { _ in }
+    /// 点引用那句要跳过去（见 `ChatJump`）
+    @ObservedObject private var jump = ChatJump.shared
+    /// 刚跳到的那一条：亮一下，两秒后淡掉
+    @State private var flashID: UUID?
 
     @EnvironmentObject var app: AppState
     /// 他正在蹦的字（见 `LiveStream`）。只有这一块订阅它，蹦字不惊动别的页面
@@ -1960,6 +1915,7 @@ struct MessageListView: View {
                             onMention: { onMention($0) }
                         )
                         .equatable()
+                        .background(flashBand(message.id))
                         .id(message.id)
 
                         // 这条底下压着的那几段「重发时收起来的对话」（见 `branchBar`）
@@ -2121,18 +2077,26 @@ struct MessageListView: View {
             // 所以这条排在后面，最后一个说了算。
             .onChange(of: jumpTo) { _, target in
                 guard let target else { return }
-                withAnimation(.easeOut(duration: 0.3)) {
-                    proxy.scrollTo(target, anchor: .center)
-                }
+                land(on: target, proxy: proxy)
                 onJumped()
+            }
+            .onChange(of: jump.target) { _, target in
+                guard let target else { return }
+                land(on: target, proxy: proxy)
+                jump.target = nil
             }
             // 注意：App 只是切到后台再回来的话不滚。
             // 你可能正翻着上面某句话跑去别的 App 查东西，回来还得在原地。
             // 只有整个 App 被杀掉、重新打开的那一次，才回到最新。
             .onAppear {
+                // ⚠️ 正要跳到某一条的时候**别抢着滚到底**。
+                // 从搜索点进来那次，这儿的「0.35 秒后再滚到底」跟跳转撞在一起，
+                // 落点就被往下拽——她说的「跳转的地方偏下大概 12 条」有一半是这个。
+                guard jumpTo == nil, jump.target == nil else { return }
                 proxy.scrollTo("__bottom", anchor: .bottom)
                 // 图片和长文排版完还会再撑高一点，稍等再补一次
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    guard jumpTo == nil, jump.target == nil, flashID == nil else { return }
                     proxy.scrollTo("__bottom", anchor: .bottom)
                 }
             }
@@ -2146,6 +2110,42 @@ struct MessageListView: View {
     /// 本来就在同一条里，所以也只挂一次。
     /// 唯一要合并的是同一个 turn 拆出来的那两条（文字 + 表情），
     /// 那是一次发送，不该挂两个头像。
+    /// 跳到某一条，停在屏幕中间，亮一下。
+    ///
+    /// ⚠️ **滚三次**，不是一次：消息区是懒加载的，没画出来的那几十条
+    /// 高度是估的，第一次滚过去落点会偏；等那一截真的画出来，再滚两次才对得准。
+    /// 她说的「偏下大概 12 条」另一半就是这个。
+    /// 也不加动画：带动画滚的时候落点是按估算的高度算的，偏得更多。
+    private func land(on id: UUID, proxy: ScrollViewProxy) {
+        stickToBottom = false
+        proxy.scrollTo(id, anchor: .center)
+        for delay in [0.15, 0.45] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                proxy.scrollTo(id, anchor: .center)
+            }
+        }
+        // 停稳了再亮，像微信那样亮一下，两秒后淡掉
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            withAnimation(.easeOut(duration: 0.2)) { flashID = id }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            guard flashID == id else { return }
+            withAnimation(.easeOut(duration: 0.6)) { flashID = nil }
+        }
+    }
+
+    /// 跳到的那一条后面那一道淡淡的底色（横贯整行，跟微信一样）
+    @ViewBuilder
+    private func flashBand(_ id: UUID) -> some View {
+        if flashID == id {
+            Rectangle()
+                .fill(app.settings.accentColor.opacity(0.16))
+                .padding(.horizontal, -16)
+                .padding(.vertical, -4)
+                .allowsHitTesting(false)
+        }
+    }
+
     /// tokens 那行挂在哪一条下面。
     ///
     /// 她报的：「游戏在 token 显示的下面。」

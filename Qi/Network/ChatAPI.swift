@@ -647,6 +647,19 @@ enum ChatAPI {
         // 认得哪个用哪个，不认识的一般当多余的键忽略掉。
         // **真有中转站为此报 400 的**，见 `isThinkingRejection`：
         // 那时候脱掉这几个键原地重发一次，并把这个地址记下来不再试。
+        // ⚠️⚠️ **一次能写多长，得自己说。**
+        //
+        // 她报的：「让他用工具做 HTML，thinking 说要开始动手，然后就不出字了，
+        // 过一会跳出 token 数，再过一会整段消失。试了三次都这样，以前做 HTML 没有。」
+        //
+        // 这个请求体里从来没写过 `max_tokens`，于是用的是中转站自己的默认值，
+        // 常见的只有四千、八千。以前做的 HTML 小，塞得下；这回照着十二张截图的规格写，
+        // 一整页 HTML 是塞在工具参数里的，写到一半就被砍了——工具拿到的是半截。
+        //
+        // 只给 Claude 家的开到一万六：别家（比如 DeepSeek）上限低，写大了直接报 400。
+        if model.lowercased().contains("claude") {
+            body["max_tokens"] = 16000
+        }
         if wantThinking {
             body["thinking"] = ["type": "enabled", "budget_tokens": 2048]
             body["reasoning"] = ["max_tokens": 2048]

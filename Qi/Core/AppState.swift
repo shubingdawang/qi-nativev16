@@ -1567,6 +1567,8 @@ final class AppState: ObservableObject {
                     round += 1
                     var pending: [Int: ChatAPI.ToolCallPayload] = [:]
                     var roundText = ""
+                    // 这一轮是怎么结束的（`stop` / `tool_calls` / `length`…）
+                    var roundFinish = ""
 
                     // 这一层单独 catch，是为了**换人之后能原地重来**。
                     // 外面那个 catch 在 while 外面，接住了就只能报错收场。
@@ -1605,8 +1607,8 @@ final class AppState: ObservableObject {
                                 if let name, !name.isEmpty { call.name = name }
                                 if let argsPiece { call.arguments += argsPiece }
                                 pending[idx] = call
-                            case .finish:
-                                break
+                            case .finish(let why):
+                                roundFinish = why
                             }
                         }
                     } catch {
@@ -1642,6 +1644,32 @@ final class AppState: ObservableObject {
 
                     if Task.isCancelled { break }
                     if pending.isEmpty { break }   // 没有要调的工具，这轮就是最终回答
+
+                    // ⚠️ **这一轮是写到长度上限被砍断的**：工具参数只有半截。
+                    //
+                    // 以前照样拿去跑——做 HTML 的工具收到半截（或者解析失败变成空的），
+                    // 做不出东西；他也不知道为什么，只会再试一遍、再被砍一遍。
+                    // 现在不跑，直接回他一句：写太长被截断了，拆小一点再来。
+                    if roundFinish == "length" {
+                        self.flushStream(assistantID, in: conversationID, force: true)
+                        let calls = pending.sorted { $0.key < $1.key }.map { $0.value }
+                        apiMessages.append(ChatAPI.OutgoingMessage(
+                            role: "assistant", text: roundText, toolCalls: calls))
+                        for call in calls {
+                            var run = ToolRun(toolName: call.name, arguments: "")
+                            run.serverName = NativeTools.isNative(call.name) ? "本机" : "—"
+                            run.result = "这一次写到一半就被截断了（一轮能输出的长度到顶了），"
+                                + "参数只有半截，没有执行。内容太长——拆小一点："
+                                + "比如 HTML 先写一个精简但完整的版本，样式和细节少一些；"
+                                + "别把同样长的东西原样再发一遍。"
+                            run.failed = true
+                            run.finished = true
+                            self.appendToolRun(run, to: assistantID, in: conversationID)
+                            apiMessages.append(ChatAPI.OutgoingMessage(
+                                role: "tool", text: run.result, toolCallID: call.id))
+                        }
+                        continue
+                    }
 
                     // 要去跑工具了。先刷一次——工具可能要跑好几秒，
                     // 那几秒里她应该看得见他动手之前说的那半句。
@@ -4928,7 +4956,10 @@ final class AppState: ObservableObject {
     }
 
     /// 改一句已经发出去的话
-    func editMessage(_ messageID: UUID, in conversationID: UUID, text: String) {
+    /// - Parameter images: 传了就连图一起换（她在编辑页里加了图、删了图）；
+    ///   不传就只改字。
+    func editMessage(_ messageID: UUID, in conversationID: UUID, text: String,
+                     images: [String]? = nil) {
         guard let ci = index(of: conversationID),
               let mi = conversations[ci].messages.firstIndex(where: { $0.id == messageID })
         else { return }
@@ -4943,6 +4974,7 @@ final class AppState: ObservableObject {
             }
         }
         conversations[ci].messages[mi].content = text
+        if let images { conversations[ci].messages[mi].imageNames = images }
         conversations[ci].updatedAt = Date()
     }
 
@@ -7207,6 +7239,43 @@ final class AppState: ObservableObject {
         return String(text[r])
     }
 
+    /// 她引用的那句前后各 15 条原话，给他看上下文。
+    ///
+    /// 每条前面带日期和钟点，被引用的那句用「→」标出来；
+    /// 每条最多 160 字——这是给他找回当时在聊什么的，不是让他重读一遍全文。
+    static func quoteContext(_ id: UUID, in conv: Conversation) -> String {
+        let all = conv.messages.filter { $0.role != .system && !$0.isEmptyContent }
+        guard let i = all.firstIndex(where: { $0.id == id }) else { return "" }
+        let lo = max(0, i - 15), hi = min(all.count, i + 15)
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "M月d日 HH:mm"
+        let nl = "\n"
+        var lines: [String] = []
+        for k in lo..<hi {
+            let m = all[k]
+            let who = m.role == .user ? "她" : "你"
+            var say = m.content.replacingOccurrences(of: nl, with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if say.isEmpty { say = m.imageNames.isEmpty ? "（非文字消息）" : "（图片）" }
+            if say.count > 160 { say = String(say.prefix(160)) + "…" }
+            lines.append((k == i ? "→ " : "  ") + "[" + f.string(from: m.createdAt) + "] "
+                         + who + "：" + say)
+        }
+        return nl + nl + "（她引用的那句已经不在你眼前了。那句前后的原话是这些，"
+            + "「→」标的就是她引用的那句：" + nl + lines.joined(separator: nl) + "）"
+    }
+
+    /// 思考链某一段的译文存进那条消息（见 `ChatMessage.stepTranslations`）。
+    /// 传空字符串就是删掉那一段的译文（「收起译文」）。
+    func saveStepTranslation(_ text: String, key: String,
+                             message id: UUID, in conversationID: UUID) {
+        guard let i = index(of: conversationID),
+              let mi = conversations[i].messages.firstIndex(where: { $0.id == id })
+        else { return }
+        conversations[i].messages[mi].stepTranslations[key] = text.isEmpty ? nil : text
+    }
+
     /// 读一条任意网址（小红书／B 站／抖音之外的）。
     ///
     /// 读得到：标题 + 正文给他。连不上：告诉他多半要开 VPN，让他跟她说一声。
@@ -7276,7 +7345,7 @@ final class AppState: ObservableObject {
         var caption: String
     }
 
-    func recentUserImages(limit: Int = 12) -> [RecentImage] {
+    func recentUserImages(limit: Int = 20) -> [RecentImage] {
         guard let cid = activeToolConversationID ?? activeID(for: .chat),
               let i = index(of: cid) else { return [] }
         var out: [RecentImage] = []
@@ -7655,10 +7724,23 @@ final class AppState: ObservableObject {
             let used = Date().timeIntervalSince(conversations[ci].messages[mi].createdAt)
             conversations[ci].messages[mi].reasoningSeconds = max(0.1, used)
         }
-        // 一个字都没收到、也没报错，就把这个空气泡收掉
-        if conversations[ci].messages[mi].isEmptyContent,
-           conversations[ci].messages[mi].reasoning == nil {
-            conversations[ci].messages.remove(at: mi)
+        // 一个字都没收到、也没报错，就把这个空气泡收掉。
+        //
+        // ⚠️⚠️ **动过工具、或者花过 token 的，一律不许删。**
+        //
+        // 她报的「过一会跳出 token 数，再过一会整段消失」就是这儿：
+        // 以前只看「正文空、思考也空」——那一轮他去写 HTML，工具那一步失败了，
+        // 没说出字，于是连同 token 数和工具记录整条被抹掉，
+        // 她连发生了什么都看不到，只能以为他又光说不做。
+        let m = conversations[ci].messages[mi]
+        if m.isEmptyContent, m.reasoning == nil {
+            if m.toolRuns.isEmpty, (m.totalTokens ?? 0) == 0 {
+                conversations[ci].messages.remove(at: mi)
+            } else if m.toolRuns.isEmpty {
+                // 花了钱、一个字都没回出来：留着，挂一句说明和「重试」
+                conversations[ci].messages[mi].errorText =
+                    "这一轮花了 token，但一个字都没回出来（多半是写的东西太长被截断了）。"
+            }
         }
     }
 
@@ -8177,7 +8259,10 @@ final class AppState: ObservableObject {
         //    历史缓存从第一张图那儿整段作废。她是靠截图报 bug 的，
         //    这件事每天要发生很多次。限住之后，掉出这个窗口的那些
         //    编号一次之后就再也不动了。
-        let tagLimit = 12
+        // 12 → 20：她一次能选 20 张了（见 `ChatPickers`）。
+        // 她报的：「我发了 19 张，他一直说 12 张全部读完了。」
+        // 19 张其实都发过去了，是底下那行说明只数了编了号的 12 张。
+        let tagLimit = 20
         // 这一份**不封顶**，只用来判断某条消息里的图该不该淡出。
         var imageOrder: [UUID: Int] = [:]      // 这条消息里最新那张排第几
         for m in history.reversed() where m.role == .user {
@@ -8211,6 +8296,9 @@ final class AppState: ObservableObject {
         // 视频同理：一段视频要发好几帧。只有最近那一段还发帧，
         // 更早的用它自己的 `videoNote` 顶上。
         let latestVideoID = history.last(where: { !$0.videoName.isEmpty })?.id
+
+        // 这一轮送得出去的那几条（她引用的那句在不在里面，见下面 `quoteContext`）
+        let historyIDs = Set(history.map(\.id))
 
         // 上一条是什么时候说的，用来算间隔
         var previousAt: Date?
@@ -8285,8 +8373,15 @@ final class AppState: ObservableObject {
             if let ns = imageTags[m.id], !ns.isEmpty {
                 let tag = ns.map { "#\($0)" }.joined(separator: " ")
                 if liveShot {
+                    // ⚠️ 张数写**这条真正带了几张**，不是编了号的几张。
+                    // 以前写的是 `ns.count`，19 张的消息只编得上 12 个号，
+                    // 他就照着这行字说「12 张全部读完了」。
+                    let total = m.imageNames.count
                     text += (text.isEmpty ? "" : "\n")
-                        + "（这条带了 \(ns.count) 张图，从左到右是 \(tag)"
+                        + "（这条带了 \(total) 张图"
+                        + (ns.count < total
+                           ? "，全都发给你了；最新的 \(ns.count) 张编了号 \(tag)"
+                           : "，从左到右是 \(tag)")
                         + "——要存哪张、要发哪张，就用这个号）"
                 } else {
                     text += (text.isEmpty ? "" : "\n")
@@ -8306,6 +8401,16 @@ final class AppState: ObservableObject {
             }
             if !m.quotedText.isEmpty {
                 text = "（回应你那句「\(m.quotedText)」）\n" + text
+                // 她引用的那句已经不在这一轮看得到的范围里：把那句前后的原话附上。
+                //
+                // 她要的：「他可以根据我引用的句子快速找到那个聊天记录，
+                // 然后查看前后一共 30 条。」
+                // ⚠️ 只附在**最新那一条**上：附在历史里的话，每轮都要重发一遍，
+                // 而且那段历史的缓存会整段作废。
+                if isLast, m.role == .user, let qid = m.quotedMessageID,
+                   !historyIDs.contains(qid) {
+                    text += Self.quoteContext(qid, in: conv)
+                }
             }
             text = Self.appendFiles(m, to: text)
 

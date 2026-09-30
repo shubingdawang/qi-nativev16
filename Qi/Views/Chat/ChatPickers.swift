@@ -42,7 +42,9 @@ struct ChatPickers: View {
         // 这一块只做一件事：当那三个弹窗的宿主。
         Color.clear
             .photosPicker(isPresented: on(.photos), selection: $images,
-                          maxSelectionCount: 6, matching: .images)
+                          // 她要的：一次最多选 20 张（以前是 6）。
+                          // 跟 `AppState.tagLimit` 对齐：选进来的每一张都编得上号
+                          maxSelectionCount: 20, matching: .images)
             // 一次只收一段。两段视频抽出二十多张图，
             // 他看到的是一堆分不清哪段是哪段的画面
             .photosPicker(isPresented: on(.videos), selection: $video,
