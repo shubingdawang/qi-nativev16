@@ -10,7 +10,7 @@ enum ThemePreset: String, CaseIterable, Identifiable, Codable {
     case original = "original"
     case home = "home"
     case gradient = "gradient"
-    case tutou = "tutou"
+    // 「兔牙」那一档撤了：她说指向性太高。存着 tutou 的旧设置读回来会落到「原来的」
 
     var id: String { rawValue }
 
@@ -19,7 +19,6 @@ enum ThemePreset: String, CaseIterable, Identifiable, Codable {
         case .original: return "原来的"
         case .home:     return "家"
         case .gradient: return "渐变"
-        case .tutou:    return "兔牙"
         }
     }
 
@@ -28,7 +27,6 @@ enum ThemePreset: String, CaseIterable, Identifiable, Codable {
         case .original: return "随主题色变化，可自定义染色。壁纸使用自选图片。"
         case .home:     return "沿用 claude.ai 配色：暖纸底色、炭黑文字、橙色点缀，气泡样式一致。启用后替换壁纸。"
         case .gradient: return "以全屏渐变为底，气泡保持玻璃效果。选中后可在下方调整两端颜色与方向。启用后替换壁纸。"
-        case .tutou:    return "粉兔配色：奶粉底色、玫红主色、深梅文字，气泡保持玻璃效果。启用后替换壁纸。"
         }
     }
 
@@ -41,8 +39,6 @@ enum ThemePreset: String, CaseIterable, Identifiable, Codable {
             return "整套替换：底色为 claude.ai 暖纸色，自选壁纸暂时停用（切回「原来的」即恢复）。气泡同步更换：你的消息显示为浅色面板，他的消息不加气泡，直接排在纸面上。"
         case .gradient:
             return "全屏渐变底色，两端颜色与方向在上方调整。气泡保持玻璃效果。"
-        case .tutou:
-            return "沿用 tmux 兔牙主题配色：奶粉底色、玫红主色、深梅文字，气泡保持玻璃效果。自选壁纸暂时停用（切回「原来的」即恢复）。"
         }
     }
 
@@ -56,9 +52,6 @@ enum ThemePreset: String, CaseIterable, Identifiable, Codable {
         case .home:
             return [HomePalette.sage, HomePalette.amber,
                     HomePalette.bodyPink, HomePalette.orange]
-        case .tutou:
-            return [TutouPalette.blush, TutouPalette.rose,
-                    TutouPalette.inkSoft, TutouPalette.ink]
         default:
             return []
         }
@@ -83,7 +76,6 @@ enum ThemePreset: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .original, .gradient: return .original
         case .home:                return .home
-        case .tutou:               return .tutou
         }
     }
 }
@@ -193,47 +185,6 @@ extension ThemeSkin {
         primary:      HomePalette.orange,
         remind:       HomePalette.amber
     )
-
-    /// 「兔牙」：照 `Anko3o/tmux-tutou` 那套的色搬的。
-    /// 深色那一半原版没有，是照着同一组色相往下压出来的。
-    static let tutou = ThemeSkin(
-        cardFill:     SkinColor(TutouPalette.panel.opacity(0.92),
-                                TutouPalette.panelDark.opacity(0.9)),
-        cardStroke:   SkinColor(TutouPalette.line.opacity(0.75),
-                                .white.opacity(0.08)),
-        barFill:      SkinColor(TutouPalette.paper.opacity(0.9),
-                                TutouPalette.panelDark.opacity(0.96)),
-        textMain:     SkinColor(TutouPalette.ink, TutouPalette.inkDark),
-        textSoft:     SkinColor(TutouPalette.ink.opacity(0.82),
-                                TutouPalette.inkDark.opacity(0.8)),
-        textMuted:    SkinColor(TutouPalette.inkSoft, TutouPalette.inkSoftDark),
-        controlFill:  SkinColor(TutouPalette.paper.opacity(0.92),
-                                TutouPalette.paperDark.opacity(0.55)),
-        controlMuted: SkinColor(TutouPalette.inkSoft.opacity(0.75)),
-        page:         SkinColor(TutouPalette.paper, TutouPalette.paperDark),
-        softFillDeep: SkinColor(TutouPalette.panel.opacity(0.75),
-                                .white.opacity(0.055)),
-        accent:       TutouPalette.rose,
-        primary:      TutouPalette.rose,
-        remind:       TutouPalette.blush
-    )
-}
-
-/// 「兔牙」那套的色值。原版是一份 tmux 配置，取的就是它状态栏上那几个。
-enum TutouPalette {
-    static let paper    = Color(hexString: "FFF6FA")!   // 页面底：奶粉
-    static let panel    = Color(hexString: "F6E3EC")!   // 面板：状态栏那块
-    static let blush    = Color(hexString: "F2B8CE")!   // 当前那一格的高亮
-    static let line     = Color(hexString: "E6C3D3")!   // 分隔线
-    static let rose     = Color(hexString: "C2708A")!   // 主色：兔头那一块
-    static let inkSoft  = Color(hexString: "B3849A")!   // 灰粉字
-    static let ink      = Color(hexString: "6B3A4E")!   // 正文：最深那档
-
-    // 深色那一半原版没有，照同一组色相压下来的
-    static let paperDark    = Color(hexString: "1E1418")!
-    static let panelDark    = Color(hexString: "2A1D24")!
-    static let inkDark      = Color(hexString: "F6E3EC")!
-    static let inkSoftDark  = Color(hexString: "B3849A")!
 }
 
 /// 「家」那套的色值
