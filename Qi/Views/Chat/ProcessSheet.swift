@@ -96,6 +96,27 @@ struct ProcessSheet: View {
     /// 一个装数的小盒子。`@State` 里放引用类型，改里面的数不会触发重画
     final class SignatureBox { var value = -1 }
 
+    /// 切好的那几步，连同切的时候内容长什么样。
+    ///
+    /// ⚠️ 她报：「点了翻译之后思考链就变得好卡，拖不动，点空白处两三秒才收起。」
+    /// 这一页挂着 `app`，他每吐一次字 `app` 就变一次，整页就跟着重算一次——
+    /// 每次都把整段思考正则剥一遍、切一遍；译文再整段过一遍 Markdown。
+    /// 现在内容没变就直接用上次切好的，译文也走排版缓存（`rendered`）。
+    final class StepsCache { var sig = Int.min; var steps: [Step] = [] }
+    @State private var stepsCache = StepsCache()
+
+    private var cachedSteps: [Step] {
+        var h = Hasher()
+        h.combine(contentSignature)
+        h.combine(scheme == .dark)
+        let sig = h.finalize()
+        if sig != stepsCache.sig {
+            stepsCache.steps = steps
+            stepsCache.sig = sig
+        }
+        return stepsCache.steps
+    }
+
     /// 这条消息现在「长什么样」——正文、思考、工具各有多长，拼成一个数
     private var contentSignature: Int {
         let m = message
@@ -129,7 +150,7 @@ struct ProcessSheet: View {
                 WallpaperBackground()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        let all = steps
+                        let all = cachedSteps
                         ForEach(Array(all.enumerated()), id: \.element.id) { i, s in
                             row(s, isLast: i == all.count - 1)
                         }
@@ -404,7 +425,7 @@ struct ProcessSheet: View {
                         .foregroundStyle(Theme.textSoft(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    translation(s)
+                    translation(s, growing: growing)
                 } else if growing {
                     Text(oneLine(s.body))
                         .font(.app(11))
@@ -443,22 +464,25 @@ struct ProcessSheet: View {
     /// 展开之后原文底下那一块：译文，或者「翻成中文」按钮。
     /// 只给思考那几段摆按钮（工具的参数和结果本来就是中文居多）；长按哪一条都能翻。
     @ViewBuilder
-    private func translation(_ s: Step) -> some View {
+    private func translation(_ s: Step, growing: Bool) -> some View {
         if translating.contains(s.id) {
-            Text("在翻…")
-                .font(.app(10.5))
-                .foregroundStyle(Theme.textMuted(scheme))
+            translationHeader(growing ? "译文 · 在翻（只翻到点下去那一刻）" : "译文 · 在翻…")
+                .padding(.top, 8)
         } else if let t = savedTranslation(s), !t.isEmpty {
-            HStack(alignment: .top, spacing: 6) {
-                Capsule()
-                    .fill(app.settings.accentColor.opacity(0.4))
-                    .frame(width: 2)
-                Text(MD.inline(t))
+            // 跟原文**明显分开**：上面一道带字的分隔，底下垫一层浅底。
+            // 她报：「翻译直接接在 thinking 后面，一边翻一边流式出，分不清哪段是哪段。」
+            VStack(alignment: .leading, spacing: 6) {
+                translationHeader(growing ? "译文 · 只翻到点下去那一刻，后面的还没翻" : "译文")
+                Text(Self.rendered(t))
                     .font(.app(12))
-                    .foregroundStyle(Theme.textSoft(scheme))
+                    .foregroundStyle(Theme.textMain(scheme).opacity(0.85))
                     .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(app.settings.accentColor.opacity(0.09)))
+            .padding(.top, 8)
         } else if s.icon == nil, !Translator.looksChinese(s.body) {
             Button { translate(s) } label: {
                 HStack(spacing: 3) {
@@ -472,6 +496,21 @@ struct ProcessSheet: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    /// 译文上面那道分隔：一根细线 + 一行小字
+    private func translationHeader(_ label: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "character.book.closed")
+                .font(.app(9))
+            Text(label)
+                .font(.app(9.5, weight: .medium))
+                .lineLimit(1)
+            Rectangle()
+                .fill(app.settings.accentColor.opacity(0.3))
+                .frame(height: 0.5)
+        }
+        .foregroundStyle(app.settings.accentColor)
     }
 
     private func translate(_ s: Step) {

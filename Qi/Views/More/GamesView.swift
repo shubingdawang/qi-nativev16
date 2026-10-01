@@ -357,7 +357,7 @@ final class GameStore: ObservableObject {
     /// 游戏间里就是多了一个能点开的。
     @discardableResult
     func add(name: String, html: String) -> LocalGame? {
-        guard let data = html.data(using: .utf8) else { return nil }
+        guard let data = Self.reachable(html).data(using: .utf8) else { return nil }
         let fileName = UUID().uuidString + ".html"
         do {
             try data.write(to: GameStore.dir.appendingPathComponent(fileName),
@@ -367,6 +367,24 @@ final class GameStore: ObservableObject {
         g.genre = GameGenre.other.rawValue
         games.append(g)
         return g
+    }
+
+    /// 页面里连不上的外链换成国内能连上的。
+    ///
+    /// 她报：「这次可以出 HTML 了，但点开是空白的。」他用的是谷歌字体，
+    /// 而 `<link rel="stylesheet">` 会**挡住整页渲染**直到它加载完——
+    /// 在国内那个地址连不上，就一直白着。换成同样内容的国内镜像。
+    static func reachable(_ html: String) -> String {
+        html.replacingOccurrences(of: "fonts.googleapis.com", with: "fonts.loli.net")
+            .replacingOccurrences(of: "fonts.gstatic.com", with: "gstatic.loli.net")
+    }
+
+    /// 打开之前过一遍：以前存下的那几份也一起修好（只改一次，改完写回去）
+    func prepare(_ game: LocalGame) {
+        let u = url(for: game)
+        guard let s = try? String(contentsOf: u, encoding: .utf8) else { return }
+        let fixed = Self.reachable(s)
+        if fixed != s { try? fixed.write(to: u, atomically: true, encoding: .utf8) }
     }
 
     func remove(_ game: LocalGame) {
@@ -383,13 +401,19 @@ struct GamePlayerView: View {
 
     var body: some View {
         NavigationStack {
-            LocalWebView(url: GameStore.shared.url(for: game))
+            LocalWebView(url: { GameStore.shared.prepare(game); return GameStore.shared.url(for: game) }())
                 .ignoresSafeArea(edges: .bottom)
                 .navigationTitle(game.name)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("退出") { dismiss() }
+                    }
+                    // 把这份 HTML 文件导出来：存到文件、发给别人、换个浏览器打开
+                    ToolbarItem(placement: .topBarTrailing) {
+                        ShareLink(item: GameStore.shared.url(for: game)) {
+                            Image(systemName: "square.and.arrow.up")
+                        }
                     }
                 }
         }

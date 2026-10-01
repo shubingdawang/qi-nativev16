@@ -7821,11 +7821,22 @@ final class AppState: ObservableObject {
         guard let r = Self.htmlBlock(in: text) else { return }
         let html = String(text[r.inner])
         guard html.count > 200 else { return }
-        let title = conversations[ci].messages[mi].cotTitle
+        // 他有时照着别处的习惯写成 <file_create file_path="物化.html" …> 包着：
+        // 名字从这儿拿，外壳剥掉（不然她看见一行标签）
+        var title = conversations[ci].messages[mi].cotTitle
+        if let m = text.range(of: #"file_path="([^"/]+?)(\.html?)?""#, options: .regularExpression) {
+            let raw = String(text[m]).replacingOccurrences(of: "file_path=", with: "")
+                .replacingOccurrences(of: "\"", with: "")
+            title = raw.replacingOccurrences(of: ".html", with: "")
+                .replacingOccurrences(of: ".htm", with: "")
+        }
         guard let g = GameStore.shared.add(name: title.isEmpty ? "他做的网页" : title,
                                            html: html) else { return }
         var rest = text
         rest.replaceSubrange(r.whole, with: "（做好了，点下面那张卡就能打开）")
+        rest = rest.replacingOccurrences(of: #"<file_create[^>]*>"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: "</file_create>", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         conversations[ci].messages[mi].content = rest
         var card = ChatMessage(role: .assistant)
         card.turnID = conversations[ci].messages[mi].turnID
