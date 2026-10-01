@@ -7778,22 +7778,34 @@ final class AppState: ObservableObject {
                         "结束原因：" + (finishReason.isEmpty ? "未知" : finishReason))
         }
 
+        // ⚠️ **只有思考、没有正文**的也要说清楚。
+        //
+        // 她报的：做 HTML 那轮只剩一段思考和 token 数，没有红框——
+        // 以前这儿要求「思考也是空的」才挂说明，有思考就当它正常结束了。
+        // 多半是思考把一轮能写的长度吃光了（`length`），正文一个字没轮到。
         let m = conversations[ci].messages[mi]
-        if m.isEmptyContent, m.reasoning == nil {
-            if m.toolRuns.isEmpty, (m.totalTokens ?? 0) == 0 {
+        if m.isEmptyContent, m.errorText == nil {
+            let thought = !(m.reasoning ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            if m.toolRuns.isEmpty, (m.totalTokens ?? 0) == 0, !thought {
                 conversations[ci].messages.remove(at: mi)
             } else if m.toolRuns.isEmpty {
                 // 花了钱、一个字都没回出来：留着，挂一句说明和「重试」。
                 // 结束原因写出来：`length` 是写太长被截断，`stop` 是上游本来就没给字
                 let why: String
                 switch finishReason {
-                case "length": why = "写的东西太长，到输出上限被截断了"
+                case "length":
+                    why = thought ? "思考把这一轮能写的长度用完了，正文没轮到"
+                                  : "写的东西太长，到输出上限被截断了"
                 case "stop", "end_turn": why = "上游正常结束，但没有给出任何文字"
-                case "": why = "上游没有说明结束原因"
+                case "": why = "上游没有说明结束原因，可能是连接中途断了"
                 default: why = "结束原因：" + finishReason
                 }
                 conversations[ci].messages[mi].errorText =
-                    "这一轮花了 token，但一个字都没回出来（" + why + "）。"
+                    (thought ? "这一轮只想了，没说出来（" : "这一轮花了 token，但一个字都没回出来（")
+                    + why + "）。"
+                Console.log(.warn, "这一轮没有正文",
+                            "结束原因：" + (finishReason.isEmpty ? "未知" : finishReason)
+                            + " · 思考 \((m.reasoning ?? "").count) 字")
             }
         }
     }

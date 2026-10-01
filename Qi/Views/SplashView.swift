@@ -1,274 +1,344 @@
 import SwiftUI
 
-/// 开屏：一扇起了雾的窗。
+/// 开屏：夜里的一片静水。
 ///
-/// 她要的：「给我的前端搞一个有意思、有意境的交互开屏。」
-/// 参考的是 motion-web 那份做法的主张——**动效是界面的材料，不是装饰**：
-/// 要有物理（弹簧、阻尼、惯性），要有因果（手做了什么，才发生什么），
-/// 不许用「透明度 0 → 1」那种糊弄的淡入淡出。
+/// 参考 motion-web 那份做法的主张——**动效是界面的材料，不是装饰**：
+/// 要有物理（弹簧、阻尼），要有因果（手做了什么，才发生什么），不用透明度淡入淡出。
 ///
-/// ## 为什么是雾窗
-///
-/// App 叫「栖」，她的壁纸是雨打在玻璃上。开屏就是那扇窗起了雾：
-///   · 雾上有人用手指写过一个「栖」——那几笔透着后面清楚的壁纸
-///   · 她的手指一划，雾就被擦开；擦开的地方过几秒慢慢又起雾
-///   · 水珠在玻璃上**先停住、攒够了才滑**，一路把雾带开，滑到半路可能又卡住
-///     （粘滞—滑动：真的水珠就是这么走的，不是匀速落下）
-///   · 擦开四成左右，或者轻点一下：整片雾像一层冷凝水被重力拽下去，带一点回弹
+///   · 底下是她的壁纸，糊开、压暗，像水面上的倒影；一团光慢慢游
+///   · 水面上浮着光尘：近的小而亮，远的大而虚（散景）。手指靠近，它们被推开，再慢慢漂回来
+///   · 手指点下、划过：起涟漪，真的折射底下的画面（`SplashRipple.metal`）
+///   · 右上角竖着写今天的日期和此刻，一个字一个字从水下浮上来
+///   · 轻点：那一点起一圈大涟漪，水面从那儿向外让开，露出 App
 ///
 /// 只在冷启动出现一次；设置里能关（`AppSettings.splashOn`）。
 struct SplashView: View {
 
     var onEnter: () -> Void
 
-    @Environment(\.colorScheme) private var scheme
-    @State private var sim = FogSim()
-    /// 整片雾往下滑了多少（离场用，弹簧驱动）
-    @State private var slide: CGFloat = 0
+    @State private var sim = PondSim()
     @State private var leaving = false
-    @State private var showHint = false
+    /// 离场：从点下去的地方向外让开的那个圆
+    @State private var revealR: CGFloat = 0
+    @State private var revealAt: CGPoint = .zero
+    @State private var lastRipple: CGPoint?
     @State private var dragStart: Date?
+    @State private var risen = false
+    /// 打开那一刻的日期和时间（竖排）。只算一次
+    @State private var stamp = SplashView.timeColumns(Date())
 
     var body: some View {
         GeometryReader { geo in
-            ZStack {
-                // 雾后面就是 App 本身：擦开的地方看见的就是进去以后的样子，
-                // 雾滑走时底下不用换一张图
-                fogSheet(size: geo.size)
-                    .offset(y: slide)
-
-                // 玻璃上的水珠（画在雾外面，擦没擦开都看得见）
-                TimelineView(.animation(paused: leaving)) { tl in
-                    Canvas { gc, size in
-                        sim.step(tl.date, size: size)
-                        drawDrops(gc)
-                    }
-                }
-                .offset(y: slide)
-                .allowsHitTesting(false)
-
-                if showHint && !leaving {
-                    VStack {
-                        Spacer()
-                        Text("用手指擦开雾气 · 轻点进入")
-                            .font(.app(12))
-                            .foregroundStyle(.white.opacity(0.75))
-                            .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
-                            .padding(.bottom, geo.safeAreaInsets.bottom + 48)
-                    }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .allowsHitTesting(false)
-                }
+            TimelineView(.animation) { tl in
+                let now = tl.date
+                scene(size: geo.size, now: now, safeTop: geo.safeAreaInsets.top,
+                      safeBottom: geo.safeAreaInsets.bottom)
+                    .layerEffect(ShaderLibrary.qiRipple(.floatArray(sim.shaderArgs(now: now))),
+                                 maxSampleOffset: CGSize(width: 28, height: 28))
             }
+            .mask { revealMask }
             .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { v in
-                        if dragStart == nil { dragStart = Date() }
-                        guard !leaving else { return }
-                        sim.wipe(at: v.location)
-                    }
-                    .onEnded { v in
-                        defer { dragStart = nil; sim.liftFinger() }
-                        guard !leaving else { return }
-                        let moved = hypot(v.translation.width, v.translation.height)
-                        let quick = Date().timeIntervalSince(dragStart ?? Date()) < 0.3
-                        // 轻点一下：进去。擦够了：也进去
-                        if (moved < 8 && quick) || sim.clearedFraction > 0.4 {
-                            leave(height: geo.size.height)
-                        }
-                    }
-            )
+            .gesture(touch(size: geo.size))
         }
         .ignoresSafeArea()
         .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) { showHint = true }
+            withAnimation { risen = true }
+        }
+    }
+
+    // MARK: 画面
+
+    private func scene(size: CGSize, now: Date, safeTop: CGFloat, safeBottom: CGFloat) -> some View {
+        ZStack {
+            // 倒影：壁纸糊开、放大一点（糊的边不露底）
+            WallpaperBackground()
+                .blur(radius: 16)
+                .scaleEffect(1.12)
+            // 夜色。白天浅一些，夜里深一些
+            LinearGradient(colors: [Color(red: 0.04, green: 0.06, blue: 0.13).opacity(stamp.night ? 0.55 : 0.30),
+                                    Color(red: 0.02, green: 0.03, blue: 0.08).opacity(stamp.night ? 0.78 : 0.50)],
+                           startPoint: .top, endPoint: .bottom)
+
+            // 光尘和那团游动的光
+            Canvas { gc, sz in
+                sim.step(now, size: sz)
+                drawGlow(gc, size: sz, now: now)
+                drawMotes(gc, now: now)
+            }
+            .allowsHitTesting(false)
+
+            timeColumns
+                .padding(.top, safeTop + 64)
+                .padding(.trailing, 34)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .allowsHitTesting(false)
+
+            Text("轻点进入")
+                .font(.system(size: 12, weight: .light, design: .serif))
+                .tracking(6)
+                .foregroundStyle(.white.opacity(0.62))
+                .offset(y: risen ? 0 : 18)
+                .blur(radius: risen ? 0 : 6)
+                .animation(.spring(response: 1.2, dampingFraction: 0.8).delay(2.2), value: risen)
+                .padding(.bottom, safeBottom + 44)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .allowsHitTesting(false)
+        }
+        .frame(width: size.width, height: size.height)
+        .clipped()
+    }
+
+    /// 右上角竖排：右边一列是日期，左边一列是此刻。一个字一个字从水下浮上来
+    private var timeColumns: some View {
+        HStack(alignment: .top, spacing: 16) {
+            column(stamp.time, startDelay: 0.9)
+                .padding(.top, 34)
+            column(stamp.date, startDelay: 0.35)
+        }
+    }
+
+    private func column(_ text: String, startDelay: Double) -> some View {
+        VStack(spacing: 7) {
+            ForEach(Array(text.enumerated()), id: \.offset) { i, ch in
+                Text(String(ch))
+                    .font(.system(size: 21, weight: .light, design: .serif))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .shadow(color: .black.opacity(0.35), radius: 6)
+                    .offset(y: risen ? 0 : 16)
+                    .blur(radius: risen ? 0 : 7)
+                    .animation(.spring(response: 1.1, dampingFraction: 0.72)
+                        .delay(startDelay + Double(i) * 0.11), value: risen)
             }
         }
     }
 
-    // MARK: 雾
+    /// 一团暖光在水面下慢慢游（李萨如轨迹，周期几十秒）
+    private func drawGlow(_ gc: GraphicsContext, size: CGSize, now: Date) {
+        let t = now.timeIntervalSinceReferenceDate
+        let c = CGPoint(x: size.width * (0.5 + 0.28 * sin(t * 0.11)),
+                        y: size.height * (0.42 + 0.18 * sin(t * 0.07 + 1.3)))
+        let r = max(size.width, size.height) * 0.55
+        var g = gc
+        g.blendMode = .plusLighter
+        g.fill(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)),
+               with: .radialGradient(Gradient(colors: [Color(red: 1, green: 0.82, blue: 0.6).opacity(0.16),
+                                                       Color(red: 1, green: 0.7, blue: 0.5).opacity(0.05),
+                                                       .clear]),
+                                     center: c, startRadius: 0, endRadius: r))
+    }
 
-    /// 雾那一层：糊掉的壁纸 + 一层水汽的白，按「擦开了哪儿」挖掉
-    private func fogSheet(size: CGSize) -> some View {
-        ZStack {
-            WallpaperBackground()
-                .blur(radius: 26)
-            Rectangle()
-                .fill(scheme == .dark ? Color.white.opacity(0.10) : Color.white.opacity(0.32))
+    /// 光尘：近的是一颗亮点带一圈晕；远的是一片虚的光斑，边上一道淡淡的环（散景）
+    private func drawMotes(_ gc: GraphicsContext, now: Date) {
+        let t = now.timeIntervalSinceReferenceDate
+        var g = gc
+        g.blendMode = .plusLighter
+        for m in sim.motes {
+            let tw = 0.55 + 0.45 * pow(sin(t * m.twinkle + m.phase), 2)
+            let color = m.warm ? Color(red: 1, green: 0.86, blue: 0.64) : Color(red: 0.82, green: 0.9, blue: 1)
+            let r = m.r
+            let rect = CGRect(x: m.p.x - r, y: m.p.y - r, width: r * 2, height: r * 2)
+            if m.bokeh {
+                g.fill(Path(ellipseIn: rect), with: .color(color.opacity(0.07 * tw)))
+                g.stroke(Path(ellipseIn: rect.insetBy(dx: 0.5, dy: 0.5)),
+                         with: .color(color.opacity(0.10 * tw)), lineWidth: 1)
+            } else {
+                g.fill(Path(ellipseIn: rect),
+                       with: .radialGradient(Gradient(colors: [color.opacity(0.95 * tw),
+                                                               color.opacity(0.28 * tw), .clear]),
+                                             center: m.p, startRadius: 0, endRadius: r))
+            }
         }
-        .compositingGroup()
-        .mask {
-            TimelineView(.animation(paused: leaving)) { tl in
-                Canvas { gc, sz in
-                    // 先整片是雾
-                    gc.fill(Path(CGRect(origin: .zero, size: sz)), with: .color(.black))
-                    gc.blendMode = .destinationOut
-                    // 雾擦开的边从来不是硬的：整层带一点虚
-                    gc.addFilter(.blur(radius: 5))
-                    let now = tl.date
-                    // 手指擦开的、水珠带开的：一段一段连成笔画。越新越清楚，慢慢又起雾
-                    for m in sim.marks {
-                        let clear = sim.clearness(of: m, now: now)
-                        guard clear > 0.01 else { continue }
-                        var line = Path()
-                        line.move(to: m.from ?? m.p)
-                        line.addLine(to: m.p)
-                        gc.stroke(line, with: .color(.black.opacity(clear)),
-                                  style: StrokeStyle(lineWidth: m.r * 2, lineCap: .round))
-                    }
-                    // 雾上有人用手指写过的那个「栖」：只透一点，边是虚的
-                    var ink = gc
-                    ink.opacity = 0.32
-                    ink.draw(Text("栖").font(.system(size: min(sz.width, sz.height) * 0.26,
-                                                      weight: .light)),
-                             at: CGPoint(x: sz.width / 2, y: sz.height * 0.40))
+    }
+
+    // MARK: 手
+
+    private func touch(size: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { v in
+                guard !leaving else { return }
+                if dragStart == nil { dragStart = Date() }
+                let p = v.location
+                sim.finger = p
+                // 划过去：每隔一段起一圈小涟漪
+                if lastRipple.map({ hypot($0.x - p.x, $0.y - p.y) > 42 }) ?? true {
+                    sim.addRipple(at: p, amp: lastRipple == nil ? 0.8 : 0.45)
+                    lastRipple = p
                 }
             }
-        }
-    }
-
-    /// 水珠：一颗亮的椭圆 + 下沿一道暗边 + 左上一个高光点，看着才像立在玻璃上的水
-    private func drawDrops(_ gc: GraphicsContext) {
-        for d in sim.drops {
-            let w = d.r * 1.6, h = d.r * 2
-            let rect = CGRect(x: d.x - w / 2, y: d.y - h / 2, width: w, height: h)
-            let body = Path(ellipseIn: rect)
-            gc.fill(body, with: .color(.white.opacity(0.10)))
-            gc.stroke(body, with: .color(.black.opacity(0.10)), lineWidth: 0.6)
-            let hl = CGRect(x: rect.minX + w * 0.22, y: rect.minY + h * 0.18,
-                            width: w * 0.28, height: h * 0.22)
-            gc.fill(Path(ellipseIn: hl), with: .color(.white.opacity(0.55)))
-        }
+            .onEnded { v in
+                defer { dragStart = nil; lastRipple = nil; sim.finger = nil }
+                guard !leaving else { return }
+                let moved = hypot(v.translation.width, v.translation.height)
+                let quick = Date().timeIntervalSince(dragStart ?? Date()) < 0.35
+                if moved < 10 && quick { leave(at: v.location, size: size) }
+            }
     }
 
     // MARK: 离场
 
-    /// 整片雾被重力拽下去——弹簧带一点回弹，不淡出。
-    /// 雾滑走之后这一层就没了，下面就是 App。
-    private func leave(height: CGFloat) {
+    /// 那一点起一圈大涟漪，水面从那儿向外让开（弹簧，不淡出）
+    private func leave(at p: CGPoint, size: CGSize) {
         leaving = true
-        withAnimation(.spring(response: 0.75, dampingFraction: 0.78)) {
-            slide = height * 1.08
+        sim.addRipple(at: p, amp: 1.6)
+        revealAt = p
+        let far = [CGPoint.zero, CGPoint(x: size.width, y: 0),
+                   CGPoint(x: 0, y: size.height), CGPoint(x: size.width, y: size.height)]
+            .map { hypot($0.x - p.x, $0.y - p.y) }.max() ?? size.height
+        withAnimation(.spring(response: 1.0, dampingFraction: 0.92)) {
+            revealR = far + 40
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { onEnter() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { onEnter() }
+    }
+
+    private var revealMask: some View {
+        ZStack {
+            Rectangle()
+            Circle()
+                .frame(width: revealR * 2, height: revealR * 2)
+                .position(revealAt)
+                .blur(radius: revealR > 0 ? 18 : 0)
+                .blendMode(.destinationOut)
+        }
+        .compositingGroup()
+    }
+
+    // MARK: 竖排的日期和时间
+
+    struct Stamp { var date: String; var time: String; var night: Bool }
+
+    static func timeColumns(_ d: Date) -> Stamp {
+        let c = Calendar.current.dateComponents([.month, .day, .hour, .minute], from: d)
+        let mo = c.month ?? 1, day = c.day ?? 1, h = c.hour ?? 0, mi = c.minute ?? 0
+        let part: String
+        switch h {
+        case 0..<5: part = "凌晨"
+        case 5..<8: part = "清晨"
+        case 8..<11: part = "上午"
+        case 11..<13: part = "中午"
+        case 13..<17: part = "下午"
+        case 17..<19: part = "傍晚"
+        default: part = "夜里"
+        }
+        let h12 = h % 12 == 0 ? 12 : h % 12
+        let hour = h12 == 2 ? "两" : cn(h12)
+        let minute = mi == 0 ? "整" : (mi < 10 ? "零" + cn(mi) + "分" : cn(mi) + "分")
+        return Stamp(date: cn(mo) + "月" + cn(day) + "日",
+                     time: part + hour + "点" + minute,
+                     night: h >= 19 || h < 6)
+    }
+
+    /// 1–59 写成汉字
+    static func cn(_ n: Int) -> String {
+        let d = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九"]
+        if n < 10 { return d[n] }
+        if n == 10 { return "十" }
+        if n < 20 { return "十" + d[n % 10] }
+        return d[n / 10] + "十" + (n % 10 == 0 ? "" : d[n % 10])
     }
 }
 
 // MARK: - 模拟
 
-/// 雾和水珠。每一帧由画的那一步推一下（见 `step`）。
+/// 涟漪和光尘。每一帧由画的那一步推一下（见 `step`）。
 ///
 /// ⚠️ 是个类：画的时候改它不触发重画——重画本来就由 `TimelineView` 按帧推着走。
-final class FogSim {
+final class PondSim {
 
-    struct Mark {
+    struct Ripple { var p: CGPoint; var born: Date; var amp: Float }
+
+    struct Mote {
         var p: CGPoint
-        /// 这一段从哪儿连过来（同一笔的上一点）。没有就是一个点
-        var from: CGPoint?
+        var v: CGVector = .zero
         var r: CGFloat
-        var born: Date
-        /// 手指擦的（算进「擦开了多少」），还是水珠带的（不算）
-        var byHand: Bool
+        /// 远近：远的漂得慢、被手推得少
+        var depth: CGFloat
+        var bokeh: Bool
+        var warm: Bool
+        var phase: Double
+        var twinkle: Double
     }
 
-    struct Drop {
-        var x: CGFloat
-        var y: CGFloat
-        var r: CGFloat
-        var vy: CGFloat = 0
-        /// 还要停多久（粘滞）。攒够了才滑
-        var rest: Double
-        var lastTrailY: CGFloat
-        var seed: Double
-    }
-
-    private(set) var marks: [Mark] = []
-    private(set) var drops: [Drop] = []
+    private(set) var ripples: [Ripple] = []
+    private(set) var motes: [Mote] = []
+    var finger: CGPoint?
     private var last: Date?
-    private var size: CGSize = .zero
-    private var handArea: CGFloat = 0
-    /// 这一笔上一次落在哪儿。松手清掉
-    private var lastHand: CGPoint?
 
-    /// 擦开的地方多久起满雾
-    private let refog: Double = 7
-    /// 重力（点/秒²）和阻力：终端速度大约一百五十点每秒——水珠在玻璃上是被拖着走的
-    private let gravity: CGFloat = 900
-    private let drag: CGFloat = 6
-
-    /// 手指擦开了大约多少（面积之和，重叠会多算一些，所以门槛放在 0.4）
-    var clearedFraction: CGFloat {
-        guard size.width > 0 else { return 0 }
-        return handArea / (size.width * size.height)
+    func addRipple(at p: CGPoint, amp: Float) {
+        ripples.append(Ripple(p: p, born: Date(), amp: amp))
+        if ripples.count > 10 { ripples.removeFirst(ripples.count - 10) }
     }
 
-    /// 这一处现在还有多清楚：刚擦开是全清，先保持一会儿，再慢慢起雾
-    func clearness(of m: Mark, now: Date) -> Double {
-        let age = now.timeIntervalSince(m.born)
-        let t = max(0, min(1, age / refog))
-        return 1 - t * t
-    }
-
-    func wipe(at p: CGPoint) {
-        let r: CGFloat = 30
-        if let from = lastHand {
-            // 跟上一点离得太近就先不记，省得一秒攒几百段
-            let d = hypot(from.x - p.x, from.y - p.y)
-            guard d >= 8 else { return }
-            marks.append(Mark(p: p, from: from, r: r, born: Date(), byHand: true))
-            handArea += d * r * 2 * 0.8
-        } else {
-            marks.append(Mark(p: p, from: nil, r: r, born: Date(), byHand: true))
-            handArea += .pi * r * r * 0.8
+    /// 交给着色器的那串数：每圈四个（x, y, 几秒, 力）
+    func shaderArgs(now: Date) -> [Float] {
+        var a: [Float] = []
+        for r in ripples {
+            let age = Float(now.timeIntervalSince(r.born))
+            if age < 4.5 { a += [Float(r.p.x), Float(r.p.y), age, r.amp] }
         }
-        lastHand = p
+        return a.isEmpty ? [0, 0, 99, 0] : a
     }
-
-    func liftFinger() { lastHand = nil }
 
     func step(_ now: Date, size: CGSize) {
-        self.size = size
+        guard size.width > 0 else { return }
+        if motes.isEmpty { seed(size) }
         let dt = CGFloat(min(1.0 / 20, now.timeIntervalSince(last ?? now)))
         last = now
-        guard size.width > 0 else { return }
+        let t = now.timeIntervalSinceReferenceDate
 
-        // 玻璃上一直有十来颗水珠
-        if drops.count < 12, Double.random(in: 0...1) < 0.05 {
-            let y = CGFloat.random(in: 0...(size.height * 0.6))
-            drops.append(Drop(x: .random(in: 12...(size.width - 12)), y: y,
-                              r: .random(in: 3...7), rest: .random(in: 0.3...2.5),
-                              lastTrailY: y, seed: .random(in: 0...10)))
+        for i in motes.indices {
+            var m = motes[i]
+            // 想去的速度：慢慢往上飘，左右轻轻摆
+            let want = CGVector(dx: CGFloat(sin(t * 0.27 + m.phase)) * 9 * m.depth,
+                                dy: (-7 - CGFloat(cos(t * 0.19 + m.phase * 1.7)) * 4) * m.depth)
+            // 弹簧把速度拉回想去的速度（阻尼）
+            m.v.dx += (want.dx - m.v.dx) * 1.4 * dt
+            m.v.dy += (want.dy - m.v.dy) * 1.4 * dt
+            // 手指推开
+            if let f = finger {
+                let dx = m.p.x - f.x, dy = m.p.y - f.y
+                let d = max(1, hypot(dx, dy))
+                if d < 170 {
+                    let push = (1 - d / 170) * 1400 * m.depth
+                    m.v.dx += dx / d * push * dt
+                    m.v.dy += dy / d * push * dt
+                }
+            }
+            // 涟漪的波前经过，也推一下
+            for r in ripples {
+                let age = CGFloat(now.timeIntervalSince(r.born))
+                let dx = m.p.x - r.p.x, dy = m.p.y - r.p.y
+                let d = max(1, hypot(dx, dy))
+                let x = d - age * 240
+                if abs(x) < 40 {
+                    let k = CGFloat(r.amp) * exp(-age * 1.25) * 260 * m.depth
+                    m.v.dx += dx / d * k * dt
+                    m.v.dy += dy / d * k * dt
+                }
+            }
+            m.p.x += m.v.dx * dt
+            m.p.y += m.v.dy * dt
+            // 出了边就从另一边回来
+            let pad = m.r + 10
+            if m.p.y < -pad { m.p.y = size.height + pad; m.p.x = .random(in: 0...size.width) }
+            if m.p.y > size.height + pad { m.p.y = -pad }
+            if m.p.x < -pad { m.p.x = size.width + pad }
+            if m.p.x > size.width + pad { m.p.x = -pad }
+            motes[i] = m
         }
+        ripples.removeAll { now.timeIntervalSince($0.born) > 4.5 }
+    }
 
-        for i in drops.indices {
-            if drops[i].rest > 0 {
-                // 粘住：攒着
-                drops[i].rest -= Double(dt)
-                drops[i].vy = 0
-                continue
-            }
-            // 滑：重力往下拉，阻力往回拽
-            drops[i].vy += (gravity - drag * drops[i].vy) * dt
-            drops[i].y += drops[i].vy * dt
-            // 横向是一格一格抖的（十一赫兹量化），不是平滑的正弦——水珠碰到玻璃上的颗粒
-            let tick = Double(Int(now.timeIntervalSinceReferenceDate * 11))
-            drops[i].x += CGFloat(sin(tick * 1.7 + drops[i].seed)) * 0.35
-            // 一路带开一道雾（连成一条线，不是一串珠子）
-            if drops[i].y - drops[i].lastTrailY > 6 {
-                marks.append(Mark(p: CGPoint(x: drops[i].x, y: drops[i].y),
-                                  from: CGPoint(x: drops[i].x, y: drops[i].lastTrailY),
-                                  r: drops[i].r * 0.7, born: now, byHand: false))
-                drops[i].lastTrailY = drops[i].y
-            }
-            // 半路又被卡住
-            if Double.random(in: 0...1) < Double(dt) * 0.9 {
-                drops[i].rest = .random(in: 0.2...1.0)
-            }
+    private func seed(_ size: CGSize) {
+        for i in 0..<46 {
+            let bokeh = i < 12
+            motes.append(Mote(
+                p: CGPoint(x: .random(in: 0...size.width), y: .random(in: 0...size.height)),
+                r: bokeh ? .random(in: 16...34) : .random(in: 2...5.5),
+                depth: bokeh ? .random(in: 0.35...0.6) : .random(in: 0.7...1.2),
+                bokeh: bokeh,
+                warm: Double.random(in: 0...1) < 0.6,
+                phase: .random(in: 0...(2 * .pi)),
+                twinkle: .random(in: 0.6...1.8)))
         }
-        drops.removeAll { $0.y > size.height + 20 }
-        // 起满雾的就不用再记了
-        marks.removeAll { clearness(of: $0, now: now) <= 0.001 }
     }
 }

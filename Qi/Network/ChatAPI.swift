@@ -680,8 +680,10 @@ enum ChatAPI {
         // 一整页 HTML 是塞在工具参数里的，写到一半就被砍了——工具拿到的是半截。
         //
         // 只给 Claude 家的开到一万六：别家（比如 DeepSeek）上限低，写大了直接报 400。
+        // 后来又提到三万二：她那轮做 HTML，思考就把一万六吃光了，正文一个字没轮到。
+        // 现在的 Claude 都收得下；中转不收会报 5xx，那时自动去掉再发（见 `noCap`）
         if capped && model.lowercased().contains("claude") {
-            body["max_tokens"] = 16000
+            body["max_tokens"] = 32000
         }
         if wantThinking {
             body["thinking"] = ["type": "enabled", "budget_tokens": 2048]

@@ -251,14 +251,14 @@ struct AppearanceView: View {
     private var splashCard: some View {
         SettingsCard(title: "开屏") {
             Toggle(isOn: $app.settings.splashOn) {
-                Text("雾窗")
+                Text("水面开屏")
                     .font(.app(15))
                     .foregroundStyle(Theme.textMain(scheme))
             }
             .tint(app.settings.accentColor)
             .padding(.horizontal, 16)
             .padding(.vertical, 11)
-            SettingsNote("打开 App 时先是一扇起了雾的窗：手指划过擦开雾气，擦开大约四成或轻点一下进入。只在冷启动时出现。")
+            SettingsNote("打开 App 时先是一片夜里的水面：手指点下、划过会起涟漪，推开水面上的光点；轻点一下进入。只在冷启动时出现。")
         }
     }
 
