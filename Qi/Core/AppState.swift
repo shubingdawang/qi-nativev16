@@ -7810,6 +7810,20 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// 给一个网页游戏改名：游戏间里那条、聊天里指向它的卡，一起改
+    func renameGame(_ id: UUID, to raw: String) {
+        let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        GameStore.shared.rename(id, to: name)
+        let key = id.uuidString
+        for ci in conversations.indices {
+            for mi in conversations[ci].messages.indices
+            where conversations[ci].messages[mi].gameID == key {
+                conversations[ci].messages[mi].gameName = name
+            }
+        }
+    }
+
     /// 他把整页 HTML 直接写在正文里（```html … ``` 或者 <!DOCTYPE html> 开头）：
     /// 替他存成一张游戏卡，正文里那一大段换成一句话。
     ///

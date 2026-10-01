@@ -7,7 +7,10 @@ using namespace metal;
 // r 里每四个数是一圈：圆心 x、圆心 y、出生了几秒、多大力。
 // 波前以固定速度往外走，越走越弱；经过的地方按波的斜率把底下的画面推开一点（折射），
 // 波峰上加一点亮（反光）。
-[[ stitchable ]] half4 qiRipple(float2 pos, SwiftUI::Layer layer, device const float *r, int count) {
+//
+// ⚠️ 推开的距离要限住（不超过 maxSampleOffset），取样点也要夹在画面里：
+// 几圈叠在一起推得太远，会取到画面外面——那儿是空的，就露出一格一格的方块和白边。
+[[ stitchable ]] half4 qiRipple(float2 pos, SwiftUI::Layer layer, device const float *r, int count, float2 size) {
     float2 off = float2(0.0);
     float shine = 0.0;
     for (int i = 0; i + 3 < count; i += 4) {
@@ -24,7 +27,10 @@ using namespace metal;
         off += dir * w * 12.0;
         shine += max(0.0, cos(x * 0.11)) * env;
     }
-    half4 col = layer.sample(pos - off);
-    col.rgb += half3(shine * 0.07);
+    float len = length(off);
+    if (len > 30.0) { off *= 30.0 / len; }
+    float2 p = clamp(pos - off, float2(1.0), size - 1.0);
+    half4 col = layer.sample(p);
+    col.rgb += half3(min(shine, 1.5) * 0.07);
     return col;
 }

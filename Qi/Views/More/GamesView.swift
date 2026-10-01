@@ -25,6 +25,8 @@ struct GamesView: View {
     @State private var mcpText = ""
     @State private var loadingMCP = false
     @State private var pickingGenre: LocalGame?
+    @State private var renaming: LocalGame?
+    @State private var newName = ""
     @State private var openingHuman = false
 
     var body: some View {
@@ -61,6 +63,16 @@ struct GamesView: View {
             WebPageView(title: "人类端",
                         url: URL(string: "https://toy.cedarstar.org")!)
         }
+        .alert("重命名", isPresented: Binding(
+            get: { renaming != nil },
+            set: { if !$0 { renaming = nil } })) {
+            TextField("名字", text: $newName)
+            Button("取消", role: .cancel) { renaming = nil }
+            Button("好") {
+                if let g = renaming { app.renameGame(g.id, to: newName) }
+                renaming = nil
+            }
+        }
         .confirmationDialog("这算哪一类", isPresented: Binding(
             get: { pickingGenre != nil },
             set: { if !$0 { pickingGenre = nil } })) {
@@ -92,6 +104,12 @@ struct GamesView: View {
                         .buttonStyle(.plain)
                         .contextMenu {
                             Button {
+                                newName = game.name
+                                renaming = game
+                            } label: {
+                                Label("重命名", systemImage: "pencil")
+                            }
+                            Button {
                                 pickingGenre = game
                             } label: {
                                 Label("改分类", systemImage: "tag")
@@ -108,7 +126,7 @@ struct GamesView: View {
         }
 
         if store.games.isEmpty {
-            Text("导入网页游戏后即可运行，长按条目可修改分类。")
+            Text("导入网页游戏后即可运行，长按条目可重命名、修改分类。")
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
         }
@@ -344,6 +362,11 @@ final class GameStore: ObservableObject {
         }
     }
 
+    func rename(_ id: UUID, to name: String) {
+        guard let i = games.firstIndex(where: { $0.id == id }) else { return }
+        games[i].name = name
+    }
+
     func setGenre(_ game: LocalGame, _ genre: GameGenre) {
         guard let i = games.firstIndex(where: { $0.id == game.id }) else { return }
         games[i].genre = genre.rawValue
@@ -397,17 +420,38 @@ final class GameStore: ObservableObject {
 
 struct GamePlayerView: View {
     let game: LocalGame
+    @EnvironmentObject var app: AppState
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var store = GameStore.shared
+    @State private var renaming = false
+    @State private var newName = ""
+
+    private var title: String {
+        store.games.first { $0.id == game.id }?.name ?? game.name
+    }
 
     var body: some View {
         NavigationStack {
             LocalWebView(url: { GameStore.shared.prepare(game); return GameStore.shared.url(for: game) }())
                 .ignoresSafeArea(edges: .bottom)
-                .navigationTitle(game.name)
+                .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
+                .alert("重命名", isPresented: $renaming) {
+                    TextField("名字", text: $newName)
+                    Button("取消", role: .cancel) {}
+                    Button("好") { app.renameGame(game.id, to: newName) }
+                }
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("退出") { dismiss() }
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            newName = title
+                            renaming = true
+                        } label: {
+                            Image(systemName: "pencil")
+                        }
                     }
                     // 把这份 HTML 文件导出来：存到文件、发给别人、换个浏览器打开
                     ToolbarItem(placement: .topBarTrailing) {

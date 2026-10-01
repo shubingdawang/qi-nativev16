@@ -867,7 +867,7 @@ struct MessageBubbleView: View {
                     .font(.app(17))
                     .foregroundStyle(app.settings.accentColor)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(message.gameName.isEmpty ? "他做的东西" : message.gameName)
+                    Text(game?.name ?? (message.gameName.isEmpty ? "他做的东西" : message.gameName))
                         .font(.app(14, weight: .medium))
                         .foregroundStyle(Theme.textMain(scheme))
                         .lineLimit(1)

@@ -31,10 +31,15 @@ struct SplashView: View {
         GeometryReader { geo in
             TimelineView(.animation) { tl in
                 let now = tl.date
-                scene(size: geo.size, now: now, safeTop: geo.safeAreaInsets.top,
-                      safeBottom: geo.safeAreaInsets.bottom)
-                    .layerEffect(ShaderLibrary.qiRipple(.floatArray(sim.shaderArgs(now: now))),
-                                 maxSampleOffset: CGSize(width: 28, height: 28))
+                ZStack {
+                    // 水面（会被涟漪折射的只有这一层）
+                    water(size: geo.size, now: now)
+                        .layerEffect(ShaderLibrary.qiRipple(.floatArray(sim.shaderArgs(now: now)),
+                                                            .float2(geo.size)),
+                                     maxSampleOffset: CGSize(width: 40, height: 40))
+                    // 字浮在水面上，不跟着折射——折射会把带阴影的字切成一格一格的
+                    words(safeTop: geo.safeAreaInsets.top, safeBottom: geo.safeAreaInsets.bottom)
+                }
             }
             .mask { revealMask }
             .contentShape(Rectangle())
@@ -48,62 +53,109 @@ struct SplashView: View {
 
     // MARK: 画面
 
-    private func scene(size: CGSize, now: Date, safeTop: CGFloat, safeBottom: CGFloat) -> some View {
-        ZStack {
-            // 倒影：壁纸糊开、放大一点（糊的边不露底）
-            WallpaperBackground()
-                .blur(radius: 16)
-                .scaleEffect(1.12)
-            // 夜色。白天浅一些，夜里深一些
-            LinearGradient(colors: [Color(red: 0.04, green: 0.06, blue: 0.13).opacity(stamp.night ? 0.55 : 0.30),
-                                    Color(red: 0.02, green: 0.03, blue: 0.08).opacity(stamp.night ? 0.78 : 0.50)],
-                           startPoint: .top, endPoint: .bottom)
+    /// 什么时辰什么颜色：天色从上往下（中间那道是水天相接），加上那一处光的颜色和位置
+    struct Palette {
+        var stops: [Gradient.Stop]
+        var light: Color
+        var lightAt: CGPoint      // 按画面比例
+        var ink: Color            // 字的颜色
+    }
 
-            // 光尘和那团游动的光
+    static func palette(hour h: Int) -> Palette {
+        func c(_ r: Double, _ g: Double, _ b: Double) -> Color { Color(red: r, green: g, blue: b) }
+        switch h {
+        case 5..<8:     // 清晨：藏青里透出一道蜜桃色
+            return Palette(stops: [.init(color: c(0.14, 0.18, 0.36), location: 0),
+                                   .init(color: c(0.55, 0.42, 0.56), location: 0.30),
+                                   .init(color: c(0.95, 0.68, 0.58), location: 0.40),
+                                   .init(color: c(0.20, 0.20, 0.36), location: 0.52),
+                                   .init(color: c(0.07, 0.08, 0.18), location: 1)],
+                           light: c(1, 0.82, 0.70), lightAt: CGPoint(x: 0.34, y: 0.33),
+                           ink: c(1, 0.95, 0.92))
+        case 8..<17:    // 白天：青绿的深水，光从上面漏下来
+            return Palette(stops: [.init(color: c(0.10, 0.34, 0.42), location: 0),
+                                   .init(color: c(0.16, 0.46, 0.50), location: 0.35),
+                                   .init(color: c(0.06, 0.24, 0.31), location: 0.7),
+                                   .init(color: c(0.02, 0.11, 0.17), location: 1)],
+                           light: c(1, 0.96, 0.84), lightAt: CGPoint(x: 0.70, y: 0.12),
+                           ink: c(0.96, 1, 0.98))
+        case 17..<19:   // 傍晚：紫到橘的一道天边，水里一条金
+            return Palette(stops: [.init(color: c(0.08, 0.07, 0.22), location: 0),
+                                   .init(color: c(0.40, 0.20, 0.40), location: 0.26),
+                                   .init(color: c(0.95, 0.56, 0.36), location: 0.38),
+                                   .init(color: c(0.30, 0.14, 0.28), location: 0.48),
+                                   .init(color: c(0.06, 0.04, 0.14), location: 1)],
+                           light: c(1, 0.74, 0.46), lightAt: CGPoint(x: 0.52, y: 0.36),
+                           ink: c(1, 0.93, 0.86))
+        default:        // 夜里、凌晨：墨蓝，一轮月亮，水里一条碎银
+            return Palette(stops: [.init(color: c(0.02, 0.04, 0.11), location: 0),
+                                   .init(color: c(0.06, 0.09, 0.22), location: 0.38),
+                                   .init(color: c(0.03, 0.05, 0.13), location: 0.6),
+                                   .init(color: c(0.01, 0.01, 0.05), location: 1)],
+                           light: c(0.84, 0.90, 1), lightAt: CGPoint(x: 0.66, y: 0.17),
+                           ink: c(0.92, 0.95, 1))
+        }
+    }
+
+    private func water(size: CGSize, now: Date) -> some View {
+        let pal = Self.palette(hour: stamp.hour)
+        return ZStack {
+            // 她的壁纸只当一点点纹理：去色、糊开，颜色交给天色
+            WallpaperBackground()
+                .saturation(0.25)
+                .blur(radius: 18)
+                .scaleEffect(1.12)
+            LinearGradient(stops: pal.stops, startPoint: .top, endPoint: .bottom)
+                .opacity(0.86)
+
             Canvas { gc, sz in
                 sim.step(now, size: sz)
-                drawGlow(gc, size: sz, now: now)
+                drawLight(gc, size: sz, now: now, pal: pal)
+                drawStreak(gc, size: sz, now: now, pal: pal)
                 drawMotes(gc, now: now)
             }
             .allowsHitTesting(false)
-
-            timeColumns
-                .padding(.top, safeTop + 64)
-                .padding(.trailing, 34)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                .allowsHitTesting(false)
-
-            Text("轻点进入")
-                .font(.system(size: 12, weight: .light, design: .serif))
-                .tracking(6)
-                .foregroundStyle(.white.opacity(0.62))
-                .offset(y: risen ? 0 : 18)
-                .blur(radius: risen ? 0 : 6)
-                .animation(.spring(response: 1.2, dampingFraction: 0.8).delay(2.2), value: risen)
-                .padding(.bottom, safeBottom + 44)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                .allowsHitTesting(false)
         }
         .frame(width: size.width, height: size.height)
         .clipped()
     }
 
+    private func words(safeTop: CGFloat, safeBottom: CGFloat) -> some View {
+        let ink = Self.palette(hour: stamp.hour).ink
+        return ZStack {
+            timeStack(ink)
+                .padding(.top, safeTop + 64)
+                .padding(.trailing, 34)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+
+            Text("轻点进入")
+                .font(.system(size: 12, weight: .light, design: .serif))
+                .tracking(6)
+                .foregroundStyle(ink.opacity(0.6))
+                .offset(y: risen ? 0 : 18)
+                .blur(radius: risen ? 0 : 6)
+                .animation(.spring(response: 1.2, dampingFraction: 0.8).delay(2.2), value: risen)
+                .padding(.bottom, safeBottom + 44)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        }
+        .allowsHitTesting(false)
+    }
+
     /// 右上角竖排：右边一列是日期，左边一列是此刻。一个字一个字从水下浮上来
-    private var timeColumns: some View {
+    private func timeStack(_ ink: Color) -> some View {
         HStack(alignment: .top, spacing: 16) {
-            column(stamp.time, startDelay: 0.9)
+            column(stamp.time, ink: ink, startDelay: 0.9)
                 .padding(.top, 34)
-            column(stamp.date, startDelay: 0.35)
+            column(stamp.date, ink: ink, startDelay: 0.35)
         }
     }
 
-    private func column(_ text: String, startDelay: Double) -> some View {
+    private func column(_ text: String, ink: Color, startDelay: Double) -> some View {
         VStack(spacing: 7) {
             ForEach(Array(text.enumerated()), id: \.offset) { i, ch in
                 Text(String(ch))
                     .font(.system(size: 21, weight: .light, design: .serif))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .shadow(color: .black.opacity(0.35), radius: 6)
+                    .foregroundStyle(ink.opacity(0.92))
                     .offset(y: risen ? 0 : 16)
                     .blur(radius: risen ? 0 : 7)
                     .animation(.spring(response: 1.1, dampingFraction: 0.72)
@@ -112,22 +164,51 @@ struct SplashView: View {
         }
     }
 
-    /// 一团暖光在水面下慢慢游（李萨如轨迹，周期几十秒）
-    private func drawGlow(_ gc: GraphicsContext, size: CGSize, now: Date) {
+    /// 那一处光（月亮、太阳、天边）：一大团晕，中间一个亮一点的核，慢慢呼吸
+    private func drawLight(_ gc: GraphicsContext, size: CGSize, now: Date, pal: Palette) {
         let t = now.timeIntervalSinceReferenceDate
-        let c = CGPoint(x: size.width * (0.5 + 0.28 * sin(t * 0.11)),
-                        y: size.height * (0.42 + 0.18 * sin(t * 0.07 + 1.3)))
-        let r = max(size.width, size.height) * 0.55
+        let c = CGPoint(x: size.width * pal.lightAt.x, y: size.height * pal.lightAt.y)
+        let breathe = 1 + 0.04 * sin(t * 0.5)
         var g = gc
         g.blendMode = .plusLighter
+        let r = size.width * 0.75 * breathe
         g.fill(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)),
-               with: .radialGradient(Gradient(colors: [Color(red: 1, green: 0.82, blue: 0.6).opacity(0.16),
-                                                       Color(red: 1, green: 0.7, blue: 0.5).opacity(0.05),
-                                                       .clear]),
+               with: .radialGradient(Gradient(colors: [pal.light.opacity(0.30), pal.light.opacity(0.08), .clear]),
                                      center: c, startRadius: 0, endRadius: r))
+        let core: CGFloat = 26
+        g.fill(Path(ellipseIn: CGRect(x: c.x - core * 2, y: c.y - core * 2, width: core * 4, height: core * 4)),
+               with: .radialGradient(Gradient(colors: [pal.light.opacity(0.85), pal.light.opacity(0.35), .clear]),
+                                     center: c, startRadius: core * 0.55, endRadius: core * 2))
     }
 
-    /// 光尘：近的是一颗亮点带一圈晕；远的是一片虚的光斑，边上一道淡淡的环（散景）
+    /// 光在水里的倒影：从光底下一路往下，一行一行碎开的短横，越往下越宽越淡、闪个不停
+    private func drawStreak(_ gc: GraphicsContext, size: CGSize, now: Date, pal: Palette) {
+        let t = now.timeIntervalSinceReferenceDate
+        var g = gc
+        g.blendMode = .plusLighter
+        let cx = size.width * pal.lightAt.x
+        let top = size.height * pal.lightAt.y + 60
+        guard size.height > top else { return }
+        var y = top
+        var row = 0
+        while y < size.height + 10 {
+            let k = (y - top) / (size.height - top)
+            let spread = 10 + k * size.width * 0.34
+            for j in 0..<3 {
+                let seed = Double(row * 7 + j * 13)
+                let wob = CGFloat(sin(t * (0.5 + 0.25 * Double(j)) + seed))
+                let w = (10 + 46 * k) * CGFloat(0.35 + 0.65 * abs(sin(t * 0.8 + seed * 1.7)))
+                let x = cx + wob * spread * 0.45 + CGFloat(j - 1) * spread * 0.3
+                let a = (1 - k * 0.75) * 0.32 * (0.35 + 0.65 * abs(sin(t * 1.2 + seed)))
+                let rect = CGRect(x: x - w / 2, y: y, width: w, height: 1.4 + k * 1.6)
+                g.fill(Capsule().path(in: rect), with: .color(pal.light.opacity(a)))
+            }
+            y += 5 + k * 10
+            row += 1
+        }
+    }
+
+    /// 光尘：近的是一颗亮点带一圈晕；远的是一片很虚的光斑（散景）
     private func drawMotes(_ gc: GraphicsContext, now: Date) {
         let t = now.timeIntervalSinceReferenceDate
         var g = gc
@@ -137,16 +218,11 @@ struct SplashView: View {
             let color = m.warm ? Color(red: 1, green: 0.86, blue: 0.64) : Color(red: 0.82, green: 0.9, blue: 1)
             let r = m.r
             let rect = CGRect(x: m.p.x - r, y: m.p.y - r, width: r * 2, height: r * 2)
-            if m.bokeh {
-                g.fill(Path(ellipseIn: rect), with: .color(color.opacity(0.07 * tw)))
-                g.stroke(Path(ellipseIn: rect.insetBy(dx: 0.5, dy: 0.5)),
-                         with: .color(color.opacity(0.10 * tw)), lineWidth: 1)
-            } else {
-                g.fill(Path(ellipseIn: rect),
-                       with: .radialGradient(Gradient(colors: [color.opacity(0.95 * tw),
-                                                               color.opacity(0.28 * tw), .clear]),
-                                             center: m.p, startRadius: 0, endRadius: r))
-            }
+            let inner = m.bokeh ? 0.10 * tw : 0.95 * tw
+            let mid = m.bokeh ? 0.06 * tw : 0.28 * tw
+            g.fill(Path(ellipseIn: rect),
+                   with: .radialGradient(Gradient(colors: [color.opacity(inner), color.opacity(mid), .clear]),
+                                         center: m.p, startRadius: 0, endRadius: r))
         }
     }
 
@@ -204,7 +280,7 @@ struct SplashView: View {
 
     // MARK: 竖排的日期和时间
 
-    struct Stamp { var date: String; var time: String; var night: Bool }
+    struct Stamp { var date: String; var time: String; var hour: Int }
 
     static func timeColumns(_ d: Date) -> Stamp {
         let c = Calendar.current.dateComponents([.month, .day, .hour, .minute], from: d)
@@ -224,7 +300,7 @@ struct SplashView: View {
         let minute = mi == 0 ? "整" : (mi < 10 ? "零" + cn(mi) + "分" : cn(mi) + "分")
         return Stamp(date: cn(mo) + "月" + cn(day) + "日",
                      time: part + hour + "点" + minute,
-                     night: h >= 19 || h < 6)
+                     hour: h)
     }
 
     /// 1–59 写成汉字
@@ -330,7 +406,7 @@ final class PondSim {
 
     private func seed(_ size: CGSize) {
         for i in 0..<46 {
-            let bokeh = i < 12
+            let bokeh = i < 8
             motes.append(Mote(
                 p: CGPoint(x: .random(in: 0...size.width), y: .random(in: 0...size.height)),
                 r: bokeh ? .random(in: 16...34) : .random(in: 2...5.5),
