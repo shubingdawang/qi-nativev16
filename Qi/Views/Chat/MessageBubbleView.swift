@@ -522,7 +522,7 @@ struct MessageBubbleView: View {
 
             // fillWidth: false —— 气泡跟着字数走，不再一律撑成最长的那行
             MarkdownText(text: text, fontSize: app.settings.fontSize, fillWidth: false)
-                .foregroundStyle(Theme.textMain(scheme))
+                .foregroundStyle(bubbleInk)
 
             // 译文贴在原文下面，中间一条虚线隔开
             if message.isTranslating {
@@ -536,7 +536,7 @@ struct MessageBubbleView: View {
                     .frame(height: 1)
                 Text(t)
                     .font(.system(size: max(11, app.settings.fontSize - 2)))
-                    .foregroundStyle(Theme.textMuted(scheme))
+                    .foregroundStyle(monoUser ? bubbleInk.opacity(0.65) : Theme.textMuted(scheme))
             }
 
             // ⚠️ **他这一条里真的落下了什么。**
@@ -1854,12 +1854,26 @@ struct MessageBubbleView: View {
 
     /// 气泡就是一块玻璃。自己和对方的区别靠左右位置，
     /// 不靠颜色——整块染色会变成不透光的塑料片。
+    /// 「极简」主题里她自己那条：黑底白字（深色模式反过来）
+    private var monoUser: Bool { isUser && app.settings.preset.skin.bubbles == .mono }
+
+    /// 气泡里正文的颜色
+    private var bubbleInk: Color {
+        guard monoUser else { return Theme.textMain(scheme) }
+        return scheme == .dark ? MinimalPalette.ink : .white
+    }
+
     @ViewBuilder
     private var bubbleShape: some View {
         // 有的主题气泡不是玻璃（「家」＝claude.ai 就是）：
         // **她说的话**是一块实心的浅面板，**他说的话根本没有气泡**——
         // 就直接印在纸上。这一档不走 GlassSurface。
-        if app.settings.preset.skin.bubbles == .panel {
+        if app.settings.preset.skin.bubbles == .mono {
+            // 黑白：她的一块实心黑（深色下是白），他的一块白卡片（深色下是深灰）
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(isUser ? MinimalPalette.contrast
+                             : (scheme == .dark ? MinimalPalette.cardDark : MinimalPalette.card))
+        } else if app.settings.preset.skin.bubbles == .panel {
             if isUser {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(app.settings.preset.skin.cardFill.c(scheme))

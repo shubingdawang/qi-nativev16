@@ -10,6 +10,7 @@ enum ThemePreset: String, CaseIterable, Identifiable, Codable {
     case original = "original"
     case home = "home"
     case gradient = "gradient"
+    case minimal = "minimal"
     // 「兔牙」那一档撤了：她说指向性太高。存着 tutou 的旧设置读回来会落到「原来的」
 
     var id: String { rawValue }
@@ -19,6 +20,7 @@ enum ThemePreset: String, CaseIterable, Identifiable, Codable {
         case .original: return "原来的"
         case .home:     return "家"
         case .gradient: return "渐变"
+        case .minimal:  return "极简"
         }
     }
 
@@ -27,6 +29,7 @@ enum ThemePreset: String, CaseIterable, Identifiable, Codable {
         case .original: return "随主题色变化，可自定义染色。壁纸使用自选图片。"
         case .home:     return "沿用 claude.ai 配色：暖纸底色、炭黑文字、橙色点缀，气泡样式一致。启用后替换壁纸。"
         case .gradient: return "以全屏渐变为底，气泡保持玻璃效果。选中后可在下方调整两端颜色与方向。启用后替换壁纸。"
+        case .minimal:  return "黑白两色：浅灰底、白卡片、黑字。你的消息是黑底白字，他的消息是白卡片。启用后替换壁纸。"
         }
     }
 
@@ -39,6 +42,8 @@ enum ThemePreset: String, CaseIterable, Identifiable, Codable {
             return "整套替换：底色为 claude.ai 暖纸色，自选壁纸暂时停用（切回「原来的」即恢复）。气泡同步更换：你的消息显示为浅色面板，他的消息不加气泡，直接排在纸面上。"
         case .gradient:
             return "全屏渐变底色，两端颜色与方向在上方调整。气泡保持玻璃效果。"
+        case .minimal:
+            return "整套替换为黑白：底色浅灰（深色模式为近黑），卡片纯白（深色为深灰），强调色为黑（深色为白）。你的消息黑底白字，他的消息白卡片。自选壁纸暂时停用（切回「原来的」即恢复）。"
         }
     }
 
@@ -52,6 +57,9 @@ enum ThemePreset: String, CaseIterable, Identifiable, Codable {
         case .home:
             return [HomePalette.sage, HomePalette.amber,
                     HomePalette.bodyPink, HomePalette.orange]
+        case .minimal:
+            return [MinimalPalette.paper, MinimalPalette.line,
+                    MinimalPalette.soft, MinimalPalette.ink]
         default:
             return []
         }
@@ -76,6 +84,7 @@ enum ThemePreset: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .original, .gradient: return .original
         case .home:                return .home
+        case .minimal:             return .minimal
         }
     }
 }
@@ -114,6 +123,8 @@ struct SkinColor {
 enum BubbleStyle {
     /// 毛玻璃（原来那样）
     case glass
+    /// 黑白：**她说的话**黑底白字（深色模式反过来），**他说的话**一块白卡片
+    case mono
     /// 实心面板：**她说的话**是一块浅面板，**他说的话不套气泡**（claude.ai 那样）
     case panel
 }
@@ -185,6 +196,42 @@ extension ThemeSkin {
         primary:      HomePalette.orange,
         remind:       HomePalette.amber
     )
+
+    /// 「极简」：黑白。强调靠字重和黑白反转，不靠颜色
+    static let minimal = ThemeSkin(
+        cardFill:     SkinColor(MinimalPalette.card, MinimalPalette.cardDark),
+        cardStroke:   SkinColor(MinimalPalette.line, .white.opacity(0.08)),
+        // 底栏、输入框还是原来那层毛玻璃
+        barFill:      SkinColor(.white.opacity(0.55), .white.opacity(0.09)),
+        textMain:     SkinColor(MinimalPalette.ink, MinimalPalette.inkDark),
+        textSoft:     SkinColor(Color(hexString: "3A3A3A")!, Color(hexString: "C8C8C8")!),
+        textMuted:    SkinColor(MinimalPalette.soft, Color(hexString: "8A8A8E")!),
+        controlFill:  SkinColor(MinimalPalette.card.opacity(0.95), Color(hexString: "2A2A2C")!),
+        controlMuted: SkinColor(MinimalPalette.soft),
+        page:         SkinColor(MinimalPalette.paper, MinimalPalette.paperDark),
+        softFillDeep: SkinColor(Color(hexString: "EDEDEC")!, .white.opacity(0.06)),
+        bubbles:      .mono,
+        accent:       MinimalPalette.contrast,
+        primary:      MinimalPalette.contrast,
+        remind:       MinimalPalette.contrast
+    )
+}
+
+/// 「极简」那套的色值。只有黑、白、几档灰
+enum MinimalPalette {
+    static let paper     = Color(hexString: "F4F4F3")!   // 页面底
+    static let card      = Color(hexString: "FFFFFF")!   // 卡片、他的气泡
+    static let line      = Color(hexString: "E6E6E4")!   // 分隔线
+    static let soft      = Color(hexString: "8B8B8B")!   // 灰字
+    static let ink       = Color(hexString: "111111")!   // 正文、她的气泡
+
+    static let paperDark = Color(hexString: "0E0E0F")!
+    static let cardDark  = Color(hexString: "1C1C1E")!
+    static let inkDark   = Color(hexString: "F2F2F2")!
+
+    /// 浅色下是黑、深色下是白——强调色、她的气泡都用它
+    static let contrast = Color(UIColor { $0.userInterfaceStyle == .dark
+        ? UIColor(white: 0.95, alpha: 1) : UIColor(white: 0.07, alpha: 1) })
 }
 
 /// 「家」那套的色值
