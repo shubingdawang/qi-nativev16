@@ -258,7 +258,7 @@ struct AppearanceView: View {
             .tint(app.settings.accentColor)
             .padding(.horizontal, 16)
             .padding(.vertical, 11)
-            SettingsNote("打开 App 时先是一扇拱窗：手指点、划窗里会起涟漪，拨窗上的珍珠串会晃；轻点一下进入。只在冷启动时出现。")
+            SettingsNote("打开 App 时先是毛玻璃上的一扇彩绘玻璃拱窗：手指点、划窗里会起涟漪，拨窗上的珍珠串会晃；轻点一下进入。只在冷启动时出现。")
         }
     }
 

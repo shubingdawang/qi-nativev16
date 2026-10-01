@@ -1,15 +1,16 @@
 import SwiftUI
 
-/// 开屏：一页象牙色的纸，中间一扇拱窗。
+/// 开屏：毛玻璃上的一扇彩绘玻璃拱窗。
 ///
-/// 她要的风格：浅、雅、像一页复古手账——象牙白的底、细金线、
-/// 藕荷和酒红点一点、衬线斜体的小字。只要这种气质，不照搬别人的物件。
+/// 她定的：外面不要纸底，做成**毛玻璃**——底下的聊天页透上来，但一切都是糊的；
+/// 窗里不放壁纸（壁纸上的水珠显得突兀），换成一扇彩绘玻璃；窗框要华丽：
+/// 打磨过的金边、一圈宝石、藤叶、立柱、卷草、冠饰、窗台下的垂饰。
 ///
 /// 动的东西都讲物理、讲因果（motion-web 那份主张）：
-///   · 拱窗里是她自己的壁纸，手指点、划过窗里，水波一样起涟漪（`SplashRipple.metal`）
+///   · 手指点、划过窗里，彩色玻璃像水面一样起涟漪（`SplashRipple.metal` 的 `qiStained`）
 ///   · 窗上搭着一串珍珠，是一根真的绳子（Verlet）：进来时从拉直的样子垂下去晃两下；
 ///     手指拨它会荡，坠子跟着甩
-///   · 字一个个浮上来；几颗金色的小星一闪一闪
+///   · 有一团光从窗上面透进来，慢慢左右移；字一个个浮上来；几颗金色小星一闪一闪
 ///   · 轻点任何地方：那一点向外让开，露出 App
 ///
 /// 只在冷启动出现一次；设置里能关（`AppSettings.splashOn`）。
@@ -19,7 +20,6 @@ struct SplashView: View {
 
     @State private var ripples = RippleSet()
     @State private var rope = PearlRope()
-    @State private var grain = PaperGrain()
     @State private var leaving = false
     @State private var revealR: CGFloat = 0
     @State private var revealAt: CGPoint = .zero
@@ -29,40 +29,43 @@ struct SplashView: View {
     @State private var stamp = SplashView.stamp(Date())
 
     // 色板
-    static let paper = Color(red: 0.965, green: 0.945, blue: 0.915)
-    static let gold = Color(red: 0.74, green: 0.60, blue: 0.38)
-    static let wine = Color(red: 0.50, green: 0.15, blue: 0.20)
-    static let rose = Color(red: 0.70, green: 0.50, blue: 0.52)
-    static let ink = Color(red: 0.24, green: 0.19, blue: 0.18)
+    static let gold = Color(red: 0.722, green: 0.573, blue: 0.310)
+    static let goldDeep = Color(red: 0.431, green: 0.314, blue: 0.114)
+    static let wine = Color(red: 0.478, green: 0.133, blue: 0.212)
+    static let rose = Color(red: 0.612, green: 0.365, blue: 0.416)
+    static let ink = Color(red: 0.227, green: 0.176, blue: 0.169)
+    static let veil = Color(red: 0.988, green: 0.973, blue: 0.945)
 
     var body: some View {
         GeometryReader { geo in
             let size = geo.size
             let win = Self.windowRect(in: size)
             ZStack {
-                Self.paper
-                // 纸的颗粒和四周一圈微微发暖
-                Canvas { gc, sz in grain.draw(gc, size: sz) }
-                RadialGradient(colors: [.clear, Color(red: 0.86, green: 0.80, blue: 0.72).opacity(0.35)],
-                               center: .center, startRadius: size.height * 0.25,
-                               endRadius: size.height * 0.75)
+                // 毛玻璃：底下的 App 透上来，全是糊的
+                Rectangle().fill(.ultraThinMaterial)
+                Self.veil.opacity(0.42)
+
+                // 静的金线：窗框、立柱、卷草、边框（只画一次）
+                Canvas { gc, sz in drawFrame(gc, win: win, size: sz) }
+                    .allowsHitTesting(false)
 
                 TimelineView(.animation) { tl in
                     let now = tl.date
                     ZStack {
                         glass(win: win, now: now)
                         Canvas { gc, sz in
-                            drawFrame(gc, win: win, size: sz)
-                            drawSparkles(gc, size: sz, win: win, now: now)
+                            drawTracery(gc, win: win)
+                            drawSparkles(gc, size: sz, now: now)
                             rope.step(now, win: win)
                             rope.draw(gc)
                         }
+                        .allowsHitTesting(false)
                     }
                 }
 
-                words(size: size, win: win, safeTop: geo.safeAreaInsets.top,
-                      safeBottom: geo.safeAreaInsets.bottom)
+                words(size: size, win: win, safeBottom: geo.safeAreaInsets.bottom)
             }
+            .environment(\.colorScheme, .light)
             .mask { revealMask }
             .contentShape(Rectangle())
             .gesture(touch(size: size, win: win))
@@ -74,91 +77,166 @@ struct SplashView: View {
     // MARK: 拱窗
 
     static func windowRect(in size: CGSize) -> CGRect {
-        let w = min(size.width * 0.6, 270)
+        let w = min(size.width * 0.54, 240)
         let h = w * 1.42
-        return CGRect(x: (size.width - w) / 2, y: size.height * 0.2, width: w, height: h)
+        return CGRect(x: (size.width - w) / 2, y: size.height * 0.23, width: w, height: h)
     }
 
-    /// 窗里：她的壁纸，会起涟漪；上面斜斜一道玻璃反光
+    /// 窗里：一扇彩绘玻璃，会起涟漪，有一团光从上面透进来慢慢移
     private func glass(win: CGRect, now: Date) -> some View {
-        ZStack {
-            WallpaperBackground()
-            LinearGradient(colors: [.white.opacity(0.22), .clear, .clear, .white.opacity(0.10)],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-        }
-        .frame(width: win.width, height: win.height)
-        .clipped()
-        .layerEffect(ShaderLibrary.qiRipple(.floatArray(ripples.args(now: now)),
-                                            .float2(win.size)),
-                     maxSampleOffset: CGSize(width: 40, height: 40))
-        .clipShape(ArchShape())
-        .overlay(ArchShape().stroke(Self.ink.opacity(0.12), lineWidth: 3).blur(radius: 3).clipShape(ArchShape()))
-        .scaleEffect(risen ? 1 : 0.94, anchor: .bottom)
-        .animation(.spring(response: 1.2, dampingFraction: 0.7), value: risen)
-        .position(x: win.midX, y: win.midY)
+        let t = Float(now.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 10_000))
+        return Rectangle()
+            .fill(.white)
+            .frame(width: win.width, height: win.height)
+            .colorEffect(ShaderLibrary.qiStained(.floatArray(ripples.args(now: now)),
+                                                 .float2(win.size), .float(t)))
+            .clipShape(ArchShape())
+            .scaleEffect(risen ? 1 : 0.94, anchor: .bottom)
+            .animation(.spring(response: 1.2, dampingFraction: 0.7), value: risen)
+            .position(x: win.midX, y: win.midY)
     }
 
-    /// 金线：窗框两道、外圈一串小金珠、拱顶一颗菱形、窗台；整页一道细边框
+    /// 打磨过的金：亮暗相间的一道斜渐变
+    static func metal(_ a: CGPoint, _ b: CGPoint) -> GraphicsContext.Shading {
+        .linearGradient(Gradient(stops: [
+            .init(color: Color(red: 0.478, green: 0.353, blue: 0.133), location: 0),
+            .init(color: Color(red: 0.914, green: 0.812, blue: 0.529), location: 0.18),
+            .init(color: Color(red: 0.639, green: 0.482, blue: 0.208), location: 0.36),
+            .init(color: Color(red: 0.969, green: 0.902, blue: 0.682), location: 0.55),
+            .init(color: Color(red: 0.549, green: 0.416, blue: 0.173), location: 0.74),
+            .init(color: Color(red: 0.890, green: 0.769, blue: 0.486), location: 0.9),
+            .init(color: Color(red: 0.431, green: 0.314, blue: 0.114), location: 1)]),
+            startPoint: a, endPoint: b)
+    }
+
+    /// 金线、立柱、卷草、宝石……都是静的
     private func drawFrame(_ gc: GraphicsContext, win: CGRect, size: CGSize) {
         let gold = Self.gold
-        // 整页的边框：两道，四角各一颗菱形
-        for (inset, wdt, a) in [(14.0, 0.7, 0.55), (19.0, 0.4, 0.35)] {
-            let r = CGRect(origin: .zero, size: size).insetBy(dx: inset, dy: inset)
-            gc.stroke(Path(r), with: .color(gold.opacity(a)), lineWidth: wdt)
+        // 整页边框：两道金线，四角卷草
+        let borders: [(CGFloat, CGFloat, Double)] = [(14, 0.7, 0.6), (19, 0.4, 0.4)]
+        for (inset, lw, a) in borders {
+            gc.stroke(Path(CGRect(origin: .zero, size: size).insetBy(dx: inset, dy: inset)),
+                      with: .color(gold.opacity(a)), lineWidth: lw)
         }
-        for c in [CGPoint(x: 14, y: 14), CGPoint(x: size.width - 14, y: 14),
-                  CGPoint(x: 14, y: size.height - 14), CGPoint(x: size.width - 14, y: size.height - 14)] {
-            gc.fill(diamond(at: c, r: 4), with: .color(gold.opacity(0.7)))
+        let corners: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [
+            (14, 14, 1, 1), (size.width - 14, 14, -1, 1),
+            (14, size.height - 14, 1, -1), (size.width - 14, size.height - 14, -1, -1)]
+        for (x, y, sx, sy) in corners {
+            var c = gc
+            c.translateBy(x: x, y: y)
+            c.scaleBy(x: sx, y: sy)
+            var p = Path()
+            p.move(to: .zero)
+            p.addCurve(to: CGPoint(x: 22, y: 18), control1: CGPoint(x: 18, y: 2), control2: CGPoint(x: 26, y: 10))
+            p.addCurve(to: CGPoint(x: 15, y: 15), control1: CGPoint(x: 19, y: 23), control2: CGPoint(x: 12, y: 20))
+            p.move(to: .zero)
+            p.addCurve(to: CGPoint(x: 18, y: 22), control1: CGPoint(x: 2, y: 18), control2: CGPoint(x: 10, y: 26))
+            c.stroke(p, with: .color(gold), lineWidth: 0.8)
+            c.fill(Self.leaf(at: CGPoint(x: 6, y: 6), angle: .pi / 4, len: 12, wid: 3.5), with: .color(gold))
+            c.fill(Self.diamond(at: .zero, r: 4), with: .color(gold))
         }
 
-        // 窗框
-        let inner = win
-        let outer = win.insetBy(dx: -11, dy: -11)
-        gc.stroke(ArchShape().path(in: inner), with: .color(gold.opacity(0.9)), lineWidth: 0.8)
-        gc.stroke(ArchShape().path(in: outer), with: .color(gold), lineWidth: 1.2)
-        gc.stroke(ArchShape().path(in: win.insetBy(dx: -16, dy: -16)),
-                  with: .color(gold.opacity(0.45)), lineWidth: 0.5)
-        // 外圈拱上一串小金珠
-        let rad = outer.width / 2
-        let center = CGPoint(x: outer.midX, y: outer.minY + rad)
-        for deg in stride(from: 186.0, through: 354.0, by: 7.0) {
-            let a = deg * .pi / 180
-            let p = CGPoint(x: center.x + cos(a) * (rad + 5.5), y: center.y + sin(a) * (rad + 5.5))
-            gc.fill(Path(ellipseIn: CGRect(x: p.x - 1.3, y: p.y - 1.3, width: 2.6, height: 2.6)),
-                    with: .color(gold.opacity(0.8)))
+        let ox = win.minX - 11, oy = win.minY - 11, ow = win.width + 22, oh = win.height + 22
+        let outer = CGRect(x: ox, y: oy, width: ow, height: oh)
+        let R = ow / 2
+        let cx = win.midX, cy = oy + R
+        let arch = ArchShape()
+
+        // 窗框：一道有光泽的宽金边，带阴影；两侧暗线、中间一道亮线
+        var shadowed = gc
+        shadowed.addFilter(.shadow(color: Color(red: 0.27, green: 0.18, blue: 0.08).opacity(0.35), radius: 9, x: 0, y: 6))
+        shadowed.stroke(arch.path(in: outer.insetBy(dx: -1, dy: -1)),
+                        with: Self.metal(outer.origin, CGPoint(x: outer.maxX, y: outer.maxY)), lineWidth: 10)
+        gc.stroke(arch.path(in: outer.insetBy(dx: -6, dy: -6)), with: .color(Self.goldDeep), lineWidth: 0.7)
+        gc.stroke(arch.path(in: outer.insetBy(dx: 4, dy: 4)), with: .color(Self.goldDeep), lineWidth: 0.7)
+        gc.stroke(arch.path(in: outer.insetBy(dx: -1, dy: -1)),
+                  with: .color(Color(red: 1, green: 0.965, blue: 0.84).opacity(0.7)), lineWidth: 0.6)
+        gc.stroke(arch.path(in: win.insetBy(dx: -5, dy: -5)), with: .color(gold.opacity(0.5)), lineWidth: 0.5)
+
+        // 拱上一圈藤：起伏的蔓，两边交替长叶，叶间一颗小金珠
+        var vine = Path()
+        for d in stride(from: 180.0, through: 360.0, by: 2.0) {
+            let a = d * .pi / 180
+            let rr: CGFloat = R + 8 + CGFloat(sin(d * 0.35) * 2.2)
+            let pt = CGPoint(x: cx + CGFloat(cos(a)) * rr, y: cy + CGFloat(sin(a)) * rr)
+            if d == 180 { vine.move(to: pt) } else { vine.addLine(to: pt) }
         }
-        // 拱顶
-        gc.fill(diamond(at: CGPoint(x: outer.midX, y: outer.minY - 9), r: 5.5), with: .color(gold))
-        gc.fill(diamond(at: CGPoint(x: outer.midX, y: outer.minY - 9), r: 2.2), with: .color(Self.paper))
-        // 窗台
-        let sill = CGRect(x: outer.minX - 12, y: outer.maxY, width: outer.width + 24, height: 7)
-        gc.fill(Path(sill), with: .color(Self.paper))
+        gc.stroke(vine, with: .color(gold.opacity(0.85)), lineWidth: 0.7)
+        var k = 0
+        for d in stride(from: 186.0, through: 354.0, by: 9.0) {
+            defer { k += 1 }
+            if abs(d - 270) < 10 { continue }
+            let a = d * .pi / 180
+            let rr: CGFloat = R + 8 + CGFloat(sin(d * 0.35) * 2.2)
+            let pt = CGPoint(x: cx + CGFloat(cos(a)) * rr, y: cy + CGFloat(sin(a)) * rr)
+            let out: Double = k % 2 == 1 ? 1 : -1
+            gc.fill(Self.leaf(at: pt, angle: a + out * 0.9 + (d < 270 ? -0.5 : 0.5), len: 9, wid: 2.6),
+                    with: .color(gold.opacity(0.9)))
+            if k % 2 == 1 {
+                let bp = CGPoint(x: cx + CGFloat(cos(a + 0.05)) * (rr - 4), y: cy + CGFloat(sin(a + 0.05)) * (rr - 4))
+                gc.fill(Path(ellipseIn: CGRect(x: bp.x - 1.1, y: bp.y - 1.1, width: 2.2, height: 2.2)),
+                        with: .color(gold))
+            }
+        }
+
+        // 拱上嵌一圈宝石：红蓝珍珠相间，正顶一颗大红宝石
+        var gi = 0
+        for d in stride(from: 198.0, through: 342.0, by: 18.0) {
+            let a = d * .pi / 180
+            let pt = CGPoint(x: cx + CGFloat(cos(a)) * R, y: cy + CGFloat(sin(a)) * R)
+            let top = d == 270
+            Self.gem(gc, at: pt, r: top ? 5.2 : 3.4, kind: top ? .ruby : (gi % 2 == 1 ? .sapphire : .pearl))
+            gi += 1
+        }
+
+        // 冠饰：中间一片向上的叶、两边卷草、三颗宝石
+        gc.fill(Self.leaf(at: CGPoint(x: cx, y: oy - 8), angle: -.pi / 2, len: 22, wid: 5.5), with: .color(gold))
+        Self.scroll(gc, from: CGPoint(x: cx - 3, y: oy - 6), dir: -1, s: 13)
+        Self.scroll(gc, from: CGPoint(x: cx + 3, y: oy - 6), dir: 1, s: 13)
+        gc.fill(Self.leaf(at: CGPoint(x: cx - 4, y: oy - 12), angle: -.pi / 2 - 0.7, len: 12, wid: 3), with: .color(gold))
+        gc.fill(Self.leaf(at: CGPoint(x: cx + 4, y: oy - 12), angle: -.pi / 2 + 0.7, len: 12, wid: 3), with: .color(gold))
+        Self.gem(gc, at: CGPoint(x: cx, y: oy - 30), r: 4.2, kind: .ruby)
+        Self.gem(gc, at: CGPoint(x: cx - 15, y: oy - 15), r: 2.8, kind: .sapphire)
+        Self.gem(gc, at: CGPoint(x: cx + 15, y: oy - 15), r: 2.8, kind: .sapphire)
+
+        // 两侧立柱 + 拱肩卷草
+        Self.column(gc, x: ox - 12, top: cy + 4, bottom: oy + oh)
+        Self.column(gc, x: ox + ow + 12, top: cy + 4, bottom: oy + oh)
+        Self.scroll(gc, from: CGPoint(x: ox - 6, y: cy - 10), dir: -1, s: 18)
+        Self.scroll(gc, from: CGPoint(x: ox + ow + 6, y: cy - 10), dir: 1, s: 18)
+
+        // 窗台 + 托架 + 一排垂饰
+        let sill = CGRect(x: ox - 26, y: oy + oh, width: ow + 52, height: 8)
+        gc.fill(Path(sill), with: .color(Self.veil.opacity(0.55)))
         gc.stroke(Path(sill), with: .color(gold), lineWidth: 0.9)
         gc.stroke(Path(CGRect(x: sill.minX + 8, y: sill.maxY, width: sill.width - 16, height: 3)),
                   with: .color(gold.opacity(0.6)), lineWidth: 0.6)
-        // 窗的中梃：一根细金线，到拱起的地方为止
-        var mullion = Path()
-        mullion.move(to: CGPoint(x: inner.midX, y: inner.minY + inner.width / 2))
-        mullion.addLine(to: CGPoint(x: inner.midX, y: inner.maxY))
-        gc.stroke(mullion, with: .color(gold.opacity(0.55)), lineWidth: 0.6)
+        Self.scroll(gc, from: CGPoint(x: sill.minX + 26, y: sill.minY + 11), dir: -1, s: 12, up: -1)
+        Self.scroll(gc, from: CGPoint(x: sill.maxX - 26, y: sill.minY + 11), dir: 1, s: 12, up: -1)
+        for i in 0..<9 {
+            let px = cx - 48 + CGFloat(i) * 12
+            let len = 5 + CGFloat(4 - abs(i - 4)) * 2.5
+            var l = Path()
+            l.move(to: CGPoint(x: px, y: sill.minY + 11))
+            l.addLine(to: CGPoint(x: px, y: sill.minY + 11 + len))
+            gc.stroke(l, with: .color(gold.opacity(0.6)), lineWidth: 0.5)
+            gc.fill(Path(ellipseIn: CGRect(x: px - 1.4, y: sill.minY + 10.6 + len, width: 2.8, height: 2.8)),
+                    with: .color(gold))
+        }
     }
 
-    private func diamond(at c: CGPoint, r: CGFloat) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: c.x, y: c.y - r))
-        p.addLine(to: CGPoint(x: c.x + r * 0.7, y: c.y))
-        p.addLine(to: CGPoint(x: c.x, y: c.y + r))
-        p.addLine(to: CGPoint(x: c.x - r * 0.7, y: c.y))
-        p.closeSubpath()
-        return p
+    /// 玻璃上那一道金色内框（在玻璃上面，所以每帧画）
+    private func drawTracery(_ gc: GraphicsContext, win: CGRect) {
+        gc.stroke(ArchShape().path(in: win),
+                  with: Self.metal(win.origin, CGPoint(x: win.maxX, y: win.maxY)), lineWidth: 2.2)
     }
 
-    /// 几颗四角的小金星，错开着一闪一闪（在窗外面）
-    private func drawSparkles(_ gc: GraphicsContext, size: CGSize, win: CGRect, now: Date) {
+    /// 几颗四角的小金星，错开着一闪一闪
+    private func drawSparkles(_ gc: GraphicsContext, size: CGSize, now: Date) {
         let t = now.timeIntervalSinceReferenceDate
         let spots: [(CGFloat, CGFloat, CGFloat)] = [
-            (0.14, 0.16, 6), (0.86, 0.12, 4), (0.10, 0.52, 4.5), (0.90, 0.47, 7),
-            (0.18, 0.80, 3.5), (0.84, 0.84, 5), (0.50, 0.93, 3)]
+            (0.13, 0.15, 6), (0.87, 0.11, 4), (0.08, 0.50, 4.5), (0.92, 0.45, 7),
+            (0.16, 0.82, 3.5), (0.86, 0.85, 5), (0.50, 0.95, 3)]
         for (i, s) in spots.enumerated() {
             let k = 0.35 + 0.65 * pow(sin(t * (0.7 + 0.13 * Double(i)) + Double(i) * 1.9), 2)
             let c = CGPoint(x: size.width * s.0, y: size.height * s.1)
@@ -173,26 +251,113 @@ struct SplashView: View {
         }
     }
 
+    // MARK: 金饰的小零件
+
+    static func diamond(at c: CGPoint, r: CGFloat) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: c.x, y: c.y - r))
+        p.addLine(to: CGPoint(x: c.x + r * 0.7, y: c.y))
+        p.addLine(to: CGPoint(x: c.x, y: c.y + r))
+        p.addLine(to: CGPoint(x: c.x - r * 0.7, y: c.y))
+        p.closeSubpath()
+        return p
+    }
+
+    /// 一片叶子：从 `at` 往 `angle` 方向长
+    static func leaf(at p: CGPoint, angle: Double, len: CGFloat, wid: CGFloat) -> Path {
+        var l = Path()
+        l.move(to: .zero)
+        l.addQuadCurve(to: CGPoint(x: len, y: 0), control: CGPoint(x: len * 0.5, y: -wid))
+        l.addQuadCurve(to: .zero, control: CGPoint(x: len * 0.5, y: wid))
+        return l.applying(CGAffineTransform(translationX: p.x, y: p.y).rotated(by: angle))
+    }
+
+    /// 一个卷草：从 `from` 往 `dir` 方向（1 右 / -1 左）卷一圈半，末端一颗小珠
+    static func scroll(_ gc: GraphicsContext, from o: CGPoint, dir: CGFloat, s: CGFloat, up: CGFloat = 1) {
+        var p = Path()
+        p.move(to: o)
+        p.addCurve(to: CGPoint(x: o.x + dir * s * 0.9, y: o.y - up * s * 1.2),
+                   control1: CGPoint(x: o.x + dir * s * 0.9, y: o.y - up * s * 0.1),
+                   control2: CGPoint(x: o.x + dir * s * 1.4, y: o.y - up * s * 0.9))
+        p.addCurve(to: CGPoint(x: o.x + dir * s * 0.7, y: o.y - up * s * 0.8),
+                   control1: CGPoint(x: o.x + dir * s * 0.55, y: o.y - up * s * 1.4),
+                   control2: CGPoint(x: o.x + dir * s * 0.35, y: o.y - up * s * 0.95))
+        gc.stroke(p, with: .color(gold), lineWidth: 0.8)
+        let e = CGPoint(x: o.x + dir * s * 0.7, y: o.y - up * s * 0.8)
+        gc.fill(Path(ellipseIn: CGRect(x: e.x - 1.3, y: e.y - 1.3, width: 2.6, height: 2.6)), with: .color(gold))
+    }
+
+    /// 一根金立柱：柱身打磨金 + 三道凹槽、柱头柱础、柱头两边一对小卷草
+    static func column(_ gc: GraphicsContext, x: CGFloat, top: CGFloat, bottom: CGFloat) {
+        let w: CGFloat = 9
+        let body = CGRect(x: x - w / 2, y: top, width: w, height: bottom - top)
+        gc.fill(Path(body), with: metal(CGPoint(x: body.minX, y: 0), CGPoint(x: body.maxX, y: 0)))
+        gc.stroke(Path(body), with: .color(gold.opacity(0.9)), lineWidth: 0.8)
+        for o: CGFloat in [-2, 0, 2] {
+            var l = Path()
+            l.move(to: CGPoint(x: x + o, y: top + 10))
+            l.addLine(to: CGPoint(x: x + o, y: bottom - 10))
+            gc.stroke(l, with: .color(Color(red: 0.35, green: 0.25, blue: 0.09).opacity(0.55)), lineWidth: 0.5)
+        }
+        gc.fill(Path(CGRect(x: x - w / 2 - 3, y: top - 3, width: w + 6, height: 2.2)), with: .color(gold))
+        gc.fill(Path(CGRect(x: x - w / 2 - 1.5, y: top - 6, width: w + 3, height: 1.6)), with: .color(gold))
+        gc.fill(Path(CGRect(x: x - w / 2 - 3, y: bottom + 0.8, width: w + 6, height: 2.2)), with: .color(gold))
+        gc.fill(Path(CGRect(x: x - w / 2 - 1.5, y: bottom + 4, width: w + 3, height: 1.6)), with: .color(gold))
+        scroll(gc, from: CGPoint(x: x - w / 2 - 2, y: top - 2), dir: -1, s: 6, up: -1)
+        scroll(gc, from: CGPoint(x: x + w / 2 + 2, y: top - 2), dir: 1, s: 6, up: -1)
+    }
+
+    enum GemKind { case ruby, sapphire, pearl }
+
+    /// 一颗切面宝石：金托 + 八边形宝石（径向渐变）+ 一道刻面 + 一个白高光
+    static func gem(_ gc: GraphicsContext, at p: CGPoint, r: CGFloat, kind: GemKind) {
+        let cols: [Color]
+        switch kind {
+        case .ruby: cols = [Color(red: 1, green: 0.70, blue: 0.75), Color(red: 0.64, green: 0.07, blue: 0.18), Color(red: 0.30, green: 0.03, blue: 0.09)]
+        case .sapphire: cols = [Color(red: 0.74, green: 0.82, blue: 1), Color(red: 0.16, green: 0.25, blue: 0.62), Color(red: 0.05, green: 0.09, blue: 0.28)]
+        case .pearl: cols = [.white, Color(red: 0.91, green: 0.89, blue: 0.96), Color(red: 0.66, green: 0.63, blue: 0.74)]
+        }
+        let mount = CGRect(x: p.x - r - 1.6, y: p.y - r - 1.6, width: (r + 1.6) * 2, height: (r + 1.6) * 2)
+        gc.fill(Path(ellipseIn: mount), with: metal(mount.origin, CGPoint(x: mount.maxX, y: mount.maxY)))
+        var oct = Path()
+        for k in 0..<8 {
+            let a = Double(k) * .pi / 4 + .pi / 8
+            let q = CGPoint(x: p.x + CGFloat(cos(a)) * r, y: p.y + CGFloat(sin(a)) * r)
+            if k == 0 { oct.move(to: q) } else { oct.addLine(to: q) }
+        }
+        oct.closeSubpath()
+        gc.fill(oct, with: .radialGradient(Gradient(colors: cols),
+                                           center: CGPoint(x: p.x - r * 0.3, y: p.y - r * 0.3),
+                                           startRadius: 0, endRadius: r))
+        var facet = Path()
+        facet.move(to: CGPoint(x: p.x - r * 0.5, y: p.y - r * 0.2))
+        facet.addLine(to: CGPoint(x: p.x, y: p.y - r * 0.6))
+        facet.addLine(to: CGPoint(x: p.x + r * 0.5, y: p.y - r * 0.2))
+        gc.stroke(facet, with: .color(.white.opacity(0.35)), lineWidth: 0.5)
+        gc.fill(Path(ellipseIn: CGRect(x: p.x - r * 0.57, y: p.y - r * 0.57, width: r * 0.44, height: r * 0.44)),
+                with: .color(.white.opacity(0.9)))
+    }
+
     // MARK: 字
 
-    private func words(size: CGSize, win: CGRect, safeTop: CGFloat, safeBottom: CGFloat) -> some View {
+    private func words(size: CGSize, win: CGRect, safeBottom: CGFloat) -> some View {
         let outerTop = win.minY - 11
         return ZStack {
             // 窗上面：日期，两边各一道细金线
             HStack(spacing: 10) {
-                Rectangle().fill(Self.gold.opacity(0.6)).frame(width: 34, height: 0.6)
+                Rectangle().fill(Self.gold.opacity(0.7)).frame(width: 30, height: 0.6)
                 rise(stamp.dateLine, delay: 0.3) { s in
-                    Text(s).font(.system(size: 16, weight: .regular, design: .serif).italic())
+                    Text(s).font(.system(size: 18, weight: .regular, design: .serif).italic())
                         .foregroundStyle(Self.wine)
                 }
-                Rectangle().fill(Self.gold.opacity(0.6)).frame(width: 34, height: 0.6)
+                Rectangle().fill(Self.gold.opacity(0.7)).frame(width: 30, height: 0.6)
             }
-            .position(x: size.width / 2, y: outerTop - 40)
+            .position(x: size.width / 2, y: outerTop - 54)
 
             // 窗下面：此刻
             VStack(spacing: 8) {
                 rise(stamp.clock, delay: 0.8) { s in
-                    Text(s).font(.system(size: 46, weight: .light, design: .serif).italic())
+                    Text(s).font(.system(size: 50, weight: .light, design: .serif).italic())
                         .foregroundStyle(Self.ink)
                 }
                 rise(stamp.words, delay: 1.2) { s in
@@ -201,15 +366,15 @@ struct SplashView: View {
                         .foregroundStyle(Self.rose)
                 }
             }
-            .position(x: size.width / 2, y: win.maxY + 82)
+            .position(x: size.width / 2, y: win.maxY + 96)
 
             VStack(spacing: 5) {
                 Text("轻点进入")
                     .font(.system(size: 11, weight: .regular, design: .serif))
                     .tracking(6)
-                    .foregroundStyle(Self.ink.opacity(0.55))
+                    .foregroundStyle(Self.ink.opacity(0.65))
                 Text("entrez")
-                    .font(.system(size: 10, weight: .regular, design: .serif).italic())
+                    .font(.system(size: 12, weight: .regular, design: .serif).italic())
                     .foregroundStyle(Self.gold)
             }
             .offset(y: risen ? 0 : 14)
@@ -492,26 +657,6 @@ final class PearlRope {
         // 两头的钉子：小金花托
         for e in [p[0], p[p.count - 1]] {
             gc.fill(Path(ellipseIn: CGRect(x: e.x - 3, y: e.y - 3, width: 6, height: 6)), with: .color(gold))
-        }
-    }
-}
-
-// MARK: - 纸纹
-
-/// 纸上细细的颗粒。只算一次
-final class PaperGrain {
-    private var dots: [(CGFloat, CGFloat, Double)] = []
-
-    func draw(_ gc: GraphicsContext, size: CGSize) {
-        if dots.isEmpty {
-            for _ in 0..<1400 {
-                dots.append((CGFloat.random(in: 0...1), CGFloat.random(in: 0...1),
-                             Double.random(in: 0.03...0.09)))
-            }
-        }
-        for d in dots {
-            gc.fill(Path(ellipseIn: CGRect(x: d.0 * size.width, y: d.1 * size.height, width: 0.9, height: 0.9)),
-                    with: .color(SplashView.ink.opacity(d.2)))
         }
     }
 }
