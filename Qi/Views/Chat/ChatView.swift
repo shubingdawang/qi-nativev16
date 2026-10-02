@@ -2190,6 +2190,7 @@ struct MessageListView: View {
     private func branchBar(_ id: UUID) -> some View {
         let list = conversation.branches.filter { $0.afterMessageID == id }
         if !list.isEmpty {
+            // 他正在回的时候不让换（换了那一轮会吊死，见 `AppState.restoreBranch`）
             HStack(spacing: 10) {
                 Button {
                     // 往回翻：换**最近**收起来的那一段
@@ -2212,6 +2213,8 @@ struct MessageListView: View {
             .font(.app(10.5))
             .foregroundStyle(Theme.textMuted(scheme))
             .buttonStyle(.plain)
+            .disabled(running)
+            .opacity(running ? 0.4 : 1)
             .padding(.vertical, 2)
             .frame(maxWidth: .infinity)
             // 长按开那张列表：看每一段是什么、或者丢掉不要的

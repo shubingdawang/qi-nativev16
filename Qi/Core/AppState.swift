@@ -1443,7 +1443,22 @@ final class AppState: ObservableObject {
         guard let i = index(of: conversationID),
               let bi = conversations[i].branches.firstIndex(where: { $0.id == branchID })
         else { return }
-        let branch = conversations[i].branches.remove(at: bi)
+        // ⚠️ 他正在回的时候不许换。
+        //
+        // 她报的：「我在他回复的时候切换旧对话，回来他就一直保持着不动了，不出字，
+        // 发送键也是箭头。」——换的那一下把**正在写的那条**一起收进了旧对话里，
+        // 流还在往一条已经不在正文里的消息上写，写不进去；收尾时又找不到它，
+        // 于是这一轮就这么吊着。按钮那边也挡了（见 `branchBar`），这里再兜一道。
+        if runningConversationIDs.contains(conversationID) { return }
+        var branch = conversations[i].branches.remove(at: bi)
+        // 以前卡死过的那一段里可能留着一条「还在写」的空消息：换回来时一并收尾，
+        // 不然它会一直转圈
+        for k in branch.messages.indices where branch.messages[k].isStreaming {
+            branch.messages[k].isStreaming = false
+        }
+        branch.messages.removeAll {
+            $0.role == .assistant && $0.isEmptyContent && $0.toolRuns.isEmpty && $0.errorText == nil
+        }
         // 切点：那条消息在正文里的下一格；找不着（她把那条删了）就接在最后
         let cut: Int
         if let anchor = branch.afterMessageID,
@@ -1462,6 +1477,10 @@ final class AppState: ObservableObject {
     func dropBranch(_ branchID: UUID, in conversationID: UUID) {
         guard let i = index(of: conversationID) else { return }
         conversations[i].branches.removeAll { $0.id == branchID }
+        // 她报：「删除一个旧对话后仍然会保持 ‹2 段›，要手动点一下箭头才消失。」
+        // 只动了 branches，聊天页那一列没跟着重算。改一下时间戳、主动喊一声
+        conversations[i].updatedAt = Date()
+        objectWillChange.send()
     }
 
     func cancelStream(for id: UUID) {
@@ -7847,7 +7866,7 @@ final class AppState: ObservableObject {
         guard let g = GameStore.shared.add(name: title.isEmpty ? "他做的网页" : title,
                                            html: html) else { return }
         var rest = text
-        rest.replaceSubrange(r.whole, with: "（做好了，点下面那张卡就能打开）")
+        rest.replaceSubrange(r.whole, with: "（整页 HTML 已经存成网页卡「\(g.name)」，就在下一条，点开就能看）")
         rest = rest.replacingOccurrences(of: #"<file_create[^>]*>"#, with: "", options: .regularExpression)
             .replacingOccurrences(of: "</file_create>", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -8491,6 +8510,23 @@ final class AppState: ObservableObject {
                 result.append(.init(role: m.role.rawValue,
                                     text: text,
                                     imageDataURLs: urls))
+                continue
+            }
+
+            // 他做的网页卡。以前这一条正文是空的，他翻记录时只看见一条空消息，
+            // 就以为「那张卡是空的」，又重做一张（她报：「我改了游戏名字后他好像就不知道有这个游戏了」）。
+            // 名字用游戏间里**现在**的——她改过名，他得跟着认。
+            if !m.gameID.isEmpty {
+                let now = GameStore.shared.games.first { $0.id.uuidString == m.gameID }
+                let name = now?.name ?? (m.gameName.isEmpty ? "没名字" : m.gameName)
+                let said = m.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                var text = now == nil
+                    ? "（这里原来是你做的网页卡「\(name)」，她已经从游戏间里删掉了）"
+                    : "（这里是你做的网页卡「\(name)」：整页已经存进游戏间，她点这张卡就能打开。"
+                        + (m.gameName.isEmpty || m.gameName == name ? "" : "她把它改名叫「\(name)」了，原来叫「\(m.gameName)」。")
+                        + "要改它就在原来那张上改，别再新做一张）"
+                if !said.isEmpty { text = said + "\n" + text }
+                result.append(.init(role: m.role.rawValue, text: text))
                 continue
             }
 
