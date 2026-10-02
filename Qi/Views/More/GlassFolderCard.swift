@@ -43,7 +43,7 @@ struct GlassFolderCard: View {
 
                 // clawd：站在后片里，腰以下藏在玻璃后面
                 clawd(width: w * 0.5)
-                    .position(x: w * 0.58, y: h * 0.44)
+                    .position(x: w * 0.58, y: h * 0.31)
                     .offset(y: hop ? -h * 0.12 : 0)
 
                 // 前片：毛玻璃（字跟着卡片大小走：每行 4 个的时候卡片只有一半大）

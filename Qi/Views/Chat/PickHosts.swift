@@ -54,9 +54,28 @@ struct PhotoPickHost: View {
     var filter: PHPickerFilter = .images
 
     var body: some View {
-        Color.clear
-            .photosPicker(isPresented: $open, selection: $picked,
-                          maxSelectionCount: maxCount, matching: filter)
+        // ⚠️ 套一层 `.equatable()`：她报「工资页添加照片，选照片的时候一直在刷新」。
+        // 宿主本身不订阅东西，可**外面那一页一重求值，它的 body 也跟着重算**
+        // （Binding 没法比较，SwiftUI 只能当它变了），选择器就被重新配置一遍。
+        // 现在只有「开没开 / 选了几张 / 上限」真的变了才重算。
+        Core(open: $open, picked: $picked, maxCount: maxCount, filter: filter).equatable()
+    }
+
+    struct Core: View, Equatable {
+        @Binding var open: Bool
+        @Binding var picked: [PhotosPickerItem]
+        var maxCount: Int
+        var filter: PHPickerFilter
+
+        static func == (a: Core, b: Core) -> Bool {
+            a.open == b.open && a.picked.count == b.picked.count && a.maxCount == b.maxCount
+        }
+
+        var body: some View {
+            Color.clear
+                .photosPicker(isPresented: $open, selection: $picked,
+                              maxSelectionCount: maxCount, matching: filter)
+        }
     }
 }
 
@@ -70,7 +89,22 @@ struct SinglePhotoPickHost: View {
     var filter: PHPickerFilter = .images
 
     var body: some View {
-        Color.clear
-            .photosPicker(isPresented: $open, selection: $picked, matching: filter)
+        // 同上：外面重算不牵连它
+        Core(open: $open, picked: $picked, filter: filter).equatable()
+    }
+
+    struct Core: View, Equatable {
+        @Binding var open: Bool
+        @Binding var picked: PhotosPickerItem?
+        var filter: PHPickerFilter
+
+        static func == (a: Core, b: Core) -> Bool {
+            a.open == b.open && (a.picked == nil) == (b.picked == nil)
+        }
+
+        var body: some View {
+            Color.clear
+                .photosPicker(isPresented: $open, selection: $picked, matching: filter)
+        }
     }
 }

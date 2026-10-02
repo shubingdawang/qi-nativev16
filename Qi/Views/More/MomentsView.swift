@@ -43,7 +43,7 @@ struct MomentsView: View {
         }
         .navigationTitle("动态")
         .navigationBarTitleDisplayMode(.inline)
-        .photosPicker(isPresented: $pickingPhoto, selection: $photoItem, matching: .images)
+        .background(SinglePhotoPickHost(open: $pickingPhoto, picked: $photoItem))
         .onChange(of: photoItem) { _, item in loadPhoto(item) }
         .sheet(item: $replyTo) { m in replySheet(m) }
     }

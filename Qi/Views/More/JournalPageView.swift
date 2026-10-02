@@ -133,8 +133,7 @@ struct JournalPageView: View {
                 }
             }
         }
-        .photosPicker(isPresented: $showingPhotoPicker, selection: $photoItem,
-                      matching: .images)
+        .background(SinglePhotoPickHost(open: $showingPhotoPicker, picked: $photoItem))
         .onChange(of: photoItem) { _, item in loadPhoto(item) }
     }
 

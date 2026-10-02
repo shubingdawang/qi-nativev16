@@ -25,7 +25,13 @@ import UniformTypeIdentifiers
 /// ① **这个 View 不订阅任何东西。** 外面重建多少次都跟它无关。
 /// ② **「开着哪一个」是一个值，不是三个布尔。**
 ///    跟 `ChatPanel` 那次一样：两个同时为真从根上不可能了。
-struct ChatPickers: View {
+struct ChatPickers: View, Equatable {
+
+    /// 外面重算不牵连它（见 `PhotoPickHost` 那段）。闭包不参与比较
+    static func == (a: ChatPickers, b: ChatPickers) -> Bool {
+        a.pick == b.pick && a.images.count == b.images.count && a.video.count == b.video.count
+    }
+
 
     enum Kind: String, Identifiable {
         case photos, videos, files

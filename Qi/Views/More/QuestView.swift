@@ -57,7 +57,7 @@ struct QuestView: View {
         .navigationTitle("小事")
         .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .top) { gotCoins }
-        .photosPicker(isPresented: $pickingPhoto, selection: $photoItem, matching: .images)
+        .background(SinglePhotoPickHost(open: $pickingPhoto, picked: $photoItem))
         .onChange(of: photoItem) { _, item in loadPhoto(item) }
         .sheet(item: $checkingIn) { q in checkInSheet(q) }
         .alert("加一个能换的", isPresented: $addingReward) {

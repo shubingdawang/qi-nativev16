@@ -65,6 +65,26 @@ struct FolderGridView: View {
                             }
                             acting = name
                         }
+                        // ⚠️ 挂在**这一个文件夹**上，不挂在整页上：
+                        // 新系统里这个菜单是从它挂的那个东西上弹出来的，
+                        // 挂在整页上就永远从屏幕中间冒出来（她报的「长按哪个都在中间」）
+                        .confirmationDialog(
+                            "「\(name)」",
+                            isPresented: Binding(get: { acting == name },
+                                                 set: { if !$0, acting == name { acting = nil } }),
+                            titleVisibility: .visible
+                        ) {
+                            Button("改个名字") {
+                                renameText = name
+                                renaming = name
+                                acting = nil
+                            }
+                            Button("删除该文件夹", role: .destructive) {
+                                deletingFolder = name
+                                acting = nil
+                            }
+                            Button("取消", role: .cancel) { acting = nil }
+                        }
                 }
 
                 Button {
@@ -121,23 +141,6 @@ struct FolderGridView: View {
                 }
                 renaming = nil
             }
-        }
-        .confirmationDialog(
-            "「\(acting ?? "")」",
-            isPresented: Binding(get: { acting != nil },
-                                 set: { if !$0 { acting = nil } }),
-            titleVisibility: .visible
-        ) {
-            Button("改个名字") {
-                renameText = acting ?? ""
-                renaming = acting
-                acting = nil
-            }
-            Button("删除该文件夹", role: .destructive) {
-                deletingFolder = acting
-                acting = nil
-            }
-            Button("取消", role: .cancel) { acting = nil }
         }
         .confirmationDialog(
             "删除文件夹「\(deletingFolder ?? "")」？",

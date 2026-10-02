@@ -463,6 +463,7 @@ struct ChatView: View {
                     }
                 }
             }
+            .equatable()
         )
         .fullScreenCover(item: $travelling) { j in
             JourneyPlayerView(journey: j, startAt: travellingAt)
