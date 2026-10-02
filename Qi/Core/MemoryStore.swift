@@ -466,6 +466,18 @@ struct PeriodBook: Codable {
     var records: [PeriodRecord] = []
     /// 日期 → 那天的几条备注
     var notes: [String: [PeriodNote]] = [:]
+    /// 排卵期出血，一段一段记（开始、结束），跟经期分开——它不算一次经期，不进周期计算
+    var ovulation: [PeriodRecord] = []
+}
+
+extension PeriodBook {
+    // ⚠️ 容错解码：旧的 periods.json 里没有 ovulation，合成的解码器会整份读不出来
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        records = (try? c.decodeIfPresent([PeriodRecord].self, forKey: .records)) ?? []
+        notes = (try? c.decodeIfPresent([String: [PeriodNote]].self, forKey: .notes)) ?? [:]
+        ovulation = (try? c.decodeIfPresent([PeriodRecord].self, forKey: .ovulation)) ?? []
+    }
 }
 
 // 下面两个的 id 都是**可选**的。

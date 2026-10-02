@@ -1177,9 +1177,42 @@ struct PeriodPane: View {
     static let ovulationTag = "排卵期出血"
     static let ovulationColor = Color(red: 0.91, green: 0.55, blue: 0.66)
 
+    private var ovulation: [PeriodRecord] {
+        app.settings.localMemory ? MemoryStore.shared.periods.ovulation : []
+    }
+
+    /// 这天在不在某一段排卵期出血里。没记结束的那段：最多涂到今天，也不超过开始后第 7 天
     private func ovulationBleed(_ day: Date) -> Bool {
-        (notesByDay[df.string(from: cal.startOfDay(for: day))] ?? [])
-            .contains { $0.text.hasPrefix(Self.ovulationTag) }
+        let d = df.string(from: cal.startOfDay(for: day))
+        let today = df.string(from: Date())
+        for r in ovulation where r.start <= d {
+            var end = r.end ?? today
+            if r.end == nil, let s = df.date(from: r.start),
+               let cap = cal.date(byAdding: .day, value: 6, to: s) {
+                end = min(end, df.string(from: cap))
+            }
+            if d <= end { return true }
+        }
+        // 以前那一版记成过备注，也认
+        return (notesByDay[d] ?? []).contains { $0.text.hasPrefix(Self.ovulationTag) }
+    }
+
+    private func ovulationStartBefore(_ d: Date) -> String? {
+        let day = df.string(from: d)
+        let before = ovulation.filter { $0.start <= day }
+        if let open = before.filter({ $0.end == nil }).map(\.start).max() { return open }
+        return before.map(\.start).max()
+    }
+
+    private func ovulationCovering(_ d: Date) -> PeriodRecord? {
+        let day = df.string(from: d)
+        return ovulation.last { r in r.start <= day && (r.end.map { day <= $0 } ?? (r.start == day)) }
+    }
+
+    private func editOvulation(_ change: (inout [PeriodRecord]) -> Void) {
+        let m = MemoryStore.shared
+        change(&m.periods.ovulation)
+        m.savePeriods()
     }
 
     /// 记「结束」记在哪一次上：这天（含）之前**还没结束**的最近一次；都结束了才退回最近一次。
@@ -1380,15 +1413,43 @@ struct PeriodPane: View {
                                 m.savePeriods()
                             }
                         }
-                        // 排卵期出血：不算一次经期，记成这天的一条备注，日历上点一滴
-                        periodButton(Self.ovulationTag) {
-                            guard let d = picked else { return }
-                            await model.run(app, tool: "add_period_note", args: [
-                                "date": df.string(from: d),
-                                "text": Self.ovulationTag,
-                                "author": app.settings.userName
-                            ])
+                        // 排卵期出血：也是开始、结束一段（常见三到六天），跟经期分开记
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "drop.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(Self.ovulationColor)
+                                Text(Self.ovulationTag).font(.app(13, weight: .medium))
+                            }
+                            HStack(spacing: 10) {
+                                periodButton("开始") {
+                                    guard let d = picked else { return }
+                                    editOvulation { list in
+                                        let day = df.string(from: d)
+                                        if !list.contains(where: { $0.start == day }) {
+                                            list.append(PeriodRecord(start: day, end: nil))
+                                            list.sort { $0.start < $1.start }
+                                        }
+                                    }
+                                }
+                                periodButton("结束") {
+                                    guard let d = picked, let st = ovulationStartBefore(d) else { return }
+                                    editOvulation { list in
+                                        if let i = list.firstIndex(where: { $0.start == st }) {
+                                            list[i].end = df.string(from: d)
+                                        }
+                                    }
+                                }
+                                .disabled(picked.flatMap(ovulationStartBefore) == nil)
+                                .opacity(picked.flatMap(ovulationStartBefore) == nil ? 0.4 : 1)
+                            }
+                            if let d = picked, let r = ovulationCovering(d) {
+                                periodButton("删掉这次（\(r.start.suffix(5))\(r.end.map { " 到 " + $0.suffix(5) } ?? " 起")）") {
+                                    editOvulation { list in list.removeAll { $0 == r } }
+                                }
+                            }
                         }
+                        .glassCard()
 
                         VStack(alignment: .leading, spacing: 8) {
                             Text("写点当天的").font(.app(14, weight: .medium))
