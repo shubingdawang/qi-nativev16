@@ -25,9 +25,12 @@ struct FolderGridView: View {
     private var folders: [String] { store.folders(kind) }
     private var looseCount: Int { store.list(kind, folder: "").count }
 
-    // 两列：每个文件夹后面要探出一只 clawd，格子小了看不清它在干嘛
-    private let columns = [GridItem(.flexible(), spacing: 16),
-                           GridItem(.flexible(), spacing: 16)]
+    /// 一行摆几个文件夹（2 / 3 / 4），右上角切换。存在本机
+    @AppStorage("folderColumns") private var columnCount = 2
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: columnCount >= 4 ? 10 : 14),
+              count: min(4, max(2, columnCount)))
+    }
 
     var body: some View {
         ScrollView {
@@ -90,6 +93,19 @@ struct FolderGridView: View {
             .padding(.horizontal, 18)
             .padding(.top, 14)
             .padding(.bottom, Layout.tabBarExpanded + 12)
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Picker("每行几个", selection: $columnCount) {
+                        Text("每行 2 个").tag(2)
+                        Text("每行 3 个").tag(3)
+                        Text("每行 4 个").tag(4)
+                    }
+                } label: {
+                    Image(systemName: "square.grid.2x2")
+                }
+            }
         }
         .navigationDestination(item: $opened) { folder in
             MediaGridView(kind: kind, folder: folder, onPick: onPick)

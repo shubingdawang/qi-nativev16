@@ -46,8 +46,8 @@ struct GlassFolderCard: View {
                     .position(x: w * 0.58, y: h * 0.44)
                     .offset(y: hop ? -h * 0.12 : 0)
 
-                // 前片：毛玻璃
-                front
+                // 前片：毛玻璃（字跟着卡片大小走：每行 4 个的时候卡片只有一半大）
+                front(w)
                     .frame(width: w, height: h * 0.54)
                     .offset(y: h * 0.46)
             }
@@ -84,8 +84,8 @@ struct GlassFolderCard: View {
         return frames.last?.0
     }
 
-    private var front: some View {
-        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+    private func front(_ w: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: min(16, w * 0.1), style: .continuous)
         return ZStack(alignment: .bottomLeading) {
             shape.fill(.ultraThinMaterial)
             shape.fill(LinearGradient(colors: [tint.opacity(0.45), tint.opacity(0.22)],
@@ -96,21 +96,23 @@ struct GlassFolderCard: View {
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)
-                        .font(.app(15, weight: .bold))
+                        .font(.app(max(10, min(15, w * 0.085)), weight: .bold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .shadow(color: .black.opacity(0.25), radius: 4)
                     Text("\(count) 张")
-                        .font(.app(10, weight: .medium))
+                        .font(.app(max(8, min(10, w * 0.06)), weight: .medium))
                         .foregroundStyle(.white.opacity(0.75))
                 }
                 Spacer(minLength: 4)
-                Image(systemName: "folder")
-                    .font(.app(14, weight: .light))
-                    .foregroundStyle(.white.opacity(0.9))
+                if w > 110 {
+                    Image(systemName: "folder")
+                        .font(.app(14, weight: .light))
+                        .foregroundStyle(.white.opacity(0.9))
+                }
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 10)
+            .padding(.horizontal, min(12, w * 0.07))
+            .padding(.bottom, min(10, w * 0.06))
         }
         .shadow(color: .black.opacity(0.18), radius: 10, y: 6)
     }
