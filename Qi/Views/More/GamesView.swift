@@ -431,35 +431,49 @@ struct GamePlayerView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        // 整屏都是那张网页，不要顶上那条黑栏。
+        // 她说：「所有游戏打开之后是这样的页面，我不喜欢这样的」——
+        // 一条黑底导航栏压在一张米色的网页上，像是被框起来了。
+        // 现在只留左上一个关掉、右上一个「更多」，两颗小玻璃圆钮浮在网页上。
+        ZStack(alignment: .top) {
+            Color(.systemBackground).ignoresSafeArea()
             LocalWebView(url: { GameStore.shared.prepare(game); return GameStore.shared.url(for: game) }())
-                .ignoresSafeArea(edges: .bottom)
-                .navigationTitle(title)
-                .navigationBarTitleDisplayMode(.inline)
-                .alert("重命名", isPresented: $renaming) {
-                    TextField("名字", text: $newName)
-                    Button("取消", role: .cancel) {}
-                    Button("好") { app.renameGame(game.id, to: newName) }
+                .ignoresSafeArea()
+            HStack {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(.ultraThinMaterial))
                 }
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button("退出") { dismiss() }
-                    }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            newName = title
-                            renaming = true
-                        } label: {
-                            Image(systemName: "pencil")
-                        }
+                Spacer()
+                Menu {
+                    Button {
+                        newName = title
+                        renaming = true
+                    } label: {
+                        Label("重命名", systemImage: "pencil")
                     }
                     // 把这份 HTML 文件导出来：存到文件、发给别人、换个浏览器打开
-                    ToolbarItem(placement: .topBarTrailing) {
-                        ShareLink(item: GameStore.shared.url(for: game)) {
-                            Image(systemName: "square.and.arrow.up")
-                        }
+                    ShareLink(item: GameStore.shared.url(for: game)) {
+                        Label("导出", systemImage: "square.and.arrow.up")
                     }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(.ultraThinMaterial))
                 }
+            }
+            .foregroundStyle(.primary)
+            .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+            .padding(.horizontal, 14)
+            .padding(.top, 6)
+        }
+        .alert("重命名", isPresented: $renaming) {
+            TextField("名字", text: $newName)
+            Button("取消", role: .cancel) {}
+            Button("好") { app.renameGame(game.id, to: newName) }
         }
     }
 }
