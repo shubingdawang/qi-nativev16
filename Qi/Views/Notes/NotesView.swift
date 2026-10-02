@@ -1182,10 +1182,24 @@ struct PeriodPane: View {
             .contains { $0.text.hasPrefix(Self.ovulationTag) }
     }
 
-    /// 这天（含）之前最近的一次开始。记「结束」就记在它上面
+    /// 记「结束」记在哪一次上：这天（含）之前**还没结束**的最近一次；都结束了才退回最近一次。
+    ///
+    /// 她报的：「点了 16 号结束还是这样，一直亮到 10.3。」——16 号那天本身也被记成过一次开始，
+    /// 以前只找「最近的一次开始」，于是结束记在了 16 号那次上（16 到 16），
+    /// 10 号开始的那次一直没结束，涂到了今天。
     private func startBefore(_ d: Date) -> String? {
         let day = df.string(from: d)
-        return records.map(\.start).filter { $0 <= day }.max()
+        let before = records.filter { $0.start <= day }
+        if let open = before.filter({ $0.end == nil }).map(\.start).max() { return open }
+        return before.map(\.start).max()
+    }
+
+    /// 这天落在哪一次里（拿来删）
+    private func record(covering d: Date) -> PeriodRecord? {
+        let day = df.string(from: d)
+        return records.last { r in
+            r.start <= day && (r.end.map { day <= $0 } ?? (r.start == day))
+        }
     }
 
     private func periodButton(_ title: String, _ act: @escaping () async -> Void) -> some View {
@@ -1226,11 +1240,17 @@ struct PeriodPane: View {
                 guard let start = df.date(from: r.start).map({ cal.startOfDay(for: $0) })
                 else { continue }
                 // 记了结束日就到那天，没记就只涂到今天——来一天涂一天
-                let end: Date
+                var end: Date
                 if let e = r.end, let ed = df.date(from: e) {
                     end = cal.startOfDay(for: ed)
                 } else {
                     end = today
+                    // 没结束、后面却又记过一次开始：最多涂到那次开始的前一天
+                    if let next = records.map(\.start).filter({ $0 > r.start }).min(),
+                       let nd = df.date(from: next),
+                       let dayBefore = cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: nd)) {
+                        end = min(end, dayBefore)
+                    }
                 }
                 if d >= start && d <= end { return 1 }
             }
@@ -1351,6 +1371,14 @@ struct PeriodPane: View {
                             }
                             .disabled(picked.flatMap(startBefore) == nil)
                             .opacity(picked.flatMap(startBefore) == nil ? 0.4 : 1)
+                        }
+                        // 记错了：这天落在哪一次里，就能把那一次整条删掉
+                        if let d = picked, let r = record(covering: d) {
+                            periodButton("删掉这次（\(r.start.suffix(5))\(r.end.map { " 到 " + $0.suffix(5) } ?? " 起")）") {
+                                let m = MemoryStore.shared
+                                m.periods.records.removeAll { $0 == r }
+                                m.savePeriods()
+                            }
                         }
                         // 排卵期出血：不算一次经期，记成这天的一条备注，日历上点一滴
                         periodButton(Self.ovulationTag) {
