@@ -29,21 +29,32 @@ struct SplashView: View {
     @State private var stamp = SplashView.stamp(Date())
 
     // 色板
-    static let gold = Color(red: 0.722, green: 0.573, blue: 0.310)
-    static let goldDeep = Color(red: 0.431, green: 0.314, blue: 0.114)
-    static let wine = Color(red: 0.478, green: 0.133, blue: 0.212)
-    static let rose = Color(red: 0.612, green: 0.365, blue: 0.416)
-    static let ink = Color(red: 0.227, green: 0.176, blue: 0.169)
-    static let veil = Color(red: 0.988, green: 0.973, blue: 0.945)
+    //
+    // ⚠️ 两套：浅色模式是白天（金框、暖色玻璃），深色模式是同一扇窗到了夜里
+    // （珍珠银框、月光色玻璃、窗外飘星屑）。她定的：「深色就要月夜那个」。
+    // 开屏只出现一次，所以用一个静态开关切，省得把色板一层层往下传。
+    nonisolated(unsafe) static var night = false
+    static var gold: Color { night ? Color(red: 0.812, green: 0.820, blue: 0.863) : Color(red: 0.722, green: 0.573, blue: 0.310) }
+    static var goldDeep: Color { night ? Color(red: 0.271, green: 0.282, blue: 0.345) : Color(red: 0.431, green: 0.314, blue: 0.114) }
+    static var wine: Color { night ? Color(red: 0.839, green: 0.776, blue: 0.949) : Color(red: 0.478, green: 0.133, blue: 0.212) }
+    static var rose: Color { night ? Color(red: 0.910, green: 0.737, blue: 0.804) : Color(red: 0.612, green: 0.365, blue: 0.416) }
+    static var ink: Color { night ? Color(red: 0.933, green: 0.925, blue: 0.965) : Color(red: 0.227, green: 0.176, blue: 0.169) }
+    static var veil: Color { night ? Color(red: 0.086, green: 0.094, blue: 0.141) : Color(red: 0.988, green: 0.973, blue: 0.945) }
+    /// 珍珠串下面那颗坠子
+    static var drop: Color { night ? Color(red: 0.663, green: 0.722, blue: 0.918) : Color(red: 0.478, green: 0.133, blue: 0.212) }
+
+    @Environment(\.colorScheme) private var systemScheme
+    @State private var sparks = SparkField()
 
     var body: some View {
         GeometryReader { geo in
             let size = geo.size
             let win = Self.windowRect(in: size)
+            let _ = { Self.night = systemScheme == .dark }()
             ZStack {
                 // 毛玻璃：底下的 App 透上来，全是糊的
                 Rectangle().fill(.ultraThinMaterial)
-                Self.veil.opacity(0.42)
+                Self.veil.opacity(Self.night ? 0.62 : 0.42)
 
                 // 静的金线：窗框、立柱、卷草、边框（只画一次）
                 Canvas { gc, sz in drawFrame(gc, win: win, size: sz) }
@@ -58,6 +69,9 @@ struct SplashView: View {
                             drawSparkles(gc, size: sz, now: now)
                             rope.step(now, win: win)
                             rope.draw(gc)
+                            // 手指划过落一串星屑；夜里窗外还一直飘着细星屑
+                            sparks.step(now, size: sz, finger: rope.finger, night: Self.night)
+                            sparks.draw(gc)
                         }
                         .allowsHitTesting(false)
                     }
@@ -65,7 +79,7 @@ struct SplashView: View {
 
                 words(size: size, win: win, safeBottom: geo.safeAreaInsets.bottom)
             }
-            .environment(\.colorScheme, .light)
+            .environment(\.colorScheme, Self.night ? .dark : .light)
             .mask { revealMask }
             .contentShape(Rectangle())
             .gesture(touch(size: size, win: win))
@@ -89,7 +103,8 @@ struct SplashView: View {
             .fill(.white)
             .frame(width: win.width, height: win.height)
             .colorEffect(ShaderLibrary.qiStained(.floatArray(ripples.args(now: now)),
-                                                 .float2(win.size), .float(t)))
+                                                 .float2(win.size), .float(t),
+                                                 .float(Self.night ? 1 : 0)))
             .clipShape(ArchShape())
             .scaleEffect(risen ? 1 : 0.94, anchor: .bottom)
             .animation(.spring(response: 1.2, dampingFraction: 0.7), value: risen)
@@ -98,7 +113,18 @@ struct SplashView: View {
 
     /// 打磨过的金：亮暗相间的一道斜渐变
     static func metal(_ a: CGPoint, _ b: CGPoint) -> GraphicsContext.Shading {
-        .linearGradient(Gradient(stops: [
+        if night {
+            return .linearGradient(Gradient(stops: [
+                .init(color: Color(red: 0.333, green: 0.345, blue: 0.416), location: 0),
+                .init(color: Color(red: 0.902, green: 0.910, blue: 0.949), location: 0.18),
+                .init(color: Color(red: 0.553, green: 0.565, blue: 0.643), location: 0.36),
+                .init(color: Color(red: 0.984, green: 0.984, blue: 1.0), location: 0.55),
+                .init(color: Color(red: 0.478, green: 0.494, blue: 0.573), location: 0.74),
+                .init(color: Color(red: 0.863, green: 0.867, blue: 0.914), location: 0.9),
+                .init(color: Color(red: 0.278, green: 0.290, blue: 0.353), location: 1)]),
+                startPoint: a, endPoint: b)
+        }
+        return .linearGradient(Gradient(stops: [
             .init(color: Color(red: 0.478, green: 0.353, blue: 0.133), location: 0),
             .init(color: Color(red: 0.914, green: 0.812, blue: 0.529), location: 0.18),
             .init(color: Color(red: 0.639, green: 0.482, blue: 0.208), location: 0.36),
@@ -144,7 +170,8 @@ struct SplashView: View {
 
         // 窗框：一道有光泽的宽金边，带阴影；两侧暗线、中间一道亮线
         var shadowed = gc
-        shadowed.addFilter(.shadow(color: Color(red: 0.27, green: 0.18, blue: 0.08).opacity(0.35), radius: 9, x: 0, y: 6))
+        shadowed.addFilter(.shadow(color: Self.night ? .black.opacity(0.5) : Color(red: 0.27, green: 0.18, blue: 0.08).opacity(0.35),
+                                   radius: 9, x: 0, y: 6))
         shadowed.stroke(arch.path(in: outer.insetBy(dx: -1, dy: -1)),
                         with: Self.metal(outer.origin, CGPoint(x: outer.maxX, y: outer.maxY)), lineWidth: 10)
         gc.stroke(arch.path(in: outer.insetBy(dx: -6, dy: -6)), with: .color(Self.goldDeep), lineWidth: 0.7)
@@ -313,9 +340,16 @@ struct SplashView: View {
     static func gem(_ gc: GraphicsContext, at p: CGPoint, r: CGFloat, kind: GemKind) {
         let cols: [Color]
         switch kind {
-        case .ruby: cols = [Color(red: 1, green: 0.70, blue: 0.75), Color(red: 0.64, green: 0.07, blue: 0.18), Color(red: 0.30, green: 0.03, blue: 0.09)]
-        case .sapphire: cols = [Color(red: 0.74, green: 0.82, blue: 1), Color(red: 0.16, green: 0.25, blue: 0.62), Color(red: 0.05, green: 0.09, blue: 0.28)]
-        case .pearl: cols = [.white, Color(red: 0.91, green: 0.89, blue: 0.96), Color(red: 0.66, green: 0.63, blue: 0.74)]
+        // 夜里：红宝石换成月光石，蓝宝石换成淡紫晶，珍珠带一点粉
+        case .ruby: cols = night
+            ? [.white, Color(red: 0.80, green: 0.85, blue: 0.96), Color(red: 0.46, green: 0.51, blue: 0.62)]
+            : [Color(red: 1, green: 0.70, blue: 0.75), Color(red: 0.64, green: 0.07, blue: 0.18), Color(red: 0.30, green: 0.03, blue: 0.09)]
+        case .sapphire: cols = night
+            ? [Color(red: 0.96, green: 0.93, blue: 1), Color(red: 0.73, green: 0.66, blue: 0.89), Color(red: 0.36, green: 0.32, blue: 0.52)]
+            : [Color(red: 0.74, green: 0.82, blue: 1), Color(red: 0.16, green: 0.25, blue: 0.62), Color(red: 0.05, green: 0.09, blue: 0.28)]
+        case .pearl: cols = night
+            ? [.white, Color(red: 0.95, green: 0.90, blue: 0.94), Color(red: 0.66, green: 0.58, blue: 0.62)]
+            : [.white, Color(red: 0.91, green: 0.89, blue: 0.96), Color(red: 0.66, green: 0.63, blue: 0.74)]
         }
         let mount = CGRect(x: p.x - r - 1.6, y: p.y - r - 1.6, width: (r + 1.6) * 2, height: (r + 1.6) * 2)
         gc.fill(Path(ellipseIn: mount), with: metal(mount.origin, CGPoint(x: mount.maxX, y: mount.maxY)))
@@ -638,7 +672,7 @@ final class PearlRope {
         tear.addQuadCurve(to: CGPoint(x: 0, y: 12), control: CGPoint(x: 9, y: 9))
         tear.addQuadCurve(to: CGPoint(x: 0, y: -1), control: CGPoint(x: -9, y: 9))
         let tf = CGAffineTransform(translationX: drop.x, y: drop.y).rotated(by: ang)
-        gc.fill(tear.applying(tf), with: .color(SplashView.wine))
+        gc.fill(tear.applying(tf), with: .color(SplashView.drop))
         gc.fill(Path(ellipseIn: CGRect(x: -1.6, y: 4, width: 2.2, height: 3.2)).applying(tf),
                 with: .color(.white.opacity(0.55)))
         // 珍珠（两头的钉子不画）
@@ -657,6 +691,94 @@ final class PearlRope {
         // 两头的钉子：小金花托
         for e in [p[0], p[p.count - 1]] {
             gc.fill(Path(ellipseIn: CGRect(x: e.x - 3, y: e.y - 3, width: 6, height: 6)), with: .color(gold))
+        }
+    }
+}
+
+// MARK: - 星屑
+
+/// 手指划过时落下的一串小星屑（淡紫、淡粉，夜里偏银白），往上一扬再慢慢落、慢慢淡；
+/// 夜里窗外还一直飘着一层很细的星屑。
+///
+/// 她定的：「星屑的粒子可以保留」——那一版开屏不要了，只要手指移动时出来的这串粒子。
+/// ⚠️ 是个类：画的时候推它一步，不触发重画（重画由 `TimelineView` 按帧推）
+final class SparkField {
+    struct Spark { var p: CGPoint; var v: CGVector; var life: Double; var r: CGFloat; var c: Color }
+    struct Dust { var p: CGPoint; var v: CGFloat; var r: CGFloat; var ph: Double; var c: Color }
+    private var sparks: [Spark] = []
+    private var dust: [Dust] = []
+    private var last: Date?
+    private var lastFinger: CGPoint?
+    private var t: Double = 0
+    private var night = false
+
+    func step(_ now: Date, size: CGSize, finger: CGPoint?, night: Bool) {
+        self.night = night
+        let dt = min(1.0 / 30, now.timeIntervalSince(last ?? now))
+        last = now
+        t = now.timeIntervalSinceReferenceDate
+        let pal: [Color] = night
+            ? [Color(red: 0.92, green: 0.89, blue: 1), Color(red: 1, green: 0.84, blue: 0.91), Color(red: 0.87, green: 0.93, blue: 1)]
+            : [Color(red: 0.93, green: 0.80, blue: 0.55), Color(red: 0.96, green: 0.76, blue: 0.82), Color(red: 0.86, green: 0.82, blue: 0.95)]
+        // 手指在动才落：按这一帧移动的距离决定落几颗
+        if let f = finger {
+            let moved = lastFinger.map { hypot(f.x - $0.x, f.y - $0.y) } ?? 0
+            let n = min(4, Int(moved / 6) + (lastFinger == nil ? 2 : 0))
+            for _ in 0..<n {
+                sparks.append(Spark(p: CGPoint(x: f.x + .random(in: -6...6), y: f.y + .random(in: -6...6)),
+                                    v: CGVector(dx: .random(in: -15...15), dy: .random(in: -36...(-8))),
+                                    life: 1, r: .random(in: 0.6...2.2), c: pal.randomElement()!))
+            }
+        }
+        lastFinger = finger
+        for i in sparks.indices {
+            sparks[i].life -= dt * 0.55
+            sparks[i].p.x += sparks[i].v.dx * dt
+            sparks[i].p.y += sparks[i].v.dy * dt
+            sparks[i].v.dy += 12 * dt
+        }
+        sparks.removeAll { $0.life <= 0 }
+        if sparks.count > 260 { sparks.removeFirst(sparks.count - 260) }
+
+        if night {
+            if dust.isEmpty, size.width > 0 {
+                dust = (0..<46).map { _ in
+                    Dust(p: CGPoint(x: .random(in: 0...size.width), y: .random(in: 0...size.height)),
+                         v: .random(in: 6...20), r: .random(in: 0.5...1.8), ph: .random(in: 0...7),
+                         c: pal.randomElement()!)
+                }
+            }
+            for i in dust.indices {
+                dust[i].p.y += dust[i].v * dt
+                dust[i].p.x += CGFloat(sin(t * 0.4 + dust[i].ph)) * 0.08
+                if dust[i].p.y > size.height + 4 { dust[i].p.y = -4; dust[i].p.x = .random(in: 0...size.width) }
+            }
+        } else {
+            dust.removeAll()
+        }
+    }
+
+    func draw(_ gc: GraphicsContext) {
+        for d in dust {
+            let a = 0.25 + 0.55 * pow(sin(t * 1.3 + d.ph), 2)
+            gc.fill(Path(ellipseIn: CGRect(x: d.p.x - d.r, y: d.p.y - d.r, width: d.r * 2, height: d.r * 2)),
+                    with: .color(d.c.opacity(a)))
+        }
+        for s in sparks {
+            if s.r > 1.6 {
+                // 大一点的画成四角小星
+                let r = s.r * 0.8, c = s.p
+                var p = Path()
+                p.move(to: CGPoint(x: c.x, y: c.y - r * 2))
+                p.addQuadCurve(to: CGPoint(x: c.x + r * 2, y: c.y), control: c)
+                p.addQuadCurve(to: CGPoint(x: c.x, y: c.y + r * 2), control: c)
+                p.addQuadCurve(to: CGPoint(x: c.x - r * 2, y: c.y), control: c)
+                p.addQuadCurve(to: CGPoint(x: c.x, y: c.y - r * 2), control: c)
+                gc.fill(p, with: .color(s.c.opacity(s.life * 0.9)))
+            } else {
+                gc.fill(Path(ellipseIn: CGRect(x: s.p.x - s.r, y: s.p.y - s.r, width: s.r * 2, height: s.r * 2)),
+                        with: .color(s.c.opacity(s.life * 0.9)))
+            }
         }
     }
 }
