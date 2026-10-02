@@ -2595,6 +2595,11 @@ struct ClawdView: View {
                                 id: \.self) { id in
                             ClawdWornView(id: id, scale: scale)
                         }
+                        // 道具盖回穿戴件上面：吉他压住帽子，不是帽子压住吉他（见 `ClawdRig.propsOnly`）
+                        if pose == .none {
+                            PixelSpriteView(sprite: ClawdRig.propsOnly(sprites[min(frame, sprites.count - 1)].0),
+                                            scale: scale)
+                        }
                     }
                     .allowsHitTesting(false)
             }

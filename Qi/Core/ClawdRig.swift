@@ -214,6 +214,10 @@ struct ClawdRigView: View {
                 ForEach(ClawdRig.shownWorn(wornIDs, mood: mood, pose: pose), id: \.self) { id in
                     ClawdWornView(id: id, scale: scale)
                 }
+                // 道具盖回穿戴件上面（见 `ClawdRig.propsOnly`）
+                if !wornIDs.isEmpty {
+                    PixelSpriteView(sprite: ClawdRig.propsOnly(body0), scale: scale)
+                }
             }
             }
             // 身子和穿戴件是一块的：一起抬、一起歪。⚠️ 支点在**脚底**
@@ -579,6 +583,28 @@ enum ClawdRig {
     /// 结果把扫地那两帧伸在身子外面的扫把杆（`n`）和稻草（`t`）
     /// 一起抹没了——他举着空气扫地。
     /// 抠的是「手」，不是「身子外面的所有东西」。
+    /// 这一帧里**动作的那部分**：把身子（`p`）和眼睛（`k`）抠掉，剩下的就是吉他、耳机、
+    /// 咖啡杯、书、泪滴、爱心……
+    ///
+    /// 她定的：「动作的优先级高于衣服。衣服和 clawd 是一体的——
+    /// 动作超过头顶，帽子就在动作后面；动作在身体前面，衣服领带也在下面一层，
+    /// 穿在 clawd 身上，不是盖在上面。」她报的那张：帽子把吉他遮住了。
+    ///
+    /// 所以画的顺序是：整帧（身子 + 道具）→ 穿戴件 → **再把道具这一层盖回去**。
+    /// 道具压住衣服，衣服压住身子。
+    static func propsOnly(_ s: PixelSprite) -> PixelSprite {
+        let key = s.rows.joined(separator: "
+")
+        if let hit = propCache[key] { return hit }
+        let rows = s.rows.map { row -> String in
+            String(row.map { ($0 == "p" || $0 == "k") ? "." : $0 })
+        }
+        let out = PixelSprite(rows, s.palette)
+        propCache[key] = out
+        return out
+    }
+    nonisolated(unsafe) private static var propCache: [String: PixelSprite] = [:]
+
     static func stripArms(_ s: PixelSprite) -> PixelSprite {
         let rows = s.rows.map { row -> String in
             var chars = Array(row)
