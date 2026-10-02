@@ -25,13 +25,13 @@ struct FolderGridView: View {
     private var folders: [String] { store.folders(kind) }
     private var looseCount: Int { store.list(kind, folder: "").count }
 
-    private let columns = [GridItem(.flexible(), spacing: 14),
-                           GridItem(.flexible(), spacing: 14),
-                           GridItem(.flexible(), spacing: 14)]
+    // 两列：每个文件夹后面要探出一只 clawd，格子小了看不清它在干嘛
+    private let columns = [GridItem(.flexible(), spacing: 16),
+                           GridItem(.flexible(), spacing: 16)]
 
     var body: some View {
         ScrollView {
-            LazyVGrid(columns: columns, spacing: 18) {
+            LazyVGrid(columns: columns, spacing: 22) {
 
                 // 「全部」那一格**撤了**。
                 //
@@ -158,18 +158,7 @@ struct FolderGridView: View {
     }
 
     private func folderCell(title: String, count: Int, tint: Color) -> some View {
-        VStack(spacing: 8) {
-            FolderIcon(tint: tint, size: 68)
-            VStack(spacing: 1) {
-                Text(title)
-                    .font(.app(12, weight: .medium))
-                    .foregroundStyle(Theme.textMain(scheme))
-                    .lineLimit(1)
-                Text("\(count)")
-                    .font(.app(10))
-                    .foregroundStyle(Theme.textMuted(scheme))
-            }
-        }
+        GlassFolderCard(title: title, count: count, tint: tint)
     }
 
     /// 每个文件夹在主题色附近取一个略微不同的色相，整体还是一家人
