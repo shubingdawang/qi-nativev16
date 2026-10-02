@@ -1006,12 +1006,20 @@ struct PeriodPane: View {
             calendar
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("点击日历中的日期可记录周期开始，或补充当日情况。")
+                Text("点击日历中的日期可记录这次的开始、结束或排卵期出血，也可补充当日情况。")
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
                 HStack(spacing: 14) {
                     legend(app.settings.accentColor.opacity(0.75), "来了")
                     legend(app.settings.accentColor.opacity(0.28), "预测")
+                    HStack(spacing: 4) {
+                        Image(systemName: "drop.fill")
+                            .font(.system(size: 8))
+                            .foregroundStyle(Self.ovulationColor)
+                        Text(Self.ovulationTag)
+                            .font(.app(11))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
                     HStack(spacing: 5) {
                         Circle().fill(app.settings.accentColor).frame(width: 3.5, height: 3.5)
                         Text("有备注")
@@ -1135,6 +1143,14 @@ struct PeriodPane: View {
                     .font(.app(13, weight: isToday ? .semibold : .regular))
                     .foregroundStyle(mark == 1 ? Color.white : Theme.textMain(scheme))
 
+                // 排卵期出血：右上角一滴
+                if ovulationBleed(day) {
+                    Image(systemName: "drop.fill")
+                        .font(.system(size: 7))
+                        .foregroundStyle(Self.ovulationColor)
+                        .offset(x: 11, y: -11)
+                }
+
                 // 写过备注的那天，底下点一个小点
                 if hasNote(day) {
                     Circle()
@@ -1157,6 +1173,38 @@ struct PeriodPane: View {
     /// 本机记忆库开着的话，直接读那份真数据。
     /// 走 MCP 那条路才需要从 period_status 那段话里抠日期——
     /// 抠出来的东西不可靠，能不用就不用。
+    /// 排卵期出血记成备注时用的那句话（日历上靠它认）
+    static let ovulationTag = "排卵期出血"
+    static let ovulationColor = Color(red: 0.91, green: 0.55, blue: 0.66)
+
+    private func ovulationBleed(_ day: Date) -> Bool {
+        (notesByDay[df.string(from: cal.startOfDay(for: day))] ?? [])
+            .contains { $0.text.hasPrefix(Self.ovulationTag) }
+    }
+
+    /// 这天（含）之前最近的一次开始。记「结束」就记在它上面
+    private func startBefore(_ d: Date) -> String? {
+        let day = df.string(from: d)
+        return records.map(\.start).filter { $0 <= day }.max()
+    }
+
+    private func periodButton(_ title: String, _ act: @escaping () async -> Void) -> some View {
+        Button {
+            Task {
+                await act()
+                showSheet = false
+                await model.run(app, tool: "period_status")
+            }
+        } label: {
+            Text(title)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(RoundedRectangle(cornerRadius: 14)
+                    .fill(app.settings.accentColor.opacity(0.32)))
+        }
+        .buttonStyle(.plain)
+    }
+
     private var records: [PeriodRecord] {
         app.settings.localMemory ? MemoryStore.shared.periods.records : []
     }
@@ -1289,22 +1337,30 @@ struct PeriodPane: View {
                             }
                         }
 
-                        Button {
-                            guard let d = picked else { return }
-                            Task {
+                        // 「开始」和「结束」并排：结束记在这天之前最近的那一次上
+                        HStack(spacing: 10) {
+                            periodButton("开始") {
+                                guard let d = picked else { return }
                                 await model.run(app, tool: "log_period",
                                                 args: ["start": df.string(from: d)])
-                                showSheet = false
-                                await model.run(app, tool: "period_status")
                             }
-                        } label: {
-                            Text("这天开始的")
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(RoundedRectangle(cornerRadius: 14)
-                                    .fill(app.settings.accentColor.opacity(0.32)))
+                            periodButton("结束") {
+                                guard let d = picked, let st = startBefore(d) else { return }
+                                await model.run(app, tool: "log_period",
+                                                args: ["start": st, "end": df.string(from: d)])
+                            }
+                            .disabled(picked.flatMap(startBefore) == nil)
+                            .opacity(picked.flatMap(startBefore) == nil ? 0.4 : 1)
                         }
-                        .buttonStyle(.plain)
+                        // 排卵期出血：不算一次经期，记成这天的一条备注，日历上点一滴
+                        periodButton(Self.ovulationTag) {
+                            guard let d = picked else { return }
+                            await model.run(app, tool: "add_period_note", args: [
+                                "date": df.string(from: d),
+                                "text": Self.ovulationTag,
+                                "author": app.settings.userName
+                            ])
+                        }
 
                         VStack(alignment: .leading, spacing: 8) {
                             Text("写点当天的").font(.app(14, weight: .medium))
