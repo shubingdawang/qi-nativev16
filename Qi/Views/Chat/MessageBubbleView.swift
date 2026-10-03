@@ -178,8 +178,18 @@ struct MessageBubbleView: View {
         if isUser {
             return app.settings.userName.isEmpty ? "我" : app.settings.userName
         }
+        // 群里那位：按 id 找现在的名字（她改过名也跟着变），找不到再用当时记下的
+        if let m = senderMember, !m.name.isEmpty { return m.name }
         if !message.senderName.isEmpty { return message.senderName }
         return app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName
+    }
+
+    /// 这一条是群里哪一位说的
+    private var senderMember: GroupMember? {
+        guard let members = app.conversation(conversationID)?.members, !members.isEmpty else { return nil }
+        if let id = message.senderID, let m = members.first(where: { $0.id == id }) { return m }
+        if !message.senderName.isEmpty { return members.first { $0.name == message.senderName } }
+        return nil
     }
 
     /// 群聊里每位可以有自己的头像，没设就退回全局那两张
@@ -187,9 +197,7 @@ struct MessageBubbleView: View {
         if isUser {
             return app.settings.userAvatarName.flatMap { ImageStore.cached($0) }
         }
-        if !message.senderName.isEmpty,
-           let member = app.conversation(conversationID)?.members
-            .first(where: { $0.name == message.senderName }),
+        if let member = senderMember,
            let name = member.avatarName,
            let img = ImageStore.cached(name) {
             return img

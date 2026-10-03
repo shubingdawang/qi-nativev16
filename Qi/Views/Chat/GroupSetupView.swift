@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 /// 群成员。每位挂各自的模型，所以阿晏和工坊那边的模型能在同一个群里说话。
 /// 发言顺序就是这个列表的顺序，能拖着调。
@@ -34,11 +35,10 @@ struct GroupSetupView: View {
                             editing = member
                         } label: {
                             HStack(spacing: 10) {
-                                Circle()
-                                    .fill(member.enabled
-                                          ? app.settings.accentColor.opacity(0.7)
-                                          : Color.gray.opacity(0.35))
-                                    .frame(width: 8, height: 8)
+                                AvatarView(name: member.name.isEmpty ? "?" : member.name,
+                                           image: member.avatarName.flatMap { ImageStore.cached($0) },
+                                           size: 30)
+                                    .opacity(member.enabled ? 1 : 0.45)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(member.name.isEmpty ? "还没起名" : member.name)
                                         .foregroundStyle(Theme.mainText)
@@ -129,11 +129,26 @@ struct GroupMemberFormView: View {
 
     @EnvironmentObject var app: AppState
     @Environment(\.dismiss) private var dismiss
+    @State private var pickingAvatar: PhotosPickerItem?
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("这一位") {
+                    // 头像：点一下从相册挑
+                    HStack(spacing: 14) {
+                        AvatarView(name: member.name.isEmpty ? "?" : member.name,
+                                   image: member.avatarName.flatMap { ImageStore.cached($0) },
+                                   size: 56)
+                        PhotosPicker(selection: $pickingAvatar, matching: .images) {
+                            Text(member.avatarName == nil ? "设置头像" : "换头像")
+                        }
+                        if member.avatarName != nil {
+                            Button("移除", role: .destructive) { member.avatarName = nil }
+                                .buttonStyle(.borderless)
+                        }
+                    }
+                    .padding(.vertical, 4)
                     TextField("名字", text: $member.name)
                     Toggle("参与说话", isOn: $member.enabled)
                 }
@@ -176,6 +191,17 @@ struct GroupMemberFormView: View {
             }
             .transparentList()
             .listRowBackground(GlassRowBackground())
+            .onChange(of: pickingAvatar) { _, item in
+                guard let item else { return }
+                Task { @MainActor in
+                    if let data = try? await item.loadTransferable(type: Data.self),
+                       let img = UIImage(data: data),
+                       let name = ImageStore.save(ImageStore.downscale(img, maxSide: 512)) {
+                        member.avatarName = name
+                    }
+                    pickingAvatar = nil
+                }
+            }
             .navigationTitle(member.name.isEmpty ? "新成员" : member.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
