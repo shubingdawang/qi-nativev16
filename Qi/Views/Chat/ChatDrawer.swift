@@ -316,7 +316,8 @@ struct ChatDrawer: View {
         let state = app.presence(in: conv.id)
         HStack(spacing: 4) {
             Circle()
-                .fill(state.busy ? app.settings.accentColor : Color.green.opacity(0.85))
+                .fill(app.isOffline(conv.id) ? Color.red.opacity(0.85)
+                      : (state.busy ? app.settings.accentColor : Color.green.opacity(0.85)))
                 .frame(width: 5, height: 5)
             Text(state.text)
                 .font(.app(10))

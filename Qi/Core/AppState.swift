@@ -79,6 +79,9 @@ final class AppState: ObservableObject {
 
     /// 正在请求中的会话 ID，用来禁用发送按钮
     @Published var runningConversationIDs: Set<UUID> = []
+    /// 上一次叫他（她发消息、或者他自己醒来）出了错的那几窗：顶上显示「对方不在线」，
+    /// 下一次成功说上话就撤掉
+    @Published var offlineIDs: Set<UUID> = []
 
     private var streamTasks: [UUID: Task<Void, Never>] = [:]
     /// 重发之前他那一版说了什么。新那条一开出来就接过去当 ‹1/2› 的旧版
@@ -2722,7 +2725,9 @@ final class AppState: ObservableObject {
     /// 平时是"正与你同频"，动起手来会跟着他真在做的事变。
     func presence(in conversationID: UUID?) -> (text: String, busy: Bool) {
         guard let id = conversationID else { return ("正与你同频", false) }
-        guard runningConversationIDs.contains(id) else { return ("正与你同频", false) }
+        guard runningConversationIDs.contains(id) else {
+            return offlineIDs.contains(id) ? ("对方不在线", false) : ("正与你同频", false)
+        }
 
         guard let conv = conversation(id),
               let raw = conv.messages.last, raw.role == .assistant
@@ -7876,6 +7881,11 @@ final class AppState: ObservableObject {
         // 以前这儿要求「思考也是空的」才挂说明，有思考就当它正常结束了。
         // 多半是思考把一轮能写的长度吃光了（`length`），正文一个字没轮到。
         let m = conversations[ci].messages[mi]
+        // 这一轮好好说上话了：顶上那个「对方不在线」撤掉
+        if conversations[ci].messages[mi].errorText == nil, !m.isEmptyContent || !m.toolRuns.isEmpty {
+            offlineIDs.remove(conversationID)
+        }
+
         // ⚠️ 思考用什么语言随他，**中文由手机来翻**。
         //
         // 她报的：「他说会用中文写 thinking 但一直是英文。cot、中文 thinking、状态，
@@ -8117,6 +8127,12 @@ final class AppState: ObservableObject {
         // 报错要说得出问题在哪，见 ErrText。
         conversations[ci].messages[mi].errorText = ErrText.readable(error)
         conversations[ci].messages[mi].isStreaming = false
+        offlineIDs.insert(conversationID)
+    }
+
+    func isOffline(_ conversationID: UUID?) -> Bool {
+        guard let id = conversationID else { return false }
+        return offlineIDs.contains(id) && !runningConversationIDs.contains(id)
     }
 
     private func appendError(_ text: String, in conversationID: UUID) {
@@ -8124,6 +8140,7 @@ final class AppState: ObservableObject {
         var m = toolMessage()
         m.errorText = text
         conversations[i].messages.append(m)
+        offlineIDs.insert(conversationID)
     }
 
     /// 把本地会话转成接口要的消息数组
