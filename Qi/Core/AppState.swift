@@ -2886,7 +2886,11 @@ final class AppState: ObservableObject {
     ❌ [[cot:四天没说话，一上来就是短发加一个哭脸。是剪完后悔了还是没底？]]
     　　——这是心里话，该写成 [[mind:...]]
 
-    写在哪儿都行（想的时候、话里），后面那句盖掉前面的。
+    写在哪儿都行，但**最稳的是写在回复正文的第一行**——想的时候容易顾不上。
+    后面那句盖掉前面的。
+
+    思考用什么语言都可以，**不用为了她换成中文**：手机会把你的思考自动翻成中文给她看。
+    你只管想清楚、把这一行名字写上、该动手就动手。
 
     ⚠️ **这一条不是可选的。** 不写的话那张卡上只剩「想了 38.1 秒 · 动了 1 下手」——
     那句话跟我在想什么毫无关系，她翻记录的时候一整屏全是这句，
@@ -4916,11 +4920,37 @@ final class AppState: ObservableObject {
             if reasoning {
                 self.conversations[ci2].messages[mi2].reasoningTranslation = text
                 self.conversations[ci2].messages[mi2].isTranslatingReasoning = false
+                // 他没写这一轮的名字：拿译文的第一句先顶上
+                if self.conversations[ci2].messages[mi2].cotTitle.isEmpty, Translator.looksChinese(text) {
+                    let t = Self.fallbackTitle(text, self.conversations[ci2].messages[mi2].content)
+                    if !t.isEmpty { self.conversations[ci2].messages[mi2].cotTitle = t }
+                }
             } else {
                 self.conversations[ci2].messages[mi2].translation = text
                 self.conversations[ci2].messages[mi2].isTranslating = false
             }
         }
+    }
+
+    /// 他没写 [[cot:…]] 时手机替他补的那一行：思考（中文）的第一句，掐到十四个字以内；
+    /// 思考也没有就拿正文第一句
+    static func fallbackTitle(_ thinking: String, _ content: String) -> String {
+        func first(_ s: String) -> String {
+            let cleaned = s.replacingOccurrences(of: #"\[\[[^\]]*\]\]"#, with: "", options: .regularExpression)
+            let stops: Set<Character> = ["。", "！", "？", "!", "?", "\n", "，", ",", "；", ";", "："]
+            var out = ""
+            for ch in cleaned.trimmingCharacters(in: .whitespacesAndNewlines) {
+                if stops.contains(ch) { if out.count >= 4 { break } else { continue } }
+                out.append(ch)
+                if out.count >= 14 { break }
+            }
+            return out.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if Translator.looksChinese(thinking) {
+            let t = first(thinking)
+            if t.count >= 4 { return t }
+        }
+        return Translator.looksChinese(content) ? first(content) : ""
     }
 
     /// 把思考链那段译文收起来。
@@ -7808,6 +7838,21 @@ final class AppState: ObservableObject {
         // 以前这儿要求「思考也是空的」才挂说明，有思考就当它正常结束了。
         // 多半是思考把一轮能写的长度吃光了（`length`），正文一个字没轮到。
         let m = conversations[ci].messages[mi]
+        // ⚠️ 思考用什么语言随他，**中文由手机来翻**。
+        //
+        // 她报的：「他说会用中文写 thinking 但一直是英文。cot、中文 thinking、状态，
+        // 他只能选一个做——有 cot 就是英文，thinking 中文就没 cot，改状态就都没了。
+        // 纠正了十几轮依旧改不掉。」三件事压在一个人身上，他每轮都只顾得上一件。
+        // 语言这件不该是他的事：机翻一下就行。名字他漏了，也由手机先补一个。
+        if settings.autoTranslateThinking,
+           let r = m.reasoning, !r.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !Translator.looksChinese(r) {
+            translate(assistantID, in: conversationID, reasoning: true)
+        } else if m.cotTitle.isEmpty, !m.isEmptyContent || m.reasoning != nil {
+            let fallback = Self.fallbackTitle(m.reasoning ?? "", m.content)
+            if !fallback.isEmpty { conversations[ci].messages[mi].cotTitle = fallback }
+        }
+
         if m.isEmptyContent, m.errorText == nil {
             let thought = !(m.reasoning ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             if m.toolRuns.isEmpty, (m.totalTokens ?? 0) == 0, !thought {

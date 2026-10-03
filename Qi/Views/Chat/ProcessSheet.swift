@@ -495,6 +495,10 @@ struct ProcessSheet: View {
                 .background(Capsule().fill(Theme.softFillDeep))
             }
             .buttonStyle(.plain)
+            // 设置里开了「思考自动翻成中文」：展开就自己翻（还在写的那一段等写完再翻）
+            .onAppear {
+                if app.settings.autoTranslateThinking, !growing { translate(s) }
+            }
         }
     }
 

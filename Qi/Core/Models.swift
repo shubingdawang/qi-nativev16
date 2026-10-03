@@ -798,6 +798,8 @@ struct AppSettings: Codable {
     /// 他分段发：让他自己决定在哪儿断句，断开的每一段单独一个气泡。
     /// 一整段说完才算一句话，头像只挂一次。
     var segmentAssistant: Bool = false
+    /// 他的思考不是中文的话，手机自动翻成中文给她看（机翻，不调模型）
+    var autoTranslateThinking: Bool = true
     /// **他自己的声音听起来是什么样的**，一句人话。
     ///
     /// 她说的：「我想让他知道他的声音是什么样的。」
@@ -1097,6 +1099,7 @@ extension AppSettings {
         todoAccess = (try? c.decodeIfPresent(Bool.self, forKey: .todoAccess)) ?? false
         todoWrite = (try? c.decodeIfPresent(Bool.self, forKey: .todoWrite)) ?? false
         segmentAssistant = (try? c.decodeIfPresent(Bool.self, forKey: .segmentAssistant)) ?? false
+        autoTranslateThinking = (try? c.decodeIfPresent(Bool.self, forKey: .autoTranslateThinking)) ?? true
         toolConfirm = (try? c.decodeIfPresent(Bool.self, forKey: .toolConfirm)) ?? true
         hisVoiceNote = (try? c.decodeIfPresent(String.self, forKey: .hisVoiceNote)) ?? ""
         herVoiceNote = (try? c.decodeIfPresent(String.self, forKey: .herVoiceNote)) ?? ""

@@ -648,6 +648,22 @@ struct SettingsView: View {
 
             SettingsDivider()
 
+            Toggle(isOn: $app.settings.autoTranslateThinking) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("思考自动翻成中文")
+                        .font(.app(15))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    Text("思考不是中文时，在思考链里自动附上中文译文（系统翻译，不调用模型）")
+                        .font(.app(11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+            }
+            .tint(app.settings.accentColor)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+
+            SettingsDivider()
+
             typingSection
 
             SettingsDivider()
