@@ -78,7 +78,19 @@ struct GroupSetupView: View {
                 } header: {
                     Text("群里有谁")
                 } footer: {
-                    Text("按此顺序轮流发言，靠后的成员可读取此前的发言。左滑删除，长按拖动可调整顺序。")
+                    Text("不 @ 任何人时由排第一的成员回复；@ 谁就由谁回复，成员之间 @ 对方也会叫起对方。左滑删除，长按拖动可调整顺序。")
+                }
+
+                Section {
+                    Stepper(value: Binding(
+                        get: { conversation?.groupChainLimit ?? 4 },
+                        set: { v in
+                            if let i = app.index(of: conversationID) { app.conversations[i].groupChainLimit = v }
+                        }), in: 1...10) {
+                        Text("成员之间最多来回 \(conversation?.groupChainLimit ?? 4) 轮")
+                    }
+                } footer: {
+                    Text("成员互相 @ 着接话时，一次最多来回这么多轮，到了就停下；他们也会被提醒在这几轮内聊完。")
                 }
             }
             .transparentList()

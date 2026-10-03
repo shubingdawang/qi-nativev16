@@ -487,6 +487,8 @@ struct Conversation: Identifiable, Codable, Hashable {
     var isGroup: Bool = false
     /// 群里都有谁，按这个顺序轮流说话
     var members: [GroupMember] = []
+    /// 群里成员之间互相 @ 着接话，一次最多来回几轮（她在群设置里挑）
+    var groupChainLimit: Int = 4
     /// 重发时收起来的那些段（见 `ChatBranch`）。最多留 20 段，超了扔最早的。
     var branches: [ChatBranch] = []
     /// 滚雪球压缩出来的浓缩件。**每窗一份，一直往下滚。**
@@ -1177,6 +1179,7 @@ extension Conversation {
         syncWithClaude = (try? c.decodeIfPresent(Bool.self, forKey: .syncWithClaude)) ?? false
         isGroup = (try? c.decodeIfPresent(Bool.self, forKey: .isGroup)) ?? false
         members = (try? c.decodeIfPresent([GroupMember].self, forKey: .members)) ?? []
+        groupChainLimit = (try? c.decodeIfPresent(Int.self, forKey: .groupChainLimit)) ?? 4
         digest = try? c.decodeIfPresent(ContextDigest.self, forKey: .digest)
         branches = (try? c.decodeIfPresent([ChatBranch].self, forKey: .branches)) ?? []
     }

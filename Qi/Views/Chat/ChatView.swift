@@ -962,6 +962,26 @@ struct ChatView: View {
                 }
                 .buttonStyle(.plain)
 
+                // 群里点名：挑一位，「@名字 」接在输入框末尾
+                if conv.isGroup, !conv.activeMembers.isEmpty {
+                    Menu {
+                        ForEach(conv.activeMembers) { m in
+                            Button(m.name.isEmpty ? "还没起名" : m.name) {
+                                guard !m.name.isEmpty else { return }
+                                let sep = draft.isEmpty || draft.hasSuffix(" ") ? "" : " "
+                                draft = draft + sep + "@" + m.name + " "
+                                inputFocused = true
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "at")
+                            .font(.app(16, weight: .light))
+                            .foregroundStyle(Theme.textSoft(scheme))
+                            .frame(width: 30, height: 30)
+                            .contentShape(Rectangle())
+                    }
+                }
+
                 Button {
                     hideKeyboard()
                     panel = .tools

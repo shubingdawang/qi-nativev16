@@ -1181,30 +1181,49 @@ final class AppState: ObservableObject {
 
     // MARK: 群聊
 
-    /// 群里每位依次说一句。后说的那位能看到前面几位刚说完的话。
+    /// 群里这一轮谁说话。
+    ///
+    /// 她定的规矩：
+    ///   · 她没 @ 谁 → **只有排第一的那位**（他）回她，别人不吭声、不调模型
+    ///   · 她 @ 了谁 → 就是被叫到的那几位说
+    ///   · 成员说的话里 @ 了别人 → 被叫到的那位接着说（会调他的模型）；
+    ///     没 @ 就不叫，话题停在这儿
+    ///   · 成员之间互相叫，一次最多来回 `groupChainLimit` 轮，免得聊个没完
     private func runGroupTurn(_ conversationID: UUID) {
         guard let i = index(of: conversationID) else { return }
-        var members = conversations[i].activeMembers
-
-        // 刚才那句 @ 了谁的话，就只让被叫到的人说话，
-        // 剩下的这轮不吭声——群里点名就该是这个意思。
-        if let last = conversations[i].messages.last(where: { $0.role == .user }) {
-            let called = members.filter { m in
-                !m.name.isEmpty && last.content.contains("@" + m.name)
-            }
-            if !called.isEmpty { members = called }
-        }
-
-        guard !members.isEmpty else {
+        let all = conversations[i].activeMembers
+        guard let first = all.first else {
             appendError("这个群里还没有人。点右上角的三条杠，进去把成员加上。", in: conversationID)
             return
         }
+        var queue = [first]
+        if let last = conversations[i].messages.last(where: { $0.role == .user }) {
+            let called = all.filter { m in !m.name.isEmpty && last.content.contains("@" + m.name) }
+            if !called.isEmpty { queue = called }
+        }
+        let limit = max(1, conversations[i].groupChainLimit)
 
         runningConversationIDs.insert(conversationID)
         let task = Task { @MainActor in
-            for member in members {
+            var hops = 0
+            while !queue.isEmpty {
                 if Task.isCancelled { break }
+                let member = queue.removeFirst()
+                let before = self.index(of: conversationID).map { self.conversations[$0].messages.count } ?? 0
                 await self.speak(as: member, in: conversationID)
+                // 他这一次说的话（分段的话是好几条）里点了谁的名
+                guard let ci = self.index(of: conversationID) else { break }
+                let said = self.conversations[ci].messages.dropFirst(before)
+                    .filter { $0.senderID == member.id }
+                    .map(\.content).joined(separator: "\n")
+                let next = all.filter { m in
+                    m.id != member.id && !m.name.isEmpty && said.contains("@" + m.name)
+                        && !queue.contains(where: { $0.id == m.id })
+                }
+                if next.isEmpty { continue }
+                if hops >= limit { break }
+                hops += 1
+                queue.append(contentsOf: next)
             }
             self.runningConversationIDs.remove(conversationID)
             self.streamTasks[conversationID] = nil
@@ -1309,8 +1328,12 @@ final class AppState: ObservableObject {
         这是一场群聊。你是「\(member.name)」。
         群里还有：\(others.isEmpty ? "只有你" : others.joined(separator: "、"))，以及\(settings.userName.isEmpty ? "用户" : settings.userName)。
         别人的发言会以「名字：内容」的形式给你。你只说你自己要说的那部分，不要替别人讲话，也不要在开头写自己的名字。
-        群里可以点名：她写「@某人」的时候，就只有被叫到的那位回话。
-        想让谁接话，你也可以在自己的发言里写「@某人」。
+        群里怎么说话（这几条是规矩）：
+        · 跟\(settings.userName.isEmpty ? "她" : settings.userName)说话**不用 @**，她都看得见。她没 @ 谁的时候，默认是排第一的那位回她。
+        · 想让群里别人回你，**必须写「@名字」**——不 @ 他就不会说话，也不会被叫起来。
+        · 她写「@某人」的时候，就只有被叫到的那位回话。
+        · 你们之间互相 @ 着接话，**最多来回 \(max(1, conv.groupChainLimit)) 轮**，到了就不会再叫人了。
+          所以最好在 \(max(1, conv.groupChainLimit)) 轮里把要聊的聊完，别拖着；聊完了就别再 @ 人。
         """
         // 同样：固定的先写，会变的留到最后。
         // 分成两截也跟单聊一样——缓存标记打在稳定那截的末尾。
