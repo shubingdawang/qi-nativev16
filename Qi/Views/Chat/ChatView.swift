@@ -92,6 +92,8 @@ struct ChatView: View {
     /// 还要跑一段 `withAnimation` 的滚动——一秒钟五六下，就是她说的那种一卡一卡。
     /// 真正需要滚的只有「输入栏长高了一行」那一下，见 `bumpTypingIfGrew`。
     @State private var typingTick = 0
+    /// 输入栏高度变了之后，晚一点再让列表滚（见 `composerHeight` 那段）
+    @State private var heightKick: Task<Void, Never>?
 
     @FocusState private var inputFocused: Bool
     /// 从聊天记录点进来的那一条，滚到它那儿并闪一下
@@ -259,7 +261,17 @@ struct ChatView: View {
                                     withTransaction(t) { composerHeight = h }
                                     // 输入栏长高/变矮了，底下那几条会被顶出去——
                                     // **打字期间只有这一下需要滚**。
-                                    typingTick += 1
+                                    //
+                                    // ⚠️ 但**别当场滚**：她报「点开表情顿一下才弹出，
+                                    // 点表情也顿一下才进输入框」。表情面板一开一关，输入栏高度就变，
+                                    // `typingTick` 一变整个消息列表重算一遍、再跑一段滚动动画——
+                                    // 正好撞在面板弹出的那一帧上。等面板动完（0.3 秒）再滚，
+                                    // 连着变好几次只滚最后一次。
+                                    heightKick?.cancel()
+                                    heightKick = Task { @MainActor in
+                                        try? await Task.sleep(nanoseconds: 320_000_000)
+                                        if !Task.isCancelled { typingTick += 1 }
+                                    }
                                 }
                         })
                     }
