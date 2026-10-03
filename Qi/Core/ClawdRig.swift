@@ -593,7 +593,7 @@ enum ClawdRig {
     /// 所以画的顺序是：整帧（身子 + 道具）→ 穿戴件 → **再把道具这一层盖回去**。
     /// 道具压住衣服，衣服压住身子。
     static func propsOnly(_ s: PixelSprite) -> PixelSprite {
-        let key = s.rows.joined(separator: "|")
+        let key = s.key
         if let hit = propCache[key] { return hit }
         let rows = s.rows.map { row -> String in
             String(row.map { ($0 == "p" || $0 == "k") ? "." : $0 })
@@ -602,7 +602,7 @@ enum ClawdRig {
         propCache[key] = out
         return out
     }
-    nonisolated(unsafe) private static var propCache: [String: PixelSprite] = [:]
+    nonisolated(unsafe) private static var propCache: [Int: PixelSprite] = [:]
 
     static func stripArms(_ s: PixelSprite) -> PixelSprite {
         let rows = s.rows.map { row -> String in

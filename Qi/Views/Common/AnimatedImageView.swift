@@ -11,6 +11,10 @@ struct AnimatedImageView: UIViewRepresentable {
 
     let url: URL
     var contentMode: UIView.ContentMode = .scaleAspectFit
+    /// 解到多大（像素，长边）。0 = 原尺寸。
+    /// 表情面板一格才 60 点，把一张 512 的动图每一帧都按原尺寸解出来，
+    /// 几十格一起就是她说的「表情包弹出有点卡」
+    var maxPixel: CGFloat = 0
 
     func makeUIView(context: Context) -> UIImageView {
         let view = UIImageView()
@@ -47,6 +51,10 @@ struct AnimatedImageView: UIViewRepresentable {
     /// 那个 if 看着像个缓存，其实一次都没挡住。
     private func load(into view: UIImageView, _ coordinator: Coordinator) {
         coordinator.loadedURL = url
+        if maxPixel > 0 {
+            loadSmall(into: view, coordinator)
+            return
+        }
 
         guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else {
             // 文件不在了。**得把上一张擦掉**——
@@ -83,6 +91,73 @@ struct AnimatedImageView: UIViewRepresentable {
         view.startAnimating()
     }
 
+    /// 缩小版：在后台按 `maxPixel` 解，解过的记下来；回到主线程时这一格还是这张才放上去
+    private func loadSmall(into view: UIImageView, _ coordinator: Coordinator) {
+        let key = "\(url.path)|\(Int(maxPixel))" as NSString
+        if let hit = Self.smallCache.object(forKey: key) {
+            Self.apply(hit, to: view)
+            return
+        }
+        view.animationImages = nil
+        view.stopAnimating()
+        view.image = nil
+        let u = url, px = maxPixel
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let decoded = Self.decodeSmall(u, maxPixel: px) else { return }
+            Self.smallCache.setObject(decoded, forKey: key)
+            DispatchQueue.main.async {
+                guard coordinator.loadedURL == u else { return }
+                Self.apply(decoded, to: view)
+            }
+        }
+    }
+
+    final class Decoded {
+        let frames: [UIImage]
+        let duration: Double
+        init(_ f: [UIImage], _ d: Double) { frames = f; duration = d }
+    }
+
+    nonisolated(unsafe) static let smallCache: NSCache<NSString, Decoded> = {
+        let c = NSCache<NSString, Decoded>()
+        c.countLimit = 120
+        return c
+    }()
+
+    private static func apply(_ d: Decoded, to view: UIImageView) {
+        if d.frames.count > 1 {
+            view.animationImages = d.frames
+            view.animationDuration = d.duration
+            view.animationRepeatCount = 0
+            view.image = d.frames.first
+            view.startAnimating()
+        } else {
+            view.animationImages = nil
+            view.stopAnimating()
+            view.image = d.frames.first
+        }
+    }
+
+    private static func decodeSmall(_ url: URL, maxPixel: CGFloat) -> Decoded? {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let count = CGImageSourceGetCount(src)
+        let opts: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel
+        ]
+        var frames: [UIImage] = []
+        var total = 0.0
+        for i in 0..<max(1, count) {
+            guard let cg = CGImageSourceCreateThumbnailAtIndex(src, i, opts as CFDictionary) else { continue }
+            frames.append(UIImage(cgImage: cg))
+            if count > 1 { total += frameDelay(src, i) }
+        }
+        guard !frames.isEmpty else { return nil }
+        return Decoded(frames, total > 0 ? total : Double(frames.count) / 12.0)
+    }
+
     /// 每帧停多久。太短的按浏览器惯例补到 0.1 秒，不然会快得看不清
     private static func frameDelay(_ src: CGImageSource, _ index: Int) -> Double {
         guard let props = CGImageSourceCopyPropertiesAtIndex(src, index, nil) as? [CFString: Any]
@@ -112,7 +187,8 @@ struct StickerImage: View {
     var size: CGFloat = 64
 
     var body: some View {
-        AnimatedImageView(url: StickerStore.shared.url(of: sticker))
+        AnimatedImageView(url: StickerStore.shared.url(of: sticker),
+                          maxPixel: size * UIScreen.main.scale)
             .frame(width: size, height: size)
             .allowsHitTesting(false)
     }

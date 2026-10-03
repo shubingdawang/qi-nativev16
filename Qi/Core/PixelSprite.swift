@@ -39,6 +39,8 @@ struct PixelSprite {
 
     var width: Int { w }
     var height: Int { h }
+    /// 这张图纸的指纹，造的时候算一次（`ClawdRig.propsOnly` 拿它当缓存键）
+    let key: Int
 
     init(_ rows: [String], _ palette: [Character: Color]) {
         self.rows = rows
@@ -57,6 +59,9 @@ struct PixelSprite {
             }
         }
         self.grid = g
+        var hasher = Hasher()
+        hasher.combine(rows)
+        self.key = hasher.finalize()
     }
 
     func color(x: Int, y: Int) -> Color? {

@@ -2207,10 +2207,15 @@ final class AppState: ObservableObject {
                 // 她是按次计费：一次就是一次钱，缓存省的只是速度；
                 // 而攒的代价是实打实的——她那张图里工具表攒到了 84 件、17.4k。
                 // 通道本来就不缓存的时候同理。
+                // ⚠️⚠️ 一律「挂上了就不摘」。
+                //
+                // 她报的：缓存命中 1%、写入 0，「虽然我是按次，但缓存命中能提高回复的速度，
+                // 现在首字太慢了」。以前按次计费、或者连着三次没命中，就改成每轮按眼下挂——
+                // 工具表排在缓存前缀的**最前面**，表一变后面整段作废，于是更不命中，
+                // 「没命中 → 不攒 → 更不命中」，自己咬住了自己。
+                // 现在只看这一窗挂过什么，下次滚雪球时才重新从零算。
                 ToolMount.shared.activeGroups(
-                    conversation: $0, context: context,
-                    sticky: !cacheless($0.modelID)
-                        && settings.pricing.mode != .perCall)
+                    conversation: $0, context: context, sticky: true)
             }
             : nil
         var out: [[String: Any]] = []

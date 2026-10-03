@@ -311,11 +311,25 @@ enum ImageStore {
     }
 
     static func base64DataURL(_ name: String, maxSide: CGFloat = 1280) -> String? {
+        // ⚠️ 记下来。每发一句都要把最近那几张图重新编一遍——
+        // 解码、缩小、压 jpg、转 base64，一张就是上百毫秒，全在主线程上，
+        // 她说的「发送也有点卡」有一半在这儿。图的文件名不会变，编出来的也不会变，
+        // 而且**一字不差**才进得了缓存（每次重压一遍万一差一个字节，前缀就对不上了）
+        let key = "\(name)|\(Int(maxSide))" as NSString
+        if let hit = dataURLCache.object(forKey: key) { return hit as String }
         guard let image = load(name) else { return nil }
         let small = downscale(image, maxSide: maxSide)
         guard let data = small.jpegData(compressionQuality: 0.8) else { return nil }
-        return "data:image/jpeg;base64," + data.base64EncodedString()
+        let out = "data:image/jpeg;base64," + data.base64EncodedString()
+        dataURLCache.setObject(out as NSString, forKey: key)
+        return out
     }
+
+    nonisolated(unsafe) private static let dataURLCache: NSCache<NSString, NSString> = {
+        let c = NSCache<NSString, NSString>()
+        c.countLimit = 40
+        return c
+    }()
 
     /// 图太大就等比缩小，省内存也省流量
     static func downscale(_ image: UIImage, maxSide: CGFloat) -> UIImage {
