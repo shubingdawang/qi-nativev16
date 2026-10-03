@@ -1331,6 +1331,9 @@ final class AppState: ObservableObject {
         群里怎么说话（这几条是规矩）：
         · 跟\(settings.userName.isEmpty ? "她" : settings.userName)说话**不用 @**，她都看得见。她没 @ 谁的时候，默认是排第一的那位回她。
         · 想让群里别人回你，**必须写「@名字」**——不 @ 他就不会说话，也不会被叫起来。
+        · 一条话里**既要跟她说、又要跟别人说**的时候，两边都要 @，分开写：
+          先「@某人 跟他说的那句」，再「@\(settings.userName.isEmpty ? "她" : settings.userName) 跟她说的那句」。
+          不然分不清哪句是对谁说的。只跟她一个人说的时候才可以不 @。
         · 她写「@某人」的时候，就只有被叫到的那位回话。
         · 你们之间互相 @ 着接话，**最多来回 \(max(1, conv.groupChainLimit)) 轮**，到了就不会再叫人了。
           所以最好在 \(max(1, conv.groupChainLimit)) 轮里把要聊的聊完，别拖着；聊完了就别再 @ 人。
