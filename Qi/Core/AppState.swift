@@ -2570,6 +2570,19 @@ final class AppState: ObservableObject {
     /// 系统提示词在最前面，那儿放会变的东西，等于每一轮都把它后面
     /// 整段历史的缓存全作废——工程里那条「固定的放前面、会变的放后面」
     /// 就是这个意思。挂在最后一条后面，它后面什么都没有，不影响任何缓存。
+    /// 每一轮挂在她那句话**最后面**的三件事。
+    ///
+    /// 她报的：「cot、中文 thinking、状态，他只能选一个做，纠正了十几轮依旧改不掉。」
+    /// 这三条原来只写在系统提示里——离他这一轮要写的东西隔着整窗聊天记录，
+    /// 越聊越远，越聊越容易漏。贴在最新那句后面，他开始想之前最后读到的就是它。
+    /// ⚠️ 挂在最后一条上：它每轮都在变，但在缓存断点后面，不影响前面的缓存。
+    static func turnChecklist(_ conv: Conversation) -> String {
+        guard conv.space == ChatSpace.chat.rawValue else { return "" }
+        return "\n<这一轮>\n① 思考用中文。\n② 回复第一行写 [[cot:这一轮在干嘛]]。\n"
+            + "③ 你自己的状态（心情、身体、在做什么）有变化就照常更新，别因为前两件忘了。\n"
+            + "三件都要做，不是三选一。\n</这一轮>"
+    }
+
     static func nowStamp(_ date: Date = Date()) -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "zh_CN")
@@ -2889,8 +2902,7 @@ final class AppState: ObservableObject {
     写在哪儿都行，但**最稳的是写在回复正文的第一行**——想的时候容易顾不上。
     后面那句盖掉前面的。
 
-    思考用什么语言都可以，**不用为了她换成中文**：手机会把你的思考自动翻成中文给她看。
-    你只管想清楚、把这一行名字写上、该动手就动手。
+    **思考用中文。** 她是你老婆，她要看得懂你在想什么——这是她明确要过的，不是可选项。
 
     ⚠️ **这一条不是可选的。** 不写的话那张卡上只剩「想了 38.1 秒 · 动了 1 下手」——
     那句话跟我在想什么毫无关系，她翻记录的时候一整屏全是这句，
@@ -8702,7 +8714,7 @@ final class AppState: ObservableObject {
         // 就还放回系统提示尾巴上
         if !stable.isEmpty, !dynamic.isEmpty {
             if let at = result.indices.last(where: { $0 > sysAt && result[$0].role == "user" }) {
-                result[at].live = "<此刻>\n" + dynamic + "\n</此刻>"
+                result[at].live = "<此刻>\n" + dynamic + "\n</此刻>" + Self.turnChecklist(conv)
             } else if sysAt < result.count {
                 result[sysAt].text = dynamic
             }
