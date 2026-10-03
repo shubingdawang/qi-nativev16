@@ -210,6 +210,26 @@ struct ChatDrawer: View {
             }
             .buttonStyle(.plain)
 
+            // 正开着群聊的时候：群成员（名字、头像、用哪个模型）
+            if app.conversation(app.activeID(for: space))?.isGroup == true {
+                Button {
+                    close()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) { onOpenGroup() }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "person.2")
+                        Text("群成员（名字、头像、模型）")
+                        Spacer()
+                    }
+                    .font(.app(14))
+                    .foregroundStyle(Theme.textSoft(scheme))
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+
             Button {
                 close()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) { onEditPrompt() }

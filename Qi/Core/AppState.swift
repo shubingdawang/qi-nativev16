@@ -423,7 +423,11 @@ final class AppState: ObservableObject {
     /// 打开群聊：没有就现建一个，然后切过去
     @discardableResult
     func openGroup(in space: ChatSpace) -> Conversation {
-        let c = groupConversation(in: space)
+        var c = groupConversation(in: space)
+        if c.members.isEmpty, let i = index(of: c.id) {
+            conversations[i].members = defaultGroupMembers()
+            c = conversations[i]
+        }
         setActive(c.id, for: space)
         return c
     }
