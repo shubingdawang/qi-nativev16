@@ -185,6 +185,8 @@ struct ToolToggleView: View {
 
             SettingsDivider()
             mountRow
+            SettingsDivider()
+            indexRow
 
             if isOpen {
                 VStack(spacing: 0) {
@@ -232,6 +234,27 @@ struct ToolToggleView: View {
         .padding(.vertical, 11)
         .opacity(app.settings.nativeToolsEnabled ? 1 : 0.5)
         .disabled(!app.settings.nativeToolsEnabled)
+    }
+
+    /// 工具目录的开关
+    private var indexRow: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("工具目录")
+                    .font(.app(14))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Text("常驻工具每轮都带；其余的（含小屋的）只给一份名字加用途的目录，用到时先看说明再执行。省上下文，缓存也更稳。开启时「按需挂载」不起作用")
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                    .multilineTextAlignment(.leading)
+            }
+            Spacer(minLength: 4)
+            Toggle("", isOn: $app.settings.toolIndex)
+                .labelsHidden()
+                .tint(app.settings.accentColor)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
     }
 
     // MARK: 记忆库那批

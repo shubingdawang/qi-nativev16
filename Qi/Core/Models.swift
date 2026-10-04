@@ -772,6 +772,8 @@ struct AppSettings: Codable {
     var nativeToolsEnabled: Bool = true
     /// 自带工具按需挂载：常驻的每轮都带，其余按分组在该出现时才带（见 ToolMount）
     var mountToolsOnDemand: Bool = true
+    /// 工具目录：常驻那几件照常给，其余的只给一份短目录，用到时 tool_show 看说明、tool_call 执行
+    var toolIndex: Bool = true
     /// 用本机那份记忆库（不走 MCP、不用开电脑）。
     /// 打开之后记忆库那 38 个工具变成 App 内置的，
     /// **这时候该把「小屋」那台 MCP 关掉**，不然同一件事有两套工具。
@@ -1091,6 +1093,7 @@ extension AppSettings {
         themePunch = (try? c.decodeIfPresent(Double.self, forKey: .themePunch)) ?? 1.0
         nativeToolsEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .nativeToolsEnabled)) ?? true
         mountToolsOnDemand = (try? c.decodeIfPresent(Bool.self, forKey: .mountToolsOnDemand)) ?? true
+        toolIndex = (try? c.decodeIfPresent(Bool.self, forKey: .toolIndex)) ?? true
         localMemory = (try? c.decodeIfPresent(Bool.self, forKey: .localMemory)) ?? true
         localPulse = (try? c.decodeIfPresent(Bool.self, forKey: .localPulse)) ?? true
         disabledNativeTools = (try? c.decodeIfPresent([String].self, forKey: .disabledNativeTools)) ?? []

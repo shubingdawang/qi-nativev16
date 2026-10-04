@@ -177,6 +177,11 @@ enum ToolBlurb {
         "delete_diary": "删除一篇日记",
         "annotate_diary": "为日记添加批注，原文不变",
 
+        // MARK: 工具目录
+
+        "tool_show": "查看目录里一件工具的完整说明",
+        "tool_call": "执行目录里的一件工具",
+
         // MARK: 记忆库 · 经期 · 心情
 
         "log_period": "记录一次经期的起止日期",

@@ -2200,8 +2200,93 @@ final class AppState: ObservableObject {
         return (cacheMiss[model] ?? 0) >= 3
     }
 
+    // MARK: 工具目录
+    //
+    // 她给的那份《Clio 的工具优化笔记》：工具越来越多，每件的完整说明（schema）每轮都整份发，
+    // 这一轮根本不用的也读一遍。做法是「目录常驻、按需展开」：
+    //   · 常驻那几件（发表情、记忆、感受……）照常整份给
+    //   · 其余的只给一份短目录：名字 + 一句话用途
+    //   · 要用哪件：先 `tool_show(name)` 拿完整说明，再 `tool_call(name, arguments)` 执行
+    //
+    // 对缓存也是好事：工具表永远是「常驻那几件 + 这两件」，不会因为聊到新话题多挂一组就整段作废。
+    // ⚠️ 目录写在 `tool_show` 的说明里——工具表本来就在缓存前缀最前面，不用另找地方放。
+
+    /// 目录里那些工具的完整定义（名字 → function 那一段）。tool_show 从这儿拿
+    private var toolCatalog: [String: [String: Any]] = [:]
+
     func mcpToolDefinitions(for conversation: Conversation? = nil,
                             context: [ChatAPI.OutgoingMessage] = []) -> [[String: Any]] {
+        guard settings.toolIndex else {
+            return fullToolDefinitions(for: conversation, context: context, everything: false)
+        }
+        let all = fullToolDefinitions(for: conversation, context: context, everything: true)
+        var core: [[String: Any]] = []
+        var catalog: [String: [String: Any]] = [:]
+        var lines: [String] = []
+        for item in all {
+            guard let fn = item["function"] as? [String: Any],
+                  let name = fn["name"] as? String else { continue }
+            let native = NativeTools.isNative(name)
+            let short = native ? NativeTools.shortName(name) : name
+            // 本机那批里没分组的 = 常驻，整份给；其余进目录
+            if native, ToolMount.groupOf[short] == nil {
+                core.append(item)
+                continue
+            }
+            catalog[name] = fn
+            let desc = Self.oneLine((fn["description"] as? String) ?? "")
+            lines.append("- \(name) — \(desc)")
+        }
+        toolCatalog = catalog
+        guard !catalog.isEmpty else { return core }
+        let show: [String: Any] = ["type": "function", "function": [
+            "name": "tool_show",
+            "description": "查看目录里某件工具的完整说明（参数、哪些必填、限制）。"
+                + "下面这份目录里的工具**不能直接调**：先用这个看说明，再用 tool_call 执行。"
+                + "常驻的那些工具照常直接调，不用经过这里。\n\n【工具目录】\n"
+                + lines.sorted().joined(separator: "\n"),
+            "parameters": ["type": "object",
+                           "properties": ["name": ["type": "string", "description": "目录里的工具名，原样照抄"]],
+                           "required": ["name"]] as [String: Any]
+        ] as [String: Any]]
+        let call: [String: Any] = ["type": "function", "function": [
+            "name": "tool_call",
+            "description": "执行目录里的一件工具。先用 tool_show 看过它的说明，再把参数照说明填进 arguments。"
+                + "看过一次的工具，这一窗里再用可以直接 tool_call，不用每次都 show。",
+            "parameters": ["type": "object",
+                           "properties": [
+                               "name": ["type": "string", "description": "目录里的工具名"],
+                               "arguments": ["type": "object", "description": "这件工具的参数，照 tool_show 给的说明填"]
+                           ],
+                           "required": ["name"]] as [String: Any]
+        ] as [String: Any]]
+        return core + [show, call]
+    }
+
+    /// 目录里那一行：说明的第一句，掐到五十字
+    static func oneLine(_ s: String) -> String {
+        let t = s.replacingOccurrences(of: mcpAgencyTail, with: "")
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        var out = ""
+        for ch in t {
+            out.append(ch)
+            if "。！？".contains(ch) && out.count >= 8 { break }
+            if out.count >= 50 { out += "…"; break }
+        }
+        return out
+    }
+
+    /// 目录里认这个名字吗（带不带 app__ 前缀都认）
+    private func catalogName(_ raw: String) -> String? {
+        if toolCatalog[raw] != nil { return raw }
+        if toolCatalog[NativeTools.prefix + raw] != nil { return NativeTools.prefix + raw }
+        return nil
+    }
+
+    private func fullToolDefinitions(for conversation: Conversation?,
+                                     context: [ChatAPI.OutgoingMessage],
+                                     everything: Bool) -> [[String: Any]] {
         // 开了跟 claude.ai 同步的窗口，记忆工具必须放开——
         // 两边就是靠小屋这个中转站互相知道对方聊了什么的
         let blockMemory = conversation.map {
@@ -2232,7 +2317,7 @@ final class AppState: ObservableObject {
         // 总开关关了就一件都不给；单独关掉的那几件也挑出去。
         // 这一轮挂上了哪几组。**只算一次**，本机那批和小屋那批共用——
         // 算两遍不光白费事，两遍之间还可能不一样，那工具表就抖起来了（缓存最怕这个）
-        let mountedGroups: Set<String>? = (settings.mountToolsOnDemand && conversation != nil)
+        let mountedGroups: Set<String>? = (settings.mountToolsOnDemand && conversation != nil && !everything)
             ? conversation.map {
                 // ⚠️ **按次计费也不攒。**
                 //
@@ -2254,7 +2339,7 @@ final class AppState: ObservableObject {
         var out: [[String: Any]] = []
         if settings.nativeToolsEnabled {
             // 按需挂载：只在有对话的时候判（没对话就整份给，不猜）
-            let mount = settings.mountToolsOnDemand && conversation != nil
+            let mount = settings.mountToolsOnDemand && conversation != nil && !everything
             var native = NativeTools.definitions(
                 hasGroup: conversations.contains { $0.isGroup },
                 hasVoice: activeVoice != nil,
@@ -2430,6 +2515,36 @@ final class AppState: ObservableObject {
 
     /// 真正去调一次工具
     private func execute(_ call: ChatAPI.ToolCallPayload) async -> ToolRun {
+        // 工具目录那两件（见 `mcpToolDefinitions`）
+        let bare = NativeTools.isNative(call.name) ? NativeTools.shortName(call.name) : call.name
+        if bare == "tool_show" || bare == "tool_call" {
+            var meta: [String: Any] = [:]
+            if let d = call.arguments.data(using: .utf8),
+               let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] { meta = o }
+            let asked = (meta["name"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+            if bare == "tool_show" {
+                var run = ToolRun(toolName: "tool_show", arguments: call.arguments)
+                run.serverName = "本机"
+                run.finished = true
+                if let n = catalogName(asked), let fn = toolCatalog[n] {
+                    let params = (fn["parameters"]).flatMap { try? JSONSerialization.data(withJSONObject: $0, options: [.prettyPrinted, .sortedKeys]) }
+                        .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+                    run.result = "【\(n)】\n" + ((fn["description"] as? String) ?? "") + "\n\n参数：\n" + params
+                        + "\n\n用 tool_call 执行：name 填「\(n)」，arguments 照上面填。"
+                } else {
+                    run.result = "目录里没有叫「\(asked)」的工具。照 tool_show 说明里那份目录原样抄名字。"
+                    run.failed = true
+                }
+                return run
+            }
+            // tool_call：拆出里面那件，照常走一遍（问她、本机、小屋都跟直接调一样）
+            let inner = catalogName(asked) ?? asked
+            var argsText = "{}"
+            if let a = meta["arguments"] as? [String: Any],
+               let d = try? JSONSerialization.data(withJSONObject: a) { argsText = String(data: d, encoding: .utf8) ?? "{}" }
+            else if let a = meta["arguments"] as? String, !a.isEmpty { argsText = a }
+            return await execute(ChatAPI.ToolCallPayload(id: call.id, name: inner, arguments: argsText))
+        }
         var run = ToolRun(toolName: call.name, arguments: call.arguments)
 
         // 会删东西那几件，动手之前先问她一句
