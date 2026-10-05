@@ -332,7 +332,7 @@ struct ProcessSheet: View {
     /// 没起才退回「想了几秒 · 动了几下手」——那句话跟他在想什么毫无关系，
     /// 所以提示词里那条已经改成**必写**了。
     private var title: String {
-        if !message.cotTitle.isEmpty { return message.cotTitle }
+        if !message.cotTitle.isEmpty { return MD.plainTitle(message.cotTitle) }
         var bits: [String] = []
         if let s = message.reasoningSeconds, s > 0 {
             bits.append(String(format: "想了 %.1fs", s))

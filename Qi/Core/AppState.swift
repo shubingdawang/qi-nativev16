@@ -5323,7 +5323,7 @@ final class AppState: ObservableObject {
                 // 他没写这一轮的名字：拿译文的第一句先顶上
                 if self.conversations[ci2].messages[mi2].cotTitle.isEmpty, Translator.looksChinese(text) {
                     let t = Self.fallbackTitle(text, self.conversations[ci2].messages[mi2].content)
-                    if !t.isEmpty { self.conversations[ci2].messages[mi2].cotTitle = t }
+                    if !t.isEmpty { self.conversations[ci2].messages[mi2].cotTitle = MD.plainTitle(t) }
                 }
             } else {
                 self.conversations[ci2].messages[mi2].translation = text
@@ -8200,7 +8200,7 @@ final class AppState: ObservableObject {
         // 他把这一轮的名字写在正文里的时候，单独收好。
         // ⚠️ 上面那一句已经把标记从正文里剥掉了，**这儿不收就再也找不回来**。
         if !acted.cot.isEmpty {
-            conversations[ci].messages[mi].cotTitle = acted.cot
+            conversations[ci].messages[mi].cotTitle = MD.plainTitle(acted.cot)
         }
 
         // 他在回复末尾写了 [[sticker:xxx]] 的话，抠出来单独成一条表情消息
@@ -8273,7 +8273,7 @@ final class AppState: ObservableObject {
             translate(assistantID, in: conversationID, reasoning: true)
         } else if m.cotTitle.isEmpty, !m.isEmptyContent || m.reasoning != nil {
             let fallback = Self.fallbackTitle(m.reasoning ?? "", m.content)
-            if !fallback.isEmpty { conversations[ci].messages[mi].cotTitle = fallback }
+            if !fallback.isEmpty { conversations[ci].messages[mi].cotTitle = MD.plainTitle(fallback) }
         }
 
         if m.isEmptyContent, m.errorText == nil {
@@ -8858,6 +8858,29 @@ final class AppState: ObservableObject {
         // 她此刻正开着小屋跟他说话——把他在哪一间、屋里有什么带上。
         // ⚠️ 只有那一页开着时才有值（见 `houseContext`）。
         if !houseContext.isEmpty { sys += "\n\n" + houseContext }
+
+        // 群里最近说了什么。她报：「聊天页他并不知道 gemini 已经回他了」——
+        // 群里他和 gemini 的来回只落在群里（她不想在聊天页看见），
+        // 可他在这一窗里得知道：自己在群里说过什么、别人回了什么。
+        // 只带最近两天、最多十二条，每条掐到两百字；放在每轮在变的这一块，不碍缓存
+        if !conv.isGroup, conv.space == ChatSpace.chat.rawValue,
+           let g = conversations.first(where: { $0.isGroup && $0.space == ChatSpace.chat.rawValue }) {
+            let since = Date().addingTimeInterval(-48 * 3600)
+            let me = settings.userName.isEmpty ? "她" : settings.userName
+            let him = settings.aiName.isEmpty ? "阿晏" : settings.aiName
+            let lines = g.messages
+                .filter { $0.createdAt > since && $0.errorText == nil && !$0.content.isEmpty }
+                .suffix(12)
+                .map { m -> String in
+                    let who = m.role == .user ? me : (m.senderName.isEmpty ? him : m.senderName)
+                    let tag = who == him ? "你" : who
+                    return "\(Self.clockLabel(m.createdAt)) \(tag)：" + String(m.content.prefix(200))
+                }
+            if !lines.isEmpty {
+                sys += "\n\n## 群聊里最近\n（这些是群里的话，她在这一窗看不到；你在群里说过的也算你说过的）\n"
+                    + lines.joined(separator: "\n")
+            }
+        }
 
         let dynamic = sys.trimmingCharacters(in: .whitespacesAndNewlines)
         // ⚠️ 每轮在变的那块**不再放系统提示里**，挪到最新那条 user 前面（见底下）。

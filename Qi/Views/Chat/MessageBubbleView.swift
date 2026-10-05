@@ -1610,8 +1610,8 @@ struct MessageBubbleView: View {
         // 写在正文里的也算。以前只认 thinking 里的那一句，
         // 所以他写在正文里的时候，标题退回「想了 28.5s · 动了 1 下手」，
         // 而那句名字原样留在气泡上（她报的第一条 cot 没生效）。
-        if !message.cotTitle.isEmpty { return message.cotTitle }
-        if !parsed.cot.isEmpty { return parsed.cot }
+        if !message.cotTitle.isEmpty { return MD.plainTitle(message.cotTitle) }
+        if !parsed.cot.isEmpty { return MD.plainTitle(parsed.cot) }
         if message.isStreaming { return "正在想…" }
         var bits: [String] = []
         if !(message.reasoning ?? "").isEmpty {

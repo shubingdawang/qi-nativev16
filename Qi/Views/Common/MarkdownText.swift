@@ -237,6 +237,18 @@ struct MarkdownText: View {
 /// 就是这么来的）。这些地方现在一律走 `Text(MD.inline(…))`。
 enum MD {
 
+    /// 标题只要字：** * _ ` # 这些记号去掉（gemini 写成了「**分析**」原样显示）
+    static func plainTitle(_ s: String) -> String {
+        var t = s
+        for mark in ["**", "__", "`", "#"] { t = t.replacingOccurrences(of: mark, with: "") }
+        t = t.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 单个 * 或 _ 包着的整句（*分析*）
+        for mark in ["*", "_"] where t.count > 2 && t.hasPrefix(mark) && t.hasSuffix(mark) {
+            t = String(t.dropFirst().dropLast())
+        }
+        return t.replacingOccurrences(of: "*", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     static func inline(_ raw: String) -> AttributedString {
         // 批注：`⟪原句⟫→改的` —— 原句**红色下划线**。
         //
