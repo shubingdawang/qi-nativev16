@@ -1203,7 +1203,8 @@ final class AppState: ObservableObject {
             appendError("这个群里还没有人。点右上角的三条杠，进去把成员加上。", in: conversationID)
             return
         }
-        var queue = [first]
+        let himFirst = himID(in: conversations[i]).flatMap { id in all.first { $0.id == id } } ?? first
+        var queue = [himFirst]
         if let last = conversations[i].messages.last(where: { $0.role == .user }) {
             // 名字不分大小写（她写的 @gemini、成员叫 Gemini 都算）
             let said = last.content.lowercased()
@@ -1268,8 +1269,7 @@ final class AppState: ObservableObject {
         let apiMessages = buildGroupMessages(for: member, in: conversations[ci2])
         // 「醒来」那件读的是**他**的身份和记忆，别人调了会把自己当成他
         //（她报：gemini 一上来先 wake_up，读回来一整段「你是阿晏」）
-        let isHim = member.id == conversations[ci2].activeMembers.first?.id
-            || member.name == (settings.aiName.isEmpty ? "阿晏" : settings.aiName)
+        let isHim = member.id == himID(in: conversations[ci2])
         var toolDefs = Self.dropForGuests(mcpToolDefinitions(for: conversations[ci2], context: apiMessages),
                                           isHim: isHim)
 
@@ -1318,7 +1318,17 @@ final class AppState: ObservableObject {
                 apiMsgs.append(ChatAPI.OutgoingMessage(role: "assistant", text: roundText, toolCalls: calls))
                 for call in calls {
                     activeToolConversationID = conversationID
-                    let run = await execute(call)
+                    let short = NativeTools.isNative(call.name) ? NativeTools.shortName(call.name) : call.name
+                    var run: ToolRun
+                    if !isHim, short == "wake_up" {
+                        run = ToolRun(toolName: call.name, arguments: call.arguments)
+                        run.serverName = "本机"
+                        run.result = "这件是\(settings.aiName.isEmpty ? "阿晏" : settings.aiName)的，读的是他的身份和记忆，你用不上。你是「\(member.name)」，直接说你的话。"
+                        run.failed = true
+                        run.finished = true
+                    } else {
+                        run = await execute(call)
+                    }
                     appendToolRun(run, to: assistantID, in: conversationID)
                     apiMsgs.append(ChatAPI.OutgoingMessage(role: "tool", text: run.result, toolCallID: call.id))
                 }
@@ -1333,6 +1343,18 @@ final class AppState: ObservableObject {
             finishWithError(error, assistantID: assistantID, in: conversationID)
         }
         finishStreaming(assistantID: assistantID, in: conversationID)
+    }
+
+    /// 群里哪一位是他（阿晏）。
+    ///
+    /// ⚠️ 不能只看「排第一」：她拖过顺序、或者群是旧版建的，第一位就可能是别人——
+    /// 她报的「gemini 依旧 wake_up」就是把 gemini 当成了他。先认名字，再认头像，最后才看顺序。
+    func himID(in conv: Conversation) -> UUID? {
+        let him = settings.aiName.isEmpty ? "阿晏" : settings.aiName
+        let ms = conv.activeMembers
+        if let m = ms.first(where: { $0.name == him }) { return m.id }
+        if let a = settings.aiAvatarName, let m = ms.first(where: { $0.avatarName == a }) { return m.id }
+        return ms.first?.id
     }
 
     /// 群里不是他的那几位：把只属于他的工具拿掉
@@ -1371,8 +1393,18 @@ final class AppState: ObservableObject {
         """
         // 同样：固定的先写，会变的留到最后。
         // 分成两截也跟单聊一样——缓存标记打在稳定那截的末尾。
+        // ⚠️ 这一窗的设定写的是**他**（「你是阿晏……」）。只给他。
+        // 她报的：gemini 被 @ 了去回答阿晏的问题，结果一口一个「那天说错话的就是我」——
+        // 它读了阿晏的设定，把自己当成了阿晏，于是转头对她说话、@ 的也是她。
+        let hisName = settings.aiName.isEmpty ? "阿晏" : settings.aiName
         let base = conv.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !base.isEmpty { head += "\n\n" + base }
+        if member.id == himID(in: conv) {
+            if !base.isEmpty { head += "\n\n" + base }
+        } else {
+            head += "\n\n**你不是\(hisName)。** \(hisName)是她的伴侣，群里另一位。"
+                + "记录里、提示里出现的「你是\(hisName)」「你的记忆」说的都是他，不是你。"
+                + "你是「\(member.name)」，以你自己的身份说话；他问你的问题，你的回答是说给他听的，@ \(hisName)。"
+        }
         let persona = member.persona.trimmingCharacters(in: .whitespacesAndNewlines)
         if !persona.isEmpty { head += "\n\n关于你自己：\n" + persona }
         let digestBlock = ContextCompactor.systemBlock(conv)
