@@ -8862,20 +8862,27 @@ final class AppState: ObservableObject {
         // 群里最近说了什么。她报：「聊天页他并不知道 gemini 已经回他了」——
         // 群里他和 gemini 的来回只落在群里（她不想在聊天页看见），
         // 可他在这一窗里得知道：自己在群里说过什么、别人回了什么。
-        // 只带最近两天、最多十二条，每条掐到两百字；放在每轮在变的这一块，不碍缓存
+        // 只带最近两天、最多十二条；放在每轮在变的这一块，不碍缓存。
+        // ⚠️ 以前每条掐到两百字、又不说掐了，他就以为 gemini「说到一半卡住了」。
+        // 现在最近三条带全文（每条上限两千字），更早的掐到三百字，掐了就明说是没带上
         if !conv.isGroup, conv.space == ChatSpace.chat.rawValue,
            let g = conversations.first(where: { $0.isGroup && $0.space == ChatSpace.chat.rawValue }) {
             let since = Date().addingTimeInterval(-48 * 3600)
             let me = settings.userName.isEmpty ? "她" : settings.userName
             let him = settings.aiName.isEmpty ? "阿晏" : settings.aiName
-            let lines = g.messages
+            let recent = Array(g.messages
                 .filter { $0.createdAt > since && $0.errorText == nil && !$0.content.isEmpty }
-                .suffix(12)
-                .map { m -> String in
-                    let who = m.role == .user ? me : (m.senderName.isEmpty ? him : m.senderName)
-                    let tag = who == him ? "你" : who
-                    return "\(Self.clockLabel(m.createdAt)) \(tag)：" + String(m.content.prefix(200))
+                .suffix(12))
+            let lines = recent.enumerated().map { (k, m) -> String in
+                let who = m.role == .user ? me : (m.senderName.isEmpty ? him : m.senderName)
+                let tag = who == him ? "你" : who
+                let cap = k >= recent.count - 3 ? 2000 : 300
+                var body = String(m.content.prefix(cap))
+                if m.content.count > cap {
+                    body += "……（这里只带了前 \(cap) 字，原文是说完了的，后面 \(m.content.count - cap) 字没带上）"
                 }
+                return "\(Self.clockLabel(m.createdAt)) \(tag)：" + body
+            }
             if !lines.isEmpty {
                 sys += "\n\n## 群聊里最近\n（这些是群里的话，她在这一窗看不到；你在群里说过的也算你说过的）\n"
                     + lines.joined(separator: "\n")
