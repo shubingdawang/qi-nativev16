@@ -1196,7 +1196,7 @@ final class AppState: ObservableObject {
     ///   · 成员说的话里 @ 了别人 → 被叫到的那位接着说（会调他的模型）；
     ///     没 @ 就不叫，话题停在这儿
     ///   · 成员之间互相叫，一次最多来回 `groupChainLimit` 轮，免得聊个没完
-    private func runGroupTurn(_ conversationID: UUID) {
+    private func runGroupTurn(_ conversationID: UUID, startWith redo: UUID? = nil) {
         guard let i = index(of: conversationID) else { return }
         let all = conversations[i].activeMembers
         guard let first = all.first else {
@@ -1205,9 +1205,13 @@ final class AppState: ObservableObject {
         }
         var queue = [first]
         if let last = conversations[i].messages.last(where: { $0.role == .user }) {
-            let called = all.filter { m in !m.name.isEmpty && last.content.contains("@" + m.name) }
+            // 名字不分大小写（她写的 @gemini、成员叫 Gemini 都算）
+            let said = last.content.lowercased()
+            let called = all.filter { m in !m.name.isEmpty && said.contains("@" + m.name.lowercased()) }
             if !called.isEmpty { queue = called }
         }
+        // 重来某一位说的话：就让那一位重说
+        if let redo, let m = all.first(where: { $0.id == redo }) { queue = [m] }
         let limit = max(1, conversations[i].groupChainLimit)
 
         runningConversationIDs.insert(conversationID)
@@ -1223,8 +1227,9 @@ final class AppState: ObservableObject {
                 let said = self.conversations[ci].messages.dropFirst(before)
                     .filter { $0.senderID == member.id }
                     .map(\.content).joined(separator: "\n")
+                let lower = said.lowercased()
                 let next = all.filter { m in
-                    m.id != member.id && !m.name.isEmpty && said.contains("@" + m.name)
+                    m.id != member.id && !m.name.isEmpty && lower.contains("@" + m.name.lowercased())
                         && !queue.contains(where: { $0.id == m.id })
                 }
                 if next.isEmpty { continue }
@@ -1261,7 +1266,12 @@ final class AppState: ObservableObject {
         await ContextCompactor.compactIfNeeded(conversationID, app: self)
         let ci2 = index(of: conversationID) ?? ci
         let apiMessages = buildGroupMessages(for: member, in: conversations[ci2])
-        var toolDefs = mcpToolDefinitions(for: conversations[ci2], context: apiMessages)
+        // 「醒来」那件读的是**他**的身份和记忆，别人调了会把自己当成他
+        //（她报：gemini 一上来先 wake_up，读回来一整段「你是阿晏」）
+        let isHim = member.id == conversations[ci2].activeMembers.first?.id
+            || member.name == (settings.aiName.isEmpty ? "阿晏" : settings.aiName)
+        var toolDefs = Self.dropForGuests(mcpToolDefinitions(for: conversations[ci2], context: apiMessages),
+                                          isHim: isHim)
 
         do {
             var round = 0
@@ -1315,13 +1325,25 @@ final class AppState: ObservableObject {
                 // 他刚挂了一组：下一次请求就带上
                 if calls.contains(where: { NativeTools.shortName($0.name) == "load_tools" }),
                    let now = index(of: conversationID) {
-                    toolDefs = mcpToolDefinitions(for: conversations[now], context: apiMsgs)
+                    toolDefs = Self.dropForGuests(mcpToolDefinitions(for: conversations[now], context: apiMsgs),
+                                                  isHim: isHim)
                 }
             }
         } catch {
             finishWithError(error, assistantID: assistantID, in: conversationID)
         }
         finishStreaming(assistantID: assistantID, in: conversationID)
+    }
+
+    /// 群里不是他的那几位：把只属于他的工具拿掉
+    static func dropForGuests(_ defs: [[String: Any]], isHim: Bool) -> [[String: Any]] {
+        guard !isHim else { return defs }
+        let his: Set<String> = ["wake_up"]
+        return defs.filter { item in
+            guard let fn = item["function"] as? [String: Any], let n = fn["name"] as? String else { return true }
+            let short = NativeTools.isNative(n) ? NativeTools.shortName(n) : n
+            return !his.contains(short)
+        }
     }
 
     /// 给群里某一位组消息：
@@ -1338,6 +1360,8 @@ final class AppState: ObservableObject {
         群里怎么说话（这几条是规矩）：
         · 跟\(settings.userName.isEmpty ? "她" : settings.userName)说话**不用 @**，她都看得见。她没 @ 谁的时候，默认是排第一的那位回她。
         · 想让群里别人回你，**必须写「@名字」**——不 @ 他就不会说话，也不会被叫起来。
+        · **回谁就 @ 谁，自己判断这句话是对谁说的。** 她 @ 你、让你回答别人提的问题时，
+          你的回答是说给那个人听的——@ 那个人，不是 @ 她。
         · 一条话里**既要跟她说、又要跟别人说**的时候，两边都要 @，分开写：
           先「@某人 跟他说的那句」，再「@\(settings.userName.isEmpty ? "她" : settings.userName) 跟她说的那句」。
           不然分不清哪句是对谁说的。只跟她一个人说的时候才可以不 @。
@@ -1415,10 +1439,15 @@ final class AppState: ObservableObject {
         let firstHis = conversations[i].messages.lastIndex { $0.role != .assistant }
             .map { $0 + 1 } ?? 0
         stashOldReply(conversations[i].messages[firstHis...], in: conversationID)
+        let redo = conversations[i].messages.last(where: { $0.role == .assistant })?.senderID
         while let last = conversations[i].messages.last, last.role == .assistant {
             conversations[i].messages.removeLast()
         }
-        runTurn(conversationID)
+        if conversations[i].isGroup {
+            runGroupTurn(conversationID, startWith: redo)
+        } else {
+            runTurn(conversationID)
+        }
     }
 
     /// 从某一条重来一次。
@@ -1435,6 +1464,8 @@ final class AppState: ObservableObject {
         // 正在跑就先停下来，不然两轮会打架
         cancelStream(for: conversationID)
         let isUserMsg = conversations[i].messages[at].role == .user
+        // 群里点的是哪一位说的，重来就还让那一位说
+        let redo = isUserMsg ? nil : conversations[i].messages[at].senderID
         let cut = isUserMsg ? at + 1 : at
         guard cut <= conversations[i].messages.count else { return }
         // 他那一版收进新那条的 ‹1/2› 里——她长按重发的是他，旧的也得翻得回去
@@ -1448,7 +1479,12 @@ final class AppState: ObservableObject {
         // 而且撤不回来——只有紧跟的那一条被收进 ‹1/2›。
         // 现在整段搬进 `branches`，她能翻回去看，也能换回来（见 `restoreBranch`）。
         archiveTail(from: cut, in: i)
-        runTurn(conversationID)
+        // ⚠️ 群里不能走 `runTurn`：她报「换模型重发 gemini 那条，再次发言的依旧是阿晏」
+        if conversations[i].isGroup {
+            runGroupTurn(conversationID, startWith: redo)
+        } else {
+            runTurn(conversationID)
+        }
     }
 
     /// 把第 `cut` 条往后的整段收进分支，正文里留下切点之前的部分。
