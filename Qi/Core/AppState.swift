@@ -1213,10 +1213,7 @@ final class AppState: ObservableObject {
         var queue: [GroupMember] = []
         if let last = conversations[i].messages.last(where: { $0.role == .user }) {
             queue = mentioned(last.content, among: all)
-            if mentionsHim(last.content) {
-                relayToHim(from: settings.userName.isEmpty ? "她" : settings.userName,
-                           text: last.content, group: conversationID)
-            }
+            if mentionsHim(last.content), let h = himMember() { queue.append(h) }
         }
         // 重来某一位说的话：就让那一位重说
         if let redo, let m = all.first(where: { $0.id == redo }) { queue = [m] }
@@ -1256,20 +1253,62 @@ final class AppState: ObservableObject {
                 let said = self.conversations[ci].messages.dropFirst(before)
                     .filter { $0.senderID == member.id }
                     .map(\.content).joined(separator: "\n")
-                let next = self.mentioned(said, among: all)
+                var next = self.mentioned(said, among: all)
                     .filter { m in m.id != member.id && !queue.contains(where: { $0.id == m.id }) }
-                let callsHim = self.mentionsHim(said)
-                if next.isEmpty && !callsHim { continue }
+                if member.id != Self.himSentinel, self.mentionsHim(said),
+                   !queue.contains(where: { $0.id == Self.himSentinel }),
+                   let h = self.himMember() {
+                    next.append(h)
+                }
+                if next.isEmpty { continue }
                 let hops = self.groupHops[conversationID] ?? 0
                 if hops >= limit { break }
                 self.groupHops[conversationID] = hops + 1
                 queue.append(contentsOf: next)
-                if callsHim { self.relayToHim(from: member.name, text: said, group: conversationID) }
             }
             self.runningConversationIDs.remove(conversationID)
             self.streamTasks[conversationID] = nil
         }
         streamTasks[conversationID] = task
+    }
+
+    /// 群里代表「他」的那个记号。他不在成员名单里，但被 @ 到时要在群里说话
+    static let himSentinel = UUID(uuidString: "00000000-0000-0000-0000-00000000A1A4")!
+
+    /// 被 @ 到时替他在群里说话的那一位：用的是**他自己那一窗**的模型
+    func himMember() -> GroupMember? {
+        guard let cid = hisConversationID(), let c = conversation(cid) else { return nil }
+        var m = GroupMember(name: settings.aiName.isEmpty ? "阿晏" : settings.aiName,
+                            providerID: c.providerID, modelID: c.modelID)
+        m.id = Self.himSentinel
+        return m
+    }
+
+    /// 他在群里开口时看到的东西：**他自己那一窗的全部**（设定、记忆、跟她的聊天），
+    /// 再加最近这段群聊。说完的话直接落在群里，不进他和她那一窗。
+    ///
+    /// 她定的：「我不想在聊天页看见阿晏和 gemini 的聊天记录，他俩聊天在群聊里就够了。」
+    private func himGroupMessages(group gid: UUID) -> [ChatAPI.OutgoingMessage] {
+        guard let hid = hisConversationID(), let his = conversation(hid),
+              let g = conversation(gid) else { return [] }
+        var msgs = buildAPIMessages(from: his)
+        let me = settings.userName.isEmpty ? "她" : settings.userName
+        let him = settings.aiName.isEmpty ? "阿晏" : settings.aiName
+        let recent = g.messages.filter { $0.role != .system && $0.errorText == nil && !$0.isEmptyContent }
+            .suffix(24)
+            .map { m -> String in
+                let who = m.role == .user ? me : (m.senderName.isEmpty ? him : m.senderName)
+                return who + "：" + m.content
+            }
+            .joined(separator: "\n")
+        let members = g.activeMembers.map(\.name).joined(separator: "、")
+        let note = "【群聊】群里有你、\(me)，还有\(members)。最近的群聊：\n" + recent
+            + "\n\n刚才群里有人 @ 了你。你这次说的话会**直接发到群里**（不用调 send_to_group_chat），"
+            + "不会出现在你和\(me)的这一窗。规矩：回谁就 @ 谁；想让\(members)接着说就 @ 它，不 @ 它就不会说话；"
+            + "只是说给\(me)听的不用 @；一句里同时对两边说就两边都 @、分开写。"
+            + "来回有轮数上限（\(max(1, g.groupChainLimit)) 轮），尽量在这几轮里聊完。"
+        msgs.append(ChatAPI.OutgoingMessage(role: "user", text: note))
+        return msgs
     }
 
     /// 他自己那一窗（不是群聊、在絮语这边、最近说过话的那个）
@@ -1318,12 +1357,22 @@ final class AppState: ObservableObject {
         // 压完得重新取一遍这一窗——上面那个 ci 是压之前的。
         await ContextCompactor.compactIfNeeded(conversationID, app: self)
         let ci2 = index(of: conversationID) ?? ci
-        let apiMessages = buildGroupMessages(for: member, in: conversations[ci2])
+        let asHim = member.id == Self.himSentinel
+        let apiMessages = asHim
+            ? himGroupMessages(group: conversationID)
+            : buildGroupMessages(for: member, in: conversations[ci2])
         // 「醒来」那件读的是**他**的身份和记忆，别人调了会把自己当成他
         //（她报：gemini 一上来先 wake_up，读回来一整段「你是阿晏」）
-        let isHim = member.id == himID(in: conversations[ci2])
-        var toolDefs = Self.dropForGuests(mcpToolDefinitions(for: conversations[ci2], context: apiMessages),
-                                          isHim: isHim)
+        let isHim = asHim || member.id == himID(in: conversations[ci2])
+        let toolBase = asHim
+            ? (hisConversationID().flatMap { conversation($0) }.map { mcpToolDefinitions(for: $0, context: apiMessages) } ?? [])
+                .filter { item in
+                    // 他这次的话本来就落在群里，不用再往群里发一遍
+                    let n = ((item["function"] as? [String: Any])?["name"] as? String) ?? ""
+                    return !n.hasSuffix("send_to_group_chat")
+                }
+            : mcpToolDefinitions(for: conversations[ci2], context: apiMessages)
+        var toolDefs = Self.dropForGuests(toolBase, isHim: isHim)
 
         do {
             var round = 0
