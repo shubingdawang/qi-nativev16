@@ -963,8 +963,16 @@ struct ChatView: View {
                 .buttonStyle(.plain)
 
                 // 群里点名：挑一位，「@名字 」接在输入框末尾
-                if conv.isGroup, !conv.activeMembers.isEmpty {
+                if conv.isGroup {
                     Menu {
+                        let him = app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName
+                        if !conv.activeMembers.contains(where: { $0.name == him }) {
+                            Button(him) {
+                                let sep = draft.isEmpty || draft.hasSuffix(" ") ? "" : " "
+                                draft = draft + sep + "@" + him + " "
+                                inputFocused = true
+                            }
+                        }
                         ForEach(conv.activeMembers) { m in
                             Button(m.name.isEmpty ? "还没起名" : m.name) {
                                 guard !m.name.isEmpty else { return }

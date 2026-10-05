@@ -1196,52 +1196,104 @@ final class AppState: ObservableObject {
     ///   · 成员说的话里 @ 了别人 → 被叫到的那位接着说（会调他的模型）；
     ///     没 @ 就不叫，话题停在这儿
     ///   · 成员之间互相叫，一次最多来回 `groupChainLimit` 轮，免得聊个没完
+    /// 群聊这一轮。
+    ///
+    /// ⚠️ **他（阿晏）不是群成员。** 他就在自己那一窗里，用 `send_to_group_chat` 往群里说话——
+    /// 带着他自己的记忆、身体、一切。群成员名单里只有别的模型（比如 gemini）。
+    ///
+    /// 规矩（她定的）：
+    ///   · 她在群里说话，@ 了谁谁才说：@ 成员 → 那位在群里说；@ 他 → 消息送进他那一窗，他自己决定怎么回
+    ///   · 没 @ 任何人：谁都不叫，不调模型
+    ///   · 谁的话里 @ 了谁，被叫到的接着说；一次最多来回 `groupChainLimit` 轮
     private func runGroupTurn(_ conversationID: UUID, startWith redo: UUID? = nil) {
         guard let i = index(of: conversationID) else { return }
         let all = conversations[i].activeMembers
-        guard let first = all.first else {
-            appendError("这个群里还没有人。点右上角的三条杠，进去把成员加上。", in: conversationID)
-            return
-        }
-        let himFirst = himID(in: conversations[i]).flatMap { id in all.first { $0.id == id } } ?? first
-        var queue = [himFirst]
+        // 她新说了一句：来回轮数从头算
+        groupHops[conversationID] = 0
+        var queue: [GroupMember] = []
         if let last = conversations[i].messages.last(where: { $0.role == .user }) {
-            // 名字不分大小写（她写的 @gemini、成员叫 Gemini 都算）
-            let said = last.content.lowercased()
-            let called = all.filter { m in !m.name.isEmpty && said.contains("@" + m.name.lowercased()) }
-            if !called.isEmpty { queue = called }
+            queue = mentioned(last.content, among: all)
+            if mentionsHim(last.content) {
+                relayToHim(from: settings.userName.isEmpty ? "她" : settings.userName,
+                           text: last.content, group: conversationID)
+            }
         }
         // 重来某一位说的话：就让那一位重说
         if let redo, let m = all.first(where: { $0.id == redo }) { queue = [m] }
-        let limit = max(1, conversations[i].groupChainLimit)
+        guard !queue.isEmpty else { return }
+        runGroupQueue(conversationID, queue)
+    }
 
+    /// 来回了几轮（她在群里新说一句就清零）
+    private var groupHops: [UUID: Int] = [:]
+
+    /// 这句话 @ 了哪几位成员（名字不分大小写）
+    func mentioned(_ text: String, among all: [GroupMember]) -> [GroupMember] {
+        let t = text.lowercased()
+        return all.filter { !$0.name.isEmpty && t.contains("@" + $0.name.lowercased()) }
+    }
+
+    /// 这句话 @ 了他没有
+    func mentionsHim(_ text: String) -> Bool {
+        let him = settings.aiName.isEmpty ? "阿晏" : settings.aiName
+        return text.lowercased().contains("@" + him.lowercased())
+    }
+
+    /// 让群里这几位依次说；谁的话里 @ 了别人就接着叫，@ 了他就送进他那一窗
+    private func runGroupQueue(_ conversationID: UUID, _ initial: [GroupMember]) {
+        guard let i = index(of: conversationID) else { return }
+        let all = conversations[i].activeMembers
+        let limit = max(1, conversations[i].groupChainLimit)
+        var queue = initial
         runningConversationIDs.insert(conversationID)
         let task = Task { @MainActor in
-            var hops = 0
             while !queue.isEmpty {
                 if Task.isCancelled { break }
                 let member = queue.removeFirst()
                 let before = self.index(of: conversationID).map { self.conversations[$0].messages.count } ?? 0
                 await self.speak(as: member, in: conversationID)
-                // 他这一次说的话（分段的话是好几条）里点了谁的名
                 guard let ci = self.index(of: conversationID) else { break }
                 let said = self.conversations[ci].messages.dropFirst(before)
                     .filter { $0.senderID == member.id }
                     .map(\.content).joined(separator: "\n")
-                let lower = said.lowercased()
-                let next = all.filter { m in
-                    m.id != member.id && !m.name.isEmpty && lower.contains("@" + m.name.lowercased())
-                        && !queue.contains(where: { $0.id == m.id })
-                }
-                if next.isEmpty { continue }
+                let next = self.mentioned(said, among: all)
+                    .filter { m in m.id != member.id && !queue.contains(where: { $0.id == m.id }) }
+                let callsHim = self.mentionsHim(said)
+                if next.isEmpty && !callsHim { continue }
+                let hops = self.groupHops[conversationID] ?? 0
                 if hops >= limit { break }
-                hops += 1
+                self.groupHops[conversationID] = hops + 1
                 queue.append(contentsOf: next)
+                if callsHim { self.relayToHim(from: member.name, text: said, group: conversationID) }
             }
             self.runningConversationIDs.remove(conversationID)
             self.streamTasks[conversationID] = nil
         }
         streamTasks[conversationID] = task
+    }
+
+    /// 他自己那一窗（不是群聊、在絮语这边、最近说过话的那个）
+    private func hisConversationID() -> UUID? {
+        conversations.filter { !$0.isGroup && $0.space == ChatSpace.chat.rawValue }
+            .max(by: { $0.updatedAt < $1.updatedAt })?.id
+    }
+
+    /// 群里有人 @ 了他：把那句话送进他那一窗，让他自己决定回不回、回在哪
+    private func relayToHim(from who: String, text: String, group gid: UUID) {
+        guard let cid = hisConversationID() else { return }
+        let me = settings.userName.isEmpty ? "她" : settings.userName
+        let note = "（群聊里\(who) @ 了你：「\(String(text.prefix(600)))」。"
+            + "要在群里回就用 send_to_group_chat；想让对方接着说，回的那句里 @ 对方；"
+            + "只是对\(me)说的话可以不 @。）"
+        Task { @MainActor in
+            // 他那一窗正在说话就等他说完，别插进去
+            var waited = 0
+            while self.runningConversationIDs.contains(cid), waited < 240 {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                waited += 1
+            }
+            self.send(text: note, images: [], in: cid, narration: true)
+        }
     }
 
     /// 让某一位说一句
@@ -1401,13 +1453,15 @@ final class AppState: ObservableObject {
     private func buildGroupMessages(for member: GroupMember, in conv: Conversation) -> [ChatAPI.OutgoingMessage] {
         var result: [ChatAPI.OutgoingMessage] = []
 
+        let hisName0 = settings.aiName.isEmpty ? "阿晏" : settings.aiName
         let others = conv.activeMembers.filter { $0.id != member.id }.map { $0.name }
+            + (conv.activeMembers.contains { $0.name == hisName0 } ? [] : [hisName0])
         var head = """
         这是一场群聊。你是「\(member.name)」。
         群里还有：\(others.isEmpty ? "只有你" : others.joined(separator: "、"))，以及\(settings.userName.isEmpty ? "用户" : settings.userName)。
         别人的发言会以「名字：内容」的形式给你。你只说你自己要说的那部分，不要替别人讲话，也不要在开头写自己的名字。
         群里怎么说话（这几条是规矩）：
-        · 跟\(settings.userName.isEmpty ? "她" : settings.userName)说话**不用 @**，她都看得见。她没 @ 谁的时候，默认是排第一的那位回她。
+        · 跟\(settings.userName.isEmpty ? "她" : settings.userName)说话**不用 @**，她都看得见。
         · 想让群里别人回你，**必须写「@名字」**——不 @ 他就不会说话，也不会被叫起来。
         · **回谁就 @ 谁，自己判断这句话是对谁说的。** 她 @ 你、让你回答别人提的问题时，
           你的回答是说给那个人听的——@ 那个人，不是 @ 她。
@@ -7553,6 +7607,24 @@ final class AppState: ObservableObject {
             msg.senderName = settings.aiName.isEmpty ? "阿晏" : settings.aiName
             conversations[gi].messages.append(msg)
             conversations[gi].updatedAt = Date()
+            // 他 @ 了群里谁：叫那位起来说（没 @ 就是说给她听的，谁都不叫、不调模型）
+            let called = mentioned(text, among: conversations[gi].activeMembers)
+            if !called.isEmpty {
+                let hops = groupHops[gid] ?? 0
+                if hops < max(1, conversations[gi].groupChainLimit) {
+                    groupHops[gid] = hops + 1
+                    Task { @MainActor in
+                        var waited = 0
+                        while self.runningConversationIDs.contains(gid), waited < 240 {
+                            try? await Task.sleep(nanoseconds: 500_000_000)
+                            waited += 1
+                        }
+                        self.runGroupQueue(gid, called)
+                    }
+                    return ("发到群聊了，\(called.map(\.name).joined(separator: "、")) 会接着说。", false)
+                }
+                return ("发到群聊了。这一轮来回的次数已经到了，对方不会再接——话题在这儿收住。", false)
+            }
             return ("发到群聊了。", false)
 
         default:
