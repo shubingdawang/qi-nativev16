@@ -1218,6 +1218,20 @@ final class AppState: ObservableObject {
         // 重来某一位说的话：就让那一位重说
         if let redo, let m = all.first(where: { $0.id == redo }) { queue = [m] }
         guard !queue.isEmpty else { return }
+        // ⚠️ 群里还有人在说：等那一串说完再接着叫。两串并着跑的话，
+        // 后一串会把前一串的任务顶掉，前一串那几位就停不下来了
+        if runningConversationIDs.contains(conversationID) {
+            let q = queue
+            Task { @MainActor in
+                var waited = 0
+                while self.runningConversationIDs.contains(conversationID), waited < 240 {
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    waited += 1
+                }
+                self.runGroupQueue(conversationID, q)
+            }
+            return
+        }
         runGroupQueue(conversationID, queue)
     }
 
@@ -1226,14 +1240,21 @@ final class AppState: ObservableObject {
 
     /// 这句话 @ 了哪几位成员（名字不分大小写）
     func mentioned(_ text: String, among all: [GroupMember]) -> [GroupMember] {
-        let t = text.lowercased()
+        let t = Self.normMention(text)
         return all.filter { !$0.name.isEmpty && t.contains("@" + $0.name.lowercased()) }
     }
 
     /// 这句话 @ 了他没有
     func mentionsHim(_ text: String) -> Bool {
         let him = settings.aiName.isEmpty ? "阿晏" : settings.aiName
-        return text.lowercased().contains("@" + him.lowercased())
+        return Self.normMention(text).contains("@" + him.lowercased())
+    }
+
+    /// 比对 @ 之前先归一：全角＠ → @，「@ 名字」的空格去掉，大小写不分
+    static func normMention(_ text: String) -> String {
+        text.replacingOccurrences(of: "＠", with: "@")
+            .replacingOccurrences(of: "@ ", with: "@")
+            .lowercased()
     }
 
     /// 让群里这几位依次说；谁的话里 @ 了别人就接着叫，@ 了他就送进他那一窗
@@ -1242,14 +1263,31 @@ final class AppState: ObservableObject {
         let all = conversations[i].activeMembers
         let limit = max(1, conversations[i].groupChainLimit)
         var queue = initial
+        // 同一串里每一位最多说几次（Sei & Komi 那份指南里的第二道防线）
+        let perBot = 3
+        var spoken: [UUID: Int] = [:]
         runningConversationIDs.insert(conversationID)
         let task = Task { @MainActor in
             while !queue.isEmpty {
                 if Task.isCancelled { break }
                 let member = queue.removeFirst()
+                if spoken[member.id, default: 0] >= perBot { continue }
+                spoken[member.id, default: 0] += 1
                 let before = self.index(of: conversationID).map { self.conversations[$0].messages.count } ?? 0
                 await self.speak(as: member, in: conversationID)
                 guard let ci = self.index(of: conversationID) else { break }
+                // 它觉得这轮不用说话，只回了一个「.」：那条撤掉，也不往下叫人
+                let mine = self.conversations[ci].messages.indices.dropFirst(before)
+                    .filter { self.conversations[ci].messages[$0].senderID == member.id }
+                let silent = !mine.isEmpty && mine.allSatisfy { k in
+                    let m = self.conversations[ci].messages[k]
+                    let t = m.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                    return (t == "." || t == "。" || t.isEmpty) && m.toolRuns.isEmpty && m.errorText == nil
+                }
+                if silent {
+                    for k in mine.reversed() { self.conversations[ci].messages.remove(at: k) }
+                    continue
+                }
                 let said = self.conversations[ci].messages.dropFirst(before)
                     .filter { $0.senderID == member.id }
                     .map(\.content).joined(separator: "\n")
@@ -1307,6 +1345,7 @@ final class AppState: ObservableObject {
             + "不会出现在你和\(me)的这一窗。规矩：回谁就 @ 谁；想让\(members)接着说就 @ 它，不 @ 它就不会说话；"
             + "只是说给\(me)听的不用 @；一句里同时对两边说就两边都 @、分开写。"
             + "来回有轮数上限（\(max(1, g.groupChainLimit)) 轮），尽量在这几轮里聊完。"
+            + "觉得这轮不需要你说话，就只回一个「.」。"
         msgs.append(ChatAPI.OutgoingMessage(role: "user", text: note))
         return msgs
     }
@@ -1518,6 +1557,7 @@ final class AppState: ObservableObject {
           先「@某人 跟他说的那句」，再「@\(settings.userName.isEmpty ? "她" : settings.userName) 跟她说的那句」。
           不然分不清哪句是对谁说的。只跟她一个人说的时候才可以不 @。
         · 她写「@某人」的时候，就只有被叫到的那位回话。
+        · 被叫到了但觉得这轮不需要你说话，就只回一个「.」，这一条会被撤掉，也不会再叫别人。
         · 你们之间互相 @ 着接话，**最多来回 \(max(1, conv.groupChainLimit)) 轮**，到了就不会再叫人了。
           所以最好在 \(max(1, conv.groupChainLimit)) 轮里把要聊的聊完，别拖着；聊完了就别再 @ 人。
         """
