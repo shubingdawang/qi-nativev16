@@ -1320,10 +1320,10 @@ final class AppState: ObservableObject {
                     activeToolConversationID = conversationID
                     let short = NativeTools.isNative(call.name) ? NativeTools.shortName(call.name) : call.name
                     var run: ToolRun
-                    if !isHim, short == "wake_up" {
+                    if !isHim, !Self.guestTools.contains(short) {
                         run = ToolRun(toolName: call.name, arguments: call.arguments)
                         run.serverName = "本机"
-                        run.result = "这件是\(settings.aiName.isEmpty ? "阿晏" : settings.aiName)的，读的是他的身份和记忆，你用不上。你是「\(member.name)」，直接说你的话。"
+                        run.result = "这件是\(settings.aiName.isEmpty ? "阿晏" : settings.aiName)的（他的身份、身体、心情、记忆），你用不上，也不该替他记。你是「\(member.name)」，直接说你的话。"
                         run.failed = true
                         run.finished = true
                     } else {
@@ -1342,6 +1342,27 @@ final class AppState: ObservableObject {
         } catch {
             finishWithError(error, assistantID: assistantID, in: conversationID)
         }
+        // 它照着记录的格式在开头写了「饼饼：」「gemini：」——去掉。
+        // 记录里别人的话是「名字：内容」，它学着写，看上去就像是别人在说
+        endStreamBuffer(assistantID, in: conversationID)
+        if let ci3 = index(of: conversationID),
+           let mi3 = conversations[ci3].messages.firstIndex(where: { $0.id == assistantID }) {
+            let names = conversations[ci3].activeMembers.map(\.name)
+                + [settings.userName.isEmpty ? "她" : settings.userName, "她"]
+            var text = conversations[ci3].messages[mi3].content
+            var changed = true
+            while changed {
+                changed = false
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                for n in names where !n.isEmpty {
+                    for sep in ["：", ":"] where trimmed.hasPrefix(n + sep) {
+                        text = String(trimmed.dropFirst(n.count + sep.count))
+                        changed = true
+                    }
+                }
+            }
+            conversations[ci3].messages[mi3].content = text
+        }
         finishStreaming(assistantID: assistantID, in: conversationID)
     }
 
@@ -1354,19 +1375,25 @@ final class AppState: ObservableObject {
         let ms = conv.activeMembers
         if let m = ms.first(where: { $0.name == him }) { return m.id }
         if let a = settings.aiAvatarName, let m = ms.first(where: { $0.avatarName == a }) { return m.id }
-        return ms.first?.id
+        // ⚠️ 名字、头像都对不上就**谁都不算他**。以前退回「排第一的」，
+        // 她那个群里排第一的正好是 gemini，于是 gemini 拿到了他的设定和他的工具，
+        // 一上来 wake_up，还用 set_mood 替他记了心情（who: 阿晏）——写进的是他的记忆。
+        return nil
     }
 
     /// 群里不是他的那几位：把只属于他的工具拿掉
     static func dropForGuests(_ defs: [[String: Any]], isHim: Bool) -> [[String: Any]] {
         guard !isHim else { return defs }
-        let his: Set<String> = ["wake_up"]
         return defs.filter { item in
-            guard let fn = item["function"] as? [String: Any], let n = fn["name"] as? String else { return true }
+            guard let fn = item["function"] as? [String: Any], let n = fn["name"] as? String else { return false }
             let short = NativeTools.isNative(n) ? NativeTools.shortName(n) : n
-            return !his.contains(short)
+            return guestTools.contains(short)
         }
     }
+
+    /// 群里的客人能用的工具：只有查网页这两件。
+    /// 身体、心情、念头、记忆、wake_up 全是**他**的——客人一调，写进去的就是他的东西
+    static let guestTools: Set<String> = ["web_search", "open_link"]
 
     /// 给群里某一位组消息：
     /// 他自己说过的话是 assistant，别人说的话都转成 user 并且标上名字，
