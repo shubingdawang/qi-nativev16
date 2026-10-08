@@ -26,27 +26,50 @@ import SwiftUI
 // 不走 MCP、不走小屋。数据是 `wage.json`，跟着整个文稿目录进备份
 // （`BackupBundle` 是整目录打包的，不用另外登记）。
 
-/// 班次。
-enum ShiftKind: String, Codable, CaseIterable, Identifiable {
-    case morning = "早班"
-    case middle = "中班"
-    case night = "晚班"
-    case full = "通班"
+/// 班次：四个自带的 + 她在工资设置里自己加的。
+///
+/// ⚠️ 以前是 enum，存盘就是那个名字字符串（"早班"）。改成按名字认的结构体，
+/// 编码仍是同一个字符串，老的 `wage.json` 原样读得出来。
+struct ShiftKind: Hashable, Codable, Identifiable {
+    let rawValue: String
+
+    init(_ name: String) { rawValue = name }
+
+    static let morning = ShiftKind("早班")
+    static let middle = ShiftKind("中班")
+    static let night = ShiftKind("晚班")
+    static let full = ShiftKind("通班")
+    static let builtins: [ShiftKind] = [.morning, .middle, .night, .full]
 
     var id: String { rawValue }
+    var isBuiltin: Bool { Self.builtins.contains(self) }
 
     /// 日历格子上那一个字
     var short: String { String(rawValue.prefix(1)) }
 
     /// 每个班一个颜色，日历上一眼分得出。**跟主题色无关**——
     /// 班次是她自己排的日程，换个主题色早班不该跟着变色。
+    /// 自己加的班按名字挑一个，同一个名字永远同一个颜色
     var tint: Color {
-        switch self {
-        case .morning: return Color(hexString: "E8A33C") ?? .orange
-        case .middle:  return Color(hexString: "5B8DEF") ?? .blue
-        case .night:   return Color(hexString: "8A6FD6") ?? .purple
-        case .full:    return Color(hexString: "3FA37A") ?? .green
+        switch rawValue {
+        case "早班": return Color(hexString: "E8A33C") ?? .orange
+        case "中班": return Color(hexString: "5B8DEF") ?? .blue
+        case "晚班": return Color(hexString: "8A6FD6") ?? .purple
+        case "通班": return Color(hexString: "3FA37A") ?? .green
+        default:
+            let palette = ["E07A9A", "3AA6B9", "D9694F", "9AA03F", "B07D5B", "6C7A93", "C76FB8"]
+            let h = rawValue.unicodeScalars.reduce(0) { $0 &+ Int($1.value) }
+            return Color(hexString: palette[h % palette.count]) ?? .pink
         }
+    }
+
+    init(from decoder: Decoder) throws {
+        rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        try c.encode(rawValue)
     }
 }
 
@@ -207,10 +230,19 @@ extension WorkDay {
     }
 }
 
-/// 设置：时薪 + 四个班各自的默认排法。
+/// 设置：时薪 + 每个班各自的默认排法 + 她自己加的班。
 struct WageSettings: Codable, Hashable {
     var hourly: Double = 20
     var templates: [String: ShiftTemplate] = WageSettings.defaults
+    /// 她自己加的班，按加的先后排（默认排法也放在 `templates` 里，键是名字）
+    var custom: [String] = []
+
+    /// 编辑页、图例、设置页列出来的全部班次
+    var kinds: [ShiftKind] { ShiftKind.builtins + custom.map(ShiftKind.init) }
+
+    func kind(named name: String) -> ShiftKind? {
+        kinds.first { $0.rawValue == name }
+    }
 
     static let defaults: [String: ShiftTemplate] = [
         ShiftKind.morning.rawValue: .init(work: .init(start: 8 * 60, end: 16 * 60),
@@ -225,7 +257,19 @@ struct WageSettings: Codable, Hashable {
     ]
 
     func template(_ k: ShiftKind) -> ShiftTemplate {
-        templates[k.rawValue] ?? WageSettings.defaults[k.rawValue]!
+        templates[k.rawValue] ?? WageSettings.defaults[k.rawValue] ?? WageSettings.defaults["中班"]!
+    }
+}
+
+// ⚠️ `custom` 是后加的键：老的设置里没有，合成的解码器会整份抛错，
+// 时薪和各班时间就一起回到默认了。理由同 `LedgerEntry` 那段。
+extension WageSettings {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        hourly = (try? c.decodeIfPresent(Double.self, forKey: .hourly)) ?? 20
+        templates = (try? c.decodeIfPresent([String: ShiftTemplate].self, forKey: .templates))
+            ?? WageSettings.defaults
+        custom = (try? c.decodeIfPresent([String].self, forKey: .custom)) ?? []
     }
 }
 

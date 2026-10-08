@@ -60,7 +60,7 @@ enum WageTools {
             "触发：她让你帮她排班、改班，或者说今天晚走了、早下班了、休息时间不一样。动机：替她把日历上那一格填对，薪资会跟着算。行动：给某一天设班次；时间不填就用工资设置里那个班的默认时间和时薪。\n注意：shift 填「不排班」是取消那天的班，那天记的账会留着。",
             [
                 "date": ["type": "string", "description": "哪天：2026-09-14 / 今天 / 昨天 / 明天"],
-                "shift": ["type": "string", "description": "早班 / 中班 / 晚班 / 通班 / 不排班"],
+                "shift": ["type": "string", "description": "早班 / 中班 / 晚班 / 通班 / 她在工资设置里自己加的班次名 / 不排班"],
                 "start": ["type": "string", "description": "上班时间，如 13:00。不填用默认"],
                 "end": ["type": "string", "description": "下班时间，如 22:00。跨零点照写，如 02:00"],
                 "breaks": ["type": "string", "description": "休息时段，多段用逗号隔开：17:00-18:00,20:00-20:15。填「无」= 没有休息。不填用默认"],
@@ -133,8 +133,9 @@ enum WageTools {
                 store.setShift(on: d, kind: nil)
                 return ("取消了 " + label(d) + " 的班，那天的账留着。", false)
             }
-            guard let kind = ShiftKind(rawValue: shiftText) else {
-                return ("班次只能是 早班 / 中班 / 晚班 / 通班 / 不排班，收到的是：" + shiftText, true)
+            guard let kind = store.settings.kind(named: shiftText) else {
+                let names = store.settings.kinds.map(\.rawValue).joined(separator: " / ")
+                return ("班次只能是 " + names + " / 不排班，收到的是：" + shiftText, true)
             }
             var work: TimeSpan?
             let t = store.settings.template(kind)
@@ -305,7 +306,7 @@ enum WageTools {
 
     private static func settingsLine(_ store: WageStore) -> String {
         let s = store.settings
-        let parts = ShiftKind.allCases.map { k -> String in
+        let parts = s.kinds.map { k -> String in
             let t = s.template(k)
             let rest = t.breaks.isEmpty ? "" : "（休" + t.breaks.map(\.text).joined(separator: "、") + "）"
             return k.rawValue + " " + t.work.text + rest

@@ -369,8 +369,9 @@ struct WageView: View {
 
     private var legend: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
-                ForEach(ShiftKind.allCases) { k in
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 58), spacing: 10, alignment: .leading)],
+                      alignment: .leading, spacing: 6) {
+                ForEach(store.settings.kinds) { k in
                     HStack(spacing: 5) {
                         Circle()
                             .fill(k.tint)
@@ -381,7 +382,7 @@ struct WageView: View {
                     }
                 }
             }
-            Text("点击空白日期排班或记账；已设置的日期点击后显示当日总结。右上角设置时薪与各班次时间。")
+            Text("点击空白日期排班或记账；已设置的日期点击后显示当日总结。右上角设置时薪、各班次时间，可添加班次。")
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .fixedSize(horizontal: false, vertical: true)
@@ -930,7 +931,7 @@ struct WageDayEditor: View {
             Text("班次").heading(14)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5),
                       spacing: 8) {
-                ForEach(ShiftKind.allCases) { k in
+                ForEach(store.settings.kinds) { k in
                     shiftChip(k.rawValue, tint: k.tint, on: day.shift == k) { pick(k) }
                 }
                 shiftChip("不排班", tint: Theme.textMuted(scheme), on: day.shift == nil) {
@@ -1372,6 +1373,16 @@ struct WageSettingsSheet: View {
 
     @State private var draft = WageStore.shared.settings
     @State private var hourlyText = WageStore.money(WageStore.shared.settings.hourly)
+    @State private var adding = false
+    @State private var newName = ""
+
+    /// 新班先抄中班的时间，她再改
+    private func addShift() {
+        let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name != "不排班", draft.kind(named: name) == nil else { return }
+        draft.custom.append(name)
+        draft.templates[name] = draft.template(.middle)
+    }
 
     var body: some View {
         NavigationStack {
@@ -1401,9 +1412,23 @@ struct WageSettingsSheet: View {
                             .padding(.vertical, 12)
                         }
 
-                        ForEach(ShiftKind.allCases) { k in
+                        ForEach(draft.kinds) { k in
                             templateCard(k)
                         }
+
+                        Button {
+                            newName = ""
+                            adding = true
+                        } label: {
+                            Label("添加班次", systemImage: "plus.circle")
+                                .font(.app(14, weight: .medium))
+                                .foregroundStyle(app.settings.accentColor)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Theme.softFillDeep))
+                        }
+                        .buttonStyle(.plain)
 
                         SettingsNote("修改后对之后排的班生效；已排好的日期保留排班时的时间与时薪，可在当天单独修改。")
                     }
@@ -1413,6 +1438,13 @@ struct WageSettingsSheet: View {
             }
             .navigationTitle("工资设置")
             .navigationBarTitleDisplayMode(.inline)
+            .alert("添加班次", isPresented: $adding) {
+                TextField("班次名称，如：夜班", text: $newName)
+                Button("取消", role: .cancel) {}
+                Button("添加") { addShift() }
+            } message: {
+                Text("添加后可设置上班与休息时间，排班时出现在班次里。")
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("取消") { dismiss() }
@@ -1459,16 +1491,31 @@ struct WageSettingsSheet: View {
                         .buttonStyle(.plain)
                     }
                 }
-                Button {
-                    let t = binding.wrappedValue
-                    let last = t.breaks.last?.end ?? t.work.start + 4 * 60
-                    binding.wrappedValue.breaks.append(TimeSpan(start: last, end: last + 30))
-                } label: {
-                    Label("添加休息时段", systemImage: "plus")
-                        .font(.app(12.5))
-                        .foregroundStyle(app.settings.accentColor)
+                HStack {
+                    Button {
+                        let t = binding.wrappedValue
+                        let last = t.breaks.last?.end ?? t.work.start + 4 * 60
+                        binding.wrappedValue.breaks.append(TimeSpan(start: last, end: last + 30))
+                    } label: {
+                        Label("添加休息时段", systemImage: "plus")
+                            .font(.app(12.5))
+                            .foregroundStyle(app.settings.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    Spacer(minLength: 0)
+                    // 自己加的班可以删；已经排过这个班的日子不受影响（存的是快照）
+                    if !k.isBuiltin {
+                        Button(role: .destructive) {
+                            draft.custom.removeAll { $0 == k.rawValue }
+                            draft.templates[k.rawValue] = nil
+                        } label: {
+                            Label("删除班次", systemImage: "trash")
+                                .font(.app(12.5))
+                                .foregroundStyle(.red.opacity(0.8))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)

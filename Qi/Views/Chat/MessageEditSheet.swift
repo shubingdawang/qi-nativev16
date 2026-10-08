@@ -38,6 +38,7 @@ struct MessageEditSheet: View {
                             .frame(minHeight: 160)
                             .padding(12)
                             .glassCard(padding: 0)
+                        if !mentionNames.isEmpty { mentionRow }
                         if message.role == .user { imageStrip }
                     }
                     .padding(16)
@@ -57,6 +58,46 @@ struct MessageEditSheet: View {
             images = message.imageNames
         }
         .onChange(of: picks) { _, items in load(items) }
+    }
+
+    // MARK: @
+
+    /// 群里能点的名字：他（不在成员里时）+ 各位成员
+    private var mentionNames: [String] {
+        guard let id = conversationID, let conv = app.conversation(id), conv.isGroup else { return [] }
+        let him = app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName
+        var names = conv.activeMembers.map(\.name).filter { !$0.isEmpty }
+        if !names.contains(him) { names.insert(him, at: 0) }
+        return names
+    }
+
+    private var mentionRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(mentionNames, id: \.self) { name in
+                    Button { insertMention(name) } label: {
+                        Text("@" + name)
+                            .font(.app(13))
+                            .foregroundStyle(Theme.textMain(scheme))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(Capsule().fill(Theme.softFillDeep))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.vertical, 2)
+        }
+    }
+
+    /// 末尾已经打了一个「@」就补全它，不然接在末尾
+    private func insertMention(_ name: String) {
+        if text.hasSuffix("@") || text.hasSuffix("＠") {
+            text = String(text.dropLast()) + "@" + name + " "
+        } else {
+            let sep = text.isEmpty || text.hasSuffix(" ") || text.hasSuffix("\n") ? "" : " "
+            text += sep + "@" + name + " "
+        }
     }
 
     // MARK: 图
