@@ -286,7 +286,7 @@ enum WageTools {
         }
         if let k = day.shift {
             let rest = day.breaks.isEmpty ? "无" : day.breaks.map(\.text).joined(separator: "、")
-            lines.append(label(d) + "：" + k.rawValue + " " + day.work.text
+            lines.append(label(d) + "：" + k.rawValue + " " + day.workText
                          + "，休息 " + rest
                          + "，时薪 " + WageStore.money(day.hourly)
                          + "，工时 " + String(format: "%.1f", Double(day.workedMinutes) / 60)
@@ -309,7 +309,7 @@ enum WageTools {
         let parts = s.kinds.map { k -> String in
             let t = s.template(k)
             let rest = t.breaks.isEmpty ? "" : "（休" + t.breaks.map(\.text).joined(separator: "、") + "）"
-            return k.rawValue + " " + t.work.text + rest
+            return k.rawValue + " " + t.workText + rest
         }
         return "设置：时薪 " + WageStore.money(s.hourly) + "；" + parts.joined(separator: "；")
     }

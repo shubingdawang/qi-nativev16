@@ -97,9 +97,24 @@ struct TimeSpan: Codable, Hashable, Identifiable {
 }
 
 /// 一个班的默认排法：几点到几点，中间休息哪几段。
+/// `extra` 是同一天里另外的上班时段（比如上午一段、晚上再一段）。
 struct ShiftTemplate: Codable, Hashable {
     var work: TimeSpan
     var breaks: [TimeSpan]
+    var extra: [TimeSpan] = []
+
+    var workText: String { ([work] + extra).map(\.text).joined(separator: "、") }
+}
+
+// ⚠️ `extra` 是后加的键，老设置里没有；不写容错的话各班时间会一起回到默认
+extension ShiftTemplate {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        work = (try? c.decodeIfPresent(TimeSpan.self, forKey: .work))
+            ?? TimeSpan(start: 13 * 60, end: 22 * 60)
+        breaks = (try? c.decodeIfPresent([TimeSpan].self, forKey: .breaks)) ?? []
+        extra = (try? c.decodeIfPresent([TimeSpan].self, forKey: .extra)) ?? []
+    }
 }
 
 /// 记账里的「这一笔属于哪一顿」。**可选**——不是吃的就选「其他」。
@@ -168,12 +183,17 @@ struct WorkDay: Codable, Hashable {
     /// 之后她关掉就是关掉了，明年那张表怎么变都不会回头改这一天。
     var multiplier: Double = 1
     var entries: [LedgerEntry] = []
+    /// 同一天里另外的上班时段
+    var extra: [TimeSpan] = []
 
-    /// 实际干了多少分钟：总时长减掉各段休息。不会是负的。
+    var workText: String { ([work] + extra).map(\.text).joined(separator: "、") }
+
+    /// 实际干了多少分钟：各段上班加起来减掉各段休息。不会是负的。
     var workedMinutes: Int {
         guard shift != nil else { return 0 }
         let rest = breaks.reduce(0) { $0 + $1.minutes }
-        return max(0, work.minutes - rest)
+        let total = extra.reduce(work.minutes) { $0 + $1.minutes }
+        return max(0, total - rest)
     }
 
     /// 这一天挣多少。**没排班就是 0**，不是按空时间段算出个数。
@@ -227,6 +247,7 @@ extension WorkDay {
         hourly = (try? c.decodeIfPresent(Double.self, forKey: .hourly)) ?? 20
         multiplier = (try? c.decodeIfPresent(Double.self, forKey: .multiplier)) ?? 1
         entries = (try? c.decodeIfPresent([LedgerEntry].self, forKey: .entries)) ?? []
+        extra = (try? c.decodeIfPresent([TimeSpan].self, forKey: .extra)) ?? []
     }
 }
 
@@ -361,6 +382,7 @@ final class WageStore: ObservableObject {
         if day.shift != k {
             let t = settings.template(k)
             day.work = t.work
+            day.extra = t.extra
             day.breaks = t.breaks
             day.hourly = settings.hourly
             // 法定节假日：排班那一下把三倍预先打开（跟页面上那个开关同一套规矩，

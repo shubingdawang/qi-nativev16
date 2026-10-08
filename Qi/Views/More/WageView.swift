@@ -523,7 +523,11 @@ struct WageSummaryCard: View {
                             if day.hasBonusRate { WageRatePill(text: day.rateLabel) }
                         }
                     }
-                    row("时长") { value(day.work.text) }
+                    row("时长") {
+                        VStack(alignment: .leading, spacing: 3) {
+                            ForEach([day.work] + day.extra) { w in value(w.text) }
+                        }
+                    }
                     row("休息") {
                         if day.breaks.isEmpty {
                             value("无")
@@ -966,6 +970,7 @@ struct WageDayEditor: View {
         let t = store.settings.template(k)
         day.shift = k
         day.work = t.work
+        day.extra = t.extra
         day.breaks = t.breaks
         day.hourly = store.settings.hourly
         // 法定节假日那天**预先把三倍打开**（她关掉就是关掉了，不会再自动开回来：
@@ -1033,6 +1038,33 @@ struct WageDayEditor: View {
                 MinutePicker(minutes: $day.work.end)
                 Spacer(minLength: 0)
             }
+
+            ForEach($day.extra) { $w in
+                HStack(spacing: 8) {
+                    Text("上班").font(.app(13)).foregroundStyle(Theme.textSoft(scheme))
+                    MinutePicker(minutes: $w.start)
+                    Text("至").font(.app(13)).foregroundStyle(Theme.textMuted(scheme))
+                    MinutePicker(minutes: $w.end)
+                    Spacer(minLength: 0)
+                    Button {
+                        day.extra.removeAll { $0.id == w.id }
+                    } label: {
+                        Image(systemName: "minus.circle")
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Button {
+                let last = (day.extra.last ?? day.work).end
+                day.extra.append(TimeSpan(start: last + 60, end: last + 4 * 60))
+            } label: {
+                Label("添加工作时段", systemImage: "plus")
+                    .font(.app(12.5))
+                    .foregroundStyle(app.settings.accentColor)
+            }
+            .buttonStyle(.plain)
 
             ForEach($day.breaks) { $b in
                 HStack(spacing: 8) {
@@ -1474,6 +1506,23 @@ struct WageSettingsSheet: View {
                     MinutePicker(minutes: binding.work.end)
                     Spacer(minLength: 0)
                 }
+                ForEach(binding.extra) { $w in
+                    HStack(spacing: 8) {
+                        Color.clear.frame(width: 8, height: 8)
+                        Text("上班").font(.app(13)).foregroundStyle(Theme.textSoft(scheme))
+                        MinutePicker(minutes: $w.start)
+                        Text("至").font(.app(13)).foregroundStyle(Theme.textMuted(scheme))
+                        MinutePicker(minutes: $w.end)
+                        Spacer(minLength: 0)
+                        Button {
+                            binding.wrappedValue.extra.removeAll { $0.id == w.id }
+                        } label: {
+                            Image(systemName: "minus.circle")
+                                .foregroundStyle(Theme.textMuted(scheme))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
                 ForEach(binding.breaks) { $b in
                     HStack(spacing: 8) {
                         Color.clear.frame(width: 8, height: 8)
@@ -1491,6 +1540,15 @@ struct WageSettingsSheet: View {
                         .buttonStyle(.plain)
                     }
                 }
+                Button {
+                    let last = (binding.wrappedValue.extra.last ?? binding.wrappedValue.work).end
+                    binding.wrappedValue.extra.append(TimeSpan(start: last + 60, end: last + 4 * 60))
+                } label: {
+                    Label("添加工作时段", systemImage: "plus")
+                        .font(.app(12.5))
+                        .foregroundStyle(app.settings.accentColor)
+                }
+                .buttonStyle(.plain)
                 HStack {
                     Button {
                         let t = binding.wrappedValue
