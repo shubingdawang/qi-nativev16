@@ -30,7 +30,21 @@ enum VoiceDirection {
     /// 而且她在字幕里看到的东西也不稳定。
     static let tags = [
         "轻声", "小声", "叹气", "笑", "轻笑", "顿了顿",
-        "认真", "无奈", "哄", "凑近", "打哈欠", "咬牙"
+        "认真", "无奈", "哄", "凑近", "打哈欠", "咬牙",
+        "吸气", "呼气", "停一下"
+    ]
+
+    /// 教他用的那些。「咬牙」留在 `tags` 里只为剥得掉老消息，不再教——
+    /// 参考那篇实测：写了「从牙缝里」，念出来就是咬牙切齿
+    static let taught = tags.filter { $0 != "咬牙" }
+
+    /// 送去念的时候换成 ElevenLabs 认的英文小标签（v3 的行内标签是按英文认的，
+    /// 中文的那几个它可能照着字念出来）。不在这张表里的原样留着
+    static let english: [String: String] = [
+        "轻声": "softly", "小声": "whispers", "叹气": "sighs", "笑": "laughs",
+        "轻笑": "chuckles", "顿了顿": "short pause", "认真": "serious",
+        "无奈": "resigned", "哄": "gently", "凑近": "whispers", "打哈欠": "yawns",
+        "吸气": "inhales", "呼气": "exhales", "停一下": "short pause"
     ]
 
     /// 教他怎么用。接在打电话那段提示词后面。
@@ -38,9 +52,12 @@ enum VoiceDirection {
 
     · 你可以在句子里插入表演提示，让她**听得出你的表情**，比如：
       「[轻声]我在呢。[顿了顿]你今天是不是没吃东西。」
-      能用的有：\(tags.joined(separator: "、"))。
+      能用的有：\(taught.joined(separator: "、"))。
     · 这些标签她**看不到**，只有耳朵听得出来——所以别拿它当话说，
-      也别每句都挂，一段里有一两个就够了。没有情绪要演就不写。
+      也别每句都挂，一段里一两处就够了，放在换语言、话说到一半停一拍的那一下。
+      没有情绪要演就不写。
+    · 很短的一句（两三个字）只配一个标签，标签多了这句话会被念两遍。
+    · 压着不等于发狠：要慢的、轻的、松的，不要咬牙切齿的那种。
     """
 
     /// 剥干净，给她看的那一份。
@@ -68,6 +85,11 @@ enum VoiceDirection {
         for t in tags {
             out = out.replacingOccurrences(of: "［\(t)］", with: "[\(t)]")
             out = out.replacingOccurrences(of: "【\(t)】", with: "[\(t)]")
+            if let en = english[t] {
+                out = out.replacingOccurrences(of: "[\(t)]", with: "[\(en)]")
+            } else if t == "咬牙" {
+                out = out.replacingOccurrences(of: "[\(t)]", with: "")
+            }
         }
         return out
     }

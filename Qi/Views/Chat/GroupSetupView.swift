@@ -36,7 +36,7 @@ struct GroupSetupView: View {
                         } label: {
                             HStack(spacing: 10) {
                                 AvatarView(name: member.name.isEmpty ? "?" : member.name,
-                                           image: member.avatarName.flatMap { ImageStore.cached($0) },
+                                           image: member.avatarName.flatMap { ImageStore.thumb($0, maxPixel: 180) },
                                            size: 30)
                                     .opacity(member.enabled ? 1 : 0.45)
                                 VStack(alignment: .leading, spacing: 2) {
@@ -138,7 +138,7 @@ struct GroupMemberFormView: View {
                     // 头像：点一下从相册挑
                     HStack(spacing: 14) {
                         AvatarView(name: member.name.isEmpty ? "?" : member.name,
-                                   image: member.avatarName.flatMap { ImageStore.cached($0) },
+                                   image: member.avatarName.flatMap { ImageStore.thumb($0, maxPixel: 180) },
                                    size: 56)
                         PhotosPicker(selection: $pickingAvatar, matching: .images) {
                             Text(member.avatarName == nil ? "设置头像" : "换头像")

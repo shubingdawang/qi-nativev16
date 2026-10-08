@@ -195,14 +195,14 @@ struct MessageBubbleView: View {
     /// 群聊里每位可以有自己的头像，没设就退回全局那两张
     private var avatarImage: UIImage? {
         if isUser {
-            return app.settings.userAvatarName.flatMap { ImageStore.cached($0) }
+            return app.settings.userAvatarName.flatMap { ImageStore.thumb($0, maxPixel: 180) }
         }
         if let member = senderMember,
            let name = member.avatarName,
-           let img = ImageStore.cached(name) {
+           let img = ImageStore.thumb(name, maxPixel: 180) {
             return img
         }
-        return app.settings.aiAvatarName.flatMap { ImageStore.cached($0) }
+        return app.settings.aiAvatarName.flatMap { ImageStore.thumb($0, maxPixel: 180) }
     }
 
     static let stamp: DateFormatter = {

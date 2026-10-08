@@ -706,7 +706,7 @@ struct WageThumb: View {
 
     var body: some View {
         Group {
-            if let img = ImageStore.cached(name) {
+            if let img = ImageStore.thumb(name, maxPixel: size * 3) {
                 Image(uiImage: img)
                     .resizable()
                     .scaledToFill()
@@ -717,6 +717,46 @@ struct WageThumb: View {
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+    }
+}
+
+// MARK: - 自己管字的输入框
+
+/// 格子里的字。普通类、不发通知：改它不会叫外面那一页重画
+final class TextBox {
+    var text = ""
+}
+
+/// 字只在这一格里动，打字时外面那一页不重画；外面要用时直接读 `box.text`
+struct QuietField: View {
+    let title: String
+    let box: TextBox
+    var focus: FocusState<Bool>.Binding? = nil
+    var onEdit: () -> Void = {}
+
+    @State private var text: String
+
+    init(title: String, box: TextBox, focus: FocusState<Bool>.Binding? = nil,
+         onEdit: @escaping () -> Void = {}) {
+        self.title = title
+        self.box = box
+        self.focus = focus
+        self.onEdit = onEdit
+        _text = State(initialValue: box.text)
+    }
+
+    var body: some View {
+        Group {
+            if let focus {
+                TextField(title, text: $text).focused(focus)
+            } else {
+                TextField(title, text: $text)
+            }
+        }
+        .onChange(of: text) { _, v in
+            box.text = v
+            onEdit()
+        }
     }
 }
 
@@ -738,8 +778,15 @@ struct WageDayEditor: View {
     @State private var hourlyText = ""
 
     // 记账那两个方格子
-    @State private var what = ""
-    @State private var amountText = ""
+    // ⚠️ 这两个格子的字放在盒子里、由格子自己管，不放在这一页的 @State 上：
+    // 放在这儿的话每打一个字整页（班次、时间、每一笔账和图）都要重画一遍，
+    // 她报的「输入数据有明显的卡顿延迟」就是这个
+    @State private var whatBox = TextBox()
+    @State private var amountBox = TextBox()
+    /// 从外面换格子里的字（改某一笔、记完清空）时 +1，让格子按盒子重新起
+    @State private var fieldsToken = 0
+    /// 「记一笔」能不能点。只在能/不能翻转的那一下更新
+    @State private var canAddNow = false
     @State private var meal: MealKind = .none
     @State private var income = false
     /// 两个方格子那一笔还没记进去时，先挑好的图
@@ -1195,14 +1242,16 @@ struct WageDayEditor: View {
 
             // 两个方格子：干了什么 + 多少钱
             HStack(spacing: 8) {
-                TextField("干了什么，如：吃了一个汉堡", text: $what)
-                    .focused($whatFocused)
+                QuietField(title: "干了什么，如：吃了一个汉堡", box: whatBox, focus: $whatFocused,
+                           onEdit: refreshCanAdd)
+                    .id(fieldsToken)
                     .font(.app(13.5))
                     .padding(.horizontal, 11)
                     .padding(.vertical, 10)
                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(Theme.softFillDeep))
-                TextField("金额", text: $amountText)
+                QuietField(title: "金额", box: amountBox, onEdit: refreshCanAdd)
+                    .id(fieldsToken)
                     .keyboardType(.decimalPad)
                     .font(.app(13.5))
                     .multilineTextAlignment(.trailing)
@@ -1264,14 +1313,14 @@ struct WageDayEditor: View {
                 } label: {
                     Text(editingEntry == nil ? "记一笔" : "保存修改")
                         .font(.app(13.5, weight: .medium))
-                        .foregroundStyle(canAdd ? app.settings.accentColor : Theme.textMuted(scheme))
+                        .foregroundStyle(canAddNow ? app.settings.accentColor : Theme.textMuted(scheme))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 9)
-                        .background(Capsule().fill(canAdd
+                        .background(Capsule().fill(canAddNow
                             ? app.settings.accentColor.opacity(0.16) : Theme.softFillDeep))
                 }
                 .buttonStyle(.plain)
-                .disabled(!canAdd)
+                .disabled(!canAddNow)
             }
 
             if !day.entries.isEmpty {
@@ -1347,7 +1396,12 @@ struct WageDayEditor: View {
     }
 
     private var canAdd: Bool {
-        !what.trimmingCharacters(in: .whitespaces).isEmpty && Double(amountText) != nil
+        !whatBox.text.trimmingCharacters(in: .whitespaces).isEmpty && Double(amountBox.text) != nil
+    }
+
+    private func refreshCanAdd() {
+        let v = canAdd
+        if v != canAddNow { canAddNow = v }
     }
 
     /// 把两个方格子里的那一笔记进去。
@@ -1355,8 +1409,8 @@ struct WageDayEditor: View {
     /// ⚠️ 「完成」的时候也调一次：填好了两个格子没点「记一笔」就直接点完成，
     /// 那一笔不该悄悄丢掉。
     private func commitDraftEntry() {
-        guard canAdd, let amt = Double(amountText) else { return }
-        let text = what.trimmingCharacters(in: .whitespaces)
+        guard canAdd, let amt = Double(amountBox.text) else { return }
+        let text = whatBox.text.trimmingCharacters(in: .whitespaces)
         if let id = editingEntry, let i = day.entries.firstIndex(where: { $0.id == id }) {
             // 原地改，id 不变，顺序不变
             day.entries[i].what = text
@@ -1374,8 +1428,10 @@ struct WageDayEditor: View {
     /// 把某一笔搬进上面的格子里改
     private func beginEdit(_ e: LedgerEntry) {
         editingEntry = e.id
-        what = e.what
-        amountText = WageStore.money(e.amount)
+        whatBox.text = e.what
+        amountBox.text = WageStore.money(e.amount)
+        fieldsToken += 1
+        refreshCanAdd()
         income = e.income
         meal = e.meal
         draftImages = e.images
@@ -1385,8 +1441,10 @@ struct WageDayEditor: View {
     /// 改的过程中新挑的图在 addedNow 里，保存时没挂上的会被清掉
     private func clearDraft() {
         editingEntry = nil
-        what = ""
-        amountText = ""
+        whatBox.text = ""
+        amountBox.text = ""
+        fieldsToken += 1
+        refreshCanAdd()
         meal = .none
         income = false
         draftImages = []

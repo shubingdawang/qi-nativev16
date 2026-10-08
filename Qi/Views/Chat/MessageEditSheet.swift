@@ -123,7 +123,7 @@ struct MessageEditSheet: View {
     private func thumb(_ name: String) -> some View {
         ZStack(alignment: .topTrailing) {
             Group {
-                if let img = ImageStore.cached(name) {
+                if let img = ImageStore.thumb(name, maxPixel: 220) {
                     Image(uiImage: img).resizable().scaledToFill()
                 } else {
                     Color.gray.opacity(0.2)

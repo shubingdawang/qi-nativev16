@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import ImageIO
 
 /// 把数据以 JSON 文件的形式存在 App 自己的 Documents 目录里。
 /// 这样卸载 App 才会清空，平时关机重启都不会丢。
@@ -277,15 +278,42 @@ enum ImageStore {
         return img
     }
 
+    private static let thumbMemo: NSCache<NSString, UIImage> = {
+        let c = NSCache<NSString, UIImage>()
+        c.countLimit = 400
+        return c
+    }()
+
+    /// 缩略图：按 `maxPixel` 解一张小的。1600 像素的原图画在 48pt 的格子里，
+    /// 每次重画都要把整张大图缩一遍，打字时一下一下卡的就是这个
+    static func thumb(_ name: String, maxPixel: CGFloat) -> UIImage? {
+        guard !name.isEmpty else { return nil }
+        let key = "\(name)|\(Int(maxPixel))" as NSString
+        if let hit = thumbMemo.object(forKey: key) { return hit }
+        let opts: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel
+        ]
+        guard let src = CGImageSourceCreateWithURL(url(for: name) as CFURL, nil),
+              let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary)
+        else { return cached(name) }
+        let img = UIImage(cgImage: cg)
+        thumbMemo.setObject(img, forKey: key)
+        return img
+    }
+
     /// 这张图换了内容（同名覆盖）或者被删了，把缓存里那份扔掉
     static func forget(_ name: String) {
         guard !name.isEmpty else { return }
         memo.removeObject(forKey: name as NSString)
+        thumbMemo.removeAllObjects()
     }
 
     /// 整个缓存扔掉。**还原完要叫一次**——
     /// 刚从备份里放回来一批图，缓存里可能还留着同名的旧那张。
-    static func forgetAll() { memo.removeAllObjects() }
+    static func forgetAll() { memo.removeAllObjects(); thumbMemo.removeAllObjects() }
 
     static func delete(_ name: String) {
         forget(name)
