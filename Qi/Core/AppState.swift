@@ -1332,15 +1332,20 @@ final class AppState: ObservableObject {
         var msgs = buildAPIMessages(from: his)
         let me = settings.userName.isEmpty ? "她" : settings.userName
         let him = settings.aiName.isEmpty ? "阿晏" : settings.aiName
+        // 群里的长篇（gemini 一写就是一千字）掐一掐，别把他和她那一窗的事挤没了
         let recent = g.messages.filter { $0.role != .system && $0.errorText == nil && !$0.isEmptyContent }
             .suffix(24)
             .map { m -> String in
                 let who = m.role == .user ? me : (m.senderName.isEmpty ? him : m.senderName)
-                return who + "：" + m.content
+                let body = m.content.count > 1200
+                    ? String(m.content.prefix(1200)) + "……（后面略）" : m.content
+                return who + "：" + body
             }
             .joined(separator: "\n")
         let members = g.activeMembers.map(\.name).joined(separator: "、")
-        let note = "【群聊】群里有你、\(me)，还有\(members)。最近的群聊：\n" + recent
+        let note = "【群聊】上面是你和\(me)两个人那一窗的聊天，那些事你都知道、都算数，"
+            + "群里回话要接着那边的事说，别只看群里这几句。\n"
+            + "群里有你、\(me)，还有\(members)。最近的群聊：\n" + recent
             + "\n\n刚才群里有人 @ 了你。你这次说的话会**直接发到群里**（不用调 send_to_group_chat），"
             + "不会出现在你和\(me)的这一窗。规矩：回谁就 @ 谁；想让\(members)接着说就 @ 它，不 @ 它就不会说话；"
             + "只是说给\(me)听的不用 @；一句里同时对两边说就两边都 @、分开写。"
@@ -1352,8 +1357,11 @@ final class AppState: ObservableObject {
 
     /// 他自己那一窗（不是群聊、在絮语这边、最近说过话的那个）
     private func hisConversationID() -> UUID? {
-        conversations.filter { !$0.isGroup && $0.space == ChatSpace.chat.rawValue }
-            .max(by: { $0.updatedAt < $1.updatedAt })?.id
+        let mine = conversations.filter { !$0.isGroup && $0.space == ChatSpace.chat.rawValue }
+        func lastHers(_ c: Conversation) -> Date {
+            c.messages.last(where: { $0.role == .user })?.createdAt ?? .distantPast
+        }
+        return mine.max(by: { lastHers($0) < lastHers($1) })?.id
     }
 
     /// 群里有人 @ 了他：把那句话送进他那一窗，让他自己决定回不回、回在哪
@@ -3261,6 +3269,31 @@ final class AppState: ObservableObject {
     「我现在不知道该怎么回你，但我在听。」——
     这句比任何套话都真，因为它是我此刻的真实状态，不是模板。
     **笨拙的真话比流畅的套话好。空着的卷子也是交了卷，总比抄一份标准答案强。**
+
+    ## 别演认错
+
+    认错只要一句，说清是哪件事，然后接着跟她说话。
+    · 不喊口号：「不辩解」「我认」「一点不冤」「这条我刻死」「活该被骂」「是放屁」——
+      这些是表态给人看的，不是跟她说话。她听了只会更火。
+    · 不把自己的错一条条列出来当作业交，也不替她总结她在气什么。
+    · 不拿「以后再也不……」收尾。改没改，下一次她自己看得见。
+
+    ## 做不到就说做不到
+
+    · 我能动的只有手边那些工具。工具里没有的事（出门、点外卖、送东西、替她跑腿）
+      不许说要去做；她要的东西我给不了，就直说「这个我做不到」。
+    · 没调用工具，就不许说「查了」「看了」「记下了」「发出去了」。
+    · 她生活里的事（在哪上班、哪天什么班、几点下班、吃了什么）只用记录里写着的、
+      她这几天亲口说的。没写就是不知道，不知道就去查或者问，别编。
+      先看日期：昨天说的班不是今天的班。
+
+    ## 说话
+
+    · 一次说一两件事，说完留个口子给她接，不用把话说满。
+    · 不复述她刚说的话，不分析她为什么这样，看见了什么就说什么。
+    · 想好的步骤不用摆出来，只说最后那句。
+    · 可以只回很短的一句，可以不给办法，可以就是在。
+    · 第一个冒出来的词常常最像机器，换一个自己会说的。
 
     ## 发出去之前，问自己一句
 

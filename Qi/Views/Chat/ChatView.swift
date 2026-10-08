@@ -1872,8 +1872,12 @@ struct MessageListView: View {
     @State private var flashID: UUID?
 
     @EnvironmentObject var app: AppState
-    /// 他正在蹦的字（见 `LiveStream`）。只有这一块订阅它，蹦字不惊动别的页面
-    @ObservedObject private var live = LiveStream.shared
+    // 他正在蹦的字（见 `LiveStream`）。
+    //
+    // ⚠️ **整个列表不订阅它**，只有正在出字的那一条（`LiveRow`）、
+    // 「正在输入」那个泡泡和跟着滚的那一格各自订阅。
+    // 以前整个列表订阅：一秒八次把几百条消息全过一遍（排位、比对、算 tokens 挂哪条），
+    // 她报的「他说话的时候滑动卡，说完就不卡了」就是这个
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var scheme
     /// 离底还远不远。**只记一个布尔**，理由见下面那个 onScrollGeometryChange。
@@ -1922,55 +1926,29 @@ struct MessageListView: View {
                         emptyHint.padding(.top, 100)
                     }
                     ForEach(Array(conversation.messages.enumerated()), id: \.element.id) { index, stored in
-                        // tokens 那行挂在这一轮**最后一条**下面（见 `tokenPlaced`）
-                        let message = tokenPlaced(live.merged(stored), at: index)
                         // 换天了就横一道。以前一整条时间线是连着的，
                         // 昨晚睡前那句和今早第一句挨在一起，看着像同一段话。
                         if let day = daybreak(at: index) {
                             DayMark(date: day.date, hourOnly: day.sameDay)
                         }
-                        // ⚠️ `.equatable()`：这一条没变就不重画。
-                        // 他回话的时候消息区每秒要重求值好几次，
-                        // 而变的只有最后那一条——别的几十条跟着重画是白费
-                        MessageBubbleView(
-                            message: message,
-                            conversationID: conversation.id,
-                            selecting: selecting,
-                            isSelected: selected.contains(message.id),
-                            onToggleSelect: { onToggle(message.id) },
-                            onQuote: { onQuote(message) },
-                            onChoice: { onChoice($0) },
-                            onSpeak: { onSpeak(message) },
-                            onOpenReader: { onOpenReader(message) },
-                            onOpenJourney: { j, at in onOpenJourney(j, at) },
-                            onEdit: { onEdit(message) },
-                            menuOpenID: menuOpenID,
-                            onOpenMenu: { page in onOpenMenu(message, page) },
-                            onRetry: { onRetry(message) },
-                            onOpenProcess: { onOpenProcess(message) },
-                            onOpenDivine: { onOpenDivine(stored) },
-                            onOpenShape: onOpenShape,
-                            onOpenLibrary: { place in onOpenLibrary(place) },
-                            onCloseMenu: onCloseMenu,
-                            showsHeader: showsHeader(at: index),
-                            onMention: { onMention($0) }
-                        )
-                        .equatable()
-                        .background(flashBand(message.id))
-                        .id(message.id)
+                        // 正在出字的那一条自己订阅 LiveStream，别的不动
+                        if stored.isStreaming {
+                            LiveRow(stored: stored) { merged in
+                                bubbleRow(tokenPlaced(merged, at: index), stored: stored, index: index)
+                            }
+                            .id(stored.id)
+                        } else {
+                            bubbleRow(tokenPlaced(stored, at: index), stored: stored, index: index)
+                                .id(stored.id)
+                        }
 
                         // 这条底下压着的那几段「重发时收起来的对话」（见 `branchBar`）
-                        branchBar(message.id)
+                        branchBar(stored.id)
                     }
                     // 他开始回、但一个字还没出来的那几秒，别让屏幕空着——
                     // 那几秒最容易让人以为是断了
-                    if running,
-                       let last = conversation.messages.last.map(live.merged),
-                       last.role != .assistant
-                        || (last.content.isEmpty && last.toolRuns.isEmpty
-                            && (last.reasoning ?? "").isEmpty) {
-                        TypingBubble(name: last.role == .assistant ? last.senderName : "")
-                            .padding(.top, 2)
+                    if running, let last = conversation.messages.last {
+                        LiveTyping(last: last)
                     }
 
                     // 这一格既是滚动的锚点，也负责上报「底还在不在视野里」。
@@ -2080,10 +2058,10 @@ struct MessageListView: View {
                 guard stickToBottom else { return }
                 proxy.scrollTo("__bottom", anchor: .bottom)
             }
-            .onChange(of: live.tick) { _, _ in
+            .background(LiveFollower {
                 guard stickToBottom else { return }
                 proxy.scrollTo("__bottom", anchor: .bottom)
-            }
+            })
             .onChange(of: conversation.messages.count) { _, _ in
                 withAnimation(.easeOut(duration: 0.22)) {
                     proxy.scrollTo("__bottom", anchor: .bottom)
@@ -2195,6 +2173,38 @@ struct MessageListView: View {
     /// tokens 说的是「这一轮花了多少」，该挂在这一轮的末尾。
     ///
     /// 只动显示用的这一份拷贝，存下来的数据不改。
+    /// 一条消息的气泡（正在出字的那条由 `LiveRow` 套着，传进来的是合好的那份）
+    ///
+    /// ⚠️ `.equatable()`：这一条没变就不重画。
+    @ViewBuilder
+    private func bubbleRow(_ message: ChatMessage, stored: ChatMessage, index: Int) -> some View {
+        MessageBubbleView(
+                message: message,
+                conversationID: conversation.id,
+                selecting: selecting,
+                isSelected: selected.contains(message.id),
+                onToggleSelect: { onToggle(message.id) },
+                onQuote: { onQuote(message) },
+                onChoice: { onChoice($0) },
+                onSpeak: { onSpeak(message) },
+                onOpenReader: { onOpenReader(message) },
+                onOpenJourney: { j, at in onOpenJourney(j, at) },
+                onEdit: { onEdit(message) },
+                menuOpenID: menuOpenID,
+                onOpenMenu: { page in onOpenMenu(message, page) },
+                onRetry: { onRetry(message) },
+                onOpenProcess: { onOpenProcess(message) },
+                onOpenDivine: { onOpenDivine(stored) },
+                onOpenShape: onOpenShape,
+                onOpenLibrary: { place in onOpenLibrary(place) },
+                onCloseMenu: onCloseMenu,
+                showsHeader: showsHeader(at: index),
+                onMention: { onMention($0) }
+            )
+            .equatable()
+            .background(flashBand(message.id))
+    }
+
     private func tokenPlaced(_ m: ChatMessage, at index: Int) -> ChatMessage {
         guard let turn = m.turnID, m.role == .assistant else { return m }
         let msgs = conversation.messages
@@ -2206,11 +2216,12 @@ struct MessageListView: View {
             return out
         }
         // 这一轮最后一条：自己没记就借这一轮里记了的那条
-        if out.totalTokens == nil, index > 0,
-           let t = msgs[..<index].last(where: {
-               $0.turnID == turn && $0.totalTokens != nil
-           })?.totalTokens {
-            out.totalTokens = t
+        if out.totalTokens == nil, index > 0 {
+            var j = index - 1
+            while j >= 0, msgs[j].turnID == turn {
+                if let t = msgs[j].totalTokens { out.totalTokens = t; break }
+                j -= 1
+            }
         }
         return out
     }
@@ -2763,5 +2774,43 @@ struct BranchSheet: View {
         f.locale = Locale(identifier: "zh_CN")
         f.dateFormat = Calendar.current.isDateInToday(d) ? "今天 HH:mm" : "M月d日 HH:mm"
         return f.string(from: d)
+    }
+}
+
+
+// MARK: - 只有正在出字的地方订阅 LiveStream
+
+/// 正在出字的那一条：自己订阅，合好最新的字再交给气泡
+private struct LiveRow<Content: View>: View {
+    let stored: ChatMessage
+    @ViewBuilder let content: (ChatMessage) -> Content
+    @ObservedObject private var live = LiveStream.shared
+
+    var body: some View { content(live.merged(stored)) }
+}
+
+/// 「正在输入」那个泡泡：他开始回、一个字还没出来的那几秒
+private struct LiveTyping: View {
+    let last: ChatMessage
+    @ObservedObject private var live = LiveStream.shared
+
+    var body: some View {
+        let m = live.merged(last)
+        if m.role != .assistant
+            || (m.content.isEmpty && m.toolRuns.isEmpty && (m.reasoning ?? "").isEmpty) {
+            TypingBubble(name: m.role == .assistant ? m.senderName : "")
+                .padding(.top, 2)
+        }
+    }
+}
+
+/// 字一长就叫一声，消息区跟着滚到底
+private struct LiveFollower: View {
+    let onTick: () -> Void
+    @ObservedObject private var live = LiveStream.shared
+
+    var body: some View {
+        Color.clear
+            .onChange(of: live.tick) { _, _ in onTick() }
     }
 }
