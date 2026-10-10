@@ -105,6 +105,8 @@ enum ToolBlurb {
         "wage_ledger": "新增、修改或删除某天的一笔账",
         "wage_image": "将聊天中发送的图片添加到某笔账下",
         "wage_move_day": "将某天的全部记录移到另一天",
+        "candy_jar": "糖罐：看今天的罐子、自己吃一颗、喂她一颗、翻图鉴",
+        "candy_status": "查看两人身上糖果药效与结束时间",
         "flight_chess": "开始一局飞行棋",
         "monopoly": "开始一局大富翁",
         "create_journey": "生成一段旅程",

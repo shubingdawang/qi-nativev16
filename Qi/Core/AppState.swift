@@ -1364,6 +1364,20 @@ final class AppState: ObservableObject {
         return mine.max(by: { lastHers($0) < lastHers($1) })?.id
     }
 
+    /// 糖罐页那边发生的事送进他那一窗（她喂了他、她自己吃了），他接着演
+    func tellHim(_ text: String) {
+        guard let cid = hisConversationID() else { return }
+        let note = "（糖罐：" + text + "）"
+        Task { @MainActor in
+            var waited = 0
+            while self.runningConversationIDs.contains(cid), waited < 240 {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                waited += 1
+            }
+            self.send(text: note, images: [], in: cid, narration: true)
+        }
+    }
+
     /// 群里有人 @ 了他：把那句话送进他那一窗，让他自己决定回不回、回在哪
     private func relayToHim(from who: String, text: String, group gid: UUID) {
         guard let cid = hisConversationID() else { return }
@@ -2602,6 +2616,8 @@ final class AppState: ObservableObject {
             // 工资页（排班、记账、挂图）。纯本机，一直给——
             // 她单独不想让他动的话，工具面板里那几件可以一件件关。
             native += WageTools.definitions()
+            // 糖罐（看罐、吃、喂、图鉴、药效）。纯本机
+            native += CandyTools.definitions()
             // 健康和待办。**三个开关都默认关着**，她开了才给。
             if settings.healthAccess || settings.todoAccess {
                 native += HealthTools.definitions(health: settings.healthAccess,
@@ -3564,6 +3580,8 @@ final class AppState: ObservableObject {
             return "在看你的日子"
         case "read_wage", "set_shift", "wage_ledger", "wage_image", "wage_move_day":
             return "在翻你的工资本"
+        case "candy_jar", "candy_status":
+            return "在摸糖罐"
         case "get_pulse_status":
             return "在感受自己的心跳"
         case "checkpoint", "end_of_day":
@@ -4310,6 +4328,8 @@ final class AppState: ObservableObject {
         // 前面那一摊做完之后链路是瘸的：他听得出她怎么说，
         // 而她听到的他永远是平的——TTS 拿到一串字从头念到尾一个调。
         system += VoiceDirection.hint
+        let candy = CandyStore.shared.contextLine()
+        if !candy.isEmpty { system += "\n\n" + candy }
 
         var messages: [ChatAPI.OutgoingMessage] = [.init(role: "system", text: system)]
         for line in lines {
@@ -5905,6 +5925,10 @@ final class AppState: ObservableObject {
         // 只有 wage_image 真的会叫它，读记录不白翻一遍聊天。
         if WageTools.handles(name) {
             return WageTools.run(name, args: args, recentImages: { self.recentUserImages() })
+        }
+
+        if CandyTools.handles(name) {
+            return CandyTools.run(name, args: args)
         }
 
         if MemoryTools.handles(name, memory: settings.localMemory,
@@ -8890,6 +8914,12 @@ final class AppState: ObservableObject {
         // 她此刻正开着小屋跟他说话——把他在哪一间、屋里有什么带上。
         // ⚠️ 只有那一页开着时才有值（见 `houseContext`）。
         if !houseContext.isEmpty { sys += "\n\n" + houseContext }
+
+        // 糖罐：谁身上有什么药效、刚退了什么。没有就不占地方
+        if conv.space == ChatSpace.chat.rawValue {
+            let candy = CandyStore.shared.contextLine()
+            if !candy.isEmpty { sys += "\n\n" + candy }
+        }
 
         // 群里最近说了什么。她报：「聊天页他并不知道 gemini 已经回他了」——
         // 群里他和 gemini 的来回只落在群里（她不想在聊天页看见），
