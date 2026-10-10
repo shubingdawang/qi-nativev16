@@ -32,6 +32,8 @@ struct GamesView: View {
     @State private var addingLink = false
     @State private var linkName = ""
     @State private var linkURL = ""
+    @State private var linkKey = ""
+    @State private var keyFor: WebLink?
     @State private var openingLink: WebLink?
 
     private var webLinks: [WebLink] {
@@ -73,23 +75,39 @@ struct GamesView: View {
             GamePlayerView(game: game)
         }
         .fullScreenCover(item: $openingLink) { link in
-            if let u = URL(string: link.url) { WebLinkPlayer(url: u) }
+            if let u = URL(string: link.url) { WebLinkPlayer(url: u, loginKey: link.key) }
         }
         .alert("添加网址", isPresented: $addingLink) {
             TextField("名字，如：花园", text: $linkName)
             TextField("https://…", text: $linkURL)
                 .keyboardType(.URL)
                 .textInputAutocapitalization(.never)
+            SecureField("登录钥匙（选填）", text: $linkKey)
             Button("取消", role: .cancel) {}
             Button("添加") {
                 var u = linkURL.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !u.isEmpty, !u.contains("://") { u = "https://" + u }
                 guard URL(string: u) != nil, !u.isEmpty else { return }
                 let n = linkName.trimmingCharacters(in: .whitespacesAndNewlines)
-                saveLinks(webLinks + [WebLink(name: n.isEmpty ? u : n, url: u)])
+                saveLinks(webLinks + [WebLink(name: n.isEmpty ? u : n, url: u,
+                                              key: linkKey.trimmingCharacters(in: .whitespacesAndNewlines))])
             }
         } message: {
-            Text("网页以全屏打开，登录状态会保留。")
+            Text("网页以全屏打开，登录状态会保留。填了登录钥匙的，遇到要输钥匙的登录页会自动填好并登录。")
+        }
+        .alert("登录钥匙", isPresented: Binding(get: { keyFor != nil },
+                                             set: { if !$0 { keyFor = nil } })) {
+            SecureField("粘贴钥匙", text: $linkKey)
+            Button("取消", role: .cancel) { keyFor = nil }
+            Button("保存") {
+                if let k = keyFor {
+                    let v = linkKey.trimmingCharacters(in: .whitespacesAndNewlines)
+                    saveLinks(webLinks.map { $0.id == k.id ? WebLink(id: $0.id, name: $0.name, url: $0.url, key: v) : $0 })
+                }
+                keyFor = nil
+            }
+        } message: {
+            Text("打开网页遇到要输钥匙的登录页时自动填好并登录。")
         }
         .fullScreenCover(isPresented: $openingHuman) {
             WebPageView(title: "人类端",
@@ -167,6 +185,12 @@ struct GamesView: View {
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
+                        Button {
+                            linkKey = link.key
+                            keyFor = link
+                        } label: {
+                            Label("登录钥匙", systemImage: "key")
+                        }
                         Button(role: .destructive) {
                             saveLinks(webLinks.filter { $0.id != link.id })
                         } label: {
@@ -198,6 +222,7 @@ struct GamesView: View {
             Button {
                 linkName = ""
                 linkURL = ""
+                linkKey = ""
                 addingLink = true
             } label: {
                 Label("添加网址", systemImage: "link")
@@ -550,18 +575,32 @@ struct WebLink: Codable, Identifiable, Hashable {
     var id = UUID()
     var name: String
     var url: String
+    /// 登录钥匙：页面要输钥匙（密码框）时自动填上、自动登录
+    var key: String = ""
+}
+
+// `key` 是后加的：老的列表里没有，缺了用空串，别让整张表读不出来
+extension WebLink {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
+        name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? ""
+        url = (try? c.decodeIfPresent(String.self, forKey: .url)) ?? ""
+        key = (try? c.decodeIfPresent(String.self, forKey: .key)) ?? ""
+    }
 }
 
 /// 网址游戏：整屏网页，左上一颗关掉、右上一颗刷新
 struct WebLinkPlayer: View {
     let url: URL
+    var loginKey: String = ""
     @Environment(\.dismiss) private var dismiss
     @State private var reloadTick = 0
 
     var body: some View {
         ZStack(alignment: .top) {
             Color(.systemBackground).ignoresSafeArea()
-            RemoteWebView(url: url, reloadTick: reloadTick)
+            RemoteWebView(url: url, reloadTick: reloadTick, loginKey: loginKey)
                 .ignoresSafeArea()
             HStack {
                 Button { dismiss() } label: {
@@ -620,6 +659,8 @@ struct RemoteWebView: UIViewRepresentable {
     let url: URL
     /// 加一次就重新载一次。看他下棋走到哪儿的时候要用得上。
     var reloadTick: Int = 0
+    /// 填了的话：页面上有空着的密码框就填进去、提交一次；登录完回到原来要开的那页
+    var loginKey: String = ""
 
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -627,6 +668,9 @@ struct RemoteWebView: UIViewRepresentable {
         let web = WKWebView(frame: .zero, configuration: config)
         web.isOpaque = false
         web.backgroundColor = .clear
+        context.coordinator.home = url
+        context.coordinator.key = loginKey
+        web.navigationDelegate = context.coordinator
         web.load(URLRequest(url: url))
         context.coordinator.loaded = reloadTick
         return web
@@ -639,7 +683,48 @@ struct RemoteWebView: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
-    final class Coordinator { var loaded = -1 }
+
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        var loaded = -1
+        var home: URL?
+        var key = ""
+        /// 只替她填一次。钥匙不对的话别一直重试
+        private var submitted = false
+        private var returned = false
+
+        func webView(_ web: WKWebView, didFinish navigation: WKNavigation!) {
+            guard !key.isEmpty else { return }
+            if submitted {
+                // 登录完停在设置页：回到原来要开的那页（只回一次）
+                if !returned, let home, web.url?.path != home.path {
+                    returned = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                        web.load(URLRequest(url: home))
+                    }
+                }
+                return
+            }
+            guard let data = try? JSONSerialization.data(withJSONObject: [key]),
+                  let arr = String(data: data, encoding: .utf8) else { return }
+            let js = """
+            (function(k){var i=document.querySelector('input[type=password]');
+            if(!i||i.value)return false;i.focus();i.value=k;
+            i.dispatchEvent(new Event('input',{bubbles:true}));
+            var f=i.form;if(f){if(f.requestSubmit)f.requestSubmit();else f.submit();}
+            return true;})(\(arr)[0])
+            """
+            // 登录是页面里发请求完成的，不会再跳一次页：等一下直接回原来要开的那页
+            web.evaluateJavaScript(js) { [weak self, weak web] result, _ in
+                guard (result as? Bool) == true, let self else { return }
+                self.submitted = true
+                self.returned = true
+                guard let home = self.home else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    web?.load(URLRequest(url: home))
+                }
+            }
+        }
+    }
 }
 
 /// 跑本地 HTML 的容器
