@@ -2,17 +2,17 @@ import SwiftUI
 
 /// 「一起听」的唱片页：一张在转的唱片，几只小螃蟹围着组乐队。
 ///
-/// 三种样子可选（毛玻璃 / 极简 / 拱窗），右上角切换。
+/// 三种样子可选（毛玻璃 / 极简 / 唱片套），右上角切换。背景都是壁纸。
 /// 小螃蟹的位置她自己摆：点一下解锁（虚线圈起来），拖到想放的地方，双击锁住。
 /// 每种样子各记一份位置。
 enum VinylStyle: String, CaseIterable, Identifiable {
-    case glass, minimal, arch
+    case glass, minimal, sleeve
     var id: String { rawValue }
     var label: String {
         switch self {
         case .glass: return "毛玻璃"
         case .minimal: return "极简"
-        case .arch: return "拱窗"
+        case .sleeve: return "唱片套"
         }
     }
 }
@@ -32,7 +32,6 @@ struct VinylStage: View {
     @State private var spinStart: Date?
     @State private var unlocked: Set<String> = []
     @State private var drag: [String: CGSize] = [:]
-    @State private var ripples = RippleSet()
     @State private var tick: Task<Void, Never>?
 
     private var style: VinylStyle { VinylStyle(rawValue: styleRaw) ?? .glass }
@@ -60,10 +59,10 @@ struct VinylStage: View {
             return ["listening": .init(x: 0.14, y: 0.9), "piano": .init(x: 0.32, y: 0.9),
                     "guitar": .init(x: 0.5, y: 0.9), "singing": .init(x: 0.68, y: 0.9),
                     "dancing": .init(x: 0.86, y: 0.9)]
-        case .arch:
-            return ["listening": .init(x: 0.5, y: 0.2), "piano": .init(x: 0.87, y: 0.86),
-                    "guitar": .init(x: 0.13, y: 0.86), "singing": .init(x: 0.38, y: 0.95),
-                    "dancing": .init(x: 0.62, y: 0.95)]
+        case .sleeve:
+            return ["listening": .init(x: 0.3, y: 0.12), "piano": .init(x: 0.86, y: 0.72),
+                    "guitar": .init(x: 0.12, y: 0.82), "singing": .init(x: 0.4, y: 0.92),
+                    "dancing": .init(x: 0.66, y: 0.92)]
         }
     }
 
@@ -99,7 +98,6 @@ struct VinylStage: View {
             TimelineView(.animation(paused: !playing && unlocked.isEmpty)) { ctx in
                 let now = ctx.date
                 ZStack(alignment: .topLeading) {
-                    backdrop(size: size, now: now)
                     record(size: size, now: now)
                     ForEach(Self.band) { m in member(m.id, gif: m.gif, size: size, now: now) }
                     togetherPill
@@ -179,71 +177,73 @@ struct VinylStage: View {
         .overlay(Circle().stroke(.white, lineWidth: 1.2))
     }
 
-    // MARK: 底
+    // MARK: 摆位
 
-    private func discFrame(_ size: CGSize) -> (center: CGPoint, d: CGFloat) {
+    private struct DiscLayout {
+        var center: CGPoint
+        var d: CGFloat
+        /// 唱片套（只有唱片套那一版有）
+        var sleeve: CGRect?
+    }
+
+    private func layout(_ size: CGSize) -> DiscLayout {
         switch style {
-        case .arch:
-            let win = archWindow(size)
-            let d = win.width * 0.8
-            return (CGPoint(x: win.midX, y: win.maxY - d / 2 - win.width * 0.08), d)
+        case .sleeve:
+            let s = size.width * 0.6
+            let r = CGRect(x: size.width * 0.06, y: size.height * 0.2, width: s, height: s)
+            return DiscLayout(center: CGPoint(x: r.midX + s * 0.42, y: r.midY), d: s * 0.94, sleeve: r)
         default:
             let d = min(size.width * 0.66, size.height * 0.56)
-            return (CGPoint(x: size.width / 2, y: size.height * 0.45), d)
-        }
-    }
-
-    private func archWindow(_ size: CGSize) -> CGRect {
-        let w = min(size.width * 0.6, size.height * 0.5)
-        let h = min(w * 1.42, size.height * 0.78)
-        return CGRect(x: (size.width - w) / 2, y: size.height * 0.13, width: w, height: h)
-    }
-
-    @ViewBuilder
-    private func backdrop(size: CGSize, now: Date) -> some View {
-        switch style {
-        case .glass:
-            // 毛玻璃这一版直接透出壁纸
-            Color.clear.frame(width: size.width, height: size.height)
-        case .minimal:
-            Color.clear.frame(width: size.width, height: size.height)
-        case .arch:
-            let win = archWindow(size)
-            ZStack(alignment: .topLeading) {
-                Rectangle()
-                    .fill(.white)
-                    .frame(width: win.width, height: win.height)
-                    .colorEffect(ShaderLibrary.qiStained(
-                        .floatArray(ripples.args(now: now)), .float2(win.size),
-                        .float(Float(now.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 10_000))),
-                        .float(0)))
-                    .clipShape(ArchShape())
-                    .position(x: win.midX, y: win.midY)
-                Canvas { gc, sz in
-                    SplashView.drawFrame(gc, win: win, size: sz, pageBorder: false)
-                    gc.stroke(ArchShape().path(in: win),
-                              with: SplashView.metal(win.origin, CGPoint(x: win.maxX, y: win.maxY)),
-                              lineWidth: 2.2)
-                }
-                .frame(width: size.width, height: size.height)
-                .allowsHitTesting(false)
-            }
-            .frame(width: size.width, height: size.height, alignment: .topLeading)
+            return DiscLayout(center: CGPoint(x: size.width / 2, y: size.height * 0.45), d: d, sleeve: nil)
         }
     }
 
     // MARK: 唱片
 
     private func record(size: CGSize, now: Date) -> some View {
-        let f = discFrame(size)
-        let d = f.d
-        return ZStack {
-            disc(d: d)
+        let l = layout(size)
+        return ZStack(alignment: .topLeading) {
+            disc(d: l.d)
                 .rotationEffect(.degrees(angle(now)))
-            tonearm(d: d)
+                .frame(width: l.d, height: l.d)
+                .position(l.center)
+            // 唱片套盖在唱片前面：唱片从里面滑出一半
+            if let r = l.sleeve {
+                sleeve(side: r.width)
+                    .rotationEffect(.degrees(-4))
+                    .position(x: r.midX, y: r.midY)
+            }
+            if style != .sleeve { tonearm(l) }
         }
-        .frame(width: d, height: d)
-        .position(f.center)
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+    }
+
+    private func sleeve(side: CGFloat) -> some View {
+        ZStack(alignment: .topTrailing) {
+            Group {
+                if let t = track {
+                    TrackArtwork(track: t, side: side)
+                } else {
+                    Color.gray.opacity(0.25)
+                }
+            }
+            .frame(width: side, height: side)
+            RoundedRectangle(cornerRadius: 3)
+                .stroke(.white.opacity(0.55), lineWidth: 1)
+                .padding(10)
+            Text("SIDE A")
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(1)
+                .foregroundStyle(Color(hexString: "9A6F7E")!)
+                .padding(.horizontal, 7).padding(.vertical, 4)
+                .background(RoundedRectangle(cornerRadius: 3).fill(Color(hexString: "FFFAF3")!))
+                .rotationEffect(.degrees(6))
+                .padding(14)
+        }
+        .frame(width: side, height: side)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(.white.opacity(0.6), lineWidth: 1))
+        .shadow(color: Color(red: 0.35, green: 0.24, blue: 0.2).opacity(0.25), radius: 13, y: 14)
     }
 
     @ViewBuilder
@@ -262,18 +262,15 @@ struct VinylStage: View {
                                               center: .center))
                 Circle().stroke(.white.opacity(0.8), lineWidth: 1)
             case .minimal:
+                // 只留一道外圈，不画纹路
                 Circle().fill(Color(hexString: "FBFAF8")!)
-                grooves(d: d, color: Color(hexString: "D9D3CC")!)
-                // 最外一圈深一点，一眼看得出是张唱片
-                Circle().stroke(Color(hexString: "6F6862")!, lineWidth: 2.2)
-                Circle().inset(by: d * 0.035).stroke(Color(hexString: "B8B0A8")!, lineWidth: 0.8)
-            case .arch:
-                Circle().fill(Color(hexString: "2B2426")!)
+                Circle().inset(by: 0.9).stroke(Color(hexString: "B9B2AB")!, lineWidth: 1.8)
+            case .sleeve:
+                Circle().fill(Color(hexString: "26201F")!)
                 grooves(d: d, color: .white.opacity(0.07))
-                Circle().fill(AngularGradient(colors: [.clear, Color(hexString: "FFF0DC")!.opacity(0.22), .clear,
-                                                       .clear, Color(hexString: "FFF0DC")!.opacity(0.16), .clear],
+                Circle().fill(AngularGradient(colors: [.clear, Color(hexString: "FFF0E6")!.opacity(0.2), .clear,
+                                                       .clear, Color(hexString: "FFF0E6")!.opacity(0.14), .clear],
                                               center: .center))
-                Circle().stroke(SplashView.gold.opacity(0.8), lineWidth: 1.4)
             }
             // 贴纸：歌的封面
             Group {
@@ -285,14 +282,15 @@ struct VinylStage: View {
             }
             .frame(width: label, height: label)
             .clipShape(Circle())
-            .overlay(Circle().stroke(.white.opacity(style == .arch ? 0.25 : 0.8), lineWidth: 1.5))
+            .overlay(Circle().stroke(.white.opacity(style == .sleeve ? 0.3 : 0.8), lineWidth: 1.5))
             curvedText(radius: label / 2 + d * 0.045, size: max(7, d * 0.03))
             Circle()
-                .fill(style == .arch ? SplashView.gold : .white)
+                .fill(style == .sleeve ? Color(hexString: "F4E7DC")! : .white)
                 .frame(width: max(5, d * 0.03), height: max(5, d * 0.03))
         }
         .frame(width: d, height: d)
-        .shadow(color: .black.opacity(style == .minimal ? 0.06 : 0.22), radius: style == .minimal ? 6 : 14, y: 8)
+        .shadow(color: .black.opacity(style == .minimal ? 0.05 : 0.22),
+                radius: style == .minimal ? 6 : 14, y: 8)
     }
 
     private func grooves(d: CGFloat, color: Color) -> some View {
@@ -313,7 +311,7 @@ struct VinylStage: View {
             switch style {
             case .glass: return Color(hexString: "A0708A")!
             case .minimal: return Color(hexString: "A39D97")!
-            case .arch: return SplashView.gold.opacity(0.9)
+            case .sleeve: return Color(hexString: "FFECE0")!.opacity(0.75)
             }
         }()
         return Canvas { gc, sz in
@@ -331,25 +329,37 @@ struct VinylStage: View {
         .allowsHitTesting(false)
     }
 
-    /// 唱臂：放歌时落到唱片上，停了抬回去
-    private func tonearm(d: CGFloat) -> some View {
-        let metal: Color = style == .arch ? SplashView.gold : (style == .minimal ? Color(hexString: "8A847E")! : .white)
-        return ZStack(alignment: .top) {
-            Capsule().fill(metal)
-                .frame(width: max(3, d * 0.018), height: d * 0.56)
-                .shadow(color: .black.opacity(0.15), radius: 2, x: 1, y: 1)
-            RoundedRectangle(cornerRadius: 2)
+    /// 唱臂：压在唱片上面。支点在唱片右上角外面；放歌时唱针落在外圈纹路上，停了抬到唱片外
+    private func tonearm(_ l: DiscLayout) -> some View {
+        let d = l.d
+        let len = d * 0.62
+        let pivot = CGPoint(x: l.center.x + d * 0.46, y: l.center.y - d * 0.46)
+        let metal: Color = style == .minimal ? Color(hexString: "B3ACA5")! : .white
+        let ring: Color = style == .minimal ? Color(hexString: "ECE8E3")! : .white.opacity(0.5)
+        let w = max(3, d * 0.016)
+        return ZStack(alignment: .topLeading) {
+            ZStack(alignment: .top) {
+                Capsule().fill(metal).frame(width: w, height: len)
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(metal)
+                    .frame(width: d * 0.06, height: d * 0.1)
+                    .offset(y: len - d * 0.02)
+            }
+            .frame(width: d * 0.06, height: len + d * 0.08, alignment: .top)
+            .rotationEffect(.degrees(playing ? 12 : -4), anchor: .top)
+            .animation(.easeInOut(duration: 0.8), value: playing)
+            .shadow(color: .black.opacity(0.22), radius: 3, x: 2, y: 4)
+            .position(x: pivot.x, y: pivot.y + (len + d * 0.08) / 2)
+            Circle()
                 .fill(metal)
-                .frame(width: d * 0.05, height: d * 0.08)
-                .offset(y: d * 0.54)
-            Circle().fill(metal)
-                .frame(width: d * 0.11, height: d * 0.11)
+                .frame(width: d * 0.12, height: d * 0.12)
                 .overlay(Circle().stroke(.black.opacity(0.12), lineWidth: 1))
-                .offset(y: -d * 0.04)
+                .padding(d * 0.02)
+                .background(Circle().fill(ring))
+                .shadow(color: .black.opacity(0.15), radius: 3, y: 2)
+                .position(pivot)
         }
-        .rotationEffect(.degrees(playing ? 24 : 6), anchor: UnitPoint(x: 0.5, y: 0.0))
-        .animation(.easeInOut(duration: 0.8), value: playing)
-        .offset(x: d * 0.5, y: -d * 0.08)
+        .allowsHitTesting(false)
     }
 
     // MARK: 小螃蟹

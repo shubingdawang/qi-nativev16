@@ -115,7 +115,7 @@ struct NowPlayingView: View {
             Button {
                 withAnimation(.easeInOut(duration: 0.25)) { vinyl.toggle() }
             } label: {
-                Image(systemName: vinyl ? "text.quote" : "opticaldisc")
+                Image(systemName: vinyl ? "quote.bubble" : "opticaldisc")
                     .font(.app(14))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .frame(width: 40, height: 40)
