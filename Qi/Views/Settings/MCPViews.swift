@@ -157,6 +157,9 @@ struct MCPFormView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
+                    SecureField("钥匙（选填，需要认证的服务器才填）", text: $server.bearer)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                     Toggle("启用", isOn: $server.enabled)
                     Stepper("超时 \(server.timeoutSec) 秒", value: $server.timeoutSec, in: 5...120, step: 5)
                 }

@@ -18,6 +18,8 @@ struct MCPServer: Codable, Hashable, Identifiable {
     var url: String = ""
     var enabled: Bool = true
     var timeoutSec: Int = 30
+    /// 钥匙。填了就每次带上 `Authorization: Bearer <钥匙>`（花园这类要认 AI 钥匙的服务器）
+    var bearer: String = ""
     /// 上次连上时抓下来的工具列表，存着免得每次都要重连
     var tools: [MCPTool] = []
     var lastError: String? = nil
@@ -43,6 +45,23 @@ struct MCPServer: Codable, Hashable, Identifiable {
 
     var endpoint: URL? {
         URL(string: url.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+}
+
+// ⚠️ `bearer` 是后加的键：老的设置里没有，合成的解码器会整条抛错，
+// 她配好的服务器就全没了。缺什么用默认
+extension MCPServer {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
+        name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? ""
+        url = (try? c.decodeIfPresent(String.self, forKey: .url)) ?? ""
+        enabled = (try? c.decodeIfPresent(Bool.self, forKey: .enabled)) ?? true
+        timeoutSec = (try? c.decodeIfPresent(Int.self, forKey: .timeoutSec)) ?? 30
+        bearer = (try? c.decodeIfPresent(String.self, forKey: .bearer)) ?? ""
+        tools = (try? c.decodeIfPresent([MCPTool].self, forKey: .tools)) ?? []
+        lastError = try? c.decodeIfPresent(String.self, forKey: .lastError)
+        offlineSince = try? c.decodeIfPresent(Date.self, forKey: .offlineSince)
     }
 }
 
@@ -99,6 +118,11 @@ actor MCPClient {
         req.setValue("application/json, text/event-stream", forHTTPHeaderField: "Accept")
         if let sessionID {
             req.setValue(sessionID, forHTTPHeaderField: "Mcp-Session-Id")
+        }
+        let key = server.bearer.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !key.isEmpty {
+            let value = key.lowercased().hasPrefix("bearer ") ? key : "Bearer " + key
+            req.setValue(value, forHTTPHeaderField: "Authorization")
         }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
 

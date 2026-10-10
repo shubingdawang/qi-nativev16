@@ -28,6 +28,19 @@ struct GamesView: View {
     @State private var renaming: LocalGame?
     @State private var newName = ""
     @State private var openingHuman = false
+    @AppStorage("webLinks") private var webLinksRaw = ""
+    @State private var addingLink = false
+    @State private var linkName = ""
+    @State private var linkURL = ""
+    @State private var openingLink: WebLink?
+
+    private var webLinks: [WebLink] {
+        (try? JSONDecoder().decode([WebLink].self, from: Data(webLinksRaw.utf8))) ?? []
+    }
+
+    private func saveLinks(_ list: [WebLink]) {
+        if let d = try? JSONEncoder().encode(list) { webLinksRaw = String(decoding: d, as: UTF8.self) }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -58,6 +71,25 @@ struct GamesView: View {
         }
         .fullScreenCover(item: $playing) { game in
             GamePlayerView(game: game)
+        }
+        .fullScreenCover(item: $openingLink) { link in
+            if let u = URL(string: link.url) { WebLinkPlayer(url: u) }
+        }
+        .alert("添加网址", isPresented: $addingLink) {
+            TextField("名字，如：花园", text: $linkName)
+            TextField("https://…", text: $linkURL)
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+            Button("取消", role: .cancel) {}
+            Button("添加") {
+                var u = linkURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !u.isEmpty, !u.contains("://") { u = "https://" + u }
+                guard URL(string: u) != nil, !u.isEmpty else { return }
+                let n = linkName.trimmingCharacters(in: .whitespacesAndNewlines)
+                saveLinks(webLinks + [WebLink(name: n.isEmpty ? u : n, url: u)])
+            }
+        } message: {
+            Text("网页以全屏打开，登录状态会保留。")
         }
         .fullScreenCover(isPresented: $openingHuman) {
             WebPageView(title: "人类端",
@@ -125,23 +157,58 @@ struct GamesView: View {
             }
         }
 
+        if !webLinks.isEmpty {
+            section("网址") {
+                ForEach(webLinks) { link in
+                    Button {
+                        openingLink = link
+                    } label: {
+                        row(title: link.name, sub: link.url, icon: "globe")
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            saveLinks(webLinks.filter { $0.id != link.id })
+                        } label: {
+                            Label("删除", systemImage: Icon.trash)
+                        }
+                    }
+                }
+            }
+        }
+
         if store.games.isEmpty {
             Text("导入网页游戏后即可运行，长按条目可重命名、修改分类。")
                 .font(.app(11))
                 .foregroundStyle(Theme.textMuted(scheme))
         }
 
-        Button {
-            importing = true
-        } label: {
-            Label("添加", systemImage: Icon.add)
-                .font(.app(14))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(app.settings.accentColor.opacity(0.22)))
+        HStack(spacing: 10) {
+            Button {
+                importing = true
+            } label: {
+                Label("导入文件", systemImage: Icon.add)
+                    .font(.app(14))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(app.settings.accentColor.opacity(0.22)))
+            }
+            .buttonStyle(.plain)
+            Button {
+                linkName = ""
+                linkURL = ""
+                addingLink = true
+            } label: {
+                Label("添加网址", systemImage: "link")
+                    .font(.app(14))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(app.settings.accentColor.opacity(0.22)))
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
     }
 
     // MARK: 对话
@@ -474,6 +541,47 @@ struct GamePlayerView: View {
             TextField("名字", text: $newName)
             Button("取消", role: .cancel) {}
             Button("好") { app.renameGame(game.id, to: newName) }
+        }
+    }
+}
+
+/// 存下来的一个网址游戏
+struct WebLink: Codable, Identifiable, Hashable {
+    var id = UUID()
+    var name: String
+    var url: String
+}
+
+/// 网址游戏：整屏网页，左上一颗关掉、右上一颗刷新
+struct WebLinkPlayer: View {
+    let url: URL
+    @Environment(\.dismiss) private var dismiss
+    @State private var reloadTick = 0
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            Color(.systemBackground).ignoresSafeArea()
+            RemoteWebView(url: url, reloadTick: reloadTick)
+                .ignoresSafeArea()
+            HStack {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(.ultraThinMaterial))
+                }
+                Spacer()
+                Button { reloadTick += 1 } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(.ultraThinMaterial))
+                }
+            }
+            .foregroundStyle(.primary)
+            .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+            .padding(.horizontal, 14)
+            .padding(.top, 6)
         }
     }
 }
