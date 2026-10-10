@@ -57,7 +57,7 @@ struct SplashView: View {
                 Self.veil.opacity(Self.night ? 0.62 : 0.42)
 
                 // 静的金线：窗框、立柱、卷草、边框（只画一次）
-                Canvas { gc, sz in drawFrame(gc, win: win, size: sz) }
+                Canvas { gc, sz in Self.drawFrame(gc, win: win, size: sz) }
                     .allowsHitTesting(false)
 
                 TimelineView(.animation) { tl in
@@ -135,9 +135,15 @@ struct SplashView: View {
             startPoint: a, endPoint: b)
     }
 
-    /// 金线、立柱、卷草、宝石……都是静的
-    private func drawFrame(_ gc: GraphicsContext, win: CGRect, size: CGSize) {
+    /// 金线、立柱、卷草、宝石……都是静的。
+    /// 唱片页的拱窗也用这一套（`pageBorder: false`：不画整页那圈边框）
+    static func drawFrame(_ gc: GraphicsContext, win: CGRect, size: CGSize, pageBorder: Bool = true) {
         let gold = Self.gold
+        if pageBorder { drawPageBorder(gc, size: size, gold: gold) }
+        drawArch(gc, win: win, gold: gold)
+    }
+
+    private static func drawPageBorder(_ gc: GraphicsContext, size: CGSize, gold: Color) {
         // 整页边框：两道金线，四角卷草
         let borders: [(CGFloat, CGFloat, Double)] = [(14, 0.7, 0.6), (19, 0.4, 0.4)]
         for (inset, lw, a) in borders {
@@ -161,7 +167,9 @@ struct SplashView: View {
             c.fill(Self.leaf(at: CGPoint(x: 6, y: 6), angle: .pi / 4, len: 12, wid: 3.5), with: .color(gold))
             c.fill(Self.diamond(at: .zero, r: 4), with: .color(gold))
         }
+    }
 
+    private static func drawArch(_ gc: GraphicsContext, win: CGRect, gold: Color) {
         let ox = win.minX - 11, oy = win.minY - 11, ow = win.width + 22, oh = win.height + 22
         let outer = CGRect(x: ox, y: oy, width: ow, height: oh)
         let R = ow / 2

@@ -29,6 +29,10 @@ struct NowPlayingView: View {
 
     private var hasLyrics: Bool { !player.lines.isEmpty }
 
+    /// 唱片页还是歌词页（记住上次看的）
+    @AppStorage("nowPlayingVinyl") private var vinyl = true
+    @AppStorage("vinylStyle") private var vinylStyle = VinylStyle.glass.rawValue
+
     var body: some View {
         ZStack {
             WallpaperBackground()
@@ -42,7 +46,11 @@ struct NowPlayingView: View {
 
             VStack(spacing: 0) {
                 header
-                if hasLyrics {
+                if vinyl {
+                    VinylStage(track: player.current, playing: player.playing)
+                        .padding(.horizontal, 12)
+                        .frame(maxHeight: .infinity)
+                } else if hasLyrics {
                     cover(side: 150).padding(.top, 4)
                     lyrics
                 } else {
@@ -91,7 +99,30 @@ struct NowPlayingView: View {
             }
             .buttonStyle(.plain)
             Spacer()
-            if hasLyrics {
+            if vinyl {
+                Menu {
+                    Picker("样式", selection: $vinylStyle) {
+                        ForEach(VinylStyle.allCases) { s in Text(s.label).tag(s.rawValue) }
+                    }
+                } label: {
+                    Image(systemName: "paintpalette")
+                        .font(.app(14))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                        .frame(width: 40, height: 40)
+                        .contentShape(Rectangle())
+                }
+            }
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) { vinyl.toggle() }
+            } label: {
+                Image(systemName: vinyl ? "text.quote" : "opticaldisc")
+                    .font(.app(14))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                    .frame(width: 40, height: 40)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            if hasLyrics, !vinyl {
                 Button {
                     draftLyrics = player.current?.lyrics ?? ""
                     editingLyrics = true
