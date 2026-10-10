@@ -596,32 +596,63 @@ struct WebLinkPlayer: View {
     var loginKey: String = ""
     @Environment(\.dismiss) private var dismiss
     @State private var reloadTick = 0
+    /// 那颗浮钮停在哪（相对屏幕的比例，记住）。默认贴左边中间，不挡网页四个角上的按钮
+    @AppStorage("webLinkKnobX") private var knobX: Double = 0.06
+    @AppStorage("webLinkKnobY") private var knobY: Double = 0.5
+    @State private var drag: CGSize = .zero
+    @State private var open = false
 
     var body: some View {
-        ZStack(alignment: .top) {
-            Color(.systemBackground).ignoresSafeArea()
-            RemoteWebView(url: url, reloadTick: reloadTick, loginKey: loginKey)
-                .ignoresSafeArea()
-            HStack {
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .semibold))
-                        .frame(width: 36, height: 36)
-                        .background(Circle().fill(.ultraThinMaterial))
-                }
-                Spacer()
-                Button { reloadTick += 1 } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 14, weight: .semibold))
-                        .frame(width: 36, height: 36)
-                        .background(Circle().fill(.ultraThinMaterial))
+        GeometryReader { geo in
+            ZStack(alignment: .topLeading) {
+                Color(.systemBackground).ignoresSafeArea()
+                RemoteWebView(url: url, reloadTick: reloadTick, loginKey: loginKey)
+                    .ignoresSafeArea()
+                knob
+                    .position(x: geo.size.width * knobX + drag.width,
+                              y: geo.size.height * knobY + drag.height)
+                    .gesture(
+                        DragGesture(minimumDistance: 6)
+                            .onChanged { drag = $0.translation }
+                            .onEnded { v in
+                                let x = (geo.size.width * knobX + v.translation.width) / max(geo.size.width, 1)
+                                let y = (geo.size.height * knobY + v.translation.height) / max(geo.size.height, 1)
+                                knobX = min(max(x, 0.06), 0.94)
+                                knobY = min(max(y, 0.05), 0.95)
+                                drag = .zero
+                            }
+                    )
+            }
+        }
+    }
+
+    /// 一颗小浮钮：点开是关闭和刷新，按住拖到哪就停在哪
+    private var knob: some View {
+        VStack(spacing: 8) {
+            if open {
+                circle("xmark") { dismiss() }
+                circle("arrow.clockwise") {
+                    reloadTick += 1
+                    open = false
                 }
             }
-            .foregroundStyle(.primary)
-            .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
-            .padding(.horizontal, 14)
-            .padding(.top, 6)
+            circle(open ? "chevron.up" : "ellipsis") {
+                withAnimation(.easeOut(duration: 0.18)) { open.toggle() }
+            }
+            .opacity(open ? 1 : 0.7)
         }
+        .foregroundStyle(.primary)
+        .shadow(color: .black.opacity(0.15), radius: 6, y: 2)
+    }
+
+    private func circle(_ icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(.ultraThinMaterial))
+        }
+        .buttonStyle(.plain)
     }
 }
 
