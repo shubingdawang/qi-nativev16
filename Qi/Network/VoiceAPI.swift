@@ -183,6 +183,9 @@ final class SystemVoice {
     func stop() {
         if synth.isSpeaking { synth.stopSpeaking(at: .immediate) }
     }
+
+    func pause() { if synth.isSpeaking { synth.pauseSpeaking(at: .immediate) } }
+    func resume() { if synth.isPaused { synth.continueSpeaking() } }
 }
 
 // MARK: - 存和放
@@ -276,6 +279,10 @@ final class VoicePlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
     }
 
     private var tempURL: URL?
+
+    /// 先停住，不扔。`playingName` 不清，等着放完的那几处照样在等
+    func pause() { player?.pause() }
+    func resume() { player?.play() }
 
     func stop() {
         player?.stop()

@@ -176,6 +176,28 @@ struct CallView: View {
     /// 她刚才打断了他——下一句带给他知道
     @State private var cutIn = false
 
+    /// 听她那边的声音（喘息、水声、震动……），变成一行字跟着她的话交给他
+    @AppStorage("callHearSounds") private var hearSounds = false
+    /// 同一种声音多久内不重复报
+    @State private var soundSeen: [String: Date] = [:]
+    /// 他说话时她出的声（没打断他），攒着跟她下一句一起交
+    @State private var pendingSounds: [String] = []
+
+    /// 她在他说话时出声了：先把他停住（不扔），等认出是什么再定接着放还是掐掉
+    @State private var held = false
+    /// 这几个短声只是附和，不算打断（参考 call_call 的中文短附和分流）
+    private static let backchannel: Set<String> = [
+        "嗯", "嗯嗯", "嗯嗯嗯", "啊", "哼", "嗯哼", "对", "对对", "对对对", "好", "好的",
+        "是", "是的", "哦", "噢", "喔", "唔", "行"
+    ]
+
+    /// 她没出声从什么时候开始算（免提时用）
+    @State private var quietSince: Date?
+    /// 下一次过多久问他一声
+    @State private var nudgeGap: Double = 15
+    /// 连着问了几次。她一开口就清零；问满三次不再问
+    @State private var nudges = 0
+
     private var call: CallRecord? { store.active }
     private var me: String { app.settings.userName.isEmpty ? "我" : app.settings.userName }
     private var him: String { app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName }
@@ -378,7 +400,7 @@ struct CallView: View {
             }
             .padding(.horizontal, 16)
 
-            HStack(spacing: 26) {
+            HStack(spacing: 14) {
                 // 闭麦。只是不用语音了，字照打、他的话照听。
                 Button {
                     muted.toggle()
@@ -461,6 +483,25 @@ struct CallView: View {
                 }
                 .buttonStyle(.plain)
 
+                // 听她那边的声音
+                Button {
+                    hearSounds.toggle()
+                    notice = hearSounds
+                        ? "已开启：喘息、水声、震动等声音会转成文字一并发给对方，识别在本机完成"
+                        : "已关闭声音识别"
+                } label: {
+                    Image(systemName: "ear.and.waveform")
+                        .font(.app(15))
+                        .foregroundStyle(hearSounds ? .white : Theme.textMain(scheme))
+                        .frame(width: 54, height: 54)
+                        .background(
+                            Circle().fill(hearSounds
+                                ? app.settings.accentColor.opacity(0.85)
+                                : Theme.controlFill(scheme))
+                        )
+                }
+                .buttonStyle(.plain)
+
                 // 挂断
                 Button {
                     hangUp(by: "me")
@@ -515,7 +556,7 @@ struct CallView: View {
         }
         // 插话：他出声的时候她开口，把他停下，这一句照常录完
         recorder.outputPlaying = { speaking }
-        recorder.onBargeIn = { cutOff() }
+        recorder.onBargeIn = { holdForBargeIn() }
         do {
             try recorder.start()
         } catch {
@@ -547,6 +588,8 @@ struct CallView: View {
         var passedOn = false
         defer {
             listening = false
+            // 停住的他没被确认打断（太短、没听清、只是附和）：接着放
+            if held { releaseHold(resume: true) }
             if !passedOn, handsFree {
                 Task { @MainActor in resumeListening() }
             }
@@ -574,6 +617,10 @@ struct CallView: View {
         }
         defer { try? FileManager.default.removeItem(at: url) }
 
+        // 声音和字一起认：声音在本机算，跟识别并行
+        let soundTask: Task<[String], Never>? = hearSounds
+            ? Task { await CallSounds.hear(url) } : nil
+
         var text = ""
         switch app.settings.voiceInput {
         case .onDevice:
@@ -596,7 +643,23 @@ struct CallView: View {
                 return
             }
         }
-        guard !text.isEmpty else { return }
+        let sounds = await soundTask?.value ?? []
+
+        // 他正在说、她出了声：只是附和或者只有声音，就让他接着说；
+        // 声音攒着，跟她下一句一起交
+        if held {
+            let t = text.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+            if t.isEmpty || Self.backchannel.contains(t) {
+                pendingSounds += sounds.filter { !pendingSounds.contains($0) }
+                releaseHold(resume: true)
+                return
+            }
+            releaseHold(resume: false)
+        }
+
+        let heardLine = soundLine(sounds)
+        guard !text.isEmpty || !heardLine.isEmpty else { return }
+        if !heardLine.isEmpty { text = text.isEmpty ? heardLine : text + "\n" + heardLine }
 
         // 她这一句是**怎么说**的。本机纯算术，不花钱不上传。
         let f = VoiceProsody.features(samples: shape, interval: step, text: text)
@@ -646,6 +709,40 @@ struct CallView: View {
         if case .file(let url)? = v { try? FileManager.default.removeItem(at: url) }
     }
 
+    /// 她在他说话时开口了：先停住，等认出来再定
+    private func holdForBargeIn() {
+        guard speaking, !held else { return }
+        held = true
+        VoicePlayer.shared.pause()
+        SystemVoice.shared.pause()
+    }
+
+    /// 接着放，或者确认打断
+    private func releaseHold(resume: Bool) {
+        guard held else { return }
+        held = false
+        if resume {
+            VoicePlayer.shared.resume()
+            SystemVoice.shared.resume()
+        } else {
+            cutOff()
+        }
+    }
+
+    /// 听到的声音 → 「〔听到了喘息、水声〕」。同一种 8 秒内不重复，一次最多两种
+    private func soundLine(_ fresh: [String]) -> String {
+        let now = Date()
+        var names: [String] = []
+        for n in pendingSounds + fresh where !names.contains(n) {
+            if let t = soundSeen[n], now.timeIntervalSince(t) < 8 { continue }
+            names.append(n)
+            if names.count == 2 { break }
+        }
+        pendingSounds = []
+        for n in names { soundSeen[n] = now }
+        return names.isEmpty ? "" : "〔听到了" + names.joined(separator: "、") + "〕"
+    }
+
     /// 她打断了他：停声音，这一轮剩下的不放了
     private func cutOff() {
         guard speaking else { return }
@@ -662,11 +759,16 @@ struct CallView: View {
         if handsFree, !muted, !listening { startListening() }
     }
 
-    private func send(_ text: String, tone: String = "") async {
+    private func send(_ text: String, tone: String = "", silentFor: Int? = nil) async {
         let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !clean.isEmpty else { return }
-        draft = ""
-        farewell = 0     // 你一开口，那个倒计时就取消
+        guard !clean.isEmpty || silentFor != nil else { return }
+        if silentFor == nil {
+            draft = ""
+            farewell = 0     // 你一开口，那个倒计时就取消
+            nudges = 0
+            nudgeGap = 15
+        }
+        quietSince = nil
 
         // **把这次请求绑在这一通电话上。**
         //
@@ -685,21 +787,28 @@ struct CallView: View {
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
         guard store.active?.id == mine else { return }
-        // 打字插话也算打断
-        if speaking { cutOff() }
+        if silentFor == nil {
+            // 打字插话也算打断
+            if speaking { cutOff() }
 
-        var mineLine = CallLine(fromMe: true, text: clean)
-        mineLine.tone = tone
-        if cutIn {
-            mineLine.tone = tone.isEmpty ? "打断了你" : "打断了你，" + tone
-            cutIn = false
+            var mineLine = CallLine(fromMe: true, text: clean)
+            mineLine.tone = tone
+            if cutIn {
+                mineLine.tone = tone.isEmpty ? "打断了你" : "打断了你，" + tone
+                cutIn = false
+            }
+            store.addLine(mineLine)
         }
-        store.addLine(mineLine)
+
+        let who = app.settings.userName.isEmpty ? "她" : app.settings.userName
+        let nudge = silentFor.map {
+            "（\(who)已经 \($0) 秒没出声了，麦克风开着，电话通着。接着等也行，想开口也行；想等就只回一个「.」）"
+        }
 
         thinking = true
         let myTurn = UUID()
         turn = myTurn
-        let reply = await app.speakOnCall(store.active?.lines ?? [], early: { voice in
+        let reply = await app.speakOnCall(store.active?.lines ?? [], nudge: nudge, early: { voice in
             // 第一句合成好了就先放。电话换了、这一轮被打断了，就不放
             guard store.active?.id == mine, turn == myTurn, cutTurn != myTurn else {
                 discard(voice)
@@ -715,6 +824,13 @@ struct CallView: View {
             return
         }
         thinking = false
+
+        // 他选了接着等
+        if reply.waited {
+            quietSince = Date()
+            if handsFree { resumeListening() }
+            return
+        }
 
         guard !reply.text.isEmpty else {
             notice = reply.error
@@ -760,6 +876,7 @@ struct CallView: View {
             await waitForVoiceToFinish()
             if turn == myTurn, cutTurn != myTurn { speaking = false }
         }
+        quietSince = Date()
         if handsFree { resumeListening() }
 
         // 他说了再见的话，别立刻挂——留十五秒
@@ -825,8 +942,35 @@ struct CallView: View {
                 if let start = store.active?.connectedAt {
                     elapsed = Date().timeIntervalSince(start)
                 }
+                checkQuiet()
             }
         }
+    }
+
+    /// 她一阵没出声：问他一声要不要开口。
+    ///
+    /// 只在免提时有（按住说话的时候她不说是因为没按）。
+    /// 15 秒、30 秒、60 秒各问一次，问满三次就不问了，她一开口重新算。
+    /// 每问一次是一次模型调用。
+    private func checkQuiet() {
+        guard handsFree, !muted, store.active != nil, farewell == 0 else {
+            quietSince = nil
+            return
+        }
+        if thinking || speaking || recorder.hearing || held {
+            quietSince = nil
+            return
+        }
+        guard let since = quietSince else {
+            quietSince = Date()
+            return
+        }
+        let secs = Date().timeIntervalSince(since)
+        guard nudges < 3, secs >= nudgeGap else { return }
+        nudges += 1
+        nudgeGap *= 2
+        quietSince = nil
+        Task { await send("", silentFor: Int(secs)) }
     }
 
     private func clock(_ s: TimeInterval) -> String {

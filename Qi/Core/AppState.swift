@@ -4216,6 +4216,8 @@ final class AppState: ObservableObject {
         var earlyStarted = false
         /// 第一句之后剩下的那段。**等第一句播完再放**。
         var tail: CallVoice? = nil
+        /// 她没出声那一下，他选了接着等（只回了「.」）
+        var waited = false
     }
 
     /// 通话里要放的一段声音
@@ -4269,7 +4271,7 @@ final class AppState: ObservableObject {
     /// 跟聊天不一样的地方全在提示词里：**电话是用嘴说的**，
     /// 所以句子要短、不能有格式、不能有表情符号，
     /// 而且要接得快——真人打电话不会想三十秒才开口。
-    func speakOnCall(_ lines: [CallLine],
+    func speakOnCall(_ lines: [CallLine], nudge: String? = nil,
                      early: @escaping @MainActor (CallVoice) -> Void = { _ in }) async -> CallReply {
         // 用**聊天页那个他**，连身份一起带上。
         // 以前这里抓的是供应商列表第一个，提示词也只有 defaultSystemPrompt，
@@ -4298,6 +4300,10 @@ final class AppState: ObservableObject {
           照声音猜她真正想说的意思接下去，别照字面较真，别反问她「你说什么」。
         · 别像念旁白那样一句句解说自己在做什么，说给她听的话才说。
         · 想结束通话的话，就自然地说再见。说完不用等，她那边会留几秒。
+        · 她那句话后面有时带一行「〔听到了喘息〕」这样的，是手机听到的她那边的声音，
+          不是她说的话。
+        · 她一阵没出声的时候，会有一句括号告诉你过了多久。接着等还是开口由你，
+          想等就只回一个「.」。
         """
         // 让她**听得出他的表情**。
         //
@@ -4315,6 +4321,7 @@ final class AppState: ObservableObject {
             }
             messages.append(.init(role: line.fromMe ? "user" : "assistant", text: text))
         }
+        if let nudge { messages.append(.init(role: "user", text: nudge)) }
 
         // 边流边出声：**第一句一凑齐就先去合成、合成完马上放**，
         // 不等整段说完。剩下的等流结束再合成一次。
@@ -4331,7 +4338,8 @@ final class AppState: ObservableObject {
             for try await event in stream {
                 if case .content(let piece) = event {
                     out += piece
-                    if headTask == nil, let cut = Self.firstSentenceCut(out) {
+                    // 没出声那一下他可能只回「.」：不先切第一句去念
+                    if headTask == nil, nudge == nil, let cut = Self.firstSentenceCut(out) {
                         let h = String(out[..<cut])
                         head = h
                         headTask = Task { @MainActor in
@@ -4353,6 +4361,11 @@ final class AppState: ObservableObject {
         }
 
         let raw = out.trimmingCharacters(in: .whitespacesAndNewlines)
+        if nudge != nil, raw.isEmpty || [".", "。", "…", "……"].contains(raw) {
+            var r = CallReply()
+            r.waited = true
+            return r
+        }
         guard !raw.isEmpty else { return CallReply(error: "他没说话") }
 
         // **同一段话，两个去处，处理相反**：
