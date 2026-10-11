@@ -25,8 +25,9 @@ struct VinylStage: View {
     @EnvironmentObject private var app: AppState
     @AppStorage("vinylStyle") private var styleRaw = VinylStyle.glass.rawValue
     @AppStorage("vinylBand") private var bandRaw = ""
-    @AppStorage("listenDay") private var listenDay = ""
-    @AppStorage("listenSeconds") private var listenSeconds = 0.0
+    /// 一起听了多久（放歌的时候记，见 `MusicPlayer`），一直累加
+    @AppStorage("listenTotalSeconds") private var listenSeconds = 0.0
+    @Environment(\.colorScheme) private var scheme
 
     @State private var spinBase: Double = 0
     @State private var spinStart: Date?
@@ -117,9 +118,7 @@ struct VinylStage: View {
         }
         .onAppear {
             if playing { spinStart = Date() }
-            startCounting()
         }
-        .onDisappear { tick?.cancel() }
         .onChange(of: playing) { _, on in
             if on {
                 spinStart = Date()
@@ -138,26 +137,15 @@ struct VinylStage: View {
         return f
     }()
 
-    private func startCounting() {
-        tick?.cancel()
-        tick = Task { @MainActor in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                let today = Self.dayFormat.string(from: Date())
-                if listenDay != today { listenDay = today; listenSeconds = 0 }
-                if playing { listenSeconds += 1 }
-            }
-        }
-    }
-
     private var togetherPill: some View {
-        let mins = Int(listenSeconds / 60)
+        let total = Int(listenSeconds / 60)
+        let text = total >= 60 ? "一起听 \(total / 60) 小时 \(total % 60) 分钟" : "一起听 \(total) 分钟"
         return HStack(spacing: 6) {
             HStack(spacing: -8) {
                 avatar(app.settings.userAvatarName)
                 avatar(app.settings.aiAvatarName)
             }
-            Text("一起听 \(mins) 分钟")
+            Text(text)
                 .font(.app(11.5, weight: .medium))
         }
         .padding(.leading, 4).padding(.trailing, 12).padding(.vertical, 4)
@@ -203,7 +191,7 @@ struct VinylStage: View {
 
     private func record(size: CGSize) -> some View {
         let l = layout(size)
-        let key = "\(style.rawValue)|\(track?.id.uuidString ?? "")|\(Int(l.d))"
+        let key = "\(style.rawValue)|\(track?.id.uuidString ?? "")|\(Int(l.d))|\(scheme == .dark ? "d" : "l")"
         return ZStack(alignment: .topLeading) {
             // 只有角度按帧变；唱片本身（封面、那圈字）包成不变的一块，不跟着重画
             TimelineView(.animation(paused: !playing)) { ctx in
@@ -271,15 +259,22 @@ struct VinylStage: View {
         ZStack {
             switch style {
             case .glass:
-                Circle().fill(RadialGradient(colors: [Color(hexString: "F2A9C8")!.opacity(0.72),
-                                                      Color(hexString: "D6AAE8")!.opacity(0.72)],
-                                             center: .center, startRadius: label / 2, endRadius: d / 2))
-                grooves(d: d, color: .white.opacity(0.35))
-                Circle().stroke(.white.opacity(0.8), lineWidth: 1)
+                // 真的毛玻璃：透出后面的壁纸，只压一层很淡的白，跟背景融在一起
+                Circle().fill(.ultraThinMaterial)
+                Circle().fill(.white.opacity(scheme == .dark ? 0.06 : 0.18))
+                grooves(d: d, color: .white.opacity(0.32))
+                Circle().stroke(.white.opacity(0.7), lineWidth: 1)
             case .minimal:
-                Circle().fill(Color(hexString: "FBFAF8")!)
-                grooves(d: d, color: Color(hexString: "E4DFD9")!)
-                Circle().inset(by: 0.9).stroke(Color(hexString: "B9B2AB")!, lineWidth: 1.8)
+                // 浅色是白唱片，深色是黑胶
+                if scheme == .dark {
+                    Circle().fill(Color(hexString: "1A191B")!)
+                    grooves(d: d, color: .white.opacity(0.09))
+                    Circle().inset(by: 0.9).stroke(Color(hexString: "3E3A3D")!, lineWidth: 1.8)
+                } else {
+                    Circle().fill(Color(hexString: "FBFAF8")!)
+                    grooves(d: d, color: Color(hexString: "E4DFD9")!)
+                    Circle().inset(by: 0.9).stroke(Color(hexString: "B9B2AB")!, lineWidth: 1.8)
+                }
             case .sleeve:
                 Circle().fill(Color(hexString: "1D1A1A")!)
                 grooves(d: d, color: .white.opacity(0.08))
@@ -296,7 +291,7 @@ struct VinylStage: View {
             .clipShape(Circle())
             // 贴纸边上一道压痕：里面一圈暗、外面一圈亮
             .overlay(Circle().stroke(.black.opacity(0.35), lineWidth: 1.5))
-            .overlay(Circle().inset(by: -2).stroke(.white.opacity(style == .minimal ? 0.6 : 0.1), lineWidth: 1.5))
+            .overlay(Circle().inset(by: -2).stroke(.white.opacity(style == .minimal && scheme != .dark ? 0.6 : 0.1), lineWidth: 1.5))
             Circle()
                 .fill(style == .sleeve ? Color(hexString: "F4E7DC")! : .white)
                 .frame(width: max(5, d * 0.03), height: max(5, d * 0.03))

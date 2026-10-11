@@ -1766,6 +1766,46 @@ final class AppState: ObservableObject {
         conversations[i].updatedAt = Date()
     }
 
+    // MARK: 一个切点后面的几段：按时间排好，‹ k/N › 一段一段翻
+
+    /// 这个切点后面一共几段（正文那段 + 收起来的），按每段第一条的时间排。
+    /// 返回每段的编号（nil = 正文里现在这段）和现在看的是第几段（从 0 数）
+    func segments(after anchor: UUID, in conversationID: UUID) -> (ids: [UUID?], current: Int) {
+        guard let i = index(of: conversationID) else { return ([], 0) }
+        let c = conversations[i]
+        var list: [(Date, UUID?)] = c.branches.filter { $0.afterMessageID == anchor }
+            .map { ($0.messages.first?.createdAt ?? $0.createdAt, $0.id) }
+        if let ai = c.messages.firstIndex(where: { $0.id == anchor }), ai + 1 < c.messages.count {
+            list.append((c.messages[ai + 1].createdAt, nil))
+        }
+        list.sort { $0.0 < $1.0 }
+        let ids = list.map(\.1)
+        return (ids, ids.firstIndex(where: { $0 == nil }) ?? max(0, ids.count - 1))
+    }
+
+    /// 往前（-1，更早的）/ 往后（+1，更新的）翻一段
+    func stepSegment(after anchor: UUID, by delta: Int, in conversationID: UUID) {
+        let s = segments(after: anchor, in: conversationID)
+        let t = s.current + delta
+        guard t >= 0, t < s.ids.count, let id = s.ids[t] else { return }
+        restoreBranch(id, in: conversationID)
+    }
+
+    /// 删掉正文里现在这一段（切点之后的），换上挨着的那一段
+    func dropCurrentSegment(after anchor: UUID, in conversationID: UUID) {
+        guard let i = index(of: conversationID), !runningConversationIDs.contains(conversationID),
+              let ai = conversations[i].messages.firstIndex(where: { $0.id == anchor }) else { return }
+        let s = segments(after: anchor, in: conversationID)
+        let neighbor: UUID? = (s.current > 0 ? s.ids[s.current - 1] : nil)
+            ?? (s.current + 1 < s.ids.count ? s.ids[s.current + 1] : nil)
+        if ai + 1 < conversations[i].messages.count {
+            conversations[i].messages.removeSubrange((ai + 1)...)
+        }
+        conversations[i].updatedAt = Date()
+        if let n = neighbor { restoreBranch(n, in: conversationID) }
+        objectWillChange.send()
+    }
+
     /// 丢掉一段收起来的（她确认不要了）
     func dropBranch(_ branchID: UUID, in conversationID: UUID) {
         guard let i = index(of: conversationID) else { return }

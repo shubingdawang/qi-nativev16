@@ -519,6 +519,8 @@ final class MusicPlayer: NSObject, ObservableObject {
 
     private var player: AVPlayer?
     private var observer: Any?
+    /// 一起听了多久：只要在放就记（页面关着也记），一直累加，不按天清零
+    private var lastListenTick: Date?
 
     func toggle(_ track: Track) {
         if current?.id == track.id {
@@ -584,6 +586,13 @@ final class MusicPlayer: NSObject, ObservableObject {
         ) { [weak self] time in
             Task { @MainActor in
                 guard let self else { return }
+                let now = Date()
+                if self.playing, let last = self.lastListenTick {
+                    let dt = min(1, now.timeIntervalSince(last))
+                    UserDefaults.standard.set(UserDefaults.standard.double(forKey: "listenTotalSeconds") + dt,
+                                              forKey: "listenTotalSeconds")
+                }
+                self.lastListenTick = now
                 self.progress = time.seconds
                 if let d = p.currentItem?.duration.seconds, d.isFinite, d > 0 {
                     self.duration = d

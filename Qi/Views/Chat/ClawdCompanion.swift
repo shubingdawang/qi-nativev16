@@ -155,14 +155,16 @@ struct ClawdRoamer: View {
                              // 探头时身体绕脚底往屏幕里倾（见 `ClawdRigView.tilt`）
                              tilt: peekTilt,
                              // ⚠️ 1.1 × 1.5 = 1.65。换图纸那次欠的账：图纸从 54 格缩到 36 格（3 格/单位 → 2 格/单位），躯干跟着从 33 格变成 22 格，**scale 没跟着调，他在所有地方都缩了三分之一**。22 × s_new = 33 × s_old → 每一处 scale 都要 ×1.5 才回到原来那么大。
-                             scale: 1.65,
+                             // 站在输入框上的时候小一点（她说「在输入框上 clawd 有点大了」）
+                             scale: perchBottom == nil ? 1.65 : 1.3,
                              beat: rigBeat,
                              rise: carryRise,
                              shadow: true)
                     // 倾斜得有个过渡。外面那条 `.animation(value: clawdX)`
                     // 只管横向位置，管不到 tilt——不加这句探头就是硬切一下。
                     .animation(.easeOut(duration: 0.45), value: peekTilt)
-                    .scaleEffect(held ? 1.2 : 1)
+                    // 拎起来放大时脚底不动：从中心放大的话，站在输入框上那只下半截会陷进框里
+                    .scaleEffect(held ? 1.2 : 1, anchor: .bottom)
                     .scaleEffect(x: facingLeft ? -1 : 1, y: 1)
                     .shadow(color: .black.opacity(held ? 0.26 : 0), radius: 10, y: 8)
                     // 这一条是长按拖不动的根源：PixelSpriteView 里那块 Canvas
@@ -172,7 +174,7 @@ struct ClawdRoamer: View {
                     .contentShape(Rectangle().inset(by: -14))
             }
             .position(x: posX * geo.size.width,
-                      y: perchBottom.map { geo.size.height - $0 - 22 } ?? posY * geo.size.height)
+                      y: perchBottom.map { geo.size.height - $0 - 17 } ?? posY * geo.size.height)
             .onAppear { pageWidth = geo.size.width }
             .onChange(of: geo.size.width) { _, w in pageWidth = w }
             // 拎着的时候要跟手，所以不给动画

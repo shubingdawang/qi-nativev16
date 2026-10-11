@@ -13,6 +13,16 @@ struct BeadListView: View {
     @State private var newSize = 32
     @State private var creating = false
     @State private var pickedRef: PhotosPickerItem?
+    @State private var cropNew: CropJob?
+
+    /// 用裁好的图建一块新板
+    private func startWith(_ img: UIImage) {
+        cropNew = nil
+        let name = ImageStore.save(ImageStore.downscale(img, maxSide: 1600)) ?? ""
+        let p = store.create(size: newSize, refImage: name)
+        creating = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { editing = p }
+    }
     @State private var importPick: PhotosPickerItem?
     @State private var placing: PlacingImage?
     @State private var deleting: BeadProject?
@@ -174,16 +184,15 @@ struct BeadListView: View {
         .onChange(of: pickedRef) { _, item in
             guard let item else { return }
             Task { @MainActor in
-                var name = ""
-                if let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data),
-                   let saved = ImageStore.save(ImageStore.downscale(img, maxSide: 1600)) {
-                    name = saved
+                if let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) {
+                    cropNew = CropJob(image: img)
                 }
-                let p = store.create(size: newSize, refImage: name)
                 pickedRef = nil
-                creating = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { editing = p }
             }
+        }
+        // 挑完图先裁一下，裁好了再建板
+        .fullScreenCover(item: $cropNew) { job in
+            ImageCropView(image: job.image, done: { startWith($0) }, cancel: { startWith(job.image) })
         }
     }
 }
@@ -204,7 +213,7 @@ struct BeadThumb: View {
                 let hex = project.cells[i]
                 guard !hex.isEmpty, let c = UIColor(beadHex: hex) else { continue }
                 let r = CGRect(x: CGFloat(i % n) * cell, y: CGFloat(i / n) * cell, width: cell, height: cell)
-                gc.fill(Path(ellipseIn: r.insetBy(dx: cell * 0.06, dy: cell * 0.06)), with: .color(Color(c)))
+                gc.fill(Path(r.insetBy(dx: cell * 0.03, dy: cell * 0.03)), with: .color(Color(c)))
             }
         }
     }
@@ -267,6 +276,18 @@ struct BeadEditorView: View {
     @State private var renaming = false
     @State private var tracing = false
     @State private var refPick: PhotosPickerItem?
+    @State private var cropRef: CropJob?
+
+    /// 裁好的参考图换上去
+    private func useRef(_ img: UIImage) {
+        cropRef = nil
+        guard let name = ImageStore.save(ImageStore.downscale(img, maxSide: 1600)) else { return }
+        if !p.refImage.isEmpty { ImageStore.delete(p.refImage) }
+        p.refImage = name
+        p.refScale = 1; p.refRotation = 0; p.refX = 0; p.refY = 0; p.refShown = true
+        refUIImage = ImageStore.cached(name)
+        BeadStore.shared.save(p)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -295,16 +316,14 @@ struct BeadEditorView: View {
         .onChange(of: refPick) { _, item in
             guard let item else { return }
             Task { @MainActor in
-                if let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data),
-                   let name = ImageStore.save(ImageStore.downscale(img, maxSide: 1600)) {
-                    if !p.refImage.isEmpty { ImageStore.delete(p.refImage) }
-                    p.refImage = name
-                    p.refScale = 1; p.refRotation = 0; p.refX = 0; p.refY = 0; p.refShown = true
-                    refUIImage = ImageStore.cached(name)
-                    BeadStore.shared.save(p)
+                if let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) {
+                    cropRef = CropJob(image: img)
                 }
                 refPick = nil
             }
+        }
+        .fullScreenCover(item: $cropRef) { job in
+            ImageCropView(image: job.image, done: { useRef($0) }, cancel: { useRef(job.image) })
         }
     }
 
@@ -372,12 +391,8 @@ struct BeadEditorView: View {
                         gc.fill(Path(ellipseIn: CGRect(x: r.midX - d / 2, y: r.midY - d / 2, width: d, height: d)),
                                 with: .color(Color.black.opacity(0.12)))
                     } else if let c = UIColor(beadHex: hex) {
-                        gc.fill(Path(ellipseIn: r.insetBy(dx: cell * 0.06, dy: cell * 0.06)), with: .color(Color(c)))
-                        gc.fill(Path(ellipseIn: r.insetBy(dx: cell * 0.34, dy: cell * 0.34)),
-                                with: .color(Color(c.darker(0.18))))
-                        gc.fill(Path(ellipseIn: CGRect(x: r.minX + cell * 0.22, y: r.minY + cell * 0.18,
-                                                       width: cell * 0.2, height: cell * 0.14)),
-                                with: .color(.white.opacity(0.45)))
+                        // 方形像素：一整格一个色块，格与格之间留一道细缝
+                        gc.fill(Path(r.insetBy(dx: cell * 0.03, dy: cell * 0.03)), with: .color(Color(c)))
                     }
                 }
             }
@@ -871,4 +886,10 @@ struct ImportPlacementView: View {
             }
         }
     }
+}
+
+/// 要裁的那张图
+struct CropJob: Identifiable {
+    let id = UUID()
+    let image: UIImage
 }

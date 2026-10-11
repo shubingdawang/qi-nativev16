@@ -1340,6 +1340,11 @@ struct ChatView: View {
                     Spacer(minLength: 0)
                     Button {
                         withAnimation(.easeOut(duration: 0.16)) { beatsOpen = true }
+                        // 展开了没去点哪颗，过一会儿自己收回去
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 4_000_000_000)
+                            if beatKind == nil { withAnimation(.easeOut(duration: 0.16)) { beatsOpen = false } }
+                        }
                     } label: {
                         Image(systemName: "ellipsis.bubble")
                             .font(.app(12))
@@ -1382,6 +1387,7 @@ struct ChatView: View {
                 if beatKind == kind {
                     beatKind = nil
                     beatText = ""
+                    beatsOpen = false
                 } else {
                     beatKind = kind
                     beatText = ""
@@ -1416,7 +1422,7 @@ struct ChatView: View {
         let mark = "[[" + kind + ":" + t + "]]"
         draft = draft.isEmpty ? mark : mark + br + draft
         beatText = ""
-        withAnimation(.easeOut(duration: 0.16)) { beatKind = nil }
+        withAnimation(.easeOut(duration: 0.16)) { beatKind = nil; beatsOpen = false }
         // 光标回输入框，她接着打那句话
         inputFocused = true
         typingTick += 1
@@ -2264,27 +2270,27 @@ struct MessageListView: View {
     /// ⚠️ 单独一个方法，别写回那个 `ForEach` 里（类型检查会超时）。
     @ViewBuilder
     private func branchBar(_ id: UUID) -> some View {
-        let list = conversation.branches.filter { $0.afterMessageID == id }
-        if !list.isEmpty {
+        let seg = app.segments(after: id, in: conversation.id)
+        if seg.ids.count > 1 {
+            // 一段一段翻：‹ 是更早的那段，› 是更新的那段（按每段第一条的时间排）。
             // 他正在回的时候不让换（换了那一轮会吊死，见 `AppState.restoreBranch`）
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 Button {
-                    // 往回翻：换**最近**收起来的那一段
-                    if let b = list.last {
-                        app.restoreBranch(b.id, in: conversation.id)
-                    }
+                    app.stepSegment(after: id, by: -1, in: conversation.id)
                 } label: {
                     Image(systemName: "chevron.left")
+                        .opacity(seg.current > 0 ? 1 : 0.3)
                 }
-                Text("旧对话 \(list.count + 1) 段")
+                .disabled(seg.current == 0)
+                Text("\(seg.current + 1)/\(seg.ids.count)")
+                    .monospacedDigit()
                 Button {
-                    // 往后翻：换最早收起来的那一段（只有一段时跟左边一样，来回切）
-                    if let b = list.first {
-                        app.restoreBranch(b.id, in: conversation.id)
-                    }
+                    app.stepSegment(after: id, by: 1, in: conversation.id)
                 } label: {
                     Image(systemName: "chevron.right")
+                        .opacity(seg.current + 1 < seg.ids.count ? 1 : 0.3)
                 }
+                .disabled(seg.current + 1 >= seg.ids.count)
             }
             .font(.app(10.5))
             .foregroundStyle(Theme.textMuted(scheme))
@@ -2293,8 +2299,14 @@ struct MessageListView: View {
             .opacity(running ? 0.4 : 1)
             .padding(.vertical, 2)
             .frame(maxWidth: .infinity)
-            // 长按开那张列表：看每一段是什么、或者丢掉不要的
-            .onLongPressGesture { onOpenBranches(id) }
+            // 长按：删掉现在看的这一段，换上挨着的那段
+            .contextMenu {
+                Button(role: .destructive) {
+                    app.dropCurrentSegment(after: id, in: conversation.id)
+                } label: {
+                    Label("删掉现在这一段", systemImage: "trash")
+                }
+            }
         }
     }
 
