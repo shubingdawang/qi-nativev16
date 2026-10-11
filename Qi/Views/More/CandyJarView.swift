@@ -428,11 +428,15 @@ struct CandyGlyph: View {
     }
 
     var body: some View {
-        let sh = shape, hx = Self.hex(scheme), sd = seed.isEmpty ? scheme + shape : seed
-        Canvas { gc, sz in
-            var g = gc
-            g.scaleBy(x: sz.width / 100, y: sz.height / 100)
-            CandyArt.draw(&g, shape: sh, hex: hx, seed: sd)
+        Group {
+            if let img = CandyArt.image(shape: shape, scheme: scheme, seed: seed.isEmpty ? scheme + shape : seed) {
+                // 像素图：放大不插值，按长边塞进格子
+                Image(uiImage: img).resizable().interpolation(.none).scaledToFit()
+            } else {
+                Image(systemName: Self.symbol(shape))
+                    .font(.system(size: size * 0.8))
+                    .foregroundStyle(Self.color(scheme).gradient)
+            }
         }
         .frame(width: size, height: size)
     }

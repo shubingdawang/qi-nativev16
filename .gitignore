@@ -24,3 +24,4 @@ scripts/agent-bridge/bridge-token.txt
 
 # 小岛的生成脚本出的中间图和预览，不进仓库（App 用的在 Qi/Resources/Island）
 scripts/island/*.png
+scripts/candy/*.png
