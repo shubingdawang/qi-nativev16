@@ -680,7 +680,7 @@ struct WorldView: View {
                 CGRect(x: CGFloat(x) * tile, y: CGFloat(y - h + 1) * tile, width: CGFloat(w) * tile, height: CGFloat(h) * tile)
             }
             for d in world.decor where selDecor.contains(d.id) {
-                let c = WorldDecorKind.resolve(d.kind)?.cells ?? (1, 1)
+                let c: (w: Int, h: Int) = WorldDecorKind.resolve(d.kind)?.cells ?? (w: 1, h: 1)
                 let r = frame(d.x, d.y, c.w, c.h).insetBy(dx: 2, dy: 2)
                 gc.fill(Path(roundedRect: r, cornerRadius: 8), with: .color(accent.opacity(0.12)))
                 gc.stroke(Path(roundedRect: r, cornerRadius: 8), with: .color(accent), style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
