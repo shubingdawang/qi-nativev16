@@ -203,6 +203,15 @@ struct WorldView: View {
                     framed = true
                     look(at: herWalk.pos, geo.size, content)
                 }
+                // 她走到快出画面了，镜头跟过去
+                .onChange(of: herWalk.pos) { _, p in
+                    guard zoomStart == nil else { return }
+                    let sx = geo.size.width / 2 + pan.width + (seaPad + p.x * tile + tile / 2 - content.width / 2) * zoom
+                    let sy = geo.size.height / 2 + pan.height + (seaPad + p.y * tile + tile / 2 - content.height / 2) * zoom
+                    if sx < 50 || sx > geo.size.width - 50 || sy < 90 || sy > geo.size.height - 50 {
+                        withAnimation(.easeInOut(duration: 0.6)) { look(at: p, geo.size, content) }
+                    }
+                }
         }
         .background(sea.ignoresSafeArea())
     }
@@ -349,44 +358,23 @@ struct WorldView: View {
         }
     }
 
-    /// 庄稼：种子 → 芽 → 叶 → 结果。每分钟刷一次
+    /// 庄稼：种子 → 芽 → 叶 → 结果，按像素画（一格 16 像素，跟地面一个颗粒）。每分钟刷一次
     private var cropLayer: some View {
         TimelineView(.periodic(from: .now, by: 60)) { ctx in
             Canvas { gc, _ in
+                let sc = tile / CGFloat(IslandArt.px)
                 for (key, c) in world.save.crops {
                     let xy = key.split(separator: ",").compactMap { Int($0) }
                     guard xy.count == 2, let s = WorldFarm.seed(c.kind) else { continue }
-                    let cx = CGFloat(xy[0]) * tile + tile / 2, base = CGFloat(xy[1]) * tile + tile - 8
-                    let leaf = Color(hexString: "6FA35C")!
-                    switch WorldFarm.stage(c, now: ctx.date) {
-                    case 0:
-                        for dx in [-6.0, 0, 6] {
-                            gc.fill(Path(ellipseIn: CGRect(x: cx + dx - 1.5, y: base - 3, width: 3, height: 3)),
-                                    with: .color(Color(hexString: "5E3A26")!))
-                        }
-                    case 1:
-                        var p = Path()
-                        p.move(to: CGPoint(x: cx, y: base)); p.addLine(to: CGPoint(x: cx, y: base - 8))
-                        gc.stroke(p, with: .color(leaf), lineWidth: 1.6)
-                        gc.fill(Path(ellipseIn: CGRect(x: cx - 6, y: base - 12, width: 6, height: 4)), with: .color(leaf))
-                        gc.fill(Path(ellipseIn: CGRect(x: cx, y: base - 12, width: 6, height: 4)), with: .color(leaf))
-                    default:
-                        var p = Path()
-                        p.move(to: CGPoint(x: cx, y: base)); p.addLine(to: CGPoint(x: cx, y: base - 18))
-                        gc.stroke(p, with: .color(leaf), lineWidth: 2)
-                        for (dx, dy) in [(-9.0, -10.0), (3.0, -14.0), (-7.0, -20.0)] {
-                            gc.fill(Path(ellipseIn: CGRect(x: cx + dx, y: base + dy, width: 8, height: 5)), with: .color(leaf))
-                        }
-                        if WorldFarm.stage(c, now: ctx.date) == 3 {
-                            let fruit = Color(hexString: s.color)!
-                            for (dx, dy) in [(-6.0, -24.0), (2.0, -27.0), (-2.0, -19.0)] {
-                                gc.fill(Path(ellipseIn: CGRect(x: cx + dx, y: base + dy, width: 7, height: 7)), with: .color(fruit))
-                            }
-                        }
+                    let ox = CGFloat(xy[0]) * tile, oy = CGFloat(xy[1]) * tile
+                    func dot(_ x: Int, _ y: Int, _ col: Color) {
+                        gc.fill(Path(CGRect(x: ox + CGFloat(x) * sc, y: oy + CGFloat(y) * sc, width: sc, height: sc)), with: .color(col))
                     }
+                    for (x, y, col) in WorldCropArt.pixels(stage: WorldFarm.stage(c, now: ctx.date), fruit: s.color) { dot(x, y, col) }
+                    // 刚浇过水：旁边一颗水珠
                     if c.lastWatered.map({ ctx.date.timeIntervalSince($0) < 1800 }) == true {
-                        gc.fill(Path(ellipseIn: CGRect(x: cx + 9, y: base - 6, width: 4, height: 5)),
-                                with: .color(Color(hexString: "6FB4D2")!))
+                        dot(13, 10, WorldCropArt.drop[1]); dot(13, 11, WorldCropArt.drop[0]); dot(12, 11, WorldCropArt.drop[0])
+                        dot(13, 12, WorldCropArt.drop[0])
                     }
                 }
             }
@@ -800,5 +788,45 @@ struct IslandGirl: View {
             .scaleEffect(x: walker.facing == .right ? -1 : 1, y: 1)
             .offset(y: col == 0 ? 0 : -scale)
         }
+    }
+}
+
+/// 田里的庄稼长什么样：一格 16×16 像素里的点（x, y, 颜色），下沿在第 14 行
+enum WorldCropArt {
+    static let leaf = [Color(hexString: "5E8F62")!, Color(hexString: "7FB277")!, Color(hexString: "A6D093")!]
+    static let seed = Color(hexString: "6E4A44")!
+    static let drop = [Color(hexString: "8ECCD3")!, Color(hexString: "E6F7F6")!]
+    private static let outline = Color(hexString: "4E3A4F")!
+
+    static func pixels(stage: Int, fruit: String) -> [(Int, Int, Color)] {
+        var p: [(Int, Int, Color)] = []
+        let d = leaf[0], m = leaf[1], l = leaf[2]
+        switch stage {
+        case 0:
+            // 刚种下：三颗种子，上面一点亮
+            for x in [4, 8, 11] { p += [(x, 13, seed), (x + 1, 13, seed), (x, 12, Color(hexString: "9A6E64")!)] }
+        case 1:
+            // 发芽：一根茎、两片小叶子
+            p += [(8, 13, d), (8, 12, d), (8, 11, m)]
+            p += [(6, 10, m), (7, 10, l), (7, 11, d), (9, 10, l), (10, 10, m), (9, 11, d)]
+        default:
+            // 长叶：一棵小苗，三层叶子
+            for y in 6...13 { p.append((8, y, y > 10 ? d : m)) }
+            p += [(5, 11, d), (6, 11, m), (7, 11, l), (9, 11, m), (10, 11, m), (11, 11, d), (6, 12, d), (10, 12, d)]
+            p += [(5, 8, m), (6, 8, l), (7, 8, l), (9, 8, l), (10, 8, m), (11, 8, d), (6, 9, d), (10, 9, d)]
+            p += [(7, 5, m), (8, 5, l), (9, 5, m), (8, 4, l)]
+            if stage >= 3 {
+                // 熟了：挂三颗果子，左上一点亮、外面一圈深梅描边
+                let col = Color(hexString: fruit) ?? .pink
+                let hi = Color(hexString: "FFF4F0")!
+                for (fx, fy) in [(4, 9), (11, 6), (9, 12)] {
+                    for (ex, ey) in [(-1, 0), (-1, 1), (2, 0), (2, 1), (0, -1), (1, -1), (0, 2), (1, 2)] {
+                        p.append((fx + ex, fy + ey, outline))
+                    }
+                    p += [(fx, fy, hi), (fx + 1, fy, col), (fx, fy + 1, col), (fx + 1, fy + 1, col)]
+                }
+            }
+        }
+        return p
     }
 }
