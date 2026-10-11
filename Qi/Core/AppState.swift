@@ -2618,6 +2618,8 @@ final class AppState: ObservableObject {
             native += WageTools.definitions()
             // 糖罐（看罐、吃、喂、图鉴、药效）。纯本机
             native += CandyTools.definitions()
+            // 小岛（看地图、走、说、一起做事、摆东西）。纯本机
+            native += WorldTools.definitions()
             // 健康和待办。**三个开关都默认关着**，她开了才给。
             if settings.healthAccess || settings.todoAccess {
                 native += HealthTools.definitions(health: settings.healthAccess,
@@ -3582,6 +3584,8 @@ final class AppState: ObservableObject {
             return "在翻你的工资本"
         case "candy_jar", "candy_status":
             return "在摸糖罐"
+        case "world_look", "world_act":
+            return "在小岛上"
         case "get_pulse_status":
             return "在感受自己的心跳"
         case "checkpoint", "end_of_day":
@@ -5929,6 +5933,10 @@ final class AppState: ObservableObject {
 
         if CandyTools.handles(name) {
             return CandyTools.run(name, args: args)
+        }
+
+        if WorldTools.handles(name) {
+            return WorldTools.run(name, args: args)
         }
 
         if MemoryTools.handles(name, memory: settings.localMemory,

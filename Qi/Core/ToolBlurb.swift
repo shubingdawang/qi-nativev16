@@ -107,6 +107,8 @@ enum ToolBlurb {
         "wage_move_day": "将某天的全部记录移到另一天",
         "candy_jar": "糖罐：看今天的罐子、自己吃一颗、喂她一颗、翻图鉴",
         "candy_status": "查看两人身上糖果药效与结束时间",
+        "world_look": "查看小岛地图、两人位置、摆放的东西和能一起做的事",
+        "world_act": "在小岛上走动、说话、和她一起做事、摆放或拿走东西",
         "flight_chess": "开始一局飞行棋",
         "monopoly": "开始一局大富翁",
         "create_journey": "生成一段旅程",
