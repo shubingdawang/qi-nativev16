@@ -12,7 +12,8 @@ enum WorldDecorKind: String, CaseIterable, Identifiable {
          bush, berry, rock, pebble, rocks, stump,
          daisy, clover, flowerY, flowerR, tulipPeach, lavender, sunflower, lily,
          houseOrange, cabin, shop, houseBeige,
-         fence, fenceV, crate, barrel, lamp, mailbox, bench
+         fence, fenceV, crate, barrel, lamp, mailbox, bench,
+         signpost, greenhouse, lighthouse, telescope
     var id: String { rawValue }
 
     var label: String {
@@ -51,6 +52,10 @@ enum WorldDecorKind: String, CaseIterable, Identifiable {
         case .lamp: return "路灯"
         case .mailbox: return "信箱"
         case .bench: return "长椅"
+        case .signpost: return "告示牌"
+        case .greenhouse: return "温室"
+        case .lighthouse: return "灯塔"
+        case .telescope: return "观星台"
         }
     }
 
@@ -91,6 +96,10 @@ enum WorldDecorKind: String, CaseIterable, Identifiable {
         case .lamp: return "lamp"
         case .mailbox: return "mailbox"
         case .bench: return "bench"
+        case .signpost: return "signpost"
+        case .greenhouse: return "greenhouse"
+        case .lighthouse: return "lighthouse"
+        case .telescope: return "telescope"
         }
     }
 
@@ -109,6 +118,17 @@ enum WorldDecorKind: String, CaseIterable, Identifiable {
         case .crate, .barrel: return "箱桶"
         case .lamp, .mailbox, .bench: return "小物"
         case .lily: return "水上"
+        case .signpost, .greenhouse, .lighthouse, .telescope: return "地标"
+        }
+    }
+
+    /// 要先走完哪段剧情才能自己摆
+    var unlockStory: String? {
+        switch self {
+        case .greenhouse: return "greenhouse"
+        case .lighthouse: return "lighthouse"
+        case .telescope: return "stargazing"
+        default: return nil
         }
     }
 

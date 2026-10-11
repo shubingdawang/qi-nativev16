@@ -97,6 +97,19 @@ struct WorldSave: Codable {
     var decor: [WorldDecor]? = nil
     /// 地图是第几版画法。比现在的旧，打开时换成新的地和景（摆的东西、田里的、篮子都留着）
     var art: Int = 0
+    /// 现在在哪座岛（上面的地、景、东西、田都是这座岛的）
+    var region = "home"
+    /// 别的岛存下来的样子
+    var regions: [String: WorldRegionData] = [:]
+    /// 岛的经验（两个人一起攒）
+    var xp = 0
+    /// 走完的剧情
+    var stories: [String] = []
+    /// 去过的岛
+    var visited: [String] = ["home"]
+    /// 今天摆东西、铺地已经给了多少经验（一天最多 20）
+    var buildXPDay = ""
+    var buildXP = 0
 }
 
 /// 一格庄稼。长多快按真实时间算，浇一次水快一截
@@ -170,6 +183,13 @@ extension WorldSave {
         basket = (try? c.decodeIfPresent([String: Int].self, forKey: .basket)) ?? [:]
         decor = try? c.decodeIfPresent([WorldDecor].self, forKey: .decor)
         art = (try? c.decodeIfPresent(Int.self, forKey: .art)) ?? 0
+        region = (try? c.decodeIfPresent(String.self, forKey: .region)) ?? "home"
+        regions = (try? c.decodeIfPresent([String: WorldRegionData].self, forKey: .regions)) ?? [:]
+        xp = (try? c.decodeIfPresent(Int.self, forKey: .xp)) ?? 0
+        stories = (try? c.decodeIfPresent([String].self, forKey: .stories)) ?? []
+        visited = (try? c.decodeIfPresent([String].self, forKey: .visited)) ?? ["home"]
+        buildXPDay = (try? c.decodeIfPresent(String.self, forKey: .buildXPDay)) ?? ""
+        buildXP = (try? c.decodeIfPresent(Int.self, forKey: .buildXP)) ?? 0
     }
 }
 
@@ -265,6 +285,10 @@ final class WorldStore: ObservableObject {
     @Published var herEmote: String?
     @Published var himEmote: String?
     @Published var himSay: String?
+    /// 顶上冒一句提示（升级了、桥那头还没解锁……），过几秒自己消
+    @Published var notice: String?
+    /// 刚做完某件事触发的剧情，页面上弹出来
+    @Published var pendingStory: WorldStory?
 
     private init() {
         var s = Storage.load(WorldSave.self, from: "world.json") ?? WorldSave()
@@ -273,6 +297,7 @@ final class WorldStore: ObservableObject {
         if s.art < Self.artVersion { Self.upgrade(&s) }
         save = s
         loaded = true
+        ensureExits()
     }
 
     /// 地图画法的版本：2 = 像素素材那一版，3 = 大岛、不规则的海岸，4 = 桥搭到岸上、景都挪到岸上，5 = 栖岛自己画的一套
@@ -421,6 +446,7 @@ final class WorldStore: ObservableObject {
         var list = decor
         list.append(WorldDecor(kind: kind, x: x, y: y))
         save.decor = list
+        gain(1, build: true)
     }
 
     func removeDecor(_ id: UUID) {
@@ -519,7 +545,7 @@ final class WorldStore: ObservableObject {
             v.ground[y * width + x] = g
             changed = true
         }
-        if changed { save = v }
+        if changed { save = v; gain(1, build: true) }
     }
 
     /// 油漆桶：从这一格开始，连在一起的同一种地
@@ -622,6 +648,7 @@ final class WorldStore: ObservableObject {
         guard x >= 0, y >= 0, x < width, y < height, object(at: x, y) == nil else { return nil }
         let o = WorldObject(source: source, x: x, y: y, w: min(w, width - x))
         save.objects.append(o)
+        gain(1, build: true)
         return o
     }
 
@@ -778,6 +805,7 @@ final class WorldStore: ObservableObject {
             : "你" + (what.isEmpty ? "" : "在\(what)那儿") + "对她「\(a.name)」。"
         log(byHer ? line : "他" + (what.isEmpty ? "" : "在\(what)那儿") + "对你「\(a.name)」。")
         flash(a.emote)
+        gain(3)
         return line
     }
 
@@ -823,6 +851,7 @@ final class WorldStore: ObservableObject {
         if byHer { walkHer(x, min(y + 1, height - 1)) } else { walkHim(x, min(y + 1, height - 1)) }
         let line = (byHer ? "她" : "他") + "在 (\(x),\(y)) 种下了\(seed.name)。"
         log(line)
+        gain(2)
         return line
     }
 
@@ -837,6 +866,7 @@ final class WorldStore: ObservableObject {
         flash("drop")
         let line = (byHer ? "她" : "他") + "给\(s.name)浇了水。"
         log(line)
+        gain(1)
         return line
     }
 
@@ -850,6 +880,8 @@ final class WorldStore: ObservableObject {
         flash("basket")
         let line = (byHer ? "她" : "他") + "收了一个\(s.name)，放进篮子。"
         log(line)
+        gain(8)
+        after("harvest")
         return line
     }
 
@@ -859,6 +891,8 @@ final class WorldStore: ObservableObject {
         save.basket[got, default: 0] += 1
         flash("fish")
         log((byHer ? "她" : "他") + "钓到了\(got)。")
+        gain(["锦鲤", "珍珠", "漂流瓶", "一朵睡莲"].contains(got) ? 10 : 4)
+        after("fish")
         return got
     }
 
@@ -871,7 +905,7 @@ final class WorldStore: ObservableObject {
 
     func lookText() -> String {
         var lines: [String] = []
-        lines.append("小岛 \(width)×\(height) 格（x 从左往右 0~\(width - 1)，y 从上往下 0~\(height - 1)）。")
+        lines.append("现在在\(WorldRegions.name(save.region))（岛的等级 Lv \(level)），\(width)×\(height) 格（x 从左往右 0~\(width - 1)，y 从上往下 0~\(height - 1)）。")
         lines.append("你在 (\(save.himX),\(save.himY))，她在 (\(save.herX),\(save.herY))。")
         if save.objects.isEmpty {
             lines.append("岛上还没摆东西。")
@@ -1022,5 +1056,160 @@ enum WorldTools {
         default:
             return ("do 要写 walk / say / interact / touch / place / remove / plant / water / harvest / fish。", true)
         }
+    }
+}
+
+// MARK: - 等级、群岛、剧情
+
+extension WorldStore {
+
+    var level: Int { WorldLevel.level(save.xp) }
+
+    func gain(_ n: Int, build: Bool = false) {
+        var v = save
+        if build {
+            let today = WageStore.key(Date())
+            if v.buildXPDay != today { v.buildXPDay = today; v.buildXP = 0 }
+            guard v.buildXP < 20 else { return }
+            v.buildXP += n
+        }
+        let before = WorldLevel.level(v.xp)
+        v.xp += n
+        save = v
+        let after = WorldLevel.level(v.xp)
+        guard after > before else { return }
+        log("岛升到了 Lv \(after)。")
+        let opened = WorldRegions.all.filter { $0.level == after && $0.id != "home" && unlocked($0.id) }.map(\.name)
+        show("升到 Lv \(after) 了" + (opened.isEmpty ? "" : "，可以去" + opened.joined(separator: "、") + "了"))
+    }
+
+    func show(_ text: String) {
+        notice = text
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if self.notice == text { self.notice = nil }
+        }
+    }
+
+    // MARK: 群岛
+
+    func unlocked(_ id: String) -> Bool {
+        guard let info = WorldRegions.info(id) else { return false }
+        return level >= info.level && (info.story.map { save.stories.contains($0) } ?? true)
+    }
+
+    /// 还差什么才能去
+    func lockReason(_ id: String) -> String? {
+        guard let info = WorldRegions.info(id), !unlocked(id) else { return nil }
+        var need: [String] = []
+        if level < info.level { need.append("岛到 Lv \(info.level)") }
+        if let st = info.story, !save.stories.contains(st), let story = WorldStories.story(st) { need.append("走完「\(story.title)」") }
+        return "去\(info.name)要先" + need.joined(separator: "、")
+    }
+
+    var exits: [WorldExit] { WorldRegions.exits(save.region) }
+
+    func exit(at x: Int, _ y: Int) -> WorldExit? {
+        exits.first { $0.trigger.count == 2 && $0.trigger[0] == x && $0.trigger[1] == y }
+    }
+
+    /// 这座岛的桥铺上（老存档、或者她把桥铺成了别的）
+    func ensureExits() {
+        var cells: [(Int, Int)] = []
+        for e in exits { for c in e.cells where c.count == 2 { cells.append((c[0], c[1])) } }
+        guard cells.contains(where: { ground($0.0, $0.1) != .wood }) else { return }
+        var v = save
+        for (x, y) in cells where x >= 0 && y >= 0 && x < width && y < height { v.ground[y * width + x] = .wood }
+        save = v
+    }
+
+    /// 过桥：这座岛存起来，换成那座岛。两个人一起过去
+    @discardableResult
+    func travel(_ e: WorldExit) -> Bool {
+        guard unlocked(e.to), let target = save.regions[e.to] ?? WorldRegions.fresh(e.to) else { return false }
+        var v = save
+        v.regions[v.region] = WorldRegionData(width: v.width, height: v.height, ground: v.ground,
+                                              decor: v.decor ?? [], objects: v.objects, crops: v.crops)
+        v.regions[e.to] = nil
+        v.region = e.to
+        v.width = target.width; v.height = target.height
+        v.ground = target.ground; v.decor = target.decor; v.objects = target.objects; v.crops = target.crops
+        let ax = e.arrive.first ?? 0, ay = e.arrive.count > 1 ? e.arrive[1] : 0
+        v.herX = ax; v.herY = ay
+        // 他跟在旁边一格
+        let spots = [(1, 0), (-1, 0), (0, 1), (0, -1)].map { (ax + $0.0, ay + $0.1) }
+        let him = spots.first { $0.0 >= 0 && $0.1 >= 0 && $0.0 < v.width && $0.1 < v.height && !v.ground[$0.1 * v.width + $0.0].blocked } ?? (ax, ay)
+        v.himX = him.0; v.himY = him.1
+        let first = !v.visited.contains(e.to)
+        if first { v.visited.append(e.to) }
+        save = v
+        clearHistory()
+        ensureExits()
+        log("你们一起去了\(WorldRegions.name(e.to))。")
+        if first { gain(15); show("第一次来到\(WorldRegions.name(e.to))") }
+        return true
+    }
+
+    // MARK: 剧情
+
+    /// 条件都满足了没有（不算运气）
+    func ready(_ st: WorldStory) -> Bool {
+        guard !save.stories.contains(st.id), st.region == save.region, level >= st.level,
+              st.after.allSatisfy({ save.stories.contains($0) }) else { return false }
+        if let n = st.night, n != Self.isNight { return false }
+        if let item = st.needs, (save.basket[item] ?? 0) < 1 { return false }
+        return true
+    }
+
+    /// 点了这一格：有没有剧情要来（满足条件以后还要看运气）
+    func story(atX x: Int, _ y: Int) -> WorldStory? {
+        let d = decor(at: x, y)
+        let k = d.flatMap { WorldDecorKind.resolve($0.kind) }
+        let g = ground(x, y)
+        for st in WorldStories.all where ready(st) {
+            switch st.spot {
+            case .decor(let kinds):
+                guard let k, kinds.contains(k) else { continue }
+            case .ground(let gs):
+                guard gs.contains(g) else { continue }
+            case .after:
+                continue
+            }
+            if Double.random(in: 0..<1) < st.chance { return st }
+        }
+        return nil
+    }
+
+    /// 刚做完一件事（收菜、钓鱼……）：有剧情就等页面弹出来
+    func after(_ what: String) {
+        guard pendingStory == nil else { return }
+        pendingStory = WorldStories.all.first { st in
+            if case .after(let w) = st.spot { return w == what && ready(st) }
+            return false
+        }
+    }
+
+    /// 走完一段：记下、给经验、解锁的景。返回讲给他听的那句
+    @discardableResult
+    func finish(_ st: WorldStory) -> String {
+        guard !save.stories.contains(st.id) else { return "" }
+        var v = save
+        v.stories.append(st.id)
+        save = v
+        log("你们一起经历了「\(st.title)」。")
+        gain(st.xp)
+        var tail = ""
+        if !st.unlocks.isEmpty { tail = "（解锁了能自己摆的" + st.unlocks.map(\.label).joined(separator: "、") + "）" }
+        let opened = WorldRegions.all.filter { $0.story == st.id }
+        for r in opened {
+            show(unlocked(r.id) ? "可以去\(r.name)了" : "去\(r.name)的路找到了，岛到 Lv \(r.level) 就能过去")
+        }
+        return "「\(st.title)」" + st.lines.joined() + tail
+    }
+
+    /// 这样景能不能自己摆（地标要先走完对应的剧情）
+    func canBuild(_ k: WorldDecorKind) -> Bool {
+        guard let st = k.unlockStory else { return true }
+        return save.stories.contains(st)
     }
 }

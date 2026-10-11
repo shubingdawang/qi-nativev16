@@ -18,6 +18,8 @@ ITEMS = {
     "bush": load("sp_bush.png"), "bush_berry": load("sp_bush_berry.png"),
     "rock": load("sp_rock.png"), "rock_small": small(load("sp_rock.png")), "rocks": load("sp_rocks.png"),
     "house_pink": load("h_0.png"), "house_blue": load("h_1.png"), "house_lilac": load("h_2.png"), "house_sage": load("h_3.png"),
+    "lighthouse": load("l_lighthouse.png"), "greenhouse": load("l_greenhouse.png"), "telescope": load("l_telescope.png"),
+    "signpost": load("l_signpost.png"),
 }
 for k in ("fl_daisy", "fl_pink", "fl_yellow", "tulip_pink", "tulip_peach", "lavender", "sunflower", "fence", "fence_v", "crate",
           "barrel", "stump", "lamp", "mailbox", "bench", "lily"):

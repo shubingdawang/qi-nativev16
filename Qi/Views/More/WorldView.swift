@@ -72,6 +72,8 @@ struct WorldView: View {
     @State private var box: (x0: Int, y0: Int, x1: Int, y1: Int)?
     @State private var movingSel = false
     @State private var showMaterials = false
+    @State private var storyShown: WorldStory?
+    @State private var showGuide = false
     @State private var groundPick: WorldGround = .wood
     @State private var itemPick: String?
     @State private var itemFilter: FurnitureKind.Category = .furniture
@@ -91,8 +93,10 @@ struct WorldView: View {
     private let seaPad: CGFloat = 48 * 10
 
     // 两个人在画面上的位置：存档里是「要去哪一格」，这里一步一步走过去
-    @StateObject private var herWalk = IslandWalker(WorldStore.shared.save.herX, WorldStore.shared.save.herY, step: 0.2)
-    @StateObject private var himWalk = IslandWalker(WorldStore.shared.save.himX, WorldStore.shared.save.himY, step: 0.24)
+    @StateObject private var herWalk = IslandWalker(WorldStore.shared.save.herX, WorldStore.shared.save.herY, step: 0.2,
+                                                    region: WorldStore.shared.save.region)
+    @StateObject private var himWalk = IslandWalker(WorldStore.shared.save.himX, WorldStore.shared.save.himY, step: 0.24,
+                                                    region: WorldStore.shared.save.region)
 
     // 镜头：两指捏合缩放、单指拖动
     @State private var zoom: CGFloat = 0.8
@@ -117,21 +121,55 @@ struct WorldView: View {
             if m != .select { selDecor.removeAll(); selObj.removeAll() }
         }
         .onChange(of: herCell) { _, _ in walkHerFigure() }
+        .onChange(of: herWalk.moving) { _, m in if !m { arrived() } }
+        .onChange(of: world.save.region) { _, _ in walkHerFigure(); walkHimFigure() }
+        .onChange(of: world.pendingStory?.id) { _, id in
+            guard id != nil, let st = world.pendingStory else { return }
+            world.pendingStory = nil
+            storyShown = st
+        }
+
         .onChange(of: himCell) { _, _ in walkHimFigure() }
     }
 
     private func walkHerFigure() {
         let w = world
+        if herWalk.region != w.save.region { herWalk.place(w.save.herX, w.save.herY, region: w.save.region); return }
         herWalk.walk(to: w.save.herX, w.save.herY) { w.route(from: $0, to: $1) }
     }
 
     private func walkHimFigure() {
         let w = world
+        if himWalk.region != w.save.region { himWalk.place(w.save.himX, w.save.himY, region: w.save.region); return }
         himWalk.walk(to: w.save.himX, w.save.himY) { w.route(from: $0, to: $1) }
     }
 
-    var body: some View {
+    /// 走到桥头停下来：过桥
+    private func arrived() {
+        guard !herWalk.moving, let e = world.exit(at: world.save.herX, world.save.herY) else { return }
+        if world.unlocked(e.to) {
+            world.travel(e)
+            walkHerFigure(); walkHimFigure()
+        } else if let why = world.lockReason(e.to) {
+            world.show(why)
+        }
+    }
+
+    /// 剧情、攻略两个弹窗
+    private var staged: some View {
         stage
+            .sheet(item: $storyShown) { st in
+                WorldStorySheet(story: st, him: him) { line in app.tellHim("小岛上，你们一起经历了" + line) }
+                    .presentationDetents([.medium, .large])
+            }
+            .sheet(isPresented: $showGuide) {
+                WorldGuideSheet { id in travelByMap(id) }
+                    .presentationDetents([.large])
+            }
+    }
+
+    var body: some View {
+        staged
         .navigationTitle("小岛")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -254,6 +292,22 @@ struct WorldView: View {
                     framed = true
                     look(at: herWalk.pos, geo.size, content)
                 }
+                .onChange(of: world.save.region) { _, _ in
+                    look(at: CGPoint(x: world.save.herX, y: world.save.herY), geo.size, content)
+                }
+                .overlay(alignment: .topLeading) { levelBadge.padding(12) }
+                .overlay(alignment: .top) {
+                    if let n = world.notice {
+                        Text(n)
+                            .font(.app(13))
+                            .foregroundStyle(Theme.textMain(scheme))
+                            .padding(.horizontal, 16).padding(.vertical, 9)
+                            .background(Capsule().fill(.regularMaterial))
+                            .padding(.top, 56)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+                .animation(.easeOut(duration: 0.2), value: world.notice)
                 // 她走到快出画面了，镜头跟过去
                 .onChange(of: herWalk.pos) { _, p in
                     guard zoomStart == nil else { return }
@@ -265,6 +319,48 @@ struct WorldView: View {
                 }
         }
         .background(sea.ignoresSafeArea())
+    }
+
+    /// 左上角：在哪座岛、岛几级、这一级走到哪了。点开是攻略
+    private var levelBadge: some View {
+        Button { showGuide = true } label: {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    Text(WorldRegions.name(world.save.region))
+                        .font(.app(13, weight: .semibold))
+                    Text("Lv \(world.level)")
+                        .font(.app(11.5, weight: .medium))
+                        .foregroundStyle(app.settings.accentColor)
+                    Image(systemName: "book.closed")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+                .foregroundStyle(Theme.textMain(scheme))
+                if let p = WorldLevel.progress(world.save.xp) {
+                    GeometryReader { g in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Theme.softFillDeep)
+                            Capsule().fill(app.settings.accentColor.opacity(0.7))
+                                .frame(width: g.size.width * CGFloat(p.0) / CGFloat(max(1, p.1)))
+                        }
+                    }
+                    .frame(width: 96, height: 4)
+                }
+            }
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.regularMaterial))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// 从攻略里的群岛直接过去（只能去已经解锁的）
+    private func travelByMap(_ id: String) {
+        guard id != world.save.region, world.unlocked(id) else { return }
+        // 落在通往那座岛的桥头（随便哪座岛连过去的那座桥都行）
+        let all = ["home", "huadao", "yuewan", "songlin", "xingqiu"].flatMap { WorldRegions.exits($0) }
+        guard let into = all.first(where: { $0.to == id }) else { return }
+        world.travel(WorldExit(to: id, cells: [], trigger: [], arrive: into.arrive))
+        showGuide = false
     }
 
     /// 屏幕上的点 → 岛上第几格
@@ -376,6 +472,12 @@ struct WorldView: View {
         switch mode {
         case .walk:
             guard !moved else { return }
+            if let st = world.story(atX: x, y) { storyShown = st; return }
+            // 点到还没解锁的桥：说一声，不过去
+            if let e = world.exits.first(where: { $0.cells.contains([x, y]) }), !world.unlocked(e.to) {
+                if let why = world.lockReason(e.to) { world.show(why) }
+                return
+            }
             if x == world.save.himX && y == world.save.himY { personMenu = true; return }
             if let o = world.object(at: x, y) { menuFor = o; return }
             if let d = world.decor(at: x, y, base: true), !world.actions(forDecor: d).isEmpty { decorMenu = d; return }
@@ -390,7 +492,12 @@ struct WorldView: View {
         case .place:
             guard !moved else { return }
             if sceneryTab {
-                if let k = decorPick { world.checkpoint(); world.addDecor(k.rawValue, x, y) }
+                guard let k = decorPick else { return }
+                guard world.canBuild(k) else {
+                    if let st = k.unlockStory.flatMap(WorldStories.story) { world.show("走完「\(st.title)」才能摆\(k.label)") }
+                    return
+                }
+                world.checkpoint(); world.addDecor(k.rawValue, x, y)
                 return
             }
             guard let src = itemPick else { return }
@@ -831,6 +938,12 @@ struct WorldView: View {
                                     let s = IslandArt.size(of: k.sprite)
                                     IslandSprite(key: k.sprite, scale: 40 / max(s.width, s.height))
                                         .frame(width: 40, height: 40)
+                                        .opacity(world.canBuild(k) ? 1 : 0.35)
+                                        .overlay(alignment: .topTrailing) {
+                                            if !world.canBuild(k) {
+                                                Image(systemName: "lock").font(.system(size: 10)).foregroundStyle(Theme.textMuted(scheme))
+                                            }
+                                        }
                                     Text(k.label).font(.app(9.5)).lineLimit(1).frame(width: 52)
                                 }
                                 .padding(4)
@@ -967,11 +1080,24 @@ final class IslandWalker: ObservableObject {
     private var at: (Int, Int)
     private let step: Double
     private var task: Task<Void, Never>?
+    /// 在哪座岛上
+    private(set) var region: String
 
-    init(_ x: Int, _ y: Int, step: Double) {
+    init(_ x: Int, _ y: Int, step: Double, region: String) {
         pos = CGPoint(x: x, y: y)
         at = (x, y)
         self.step = step
+        self.region = region
+    }
+
+    /// 直接站到这一格（换岛）
+    func place(_ x: Int, _ y: Int, region: String) {
+        task?.cancel()
+        at = (x, y)
+        pos = CGPoint(x: x, y: y)
+        moving = false
+        facing = .down
+        self.region = region
     }
 
     func walk(to x: Int, _ y: Int, route: ((Int, Int), (Int, Int)) -> [(Int, Int)]?) {
@@ -1063,5 +1189,190 @@ enum WorldCropArt {
             }
         }
         return p
+    }
+}
+
+// MARK: - 剧情
+
+/// 一段剧情：一段一段往下看，看完记下来、讲给他听
+struct WorldStorySheet: View {
+    let story: WorldStory
+    let him: String
+    let tell: (String) -> Void
+
+    @ObservedObject private var world = WorldStore.shared
+    @EnvironmentObject private var app: AppState
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.dismiss) private var dismiss
+    @State private var shown = 1
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "sparkles").foregroundStyle(app.settings.accentColor)
+                Text(story.title).font(.app(17, weight: .semibold)).foregroundStyle(Theme.textMain(scheme))
+                Spacer()
+                Text(WorldRegions.name(story.region)).font(.app(12)).foregroundStyle(Theme.textMuted(scheme))
+            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(Array(story.lines.prefix(shown).enumerated()), id: \.offset) { _, line in
+                        Text(line)
+                            .font(.app(15))
+                            .lineSpacing(5)
+                            .foregroundStyle(Theme.textMain(scheme))
+                            .transition(.opacity)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Button {
+                if shown < story.lines.count {
+                    withAnimation(.easeOut(duration: 0.25)) { shown += 1 }
+                } else {
+                    let line = world.finish(story)
+                    if !line.isEmpty { tell(line) }
+                    dismiss()
+                }
+            } label: {
+                Text(shown < story.lines.count ? "继续" : "讲给\(him)听")
+                    .font(.app(15, weight: .medium))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 13)
+                    .background(Capsule().fill(app.settings.accentColor))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(22)
+        .interactiveDismissDisabled()
+    }
+}
+
+// MARK: - 攻略
+
+/// 攻略：怎么升级、每座岛怎么解锁、每段剧情去哪找、基建的小技巧
+struct WorldGuideSheet: View {
+    let go: (String) -> Void
+
+    @ObservedObject private var world = WorldStore.shared
+    @EnvironmentObject private var app: AppState
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    HStack {
+                        Text("岛的等级").font(.app(14))
+                        Spacer()
+                        Text("Lv \(world.level) · \(world.save.xp) 经验").font(.app(14, weight: .medium))
+                    }
+                    if let p = WorldLevel.progress(world.save.xp) {
+                        Text("离下一级还差 \(p.1 - p.0) 经验").font(.app(12)).foregroundStyle(.secondary)
+                    }
+                    ForEach(WorldLevel.sources.indices, id: \.self) { i in
+                        HStack {
+                            Text(WorldLevel.sources[i].0).font(.app(13))
+                            Spacer()
+                            Text(WorldLevel.sources[i].1).font(.app(12.5)).foregroundStyle(.secondary)
+                        }
+                    }
+                } header: { Text("怎么升级") }
+
+                Section {
+                    islandMap
+                        .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
+                    ForEach(WorldRegions.all) { r in
+                        HStack(spacing: 10) {
+                            Image(systemName: world.unlocked(r.id) ? "lock.open" : "lock")
+                                .font(.system(size: 13))
+                                .foregroundStyle(world.unlocked(r.id) ? app.settings.accentColor : Color.secondary)
+                                .frame(width: 20)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(r.name + (r.id == world.save.region ? "（在这儿）" : "")).font(.app(14, weight: .medium))
+                                Text(r.theme).font(.app(12)).foregroundStyle(.secondary)
+                                if let why = world.lockReason(r.id) {
+                                    Text(why).font(.app(11.5)).foregroundStyle(Color(hexString: "C9707F")!)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                            if world.unlocked(r.id) && r.id != world.save.region {
+                                Button("过去") { go(r.id) }
+                                    .font(.app(12.5, weight: .medium))
+                                    .buttonStyle(.bordered)
+                                    .tint(app.settings.accentColor)
+                            }
+                        }
+                    }
+                } header: { Text("群岛") } footer: {
+                    Text("岛和岛之间有桥，走到桥的尽头就过去了；也可以在这里直接过去。")
+                }
+
+                Section {
+                    ForEach(WorldStories.all) { st in
+                        let done = world.save.stories.contains(st.id)
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Image(systemName: done ? "checkmark.circle.fill" : "circle")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(done ? app.settings.accentColor : Color.secondary)
+                                Text(st.title).font(.app(14, weight: .medium))
+                                Spacer()
+                                Text(WorldRegions.name(st.region) + " · Lv \(st.level)").font(.app(11.5)).foregroundStyle(.secondary)
+                            }
+                            Text(st.hint).font(.app(12)).foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                } header: { Text("剧情（\(world.save.stories.count)/\(WorldStories.all.count)）") } footer: {
+                    Text("条件满足了也不一定每次都触发，有的要多去几次、有的要等到晚上。")
+                }
+
+                Section {
+                    ForEach(Self.tips, id: \.self) { t in Text(t).font(.app(12.5)) }
+                } header: { Text("基建小技巧") }
+            }
+            .navigationTitle("攻略")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    static let tips = [
+        "铺地：「铺路」点起点再点终点，中间一条路；「方框」点两个对角铺满一片；「油漆桶」把连在一起的同一种地全换掉。",
+        "选择：点东西选中，「框选」拖一下选一片，「同类全选」把岛上同一种的都选上。",
+        "选好以后可以一起移动、旋转（篱笆横竖互换）、换材料（小屋换屋顶颜色、大树换品种、花换花）、删除。",
+        "弄错了点右上角的撤销；铺地选「海」可以填海、挖海湾。",
+        "灯塔、温室、观星台要先走完对应的剧情才能自己摆。"
+    ]
+
+    /// 群岛小地图：每座岛一个点，连着桥，没解锁的灰着
+    private var islandMap: some View {
+        let links = [("home", "huadao"), ("home", "yuewan"), ("home", "songlin"), ("huadao", "xingqiu")]
+        return GeometryReader { g in
+            let pt = { (id: String) -> CGPoint in
+                let i = WorldRegions.info(id)!
+                return CGPoint(x: g.size.width * i.mapX, y: g.size.height * i.mapY)
+            }
+            ZStack {
+                ForEach(links.indices, id: \.self) { i in
+                    Path { p in p.move(to: pt(links[i].0)); p.addLine(to: pt(links[i].1)) }
+                        .stroke(Color.secondary.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
+                }
+                ForEach(WorldRegions.all) { r in
+                    let on = world.unlocked(r.id)
+                    VStack(spacing: 4) {
+                        Circle()
+                            .fill(on ? app.settings.accentColor.opacity(0.85) : Color.secondary.opacity(0.25))
+                            .frame(width: r.id == world.save.region ? 18 : 13, height: r.id == world.save.region ? 18 : 13)
+                            .overlay(Circle().stroke(.white, lineWidth: 2))
+                        Text(r.name).font(.app(11, weight: .medium)).foregroundStyle(on ? Theme.textMain(scheme) : Color.secondary)
+                    }
+                    .position(pt(r.id))
+                }
+            }
+        }
+        .frame(height: 170)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(hexString: "BFE6EC")!.opacity(0.35)))
     }
 }
