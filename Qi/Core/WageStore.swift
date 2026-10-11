@@ -251,12 +251,35 @@ extension WorkDay {
     }
 }
 
-/// 设置：时薪 + 每个班各自的默认排法 + 她自己加的班。
+/// 一个纪念日（她自己加的：入职、转正……）
+struct WageAnniversary: Codable, Hashable, Identifiable {
+    var id = UUID()
+    var name: String
+    /// yyyy-MM-dd
+    var date: String
+    /// 每年这一天都算
+    var yearly = true
+}
+
+/// 一张导入的班表：从哪天开始、管几天
+struct WageRoster: Codable, Hashable, Identifiable {
+    var id = UUID()
+    /// yyyy-MM-dd
+    var start: String
+    var days: Int
+    var image: String
+    var addedAt = Date()
+}
+
+/// 设置：时薪 + 每个班各自的默认排法 + 她自己加的班 + 发薪日 + 纪念日。
 struct WageSettings: Codable, Hashable {
     var hourly: Double = 20
     var templates: [String: ShiftTemplate] = WageSettings.defaults
     /// 她自己加的班，按加的先后排（默认排法也放在 `templates` 里，键是名字）
     var custom: [String] = []
+    /// 每月几号发工资（可以几次）。当月没有这一天（31 号）就按最后一天
+    var paydays: [Int] = []
+    var anniversaries: [WageAnniversary] = []
 
     /// 编辑页、图例、设置页列出来的全部班次
     var kinds: [ShiftKind] { ShiftKind.builtins + custom.map(ShiftKind.init) }
@@ -291,6 +314,8 @@ extension WageSettings {
         templates = (try? c.decodeIfPresent([String: ShiftTemplate].self, forKey: .templates))
             ?? WageSettings.defaults
         custom = (try? c.decodeIfPresent([String].self, forKey: .custom)) ?? []
+        paydays = (try? c.decodeIfPresent([Int].self, forKey: .paydays)) ?? []
+        anniversaries = (try? c.decodeIfPresent([WageAnniversary].self, forKey: .anniversaries)) ?? []
     }
 }
 
@@ -299,6 +324,8 @@ struct WageFile: Codable {
     var settings = WageSettings()
     /// 键是 `yyyy-MM-dd`
     var days: [String: WorkDay] = [:]
+    /// 导入的班表
+    var rosters: [WageRoster] = []
 
     init() {}
 
@@ -307,6 +334,7 @@ struct WageFile: Codable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         settings = (try? c.decodeIfPresent(WageSettings.self, forKey: .settings)) ?? WageSettings()
         days = (try? c.decodeIfPresent([String: WorkDay].self, forKey: .days)) ?? [:]
+        rosters = (try? c.decodeIfPresent([WageRoster].self, forKey: .rosters)) ?? []
     }
 }
 
@@ -342,6 +370,95 @@ final class WageStore: ObservableObject {
     nonisolated static func key(_ d: Date) -> String { keyFormat.string(from: d) }
 
     func day(_ d: Date) -> WorkDay? { file.days[Self.key(d)] }
+
+    // MARK: 发薪日、纪念日、班表
+
+    private var gregorian: Calendar { Calendar(identifier: .gregorian) }
+
+    nonisolated static func date(_ key: String) -> Date? { keyFormat.date(from: key) }
+
+    func isPayday(_ d: Date) -> Bool {
+        let paydays = file.settings.paydays
+        guard !paydays.isEmpty else { return false }
+        let cal = gregorian
+        let day = cal.component(.day, from: d)
+        let last = cal.range(of: .day, in: .month, for: d)?.count ?? 31
+        return paydays.contains { min($0, last) == day }
+    }
+
+    /// 从今天起（含今天）下一个发薪日
+    func nextPayday(from d: Date = Date()) -> Date? {
+        let cal = gregorian
+        let start = cal.startOfDay(for: d)
+        for i in 0..<62 {
+            if let x = cal.date(byAdding: .day, value: i, to: start), isPayday(x) { return x }
+        }
+        return nil
+    }
+
+    /// 这一天是哪几个纪念日（每年的按月日算；2 月 29 日那年没有就按 28 日）
+    func anniversaries(on d: Date) -> [WageAnniversary] {
+        let cal = gregorian
+        return file.settings.anniversaries.filter { a in
+            guard let ad = Self.date(a.date) else { return false }
+            if !a.yearly { return cal.isDate(ad, inSameDayAs: d) }
+            guard ad <= d || cal.isDate(ad, inSameDayAs: d) else { return false }
+            let am = cal.component(.month, from: ad), aday = cal.component(.day, from: ad)
+            let m = cal.component(.month, from: d), day = cal.component(.day, from: d)
+            let last = cal.range(of: .day, in: .month, for: d)?.count ?? 31
+            return am == m && min(aday, last) == day
+        }
+    }
+
+    /// 最近的一个纪念日：哪个、哪天、第几年（0 = 当天就是那一天）
+    func nextAnniversary(from d: Date = Date()) -> (WageAnniversary, Date, Int)? {
+        let cal = gregorian
+        let start = cal.startOfDay(for: d)
+        for i in 0..<370 {
+            guard let x = cal.date(byAdding: .day, value: i, to: start) else { continue }
+            if let a = anniversaries(on: x).first, let ad = Self.date(a.date) {
+                return (a, x, cal.dateComponents([.year], from: ad, to: x).year ?? 0)
+            }
+        }
+        return nil
+    }
+
+    /// 这一天看哪张班表（几张都管到这天的话，用后导入的那张）
+    func roster(on d: Date) -> WageRoster? {
+        let cal = gregorian
+        let day = cal.startOfDay(for: d)
+        return file.rosters.filter { r in
+            guard let s = Self.date(r.start), let e = cal.date(byAdding: .day, value: r.days, to: s) else { return false }
+            return day >= s && day < e
+        }
+        .max { $0.addedAt < $1.addedAt }
+    }
+
+    /// 跟这个月有交集的班表，按开始日排
+    func rosters(in month: Date) -> [WageRoster] {
+        let cal = gregorian
+        guard let m0 = cal.date(from: cal.dateComponents([.year, .month], from: month)),
+              let m1 = cal.date(byAdding: .month, value: 1, to: m0) else { return [] }
+        return file.rosters.filter { r in
+            guard let s = Self.date(r.start), let e = cal.date(byAdding: .day, value: r.days, to: s) else { return false }
+            return s < m1 && e > m0
+        }
+        .sorted { $0.start < $1.start }
+    }
+
+    func addRoster(start: Date, days: Int, image: String) {
+        var f = file
+        f.rosters.append(WageRoster(start: Self.key(start), days: max(1, days), image: image))
+        file = f
+    }
+
+    func removeRoster(_ id: UUID) {
+        guard let r = file.rosters.first(where: { $0.id == id }) else { return }
+        var f = file
+        f.rosters.removeAll { $0.id == id }
+        file = f
+        ImageStore.delete(r.image)
+    }
 
     /// 整天替换（在那一天里改了时间、休息、时薪、账）
     func put(_ day: WorkDay, on d: Date) {

@@ -22,6 +22,7 @@ struct WageView: View {
     @State private var moving: Date?
     /// 底下飘一下的那句提示
     @State private var notice: String?
+    @State private var importing = false
 
     private let cal = Calendar.current
 
@@ -41,6 +42,7 @@ struct WageView: View {
                 if moving != nil { moveBanner }
                 calendar
                 legend
+                rosterCard
             }
 
             if let n = notice {
@@ -71,10 +73,7 @@ struct WageView: View {
                 ZStack {
                     Color.black.opacity(0.85).ignoresSafeArea()
                     if let img = ImageStore.cached(name) {
-                        Image(uiImage: img)
-                            .resizable()
-                            .scaledToFit()
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        WageZoomImage(image: img)
                             .padding(20)
                     }
                 }
@@ -102,6 +101,9 @@ struct WageView: View {
         }
         .sheet(isPresented: $showSettings) {
             WageSettingsSheet()
+        }
+        .sheet(isPresented: $importing) {
+            WageRosterImport(start: rosterStartGuess)
         }
     }
 
@@ -131,9 +133,58 @@ struct WageView: View {
                 divider
                 stat("结余", "¥" + WageStore.money(t.pay - t.spent))
             }
+            reminders
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard()
+    }
+
+    /// 下次发薪、最近的纪念日。都没设就不占地方
+    @ViewBuilder
+    private var reminders: some View {
+        let pay = store.nextPayday()
+        let ann = store.nextAnniversary()
+        if pay != nil || ann != nil {
+            VStack(alignment: .leading, spacing: 6) {
+                if let p = pay {
+                    reminderRow("yensign.circle", Self.payRed, "下次发薪 " + Self.md(p), Self.until(p))
+                }
+                if let n = ann {
+                    reminderRow("heart", Color(hexString: "E8758F")!,
+                                n.0.name + (n.2 > 0 && n.0.yearly ? " · \(n.2) 周年" : "") + " · " + Self.md(n.1), Self.until(n.1))
+                }
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    private func reminderRow(_ icon: String, _ tint: Color, _ text: String, _ tail: String) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(tint)
+            Text(text)
+                .font(.app(12))
+                .foregroundStyle(Theme.textSoft(scheme))
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            Text(tail)
+                .font(.app(11.5, weight: .medium))
+                .foregroundStyle(tint)
+        }
+    }
+
+    static func md(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "M月d日"
+        return f.string(from: d)
+    }
+
+    /// 「今天」「明天」「还有 N 天」
+    static func until(_ d: Date) -> String {
+        let cal = Calendar(identifier: .gregorian)
+        let n = cal.dateComponents([.day], from: cal.startOfDay(for: Date()), to: cal.startOfDay(for: d)).day ?? 0
+        return n == 0 ? "今天" : (n == 1 ? "明天" : "还有 \(n) 天")
     }
 
     private func stat(_ label: String, _ value: String) -> some View {
@@ -226,9 +277,11 @@ struct WageView: View {
                 finishMove(from: from, to: date)
                 return
             }
-            // 设过的那一天点进去**直接是总结**；空的那一天才进编辑
+            // 设过的那一天点进去**直接是总结**；空的那一天有班表就先看班表，没有才进编辑
             if rec != nil {
                 summary = WageDayRef(date: date)
+            } else if let r = store.roster(on: date) {
+                preview = r.image
             } else {
                 editing = WageDayRef(date: date)
             }
@@ -271,6 +324,27 @@ struct WageView: View {
             // ⚠️ 别挂在日期那个数字旁边——她报的「这个 3x 的位置太奇怪了」就是那一版：
             // 数字是居中的，角标贴着它往左伸，看上去像跟日期连成了一个词。
             // 挂在格子角上就跟右下角那颗班次的点对称了，各占一角。
+            .overlay(alignment: .topTrailing) {
+                let pay = store.isPayday(date), ann = !store.anniversaries(on: date).isEmpty
+                if pay || ann {
+                    HStack(spacing: 1) {
+                        if pay { Image(systemName: "yensign").foregroundStyle(Self.payRed) }
+                        if ann { Image(systemName: "heart.fill").foregroundStyle(Color(hexString: "E8758F")!) }
+                    }
+                    .font(.system(size: 7, weight: .semibold))
+                    .padding(.trailing, 5)
+                    .padding(.top, 4)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if store.roster(on: date) != nil {
+                    Capsule()
+                        .fill(app.settings.accentColor.opacity(0.45))
+                        .frame(height: 2)
+                        .padding(.horizontal, 8)
+                        .padding(.bottom, 3)
+                }
+            }
             .overlay(alignment: .topLeading) {
                 if rec?.hasBonusRate == true {
                     Text(WageView.rateTag(rec?.multiplier ?? 1))
@@ -295,6 +369,76 @@ struct WageView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: 班表
+
+    /// 导入时默认从哪天开始：这个月里最后一张班表的后一天；没有就今天
+    private var rosterStartGuess: Date {
+        let cal = Calendar(identifier: .gregorian)
+        if let last = store.file.rosters.max(by: { $0.start < $1.start }),
+           let s = WageStore.date(last.start),
+           let e = cal.date(byAdding: .day, value: last.days, to: s), e > Date().addingTimeInterval(-86400 * 3) {
+            return e
+        }
+        return cal.startOfDay(for: Date())
+    }
+
+    private var rosterCard: some View {
+        let list = store.rosters(in: month)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("班表")
+                    .font(.app(13.5, weight: .medium))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Spacer()
+                Button { importing = true } label: {
+                    Label("导入", systemImage: "square.and.arrow.down")
+                        .font(.app(12.5))
+                        .foregroundStyle(app.settings.accentColor)
+                }
+                .buttonStyle(.plain)
+            }
+            if list.isEmpty {
+                Text("选好开始日期和天数，导入一张班表图，日历上那几天会标出来，点一下就能看。")
+                    .font(.app(11.5))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            } else {
+                ForEach(list) { r in
+                    Button { preview = r.image } label: {
+                        HStack(spacing: 10) {
+                            WageThumb(name: r.image, size: 46)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(rosterRange(r))
+                                    .font(.app(13))
+                                    .foregroundStyle(Theme.textMain(scheme))
+                                Text("\(r.days) 天")
+                                    .font(.app(11))
+                                    .foregroundStyle(Theme.textMuted(scheme))
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button(role: .destructive) { store.removeRoster(r.id) } label: {
+                            Label("删除这张班表", systemImage: "trash")
+                        }
+                    }
+                }
+            }
+        }
+        .glassCard()
+    }
+
+    private func rosterRange(_ r: WageRoster) -> String {
+        guard let s = WageStore.date(r.start),
+              let e = Calendar(identifier: .gregorian).date(byAdding: .day, value: r.days - 1, to: s) else { return r.start }
+        return Self.md(s) + " – " + Self.md(e)
     }
 
     // MARK: 挪日期
@@ -1502,6 +1646,9 @@ struct WageSettingsSheet: View {
                             .padding(.vertical, 12)
                         }
 
+                        paydayCard
+                        anniversaryCard
+
                         ForEach(draft.kinds) { k in
                             templateCard(k)
                         }
@@ -1541,12 +1688,101 @@ struct WageSettingsSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("保存") {
+                        // 没起名字的纪念日叫「纪念日」
+                        for i in draft.anniversaries.indices where draft.anniversaries[i].name.trimmingCharacters(in: .whitespaces).isEmpty {
+                            draft.anniversaries[i].name = "纪念日"
+                        }
                         store.updateSettings(draft)
                         dismiss()
                     }
                     .fontWeight(.semibold)
                 }
             }
+        }
+    }
+
+    // MARK: 发薪日
+
+    private var paydayCard: some View {
+        SettingsCard(title: "发薪日") {
+            VStack(alignment: .leading, spacing: 10) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 7), spacing: 6) {
+                    ForEach(1...31, id: \.self) { d in
+                        let on = draft.paydays.contains(d)
+                        Button {
+                            if on { draft.paydays.removeAll { $0 == d } } else { draft.paydays = (draft.paydays + [d]).sorted() }
+                        } label: {
+                            Text(String(d))
+                                .font(.app(12.5, weight: on ? .semibold : .regular))
+                                .foregroundStyle(on ? Color.white : Theme.textSoft(scheme))
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 30)
+                                .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                    .fill(on ? app.settings.accentColor : Theme.softFillDeep))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                Text(draft.paydays.isEmpty
+                     ? "点选每月发工资的日子，可以选多天。日历上会标出来，首页显示还有几天。"
+                     : "每月 " + draft.paydays.map(String.init).joined(separator: "、") + " 号发工资；当月没有这一天时按最后一天算。")
+                    .font(.app(11.5))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+    }
+
+    // MARK: 纪念日
+
+    private var anniversaryCard: some View {
+        SettingsCard(title: "纪念日") {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach($draft.anniversaries) { $a in
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            TextField("名字，如：入职纪念日", text: $a.name)
+                                .font(.app(14))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Theme.softFillDeep))
+                            DatePicker("", selection: Binding(
+                                get: { WageStore.date(a.date) ?? Date() },
+                                set: { a.date = WageStore.key($0) }), displayedComponents: .date)
+                                .labelsHidden()
+                                .environment(\.locale, Locale(identifier: "zh_CN"))
+                            Button {
+                                let id = a.id
+                                draft.anniversaries.removeAll { $0.id == id }
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Theme.textMuted(scheme))
+                                    .frame(width: 30, height: 30)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        Toggle("每年这一天都提醒", isOn: $a.yearly)
+                            .font(.app(12.5))
+                            .foregroundStyle(Theme.textSoft(scheme))
+                            .tint(app.settings.accentColor)
+                    }
+                }
+                Button {
+                    draft.anniversaries.append(WageAnniversary(name: "", date: WageStore.key(Date())))
+                } label: {
+                    Label("添加纪念日", systemImage: "plus.circle")
+                        .font(.app(13.5, weight: .medium))
+                        .foregroundStyle(app.settings.accentColor)
+                }
+                .buttonStyle(.plain)
+                Text("入职、转正这样的日子。日历上那天有一颗小心，首页显示还有几天、第几周年。")
+                    .font(.app(11.5))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
     }
 
@@ -1660,5 +1896,186 @@ struct MinutePicker: View {
             displayedComponents: .hourAndMinute)
             .labelsHidden()
             .environment(\.locale, Locale(identifier: "zh_CN"))
+    }
+}
+
+// MARK: - 导入班表
+
+/// 导入班表：挑一张班表图，选从哪天开始、管几天，这几天在日历上标出来，点一下看图
+struct WageRosterImport: View {
+
+    @ObservedObject private var store = WageStore.shared
+    @EnvironmentObject private var app: AppState
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var start: Date
+    @State private var days = 7
+    @State private var image: UIImage?
+    @State private var item: PhotosPickerItem?
+
+    init(start: Date) {
+        _start = State(initialValue: start)
+    }
+
+    private var cal: Calendar { Calendar(identifier: .gregorian) }
+
+    private var rangeText: String {
+        guard let e = cal.date(byAdding: .day, value: days - 1, to: start) else { return "" }
+        return WageView.md(start) + " – " + WageView.md(e) + "，共 \(days) 天"
+    }
+
+    /// 这几天里已经有班表的天数
+    private var overlap: Int {
+        (0..<days).filter { i in cal.date(byAdding: .day, value: i, to: start).flatMap { store.roster(on: $0) } != nil }.count
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                WallpaperBackground()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        SettingsCard(title: "班表图") {
+                            PhotosPicker(selection: $item, matching: .images) {
+                                Group {
+                                    if let image {
+                                        Image(uiImage: image)
+                                            .resizable()
+                                            .scaledToFit()
+                                            .frame(maxHeight: 280)
+                                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                            .frame(maxWidth: .infinity)
+                                    } else {
+                                        VStack(spacing: 8) {
+                                            Image(systemName: "photo.badge.plus")
+                                                .font(.system(size: 26, weight: .light))
+                                            Text("选一张班表图")
+                                                .font(.app(13))
+                                        }
+                                        .foregroundStyle(app.settings.accentColor)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 140)
+                                    }
+                                }
+                                .padding(12)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        SettingsCard(title: "从哪天开始") {
+                            DatePicker("开始日期", selection: $start, displayedComponents: .date)
+                                .font(.app(14))
+                                .environment(\.locale, Locale(identifier: "zh_CN"))
+                                .tint(app.settings.accentColor)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                        }
+
+                        SettingsCard(title: "持续几天") {
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack(spacing: 8) {
+                                    ForEach([4, 7, 14], id: \.self) { n in
+                                        Button { days = n } label: {
+                                            Text("\(n) 天")
+                                                .font(.app(12.5, weight: days == n ? .semibold : .regular))
+                                                .foregroundStyle(days == n ? Color.white : Theme.textSoft(scheme))
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 6)
+                                                .background(Capsule().fill(days == n ? app.settings.accentColor : Theme.softFillDeep))
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                    Spacer(minLength: 0)
+                                    Stepper("", value: $days, in: 1...31)
+                                        .labelsHidden()
+                                }
+                                Text(rangeText)
+                                    .font(.app(12))
+                                    .foregroundStyle(Theme.textSoft(scheme))
+                                if overlap > 0 {
+                                    Text("其中 \(overlap) 天已经有班表了，导入后这几天看这一张。")
+                                        .font(.app(11.5))
+                                        .foregroundStyle(Theme.textMuted(scheme))
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                        }
+                    }
+                    .padding(16)
+                }
+            }
+            .navigationTitle("导入班表")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("导入") { save() }
+                        .fontWeight(.semibold)
+                        .disabled(image == nil)
+                }
+            }
+            .onChange(of: item) { _, it in
+                guard let it else { return }
+                Task { @MainActor in
+                    if let data = try? await it.loadTransferable(type: Data.self), let img = UIImage(data: data) {
+                        image = img
+                    }
+                }
+            }
+        }
+    }
+
+    private func save() {
+        // 班表要看得清字：长边留到 2048、质量高一点
+        guard let image, let name = ImageStore.save(image, quality: 0.92) else { return }
+        store.addRoster(start: start, days: days, image: name)
+        dismiss()
+    }
+}
+
+/// 放大看的图：两指放大（看清班表上的小字）、放大后拖动、双击放大 / 还原
+struct WageZoomImage: View {
+    let image: UIImage
+    @State private var scale: CGFloat = 1
+    @State private var base: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var offsetBase: CGSize = .zero
+
+    var body: some View {
+        Image(uiImage: image)
+            .resizable()
+            .scaledToFit()
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .scaleEffect(scale)
+            .offset(offset)
+            .gesture(
+                MagnifyGesture()
+                    .onChanged { v in scale = min(5, max(1, base * v.magnification)) }
+                    .onEnded { _ in
+                        base = scale
+                        if scale <= 1 { reset() }
+                    }
+                    .simultaneously(with: DragGesture()
+                        .onChanged { v in
+                            guard scale > 1 else { return }
+                            offset = CGSize(width: offsetBase.width + v.translation.width,
+                                            height: offsetBase.height + v.translation.height)
+                        }
+                        .onEnded { _ in offsetBase = offset })
+            )
+            .onTapGesture(count: 2) {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    if scale > 1 { reset() } else { scale = 2.5; base = 2.5 }
+                }
+            }
+    }
+
+    private func reset() {
+        scale = 1; base = 1; offset = .zero; offsetBase = .zero
     }
 }
