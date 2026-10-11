@@ -212,6 +212,17 @@ struct VinylStage: View {
                     .rotationEffect(.degrees(angle(ctx.date)))
             }
             .frame(width: l.d, height: l.d)
+            // 反光：不跟着转，像灯照在唱片上
+            .overlay(
+                Circle().fill(LinearGradient(stops: [
+                    .init(color: .white.opacity(0.38), location: 0),
+                    .init(color: .white.opacity(0), location: 0.32),
+                    .init(color: .white.opacity(0), location: 0.64),
+                    .init(color: .white.opacity(0.18), location: 0.82),
+                    .init(color: .white.opacity(0), location: 1)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing))
+                .allowsHitTesting(false)
+            )
             .position(l.center)
             // 唱片套盖在唱片前面：唱片从里面滑出一半
             if let r = l.sleeve {
@@ -253,30 +264,25 @@ struct VinylStage: View {
     }
 
     @ViewBuilder
+    /// 唱片：封面做成一张大贴纸，占唱片大半；外面只留一圈细纹。
+    /// 反光不在这里画——它不跟着转（见 `record` 里的 `gloss`）
     private func disc(d: CGFloat) -> some View {
-        let label = d * 0.36
+        let label = d * 0.66
         ZStack {
             switch style {
             case .glass:
-                Circle().fill(RadialGradient(colors: [Color(hexString: "FFC9DC")!.opacity(0.65),
-                                                      Color(hexString: "F2A9C8")!.opacity(0.7),
-                                                      Color(hexString: "D6AAE8")!.opacity(0.7)],
+                Circle().fill(RadialGradient(colors: [Color(hexString: "F2A9C8")!.opacity(0.72),
+                                                      Color(hexString: "D6AAE8")!.opacity(0.72)],
                                              center: .center, startRadius: label / 2, endRadius: d / 2))
                 grooves(d: d, color: .white.opacity(0.35))
-                Circle().fill(AngularGradient(colors: [.clear, .white.opacity(0.5), .clear, .clear,
-                                                       .white.opacity(0.35), .clear, .clear],
-                                              center: .center))
                 Circle().stroke(.white.opacity(0.8), lineWidth: 1)
             case .minimal:
-                // 只留一道外圈，不画纹路
                 Circle().fill(Color(hexString: "FBFAF8")!)
+                grooves(d: d, color: Color(hexString: "E4DFD9")!)
                 Circle().inset(by: 0.9).stroke(Color(hexString: "B9B2AB")!, lineWidth: 1.8)
             case .sleeve:
-                Circle().fill(Color(hexString: "26201F")!)
-                grooves(d: d, color: .white.opacity(0.07))
-                Circle().fill(AngularGradient(colors: [.clear, Color(hexString: "FFF0E6")!.opacity(0.2), .clear,
-                                                       .clear, Color(hexString: "FFF0E6")!.opacity(0.14), .clear],
-                                              center: .center))
+                Circle().fill(Color(hexString: "1D1A1A")!)
+                grooves(d: d, color: .white.opacity(0.08))
             }
             // 贴纸：歌的封面
             Group {
@@ -288,8 +294,9 @@ struct VinylStage: View {
             }
             .frame(width: label, height: label)
             .clipShape(Circle())
-            .overlay(Circle().stroke(.white.opacity(style == .sleeve ? 0.3 : 0.8), lineWidth: 1.5))
-            curvedText(radius: label / 2 + d * 0.045, size: max(7, d * 0.03))
+            // 贴纸边上一道压痕：里面一圈暗、外面一圈亮
+            .overlay(Circle().stroke(.black.opacity(0.35), lineWidth: 1.5))
+            .overlay(Circle().inset(by: -2).stroke(.white.opacity(style == .minimal ? 0.6 : 0.1), lineWidth: 1.5))
             Circle()
                 .fill(style == .sleeve ? Color(hexString: "F4E7DC")! : .white)
                 .frame(width: max(5, d * 0.03), height: max(5, d * 0.03))
@@ -299,11 +306,12 @@ struct VinylStage: View {
                 radius: style == .minimal ? 6 : 14, y: 8)
     }
 
+    /// 细纹只在贴纸外面那一圈
     private func grooves(d: CGFloat, color: Color) -> some View {
         ZStack {
             ForEach(0..<7, id: \.self) { i in
                 Circle()
-                    .inset(by: d * (0.07 + CGFloat(i) * 0.035))
+                    .inset(by: d * (0.03 + CGFloat(i) * 0.019))
                     .stroke(color, lineWidth: 0.6)
             }
         }
