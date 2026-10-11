@@ -185,6 +185,8 @@ struct WorkDay: Codable, Hashable {
     var entries: [LedgerEntry] = []
     /// 同一天里另外的上班时段
     var extra: [TimeSpan] = []
+    /// 这一天的备注（在当天的卡片里显示）
+    var note: String = ""
 
     var workText: String { ([work] + extra).map(\.text).joined(separator: "、") }
 
@@ -229,7 +231,7 @@ struct WorkDay: Codable, Hashable {
     }
 
     /// 这一天有没有东西。空的就从存档里删掉，别攒一堆空壳。
-    var isEmpty: Bool { shift == nil && entries.isEmpty }
+    var isEmpty: Bool { shift == nil && entries.isEmpty && note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 }
 
 // ⚠️⚠️ **跟 `LedgerEntry` 那段一样的理由：`multiplier` 是后加的键。**
@@ -248,6 +250,7 @@ extension WorkDay {
         multiplier = (try? c.decodeIfPresent(Double.self, forKey: .multiplier)) ?? 1
         entries = (try? c.decodeIfPresent([LedgerEntry].self, forKey: .entries)) ?? []
         extra = (try? c.decodeIfPresent([TimeSpan].self, forKey: .extra)) ?? []
+        note = (try? c.decodeIfPresent(String.self, forKey: .note)) ?? ""
     }
 }
 

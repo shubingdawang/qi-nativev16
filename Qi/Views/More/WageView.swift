@@ -719,11 +719,48 @@ struct WageSummaryCard: View {
                     }
                 }
 
-                if day.shift == nil && day.entries.isEmpty {
+                if let pay = WageStore.shared.expectedPay(on: date) {
+                    row("发薪") {
+                        VStack(alignment: .leading, spacing: 2) {
+                            value("应发 " + WageStore.money(pay.amount))
+                            if let a = WageStore.shared.payRecord(on: date)?.actual {
+                                let diff = a - pay.amount
+                                HStack(spacing: 6) {
+                                    value("实发 " + WageStore.money(a))
+                                    Text((diff >= 0 ? "+" : "-") + WageStore.money(abs(diff)))
+                                        .font(.app(12.5, weight: .semibold))
+                                        .foregroundStyle(diff >= 0 ? WagePayCard.green : WagePayCard.red)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if !day.note.isEmpty {
+                    row("备注") {
+                        Text(day.note)
+                            .font(.app(13))
+                            .foregroundStyle(Theme.textMain(scheme))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                if let r = WageStore.shared.roster(on: date) {
+                    row("班表") {
+                        Button { onOpenImage(r.image) } label: {
+                            WageThumb(name: r.image, size: 92)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                if day.shift == nil && day.entries.isEmpty && day.note.isEmpty {
                     value("这一天还没有记录")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            // 内容少的时候也别成一条扁扁的长条：按钮压到底下，卡片高度至少有宽度的大半
+            Spacer(minLength: 0)
 
             if confirming {
                 VStack(spacing: 8) {
@@ -750,7 +787,7 @@ struct WageSummaryCard: View {
             }
         }
         .padding(20)
-        .frame(maxWidth: 340)
+        .frame(maxWidth: 340, minHeight: 300)
         // ⚠️ 弹窗要读得清，底不能太透：用系统材质，**不套 `.shadow`**——
         // 阴影会让 Material 离屏渲染，玻璃就退化成一块近似纯色（Theme.swift 里记过）。
         .background(
@@ -928,6 +965,8 @@ struct WageDayEditor: View {
     // 她报的「输入数据有明显的卡顿延迟」就是这个
     @State private var whatBox = TextBox()
     @State private var amountBox = TextBox()
+    /// 备注的字也放盒子里，打字时整页不重画
+    @State private var noteBox = TextBox()
     /// 从外面换格子里的字（改某一笔、记完清空）时 +1，让格子按盒子重新起
     @State private var fieldsToken = 0
     /// 「记一笔」能不能点。只在能/不能翻转的那一下更新
@@ -989,6 +1028,7 @@ struct WageDayEditor: View {
                         VStack(alignment: .leading, spacing: 14) {
                             if store.isPayday(date) { WagePayCard(date: date) }
                             WageAnniversaryCard(date: date)
+                            noteCard
                             shiftCard
                             if day.shift != nil { rateCard }
                             if day.shift != nil { timeCard }
@@ -1028,7 +1068,7 @@ struct WageDayEditor: View {
                     .fontWeight(.semibold)
                 }
             }
-            .onAppear { hourlyText = WageStore.money(day.hourly) }
+            .onAppear { hourlyText = WageStore.money(day.hourly); noteBox.text = day.note }
             // 没点「完成」就走了（取消、下滑）：这一次新存的图全删，原来的一张不动
             .onDisappear {
                 if !committed { for n in addedNow { ImageStore.delete(n) } }
@@ -1053,8 +1093,21 @@ struct WageDayEditor: View {
         }
     }
 
+    /// 备注：写这一天想记的话，会显示在当天的卡片里
+    private var noteCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "text.alignleft").foregroundStyle(Theme.textMuted(scheme))
+                Text("备注").font(.app(14, weight: .semibold)).foregroundStyle(Theme.textMain(scheme))
+            }
+            WageNoteField(box: noteBox)
+        }
+        .glassCard()
+    }
+
     /// 写回去，并把这一次里被拿掉的图（新挑的、原来就有的都算）删文件。
     private func save() {
+        day.note = noteBox.text.trimmingCharacters(in: .whitespacesAndNewlines)
         commitDraftEntry()
         store.put(day, on: date)
         committed = true
@@ -2285,5 +2338,22 @@ struct WageAnniversaryCard: View {
             }
         }
         .glassCard()
+    }
+}
+
+/// 备注那一格：几行字，字只在这一格里动（见 `QuietField`）
+struct WageNoteField: View {
+    let box: TextBox
+    @State private var text = ""
+    @State private var ready = false
+
+    var body: some View {
+        TextField("这一天想记点什么", text: $text, axis: .vertical)
+            .font(.app(14))
+            .lineLimit(2...6)
+            .padding(.horizontal, 10).padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.softFillDeep))
+            .onAppear { if !ready { text = box.text; ready = true } }
+            .onChange(of: text) { _, v in box.text = v }
     }
 }

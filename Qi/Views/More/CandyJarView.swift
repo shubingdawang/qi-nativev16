@@ -110,7 +110,7 @@ struct CandyJarView: View {
         let c = store.candy(e.candyID)
         let mins = max(0, Int(e.expires.timeIntervalSinceNow / 60))
         return HStack(spacing: 8) {
-            if let c { CandyGlyph(scheme: c.scheme, shape: c.shape, size: 22) }
+            if let c { CandyGlyph(scheme: c.scheme, shape: c.shape, seed: c.id, size: 22) }
             VStack(alignment: .leading, spacing: 2) {
                 Text((e.target == "ai" ? him : "你") + " · " + (c?.effect ?? ""))
                     .font(.app(13, weight: .medium))
@@ -191,7 +191,7 @@ struct CandyJarView: View {
             ForEach(Array(mine.enumerated()), id: \.offset) { _, id in
                 if let c = store.candy(id) {
                     HStack(spacing: 10) {
-                        CandyGlyph(scheme: c.scheme, shape: c.shape, size: 26)
+                        CandyGlyph(scheme: c.scheme, shape: c.shape, seed: c.id, size: 26)
                         Text(c.name).font(.app(13))
                         Spacer()
                         Button("吃") { eat(reserve: id, feed: false) }
@@ -255,7 +255,7 @@ struct CandyJarView: View {
         let c = r.outcome.candy
         return ScrollView {
             VStack(spacing: 14) {
-                CandyGlyph(scheme: c.scheme, shape: c.shape, size: 64).padding(.top, 24)
+                CandyGlyph(scheme: c.scheme, shape: c.shape, seed: c.id, size: 64).padding(.top, 24)
                 Text(c.name).font(.app(18, weight: .semibold))
                 Text(c.effect + (r.outcome.minutes > 0 ? " · \(r.outcome.minutes) 分钟" : ""))
                     .font(.app(12))
@@ -310,7 +310,7 @@ struct CandyJarView: View {
         ForEach(store.candies) { c in
             let n = store.save.dex[c.id] ?? 0
             HStack(alignment: .top, spacing: 10) {
-                CandyGlyph(scheme: c.scheme, shape: c.shape, size: 30)
+                CandyGlyph(scheme: c.scheme, shape: c.shape, seed: c.id, size: 30)
                     .opacity(n > 0 ? 1 : 0.25)
                 VStack(alignment: .leading, spacing: 3) {
                     if n > 0 {
@@ -365,7 +365,7 @@ struct CandyJarView: View {
     private func shopRow(_ c: Candy, price: Int, courage: Int, toToday: Bool, title: String) -> some View {
         let soldOut = store.onceSoldOut(c.id)
         return HStack(spacing: 10) {
-            CandyGlyph(scheme: c.scheme, shape: c.shape, size: 26)
+            CandyGlyph(scheme: c.scheme, shape: c.shape, seed: c.id, size: 26)
             Text(title)
                 .font(.app(12.5))
                 .foregroundStyle(Theme.textSoft(scheme))
@@ -385,6 +385,8 @@ struct CandyJarView: View {
 struct CandyGlyph: View {
     let scheme: String
     let shape: String
+    /// 同一种造型按这个分两种样子（一般传糖的编号）
+    var seed: String = ""
     var size: CGFloat = 32
 
     static func color(_ s: String) -> Color {
@@ -413,11 +415,25 @@ struct CandyGlyph: View {
         }
     }
 
+    static func hex(_ s: String) -> String {
+        let map: [String: String] = [
+            "可乐": "6B2E1F", "青苹果": "9CCB5A", "焦糖咖啡": "B07444", "蜜桃": "F4A98C",
+            "荔枝": "F3E3E6", "橘子汽水": "F59A3B", "柠檬": "F2D64B", "绵云": "DCE6F2",
+            "葡萄": "7A4E9A", "草莓奶": "F5B5C8", "树莓红": "C7354F", "芭乐": "F08C8C",
+            "紫藤": "B39DDB", "mm巧克力": "6A4430", "mm橙红": "E2552B", "mm黄": "F2C230",
+            "mm蓝": "3C7BD9", "mm米白": "EFE6D2", "mm金": "D8A93A", "mm沙": "CDB38A",
+            "mm双色": "8C6E5A"
+        ]
+        return map[s] ?? "D9C2A7"
+    }
+
     var body: some View {
-        Image(systemName: Self.symbol(shape))
-            .font(.system(size: size * 0.8))
-            .foregroundStyle(Self.color(scheme).gradient)
-            .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
-            .frame(width: size, height: size)
+        let sh = shape, hx = Self.hex(scheme), sd = seed.isEmpty ? scheme + shape : seed
+        Canvas { gc, sz in
+            var g = gc
+            g.scaleBy(x: sz.width / 100, y: sz.height / 100)
+            CandyArt.draw(&g, shape: sh, hex: hx, seed: sd)
+        }
+        .frame(width: size, height: size)
     }
 }
