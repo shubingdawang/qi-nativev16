@@ -36,6 +36,8 @@ enum IslandPaint {
     private static let woodRim = c(0x7C5560)
     private static let board = [c(0x8A5E5A), c(0xA97970), c(0xC4968A), c(0xDDB5A6)]
     private static let plum = c(0x4E3A4F)
+    private static let stone = [c(0xA79BA5), c(0xCFC6CE), c(0xDDD6DC), c(0xEEE9ED)]
+    private static let stoneRim = c(0x8E8396)
     static let sea = [c(0x86CDD8), c(0xA2DCE1), c(0xC2EBEA)]
     private static let foam = c(0xF6FCF9)
     private static let wet = c(0xDDBFA0)
@@ -199,6 +201,15 @@ enum IslandPaint {
             if row == 4 { rgb[i] = soil[0] }
             if row == 2, nz(Double(x), Double(y), 53) < 0.07 { rgb[i] = soil[0] }
             if row == 1, nz(Double(x), Double(y), 54) < 0.05 { rgb[i] = soil[2] }
+        }
+        // 石板：一块块错开的方石，缝暗，左上一点亮，有的深一点
+        _ = terrain(.stone, stone, stoneRim, wobble: 0.1, seed: 25) { x, y, i in
+            let row = y / 5
+            let sx = x + (row % 2) * 4
+            let lx = sx % 8, ly = y % 5
+            if nz(floor(Double(sx) / 8), Double(row), 81) > 0.6 { rgb[i] = stone[2] }
+            if lx == 1 && ly == 1 { rgb[i] = stone[3] }
+            if lx == 0 || ly == 0 { rgb[i] = stone[0] }
         }
         var pond = [UInt8]()
         let pondM = field({ kind($0, $1) == .water }, tw, th, wobble: 0.3, k: 24)

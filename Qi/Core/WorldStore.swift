@@ -9,7 +9,7 @@ import SwiftUI
 // 纯本机，存档 `world.json`。他用 `world_look` / `world_act` 两件工具来玩。
 
 enum WorldGround: String, Codable, CaseIterable, Identifiable {
-    case grass, path, water, wood, sand, flowers, soil, sea
+    case grass, path, water, wood, sand, flowers, soil, sea, stone
     var id: String { rawValue }
     var label: String {
         switch self {
@@ -21,6 +21,7 @@ enum WorldGround: String, Codable, CaseIterable, Identifiable {
         case .flowers: return "花丛"
         case .soil: return "田"
         case .sea: return "海"
+        case .stone: return "石板"
         }
     }
     var color: Color {
@@ -33,6 +34,7 @@ enum WorldGround: String, Codable, CaseIterable, Identifiable {
         case .flowers: return Color(hexString: "C9DFAF")!
         case .soil: return Color(hexString: "A9805E")!
         case .sea: return Color(hexString: "71DDEE")!
+        case .stone: return Color(hexString: "CFC6CE")!
         }
     }
     /// 走不进去的地块
@@ -49,6 +51,7 @@ enum WorldGround: String, Codable, CaseIterable, Identifiable {
         case "s": return .sand
         case "f": return .flowers
         case "o": return .soil
+        case "t": return .stone
         default: return .grass
         }
     }
@@ -294,14 +297,39 @@ final class WorldStore: ObservableObject {
         var s = Storage.load(WorldSave.self, from: "world.json") ?? WorldSave()
         if s.ground.count != s.width * s.height { s = Self.starter() }
         if s.decor == nil { s.decor = Self.starterDecor }
+        if s.art < 6, s.art >= 5 { Self.addHomeExtras(&s); s.art = Self.artVersion }
         if s.art < Self.artVersion { Self.upgrade(&s) }
         save = s
         loaded = true
         ensureExits()
     }
 
+    /// 栖岛后来添的景和石板（田边、屋前、池塘、沙滩……）。已有的景不动，只往空着的地方放
+    static func addHomeExtras(_ s: inout WorldSave) {
+        guard s.region == "home" else { return }
+        let w = s.width, h = s.height
+        for c in WorldRegions.homeStone where c.count == 2 && c[0] < w && c[1] < h {
+            let i = c[1] * w + c[0]
+            if [.grass, .flowers, .path].contains(s.ground[i]) { s.ground[i] = .stone }
+        }
+        var list = s.decor ?? []
+        var taken = Set<Int>()
+        for d in list {
+            let cw = WorldDecorKind.resolve(d.kind)?.cells.w ?? 1
+            for dx in 0..<cw { taken.insert(d.y * w + d.x + dx) }
+        }
+        for e in WorldRegions.homeExtra {
+            guard let k = WorldDecorKind.resolve(e.kind), e.x < w, e.y < h else { continue }
+            let cells = (0..<k.cells.w).map { e.y * w + e.x + $0 }
+            guard !cells.contains(where: taken.contains) else { continue }
+            list.append(WorldDecor(kind: e.kind, x: e.x, y: e.y))
+            cells.forEach { taken.insert($0) }
+        }
+        s.decor = list
+    }
+
     /// 地图画法的版本：2 = 像素素材那一版，3 = 大岛、不规则的海岸，4 = 桥搭到岸上、景都挪到岸上，5 = 栖岛自己画的一套
-    static let artVersion = 5
+    static let artVersion = 6
 
     /// 老存档换成新画法：地和景换成新的，摆的东西留着（落在水里或压着景的拿掉），田里不在田上的拿掉
     private static func upgrade(_ s: inout WorldSave) {
@@ -388,6 +416,7 @@ final class WorldStore: ObservableObject {
         s.objects = starterObjects()
         s.decor = starterDecor
         s.art = artVersion
+        addHomeExtras(&s)
         return s
     }
 

@@ -22,7 +22,9 @@ ITEMS = {
     "signpost": load("l_signpost.png"),
 }
 for k in ("fl_daisy", "fl_pink", "fl_yellow", "tulip_pink", "tulip_peach", "lavender", "sunflower", "fence", "fence_v", "crate",
-          "barrel", "stump", "lamp", "mailbox", "bench", "lily"):
+          "barrel", "stump", "lamp", "mailbox", "bench", "lily",
+          "scarecrow", "haybale", "wheelbarrow", "well", "beehive", "flowerpot", "rose_arch", "fountain", "picnic", "umbrella",
+          "deckchair", "shells", "rowboat", "campfire", "logpile", "mushrooms", "birdhouse", "reeds", "tent", "stones", "lanterns"):
     ITEMS[k] = load("s_" + k + ".png")
 
 # 简单的货架式排布：按高度从高到低，一行一行排，宽 256

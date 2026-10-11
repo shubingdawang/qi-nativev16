@@ -13,7 +13,10 @@ enum WorldDecorKind: String, CaseIterable, Identifiable {
          daisy, clover, flowerY, flowerR, tulipPeach, lavender, sunflower, lily,
          houseOrange, cabin, shop, houseBeige,
          fence, fenceV, crate, barrel, lamp, mailbox, bench,
-         signpost, greenhouse, lighthouse, telescope
+         signpost, greenhouse, lighthouse, telescope,
+         scarecrow, haybale, wheelbarrow, well, beehive, flowerpot, roseArch,
+         fountain, picnic, umbrella, deckchair, shells, rowboat, campfire,
+         logpile, tent, mushrooms, birdhouse, reeds, stones, lanterns
     var id: String { rawValue }
 
     var label: String {
@@ -56,6 +59,27 @@ enum WorldDecorKind: String, CaseIterable, Identifiable {
         case .greenhouse: return "温室"
         case .lighthouse: return "灯塔"
         case .telescope: return "观星台"
+        case .scarecrow: return "稻草人"
+        case .haybale: return "草垛"
+        case .wheelbarrow: return "推车"
+        case .well: return "水井"
+        case .beehive: return "蜂箱"
+        case .flowerpot: return "花盆"
+        case .roseArch: return "玫瑰拱门"
+        case .fountain: return "喷泉"
+        case .picnic: return "野餐布"
+        case .umbrella: return "遮阳伞"
+        case .deckchair: return "躺椅"
+        case .shells: return "贝壳"
+        case .rowboat: return "小船"
+        case .campfire: return "篝火"
+        case .logpile: return "柴堆"
+        case .tent: return "帐篷"
+        case .mushrooms: return "蘑菇"
+        case .birdhouse: return "鸟屋"
+        case .reeds: return "芦苇"
+        case .stones: return "踏脚石"
+        case .lanterns: return "一串小灯"
         }
     }
 
@@ -100,6 +124,27 @@ enum WorldDecorKind: String, CaseIterable, Identifiable {
         case .greenhouse: return "greenhouse"
         case .lighthouse: return "lighthouse"
         case .telescope: return "telescope"
+        case .scarecrow: return "scarecrow"
+        case .haybale: return "haybale"
+        case .wheelbarrow: return "wheelbarrow"
+        case .well: return "well"
+        case .beehive: return "beehive"
+        case .flowerpot: return "flowerpot"
+        case .roseArch: return "rose_arch"
+        case .fountain: return "fountain"
+        case .picnic: return "picnic"
+        case .umbrella: return "umbrella"
+        case .deckchair: return "deckchair"
+        case .shells: return "shells"
+        case .rowboat: return "rowboat"
+        case .campfire: return "campfire"
+        case .logpile: return "logpile"
+        case .tent: return "tent"
+        case .mushrooms: return "mushrooms"
+        case .birdhouse: return "birdhouse"
+        case .reeds: return "reeds"
+        case .stones: return "stones"
+        case .lanterns: return "lanterns"
         }
     }
 
@@ -119,6 +164,14 @@ enum WorldDecorKind: String, CaseIterable, Identifiable {
         case .lamp, .mailbox, .bench: return "小物"
         case .lily: return "水上"
         case .signpost, .greenhouse, .lighthouse, .telescope: return "地标"
+        case .scarecrow, .haybale, .wheelbarrow, .well, .beehive: return "田园"
+        case .flowerpot, .picnic, .birdhouse, .lanterns: return "小物"
+        case .roseArch, .fountain: return "花园"
+        case .umbrella, .deckchair, .shells: return "海边"
+        case .rowboat, .reeds: return "水上"
+        case .campfire, .logpile, .tent: return "露营"
+        case .mushrooms: return "花"
+        case .stones: return "石头"
         }
     }
 
@@ -138,7 +191,8 @@ enum WorldDecorKind: String, CaseIterable, Identifiable {
     /// 挡路的（走不过去）：树干、房子、石头、箱子桶、长椅
     var blocks: Bool {
         switch self {
-        case .daisy, .clover, .flowerY, .flowerR, .tulipPeach, .lavender, .sunflower, .lily, .pebble: return false
+        case .daisy, .clover, .flowerY, .flowerR, .tulipPeach, .lavender, .sunflower, .lily, .pebble,
+             .flowerpot, .picnic, .shells, .rowboat, .mushrooms, .reeds, .stones: return false
         default: return true
         }
     }

@@ -19,6 +19,10 @@ SPRITE = {
     "houseOrange": "house_pink", "cabin": "house_blue", "shop": "house_lilac", "houseBeige": "house_sage",
     "fence": "fence", "fenceV": "fence_v", "crate": "crate", "barrel": "barrel", "lamp": "lamp", "mailbox": "mailbox", "bench": "bench",
     "lighthouse": "lighthouse", "greenhouse": "greenhouse", "telescope": "telescope", "signpost": "signpost",
+    "scarecrow": "scarecrow", "haybale": "haybale", "wheelbarrow": "wheelbarrow", "well": "well", "beehive": "beehive",
+    "flowerpot": "flowerpot", "roseArch": "rose_arch", "fountain": "fountain", "picnic": "picnic", "umbrella": "umbrella",
+    "deckchair": "deckchair", "shells": "shells", "rowboat": "rowboat", "campfire": "campfire", "logpile": "logpile",
+    "mushrooms": "mushrooms", "birdhouse": "birdhouse", "reeds": "reeds", "tent": "tent", "stones": "stones", "lanterns": "lanterns",
 }
 FLOWERS = ["daisy", "clover", "flowerY", "flowerR", "tulipPeach", "lavender"]
 
@@ -34,7 +38,9 @@ def sizes():
         "lighthouse": "l_lighthouse.png", "greenhouse": "l_greenhouse.png", "telescope": "l_telescope.png", "signpost": "l_signpost.png",
     }
     for k in ("fl_daisy", "fl_pink", "fl_yellow", "tulip_pink", "tulip_peach", "lavender", "sunflower", "fence", "fence_v",
-              "crate", "barrel", "stump", "lamp", "mailbox", "bench", "lily"):
+              "crate", "barrel", "stump", "lamp", "mailbox", "bench", "lily",
+              "scarecrow", "haybale", "wheelbarrow", "well", "beehive", "flowerpot", "rose_arch", "fountain", "picnic", "umbrella",
+              "deckchair", "shells", "rowboat", "campfire", "logpile", "mushrooms", "birdhouse", "reeds", "tent", "stones", "lanterns"):
         names[k] = "s_" + k + ".png"
     for k, n in names.items():
         im = Image.open(os.path.join(HERE, n)); out[k] = im.size
@@ -49,7 +55,7 @@ def cells_of(kind):
     w, h = SZ[SPRITE[kind]]
     return (w + 15) // 16, (h + 15) // 16
 
-BLOCKING_FREE = set(FLOWERS + ["sunflower", "lily", "pebble"])
+BLOCKING_FREE = set(FLOWERS + ["sunflower", "lily", "pebble", "shells", "stones", "mushrooms", "picnic", "reeds", "flowerpot"])
 
 class Region:
     def __init__(self, rid, name, W, H, ctrl, seed, extra_land=()):
@@ -107,6 +113,23 @@ class Region:
         """睡莲：放在水上"""
         self.decor.append((kind, x, y))
 
+    def boat(self, x, y):
+        """小船：整只都在水上"""
+        cells = self.foot("rowboat", x, y)
+        if all(self.G[cy][cx] in ("~", "w") for cx, cy in cells if 0 <= cx < self.W and 0 <= cy < self.H) and            all(0 <= cx < self.W and 0 <= cy < self.H for cx, cy in cells):
+            self.decor.append(("rowboat", x, y)); return True
+        print("  船放不下", self.id, x, y); return False
+
+    def shore(self, kind, n, box, water=("w",)):
+        """挨着水的岸边撒几样（芦苇）"""
+        placed = 0
+        for _ in range(400):
+            if placed >= n: break
+            x = self.rnd.randint(box[0], box[1]); y = self.rnd.randint(box[2], box[3])
+            if self.G[y][x] not in (".", "f", "s") or (x, y) in self.occ: continue
+            if not any(0 <= x + a < self.W and 0 <= y + b < self.H and self.G[y + b][x + a] in water for a, b in ((1, 0), (-1, 0), (0, 1), (0, -1))): continue
+            self.decor.append((kind, x, y)); self.occ.add((x, y)); placed += 1
+
     def scatter(self, kinds, box, n, ground=(".", "f"), tries=600):
         placed = 0
         for _ in range(tries):
@@ -132,50 +155,56 @@ class Region:
         print("   " + "".join(str(i % 10) for i in range(self.W)))
         for i, r in enumerate(self.rows()): print("%2d " % i + r)
 
-# ───────────────────────── 花岛：一片一片的花田、温室、花店
+# ───────────────────────── 花岛：一片一片的花田、温室、花店，中间一个喷泉广场
 
 def huadao():
     R = Region("huadao", "花岛", 26, 30, [(5, 3), (12, 1.6), (19, 2.6), (23.4, 6), (24.2, 12), (23, 17), (24, 22), (21, 26.4),
                                          (14, 27.6), (7, 26.6), (3, 22.5), (2.4, 16), (3.4, 10), (2.6, 6)], 11)
-    # 路：西边桥头进来一条横路，中间一条竖路通到北边的桥
     R.rect("p", 1, 20, 14, 15)
     R.rect("p", 12, 13, 3, 25)
-    # 花田：四块，一块一种（地上满是小花）
-    for (x0, x1, y0, y1) in [(4, 10, 5, 12), (15, 21, 5, 12), (4, 10, 17, 24), (15, 21, 17, 23)]:
+    # 中间的石板广场
+    R.rect("t", 10, 15, 13, 16)
+    for (x0, x1, y0, y1) in [(4, 10, 5, 10), (15, 21, 5, 9), (4, 10, 19, 24), (16, 21, 21, 23)]:
         R.rect("f", x0, x1, y0, y1)
-    R.rect("w", 16, 19, 19, 21)
-    R.put("w", [(17, 22), (18, 22), (17, 18)])
-    # 桥：西边回栖岛，北边去星丘
+    R.rect("w", 16, 19, 18, 20)
+    R.put("w", [(17, 21), (18, 21), (17, 17)])
     R.bridge([(0, 14), (1, 14), (2, 14)], "home", (0, 14), (28, 4))
     R.bridge([(12, 0), (12, 1)], "xingqiu", (12, 0), (12, 23))
-    # 地标：温室在东北，花店（紫顶小屋）在西南
-    R.add("greenhouse", 15, 12)
-    R.add("shop", 5, 26)
-    R.add("signpost", 14, 16)
-    for x in (8, 17): R.add("lamp", x, 13)
-    R.add("bench", 9, 16)
-    R.add("bench", 15, 25)
+    R.add("fountain", 11, 16, ground=("t",), nudge=1)
+    R.add("greenhouse", 15, 12, nudge=2)
+    R.add("shop", 5, 27)
+    R.add("signpost", 14, 18)
+    # 花园入口的玫瑰拱门、广场四角的灯、长椅
+    R.add("roseArch", 4, 13); R.add("roseArch", 18, 13)
+    for (x, y) in [(9, 12), (16, 12), (9, 17), (16, 17)]: R.add("lamp", x, y, ground=(".", "f", "t", "p"), nudge=1)
+    R.add("bench", 10, 12, ground=(".", "f", "t")); R.add("bench", 14, 21)
+    R.add("lanterns", 3, 16); R.add("lanterns", 19, 26)
+    # 花店门口：花盆、果箱、水桶
+    for (x, y) in [(9, 27), (10, 26), (4, 24)]: R.add("flowerpot", x, y)
+    R.add("crate", 10, 24); R.add("barrel", 3, 26)
+    # 蜂箱、鸟屋、野餐
+    R.add("beehive", 11, 6); R.add("beehive", 14, 6); R.add("birdhouse", 22, 11)
+    R.add("picnic", 19, 24)
+    R.shore("reeds", 4, (14, 21, 16, 23))
+    for (x, y) in [(17, 19), (18, 20)]: R.water_decor("lily", x, y)
     # 花田里一排一排的花
-    rows = {(4, 10, 5, 11): "tulipPeach", (4, 10, 18, 24): "lavender", (16, 21, 23, 23): "sunflower"}
+    rows = {(4, 10, 5, 10): "tulipPeach", (15, 21, 5, 9): "flowerR", (4, 10, 19, 24): "lavender", (16, 21, 21, 23): "sunflower"}
     for (x0, x1, y0, y1), k in rows.items():
-        for y in range(y0, y1 + 1, 2):
-            for x in range(x0, x1 + 1, 1):
-                R.add(k, x, y, ground=("f",), nudge=0) if R.ok(k, x, y, ("f",)) else None
-    for (x, y) in [(17, 20), (18, 21)]: R.water_decor("lily", x, y)
-    R.scatter(["treePink", "pinkSmall", "pinkSmall", "bush"], (2, 23, 2, 27), 9)
-    R.scatter(FLOWERS, (2, 23, 2, 27), 20)
+        for y in range(y0 + 1, y1 + 1, 2):
+            for x in range(x0, x1 + 1):
+                if R.ok(k, x, y, ("f",)): R.add(k, x, y, ground=("f",), nudge=0)
+    R.scatter(["treePink", "pinkSmall", "pinkSmall", "bush", "olive"], (2, 23, 2, 27), 12)
+    R.scatter(FLOWERS + ["flowerpot", "stones"], (2, 23, 2, 27), 30)
     return R
 
-# ───────────────────────── 月湾：月牙形的沙洲，灯塔，栈桥，夜里亮着灯
+# ───────────────────────── 月湾：月牙形的沙洲，灯塔，湾里停着小船，沙滩上有伞和躺椅
 
 def yuewan():
     R = Region("yuewan", "月湾", 28, 26, [(4, 4), (10, 2), (17, 1.8), (23, 3), (26, 7), (25.6, 13), (22, 15.6), (16, 14),
                                          (12, 15.6), (10, 20), (12, 23.4), (7, 24), (3, 20), (1.8, 13), (2.4, 7)], 21)
-    # 月牙里面是一片湾：把东南挖成海
     for y in range(R.H):
         for x in range(R.W):
             if math.hypot(x + 0.5 - 17.5, y + 0.5 - 14.5) < 4.8: R.G[y][x] = "~"
-    # 离海两格以内是沙滩，里面是草
     def near_sea(x, y, d):
         return any(R.sea(x + a, y + b) for a in range(-d, d + 1) for b in range(-d, d + 1))
     for y in range(R.H):
@@ -183,24 +212,32 @@ def yuewan():
             if R.G[y][x] == "." and near_sea(x, y, 2): R.G[y][x] = "s"
     R.rect("p", 6, 16, 6, 6)
     R.rect("p", 6, 6, 6, 18)
-    # 桥：北边回栖岛
+    R.rect("t", 18, 21, 5, 7)
     R.bridge([(12, 0), (12, 1)], "home", (12, 0), (13, 36))
     R.add("lighthouse", 22, 9)
     R.add("cabin", 4, 12)
     R.add("signpost", 8, 8)
-    for (x, y) in [(10, 5), (6, 12), (7, 19), (20, 4)]: R.add("lamp", x, y)
+    for (x, y) in [(10, 5), (6, 12), (7, 19), (17, 5)]: R.add("lamp", x, y, ground=(".", "s", "p"))
+    R.add("lanterns", 13, 8)
     R.add("bench", 9, 17)
+    # 渔夫的木屋门口
+    R.add("logpile", 8, 13); R.add("barrel", 2, 14); R.add("crate", 3, 15); R.add("well", 9, 11)
+    # 海滩：伞、躺椅、贝壳、篝火
+    for (x, y) in [(14, 4), (19, 3)]: R.add("umbrella", x, y, ground=("s", "."))
+    for (x, y) in [(16, 4), (21, 4), (4, 19)]: R.add("deckchair", x, y, ground=("s", "."))
+    R.add("campfire", 9, 21, ground=("s", "."))
+    R.scatter(["shells", "shells", "stones", "pebble"], (1, 26, 1, 24), 14, ground=("s",))
+    # 湾里的小船
+    R.boat(16, 12); R.boat(13, 19)
     R.add("rocks", 3, 21); R.add("rock", 22, 15); R.add("rocks", 24, 6)
-    R.scatter(["pebble", "rock", "bush"], (1, 26, 1, 24), 10, ground=(".", "s"))
-    R.scatter(["olive", "treeSmall", "bush", "daisy", "flowerY"], (1, 26, 1, 24), 12)
+    R.scatter(["olive", "treeSmall", "bush", "daisy", "flowerY", "tulipPeach"], (1, 26, 1, 24), 16)
     return R
 
-# ───────────────────────── 松林：密密的松树，林子里一间蓝顶木屋，一汪温泉
+# ───────────────────────── 松林：密密的松树，林子里一间蓝顶木屋，一汪温泉，林间空地上有篝火和帐篷
 
 def songlin():
     R = Region("songlin", "松林", 26, 30, [(4, 3), (11, 2), (18, 2.6), (23, 5), (24, 11), (23.4, 18), (24, 24), (19, 27.4),
                                           (12, 27), (6, 27.6), (2.6, 23), (3, 16), (2, 9)], 31)
-    # 弯弯的小路：东边桥头进来，绕到木屋和温泉
     path = [(25, 15), (24, 15), (23, 15), (22, 15), (21, 15), (20, 15), (20, 14), (19, 14), (18, 14), (17, 14), (17, 13), (16, 13),
             (15, 13), (14, 13), (13, 13), (13, 14), (12, 14), (11, 14), (10, 14), (10, 15), (10, 16), (10, 17), (10, 18), (11, 18),
             (12, 18), (13, 18), (13, 19), (13, 20), (13, 21)]
@@ -212,30 +249,89 @@ def songlin():
     R.add("cabin", 6, 12)
     R.add("signpost", 14, 12)
     R.add("bench", 11, 23)
-    R.add("lamp", 9, 13); R.add("lamp", 15, 19)
-    R.add("barrel", 10, 12); R.add("crate", 11, 12)
-    R.water_decor("lily", 16, 21)
-    R.scatter(["pine", "pine", "pine", "bonsai", "bonsai", "treeGreen"], (2, 23, 2, 27), 34)
-    R.scatter(["berry", "stump", "bush", "rock", "pebble", "lavender", "daisy"], (2, 23, 2, 27), 24)
+    R.add("lamp", 9, 13); R.add("lamp", 15, 19); R.add("lamp", 21, 13)
+    # 木屋门口：井、柴堆、推车、水桶果箱
+    R.add("well", 2, 13); R.add("logpile", 10, 11); R.add("wheelbarrow", 3, 15)
+    R.add("barrel", 11, 12); R.add("crate", 12, 12)
+    # 林间空地：篝火、帐篷、柴
+    R.add("tent", 16, 8); R.add("campfire", 19, 10); R.add("logpile", 21, 9); R.add("lanterns", 15, 10)
+    R.shore("reeds", 5, (13, 21, 19, 25))
+    R.shore("stones", 4, (13, 21, 19, 25))
+    R.water_decor("lily", 16, 21); R.water_decor("lily", 18, 22)
+    R.add("birdhouse", 7, 6)
+    R.scatter(["pine", "pine", "pine", "bonsai", "bonsai", "treeGreen", "treeOrange"], (2, 23, 2, 27), 36)
+    R.scatter(["berry", "stump", "bush", "rock", "pebble", "lavender", "daisy", "mushrooms", "mushrooms", "mushrooms"], (2, 23, 2, 27), 34)
     return R
 
-# ───────────────────────── 星丘：开阔的草坡，观星台，两张长椅，一圈灯
+# ───────────────────────── 星丘：开阔的草坡，石板观星台，一圈灯，野餐和帐篷
 
 def xingqiu():
     R = Region("xingqiu", "星丘", 24, 26, [(6, 3), (12, 1.8), (18, 3), (21.6, 8), (22, 14), (20, 20), (14, 23.6), (8, 23),
                                           (3.4, 19), (2, 12), (3, 6)], 41)
     R.rect("p", 12, 13, 15, 25)
-    R.rect("p", 8, 15, 13, 14)
-    for (x0, x1, y0, y1) in [(4, 8, 6, 10), (15, 19, 6, 10), (4, 7, 17, 20), (16, 19, 16, 20)]:
+    R.rect("t", 8, 14, 9, 13)
+    for (x0, x1, y0, y1) in [(3, 6, 5, 9), (17, 20, 6, 10), (4, 7, 17, 20), (16, 19, 16, 20)]:
         R.rect("f", x0, x1, y0, y1)
     R.bridge([(12, 24), (12, 25)], "huadao", (12, 25), (12, 2))
-    R.add("telescope", 10, 11)
-    R.add("bench", 6, 15); R.add("bench", 15, 15)
-    for (x, y) in [(9, 16), (16, 13), (8, 12), (11, 20)]: R.add("lamp", x, y)
+    R.add("telescope", 9, 11, ground=("t",))
+    R.add("picnic", 12, 13, ground=("t", "."))
+    R.add("bench", 7, 14, ground=("t", ".")); R.add("bench", 13, 9, ground=("t", "."))
+    for (x, y) in [(7, 9), (15, 9), (7, 13), (15, 13)]: R.add("lamp", x, y, ground=("t", "."), nudge=1)
+    R.add("lanterns", 9, 7)
+    R.add("tent", 15, 22); R.add("campfire", 9, 21)
+    R.add("roseArch", 11, 18)
     R.add("signpost", 14, 18)
-    R.scatter(["treePink", "pinkSmall", "treeGreen", "olive"], (2, 21, 2, 22), 8)
-    R.scatter(FLOWERS + ["sunflower"], (2, 21, 2, 22), 24)
+    R.add("birdhouse", 5, 12)
+    R.scatter(["treePink", "pinkSmall", "treeGreen", "olive", "treeBig"], (2, 21, 2, 22), 12)
+    R.scatter(FLOWERS + ["sunflower", "mushrooms", "stones"], (2, 21, 2, 22), 36)
     return R
+
+# ───────────────────────── 栖岛：在原来的布置上添一些（已有的景不动）
+
+NINJA = {"tree_big": "treeBig", "tree_pink": "treePink", "tree_green": "treeGreen", "tree_orange": "treeOrange",
+         "tree_bigpink": "treePink", "pine_big": "pine", "tree_small": "treeSmall", "pine_small": "bonsai",
+         "olive_small": "olive", "pink_small": "pinkSmall", "bush1": "bush", "bush2": "bush", "bush3": "berry",
+         "berry_o": "berry", "berry_b": "berry", "sunflower": "sunflower", "flower_y": "flowerY", "flower_r": "flowerR",
+         "daisy": "daisy", "clover": "clover", "fern": "lavender", "grass1": "tulipPeach", "grass2": "lavender",
+         "stump": "stump", "stump2": "stump", "rock_g": "rock", "rock_b": "rock", "rock_gs": "pebble", "rock_bs": "pebble",
+         "rocks_b": "rocks", "boulder": "rocks", "house_orange": "houseOrange", "cabin": "cabin", "shop": "shop",
+         "fence_h": "fence", "barrel_w": "barrel", "crate": "crate", "pot_veg": "crate"}
+
+def home_extras():
+    rows = open(os.path.join(HERE, "island_map.txt")).read().split("\n")
+    d = json.load(open(os.path.join(HERE, "island_decor.json")))
+    R = Region("home", "栖岛", len(rows[0]), len(rows), [(0, 0), (1, 0), (1, 1)], 51)
+    R.G = [list(r) for r in rows]
+    base = [(NINJA[k], x, y) for k, x, y in d["decor"]] + [("lamp", 11, 15), ("lamp", 14, 23), ("mailbox", 10, 10),
+                                                           ("bench", 18, 16), ("lily", 18, 13), ("lily", 20, 12)]
+    for k, x, y in base:
+        if k == "lily": continue
+        for f in R.foot(k, x, y): R.occ.add(f)
+    for c in [(29, 4), (13, 37), (13, 38), (13, 39), (0, 16)]: R.put("b", [c])
+    # 小屋前一小片石板
+    stone = [(x, y) for x in range(10, 16) for y in range(11, 13) if R.G[y][x] in (".", "f", "p")]
+    R.put("t", stone)
+    # 屋前：井、花盆、鸟屋
+    R.add("well", 15, 9); R.add("flowerpot", 10, 11, ground=("t", ".")); R.add("flowerpot", 15, 11, ground=("t", "."))
+    R.add("birdhouse", 9, 9)
+    # 田边：稻草人、草垛、推车、蜂箱
+    R.add("scarecrow", 5, 28, ground=("o",), nudge=1); R.add("haybale", 2, 25); R.add("haybale", 9, 25)
+    R.add("wheelbarrow", 10, 28, nudge=5); R.add("beehive", 2, 23)
+    # 池塘：芦苇、野餐
+    R.shore("reeds", 5, (15, 23, 10, 16))
+    R.add("picnic", 21, 15)
+    # 北边林子：蘑菇、柴堆
+    R.add("logpile", 8, 6); R.scatter(["mushrooms", "mushrooms", "stones"], (2, 22, 2, 9), 8)
+    # 沙滩：伞、躺椅、贝壳、篝火；栈桥边一只小船
+    R.add("umbrella", 9, 34, ground=("s",)); R.add("deckchair", 11, 34, ground=("s",)); R.add("umbrella", 17, 34, ground=("s",))
+    R.add("deckchair", 15, 34, ground=("s",)); R.add("campfire", 20, 33, ground=("s", "."))
+    R.scatter(["shells", "shells", "stones"], (3, 24, 31, 36), 8, ground=("s",))
+    R.boat(25, 24)
+    # 大路边一串灯
+    R.add("lanterns", 14, 21, nudge=4)
+    R.scatter(FLOWERS + ["flowerpot", "mushrooms"], (2, 26, 2, 33), 14)
+    added = R.decor
+    return {"extra": [[k, x, y] for k, x, y in added], "stone": [list(c) for c in stone]}
 
 # 栖岛这边的出口（跟 App 里 starterMap 对上）
 HOME_EXITS = [
@@ -246,7 +342,7 @@ HOME_EXITS = [
 
 if __name__ == "__main__":
     regs = [huadao(), yuewan(), songlin(), xingqiu()]
-    out = {"home": {"exits": HOME_EXITS}}
+    out = {"home": dict(exits=HOME_EXITS, **home_extras())}
     for R in regs:
         R.ascii()
         out[R.id] = {"name": R.name, "width": R.W, "height": R.H, "map": R.rows(),

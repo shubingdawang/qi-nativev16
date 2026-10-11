@@ -25,6 +25,8 @@ C = {
     "water": [hx("74B6C6"), hx("8ECCD3"), hx("A9DCDC"), hx("D3F0EA")],
     "water_rim": hx("5F8E9E"),
     "wood": [hx("A9776A"), hx("D2A285"), hx("E3BC9B")],
+    "stone": [hx("A79BA5"), hx("CFC6CE"), hx("DDD6DC"), hx("EEE9ED")],
+    "stone_rim": hx("8E8396"),
     "wood_rim": hx("7C5560"),
     "sea": [hx("86CDD8"), hx("A2DCE1"), hx("C2EBEA")],
     "foam": hx("F6FCF9"),
@@ -197,6 +199,19 @@ def render(rows):
     sand_m = terrain("s", C["sand"], C["sand_rim"], 0.3, 21, tex_sand)
     path_m = terrain("p", C["path"], C["path_rim"], 0.22, 22, tex_path)
     soil_m = terrain("o", C["soil"], C["soil_rim"], 0.12, 23, tex_soil)
+
+    def tex_stone(m, d):
+        # 石板：一块块错开的方石，缝暗，左上一点亮，有的石头深一点
+        yi, xi = ys.astype(int), xs.astype(int)
+        row = yi // 5
+        lx = (xi + (row % 2) * 4) % 8
+        ly = yi % 5
+        cell = nz(np.floor((xi + (row % 2) * 4) / 8), row, 81)
+        img[m & (cell > 0.6)] = C["stone"][2]
+        img[m & (lx == 1) & (ly == 1)] = C["stone"][3]
+        img[m & ((lx == 0) | (ly == 0))] = C["stone"][0]
+
+    terrain("t", C["stone"], C["stone_rim"], 0.1, 25, tex_stone)
     wat_m = terrain("w", C["water"], C["water_rim"], 0.3, 24, tex_water)
     # 池塘外面一圈草压暗一点（岸边的影子）
     ring = dist(~wat_m, 2, outside=True)
@@ -214,7 +229,7 @@ def render(rows):
     dout = dist(~landf, 10, outside=True)
     sw = 6 + (vnoise(xs / 11.0, ys / 11.0, 7) * 4).astype(int)
     tile_k = G[(ys // PX).astype(int), (xs // PX).astype(int)]
-    soft = np.isin(tile_k, [".", "f", "s", "~"])
+    soft = np.isin(tile_k, [".", "f", "s", "~"])  # 石板、路、田挨着岸不改
     edge_ok = np.isin(tile_k, [".", "f", "~"])
     sandc = C["sand"]
     wet = landf & (din <= 1) & soft

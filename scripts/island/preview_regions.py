@@ -106,6 +106,16 @@ def render(rows, decor, path):
 
 if __name__ == "__main__":
     data = json.load(open(os.path.join(HERE, "..", "..", "Qi", "Resources", "Island", "island_regions.json"), encoding="utf-8"))
+    # 栖岛：原来的地图 + 石板 + 桥，原来的景 + 添的景
+    from regions import NINJA
+    rows = [list(r) for r in open(os.path.join(HERE, "island_map.txt")).read().splitlines()]
+    for x, y in data["home"]["stone"]: rows[y][x] = "t"
+    for e in data["home"]["exits"]:
+        for x, y in e["cells"]: rows[y][x] = "b"
+    dd = json.load(open(os.path.join(HERE, "island_decor.json")))
+    base = [(NINJA[k], x, y) for k, x, y in dd["decor"]] + [("lamp", 11, 15), ("lamp", 14, 23), ("mailbox", 10, 10),
+            ("bench", 18, 16), ("lily", 18, 13), ("lily", 20, 12)]
+    render(["".join(r) for r in rows], base + [tuple(t) for t in data["home"]["extra"]], os.path.join(HERE, "region_home.png"))
     for rid in ("huadao", "yuewan", "songlin", "xingqiu"):
         d = data[rid]
         render(d["map"], [tuple(t) for t in d["decor"]], os.path.join(HERE, "region_" + rid + ".png"))

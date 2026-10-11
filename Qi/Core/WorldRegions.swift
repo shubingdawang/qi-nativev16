@@ -54,7 +54,7 @@ enum WorldRegions {
 
     // MARK: 模板（第一次去的时候用）
 
-    private struct DecorEntry: Decodable {
+    struct DecorEntry: Decodable {
         let kind: String, x: Int, y: Int
         init(from decoder: Decoder) throws {
             var c = try decoder.unkeyedContainer()
@@ -69,7 +69,13 @@ enum WorldRegions {
         let map: [String]?
         let decor: [DecorEntry]?
         let exits: [WorldExit]
+        /// 栖岛后来添的
+        let extra: [DecorEntry]?
+        let stone: [[Int]]?
     }
+
+    static var homeExtra: [DecorEntry] { templates["home"]?.extra ?? [] }
+    static var homeStone: [[Int]] { templates["home"]?.stone ?? [] }
 
     private static let templates: [String: Template] = {
         guard let url = Bundle.main.url(forResource: "island_regions", withExtension: "json"),

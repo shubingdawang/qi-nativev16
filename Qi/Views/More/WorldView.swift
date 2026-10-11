@@ -239,9 +239,19 @@ struct WorldView: View {
     private var nightLights: [CGPoint] {
         let sc = tile / CGFloat(IslandArt.px)
         return world.decor.compactMap { d -> CGPoint? in
-            guard let k = WorldDecorKind.resolve(d.kind), k.isHouse else { return nil }
+            guard let k = WorldDecorKind.resolve(d.kind) else { return nil }
             let s = IslandArt.size(of: k.sprite)
-            return CGPoint(x: CGFloat(d.x) * tile + s.width * sc / 2, y: CGFloat(d.y + 1) * tile - 14 * sc)
+            let left = CGFloat(d.x) * tile + ((CGFloat(k.cells.w * IslandArt.px) - s.width) / 2).rounded(.down) * sc
+            let top = CGFloat(d.y + 1) * tile - s.height * sc
+            switch k {
+            case _ where k.isHouse:
+                return CGPoint(x: left + s.width * sc / 2, y: CGFloat(d.y + 1) * tile - 14 * sc)
+            case .lamp: return CGPoint(x: left + 5 * sc, y: top + 5 * sc)
+            case .lanterns: return CGPoint(x: left + s.width * sc / 2, y: top + 10 * sc)
+            case .campfire: return CGPoint(x: left + s.width * sc / 2, y: top + 8 * sc)
+            case .lighthouse: return CGPoint(x: left + s.width * sc / 2, y: top + 13 * sc)
+            default: return nil
+            }
         }
     }
 
