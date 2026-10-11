@@ -35,6 +35,9 @@ struct WorldView: View {
     @State private var itemPick: String?
     @State private var itemFilter: FurnitureKind.Category = .furniture
     @State private var menuFor: WorldObject?
+    @State private var decorMenu: WorldDecor?
+    @State private var decorPick: WorldDecorKind?
+    @State private var sceneryTab = false
     @State private var personMenu = false
     @State private var showMods = false
     @State private var soilAt: (x: Int, y: Int)?
@@ -96,11 +99,36 @@ struct WorldView: View {
         .alert(caught.map { "钓到了\($0)" } ?? "", isPresented: Binding(get: { caught != nil }, set: { if !$0 { caught = nil } })) {
             Button("放进篮子") { caught = nil }
         }
+        .confirmationDialog(decorMenu.flatMap { WorldDecorKind(rawValue: $0.kind)?.label } ?? "",
+                            isPresented: Binding(get: { decorMenu != nil }, set: { if !$0 { decorMenu = nil } }),
+                            titleVisibility: .visible) {
+            if let d = decorMenu {
+                ForEach(world.actions(forDecor: d)) { a in
+                    Button(a.name) {
+                        let line = world.perform(a, onDecor: d, byHer: true)
+                        app.tellHim("小岛上，" + line)
+                        decorMenu = nil
+                    }
+                }
+            }
+            Button("算了", role: .cancel) { decorMenu = nil }
+        }
         .confirmationDialog(him, isPresented: $personMenu, titleVisibility: .visible) {
             ForEach(world.personActions) { a in
                 Button(a.name) { doAction(a, on: nil) }
             }
             Button("算了", role: .cancel) {}
+        }
+    }
+
+    /// 晚上亮着的：路灯的灯头、小屋的窗
+    private var nightLights: [CGPoint] {
+        world.decor.compactMap { d -> CGPoint? in
+            switch d.kind {
+            case "lamp": return CGPoint(x: CGFloat(d.x) * tile + tile / 2, y: CGFloat(d.y) * tile + tile * 0.92 - 41)
+            case "house": return CGPoint(x: CGFloat(d.x) * tile + tile, y: CGFloat(d.y) * tile + tile * 1.3)
+            default: return nil
+            }
         }
     }
 
@@ -127,9 +155,14 @@ struct WorldView: View {
             if world.farmOn { cropLayer }
             // 摆东西、铺地、拿走的时候显示淡淡的格线，方便对位置
             if mode != .walk { gridLines }
+            DecorCanvas(decor: world.decor, tile: tile, width: world.width, height: world.height,
+                        night: WorldStore.isNight)
+                .equatable()
             ForEach(world.save.objects) { o in objectView(o) }
             her
             himView
+            AmbientLayer(width: world.width, height: world.height, tile: tile,
+                         night: WorldStore.isNight, lights: nightLights)
         }
         .frame(width: w, height: h, alignment: .topLeading)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -165,6 +198,7 @@ struct WorldView: View {
             guard !moved else { return }
             if x == world.save.himX && y == world.save.himY { personMenu = true; return }
             if let o = world.object(at: x, y) { menuFor = o; return }
+            if let d = world.decor(at: x, y), !world.actions(forDecor: d).isEmpty { decorMenu = d; return }
             if world.farmOn, world.ground(x, y) == .soil { soilAt = (x, y); return }
             if world.farmOn, world.ground(x, y) == .water {
                 // 点水：走到旁边的岸上钓鱼
@@ -174,7 +208,12 @@ struct WorldView: View {
             }
             world.walkHer(x, y)
         case .place:
-            guard !moved, let src = itemPick else { return }
+            guard !moved else { return }
+            if sceneryTab {
+                if let k = decorPick { world.addDecor(k.rawValue, x, y) }
+                return
+            }
+            guard let src = itemPick else { return }
             var w = 1
             if src.hasPrefix("f:"), let k = FurnitureCatalog.kind(String(src.dropFirst(2))), k.sprite.width >= 20 { w = 2 }
             world.place(src, x, y, w: w)
@@ -182,6 +221,7 @@ struct WorldView: View {
             world.setGround(groundPick, x, y)
         case .remove:
             if let o = world.object(at: x, y) { world.remove(o.id) }
+            else if let d = world.decor(at: x, y) { world.removeDecor(d.id) }
         }
     }
 
@@ -421,16 +461,43 @@ struct WorldView: View {
         VStack(spacing: 8) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
+                    Button("风景") { sceneryTab = true }
+                        .font(.app(11.5, weight: sceneryTab ? .semibold : .regular))
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Capsule().fill(sceneryTab ? app.settings.accentColor.opacity(0.2) : Theme.softFillDeep))
+                        .buttonStyle(.plain)
                     ForEach(FurnitureKind.Category.allCases.filter { $0 != .wear }) { c in
-                        Button(c.rawValue) { itemFilter = c }
-                            .font(.app(11.5, weight: itemFilter == c ? .semibold : .regular))
+                        Button(c.rawValue) { itemFilter = c; sceneryTab = false }
+                            .font(.app(11.5, weight: !sceneryTab && itemFilter == c ? .semibold : .regular))
                             .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(Capsule().fill(itemFilter == c ? app.settings.accentColor.opacity(0.2) : Theme.softFillDeep))
+                            .background(Capsule().fill(!sceneryTab && itemFilter == c ? app.settings.accentColor.opacity(0.2) : Theme.softFillDeep))
                             .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, 16)
             }
+            if sceneryTab {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(WorldDecorKind.allCases) { k in
+                            Button { decorPick = k } label: {
+                                VStack(spacing: 3) {
+                                    DecorCanvas(decor: [WorldDecor(kind: k.rawValue, x: 0, y: 1)], tile: 24,
+                                                width: 2, height: 2, night: false)
+                                        .frame(width: 40, height: 40)
+                                        .clipped()
+                                    Text(k.label).font(.app(9.5)).lineLimit(1).frame(width: 52)
+                                }
+                                .padding(4)
+                                .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(decorPick == k ? app.settings.accentColor.opacity(0.18) : Theme.softFillDeep))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+            } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     // 她自己的家具素材（拼豆、导入的图）排最前面
@@ -442,6 +509,7 @@ struct WorldView: View {
                     }
                 }
                 .padding(.horizontal, 16)
+            }
             }
         }
     }

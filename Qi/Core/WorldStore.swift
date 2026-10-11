@@ -47,6 +47,14 @@ struct WorldObject: Codable, Identifiable, Hashable {
     var w: Int = 1
 }
 
+/// 岛上的一样景（树、石头、小屋……），kind 见 `WorldDecorKind`
+struct WorldDecor: Codable, Hashable, Identifiable {
+    var id = UUID()
+    var kind: String
+    var x: Int
+    var y: Int
+}
+
 struct WorldEvent: Codable, Hashable {
     var at = Date()
     var text: String
@@ -66,6 +74,8 @@ struct WorldSave: Codable {
     var crops: [String: WorldCrop] = [:]
     /// 篮子：收到的、钓到的，名字 → 个数
     var basket: [String: Int] = [:]
+    /// 风景。nil = 老存档还没铺过，打开时铺一套
+    var decor: [WorldDecor]? = nil
 }
 
 /// 一格庄稼。长多快按真实时间算，浇一次水快一截
@@ -137,6 +147,7 @@ extension WorldSave {
         events = (try? c.decodeIfPresent([WorldEvent].self, forKey: .events)) ?? []
         crops = (try? c.decodeIfPresent([String: WorldCrop].self, forKey: .crops)) ?? [:]
         basket = (try? c.decodeIfPresent([String: Int].self, forKey: .basket)) ?? [:]
+        decor = try? c.decodeIfPresent([WorldDecor].self, forKey: .decor)
     }
 }
 
@@ -236,6 +247,7 @@ final class WorldStore: ObservableObject {
     private init() {
         var s = Storage.load(WorldSave.self, from: "world.json") ?? WorldSave()
         if s.ground.count != s.width * s.height { s = Self.starter() }
+        if s.decor == nil { s.decor = Self.starterDecor }
         save = s
         loaded = true
     }
@@ -246,7 +258,7 @@ final class WorldStore: ObservableObject {
         s.ground = Array(repeating: .grass, count: s.width * s.height)
         for y in 0..<s.height { s.ground[y * s.width + 7] = .path }
         for x in 0..<s.width { s.ground[14 * s.width + x] = .path }
-        for (x, y) in [(11, 4), (12, 4), (11, 5), (12, 5), (13, 5), (12, 6)] { s.ground[y * s.width + x] = .water }
+        for (x, y) in [(11, 4), (12, 4), (11, 5), (12, 5), (13, 5), (12, 6), (11, 6), (13, 4), (10, 5)] { s.ground[y * s.width + x] = .water }
         for x in 2...5 { for y in 3...7 { s.ground[y * s.width + x] = .wood } }
         for (x, y) in [(1, 18), (2, 18), (1, 19), (13, 20), (14, 20), (14, 21)] { s.ground[y * s.width + x] = .flowers }
         for x in 9...12 { for y in 18...20 { s.ground[y * s.width + x] = .soil } }
@@ -261,7 +273,67 @@ final class WorldStore: ObservableObject {
         put("桌", 9, 16)
         put("花", 12, 9)
         s.objects = objs
+        s.decor = starterDecor
         return s
+    }
+
+    /// 一开始岛上就有的景：边上一圈树、小屋和它旁边的小东西、池塘边的荷叶芦苇
+    static var starterDecor: [WorldDecor] {
+        let list: [(String, Int, Int)] = [
+            ("house", 2, 1), ("mailbox", 6, 2), ("sign", 8, 8), ("well", 14, 10), ("pot", 1, 7), ("pot", 6, 7),
+            ("tree", 10, 0), ("pine", 13, 0), ("tree", 15, 1), ("blossom", 0, 9), ("pine", 0, 11), ("tree", 0, 15),
+            ("pine", 15, 6), ("tree", 15, 13), ("blossom", 15, 16), ("pine", 0, 23), ("tree", 2, 23), ("blossom", 13, 23),
+            ("pine", 15, 22), ("tree", 5, 12),
+            ("bush", 5, 9), ("berry", 9, 10), ("bush", 12, 12), ("bush", 1, 20), ("berry", 14, 19), ("bush", 6, 19),
+            ("rock", 10, 22), ("rocks", 4, 21), ("stump", 13, 9), ("mushroom", 15, 12), ("mushroom", 3, 13),
+            ("tallgrass", 11, 9), ("tallgrass", 3, 19), ("tallgrass", 12, 22),
+            ("lamp", 8, 13), ("lamp", 6, 15), ("fence", 9, 16), ("fence", 10, 16), ("fence", 11, 16), ("fence", 12, 16),
+            ("lily", 11, 5), ("lily", 13, 4), ("lily", 10, 5), ("reed", 14, 5), ("reed", 9, 6),
+            ("stone", 8, 6), ("stone", 9, 7), ("bench", 3, 16)
+        ]
+        return list.map { WorldDecor(kind: $0.0, x: $0.1, y: $0.2) }
+    }
+
+    var decor: [WorldDecor] { save.decor ?? [] }
+
+    func decor(at x: Int, _ y: Int) -> WorldDecor? {
+        decor.last { d in
+            if d.kind == "house" { return x >= d.x && x <= d.x + 1 && y >= d.y && y <= d.y + 1 }
+            return d.x == x && d.y == y
+        }
+    }
+
+    func addDecor(_ kind: String, _ x: Int, _ y: Int) {
+        guard x >= 0, y >= 0, x < width, y < height, decor(at: x, y) == nil else { return }
+        var list = decor
+        list.append(WorldDecor(kind: kind, x: x, y: y))
+        save.decor = list
+    }
+
+    func removeDecor(_ id: UUID) {
+        save.decor = decor.filter { $0.id != id }
+    }
+
+    /// 景上能做的事（长椅能坐、小屋能进去躺着……按景的名字配模组）
+    func actions(forDecor d: WorldDecor) -> [WorldAction] {
+        let n = WorldDecorKind(rawValue: d.kind)?.label ?? ""
+        let alias = d.kind == "house" ? n + "床沙发" : n
+        return WorldMods.all.filter(modOn).flatMap(\.actions).filter { a in
+            !a.match.isEmpty && a.match.contains { alias.contains($0) }
+        }
+    }
+
+    /// 在一样景上一起做件事
+    @discardableResult
+    func perform(_ a: WorldAction, onDecor d: WorldDecor, byHer: Bool) -> String {
+        let fake = WorldObject(source: "d:" + d.kind, x: d.x, y: d.y)
+        return perform(a, on: fake, byHer: byHer)
+    }
+
+    /// 晚上（按真实时间：19 点到早上 6 点）
+    static var isNight: Bool {
+        let h = Calendar.current.component(.hour, from: Date())
+        return h >= 19 || h < 6
     }
 
     var width: Int { save.width }
@@ -292,6 +364,7 @@ final class WorldStore: ObservableObject {
     func remove(_ id: UUID) { save.objects.removeAll { $0.id == id } }
 
     func name(of o: WorldObject) -> String {
+        if o.source.hasPrefix("d:") { return WorldDecorKind(rawValue: String(o.source.dropFirst(2)))?.label ?? "那儿" }
         if o.source.hasPrefix("f:") { return FurnitureCatalog.kind(String(o.source.dropFirst(2)))?.name ?? "东西" }
         if o.source.hasPrefix("p:"),
            let id = UUID(uuidString: String(o.source.dropFirst(2))),
