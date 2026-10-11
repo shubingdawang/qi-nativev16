@@ -921,6 +921,8 @@ final class WorldStore: ObservableObject {
             return "\(k.label) (\(d.x),\(d.y))"
         }
         if !marks.isEmpty { lines.append("岛上的景：" + marks.joined(separator: "、")) }
+        let bridges = exits.map { e in WorldRegions.name(e.to) + (unlocked(e.to) ? "" : "（还没解锁）") }
+        if !bridges.isEmpty { lines.append("桥通到：" + bridges.joined(separator: "、") + "。岛 Lv \(level)，经验 \(save.xp)。") }
         let p = personActions.map(\.name)
         if !p.isEmpty { lines.append("对她能做的：" + p.joined(separator: "、")) }
         let water = (0..<(width * height)).filter { save.ground[$0] == .water }.count
@@ -967,10 +969,11 @@ enum WorldTools {
                "看你们俩的小岛：地图多大、你和她站在哪、岛上摆了什么、每件东西上能一起做什么、最近发生了什么。",
                [:]),
             fn("world_act",
-               "在小岛上动一下：走到某格（walk）、头上说一句（say）、跟她在某件东西上一起做件事（interact，要东西编号和事情名字）、直接对她做件事（touch，要事情名字）、摆一件东西（place，要家具或景的名字和格子；景有：" + WorldDecorKind.allCases.map(\.label).joined(separator: "、") + "）、拿走一件（remove，要东西编号）、在田里种（plant，要格子和种子名字）、浇水（water）、收（harvest）、在水边钓鱼（fish）。",
+               "在小岛上动一下：走到某格（walk）、头上说一句（say）、跟她在某件东西上一起做件事（interact，要东西编号和事情名字）、直接对她做件事（touch，要事情名字）、摆一件东西（place，要家具或景的名字和格子；景有：" + WorldDecorKind.allCases.map(\.label).joined(separator: "、") + "）、拿走一件（remove，要东西编号）、在田里种（plant，要格子和种子名字）、浇水（water）、收（harvest）、在水边钓鱼（fish）、一起过桥去别的岛（travel，要岛的名字；岛要解锁了、还得有桥连着）。",
                [
                 "do": ["type": "string", "enum": ["walk", "say", "interact", "touch", "place", "remove",
-                                                  "plant", "water", "harvest", "fish"]],
+                                                  "plant", "water", "harvest", "fish", "travel"]],
+                "to": ["type": "string", "description": "travel 时去哪座岛：栖岛、花岛、月湾、松林、星丘"],
                 "seed": ["type": "string", "description": "plant 时种什么，如「草莓」"],
                 "x": ["type": "integer"], "y": ["type": "integer"],
                 "text": ["type": "string", "description": "say 时说的话"],
@@ -1053,8 +1056,19 @@ enum WorldTools {
             guard w.farmOn else { return ("田园模组关着，钓不了。", true) }
             guard w.nearWater(w.save.himX, w.save.himY) else { return ("你得先走到水边（挨着水的那一格）。", true) }
             return ("钓到了\(w.fish(byHer: false))。", false)
+        case "travel":
+            let want = (args["to"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+            guard let info = WorldRegions.all.first(where: { want.contains($0.name) || $0.id == want }) else {
+                return ("去哪座岛？" + WorldRegions.all.map(\.name).joined(separator: "、"), true)
+            }
+            guard let e = w.exits.first(where: { $0.to == info.id }) else {
+                return ("从\(WorldRegions.name(w.save.region))没有桥直接通到\(info.name)。", true)
+            }
+            if let why = w.lockReason(info.id) { return (why + "。", true) }
+            w.travel(e)
+            return ("你们一起过桥到了\(info.name)。", false)
         default:
-            return ("do 要写 walk / say / interact / touch / place / remove / plant / water / harvest / fish。", true)
+            return ("do 要写 walk / say / interact / touch / place / remove / plant / water / harvest / fish / travel。", true)
         }
     }
 }
