@@ -254,6 +254,66 @@ enum IslandArt {
         return img
     }
 
+    /// 一样景的季节版：秋天绿叶子变橙红金黄（松树不变），冬天绿的褪一点、朝上的面压一层雪
+    static func sprite(_ key: String, season: WorldSeason) -> UIImage? {
+        guard season == .autumn || season == .winter else { return sprite(key) }
+        let ck = key + "#" + season.rawValue
+        if let c = crops[ck] { return c }
+        guard let base = sprite(key), let cg = base.cgImage else { return nil }
+        let w = cg.width, h = cg.height
+        var buf = [UInt8](repeating: 0, count: w * h * 4)
+        let evergreen = key.hasPrefix("pine")
+        let onWater = ["lily", "rowboat", "reeds"].contains(key)
+        let out: CGImage? = buf.withUnsafeMutableBytes { raw in
+            guard let ctx = CGContext(data: raw.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+            ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+            let p = raw.bindMemory(to: UInt8.self)
+            func alpha(_ x: Int, _ y: Int) -> UInt8 { x < 0 || y < 0 || x >= w || y >= h ? 0 : p[(y * w + x) * 4 + 3] }
+            func isOutline(_ i: Int) -> Bool { Int(p[i]) + Int(p[i + 1]) + Int(p[i + 2]) < 260 }
+            // 先换叶子的颜色
+            for y in 0..<h {
+                for x in 0..<w {
+                    let i = (y * w + x) * 4
+                    guard p[i + 3] > 200, !evergreen else { continue }
+                    var hue: CGFloat = 0, sat: CGFloat = 0, bri: CGFloat = 0, a: CGFloat = 0
+                    UIColor(red: CGFloat(p[i]) / 255, green: CGFloat(p[i + 1]) / 255, blue: CGFloat(p[i + 2]) / 255, alpha: 1)
+                        .getHue(&hue, saturation: &sat, brightness: &bri, alpha: &a)
+                    guard hue > 0.17, hue < 0.5, sat > 0.12 else { continue }
+                    let nh: CGFloat, ns: CGFloat
+                    if season == .autumn {
+                        let pick = (x * 7 + y * 13 + (x / 5) * 3) % 3
+                        nh = [0.07, 0.03, 0.11][pick]; ns = min(1, sat * 1.25 + 0.05)
+                    } else {
+                        nh = hue; ns = sat * 0.45
+                    }
+                    let c = UIColor(hue: nh, saturation: ns, brightness: bri, alpha: 1)
+                    var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
+                    c.getRed(&r, green: &g, blue: &b, alpha: &a)
+                    p[i] = UInt8(r * 255); p[i + 1] = UInt8(g * 255); p[i + 2] = UInt8(b * 255)
+                }
+            }
+            // 冬天：每一列从上往下，描边下面那两格压成雪
+            if season == .winter && !onWater {
+                for x in 0..<w {
+                    for y in 0..<h where alpha(x, y) > 200 && alpha(x, y - 1) == 0 {
+                        for (k, v) in [(1, UInt8(250)), (2, UInt8(232))] where alpha(x, y + k) > 200 {
+                            let i = ((y + k) * w + x) * 4
+                            guard !isOutline(i) else { break }
+                            p[i] = v; p[i + 1] = v; p[i + 2] = min(255, v + 6)
+                        }
+                    }
+                }
+            }
+            return ctx.makeImage()
+        }
+        guard let out else { return base }
+        let img = UIImage(cgImage: out)
+        crops[ck] = img
+        return img
+    }
+
     /// 一样景（树、花、房子……）
     static func sprite(_ key: String) -> UIImage? {
         if let c = crops[key] { return c }
@@ -293,11 +353,12 @@ enum IslandArt {
 struct IslandSprite: View {
     let key: String
     let scale: CGFloat
+    var season: WorldSeason = .spring
 
     var body: some View {
         let s = IslandArt.size(of: key)
         Group {
-            if let img = IslandArt.sprite(key) {
+            if let img = IslandArt.sprite(key, season: season) {
                 Image(uiImage: img).resizable().interpolation(.none)
             } else {
                 Color.clear
@@ -321,6 +382,7 @@ struct AmbientLayer: View {
     var fires: [CGPoint] = []
     var fountains: [CGPoint] = []
     var ponds: [CGPoint] = []
+    var season: WorldSeason = .spring
 
     private static func noise(_ i: Int, _ k: Int) -> CGFloat {
         let v = sin(Double(i) * 12.9898 + Double(k) * 78.233) * 43758.5453
@@ -386,6 +448,14 @@ struct AmbientLayer: View {
                     ring.addEllipse(in: CGRect(x: p.x - r, y: p.y - r * 0.45, width: r * 2, height: r * 0.9))
                     gc.stroke(ring, with: .color(Color.white.opacity(0.55 * (1 - phase / 0.6))), lineWidth: px)
                 }
+                if season == .winter {
+                    // 雪：一颗颗方的，慢慢往下、左右晃
+                    for i in 0..<60 {
+                        let x = (Self.noise(i, 70) * w + CGFloat(sin(t * 0.8 + Double(i)) * 14)).truncatingRemainder(dividingBy: w)
+                        let y = (Self.noise(i, 71) * h + CGFloat(t * Double(18 + i % 4 * 6))).truncatingRemainder(dividingBy: h)
+                        dot(x, y, Color.white.opacity(0.9), i % 7 == 0 ? 2 : 1)
+                    }
+                }
                 if !night {
                     // 两只海鸥从左往右飞过，翅膀一扇一扇
                     for k in 0..<2 {
@@ -398,20 +468,24 @@ struct AmbientLayer: View {
                         dot(x - px, y + (up ? -px : px), wc); dot(x - 2 * px, y + (up ? -2 * px : px), wc)
                         dot(x + 2 * px, y + (up ? -px : px), wc); dot(x + 3 * px, y + (up ? -2 * px : px), wc)
                     }
-                    // 飘落的花瓣
-                    for i in 0..<10 {
-                        let x = (Self.noise(i, 40) * w + CGFloat(t * 6 * Double(1 + i % 3))).truncatingRemainder(dividingBy: w)
-                        let y = (Self.noise(i, 41) * h + CGFloat(t * 12)).truncatingRemainder(dividingBy: h)
-                        // 像素花瓣：一大一小两块方的，跟地面一个画法
-                        let px = (x / 3).rounded() * 3, py = (y / 3).rounded() * 3
-                        let flip = Int(t * 2 + Double(i)) % 2 == 0
-                        gc.fill(Path(CGRect(x: px, y: py, width: 6, height: 3)),
-                                with: .color(Color(red: 0.96, green: 0.71, blue: 0.78).opacity(0.95)))
-                        gc.fill(Path(CGRect(x: px + (flip ? 0 : 3), y: py + 3, width: 3, height: 3)),
-                                with: .color(Color(red: 0.91, green: 0.55, blue: 0.66).opacity(0.95)))
+                    // 飘落的：春天花瓣、秋天叶子；冬天下雪（见下面）；夏天不飘
+                    if season == .spring || season == .autumn {
+                        // 飘落的花瓣
+                        for i in 0..<10 {
+                            let x = (Self.noise(i, 40) * w + CGFloat(t * 6 * Double(1 + i % 3))).truncatingRemainder(dividingBy: w)
+                            let y = (Self.noise(i, 41) * h + CGFloat(t * 12)).truncatingRemainder(dividingBy: h)
+                            // 像素花瓣：一大一小两块方的，跟地面一个画法
+                            let px = (x / 3).rounded() * 3, py = (y / 3).rounded() * 3
+                            let flip = Int(t * 2 + Double(i)) % 2 == 0
+                            gc.fill(Path(CGRect(x: px, y: py, width: 6, height: 3)),
+                                    with: .color((season == .autumn ? Color(red: 0.95, green: 0.62, blue: 0.40) : Color(red: 0.96, green: 0.71, blue: 0.78)).opacity(0.95)))
+                            gc.fill(Path(CGRect(x: px + (flip ? 0 : 3), y: py + 3, width: 3, height: 3)),
+                                    with: .color((season == .autumn ? Color(red: 0.93, green: 0.77, blue: 0.42) : Color(red: 0.91, green: 0.55, blue: 0.66)).opacity(0.95)))
+                        }
+
                     }
                     // 两只蝴蝶
-                    for (i, col) in [Color(hexString: "F7D36B")!, Color(hexString: "C9B6E8")!].enumerated() {
+                    for (i, col) in (season == .winter ? [] : [Color(hexString: "F7D36B")!, Color(hexString: "C9B6E8")!]).enumerated() {
                         let bx = (i == 0 ? 0.28 : 0.72) * w + CGFloat(sin(t * (0.6 + Double(i) * 0.2))) * 40
                         let by = (i == 0 ? 0.32 : 0.66) * h + CGFloat(cos(t * (0.8 + Double(i) * 0.1))) * 26
                         let f = CGFloat(abs(sin(t * 9 + Double(i)))) * 4 + 1
@@ -435,7 +509,7 @@ struct AmbientLayer: View {
                                                        center: p, startRadius: 0, endRadius: 70))
                     }
                     // 萤火虫
-                    for i in 0..<22 {
+                    for i in 0..<(season == .winter ? 0 : 22) {
                         let x = Self.noise(i, 50) * w + CGFloat(sin(t * 0.9 + Double(i))) * 10
                         let y = Self.noise(i, 51) * h + CGFloat(cos(t * 1.2 + Double(i))) * 8
                         let a = 0.5 + 0.5 * sin(t * 2 + Double(i))

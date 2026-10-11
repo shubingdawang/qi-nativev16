@@ -74,6 +74,7 @@ struct WorldView: View {
     @State private var showMaterials = false
     @State private var storyShown: WorldStory?
     @State private var showGuide = false
+    @State private var enterHome = false
     @State private var groundPick: WorldGround = .wood
     @State private var itemPick: String?
     @State private var itemFilter: FurnitureKind.Category = .furniture
@@ -164,6 +165,12 @@ struct WorldView: View {
                 WorldStorySheet(story: st, him: him) { line in app.tellHim("小岛上，你们一起经历了" + line) }
                     .presentationDetents([.medium, .large])
             }
+            .navigationDestination(isPresented: $enterHome) {
+                ZStack {
+                    WallpaperBackground()
+                    ClawdHomeView()
+                }
+            }
             .sheet(isPresented: $showGuide) {
                 WorldGuideSheet { id in travelByMap(id) }
                     .presentationDetents([.large])
@@ -219,6 +226,9 @@ struct WorldView: View {
                             isPresented: Binding(get: { decorMenu != nil }, set: { if !$0 { decorMenu = nil } }),
                             titleVisibility: .visible) {
             if let d = decorMenu {
+                if WorldDecorKind.resolve(d.kind)?.isHouse == true {
+                    Button("进屋") { decorMenu = nil; enterHome = true }
+                }
                 ForEach(world.actions(forDecor: d)) { a in
                     Button(a.name) {
                         let line = world.perform(a, onDecor: d, byHer: true)
@@ -487,7 +497,7 @@ struct WorldView: View {
     private var map: some View {
         let w = CGFloat(world.width) * tile, h = CGFloat(world.height) * tile
         return ZStack(alignment: .topLeading) {
-            IslandGround(ground: world.save.ground, width: world.width, height: world.height, tile: tile)
+            IslandGround(ground: world.save.ground, width: world.width, height: world.height, tile: tile, season: world.season)
                 .equatable()
             if world.farmOn { cropLayer }
             // 摆东西、铺地、拿走的时候显示淡淡的格线，方便对位置
@@ -507,7 +517,8 @@ struct WorldView: View {
             if mode == .select || anchor != nil { selectionLayer }
             AmbientLayer(width: world.width, height: world.height, tile: tile,
                          night: WorldStore.isNight, lights: nightLights,
-                         chimneys: emitters.chimneys, fires: emitters.fires, fountains: emitters.fountains, ponds: emitters.ponds)
+                         chimneys: emitters.chimneys, fires: emitters.fires, fountains: emitters.fountains, ponds: emitters.ponds,
+                         season: world.season)
         }
         .frame(width: w, height: h, alignment: .topLeading)
     }
@@ -669,7 +680,7 @@ struct WorldView: View {
             // 比占的格子窄的居中；睡莲浮在那一格水面上
             let left = ((CGFloat(k.cells.w * IslandArt.px) - s.width) / 2).rounded(.down)
             let bottom = k == .lily ? CGFloat(d.y) * tile + (2 + s.height) * sc : CGFloat(d.y + 1) * tile
-            IslandSprite(key: k.sprite, scale: sc)
+            IslandSprite(key: k.sprite, scale: sc, season: world.season)
                 .scaleEffect(x: d.flip == true ? -1 : 1, y: 1)
                 .background(alignment: .bottom) {
                     if k.blocks {
@@ -1096,16 +1107,17 @@ struct IslandGround: View, Equatable {
     let width: Int
     let height: Int
     let tile: CGFloat
+    var season: WorldSeason = .spring
 
     @State private var image: CGImage?
 
     static func == (a: IslandGround, b: IslandGround) -> Bool {
-        a.ground == b.ground && a.width == b.width && a.height == b.height && a.tile == b.tile
+        a.ground == b.ground && a.width == b.width && a.height == b.height && a.tile == b.tile && a.season == b.season
     }
 
     private var key: Int {
         var h = Hasher()
-        h.combine(ground); h.combine(width); h.combine(height)
+        h.combine(ground); h.combine(width); h.combine(height); h.combine(season)
         return h.finalize()
     }
 
@@ -1123,8 +1135,8 @@ struct IslandGround: View, Equatable {
         .task(id: key) {
             let k = key
             if let c = IslandArt.cachedGround(k) { image = c; return }
-            let g = ground, w = width, h = height
-            let img = await Task.detached(priority: .userInitiated) { IslandPaint.render(g, width: w, height: h) }.value
+            let g = ground, w = width, h = height, s = season
+            let img = await Task.detached(priority: .userInitiated) { IslandPaint.render(g, width: w, height: h, season: s) }.value
             guard !Task.isCancelled, let img else { return }
             IslandArt.keepGround(k, img)
             image = img
@@ -1327,6 +1339,18 @@ struct WorldGuideSheet: View {
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    Picker("季节", selection: Binding<String>(
+                        get: { world.save.seasonPick ?? "auto" },
+                        set: { world.pickSeason($0 == "auto" ? nil : WorldSeason(rawValue: $0)) })) {
+                        Text("跟着日子").tag("auto")
+                        ForEach(WorldSeason.allCases) { s in Text(s.label).tag(s.rawValue) }
+                    }
+                    .pickerStyle(.segmented)
+                } header: { Text("季节（现在是\(world.season.label)天）") } footer: {
+                    Text("春天飘樱花；夏天更绿、晚上萤火虫；秋天草地发黄、树叶变色往下落；冬天积雪、屋顶树梢压着雪、池塘结冰。")
+                }
+
                 Section {
                     HStack {
                         Text("岛的等级").font(.app(14))

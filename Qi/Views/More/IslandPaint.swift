@@ -105,8 +105,30 @@ enum IslandPaint {
     }
 
     /// 整片地面，一格 16 像素，带透明（海那里是空的，底下铺海的图）
-    static func render(_ g: [WorldGround], width tw: Int, height th: Int) -> CGImage? {
+    // 各季节的草、草叶、野花、花丛、池塘
+    private static func palette(_ s: WorldSeason) -> (grass: [RGB], blade: [RGB], wild: [RGB], petals: [RGB], water: [RGB]) {
+        switch s {
+        case .spring:
+            return (grass, blade, wild, petals, water)
+        case .summer:
+            return ([c(0x7DB57A), c(0x98CA86), c(0xA9D492), c(0xBEE0A4)], [c(0x649D6A), c(0xCDEAAA)],
+                    [c(0xFFFFFF), c(0xFBE3A6), c(0xF5A9B8)], [c(0xF5A9B8), c(0xFFFFFF), c(0xC9B6E8), c(0xFBE3A6), c(0xA9DCDC)], water)
+        case .autumn:
+            return ([c(0xAFAA74), c(0xC6C087), c(0xD3CC93), c(0xE1D9A6)], [c(0x9E8A5A), c(0xEBD9A2)],
+                    [c(0xF5B38A), c(0xF2C46B), c(0xE9A28F)],
+                    [c(0xF2B07E), c(0xE98F78), c(0xF4CE7A), c(0xD9A56F), c(0xFBE3C2)], water)
+        case .winter:
+            return ([c(0xDCE4EE), c(0xEBF0F6), c(0xF4F7FB), c(0xFFFFFF)], [c(0xB7C4D4), c(0xFFFFFF)],
+                    [c(0xD6DFEB), c(0xFFFFFF), c(0xE3E9F2)],
+                    [c(0xFFFFFF), c(0xE6ECF4), c(0xD9E2EE), c(0xF4F7FB), c(0xC8D4E2)],
+                    [c(0x9CC6D4), c(0xBADCE6), c(0xCFE7EE), c(0xEEF8FB)])
+        }
+    }
+
+    static func render(_ g: [WorldGround], width tw: Int, height th: Int, season: WorldSeason = .spring) -> CGImage? {
         let W = tw * px, H = th * px, N = W * H
+        let pal = palette(season)
+        let grass = pal.grass, blade = pal.blade, wild = pal.wild, petals = pal.petals, water = pal.water
         func kind(_ x: Int, _ y: Int) -> WorldGround {
             guard x >= 0, y >= 0, x < tw, y < th else { return .sea }
             return g[y * tw + x]

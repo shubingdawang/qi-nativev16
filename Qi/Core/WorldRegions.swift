@@ -95,6 +95,30 @@ enum WorldRegions {
     }
 }
 
+// MARK: - 季节
+
+enum WorldSeason: String, CaseIterable, Identifiable, Hashable {
+    case spring, summer, autumn, winter
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .spring: return "春"
+        case .summer: return "夏"
+        case .autumn: return "秋"
+        case .winter: return "冬"
+        }
+    }
+    /// 跟着真实的月份：3–5 春、6–8 夏、9–11 秋、12–2 冬
+    static var now: WorldSeason {
+        switch Calendar.current.component(.month, from: Date()) {
+        case 3...5: return .spring
+        case 6...8: return .summer
+        case 9...11: return .autumn
+        default: return .winter
+        }
+    }
+}
+
 // MARK: - 等级
 
 enum WorldLevel {

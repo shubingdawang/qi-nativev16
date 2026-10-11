@@ -113,6 +113,8 @@ struct WorldSave: Codable {
     /// 今天摆东西、铺地已经给了多少经验（一天最多 20）
     var buildXPDay = ""
     var buildXP = 0
+    /// 她手动选的季节；nil = 跟着日子
+    var seasonPick: String? = nil
 }
 
 /// 一格庄稼。长多快按真实时间算，浇一次水快一截
@@ -193,6 +195,7 @@ extension WorldSave {
         visited = (try? c.decodeIfPresent([String].self, forKey: .visited)) ?? ["home"]
         buildXPDay = (try? c.decodeIfPresent(String.self, forKey: .buildXPDay)) ?? ""
         buildXP = (try? c.decodeIfPresent(Int.self, forKey: .buildXP)) ?? 0
+        seasonPick = try? c.decodeIfPresent(String.self, forKey: .seasonPick)
     }
 }
 
@@ -1109,6 +1112,15 @@ enum WorldTools {
 extension WorldStore {
 
     var level: Int { WorldLevel.level(save.xp) }
+
+    /// 岛上现在是什么季节
+    var season: WorldSeason { save.seasonPick.flatMap(WorldSeason.init(rawValue:)) ?? WorldSeason.now }
+
+    func pickSeason(_ s: WorldSeason?) {
+        var v = save
+        v.seasonPick = s?.rawValue
+        save = v
+    }
 
     /// 现在解锁了哪些岛
     private var unlockedSet: Set<String> { Set(WorldRegions.all.filter { $0.id != "home" && unlocked($0.id) }.map(\.id)) }
