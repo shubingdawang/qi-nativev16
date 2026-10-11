@@ -484,13 +484,16 @@ struct AmbientLayer: View {
                             let y = y0.truncatingRemainder(dividingBy: h)
                             let px: CGFloat = (x / 3).rounded() * 3
                             let py: CGFloat = (y / 3).rounded() * 3
-                            let flip = Int(t * 2 + Double(i)) % 2 == 0
+                            let beat: Int = Int(t * 2) + i
+                            let flip: Bool = beat % 2 == 0
                             gc.fill(Path(CGRect(x: px, y: py, width: 6, height: 3)), with: .color(big.opacity(0.95)))
-                            gc.fill(Path(CGRect(x: px + (flip ? 0 : 3), y: py + 3, width: 3, height: 3)), with: .color(small.opacity(0.95)))
+                            let sx: CGFloat = flip ? px : px + 3
+                            gc.fill(Path(CGRect(x: sx, y: py + 3, width: 3, height: 3)), with: .color(small.opacity(0.95)))
                         }
                     }
                     // 两只蝴蝶
-                    for (i, col) in (season == .winter ? [] : [Color(hexString: "F7D36B")!, Color(hexString: "C9B6E8")!]).enumerated() {
+                    let wings: [Color] = season == .winter ? [] : [Color(hexString: "F7D36B")!, Color(hexString: "C9B6E8")!]
+                    for (i, col) in wings.enumerated() {
                         let bx = (i == 0 ? 0.28 : 0.72) * w + CGFloat(sin(t * (0.6 + Double(i) * 0.2))) * 40
                         let by = (i == 0 ? 0.32 : 0.66) * h + CGFloat(cos(t * (0.8 + Double(i) * 0.1))) * 26
                         let f = CGFloat(abs(sin(t * 9 + Double(i)))) * 4 + 1
