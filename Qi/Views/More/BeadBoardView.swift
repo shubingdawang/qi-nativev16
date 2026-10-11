@@ -629,22 +629,6 @@ struct BeadExportView: View {
     }
 }
 
-/// 透明底的棋盘格
-struct CheckerBoard: View {
-    var body: some View {
-        Canvas { gc, sz in
-            let s: CGFloat = 10
-            gc.fill(Path(CGRect(origin: .zero, size: sz)), with: .color(Color(white: 0.96)))
-            for y in stride(from: CGFloat(0), to: sz.height, by: s) {
-                for x in stride(from: CGFloat(0), to: sz.width, by: s)
-                where (Int(x / s) + Int(y / s)) % 2 == 0 {
-                    gc.fill(Path(CGRect(x: x, y: y, width: s, height: s)), with: .color(Color(white: 0.88)))
-                }
-            }
-        }
-    }
-}
-
 // MARK: - 导入中心：摆好、选去处、存
 
 struct ImportPlacementView: View {
