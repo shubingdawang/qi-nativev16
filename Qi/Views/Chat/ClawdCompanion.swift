@@ -18,6 +18,8 @@ struct ClawdRoamer: View {
     var upset: Bool = false
     /// 她上次说话是什么时候。**用来决定这只困不困**
     var lastHerAt: Date? = nil
+    /// 输入栏顶边离页面底边多远。给了就「待在输入框上」：站在输入栏上沿，只左右走
+    var perchBottom: CGFloat? = nil
 
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
@@ -170,7 +172,7 @@ struct ClawdRoamer: View {
                     .contentShape(Rectangle().inset(by: -14))
             }
             .position(x: posX * geo.size.width,
-                      y: posY * geo.size.height)
+                      y: perchBottom.map { geo.size.height - $0 - 22 } ?? posY * geo.size.height)
             .onAppear { pageWidth = geo.size.width }
             .onChange(of: geo.size.width) { _, w in pageWidth = w }
             // 拎着的时候要跟手，所以不给动画
@@ -346,8 +348,8 @@ struct ClawdRoamer: View {
                     continue
                 }
 
-                // 偶尔躲到屏幕边上去探头。左右两边都会去。
-                if Double.random(in: 0...1) < 0.18 {
+                // 偶尔躲到屏幕边上去探头。左右两边都会去。（待在输入框上时不探头）
+                if perchBottom == nil, Double.random(in: 0...1) < 0.18 {
                     await peekLoop(right: Bool.random(), forever: false)
                     if Task.isCancelled { return }
                     continue

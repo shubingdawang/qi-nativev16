@@ -31,7 +31,6 @@ struct VinylStage: View {
     @State private var spinBase: Double = 0
     @State private var spinStart: Date?
     @State private var unlocked: Set<String> = []
-    @State private var drag: [String: CGSize] = [:]
     @State private var tick: Task<Void, Never>?
 
     private var style: VinylStyle { VinylStyle(rawValue: styleRaw) ?? .glass }
@@ -93,13 +92,16 @@ struct VinylStage: View {
     }
 
     var body: some View {
+        // ⚠️ 外面这一层**不跟着时间走**：每一帧只重画唱片那一块的角度
+        // （见 `record`），小螃蟹各管各的。以前整页一起按帧重画，拖小螃蟹会卡
         GeometryReader { geo in
             let size = geo.size
-            TimelineView(.animation(paused: !playing && unlocked.isEmpty)) { ctx in
-                let now = ctx.date
-                ZStack(alignment: .topLeading) {
-                    record(size: size, now: now)
-                    ForEach(Self.band) { m in member(m.id, gif: m.gif, size: size, now: now) }
+            ZStack(alignment: .topLeading) {
+                    record(size: size)
+                    ForEach(Self.band) { m in
+                        BandCrab(id: m.id, gif: m.gif, spot: spot(m.id), stage: size,
+                                 playing: playing, unlocked: $unlocked) { save(m.id, $0) }
+                    }
                     togetherPill
                         .frame(maxWidth: .infinity)
                         .padding(.top, 4)
@@ -111,7 +113,6 @@ struct VinylStage: View {
                             .frame(maxWidth: .infinity)
                             .offset(y: size.height - 26)
                     }
-                }
             }
         }
         .onAppear {
@@ -200,13 +201,18 @@ struct VinylStage: View {
 
     // MARK: 唱片
 
-    private func record(size: CGSize, now: Date) -> some View {
+    private func record(size: CGSize) -> some View {
         let l = layout(size)
+        let key = "\(style.rawValue)|\(track?.id.uuidString ?? "")|\(Int(l.d))"
         return ZStack(alignment: .topLeading) {
-            disc(d: l.d)
-                .rotationEffect(.degrees(angle(now)))
-                .frame(width: l.d, height: l.d)
-                .position(l.center)
+            // 只有角度按帧变；唱片本身（封面、那圈字）包成不变的一块，不跟着重画
+            TimelineView(.animation(paused: !playing)) { ctx in
+                Frozen(key: key) { disc(d: l.d) }
+                    .equatable()
+                    .rotationEffect(.degrees(angle(ctx.date)))
+            }
+            .frame(width: l.d, height: l.d)
+            .position(l.center)
             // 唱片套盖在唱片前面：唱片从里面滑出一半
             if let r = l.sleeve {
                 sleeve(side: r.width)
@@ -362,47 +368,77 @@ struct VinylStage: View {
         .allowsHitTesting(false)
     }
 
-    // MARK: 小螃蟹
+}
 
-    private func member(_ id: String, gif: String, size: CGSize, now: Date) -> some View {
-        let side = min(size.width * 0.2, 80)
-        let p = spot(id)
-        let open = unlocked.contains(id)
-        let t = now.timeIntervalSinceReferenceDate
-        let bob = playing && !open ? CGFloat(abs(sin(t * 4 + Double(id.count)))) * -3 : 0
-        let off = drag[id] ?? .zero
-        return ClawdGifView(name: gif, size: side)
-            .frame(width: side, height: side)
-            .overlay {
-                if open {
-                    Circle()
-                        .stroke(style: StrokeStyle(lineWidth: 1.2, dash: [4, 3]))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .shadow(color: .black.opacity(0.25), radius: 2)
-                        .frame(width: side * 0.7, height: side * 0.7)
-                        .offset(y: side * 0.22)
+/// 内容不变就不重画的一块（只认 key）
+private struct Frozen<Content: View>: View, Equatable {
+    let key: String
+    @ViewBuilder let content: () -> Content
+
+    static func == (a: Frozen, b: Frozen) -> Bool { a.key == b.key }
+
+    var body: some View { content() }
+}
+
+/// 乐队里的一只。拖动、晃动都只动它自己，不惊动整页
+private struct BandCrab: View {
+    let id: String
+    let gif: String
+    let spot: CGPoint
+    let stage: CGSize
+    let playing: Bool
+    @Binding var unlocked: Set<String>
+    var onMoved: (CGPoint) -> Void
+
+    @State private var drag: CGSize = .zero
+
+    private var open: Bool { unlocked.contains(id) }
+
+    var body: some View {
+        let side = min(stage.width * 0.2, 80)
+        TimelineView(.animation(minimumInterval: 1.0 / 20, paused: !playing || open)) { ctx in
+            let t = ctx.date.timeIntervalSinceReferenceDate
+            let bob = playing && !open ? CGFloat(abs(sin(t * 4 + Double(id.count)))) * -3 : 0
+            ClawdGifView(name: gif, size: side)
+                .frame(width: side, height: side)
+                .overlay {
+                    if open {
+                        Circle()
+                            .stroke(style: StrokeStyle(lineWidth: 1.2, dash: [4, 3]))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .shadow(color: .black.opacity(0.25), radius: 2)
+                            .frame(width: side * 0.7, height: side * 0.7)
+                            .offset(y: side * 0.22)
+                    }
                 }
-            }
-            .scaleEffect(open ? 1.08 : 1)
-            .contentShape(Rectangle())
-            .position(x: p.x * size.width + off.width, y: p.y * size.height + off.height + bob)
-            .onTapGesture(count: 2) {
-                withAnimation(.easeOut(duration: 0.15)) { _ = unlocked.remove(id) }
-            }
-            .onTapGesture {
-                withAnimation(.easeOut(duration: 0.15)) { _ = unlocked.insert(id) }
-            }
-            .gesture(
-                DragGesture(minimumDistance: 4)
-                    .onChanged { v in drag[id] = v.translation }
-                    .onEnded { v in
-                        drag[id] = nil
-                        let np = CGPoint(
-                            x: min(max(p.x + v.translation.width / max(size.width, 1), 0.05), 0.95),
-                            y: min(max(p.y + v.translation.height / max(size.height, 1), 0.05), 0.98))
-                        save(id, np)
-                    },
-                including: open ? .all : .subviews
-            )
+                .scaleEffect(open ? 1.08 : 1)
+                .offset(y: bob)
+        }
+        .frame(width: side, height: side)
+        .contentShape(Rectangle())
+        .offset(drag)
+        .onTapGesture(count: 2) {
+            withAnimation(.easeOut(duration: 0.15)) { _ = unlocked.remove(id) }
+        }
+        .onTapGesture {
+            withAnimation(.easeOut(duration: 0.15)) { _ = unlocked.insert(id) }
+        }
+        .gesture(
+            DragGesture(minimumDistance: 4)
+                .onChanged { v in drag = v.translation }
+                .onEnded { v in
+                    let np = CGPoint(
+                        x: min(max(spot.x + v.translation.width / max(stage.width, 1), 0.05), 0.95),
+                        y: min(max(spot.y + v.translation.height / max(stage.height, 1), 0.05), 0.98))
+                    var t = Transaction()
+                    t.disablesAnimations = true
+                    withTransaction(t) {
+                        drag = .zero
+                        onMoved(np)
+                    }
+                },
+            including: open ? .all : .subviews
+        )
+        .position(x: spot.x * stage.width, y: spot.y * stage.height)
     }
 }

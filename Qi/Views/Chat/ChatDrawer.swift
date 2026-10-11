@@ -13,6 +13,7 @@ struct ChatDrawer: View {
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
     @State private var search = ""
+    @AppStorage("clawdPerch") private var clawdPerch = false
     /// 正在改名的那一条 + 输入框里的字。
     /// 她说的：「聊天页的对话框不能长按改标题」——以前长按菜单里
     /// 只有置顶和删除，标题只能由他自己起，她改不了。
@@ -229,6 +230,18 @@ struct ChatDrawer: View {
                 }
                 .buttonStyle(.plain)
             }
+
+            Toggle(isOn: $clawdPerch) {
+                HStack(spacing: 8) {
+                    Image(systemName: "pawprint")
+                    Text("clawd 待在输入框上")
+                }
+                .font(.app(14))
+                .foregroundStyle(Theme.textSoft(scheme))
+            }
+            .tint(app.settings.accentColor)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 10)
 
             Button {
                 close()

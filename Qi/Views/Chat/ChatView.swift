@@ -130,6 +130,10 @@ struct ChatView: View {
     /// 输入栏那一块现在有多高。消息区拿它当底部留白，
     /// 最后一条才不会永远压在玻璃底下。
     @State private var composerHeight: CGFloat = 96
+    /// 聊天页那只 clawd 待在输入框上（只左右走），还是满屏溜达
+    @AppStorage("clawdPerch") private var clawdPerch = false
+    /// 打字时手动展开了动作 / 心理那两颗（发完、清空就收回去）
+    @State private var beatsOpen = false
     /// 她自己的动作 / 心里话：现在开着哪一个框（nil = 都没开）
     @State private var beatKind: String?
     @State private var beatText = ""
@@ -358,7 +362,8 @@ struct ChatView: View {
                             // 这一轮出错了没有：最后一条挂着错就是出了
                             upset: conv.messages.last?.errorText != nil,
                             // 她上次说话是什么时候——那只困不困看这个
-                            lastHerAt: conv.messages.last(where: { $0.role == .user })?.createdAt)
+                            lastHerAt: conv.messages.last(where: { $0.role == .user })?.createdAt,
+                            perchBottom: clawdPerch ? composerHeight : nil)
                     .allowsHitTesting(menuOpenID == nil && !selecting)
             }
 
@@ -1325,9 +1330,27 @@ struct ChatView: View {
     private var beatRow: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 8) {
-                beatChip("动作", "act", "chevron.right")
-                beatChip("心理", "mind", "quote.opening")
-                Spacer(minLength: 0)
+                // 正在打字（框里有字）而且没展开的时候，两颗收成右边一颗小钮，
+                // 免得手快点到。点它再展开
+                if draft.isEmpty || beatKind != nil || beatsOpen {
+                    beatChip("动作", "act", "chevron.right")
+                    beatChip("心理", "mind", "quote.opening")
+                    Spacer(minLength: 0)
+                } else {
+                    Spacer(minLength: 0)
+                    Button {
+                        withAnimation(.easeOut(duration: 0.16)) { beatsOpen = true }
+                    } label: {
+                        Image(systemName: "ellipsis.bubble")
+                            .font(.app(12))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(Theme.softFillDeep))
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
             }
 
             if let kind = beatKind {
@@ -1672,6 +1695,7 @@ struct ChatView: View {
                           videoNote: pendingVideoNote,
                           in: conv.id)
             draft = ""
+            beatsOpen = false
             mentioning = false
             pendingVoice = nil
             pendingTone = ""
@@ -1709,6 +1733,7 @@ struct ChatView: View {
         let frames = pendingVideoFrames
         let videoNote = pendingVideoNote
         draft = ""
+        beatsOpen = false
         pendingVoice = nil
         pendingTone = ""
         pendingImages = []
