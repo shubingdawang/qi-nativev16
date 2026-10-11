@@ -427,6 +427,51 @@ enum IslandArt {
                     }
                 }
             }
+            // 桥：四边挨着海的木头。上下沿描深色边、上沿一道栏杆亮线，桥下水面一道影子，隔一格一根桩子插进水里
+            let dark = soft(0x8A4B36), rail = soft(0xFFD29A), post = soft(0x6E3B2C), deep = soft(0x5E8FA0)
+            func isBridge(_ tx: Int, _ ty: Int) -> Bool {
+                at(tx, ty) == .wood && [(0, 1), (0, -1), (1, 0), (-1, 0)].contains { at(tx + $0.0, ty + $0.1) == .sea }
+            }
+            func water(_ x: Int, _ y: Int) -> Bool {
+                x >= 0 && y >= 0 && x < W && y < H && !inside[y * W + x] && at(x / px, y / px) != .wood
+            }
+            func shadow(_ i: Int) {
+                let a = 70.0 / 255
+                p[i * 4] = UInt8(40 * a); p[i * 4 + 1] = UInt8(70 * a); p[i * 4 + 2] = UInt8(90 * a); p[i * 4 + 3] = 70
+            }
+            for ty in 0..<h {
+                for tx in 0..<w where isBridge(tx, ty) {
+                    let x0 = tx * px, y0 = ty * px
+                    if at(tx, ty - 1) == .sea || at(tx, ty + 1) == .sea {
+                        for x in x0..<(x0 + px) {
+                            set(y0 * W + x, dark); set((y0 + 1) * W + x, rail); set((y0 + 2) * W + x, dark)
+                            set((y0 + px - 1) * W + x, dark)
+                            for k in 1...3 {
+                                let yy = y0 + px - 1 + k
+                                guard water(x, yy) else { continue }
+                                if k > 1 { shadow(yy * W + x) } else { set(yy * W + x, deep) }
+                            }
+                        }
+                        if tx % 2 == 0 {
+                            let bx = x0 + 6
+                            for k in 0..<5 {
+                                let yy = y0 + px - 1 + k
+                                guard water(bx, yy) else { continue }
+                                set(yy * W + bx, post); set(yy * W + bx + 1, dark)
+                            }
+                            let yy = y0 + px + 4
+                            if water(bx, yy) {
+                                set(yy * W + bx - 1, foam); set(yy * W + bx + 2, foam)
+                            }
+                        }
+                    } else {
+                        for y in y0..<(y0 + px) {
+                            set(y * W + x0, dark); set(y * W + x0 + 1, rail)
+                            set(y * W + x0 + px - 1, dark); set(y * W + x0 + px - 2, rail)
+                        }
+                    }
+                }
+            }
             return ctx.makeImage()
         }
     }

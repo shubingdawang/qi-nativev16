@@ -46,20 +46,32 @@ struct WorldView: View {
 
     /// 一格 48 点 = 素材里 16 像素放大三倍
     private let tile: CGFloat = 48
+    /// 岛外面留多宽的海（放大缩小、拖到边上都还是海）
+    private let seaPad: CGFloat = 48 * 10
+
+    // 两个人在画面上的位置：存档里是「要去哪一格」，这里一步一步走过去
+    @StateObject private var herWalk = IslandWalker(WorldStore.shared.save.herX, WorldStore.shared.save.herY, step: 0.2)
+    @StateObject private var himWalk = IslandWalker(WorldStore.shared.save.himX, WorldStore.shared.save.himY, step: 0.24)
+
+    // 镜头：两指捏合缩放、单指拖动
+    @State private var zoom: CGFloat = 0.8
+    @State private var zoomStart: CGFloat?
+    @State private var pan: CGSize = .zero
+    @State private var panStart: CGSize = .zero
+    @State private var framed = false
 
     private var him: String { app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName }
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView([.horizontal, .vertical], showsIndicators: false) {
-                // 外面一圈海跟着岛一起滚，跟格子对齐
-                map
-                    .padding(tile * 2)
-                    .background(sea)
-            }
-            .background(sea.ignoresSafeArea())
-            .defaultScrollAnchor(.center)
+            island
             bottom
+        }
+        .onChange(of: world.save.herX * 1000 + world.save.herY) { _, _ in
+            herWalk.walk(to: world.save.herX, world.save.herY) { world.route(from: $0, to: $1) }
+        }
+        .onChange(of: world.save.himX * 1000 + world.save.himY) { _, _ in
+            himWalk.walk(to: world.save.himX, world.save.himY) { world.route(from: $0, to: $1) }
         }
         .navigationTitle("小岛")
         .navigationBarTitleDisplayMode(.inline)
@@ -153,6 +165,92 @@ struct WorldView: View {
         menuFor = nil
     }
 
+    // MARK: 镜头
+
+    private var island: some View {
+        GeometryReader { geo in
+            let content = CGSize(width: CGFloat(world.width) * tile + seaPad * 2,
+                                 height: CGFloat(world.height) * tile + seaPad * 2)
+            map
+                .padding(seaPad)
+                .background(sea)
+                .frame(width: content.width, height: content.height)
+                .scaleEffect(zoom)
+                .offset(pan)
+                .frame(width: geo.size.width, height: geo.size.height)
+                .clipped()
+                .contentShape(Rectangle())
+                .gesture(dragGesture(geo.size, content).simultaneously(with: zoomGesture(geo.size, content)))
+                .simultaneousGesture(SpatialTapGesture().onEnded { v in
+                    if let c = cell(at: v.location, geo.size, content) { tap(c.0, c.1, moved: false) }
+                })
+                .onAppear {
+                    guard !framed else { return }
+                    framed = true
+                    look(at: herWalk.pos, geo.size, content)
+                }
+        }
+        .background(sea.ignoresSafeArea())
+    }
+
+    /// 屏幕上的点 → 岛上第几格
+    private func cell(at p: CGPoint, _ screen: CGSize, _ content: CGSize) -> (Int, Int)? {
+        let mx = (p.x - screen.width / 2 - pan.width) / zoom + content.width / 2 - seaPad
+        let my = (p.y - screen.height / 2 - pan.height) / zoom + content.height / 2 - seaPad
+        let x = Int(floor(mx / tile)), y = Int(floor(my / tile))
+        guard x >= 0, y >= 0, x < world.width, y < world.height else { return nil }
+        return (x, y)
+    }
+
+    private func minZoom(_ screen: CGSize, _ content: CGSize) -> CGFloat {
+        max(0.3, screen.width / content.width, screen.height / content.height)
+    }
+
+    /// 拖到哪儿都不露出海外面
+    private func clamp(_ p: CGSize, _ screen: CGSize, _ content: CGSize, _ z: CGFloat) -> CGSize {
+        let mx = max(0, (content.width * z - screen.width) / 2), my = max(0, (content.height * z - screen.height) / 2)
+        return CGSize(width: min(mx, max(-mx, p.width)), height: min(my, max(-my, p.height)))
+    }
+
+    /// 镜头对准某一格
+    private func look(at t: CGPoint, _ screen: CGSize, _ content: CGSize) {
+        let px = seaPad + t.x * tile + tile / 2 - content.width / 2
+        let py = seaPad + t.y * tile + tile / 2 - content.height / 2
+        pan = clamp(CGSize(width: -px * zoom, height: -py * zoom), screen, content, zoom)
+        panStart = pan
+    }
+
+    private func dragGesture(_ screen: CGSize, _ content: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: mode == .ground ? 0 : 6)
+            .onChanged { v in
+                guard zoomStart == nil else { return }
+                if mode == .ground {
+                    // 铺地：手指划过的格子都铺上
+                    if let c = cell(at: v.location, screen, content) { world.setGround(groundPick, c.0, c.1) }
+                    return
+                }
+                pan = clamp(CGSize(width: panStart.width + v.translation.width, height: panStart.height + v.translation.height),
+                            screen, content, zoom)
+            }
+            .onEnded { _ in panStart = pan }
+    }
+
+    private func zoomGesture(_ screen: CGSize, _ content: CGSize) -> some Gesture {
+        MagnifyGesture()
+            .onChanged { v in
+                if zoomStart == nil { zoomStart = zoom; panStart = pan }
+                guard let z0 = zoomStart else { return }
+                let z = min(2.2, max(minZoom(screen, content), z0 * v.magnification))
+                // 以屏幕中间为准缩放
+                pan = clamp(CGSize(width: panStart.width * z / z0, height: panStart.height * z / z0), screen, content, z)
+                zoom = z
+            }
+            .onEnded { _ in
+                zoomStart = nil
+                panStart = pan
+            }
+    }
+
     // MARK: 地图
 
     private var map: some View {
@@ -171,27 +269,14 @@ struct WorldView: View {
                 ForEach(world.save.objects) { o in
                     objectView(o).zIndex(Double(o.y) + 0.6)
                 }
-                her.zIndex(Double(world.save.herY) + 0.7)
-                himView.zIndex(Double(world.save.himY) + 0.75)
+                her.zIndex(Double(herWalk.pos.y) + 0.7)
+                himView.zIndex(Double(himWalk.pos.y) + 0.75)
             }
             .frame(width: w, height: h, alignment: .topLeading)
             AmbientLayer(width: world.width, height: world.height, tile: tile,
                          night: WorldStore.isNight, lights: nightLights)
         }
         .frame(width: w, height: h, alignment: .topLeading)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { v in
-                    guard mode == .ground else { return }
-                    world.setGround(groundPick, Int(v.location.x / tile), Int(v.location.y / tile))
-                }
-                .onEnded { v in tap(Int(v.location.x / tile), Int(v.location.y / tile), moved: v.translation != .zero) }
-        )
-        .animation(.easeInOut(duration: 0.45), value: world.save.herX)
-        .animation(.easeInOut(duration: 0.45), value: world.save.herY)
-        .animation(.easeInOut(duration: 0.55), value: world.save.himX)
-        .animation(.easeInOut(duration: 0.55), value: world.save.himY)
     }
 
     private func tap(_ x: Int, _ y: Int, moved: Bool) {
@@ -377,7 +462,8 @@ struct WorldView: View {
                     .frame(width: 26, height: 7).blur(radius: 1.5).offset(y: 21)
             )
         }
-        .position(x: CGFloat(world.save.herX) * tile + tile / 2, y: CGFloat(world.save.herY) * tile + tile / 2 - 6)
+        .offset(y: herWalk.moving ? -2 : 0)
+        .position(x: herWalk.pos.x * tile + tile / 2, y: herWalk.pos.y * tile + tile / 2 - 6)
         .allowsHitTesting(false)
     }
 
@@ -400,7 +486,8 @@ struct WorldView: View {
                         .frame(width: 30, height: 7).blur(radius: 1.5).offset(y: 21)
                 )
         }
-        .position(x: CGFloat(world.save.himX) * tile + tile / 2, y: CGFloat(world.save.himY) * tile + tile / 2 - 8)
+        .offset(y: himWalk.moving ? -2 : 0)
+        .position(x: himWalk.pos.x * tile + tile / 2, y: himWalk.pos.y * tile + tile / 2 - 8)
         .allowsHitTesting(false)
     }
 
@@ -599,5 +686,46 @@ struct IslandGround: View, Equatable {
             .interpolation(.none)
             .frame(width: CGFloat(width) * tile, height: CGFloat(height) * tile)
             .allowsHitTesting(false)
+    }
+}
+
+/// 岛上一个人走路：存档里改了「在哪一格」，这里沿着路线一格一格走过去（绕开水和树）
+@MainActor
+final class IslandWalker: ObservableObject {
+    enum Facing { case down, left, right, up }
+
+    /// 画面上在哪（格子坐标，走在半路是小数）
+    @Published private(set) var pos: CGPoint
+    @Published private(set) var facing: Facing = .down
+    @Published private(set) var moving = false
+
+    private var at: (Int, Int)
+    private let step: Double
+    private var task: Task<Void, Never>?
+
+    init(_ x: Int, _ y: Int, step: Double) {
+        pos = CGPoint(x: x, y: y)
+        at = (x, y)
+        self.step = step
+    }
+
+    func walk(to x: Int, _ y: Int, route: ((Int, Int), (Int, Int)) -> [(Int, Int)]?) {
+        guard (x, y) != at else { return }
+        task?.cancel()
+        // 走不到（隔着水）就直接过去
+        let steps = route(at, (x, y)) ?? [(x, y)]
+        task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.moving = true
+            for s in steps {
+                if Task.isCancelled { return }
+                let dx = s.0 - self.at.0, dy = s.1 - self.at.1
+                self.facing = dx < 0 ? .left : dx > 0 ? .right : dy < 0 ? .up : .down
+                self.at = s
+                withAnimation(.linear(duration: self.step)) { self.pos = CGPoint(x: s.0, y: s.1) }
+                try? await Task.sleep(nanoseconds: UInt64(self.step * 1_000_000_000))
+            }
+            if !Task.isCancelled { self.moving = false }
+        }
     }
 }

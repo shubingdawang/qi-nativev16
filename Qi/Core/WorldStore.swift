@@ -273,8 +273,8 @@ final class WorldStore: ObservableObject {
         loaded = true
     }
 
-    /// 地图画法的版本：2 = 像素素材那一版，3 = 大岛、不规则的海岸
-    static let artVersion = 3
+    /// 地图画法的版本：2 = 像素素材那一版，3 = 大岛、不规则的海岸，4 = 桥搭到岸上、景都挪到岸上
+    static let artVersion = 4
 
     /// 老存档换成新画法：地和景换成新的，摆的东西留着（落在水里或压着景的拿掉），田里不在田上的拿掉
     private static func upgrade(_ s: inout WorldSave) {
@@ -313,7 +313,7 @@ final class WorldStore: ObservableObject {
             "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
             "~~~~~~~~~~.......~~~~~~~....~~",
             "~~~~~~~~...........~~~~~....~~",
-            "~~~~~~~.............bbb......~",
+            "~~~~~~~............bbbbb.....~",
             "~~~~~~..............~~~~....~~",
             "~~~~~~...............~~~....~~",
             "~~~~~................~~~~~~~~~",
@@ -331,7 +331,7 @@ final class WorldStore: ObservableObject {
             "~~..........pp......pp....~~~~",
             "~~.fff......pp......pp...~~~~~",
             "~~~fff......pp......pp.~~~~~~~",
-            "~~~.........pp......pppbbb~~~~",
+            "~~~.........pp......ppbbbb~~~~",
             "~~~~........pp........~~~~~~~~",
             "~~~..ppppppppp.........~~~~~~~",
             "~~~..ppppppppp.fff......~~~~~~",
@@ -379,24 +379,23 @@ final class WorldStore: ObservableObject {
     /// 一开始岛上就有的景。坐标是图的左下角那一格
     static var starterDecor: [WorldDecor] {
         let list: [(WorldDecorKind, Int, Int)] = [
-            (.houseOrange, 11, 10), (.treeBigPink, 24, 5), (.cabin, 9, 29), (.shop, 15, 29), (.fence, 3, 26), (.fence, 5, 26),
-            (.crate, 8, 28), (.waterBarrel, 8, 29), (.barrel, 7, 26), (.sunflower, 3, 30), (.sunflower, 4, 30), (.sunflower, 5, 30),
-            (.sunflower, 6, 30), (.boulder, 2, 16), (.rocks, 22, 10), (.rock, 24, 19), (.pebble, 22, 21), (.bushThick, 6, 34),
-            (.grassTall, 21, 32), (.treeSmall, 22, 31), (.pebbleBrown, 11, 35), (.rockBrown, 15, 35), (.treePink, 8, 12), (.treePink, 15, 15),
-            (.treeSmall, 9, 17), (.treeGreen, 15, 23), (.treeOrange, 17, 27), (.treePink, 20, 29), (.berry, 9, 21), (.berryBlue, 16, 21),
-            (.bush, 10, 13), (.bush, 14, 13), (.bushSmall, 11, 15), (.bushThick, 14, 21), (.stump, 6, 18), (.flowerY, 10, 19),
-            (.daisy, 16, 9), (.clover, 18, 20), (.fern, 16, 12), (.fern, 22, 14), (.grass, 17, 16), (.bonsai, 7, 6),
-            (.bonsai, 14, 3), (.bonsai, 17, 7), (.bonsai, 8, 8), (.bonsai, 17, 5), (.pine, 11, 6), (.olive, 15, 8),
-            (.bonsai, 19, 7), (.bonsai, 9, 6), (.bonsai, 5, 8), (.bonsai, 8, 4), (.bonsai, 3, 20), (.olive, 6, 13),
-            (.treeSmall, 4, 11), (.treeSmall, 6, 15), (.treeSmall, 1, 18), (.treeSmall, 3, 13), (.treeGreen, 19, 10), (.treeGreen, 4, 23),
-            (.olive, 21, 25), (.treeSmall, 24, 17), (.treeSmall, 15, 11), (.treeSmall, 18, 24), (.grassTall, 23, 15), (.grass, 11, 14),
-            (.flowerR, 6, 5), (.bush, 22, 26), (.flowerY, 22, 20), (.clover, 8, 20), (.fern, 18, 22), (.bushSmall, 11, 26),
-            (.bush, 16, 19), (.grassTall, 21, 16), (.daisy, 5, 20), (.clover, 21, 11), (.clover, 26, 16), (.flowerY, 22, 17),
-            (.daisy, 26, 6), (.grassTall, 8, 15), (.grass, 24, 31), (.bush, 20, 11), (.bushSmall, 16, 5), (.grassTall, 23, 20),
-            (.bushSmall, 11, 23), (.bushSmall, 24, 20), (.fern, 14, 19), (.bushThick, 8, 19), (.flowerY, 5, 12), (.daisy, 14, 23),
-            (.grassTall, 10, 18), (.daisy, 18, 16), (.grassTall, 26, 14), (.bushSmall, 24, 28), (.flowerR, 14, 15), (.flowerR, 9, 23),
-            (.flowerR, 10, 3), (.grass, 19, 4), (.pebbleBrown, 24, 12), (.pebbleBrown, 22, 16), (.pebbleBrown, 11, 17), (.stumpBig, 15, 25),
-            (.stumpBig, 17, 9)
+            (.houseOrange, 11, 10), (.treePink, 25, 4), (.cabin, 9, 29), (.shop, 15, 29), (.fence, 3, 26), (.fence, 5, 26),
+            (.crate, 8, 28), (.waterBarrel, 8, 29), (.barrel, 7, 26), (.sunflower, 5, 30), (.sunflower, 6, 30), (.sunflower, 7, 30),
+            (.boulder, 2, 16), (.rocks, 20, 11), (.rock, 23, 19), (.pebble, 22, 20), (.bushThick, 6, 33), (.grassTall, 21, 32),
+            (.treeSmall, 22, 31), (.pebbleBrown, 11, 34), (.rockBrown, 14, 35), (.treePink, 8, 12), (.treePink, 15, 15), (.treeSmall, 9, 17),
+            (.treeGreen, 15, 23), (.treeOrange, 17, 26), (.treePink, 20, 29), (.berry, 9, 21), (.berryBlue, 16, 20), (.bush, 10, 13),
+            (.bush, 14, 13), (.bushSmall, 11, 15), (.bushThick, 14, 21), (.stump, 6, 18), (.flowerY, 10, 19), (.daisy, 16, 9),
+            (.clover, 18, 20), (.fern, 16, 12), (.fern, 22, 14), (.grass, 17, 16), (.bonsai, 7, 6), (.bonsai, 14, 3),
+            (.bonsai, 17, 7), (.bonsai, 8, 8), (.treeSmall, 16, 4), (.pine, 11, 6), (.olive, 15, 8), (.bonsai, 9, 6),
+            (.bonsai, 8, 4), (.bonsai, 11, 3), (.bonsai, 6, 8), (.treeSmall, 8, 15), (.treeSmall, 5, 12), (.olive, 4, 22),
+            (.bonsai, 3, 13), (.olive, 4, 18), (.bonsai, 6, 14), (.pinkSmall, 20, 24), (.olive, 18, 29), (.treeSmall, 19, 16),
+            (.treeSmall, 9, 23), (.treeSmall, 14, 20), (.olive, 15, 11), (.clover, 8, 22), (.fern, 15, 25), (.bushThick, 8, 17),
+            (.bushThick, 10, 14), (.bushSmall, 16, 16), (.grassTall, 8, 9), (.bushSmall, 4, 24), (.clover, 24, 15), (.fern, 6, 21),
+            (.daisy, 18, 32), (.bushSmall, 20, 26), (.bush, 23, 12), (.clover, 7, 32), (.clover, 25, 18), (.bushThick, 11, 19),
+            (.flowerR, 6, 19), (.grassTall, 18, 27), (.fern, 9, 26), (.fern, 11, 7), (.daisy, 8, 13), (.grass, 5, 20),
+            (.grass, 12, 32), (.bushThick, 22, 19), (.clover, 21, 30), (.bushThick, 14, 14), (.bush, 24, 30), (.bush, 11, 18),
+            (.grass, 24, 14), (.clover, 8, 26), (.flowerY, 16, 32), (.bushSmall, 14, 16), (.clover, 10, 15), (.grass, 7, 9),
+            (.grassTall, 11, 23), (.pebble, 10, 3), (.pebble, 21, 26), (.pebbleBrown, 3, 20), (.pebble, 7, 16), (.stumpBig, 18, 9)
         ]
         return list.map { WorldDecor(kind: $0.0.rawValue, x: $0.1, y: $0.2) }
     }
@@ -524,15 +523,87 @@ final class WorldStore: ObservableObject {
     // MARK: 走 / 做
 
     func walkHer(_ x: Int, _ y: Int) {
-        guard !ground(x, y).blocked else { return }
-        save.herX = min(max(x, 0), width - 1)
-        save.herY = min(max(y, 0), height - 1)
+        guard let t = reachable(near: x, y, from: (save.herX, save.herY)) else { return }
+        save.herX = t.0
+        save.herY = t.1
     }
 
     func walkHim(_ x: Int, _ y: Int) {
-        guard !ground(x, y).blocked else { return }
-        save.himX = min(max(x, 0), width - 1)
-        save.himY = min(max(y, 0), height - 1)
+        guard let t = reachable(near: x, y, from: (save.himX, save.himY)) else { return }
+        save.himX = t.0
+        save.himY = t.1
+    }
+
+    // MARK: 走路
+
+    /// 走不过去的格子：水、海、景的根脚下（树干、房子的墙脚）
+    private func blockedCells() -> Set<Int> {
+        var set = Set<Int>()
+        for i in 0..<(width * height) where save.ground[i].blocked { set.insert(i) }
+        for d in decor {
+            guard let k = WorldDecorKind.resolve(d.kind) else { continue }
+            // 小花小草踩得过去
+            guard k.cells.h >= 2 || [.rock, .rockBrown, .boulder, .rocks, .stump, .stumpBig, .barrel, .crate, .waterBarrel].contains(k) else { continue }
+            let rows = k.isHouse ? 2 : 1
+            for dy in 0..<rows {
+                for dx in 0..<k.cells.w where d.x + dx < width && d.y - dy >= 0 {
+                    set.insert((d.y - dy) * width + d.x + dx)
+                }
+            }
+        }
+        return set
+    }
+
+    func walkable(_ x: Int, _ y: Int) -> Bool {
+        x >= 0 && y >= 0 && x < width && y < height && !blockedCells().contains(y * width + x)
+    }
+
+    /// 点的那一格走不进去（水里、树干上），就找离它最近、走得到的一格
+    private func reachable(near x: Int, _ y: Int, from: (Int, Int)) -> (Int, Int)? {
+        let blocked = blockedCells()
+        func ok(_ x: Int, _ y: Int) -> Bool { x >= 0 && y >= 0 && x < width && y < height && !blocked.contains(y * width + x) }
+        if ok(x, y) { return (x, y) }
+        var best: (Int, Int)?, bestD = Int.max
+        for dy in -2...2 {
+            for dx in -2...2 where ok(x + dx, y + dy) {
+                let d = dx * dx + dy * dy
+                if d < bestD, route(from: from, to: (x + dx, y + dy), blocked: blocked) != nil { bestD = d; best = (x + dx, y + dy) }
+            }
+        }
+        return best
+    }
+
+    /// 从一格走到另一格的路线（上下左右一步一步，不含起点）。走不到返回 nil
+    func route(from a: (Int, Int), to b: (Int, Int)) -> [(Int, Int)]? {
+        route(from: a, to: b, blocked: blockedCells())
+    }
+
+    private func route(from a: (Int, Int), to b: (Int, Int), blocked: Set<Int>) -> [(Int, Int)]? {
+        let w = width, h = height
+        guard b.0 >= 0, b.1 >= 0, b.0 < w, b.1 < h, !blocked.contains(b.1 * w + b.0) else { return nil }
+        if a == b { return [] }
+        let start = a.1 * w + a.0, goal = b.1 * w + b.0
+        var prev = [Int](repeating: -1, count: w * h)
+        var queue = [start], head = 0
+        prev[start] = start
+        while head < queue.count {
+            let c = queue[head]; head += 1
+            if c == goal { break }
+            let cx = c % w, cy = c / w
+            for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                let nx = cx + dx, ny = cy + dy
+                guard nx >= 0, ny >= 0, nx < w, ny < h else { continue }
+                let n = ny * w + nx
+                guard prev[n] == -1, !blocked.contains(n) else { continue }
+                prev[n] = c
+                queue.append(n)
+            }
+        }
+        guard prev[goal] != -1 else { return nil }
+        var path: [(Int, Int)] = []
+        var c = goal
+        while c != start { path.append((c % w, c / w)); c = prev[c] }
+        return path.reversed()
     }
 
     /// 做一件事：两个人走过去、头上冒表情、记一笔。返回那句话（「她……」的口吻，给他看）
