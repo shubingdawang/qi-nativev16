@@ -255,6 +255,31 @@ struct WorldView: View {
         }
     }
 
+    /// 会动的那些在哪：烟囱口、篝火、喷泉顶、池塘里的几个点
+    private var emitters: (chimneys: [CGPoint], fires: [CGPoint], fountains: [CGPoint], ponds: [CGPoint]) {
+        let sc = tile / CGFloat(IslandArt.px)
+        var ch: [CGPoint] = [], fi: [CGPoint] = [], fo: [CGPoint] = []
+        for d in world.decor {
+            guard let k = WorldDecorKind.resolve(d.kind) else { continue }
+            let s = IslandArt.size(of: k.sprite)
+            let left = CGFloat(d.x) * tile + ((CGFloat(k.cells.w * IslandArt.px) - s.width) / 2).rounded(.down) * sc
+            let top = CGFloat(d.y + 1) * tile - s.height * sc
+            switch k {
+            case _ where k.isHouse: ch.append(CGPoint(x: left + (s.width - 13) * sc, y: top + 1 * sc))
+            case .campfire: fi.append(CGPoint(x: left + 10 * sc, y: top + 12 * sc))
+            case .fountain: fo.append(CGPoint(x: left + 23 * sc, y: top + 6 * sc))
+            default: break
+            }
+        }
+        // 池塘里挑几格（不多，免得满塘都在冒圈）
+        var po: [CGPoint] = []
+        for i in stride(from: 0, to: world.save.ground.count, by: 7) where world.save.ground[i] == .water {
+            po.append(CGPoint(x: (CGFloat(i % world.width) + 0.5) * tile, y: (CGFloat(i / world.width) + 0.5) * tile))
+            if po.count >= 6 { break }
+        }
+        return (ch, fi, fo, po)
+    }
+
     /// 海：素材里的水铺满
     @ViewBuilder
     private var sea: some View {
@@ -472,7 +497,8 @@ struct WorldView: View {
             .frame(width: w, height: h, alignment: .topLeading)
             if mode == .select || anchor != nil { selectionLayer }
             AmbientLayer(width: world.width, height: world.height, tile: tile,
-                         night: WorldStore.isNight, lights: nightLights)
+                         night: WorldStore.isNight, lights: nightLights,
+                         chimneys: emitters.chimneys, fires: emitters.fires, fountains: emitters.fountains, ponds: emitters.ponds)
         }
         .frame(width: w, height: h, alignment: .topLeading)
     }

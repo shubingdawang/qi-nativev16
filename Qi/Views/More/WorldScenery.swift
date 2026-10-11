@@ -316,6 +316,11 @@ struct AmbientLayer: View {
     let night: Bool
     /// 路灯、小屋窗户在哪（晚上发光用）
     let lights: [CGPoint]
+    /// 烟囱口（冒烟）、篝火（火苗跳）、喷泉（溅水）、池塘里的点（偶尔一圈涟漪）
+    var chimneys: [CGPoint] = []
+    var fires: [CGPoint] = []
+    var fountains: [CGPoint] = []
+    var ponds: [CGPoint] = []
 
     private static func noise(_ i: Int, _ k: Int) -> CGFloat {
         let v = sin(Double(i) * 12.9898 + Double(k) * 78.233) * 43758.5453
@@ -337,7 +342,62 @@ struct AmbientLayer: View {
                         Gradient(colors: [Color(red: 0.16, green: 0.24, blue: 0.2).opacity(night ? 0 : 0.10), .clear]),
                         center: CGPoint(x: r.midX, y: r.midY), startRadius: 0, endRadius: 120))
                 }
+                let px = tile / 16
+                func dot(_ x: CGFloat, _ y: CGFloat, _ c: Color, _ s: CGFloat = 1) {
+                    gc.fill(Path(CGRect(x: (x / px).rounded() * px, y: (y / px).rounded() * px, width: px * s, height: px * s)), with: .color(c))
+                }
+                // 烟囱冒烟：几团淡淡的方块慢慢往上、往右飘，越高越淡越大
+                for (i, p) in chimneys.enumerated() {
+                    for k in 0..<4 {
+                        let phase = (t * 0.25 + Double(k) / 4 + Double(i) * 0.37).truncatingRemainder(dividingBy: 1)
+                        let y = p.y - CGFloat(phase) * 30 * px
+                        let x = p.x + CGFloat(sin(phase * 5 + Double(i))) * 2 * px + CGFloat(phase) * 6 * px
+                        let a = 0.55 * (1 - phase)
+                        dot(x, y, Color.white.opacity(a), phase > 0.5 ? 3 : 2)
+                    }
+                }
+                // 篝火：火苗一跳一跳，上面飘几颗火星
+                for (i, p) in fires.enumerated() {
+                    let f = Int(t * 8 + Double(i) * 3) % 3
+                    dot(p.x - px, p.y - CGFloat(4 + f) * px, Color(hexString: "F7D46A")!.opacity(0.95))
+                    dot(p.x + CGFloat(f - 1) * px, p.y - CGFloat(6 + f) * px, Color(hexString: "F5A35E")!.opacity(0.85))
+                    for k in 0..<3 {
+                        let phase = (t * 0.6 + Double(k) / 3 + Double(i) * 0.21).truncatingRemainder(dividingBy: 1)
+                        dot(p.x + CGFloat(sin(phase * 9 + Double(k))) * 3 * px, p.y - CGFloat(8 + phase * 18) * px,
+                            Color(hexString: "FFD27A")!.opacity(1 - phase))
+                    }
+                }
+                // 喷泉：水珠从顶上往两边落
+                for (i, p) in fountains.enumerated() {
+                    for k in 0..<6 {
+                        let phase = (t * 0.9 + Double(k) / 6 + Double(i) * 0.3).truncatingRemainder(dividingBy: 1)
+                        let side: CGFloat = k % 2 == 0 ? -1 : 1
+                        let x = p.x + side * CGFloat(phase) * CGFloat(5 + k) * px
+                        let y = p.y - CGFloat(sin(phase * .pi)) * 7 * px + CGFloat(phase) * 6 * px
+                        dot(x, y, Color(hexString: "E6F7F6")!.opacity(0.9 - phase * 0.5))
+                    }
+                }
+                // 池塘：偶尔一圈涟漪慢慢散开
+                for (i, p) in ponds.enumerated() {
+                    let phase = (t * 0.22 + Double(i) * 0.61).truncatingRemainder(dividingBy: 1)
+                    guard phase < 0.6 else { continue }
+                    let r = CGFloat(phase / 0.6) * 6 * px + px
+                    var ring = Path()
+                    ring.addEllipse(in: CGRect(x: p.x - r, y: p.y - r * 0.45, width: r * 2, height: r * 0.9))
+                    gc.stroke(ring, with: .color(Color.white.opacity(0.55 * (1 - phase / 0.6))), lineWidth: px)
+                }
                 if !night {
+                    // 两只海鸥从左往右飞过，翅膀一扇一扇
+                    for k in 0..<2 {
+                        let span = w + 200
+                        let x = CGFloat((t * 22 + Double(k) * 400).truncatingRemainder(dividingBy: Double(span))) - 100
+                        let y = CGFloat(80 + k * 140) + CGFloat(sin(t * 0.7 + Double(k))) * 16
+                        let up = Int(t * 4 + Double(k)) % 2 == 0
+                        let wc = Color.white.opacity(0.95)
+                        dot(x, y, wc); dot(x + px, y, wc)
+                        dot(x - px, y + (up ? -px : px), wc); dot(x - 2 * px, y + (up ? -2 * px : px), wc)
+                        dot(x + 2 * px, y + (up ? -px : px), wc); dot(x + 3 * px, y + (up ? -2 * px : px), wc)
+                    }
                     // 飘落的花瓣
                     for i in 0..<10 {
                         let x = (Self.noise(i, 40) * w + CGFloat(t * 6 * Double(1 + i % 3))).truncatingRemainder(dividingBy: w)
