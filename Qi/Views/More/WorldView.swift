@@ -401,9 +401,18 @@ struct WorldView: View {
         if let k = WorldDecorKind.resolve(d.kind) {
             let sc = tile / CGFloat(IslandArt.px)
             let s = IslandArt.size(of: k.sprite)
+            // 比占的格子窄的居中；睡莲浮在那一格水面上
+            let left = ((CGFloat(k.cells.w * IslandArt.px) - s.width) / 2).rounded(.down)
+            let bottom = k == .lily ? CGFloat(d.y) * tile + (2 + s.height) * sc : CGFloat(d.y + 1) * tile
             IslandSprite(key: k.sprite, scale: sc)
-                .position(x: CGFloat(d.x) * tile + s.width * sc / 2,
-                          y: CGFloat(d.y + 1) * tile - s.height * sc / 2)
+                .background(alignment: .bottom) {
+                    if k.blocks {
+                        Ellipse().fill(Color(red: 0.31, green: 0.23, blue: 0.31).opacity(0.2))
+                            .frame(width: s.width * sc * 0.8, height: 4 * sc)
+                            .offset(y: 1.5 * sc)
+                    }
+                }
+                .position(x: CGFloat(d.x) * tile + (left + s.width / 2) * sc, y: bottom - s.height * sc / 2)
                 .allowsHitTesting(false)
         }
     }
@@ -687,16 +696,38 @@ struct IslandGround: View, Equatable {
     let height: Int
     let tile: CGFloat
 
+    @State private var image: CGImage?
+
     static func == (a: IslandGround, b: IslandGround) -> Bool {
         a.ground == b.ground && a.width == b.width && a.height == b.height && a.tile == b.tile
     }
 
+    private var key: Int {
+        var h = Hasher()
+        h.combine(ground); h.combine(width); h.combine(height)
+        return h.finalize()
+    }
+
     var body: some View {
-        Image(uiImage: IslandArt.ground(ground, width: width, height: height))
-            .resizable()
-            .interpolation(.none)
-            .frame(width: CGFloat(width) * tile, height: CGFloat(height) * tile)
-            .allowsHitTesting(false)
+        Group {
+            if let img = image ?? IslandArt.cachedGround(key) {
+                Image(decorative: img, scale: 1).resizable().interpolation(.none)
+            } else {
+                Color.clear
+            }
+        }
+        .frame(width: CGFloat(width) * tile, height: CGFloat(height) * tile)
+        .allowsHitTesting(false)
+        // 画一张要零点几秒：放到后台画，画好了再换上（铺地的时候手指不卡）
+        .task(id: key) {
+            let k = key
+            if let c = IslandArt.cachedGround(k) { image = c; return }
+            let g = ground, w = width, h = height
+            let img = await Task.detached(priority: .userInitiated) { IslandPaint.render(g, width: w, height: h) }.value
+            guard !Task.isCancelled, let img else { return }
+            IslandArt.keepGround(k, img)
+            image = img
+        }
     }
 }
 

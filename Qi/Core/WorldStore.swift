@@ -273,8 +273,8 @@ final class WorldStore: ObservableObject {
         loaded = true
     }
 
-    /// 地图画法的版本：2 = 像素素材那一版，3 = 大岛、不规则的海岸，4 = 桥搭到岸上、景都挪到岸上
-    static let artVersion = 4
+    /// 地图画法的版本：2 = 像素素材那一版，3 = 大岛、不规则的海岸，4 = 桥搭到岸上、景都挪到岸上，5 = 栖岛自己画的一套
+    static let artVersion = 5
 
     /// 老存档换成新画法：地和景换成新的，摆的东西留着（落在水里或压着景的拿掉），田里不在田上的拿掉
     private static func upgrade(_ s: inout WorldSave) {
@@ -380,22 +380,23 @@ final class WorldStore: ObservableObject {
     static var starterDecor: [WorldDecor] {
         let list: [(WorldDecorKind, Int, Int)] = [
             (.houseOrange, 11, 10), (.treePink, 25, 4), (.cabin, 9, 29), (.shop, 15, 29), (.fence, 3, 26), (.fence, 5, 26),
-            (.crate, 8, 28), (.waterBarrel, 8, 29), (.barrel, 7, 26), (.sunflower, 5, 30), (.sunflower, 6, 30), (.sunflower, 7, 30),
-            (.boulder, 2, 16), (.rocks, 20, 11), (.rock, 23, 19), (.pebble, 22, 20), (.bushThick, 6, 33), (.grassTall, 21, 32),
-            (.treeSmall, 22, 31), (.pebbleBrown, 11, 34), (.rockBrown, 14, 35), (.treePink, 8, 12), (.treePink, 15, 15), (.treeSmall, 9, 17),
-            (.treeGreen, 15, 23), (.treeOrange, 17, 26), (.treePink, 20, 29), (.berry, 9, 21), (.berryBlue, 16, 20), (.bush, 10, 13),
-            (.bush, 14, 13), (.bushSmall, 11, 15), (.bushThick, 14, 21), (.stump, 6, 18), (.flowerY, 10, 19), (.daisy, 16, 9),
-            (.clover, 18, 20), (.fern, 16, 12), (.fern, 22, 14), (.grass, 17, 16), (.bonsai, 7, 6), (.bonsai, 14, 3),
+            (.crate, 8, 28), (.crate, 8, 29), (.barrel, 7, 26), (.sunflower, 5, 30), (.sunflower, 6, 30), (.sunflower, 7, 30),
+            (.rocks, 2, 16), (.rocks, 20, 11), (.rock, 23, 19), (.pebble, 22, 20), (.berry, 6, 33), (.lavender, 21, 32),
+            (.treeSmall, 22, 31), (.pebble, 11, 34), (.rock, 14, 35), (.treePink, 8, 12), (.treePink, 15, 15), (.treeSmall, 9, 17),
+            (.treeGreen, 15, 23), (.treeOrange, 17, 26), (.treePink, 20, 29), (.berry, 9, 21), (.berry, 16, 20), (.bush, 10, 13),
+            (.bush, 14, 13), (.bush, 11, 15), (.berry, 14, 21), (.stump, 6, 18), (.flowerY, 10, 19), (.daisy, 16, 9),
+            (.clover, 18, 20), (.lavender, 16, 12), (.lavender, 22, 14), (.tulipPeach, 17, 16), (.bonsai, 7, 6), (.bonsai, 14, 3),
             (.bonsai, 17, 7), (.bonsai, 8, 8), (.treeSmall, 16, 4), (.pine, 11, 6), (.olive, 15, 8), (.bonsai, 9, 6),
             (.bonsai, 8, 4), (.bonsai, 11, 3), (.bonsai, 6, 8), (.treeSmall, 8, 15), (.treeSmall, 5, 12), (.olive, 4, 22),
             (.bonsai, 3, 13), (.olive, 4, 18), (.bonsai, 6, 14), (.pinkSmall, 20, 24), (.olive, 18, 29), (.treeSmall, 19, 16),
-            (.treeSmall, 9, 23), (.treeSmall, 14, 20), (.olive, 15, 11), (.clover, 8, 22), (.fern, 15, 25), (.bushThick, 8, 17),
-            (.bushThick, 10, 14), (.bushSmall, 16, 16), (.grassTall, 8, 9), (.bushSmall, 4, 24), (.clover, 24, 15), (.fern, 6, 21),
-            (.daisy, 18, 32), (.bushSmall, 20, 26), (.bush, 23, 12), (.clover, 7, 32), (.clover, 25, 18), (.bushThick, 11, 19),
-            (.flowerR, 6, 19), (.grassTall, 18, 27), (.fern, 9, 26), (.fern, 11, 7), (.daisy, 8, 13), (.grass, 5, 20),
-            (.grass, 12, 32), (.bushThick, 22, 19), (.clover, 21, 30), (.bushThick, 14, 14), (.bush, 24, 30), (.bush, 11, 18),
-            (.grass, 24, 14), (.clover, 8, 26), (.flowerY, 16, 32), (.bushSmall, 14, 16), (.clover, 10, 15), (.grass, 7, 9),
-            (.grassTall, 11, 23), (.pebble, 10, 3), (.pebble, 21, 26), (.pebbleBrown, 3, 20), (.pebble, 7, 16), (.stumpBig, 18, 9)
+            (.treeSmall, 9, 23), (.treeSmall, 14, 20), (.olive, 15, 11), (.clover, 8, 22), (.lavender, 15, 25), (.berry, 8, 17),
+            (.berry, 10, 14), (.bush, 16, 16), (.lavender, 8, 9), (.bush, 4, 24), (.clover, 24, 15), (.lavender, 6, 21),
+            (.daisy, 18, 32), (.bush, 20, 26), (.bush, 23, 12), (.clover, 7, 32), (.clover, 25, 18), (.berry, 11, 19),
+            (.flowerR, 6, 19), (.lavender, 18, 27), (.lavender, 9, 26), (.lavender, 11, 7), (.daisy, 8, 13), (.tulipPeach, 5, 20),
+            (.tulipPeach, 12, 32), (.berry, 22, 19), (.clover, 21, 30), (.berry, 14, 14), (.bush, 24, 30), (.bush, 11, 18),
+            (.tulipPeach, 24, 14), (.clover, 8, 26), (.flowerY, 16, 32), (.bush, 14, 16), (.clover, 10, 15), (.tulipPeach, 7, 9),
+            (.lavender, 11, 23), (.pebble, 10, 3), (.pebble, 21, 26), (.pebble, 3, 20), (.pebble, 7, 16), (.stump, 18, 9),
+            (.lamp, 11, 15), (.lamp, 14, 23), (.mailbox, 10, 10), (.bench, 18, 16), (.lily, 18, 13), (.lily, 20, 12)
         ]
         return list.map { WorldDecor(kind: $0.0.rawValue, x: $0.1, y: $0.2) }
     }
@@ -543,7 +544,7 @@ final class WorldStore: ObservableObject {
         for d in decor {
             guard let k = WorldDecorKind.resolve(d.kind) else { continue }
             // 小花小草踩得过去
-            guard k.cells.h >= 2 || [.rock, .rockBrown, .boulder, .rocks, .stump, .stumpBig, .barrel, .crate, .waterBarrel].contains(k) else { continue }
+            guard k.blocks else { continue }
             let rows = k.isHouse ? 2 : 1
             for dy in 0..<rows {
                 for dx in 0..<k.cells.w where d.x + dx < width && d.y - dy >= 0 {

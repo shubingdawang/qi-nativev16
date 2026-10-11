@@ -21,3 +21,6 @@ scripts/theme3/
 
 # 新桥的密钥，绝不能进 git
 scripts/agent-bridge/bridge-token.txt
+
+# 小岛的生成脚本出的中间图和预览，不进仓库（App 用的在 Qi/Resources/Island）
+scripts/island/*.png
