@@ -939,6 +939,12 @@ enum ClawdRig {
     }
 
     static func wearSlot(_ id: String) -> WearSlot {
+        // 她自己做的：编号里写着位置（`cw_<位置>_<短号>`，见 `CustomWearStore`）
+        if id.hasPrefix("cw_") {
+            let parts = id.split(separator: "_")
+            if parts.count >= 3, let s = WearSlot(rawValue: String(parts[1])) { return s }
+            return .head
+        }
         switch id {
         case "hat", "beret", "cap", "headphones": return .head
         case "glasses", "sunglasses": return .face

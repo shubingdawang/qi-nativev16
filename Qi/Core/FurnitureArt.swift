@@ -514,7 +514,8 @@ extension FurnitureCatalog {
     /// 位置写在图里，不写在代码里。
     @MainActor
     static func wornImage(of id: String) -> UIImage? {
-        load("wear_" + id)
+        if id.hasPrefix("cw_") { return CustomWearStore.shared.image(id) }
+        return load("wear_" + id)
     }
 
     /// 商城和背包里那张缩略图：一律用正面那张，等距的斜着摆不好看。

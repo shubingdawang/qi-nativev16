@@ -16,6 +16,8 @@ struct BeadListView: View {
     @State private var importPick: PhotosPickerItem?
     @State private var placing: PlacingImage?
     @State private var deleting: BeadProject?
+    @ObservedObject private var wears = CustomWearStore.shared
+    @ObservedObject private var room = ClawdStore.shared
 
     var body: some View {
         ScrollView {
@@ -45,6 +47,40 @@ struct BeadListView: View {
                     Text("新建一块板，可以垫一张参考图照着拼；也能直接导入图片，放大缩小旋转后存到家具素材或表情包。")
                         .font(.app(12))
                         .foregroundStyle(Theme.textMuted(scheme))
+                }
+
+                if !wears.items.isEmpty {
+                    Text("我做的衣服").heading(14)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            ForEach(wears.items) { w in
+                                let on = room.isWearing(w.id)
+                                VStack(spacing: 6) {
+                                    ZStack {
+                                        PixelSpriteView(sprite: ClawdSprites.idle, scale: 2)
+                                            .frame(width: 72, height: 72, alignment: .topLeading)
+                                            .opacity(0.35)
+                                        if let img = wears.image(w.id) {
+                                            Image(uiImage: img).resizable().frame(width: 72, height: 72)
+                                        }
+                                    }
+                                    .frame(width: 72, height: 72)
+                                    Text(w.name).font(.app(11)).lineLimit(1)
+                                    Button(on ? "脱下" : "穿上") { room.wear(w.id) }
+                                        .font(.app(11.5, weight: .medium))
+                                        .foregroundStyle(on ? Theme.textMuted(scheme) : app.settings.accentColor)
+                                }
+                                .padding(8)
+                                .frame(width: 92)
+                                .glassCard(padding: 0)
+                                .contextMenu {
+                                    Button(role: .destructive) { wears.delete(w.id) } label: {
+                                        Label("删除", systemImage: Icon.trash)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 12)], spacing: 12) {
@@ -640,13 +676,28 @@ struct ImportPlacementView: View {
     @Environment(\.colorScheme) private var scheme
 
     enum Dest: String, CaseIterable, Identifiable {
-        case furniture, sticker
+        case furniture, sticker, clothes
         var id: String { rawValue }
-        var label: String { self == .furniture ? "家具素材" : "表情包" }
-        var icon: String { self == .furniture ? "sofa" : "face.smiling" }
+        var label: String {
+            switch self {
+            case .furniture: return "家具素材"
+            case .sticker: return "表情包"
+            case .clothes: return "衣服"
+            }
+        }
+        var icon: String {
+            switch self {
+            case .furniture: return "sofa"
+            case .sticker: return "face.smiling"
+            case .clothes: return "tshirt"
+            }
+        }
     }
 
     @State private var dest: Dest = .furniture
+    @State private var wearSlot: ClawdRig.WearSlot = .head
+    @State private var wearName = ""
+    @State private var wearNow = true
     @State private var scale: CGFloat = 1
     @State private var scaleBase: CGFloat = 1
     @State private var turn: Angle = .zero
@@ -668,6 +719,12 @@ struct ImportPlacementView: View {
                     let side = min(geo.size.width, geo.size.height)
                     ZStack {
                         CheckerBoard()
+                        // 做衣服时垫一只 clawd：框就是它那张 36 格的图纸，摆到身上哪儿就穿在哪儿
+                        if dest == .clothes {
+                            PixelSpriteView(sprite: ClawdSprites.idle, scale: side / CGFloat(ClawdRig.canvas))
+                                .frame(width: side, height: side, alignment: .topLeading)
+                                .opacity(0.55)
+                        }
                         Image(uiImage: image)
                             .resizable()
                             .interpolation(.high)
@@ -711,7 +768,27 @@ struct ImportPlacementView: View {
                     }
                 }
 
-                Text("虚线框里的部分会被存下来；两指可以放大、旋转，拖动挪位置。")
+                if dest == .clothes {
+                    VStack(spacing: 8) {
+                        Picker("穿在", selection: $wearSlot) {
+                            ForEach(0..<CustomWearStore.slots.count, id: \.self) { i in
+                                Text(CustomWearStore.slots[i].1).tag(CustomWearStore.slots[i].0)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        HStack {
+                            TextField("名字，如：小草帽", text: $wearName)
+                                .font(.app(13))
+                                .padding(.horizontal, 10).padding(.vertical, 7)
+                                .background(RoundedRectangle(cornerRadius: 10).fill(Theme.softFillDeep))
+                            Toggle("存好就穿上", isOn: $wearNow).font(.app(12)).fixedSize()
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
+
+                Text(dest == .clothes ? "把图摆到 clawd 身上想穿的位置；同一个位置一次只穿一件。"
+                                      : "虚线框里的部分会被存下来；两指可以放大、旋转，拖动挪位置。")
                     .font(.app(11))
                     .foregroundStyle(Theme.textMuted(scheme))
 
@@ -780,6 +857,15 @@ struct ImportPlacementView: View {
             let img = rendered(px: 512)
             if let data = img.pngData(), StickerStore.shared.add(data: data, ext: "png", owner: "user") != nil {
                 done = "已存到表情包。"
+            } else {
+                done = "没存上，再试一次。"
+            }
+        case .clothes:
+            let img = rendered(px: CGFloat(ClawdRig.canvas) * 16)
+            let name = wearName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let item = CustomWearStore.shared.add(img, slot: wearSlot, name: name.isEmpty ? source : name) {
+                if wearNow, !ClawdStore.shared.isWearing(item.id) { ClawdStore.shared.wear(item.id) }
+                done = wearNow ? "做好了，clawd 已经穿上。" : "已存进「我做的衣服」。"
             } else {
                 done = "没存上，再试一次。"
             }
