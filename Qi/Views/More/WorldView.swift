@@ -37,6 +37,9 @@ struct WorldView: View {
     @State private var menuFor: WorldObject?
     @State private var personMenu = false
     @State private var showMods = false
+    @State private var soilAt: (x: Int, y: Int)?
+    @State private var fishing = false
+    @State private var caught: String?
 
     private let tile: CGFloat = 40
 
@@ -69,12 +72,37 @@ struct WorldView: View {
             }
             Button("算了", role: .cancel) { menuFor = nil }
         }
+        .confirmationDialog(soilTitle, isPresented: Binding(get: { soilAt != nil }, set: { if !$0 { soilAt = nil } }),
+                            titleVisibility: .visible) {
+            if let at = soilAt {
+                if let c = world.crop(at.x, at.y) {
+                    if WorldFarm.stage(c) == 3 {
+                        Button("收") { world.harvest(at.x, at.y, byHer: true) }
+                    }
+                    Button("浇水") { world.water(at.x, at.y, byHer: true) }
+                } else {
+                    ForEach(WorldFarm.seeds) { s in
+                        Button("种\(s.name)（约 \(Int(s.hours)) 小时熟）") { world.plant(s, at.x, at.y, byHer: true) }
+                    }
+                }
+            }
+            Button("算了", role: .cancel) { soilAt = nil }
+        }
+        .alert(caught.map { "钓到了\($0)" } ?? "", isPresented: Binding(get: { caught != nil }, set: { if !$0 { caught = nil } })) {
+            Button("放进篮子") { caught = nil }
+        }
         .confirmationDialog(him, isPresented: $personMenu, titleVisibility: .visible) {
             ForEach(world.personActions) { a in
                 Button(a.name) { doAction(a, on: nil) }
             }
             Button("算了", role: .cancel) {}
         }
+    }
+
+    private var soilTitle: String {
+        guard let at = soilAt else { return "" }
+        guard let c = world.crop(at.x, at.y), let s = WorldFarm.seed(c.kind) else { return "一块空田" }
+        return s.name + "：" + ["刚种下", "发芽了", "长叶了", "熟了"][WorldFarm.stage(c)] + (c.waters > 0 ? " · 浇过 \(c.waters) 次水" : "")
     }
 
     private func doAction(_ a: WorldAction, on o: WorldObject?) {
@@ -90,6 +118,7 @@ struct WorldView: View {
         let w = CGFloat(world.width) * tile, h = CGFloat(world.height) * tile
         return ZStack(alignment: .topLeading) {
             groundLayer
+            if world.farmOn { cropLayer }
             ForEach(world.save.objects) { o in objectView(o) }
             her
             himView
@@ -119,6 +148,13 @@ struct WorldView: View {
             guard !moved else { return }
             if x == world.save.himX && y == world.save.himY { personMenu = true; return }
             if let o = world.object(at: x, y) { menuFor = o; return }
+            if world.farmOn, world.ground(x, y) == .soil { soilAt = (x, y); return }
+            if world.farmOn, world.ground(x, y) == .water {
+                // 点水：走到旁边的岸上钓鱼
+                if let shore = shore(near: x, y) { world.walkHer(shore.0, shore.1) }
+                startFishing()
+                return
+            }
             world.walkHer(x, y)
         case .place:
             guard !moved, let src = itemPick else { return }
@@ -129,6 +165,28 @@ struct WorldView: View {
             world.setGround(groundPick, x, y)
         case .remove:
             if let o = world.object(at: x, y) { world.remove(o.id) }
+        }
+    }
+
+    private func shore(near x: Int, _ y: Int) -> (Int, Int)? {
+        for (dx, dy) in [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (-1, 1), (1, -1), (-1, -1)] {
+            let nx = x + dx, ny = y + dy
+            if nx >= 0, ny >= 0, nx < world.width, ny < world.height, !world.ground(nx, ny).blocked { return (nx, ny) }
+        }
+        return nil
+    }
+
+    private func startFishing() {
+        guard !fishing else { return }
+        fishing = true
+        world.flash("fish")
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64.random(in: 1_500_000_000...3_500_000_000))
+            let got = world.fish(byHer: true)
+            caught = got
+            fishing = false
+            // 钓到稀罕的才告诉他
+            if ["锦鲤", "珍珠", "漂流瓶", "一朵睡莲"].contains(got) { app.tellHim("小岛上，她在水边钓到了\(got)。") }
         }
     }
 
@@ -178,6 +236,13 @@ struct WorldView: View {
                             p.addLine(to: CGPoint(x: r.maxX, y: r.minY + CGFloat(k) * tile / 3))
                             gc.stroke(p, with: .color(Color(hexString: "B8916A")!.opacity(0.6)), lineWidth: 1)
                         }
+                    case .soil:
+                        for k in 1..<4 {
+                            var p = Path()
+                            p.move(to: CGPoint(x: r.minX + 3, y: r.minY + CGFloat(k) * tile / 4))
+                            p.addLine(to: CGPoint(x: r.maxX - 3, y: r.minY + CGFloat(k) * tile / 4))
+                            gc.stroke(p, with: .color(Color(hexString: "86603F")!.opacity(0.7)), lineWidth: 1.4)
+                        }
                     case .path, .sand:
                         for k in 0..<3 {
                             let px = r.minX + CGFloat((seed * (k + 4)) % 32) + 4
@@ -185,6 +250,52 @@ struct WorldView: View {
                             gc.fill(Path(ellipseIn: CGRect(x: px, y: py, width: 3, height: 2.4)),
                                     with: .color(Color(hexString: "CBBBA0")!.opacity(0.8)))
                         }
+                    }
+                }
+            }
+        }
+        .frame(width: CGFloat(world.width) * tile, height: CGFloat(world.height) * tile)
+        .allowsHitTesting(false)
+    }
+
+    /// 庄稼：种子 → 芽 → 叶 → 结果。每分钟刷一次
+    private var cropLayer: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { ctx in
+            Canvas { gc, _ in
+                for (key, c) in world.save.crops {
+                    let xy = key.split(separator: ",").compactMap { Int($0) }
+                    guard xy.count == 2, let s = WorldFarm.seed(c.kind) else { continue }
+                    let cx = CGFloat(xy[0]) * tile + tile / 2, base = CGFloat(xy[1]) * tile + tile - 8
+                    let leaf = Color(hexString: "6FA35C")!
+                    switch WorldFarm.stage(c, now: ctx.date) {
+                    case 0:
+                        for dx in [-6.0, 0, 6] {
+                            gc.fill(Path(ellipseIn: CGRect(x: cx + dx - 1.5, y: base - 3, width: 3, height: 3)),
+                                    with: .color(Color(hexString: "5E3A26")!))
+                        }
+                    case 1:
+                        var p = Path()
+                        p.move(to: CGPoint(x: cx, y: base)); p.addLine(to: CGPoint(x: cx, y: base - 8))
+                        gc.stroke(p, with: .color(leaf), lineWidth: 1.6)
+                        gc.fill(Path(ellipseIn: CGRect(x: cx - 6, y: base - 12, width: 6, height: 4)), with: .color(leaf))
+                        gc.fill(Path(ellipseIn: CGRect(x: cx, y: base - 12, width: 6, height: 4)), with: .color(leaf))
+                    default:
+                        var p = Path()
+                        p.move(to: CGPoint(x: cx, y: base)); p.addLine(to: CGPoint(x: cx, y: base - 18))
+                        gc.stroke(p, with: .color(leaf), lineWidth: 2)
+                        for (dx, dy) in [(-9.0, -10.0), (3.0, -14.0), (-7.0, -20.0)] {
+                            gc.fill(Path(ellipseIn: CGRect(x: cx + dx, y: base + dy, width: 8, height: 5)), with: .color(leaf))
+                        }
+                        if WorldFarm.stage(c, now: ctx.date) == 3 {
+                            let fruit = Color(hexString: s.color)!
+                            for (dx, dy) in [(-6.0, -24.0), (2.0, -27.0), (-2.0, -19.0)] {
+                                gc.fill(Path(ellipseIn: CGRect(x: cx + dx, y: base + dy, width: 7, height: 7)), with: .color(fruit))
+                            }
+                        }
+                    }
+                    if c.lastWatered.map({ ctx.date.timeIntervalSince($0) < 1800 }) == true {
+                        gc.fill(Path(ellipseIn: CGRect(x: cx + 9, y: base - 6, width: 4, height: 5)),
+                                with: .color(Color(hexString: "6FB4D2")!))
                     }
                 }
             }
@@ -293,7 +404,7 @@ struct WorldView: View {
 
             switch mode {
             case .walk:
-                Text("点空地走过去；点东西看能一起做什么；点\(him)对他做点什么。")
+                Text("点空地走过去；点东西看能一起做什么；点\(him)对他做点什么；点田种菜浇水，点水钓鱼。")
                     .font(.app(11)).foregroundStyle(Theme.textMuted(scheme))
                     .padding(.horizontal, 16)
             case .remove:
@@ -384,6 +495,11 @@ struct WorldView: View {
                     }
                 } footer: {
                     Text("打开的模组决定岛上能一起做哪些事。\(him)那边也一样能用。")
+                }
+                if !world.save.basket.isEmpty {
+                    Section("篮子") {
+                        Text(world.basketText).font(.app(12.5))
+                    }
                 }
                 if !world.save.events.isEmpty {
                     Section("最近") {
