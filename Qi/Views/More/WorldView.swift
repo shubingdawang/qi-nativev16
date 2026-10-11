@@ -81,6 +81,8 @@ struct WorldView: View {
     @State private var decorMenu: WorldDecor?
     @State private var decorPick: WorldDecorKind?
     @State private var sceneryTab = false
+    /// 风景按类看；nil = 全部
+    @State private var decorFamily: String?
     @State private var personMenu = false
     @State private var showMods = false
     @State private var soilAt: (x: Int, y: Int)?
@@ -934,6 +936,13 @@ struct WorldView: View {
         }
     }
 
+    /// 风景的分类，按第一次出现的顺序
+    static let families: [String] = {
+        var out: [String] = []
+        for k in WorldDecorKind.allCases where !out.contains(k.family) { out.append(k.family) }
+        return out
+    }()
+
     private func clearSelection() {
         selDecor.removeAll(); selObj.removeAll(); movingSel = false; box = nil
     }
@@ -967,8 +976,21 @@ struct WorldView: View {
             }
             if sceneryTab {
                 ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach([String?](arrayLiteral: nil) + Self.families.map { Optional($0) }, id: \.self) { f in
+                            Button(f ?? "全部") { decorFamily = f }
+                                .font(.app(11, weight: decorFamily == f ? .semibold : .regular))
+                                .foregroundStyle(decorFamily == f ? app.settings.accentColor : Theme.textSoft(scheme))
+                                .padding(.horizontal, 9).padding(.vertical, 4)
+                                .background(Capsule().stroke(decorFamily == f ? app.settings.accentColor.opacity(0.6) : Theme.textMuted(scheme).opacity(0.3), lineWidth: 1))
+                                .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+                ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(WorldDecorKind.allCases) { k in
+                        ForEach(WorldDecorKind.allCases.filter { decorFamily == nil || $0.family == decorFamily }) { k in
                             Button { decorPick = k } label: {
                                 VStack(spacing: 3) {
                                     let s = IslandArt.size(of: k.sprite)
