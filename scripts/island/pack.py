@@ -19,7 +19,7 @@ ITEMS = {
     "rock": load("sp_rock.png"), "rock_small": small(load("sp_rock.png")), "rocks": load("sp_rocks.png"),
     "house_pink": load("h_0.png"), "house_blue": load("h_1.png"), "house_lilac": load("h_2.png"), "house_sage": load("h_3.png"),
 }
-for k in ("fl_daisy", "fl_pink", "fl_yellow", "tulip_pink", "tulip_peach", "lavender", "sunflower", "fence", "crate",
+for k in ("fl_daisy", "fl_pink", "fl_yellow", "tulip_pink", "tulip_peach", "lavender", "sunflower", "fence", "fence_v", "crate",
           "barrel", "stump", "lamp", "mailbox", "bench", "lily"):
     ITEMS[k] = load("s_" + k + ".png")
 

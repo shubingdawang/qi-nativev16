@@ -69,6 +69,17 @@ def fence(n=2):
     cv.outline()
     return cv.image()
 
+def fence_v(n=2):
+    """竖着的一段篱笆（n 格长）：一根竖横杆，几根桩子从上往下排"""
+    h = 16 * n + 4
+    cv = Canvas(10, h)
+    cv.rect(3, 3, 6, h - 2, WOOD[1]); cv.vline(3, 3, h - 2, WOOD[2]); cv.vline(6, 3, h - 2, WOOD[0])
+    for y in range(0, h - 6, 8):
+        cv.rect(2, y, 7, y + 6, WOOD[2]); cv.hline(2, 7, y, WOOD[3]); cv.vline(7, y, y + 6, WOOD[1])
+        cv.hline(2, 7, y + 6, WOOD[0])
+    cv.outline()
+    return cv.image()
+
 def crate():
     cv = Canvas(16, 16)
     cv.rect(1, 3, 14, 14, WOOD[2])
@@ -148,6 +159,7 @@ ITEMS = {
     "lavender": lavender,
     "sunflower": sunflower,
     "fence": fence,
+    "fence_v": fence_v,
     "crate": crate,
     "barrel": barrel,
     "stump": stump,

@@ -70,6 +70,8 @@ struct WorldDecor: Codable, Hashable, Identifiable {
     var kind: String
     var x: Int
     var y: Int
+    /// 左右翻过来
+    var flip: Bool? = nil
 }
 
 struct WorldEvent: Codable, Hashable {
@@ -454,6 +456,156 @@ final class WorldStore: ObservableObject {
     func ground(_ x: Int, _ y: Int) -> WorldGround {
         guard x >= 0, y >= 0, x < width, y < height else { return .sea }
         return save.ground[y * width + x]
+    }
+
+    // MARK: 基建：撤销 / 重做、批量改
+    //
+    // 她在岛上铺地、摆、挪、删、换材料，每一次（一次手势、一次批量）记一步，能撤回去。
+    // 只记在内存里，离开小岛就清掉。
+
+    private struct Snapshot {
+        var ground: [WorldGround]
+        var decor: [WorldDecor]
+        var objects: [WorldObject]
+    }
+    private var undoStack: [Snapshot] = []
+    private var redoStack: [Snapshot] = []
+    @Published private(set) var canUndo = false
+    @Published private(set) var canRedo = false
+
+    private var snapshot: Snapshot { Snapshot(ground: save.ground, decor: decor, objects: save.objects) }
+
+    /// 改之前记一笔
+    func checkpoint() {
+        undoStack.append(snapshot)
+        if undoStack.count > 50 { undoStack.removeFirst() }
+        redoStack.removeAll()
+        refreshUndo()
+    }
+
+    func undo() {
+        guard let s = undoStack.popLast() else { return }
+        redoStack.append(snapshot)
+        apply(s)
+    }
+
+    func redo() {
+        guard let s = redoStack.popLast() else { return }
+        undoStack.append(snapshot)
+        apply(s)
+    }
+
+    func clearHistory() {
+        undoStack.removeAll(); redoStack.removeAll(); refreshUndo()
+    }
+
+    private func apply(_ s: Snapshot) {
+        var v = save
+        v.ground = s.ground; v.decor = s.decor; v.objects = s.objects
+        save = v
+        refreshUndo()
+    }
+
+    private func refreshUndo() {
+        canUndo = !undoStack.isEmpty
+        canRedo = !redoStack.isEmpty
+    }
+
+    /// 一次铺一片（画笔、直线、方框、油漆桶都走这里，存一次盘）
+    func paint(_ g: WorldGround, _ cells: [(Int, Int)]) {
+        var v = save
+        var changed = false
+        for (x, y) in cells where x >= 0 && y >= 0 && x < width && y < height && v.ground[y * width + x] != g {
+            v.ground[y * width + x] = g
+            changed = true
+        }
+        if changed { save = v }
+    }
+
+    /// 油漆桶：从这一格开始，连在一起的同一种地
+    func floodCells(_ x: Int, _ y: Int) -> [(Int, Int)] {
+        guard x >= 0, y >= 0, x < width, y < height else { return [] }
+        let k = save.ground[y * width + x]
+        var seen = Set([y * width + x]), queue = [y * width + x], head = 0
+        while head < queue.count {
+            let c = queue[head]; head += 1
+            let cx = c % width, cy = c / width
+            for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                let nx = cx + dx, ny = cy + dy
+                guard nx >= 0, ny >= 0, nx < width, ny < height else { continue }
+                let n = ny * width + nx
+                if !seen.contains(n), save.ground[n] == k { seen.insert(n); queue.append(n) }
+            }
+        }
+        return queue.map { ($0 % width, $0 / width) }
+    }
+
+    /// 方框里有哪些景、东西（景按脚下那一排算）
+    func items(inX x0: Int, _ x1: Int, y y0: Int, _ y1: Int) -> (decor: Set<UUID>, objects: Set<UUID>) {
+        let lx = min(x0, x1), hx = max(x0, x1), ly = min(y0, y1), hy = max(y0, y1)
+        var ds = Set<UUID>(), os = Set<UUID>()
+        for d in decor {
+            let w = WorldDecorKind.resolve(d.kind)?.cells.w ?? 1
+            if d.y >= ly, d.y <= hy, d.x + w - 1 >= lx, d.x <= hx { ds.insert(d.id) }
+        }
+        for o in save.objects where o.y >= ly && o.y <= hy && o.x + o.w - 1 >= lx && o.x <= hx { os.insert(o.id) }
+        return (ds, os)
+    }
+
+    func removeItems(decor ds: Set<UUID>, objects os: Set<UUID>) {
+        guard !ds.isEmpty || !os.isEmpty else { return }
+        var v = save
+        v.decor = decor.filter { !ds.contains($0.id) }
+        v.objects.removeAll { os.contains($0.id) }
+        save = v
+    }
+
+    /// 整体挪 dx, dy 格；有一件会出岛就都不挪
+    @discardableResult
+    func moveItems(decor ds: Set<UUID>, objects os: Set<UUID>, dx: Int, dy: Int) -> Bool {
+        guard dx != 0 || dy != 0 else { return true }
+        var v = save
+        var list = decor
+        for i in list.indices where ds.contains(list[i].id) {
+            let nx = list[i].x + dx, ny = list[i].y + dy
+            guard nx >= 0, ny >= 0, nx < width, ny < height else { return false }
+            list[i].x = nx; list[i].y = ny
+        }
+        for i in v.objects.indices where os.contains(v.objects[i].id) {
+            let nx = v.objects[i].x + dx, ny = v.objects[i].y + dy
+            guard nx >= 0, ny >= 0, nx + v.objects[i].w <= width, ny < height else { return false }
+            v.objects[i].x = nx; v.objects[i].y = ny
+        }
+        v.decor = list
+        save = v
+        return true
+    }
+
+    /// 旋转：篱笆横竖互换，别的左右翻过来
+    func rotateDecor(_ ds: Set<UUID>) {
+        guard !ds.isEmpty else { return }
+        var v = save
+        var list = decor
+        for i in list.indices where ds.contains(list[i].id) {
+            switch WorldDecorKind.resolve(list[i].kind) {
+            case .fence: list[i].kind = WorldDecorKind.fenceV.rawValue
+            case .fenceV: list[i].kind = WorldDecorKind.fence.rawValue
+            default: list[i].flip = !(list[i].flip ?? false)
+            }
+        }
+        v.decor = list
+        save = v
+    }
+
+    /// 换材料：选中的里面跟 k 同一类的，都换成 k
+    func setKind(_ ds: Set<UUID>, to k: WorldDecorKind) {
+        var v = save
+        var list = decor
+        for i in list.indices where ds.contains(list[i].id) {
+            if WorldDecorKind.resolve(list[i].kind)?.family == k.family { list[i].kind = k.rawValue }
+        }
+        v.decor = list
+        save = v
     }
 
     func setGround(_ g: WorldGround, _ x: Int, _ y: Int) {

@@ -10,27 +10,68 @@ struct WorldView: View {
     @ObservedObject private var pieces = PieceStore.shared
 
     enum Mode: String, CaseIterable, Identifiable {
-        case walk, place, ground, remove
+        case walk, place, ground, select
         var id: String { rawValue }
         var label: String {
             switch self {
             case .walk: return "走走"
-            case .place: return "摆东西"
+            case .place: return "摆放"
             case .ground: return "铺地"
-            case .remove: return "拿走"
+            case .select: return "选择"
             }
         }
         var icon: String {
             switch self {
             case .walk: return "figure.walk"
             case .place: return "square.on.square"
-            case .ground: return "square.grid.3x3.fill"
-            case .remove: return "trash"
+            case .ground: return "square.grid.3x3"
+            case .select: return "rectangle.dashed"
+            }
+        }
+    }
+
+    /// 铺地的几种画法
+    enum GroundTool: String, CaseIterable, Identifiable {
+        case brush, line, rect, fill
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .brush: return "画笔"
+            case .line: return "铺路"
+            case .rect: return "方框"
+            case .fill: return "油漆桶"
+            }
+        }
+        var icon: String {
+            switch self {
+            case .brush: return "paintbrush.pointed"
+            case .line: return "point.topleft.down.to.point.bottomright.curvepath"
+            case .rect: return "rectangle"
+            case .fill: return "drop"
+            }
+        }
+        var hint: String {
+            switch self {
+            case .brush: return "手指划过的格子都铺上。"
+            case .line: return "点起点、再点终点，中间铺一条路（先横后竖）。"
+            case .rect: return "点一个角、再点对角，整片铺满。"
+            case .fill: return "点一格，跟它连在一起的同一种地全换掉。"
             }
         }
     }
 
     @State private var mode: Mode = .walk
+    @State private var groundTool: GroundTool = .brush
+    /// 铺路 / 方框的第一个点
+    @State private var anchor: (x: Int, y: Int)?
+    @State private var brushing = false
+    // 选择
+    @State private var selDecor = Set<UUID>()
+    @State private var selObj = Set<UUID>()
+    @State private var boxing = false
+    @State private var box: (x0: Int, y0: Int, x1: Int, y1: Int)?
+    @State private var movingSel = false
+    @State private var showMaterials = false
     @State private var groundPick: WorldGround = .wood
     @State private var itemPick: String?
     @State private var itemFilter: FurnitureKind.Category = .furniture
@@ -71,6 +112,10 @@ struct WorldView: View {
             island
             bottom
         }
+        .onChange(of: mode) { _, m in
+            anchor = nil; box = nil; movingSel = false
+            if m != .select { selDecor.removeAll(); selObj.removeAll() }
+        }
         .onChange(of: herCell) { _, _ in walkHerFigure() }
         .onChange(of: himCell) { _, _ in walkHimFigure() }
     }
@@ -90,7 +135,13 @@ struct WorldView: View {
         .navigationTitle("小岛")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if mode != .walk {
+                    Button { world.undo() } label: { Image(systemName: "arrow.uturn.backward") }
+                        .disabled(!world.canUndo)
+                    Button { world.redo() } label: { Image(systemName: "arrow.uturn.forward") }
+                        .disabled(!world.canRedo)
+                }
                 Button { showMods = true } label: { Image(systemName: "puzzlepiece.extension") }
             }
         }
@@ -244,18 +295,35 @@ struct WorldView: View {
     }
 
     private func dragGesture(_ screen: CGSize, _ content: CGSize) -> some Gesture {
-        DragGesture(minimumDistance: mode == .ground ? 0 : 6)
+        DragGesture(minimumDistance: mode == .ground && groundTool == .brush ? 0 : 6)
             .onChanged { v in
                 guard zoomStart == nil else { return }
-                if mode == .ground {
-                    // 铺地：手指划过的格子都铺上
-                    if let c = cell(at: v.location, screen, content) { world.setGround(groundPick, c.0, c.1) }
+                if mode == .ground && groundTool == .brush {
+                    // 画笔：手指划过的格子都铺上，一笔算一步撤销
+                    if !brushing { world.checkpoint(); brushing = true }
+                    if let c = cell(at: v.location, screen, content) { world.paint(groundPick, [c]) }
+                    return
+                }
+                if mode == .select && boxing {
+                    // 框选：拉一个框
+                    if let a = cell(at: v.startLocation, screen, content), let b = cell(at: v.location, screen, content) {
+                        box = (a.0, a.1, b.0, b.1)
+                    }
                     return
                 }
                 pan = clamp(CGSize(width: panStart.width + v.translation.width, height: panStart.height + v.translation.height),
                             screen, content, zoom)
             }
-            .onEnded { _ in panStart = pan }
+            .onEnded { _ in
+                panStart = pan
+                brushing = false
+                if let b = box {
+                    let got = world.items(inX: b.x0, b.x1, y: b.y0, b.y1)
+                    selDecor.formUnion(got.decor)
+                    selObj.formUnion(got.objects)
+                    box = nil
+                }
+            }
     }
 
     private func zoomGesture(_ screen: CGSize, _ content: CGSize) -> some Gesture {
@@ -296,6 +364,7 @@ struct WorldView: View {
                 himView.zIndex(Double(himWalk.pos.y) + 0.75)
             }
             .frame(width: w, height: h, alignment: .topLeading)
+            if mode == .select || anchor != nil { selectionLayer }
             AmbientLayer(width: world.width, height: world.height, tile: tile,
                          night: WorldStore.isNight, lights: nightLights)
         }
@@ -321,19 +390,75 @@ struct WorldView: View {
         case .place:
             guard !moved else { return }
             if sceneryTab {
-                if let k = decorPick { world.addDecor(k.rawValue, x, y) }
+                if let k = decorPick { world.checkpoint(); world.addDecor(k.rawValue, x, y) }
                 return
             }
             guard let src = itemPick else { return }
             var w = 1
             if src.hasPrefix("f:"), let k = FurnitureCatalog.kind(String(src.dropFirst(2))), k.sprite.width >= 20 { w = 2 }
+            world.checkpoint()
             world.place(src, x, y, w: w)
         case .ground:
-            world.setGround(groundPick, x, y)
-        case .remove:
-            if let o = world.object(at: x, y) { world.remove(o.id) }
-            else if let d = world.decor(at: x, y) { world.removeDecor(d.id) }
+            switch groundTool {
+            case .brush:
+                world.checkpoint()
+                world.paint(groundPick, [(x, y)])
+            case .line, .rect:
+                guard let a = anchor else { anchor = (x, y); return }
+                world.checkpoint()
+                world.paint(groundPick, groundTool == .line ? Self.lineCells(a, (x, y)) : Self.rectCells(a, (x, y)))
+                anchor = nil
+            case .fill:
+                world.checkpoint()
+                world.paint(groundPick, world.floodCells(x, y))
+            }
+        case .select:
+            if movingSel {
+                // 挪：选中的整体挪过去，最左下那件落在点的这一格
+                guard let ref = selectionAnchor else { movingSel = false; return }
+                world.checkpoint()
+                if !world.moveItems(decor: selDecor, objects: selObj, dx: x - ref.x, dy: y - ref.y) { world.undo() }
+                movingSel = false
+                return
+            }
+            if let o = world.object(at: x, y) {
+                if selObj.contains(o.id) { selObj.remove(o.id) } else { selObj.insert(o.id) }
+            } else if let d = world.decor(at: x, y) {
+                if selDecor.contains(d.id) { selDecor.remove(d.id) } else { selDecor.insert(d.id) }
+            }
         }
+    }
+
+    /// 两点之间先横后竖的一条路
+    static func lineCells(_ a: (x: Int, y: Int), _ b: (Int, Int)) -> [(Int, Int)] {
+        var out: [(Int, Int)] = []
+        let sx = a.x <= b.0 ? 1 : -1, sy = a.y <= b.1 ? 1 : -1
+        for x in stride(from: a.x, through: b.0, by: sx) { out.append((x, a.y)) }
+        for y in stride(from: a.y, through: b.1, by: sy) { out.append((b.0, y)) }
+        return out
+    }
+
+    static func rectCells(_ a: (x: Int, y: Int), _ b: (Int, Int)) -> [(Int, Int)] {
+        var out: [(Int, Int)] = []
+        for y in min(a.y, b.1)...max(a.y, b.1) { for x in min(a.x, b.0)...max(a.x, b.0) { out.append((x, y)) } }
+        return out
+    }
+
+    /// 选中的那一堆里最左、最下的那一格（挪的时候拿它对准）
+    private var selectionAnchor: (x: Int, y: Int)? {
+        let ds = world.decor.filter { selDecor.contains($0.id) }.map { ($0.x, $0.y) }
+        let os = world.save.objects.filter { selObj.contains($0.id) }.map { ($0.x, $0.y) }
+        let all = ds + os
+        guard let minX = all.map({ $0.0 }).min(), let maxY = all.map({ $0.1 }).max() else { return nil }
+        return (minX, maxY)
+    }
+
+    private var selectionCount: Int { selDecor.count + selObj.count }
+
+    /// 选中的景里有哪几类，能换成的都列出来
+    private var materialChoices: [WorldDecorKind] {
+        let fams = Set(world.decor.filter { selDecor.contains($0.id) }.compactMap { WorldDecorKind.resolve($0.kind)?.family })
+        return WorldDecorKind.allCases.filter { fams.contains($0.family) && $0.siblings.count > 1 }
     }
 
     private func shore(near x: Int, _ y: Int) -> (Int, Int)? {
@@ -393,6 +518,7 @@ struct WorldView: View {
             let left = ((CGFloat(k.cells.w * IslandArt.px) - s.width) / 2).rounded(.down)
             let bottom = k == .lily ? CGFloat(d.y) * tile + (2 + s.height) * sc : CGFloat(d.y + 1) * tile
             IslandSprite(key: k.sprite, scale: sc)
+                .scaleEffect(x: d.flip == true ? -1 : 1, y: 1)
                 .background(alignment: .bottom) {
                     if k.blocks {
                         Ellipse().fill(Color(red: 0.31, green: 0.23, blue: 0.31).opacity(0.2))
@@ -436,6 +562,39 @@ struct WorldView: View {
         }
         .frame(width: w, height: tile * 1.6, alignment: .bottom)
         .position(x: CGFloat(o.x) * tile + w / 2, y: CGFloat(o.y) * tile + tile - tile * 0.8)
+        .allowsHitTesting(false)
+    }
+
+    /// 选中的东西外面一圈虚线；正在拉的框；铺路 / 方框的起点
+    private var selectionLayer: some View {
+        Canvas { gc, _ in
+            let accent = app.settings.accentColor
+            func frame(_ x: Int, _ y: Int, _ w: Int, _ h: Int) -> CGRect {
+                CGRect(x: CGFloat(x) * tile, y: CGFloat(y - h + 1) * tile, width: CGFloat(w) * tile, height: CGFloat(h) * tile)
+            }
+            for d in world.decor where selDecor.contains(d.id) {
+                let c = WorldDecorKind.resolve(d.kind)?.cells ?? (1, 1)
+                let r = frame(d.x, d.y, c.w, c.h).insetBy(dx: 2, dy: 2)
+                gc.fill(Path(roundedRect: r, cornerRadius: 8), with: .color(accent.opacity(0.12)))
+                gc.stroke(Path(roundedRect: r, cornerRadius: 8), with: .color(accent), style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+            }
+            for o in world.save.objects where selObj.contains(o.id) {
+                let r = frame(o.x, o.y, o.w, 2).insetBy(dx: 2, dy: 2)
+                gc.fill(Path(roundedRect: r, cornerRadius: 8), with: .color(accent.opacity(0.12)))
+                gc.stroke(Path(roundedRect: r, cornerRadius: 8), with: .color(accent), style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+            }
+            if let b = box {
+                let r = CGRect(x: CGFloat(min(b.x0, b.x1)) * tile, y: CGFloat(min(b.y0, b.y1)) * tile,
+                               width: CGFloat(abs(b.x1 - b.x0) + 1) * tile, height: CGFloat(abs(b.y1 - b.y0) + 1) * tile)
+                gc.fill(Path(r), with: .color(accent.opacity(0.10)))
+                gc.stroke(Path(r), with: .color(accent), style: StrokeStyle(lineWidth: 2, dash: [8, 5]))
+            }
+            if let a = anchor {
+                let r = CGRect(x: CGFloat(a.x) * tile, y: CGFloat(a.y) * tile, width: tile, height: tile).insetBy(dx: 3, dy: 3)
+                gc.stroke(Path(roundedRect: r, cornerRadius: 6), with: .color(accent), lineWidth: 3)
+            }
+        }
+        .frame(width: CGFloat(world.width) * tile, height: CGFloat(world.height) * tile)
         .allowsHitTesting(false)
     }
 
@@ -539,10 +698,18 @@ struct WorldView: View {
                 Text("点空地走过去；点东西看能一起做什么；点\(him)对他做点什么；点田种菜浇水，点水钓鱼。")
                     .font(.app(11)).foregroundStyle(Theme.textMuted(scheme))
                     .padding(.horizontal, 16)
-            case .remove:
-                Text("点一件东西把它拿走。")
-                    .font(.app(11)).foregroundStyle(Theme.textMuted(scheme))
+            case .select:
+                selectPanel
             case .ground:
+                HStack(spacing: 6) {
+                    ForEach(GroundTool.allCases) { t in
+                        toolChip(t.label, t.icon, on: groundTool == t) { groundTool = t; anchor = nil }
+                    }
+                }
+                .padding(.horizontal, 16)
+                Text(anchor != nil ? "再点一下终点。" : groundTool.hint)
+                    .font(.app(11)).foregroundStyle(Theme.textMuted(scheme))
+                    .padding(.horizontal, 16)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(WorldGround.allCases) { g in
@@ -566,6 +733,74 @@ struct WorldView: View {
         .padding(.top, 10)
         .padding(.bottom, Layout.tabBarExpanded)
         .background(.ultraThinMaterial)
+    }
+
+    private func toolChip(_ label: String, _ icon: String, on: Bool, tint: Color? = nil, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: icon).font(.system(size: 12))
+                Text(label).font(.app(11.5, weight: on ? .semibold : .regular))
+            }
+            .foregroundStyle(tint ?? (on ? app.settings.accentColor : Theme.textSoft(scheme)))
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .frame(maxWidth: .infinity)
+            .background(Capsule().fill(on ? app.settings.accentColor.opacity(0.18) : Theme.softFillDeep))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// 选择：点东西选中 / 取消，框选一片；选好了挪、转、换材料、删
+    private var selectPanel: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 6) {
+                toolChip("框选", "rectangle.dashed", on: boxing) { boxing.toggle() }
+                toolChip("同类全选", "square.stack.3d.up", on: false) { selectSameKind() }
+                toolChip("取消", "xmark", on: false) { clearSelection() }
+            }
+            .padding(.horizontal, 16)
+            if selectionCount > 0 {
+                HStack(spacing: 6) {
+                    toolChip(movingSel ? "点目标格" : "移动", "arrow.up.and.down.and.arrow.left.and.right", on: movingSel) { movingSel.toggle() }
+                    toolChip("旋转", "arrow.triangle.2.circlepath", on: false) {
+                        world.checkpoint(); world.rotateDecor(selDecor)
+                    }
+                    toolChip("换材料", "paintpalette", on: false) { showMaterials = true }
+                    toolChip("删除", "trash", on: false, tint: Color(hexString: "D9707F")!) {
+                        world.checkpoint()
+                        world.removeItems(decor: selDecor, objects: selObj)
+                        clearSelection()
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+            Text(selectionCount > 0
+                 ? "已选 \(selectionCount) 件。" + (movingSel ? "点一格，选中的整体挪过去。" : "")
+                 : (boxing ? "拖一下框住一片。关掉框选就能拖动画面。" : "点东西选中，再点一下取消；可以一次选好多件。"))
+                .font(.app(11)).foregroundStyle(Theme.textMuted(scheme))
+                .padding(.horizontal, 16)
+        }
+        .confirmationDialog("换成", isPresented: $showMaterials, titleVisibility: .visible) {
+            ForEach(materialChoices) { k in
+                Button(k.family + " · " + k.label) {
+                    world.checkpoint(); world.setKind(selDecor, to: k)
+                }
+            }
+            Button("算了", role: .cancel) {}
+        } message: {
+            Text(materialChoices.isEmpty ? "选中的东西没有别的材料可换。" : "同一类的都会换成选的这一种。")
+        }
+    }
+
+    private func clearSelection() {
+        selDecor.removeAll(); selObj.removeAll(); movingSel = false; box = nil
+    }
+
+    /// 跟已选的同一种的，全岛都选上
+    private func selectSameKind() {
+        let kinds = Set(world.decor.filter { selDecor.contains($0.id) }.map(\.kind))
+        let sources = Set(world.save.objects.filter { selObj.contains($0.id) }.map(\.source))
+        for d in world.decor where kinds.contains(d.kind) { selDecor.insert(d.id) }
+        for o in world.save.objects where sources.contains(o.source) { selObj.insert(o.id) }
     }
 
     private var itemPicker: some View {

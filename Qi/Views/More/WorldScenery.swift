@@ -12,7 +12,7 @@ enum WorldDecorKind: String, CaseIterable, Identifiable {
          bush, berry, rock, pebble, rocks, stump,
          daisy, clover, flowerY, flowerR, tulipPeach, lavender, sunflower, lily,
          houseOrange, cabin, shop, houseBeige,
-         fence, crate, barrel, lamp, mailbox, bench
+         fence, fenceV, crate, barrel, lamp, mailbox, bench
     var id: String { rawValue }
 
     var label: String {
@@ -45,6 +45,7 @@ enum WorldDecorKind: String, CaseIterable, Identifiable {
         case .shop: return "紫顶小屋"
         case .houseBeige: return "绿顶小屋"
         case .fence: return "篱笆"
+        case .fenceV: return "竖篱笆"
         case .crate: return "果箱"
         case .barrel: return "水桶"
         case .lamp: return "路灯"
@@ -84,6 +85,7 @@ enum WorldDecorKind: String, CaseIterable, Identifiable {
         case .shop: return "house_lilac"
         case .houseBeige: return "house_sage"
         case .fence: return "fence"
+        case .fenceV: return "fence_v"
         case .crate: return "crate"
         case .barrel: return "barrel"
         case .lamp: return "lamp"
@@ -93,6 +95,25 @@ enum WorldDecorKind: String, CaseIterable, Identifiable {
     }
 
     var isHouse: Bool { [.houseOrange, .cabin, .shop, .houseBeige].contains(self) }
+
+    /// 哪一类。换材料只在同一类里换（小屋换屋顶颜色、大树换品种、花换花……）
+    var family: String {
+        switch self {
+        case .houseOrange, .cabin, .shop, .houseBeige: return "小屋"
+        case .treeGreen, .treePink, .treeBig, .treeOrange, .pine: return "大树"
+        case .treeSmall, .pinkSmall, .olive, .bonsai: return "小树"
+        case .bush, .berry: return "灌木"
+        case .rock, .pebble, .rocks, .stump: return "石头"
+        case .daisy, .clover, .flowerY, .flowerR, .tulipPeach, .lavender, .sunflower: return "花"
+        case .fence, .fenceV: return "篱笆"
+        case .crate, .barrel: return "箱桶"
+        case .lamp, .mailbox, .bench: return "小物"
+        case .lily: return "水上"
+        }
+    }
+
+    /// 同一类的
+    var siblings: [WorldDecorKind] { Self.allCases.filter { $0.family == family } }
 
     /// 挡路的（走不过去）：树干、房子、石头、箱子桶、长椅
     var blocks: Bool {
