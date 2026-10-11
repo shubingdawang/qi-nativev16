@@ -261,6 +261,13 @@ struct WageAnniversary: Codable, Hashable, Identifiable {
     var yearly = true
 }
 
+/// 某个发薪日实际到手多少，多了少了为什么
+struct WagePayRecord: Codable, Hashable {
+    var actual: Double?
+    var note = ""
+    var images: [String] = []
+}
+
 /// 一张导入的班表：从哪天开始、管几天
 struct WageRoster: Codable, Hashable, Identifiable {
     var id = UUID()
@@ -279,6 +286,8 @@ struct WageSettings: Codable, Hashable {
     var custom: [String] = []
     /// 每月几号发工资（可以几次）。当月没有这一天（31 号）就按最后一天
     var paydays: [Int] = []
+    /// 每个发薪日发上个月工资的几成（键是几号，值 0...1）。没填的那几天平分剩下的
+    var payRatios: [String: Double] = [:]
     var anniversaries: [WageAnniversary] = []
 
     /// 编辑页、图例、设置页列出来的全部班次
@@ -315,6 +324,7 @@ extension WageSettings {
             ?? WageSettings.defaults
         custom = (try? c.decodeIfPresent([String].self, forKey: .custom)) ?? []
         paydays = (try? c.decodeIfPresent([Int].self, forKey: .paydays)) ?? []
+        payRatios = (try? c.decodeIfPresent([String: Double].self, forKey: .payRatios)) ?? [:]
         anniversaries = (try? c.decodeIfPresent([WageAnniversary].self, forKey: .anniversaries)) ?? []
     }
 }
@@ -326,6 +336,8 @@ struct WageFile: Codable {
     var days: [String: WorkDay] = [:]
     /// 导入的班表
     var rosters: [WageRoster] = []
+    /// 发薪日的实发记录，键是 yyyy-MM-dd
+    var payRecords: [String: WagePayRecord] = [:]
 
     init() {}
 
@@ -335,6 +347,7 @@ struct WageFile: Codable {
         settings = (try? c.decodeIfPresent(WageSettings.self, forKey: .settings)) ?? WageSettings()
         days = (try? c.decodeIfPresent([String: WorkDay].self, forKey: .days)) ?? [:]
         rosters = (try? c.decodeIfPresent([WageRoster].self, forKey: .rosters)) ?? []
+        payRecords = (try? c.decodeIfPresent([String: WagePayRecord].self, forKey: .payRecords)) ?? [:]
     }
 }
 
@@ -384,6 +397,52 @@ final class WageStore: ObservableObject {
         let day = cal.component(.day, from: d)
         let last = cal.range(of: .day, in: .month, for: d)?.count ?? 31
         return paydays.contains { min($0, last) == day }
+    }
+
+    /// 这个发薪日发几成：自己填了就用填的，没填的几天平分剩下的
+    func payRatio(day: Int) -> Double {
+        let s = file.settings
+        if let r = s.payRatios[String(day)] { return r }
+        let unset = s.paydays.filter { s.payRatios[String($0)] == nil }
+        let used = s.paydays.compactMap { s.payRatios[String($0)] }.reduce(0, +)
+        return unset.isEmpty ? 0 : max(0, 1 - used) / Double(unset.count)
+    }
+
+    /// 这一天如果是发薪日：应发多少（上个月工资 × 这一天的比例）
+    func expectedPay(on d: Date) -> (amount: Double, base: Double, ratio: Double)? {
+        guard isPayday(d) else { return nil }
+        let cal = gregorian
+        let day = cal.component(.day, from: d)
+        let last = cal.range(of: .day, in: .month, for: d)?.count ?? 31
+        guard let p = file.settings.paydays.first(where: { min($0, last) == day }),
+              let prev = cal.date(byAdding: .month, value: -1, to: d) else { return nil }
+        let base = monthTotals(prev).pay
+        let ratio = payRatio(day: p)
+        return (base * ratio, base, ratio)
+    }
+
+    func payRecord(on d: Date) -> WagePayRecord? { file.payRecords[Self.key(d)] }
+
+    func setPayRecord(_ r: WagePayRecord?, on d: Date) {
+        var f = file
+        if let r, r.actual != nil || !r.note.isEmpty || !r.images.isEmpty {
+            f.payRecords[Self.key(d)] = r
+        } else {
+            f.payRecords[Self.key(d)] = nil
+        }
+        file = f
+    }
+
+    func addAnniversary(_ name: String, on d: Date, yearly: Bool) {
+        var f = file
+        f.settings.anniversaries.append(WageAnniversary(name: name.isEmpty ? "纪念日" : name, date: Self.key(d), yearly: yearly))
+        file = f
+    }
+
+    func removeAnniversary(_ id: UUID) {
+        var f = file
+        f.settings.anniversaries.removeAll { $0.id == id }
+        file = f
     }
 
     /// 从今天起（含今天）下一个发薪日

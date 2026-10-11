@@ -147,7 +147,8 @@ struct WageView: View {
         if pay != nil || ann != nil {
             VStack(alignment: .leading, spacing: 6) {
                 if let p = pay {
-                    reminderRow("yensign.circle", Self.payRed, "下次发薪 " + Self.md(p), Self.until(p))
+                    let amount = store.expectedPay(on: p).map { " · 应发 ¥" + WageStore.money($0.amount) } ?? ""
+                    reminderRow("yensign.circle", Self.payRed, "下次发薪 " + Self.md(p) + amount, Self.until(p))
                 }
                 if let n = ann {
                     reminderRow("heart", Color(hexString: "E8758F")!,
@@ -280,7 +281,7 @@ struct WageView: View {
             // 设过的那一天点进去**直接是总结**；空的那一天有班表就先看班表，没有才进编辑
             if rec != nil {
                 summary = WageDayRef(date: date)
-            } else if let r = store.roster(on: date) {
+            } else if !store.isPayday(date), let r = store.roster(on: date) {
                 preview = r.image
             } else {
                 editing = WageDayRef(date: date)
@@ -986,6 +987,8 @@ struct WageDayEditor: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(alignment: .leading, spacing: 14) {
+                            if store.isPayday(date) { WagePayCard(date: date) }
+                            WageAnniversaryCard(date: date)
                             shiftCard
                             if day.shift != nil { rateCard }
                             if day.shift != nil { timeCard }
@@ -1723,15 +1726,40 @@ struct WageSettingsSheet: View {
                         .buttonStyle(.plain)
                     }
                 }
+                // 每个发薪日发上个月工资的几成
+                ForEach(draft.paydays, id: \.self) { d in
+                    HStack(spacing: 8) {
+                        Text("\(d) 号发").font(.app(13)).foregroundStyle(Theme.textSoft(scheme))
+                        TextField(ratioPlaceholder(d), text: Binding(
+                            get: { draft.payRatios[String(d)].map { WageStore.money($0 * 100) } ?? "" },
+                            set: { v in draft.payRatios[String(d)] = Double(v).map { min(100, max(0, $0)) / 100 } }))
+                            .keyboardType(.decimalPad)
+                            .font(.app(14, weight: .medium))
+                            .multilineTextAlignment(.trailing)
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .frame(width: 90)
+                            .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Theme.softFillDeep))
+                        Text("%").font(.app(13)).foregroundStyle(Theme.textMuted(scheme))
+                        Spacer(minLength: 0)
+                    }
+                }
                 Text(draft.paydays.isEmpty
                      ? "点选每月发工资的日子，可以选多天。日历上会标出来，首页显示还有几天。"
-                     : "每月 " + draft.paydays.map(String.init).joined(separator: "、") + " 号发工资；当月没有这一天时按最后一天算。")
+                     : "每月 " + draft.paydays.map(String.init).joined(separator: "、") + " 号发上个月的工资；比例空着的那几天平分剩下的。当月没有这一天时按最后一天算。")
                     .font(.app(11.5))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
+    }
+
+    /// 比例格子里的灰字：没填时这一天会分到多少
+    private func ratioPlaceholder(_ d: Int) -> String {
+        let unset = draft.paydays.filter { draft.payRatios[String($0)] == nil }
+        let used = draft.paydays.compactMap { draft.payRatios[String($0)] }.reduce(0, +)
+        let share = unset.isEmpty ? 0 : max(0, 1 - used) / Double(unset.count)
+        return "剩下的 " + WageStore.money(share * 100)
     }
 
     // MARK: 纪念日
@@ -2077,5 +2105,185 @@ struct WageZoomImage: View {
 
     private func reset() {
         scale = 1; base = 1; offset = .zero; offsetBase = .zero
+    }
+}
+
+// MARK: - 发薪日那一天
+
+/// 发薪日：应发多少（上个月工资 × 比例）、实发多少，差多少（多了绿、少了红），为什么——文字和图
+struct WagePayCard: View {
+    let date: Date
+
+    @ObservedObject private var store = WageStore.shared
+    @EnvironmentObject private var app: AppState
+    @Environment(\.colorScheme) private var scheme
+    @State private var actualText = ""
+    @State private var note = ""
+    @State private var images: [String] = []
+    @State private var pick: [PhotosPickerItem] = []
+    @State private var loaded = false
+
+    static let green = Color(hexString: "4FA36B")!
+    static let red = Color(hexString: "D9566B")!
+
+    private var expected: (amount: Double, base: Double, ratio: Double)? { store.expectedPay(on: date) }
+    private var actual: Double? { Double(actualText) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: "yensign.circle").foregroundStyle(WageView.payRed)
+                Text("发薪日").font(.app(14, weight: .semibold)).foregroundStyle(Theme.textMain(scheme))
+                Spacer()
+            }
+            if let e = expected {
+                HStack {
+                    Text("应发").font(.app(13)).foregroundStyle(Theme.textSoft(scheme))
+                    Spacer()
+                    Text("¥" + WageStore.money(e.amount)).font(.app(15, weight: .semibold)).foregroundStyle(Theme.textMain(scheme))
+                }
+                Text("上个月工资 ¥\(WageStore.money(e.base)) × \(WageStore.money(e.ratio * 100))%")
+                    .font(.app(11)).foregroundStyle(Theme.textMuted(scheme))
+            }
+            HStack(spacing: 8) {
+                Text("实发").font(.app(13)).foregroundStyle(Theme.textSoft(scheme))
+                Spacer()
+                Text("¥").font(.app(13)).foregroundStyle(Theme.textMuted(scheme))
+                TextField("到手多少", text: $actualText)
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .font(.app(15, weight: .medium))
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .frame(width: 130)
+                    .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Theme.softFillDeep))
+            }
+            if let a = actual, let e = expected {
+                let diff = a - e.amount
+                HStack {
+                    Text(diff >= 0 ? "多了" : "少了").font(.app(13)).foregroundStyle(Theme.textSoft(scheme))
+                    Spacer()
+                    Text((diff >= 0 ? "+" : "-") + WageStore.money(abs(diff)))
+                        .font(.app(15, weight: .semibold))
+                        .foregroundStyle(diff >= 0 ? Self.green : Self.red)
+                }
+            }
+            TextField("为什么多了 / 少了（扣了什么、补了什么）", text: $note, axis: .vertical)
+                .font(.app(13))
+                .lineLimit(1...4)
+                .padding(.horizontal, 10).padding(.vertical, 8)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.softFillDeep))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(images, id: \.self) { n in
+                        WageThumb(name: n, size: 54)
+                            .overlay(alignment: .topTrailing) {
+                                Button {
+                                    images.removeAll { $0 == n }
+                                    ImageStore.delete(n)
+                                    persist()
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill").font(.system(size: 15))
+                                        .foregroundStyle(.white, .black.opacity(0.45))
+                                }
+                                .offset(x: 5, y: -5)
+                            }
+                    }
+                    PhotosPicker(selection: $pick, maxSelectionCount: 4, matching: .images) {
+                        Image(systemName: "photo.badge.plus")
+                            .font(.system(size: 18, weight: .light))
+                            .foregroundStyle(app.settings.accentColor)
+                            .frame(width: 54, height: 54)
+                            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.softFillDeep))
+                    }
+                }
+                .padding(.top, 5)
+            }
+        }
+        .glassCard()
+        .onAppear {
+            guard !loaded else { return }
+            loaded = true
+            let r = store.payRecord(on: date)
+            actualText = r?.actual.map(WageStore.money) ?? ""
+            note = r?.note ?? ""
+            images = r?.images ?? []
+        }
+        .onChange(of: actualText) { _, _ in persist() }
+        .onChange(of: note) { _, _ in persist() }
+        .onChange(of: pick) { _, items in
+            guard !items.isEmpty else { return }
+            Task { @MainActor in
+                for it in items {
+                    if let d = try? await it.loadTransferable(type: Data.self), let img = UIImage(data: d),
+                       let n = ImageStore.save(ImageStore.downscale(img, maxSide: 1600)) { images.append(n) }
+                }
+                pick = []
+                persist()
+            }
+        }
+    }
+
+    private func persist() {
+        store.setPayRecord(WagePayRecord(actual: Double(actualText), note: note, images: images), on: date)
+    }
+}
+
+// MARK: - 这一天的纪念日
+
+/// 在编辑页直接把这一天记成纪念日：写个名字，选每年提醒，加上
+struct WageAnniversaryCard: View {
+    let date: Date
+
+    @ObservedObject private var store = WageStore.shared
+    @EnvironmentObject private var app: AppState
+    @Environment(\.colorScheme) private var scheme
+    @State private var name = ""
+    @State private var yearly = true
+    @State private var open = false
+
+    var body: some View {
+        let here = store.anniversaries(on: date)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: "heart").foregroundStyle(Color(hexString: "E8758F")!)
+                Text(here.isEmpty ? "纪念日" : here.map(\.name).joined(separator: "、"))
+                    .font(.app(14, weight: .semibold)).foregroundStyle(Theme.textMain(scheme))
+                Spacer()
+                if !open {
+                    Button(here.isEmpty ? "记成纪念日" : "再加一个") { open = true }
+                        .font(.app(12.5)).foregroundStyle(app.settings.accentColor)
+                }
+            }
+            ForEach(here) { a in
+                HStack {
+                    Text(a.yearly ? "每年这一天" : "只这一天").font(.app(11.5)).foregroundStyle(Theme.textMuted(scheme))
+                    Spacer()
+                    Button { store.removeAnniversary(a.id) } label: {
+                        Image(systemName: "trash").font(.system(size: 12)).foregroundStyle(Theme.textMuted(scheme))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            if open {
+                TextField("名字，如：入职纪念日、转正", text: $name)
+                    .font(.app(14))
+                    .padding(.horizontal, 10).padding(.vertical, 8)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.softFillDeep))
+                Toggle("每年这一天都提醒", isOn: $yearly)
+                    .font(.app(12.5)).tint(app.settings.accentColor)
+                HStack {
+                    Spacer()
+                    Button("取消") { open = false; name = "" }
+                        .font(.app(13)).foregroundStyle(Theme.textMuted(scheme))
+                    Button("加上") {
+                        store.addAnniversary(name.trimmingCharacters(in: .whitespaces), on: date, yearly: yearly)
+                        name = ""; open = false
+                    }
+                    .font(.app(13, weight: .semibold)).foregroundStyle(app.settings.accentColor)
+                    .padding(.leading, 12)
+                }
+            }
+        }
+        .glassCard()
     }
 }
