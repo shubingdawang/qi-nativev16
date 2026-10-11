@@ -292,6 +292,8 @@ final class WorldStore: ObservableObject {
     @Published var notice: String?
     /// 刚做完某件事触发的剧情，页面上弹出来
     @Published var pendingStory: WorldStory?
+    /// 刚解锁的岛（页面上放一段开锁的动画）
+    @Published var celebrating: String?
 
     private init() {
         var s = Storage.load(WorldSave.self, from: "world.json") ?? WorldSave()
@@ -1108,7 +1110,18 @@ extension WorldStore {
 
     var level: Int { WorldLevel.level(save.xp) }
 
+    /// 现在解锁了哪些岛
+    private var unlockedSet: Set<String> { Set(WorldRegions.all.filter { $0.id != "home" && unlocked($0.id) }.map(\.id)) }
+
+    private func celebrateNew(since before: Set<String>) {
+        if let id = WorldRegions.all.map(\.id).first(where: { unlockedSet.subtracting(before).contains($0) }) {
+            celebrating = id
+        }
+    }
+
     func gain(_ n: Int, build: Bool = false) {
+        let unlockedBefore = unlockedSet
+        defer { celebrateNew(since: unlockedBefore) }
         var v = save
         if build {
             let today = WageStore.key(Date())
@@ -1236,6 +1249,8 @@ extension WorldStore {
     @discardableResult
     func finish(_ st: WorldStory) -> String {
         guard !save.stories.contains(st.id) else { return "" }
+        let unlockedBefore = unlockedSet
+        defer { celebrateNew(since: unlockedBefore) }
         var v = save
         v.stories.append(st.id)
         save = v

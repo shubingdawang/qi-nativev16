@@ -345,6 +345,13 @@ struct WorldView: View {
                     }
                 }
                 .animation(.easeOut(duration: 0.2), value: world.notice)
+                .overlay {
+                    if let id = world.celebrating, let info = WorldRegions.info(id) {
+                        IslandUnlockOverlay(info: info) { world.celebrating = nil }
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeOut(duration: 0.25), value: world.celebrating)
                 // 她走到快出画面了，镜头跟过去
                 .onChange(of: herWalk.pos) { _, p in
                     guard zoomStart == nil else { return }
@@ -1432,5 +1439,92 @@ struct WorldGuideSheet: View {
         }
         .frame(height: 170)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(hexString: "BFE6EC")!.opacity(0.35)))
+    }
+}
+
+// MARK: - 解锁一座岛
+
+/// 解锁新岛：一把锁弹开，四周炸开一圈像素小碎片和星星，写上岛名和它是什么样的
+struct IslandUnlockOverlay: View {
+    let info: WorldRegionInfo
+    let done: () -> Void
+
+    @EnvironmentObject private var app: AppState
+    @State private var open = false
+    @State private var shown = false
+    @State private var burstAt: Date?
+
+    private static let colors = ["F7C6D4", "FBE3A6", "C9B6E8", "A9DCDC", "B2D89B", "FFFFFF", "F5A9B8"]
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.35).ignoresSafeArea()
+                .onTapGesture { if open { done() } }
+            // 碎片：从锁的位置往外飞，边飞边落、边转边淡
+            TimelineView(.animation) { ctx in
+                Canvas { gc, size in
+                    guard let t0 = burstAt else { return }
+                    let t = ctx.date.timeIntervalSince(t0)
+                    guard t < 2.2 else { return }
+                    let c = CGPoint(x: size.width / 2, y: size.height / 2 - 30)
+                    for i in 0..<42 {
+                        let a = Double(i) / 42 * .pi * 2 + sin(Double(i) * 7.1) * 0.3
+                        let speed = 120 + 90 * abs(sin(Double(i) * 3.7))
+                        let x = c.x + CGFloat(cos(a) * speed * t)
+                        let y = c.y + CGFloat(sin(a) * speed * t + 160 * t * t)
+                        let fade = max(0, 1 - t / 2.2)
+                        let col = Color(hexString: Self.colors[i % Self.colors.count])!.opacity(fade)
+                        let s: CGFloat = i % 5 == 0 ? 7 : 5
+                        if i % 6 == 0 {
+                            // 小星星：十字
+                            gc.fill(Path(CGRect(x: x - s, y: y - 1.5, width: s * 2, height: 3)), with: .color(col))
+                            gc.fill(Path(CGRect(x: x - 1.5, y: y - s, width: 3, height: s * 2)), with: .color(col))
+                        } else {
+                            gc.fill(Path(CGRect(x: x - s / 2, y: y - s / 2, width: s, height: s)), with: .color(col))
+                        }
+                    }
+                }
+            }
+            .allowsHitTesting(false)
+            .ignoresSafeArea()
+
+            VStack(spacing: 14) {
+                ZStack {
+                    Circle().fill(.white.opacity(0.92)).frame(width: 96, height: 96)
+                        .shadow(color: app.settings.accentColor.opacity(open ? 0.6 : 0), radius: open ? 24 : 0)
+                    Image(systemName: open ? "lock.open" : "lock")
+                        .font(.system(size: 40, weight: .light))
+                        .foregroundStyle(app.settings.accentColor)
+                        .rotationEffect(.degrees(open ? -12 : 0))
+                        .scaleEffect(open ? 1.08 : 1)
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .scaleEffect(shown ? 1 : 0.4)
+                if open {
+                    VStack(spacing: 6) {
+                        Text(info.name + " 解锁了").font(.app(20, weight: .semibold)).foregroundStyle(.white)
+                        Text(info.theme).font(.app(13)).foregroundStyle(.white.opacity(0.85))
+                        Text("走到通往那里的桥头就能过去").font(.app(11.5)).foregroundStyle(.white.opacity(0.7))
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    Button("好") { done() }
+                        .font(.app(14, weight: .medium))
+                        .foregroundStyle(app.settings.accentColor)
+                        .padding(.horizontal, 28).padding(.vertical, 9)
+                        .background(Capsule().fill(.white))
+                        .transition(.opacity)
+                }
+            }
+            .offset(y: -30)
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.6)) { shown = true }
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                burstAt = Date()
+                if app.settings.haptics { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.5)) { open = true }
+            }
+        }
     }
 }
