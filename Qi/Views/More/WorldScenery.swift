@@ -9,8 +9,9 @@ import CoreImage
 // 景：树、花、石头、房子……都是素材包里切出来的图，按格子摆，下沿对齐格子下沿。
 
 enum WorldDecorKind: String, CaseIterable, Identifiable {
-    case treeBig, treePink, treeGreen, treeOrange, treeSnow, treeBigPink, pine, treeSmall, bonsai,
-         bush, berry, berryBlue, sunflower, flowerY, flowerR, daisy, clover, fern, stump, rock, rocks, boulder,
+    case treeBig, treePink, treeGreen, treeOrange, treeSnow, treeBigPink, pine, treeSmall, bonsai, olive, pinkSmall,
+         bush, bushSmall, bushThick, berry, berryBlue, sunflower, flowerY, flowerR, daisy, clover, fern, grass, grassTall,
+         stump, stumpBig, rock, rockBrown, pebble, pebbleBrown, rocks, boulder,
          houseOrange, houseBeige, houseRed, shop, cabin, fence, barrel, crate, waterBarrel
     var id: String { rawValue }
 
@@ -25,6 +26,16 @@ enum WorldDecorKind: String, CaseIterable, Identifiable {
         case .pine: return "松树林"
         case .treeSmall: return "小树"
         case .bonsai: return "松树"
+        case .olive: return "橄榄树"
+        case .pinkSmall: return "小樱树"
+        case .bushSmall: return "小灌木"
+        case .bushThick: return "灌木丛"
+        case .grass: return "草丛"
+        case .grassTall: return "高草"
+        case .stumpBig: return "老树桩"
+        case .rockBrown: return "褐石"
+        case .pebble: return "小石子"
+        case .pebbleBrown: return "小石块"
         case .bush: return "灌木"
         case .berry: return "莓果丛"
         case .berryBlue: return "蓝莓丛"
@@ -62,6 +73,16 @@ enum WorldDecorKind: String, CaseIterable, Identifiable {
         case .pine: return "pine_big"
         case .treeSmall: return "tree_small"
         case .bonsai: return "pine_small"
+        case .olive: return "olive_small"
+        case .pinkSmall: return "pink_small"
+        case .bushSmall: return "bush1"
+        case .bushThick: return "bush3"
+        case .grass: return "grass1"
+        case .grassTall: return "grass2"
+        case .stumpBig: return "stump"
+        case .rockBrown: return "rock_b"
+        case .pebble: return "rock_gs"
+        case .pebbleBrown: return "rock_bs"
         case .bush: return "bush2"
         case .berry: return "berry_o"
         case .berryBlue: return "berry_b"
@@ -185,9 +206,13 @@ enum IslandArt {
         }
     }
 
-    /// 周围八格的位：左上、上、右上、右、右下、下、左下、左。角只在两条边都相同的时候才算
-    private static func mask(_ at: (Int, Int) -> WorldGround?, _ x: Int, _ y: Int, _ k: WorldGround) -> Int {
-        func s(_ dx: Int, _ dy: Int) -> Bool { at(x + dx, y + dy) == k }
+    /// 周围八格的位：左上、上、右上、右、右下、下、左下、左。角只在两条边都相同的时候才算。
+    /// 沙滩朝海那边不画边（海岸线另外按像素画）
+    private static func mask(_ at: (Int, Int) -> WorldGround, _ x: Int, _ y: Int, _ k: WorldGround) -> Int {
+        func s(_ dx: Int, _ dy: Int) -> Bool {
+            let a = at(x + dx, y + dy)
+            return a == k || (k == .sand && a == .sea)
+        }
         let t = s(0, -1), r = s(1, 0), b = s(0, 1), l = s(-1, 0)
         let bits = [s(-1, -1) && t && l, t, s(1, -1) && t && r, r, s(1, 1) && b && r, b, s(-1, 1) && b && l, l]
         var m = 0
@@ -212,24 +237,30 @@ enum IslandArt {
         let key = hasher.finalize()
         if let c = groundCache, c.key == key { return c.image }
 
-        func at(_ x: Int, _ y: Int) -> WorldGround? {
-            guard x >= 0, y >= 0, x < w, y < h else { return nil }
+        // 岛外面都算海
+        func at(_ x: Int, _ y: Int) -> WorldGround {
+            guard x >= 0, y >= 0, x < w, y < h else { return .sea }
             return g[y * w + x]
         }
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = false
-        let img = UIGraphicsImageRenderer(size: CGSize(width: w * px, height: h * px), format: format).image { ctx in
+        let tiles = UIGraphicsImageRenderer(size: CGSize(width: w * px, height: h * px), format: format).image { ctx in
             ctx.cgContext.interpolationQuality = .none
             let flowerKeys = ["flower_y", "daisy", "flower_r", "clover"]
             for y in 0..<h {
                 for x in 0..<w {
                     let r = CGRect(x: x * px, y: y * px, width: px, height: px)
+                    let k = at(x, y)
+                    if k == .sea {
+                        // 海那格先铺沙：海岸线往外鼓的那一点要有底，后面按像素清掉
+                        tile("TilesetFloor", 1, 1)?.draw(in: r)
+                        continue
+                    }
                     // 草地底：大多是干净的那块，偶尔一块带纹样
                     let n = noise(x, y)
                     let base = n < 0.12 ? tile("TilesetFloor", 1 + Int(n * 100) % 3, 12) : tile("TilesetFloor", 0, 12)
                     base?.draw(in: r)
-                    guard let k = at(x, y) else { continue }
                     switch k {
                     case .grass, .flowers:
                         // 零星的小草小花
@@ -257,14 +288,153 @@ enum IslandArt {
                 }
             }
         }
+        var img = tiles
+        if let cg = tiles.cgImage, let c = coast(cg, w: w, h: h, at: at) { img = UIImage(cgImage: c) }
         groundCache = (key, img)
         return img
+    }
+
+    // MARK: 海岸线
+
+    /// 平滑的噪声（格点上取 noise，中间三次插值）
+    private static func vnoise(_ x: Double, _ y: Double, _ k: Int) -> Double {
+        let i = Int(floor(x)), j = Int(floor(y))
+        var fx = x - Double(i), fy = y - Double(j)
+        fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy)
+        let a = noise(i, j, k), b = noise(i + 1, j, k), c = noise(i, j + 1, k), d = noise(i + 1, j + 1, k)
+        return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy
+    }
+
+    /// 倒角距离（横竖 3、斜 4），两遍。src 里 true 的像素算出离最近的 false 有多远
+    private static func chamfer(_ src: [Bool], _ w: Int, _ h: Int) -> [Int32] {
+        let big: Int32 = 1 << 28
+        var d = src.map { $0 ? big : 0 }
+        for y in 0..<h {
+            for x in 0..<w {
+                let i = y * w + x
+                guard d[i] != 0 else { continue }
+                var m = d[i]
+                if x > 0 { m = min(m, d[i - 1] + 3) }
+                if y > 0 {
+                    m = min(m, d[i - w] + 3)
+                    if x > 0 { m = min(m, d[i - w - 1] + 4) }
+                    if x < w - 1 { m = min(m, d[i - w + 1] + 4) }
+                }
+                d[i] = m
+            }
+        }
+        for y in stride(from: h - 1, through: 0, by: -1) {
+            for x in stride(from: w - 1, through: 0, by: -1) {
+                let i = y * w + x
+                guard d[i] != 0 else { continue }
+                var m = d[i]
+                if x < w - 1 { m = min(m, d[i + 1] + 3) }
+                if y < h - 1 {
+                    m = min(m, d[i + w] + 3)
+                    if x < w - 1 { m = min(m, d[i + w + 1] + 4) }
+                    if x > 0 { m = min(m, d[i + w - 1] + 4) }
+                }
+                d[i] = m
+            }
+        }
+        return d
+    }
+
+    /// 素材的颜色整张收过饱和度，自己画的颜色也照样收一下
+    private static func soft(_ hex: UInt32) -> (UInt8, UInt8, UInt8) {
+        let r = Double((hex >> 16) & 0xFF), g = Double((hex >> 8) & 0xFF), b = Double(hex & 0xFF)
+        let l = 0.2125 * r + 0.7154 * g + 0.0721 * b
+        func c(_ v: Double) -> UInt8 { UInt8(max(0, min(255, (l + (v - l) * 0.88).rounded()))) }
+        return (c(r), c(g), c(b))
+    }
+
+    /// 海岸线：按像素画。陆地 = 每格「是不是陆地」双线性插值 + 一点起伏 > 0.5，
+    /// 再按离岸几像素分出湿沙、沙滩、沙滩跟草地交界的描边；海上一道白浪、一道断续的浪、浅水往外越来越淡
+    private static func coast(_ image: CGImage, w: Int, h: Int, at: (Int, Int) -> WorldGround) -> CGImage? {
+        let W = w * px, H = h * px
+        // 木头：四边挨着海就是桥 / 栈桥，不算陆地
+        func land(_ x: Int, _ y: Int) -> Double {
+            let k = at(x, y)
+            if k == .sea { return 0 }
+            if k == .wood, [(0, 1), (0, -1), (1, 0), (-1, 0)].contains(where: { at(x + $0.0, y + $0.1) == .sea }) { return 0 }
+            return 1
+        }
+        var L = [Double](repeating: 0, count: (w + 2) * (h + 2))
+        for y in -1...h { for x in -1...w { L[(y + 1) * (w + 2) + x + 1] = land(x, y) } }
+        func lv(_ x: Int, _ y: Int) -> Double {
+            guard x >= -1, y >= -1, x <= w, y <= h else { return 0 }
+            return L[(y + 1) * (w + 2) + x + 1]
+        }
+        var inside = [Bool](repeating: false, count: W * H)
+        for py in 0..<H {
+            let v = (Double(py) + 0.5) / Double(px) - 0.5
+            let j = Int(floor(v)), fv = v - Double(j)
+            for qx in 0..<W {
+                let u = (Double(qx) + 0.5) / Double(px) - 0.5
+                let i = Int(floor(u)), fu = u - Double(i)
+                var f = (lv(i, j) * (1 - fu) + lv(i + 1, j) * fu) * (1 - fv) + (lv(i, j + 1) * (1 - fu) + lv(i + 1, j + 1) * fu) * fv
+                f += (vnoise(Double(qx) / 9, Double(py) / 9, 3) - 0.5) * 0.24
+                inside[py * W + qx] = f > 0.5
+            }
+        }
+        let din = chamfer(inside, W, H)
+        let dout = chamfer(inside.map { !$0 }, W, H)
+
+        let wet = soft(0xFFAD5D), wet2 = soft(0xFFBC75), sand = soft(0xFFCB8D), edge = soft(0xEF914F)
+        let foam = soft(0xFFFFFF), foam2 = soft(0xC9F3F6)
+
+        var buf = [UInt8](repeating: 0, count: W * H * 4)
+        return buf.withUnsafeMutableBytes { raw -> CGImage? in
+            guard let ctx = CGContext(data: raw.baseAddress, width: W, height: H, bitsPerComponent: 8, bytesPerRow: W * 4,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+            ctx.interpolationQuality = .none
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: W, height: H))
+            let p = raw.bindMemory(to: UInt8.self)
+            func set(_ i: Int, _ c: (UInt8, UInt8, UInt8)) {
+                p[i * 4] = c.0; p[i * 4 + 1] = c.1; p[i * 4 + 2] = c.2; p[i * 4 + 3] = 255
+            }
+            /// 半透明的白（预乘过）
+            func white(_ i: Int, _ a: Double) {
+                let v = UInt8(max(0, min(255, (a * 255).rounded())))
+                p[i * 4] = v; p[i * 4 + 1] = v; p[i * 4 + 2] = v; p[i * 4 + 3] = v
+            }
+            for y in 0..<H {
+                for x in 0..<W {
+                    let i = y * W + x
+                    let k = at(x / px, y / px)
+                    if k == .wood { continue }                // 木板原样留着
+                    if inside[i] {
+                        // 路、田、池塘挨着岸也不去改它
+                        switch k {
+                        case .grass, .flowers, .sand, .sea: break
+                        default: continue
+                        }
+                        let d = Double(din[i]) / 3
+                        let sw = 6.5 + vnoise(Double(x) / 11, Double(y) / 11, 7) * 4
+                        if d < 1.3 { set(i, wet) }
+                        else if d < 2.6 { set(i, wet2) }
+                        else if d < sw { set(i, noise(x, y, 21) < 0.035 ? wet2 : sand) }
+                        else if d < sw + 1, k != .sand { set(i, edge) }
+                        else if k == .sea { set(i, sand) }
+                    } else {
+                        let d = Double(dout[i]) / 3
+                        if d < 1.4 { set(i, foam) }
+                        else if d < 2.4 { set(i, foam2) }
+                        else if d > 4.2, d < 5.3, vnoise(Double(x) / 5, Double(y) / 5, 9) > 0.45 { white(i, 150.0 / 255) }
+                        else if d < 8 { white(i, 70.0 / 255 * (1 - d / 8)) }
+                        else { white(i, 0) }
+                    }
+                }
+            }
+            return ctx.makeImage()
+        }
     }
 
     /// 海：素材里那块干净的水。放大三倍、不插值，铺满背景
     static var sea: UIImage? {
         if let c = crops["sea@3"] { return c }
-        guard let t = tile("TilesetWater", 1, 8) else { return nil }
+        guard let t = tile("TilesetWater", 1, 7) else { return nil }
         let format = UIGraphicsImageRendererFormat()
         let side = CGFloat(px * 3)
         let img = UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { ctx in

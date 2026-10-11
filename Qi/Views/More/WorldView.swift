@@ -203,7 +203,7 @@ struct WorldView: View {
             if let o = world.object(at: x, y) { menuFor = o; return }
             if let d = world.decor(at: x, y, base: true), !world.actions(forDecor: d).isEmpty { decorMenu = d; return }
             if world.farmOn, world.ground(x, y) == .soil { soilAt = (x, y); return }
-            if world.farmOn, world.ground(x, y) == .water {
+            if world.farmOn, world.ground(x, y).isWater {
                 // 点水：走到旁边的岸上钓鱼
                 if let shore = shore(near: x, y) { world.walkHer(shore.0, shore.1) }
                 startFishing()

@@ -9,7 +9,7 @@ import SwiftUI
 // 纯本机，存档 `world.json`。他用 `world_look` / `world_act` 两件工具来玩。
 
 enum WorldGround: String, Codable, CaseIterable, Identifiable {
-    case grass, path, water, wood, sand, flowers, soil
+    case grass, path, water, wood, sand, flowers, soil, sea
     var id: String { rawValue }
     var label: String {
         switch self {
@@ -20,6 +20,7 @@ enum WorldGround: String, Codable, CaseIterable, Identifiable {
         case .sand: return "沙地"
         case .flowers: return "花丛"
         case .soil: return "田"
+        case .sea: return "海"
         }
     }
     var color: Color {
@@ -31,10 +32,26 @@ enum WorldGround: String, Codable, CaseIterable, Identifiable {
         case .sand: return Color(hexString: "F2E3BF")!
         case .flowers: return Color(hexString: "C9DFAF")!
         case .soil: return Color(hexString: "A9805E")!
+        case .sea: return Color(hexString: "71DDEE")!
         }
     }
     /// 走不进去的地块
-    var blocked: Bool { self == .water }
+    var blocked: Bool { self == .water || self == .sea }
+    /// 能钓鱼的
+    var isWater: Bool { self == .water || self == .sea }
+    /// 地图字符串里的一个字
+    static func from(_ c: Character) -> WorldGround {
+        switch c {
+        case "~": return .sea
+        case "p": return .path
+        case "w": return .water
+        case "b": return .wood
+        case "s": return .sand
+        case "f": return .flowers
+        case "o": return .soil
+        default: return .grass
+        }
+    }
 }
 
 /// 摆在岛上的一件东西。source：`f:<家具编号>` 或 `p:<素材编号>`
@@ -256,8 +273,8 @@ final class WorldStore: ObservableObject {
         loaded = true
     }
 
-    /// 地图画法的版本：2 = 像素素材那一版
-    static let artVersion = 2
+    /// 地图画法的版本：2 = 像素素材那一版，3 = 大岛、不规则的海岸
+    static let artVersion = 3
 
     /// 老存档换成新画法：地和景换成新的，摆的东西留着（落在水里或压着景的拿掉），田里不在田上的拿掉
     private static func upgrade(_ s: inout WorldSave) {
@@ -273,13 +290,13 @@ final class WorldStore: ObservableObject {
             return (d.x..<(d.x + k.cells.w)).map { d.y * fresh.width + $0 }
         })
         // 第一次打开时自动摆的那几件，跟着换成新的位置
-        let oldStarter = Set(["床", "沙发", "桌", "花"].compactMap { w in
+        let oldStarter = Set(["床", "沙发", "桌", "花", "椅"].compactMap { w in
             FurnitureCatalog.all.first(where: { $0.name.contains(w) && $0.category != .wear }).map { "f:" + $0.id }
         })
         let wasStarter = !old.objects.isEmpty && old.objects.allSatisfy { oldStarter.contains($0.source) }
         s.objects = wasStarter ? fresh.objects : old.objects.filter { o in
             o.x < fresh.width && o.y < fresh.height
-                && fresh.ground[o.y * fresh.width + o.x] != .water && !bases.contains(o.y * fresh.width + o.x)
+                && !fresh.ground[o.y * fresh.width + o.x].blocked && !bases.contains(o.y * fresh.width + o.x)
         }
         s.crops = old.crops.filter { k, _ in
             let xy = k.split(separator: ",").compactMap { Int($0) }
@@ -289,25 +306,58 @@ final class WorldStore: ObservableObject {
         s.art = artVersion
     }
 
-    /// 第一次打开：海边一圈沙滩，小屋前一条小路通到南边的木屋，东北角一汪池塘，路旁一块田
+    /// 第一次打开：一座不规则的岛（北边树林、小屋、池塘，西边田，南边木屋、小卖铺和沙滩），
+    /// 东北一座小岛有木桥过去，东边湾里一截栈桥。一个字一格：~ 海 . 草 p 路 w 池塘 o 田 f 花 s 沙 b 木头
+    static let starterMap: [String] = [
+            "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+            "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+            "~~~~~~~~~~.......~~~~~~~....~~",
+            "~~~~~~~~...........~~~~~....~~",
+            "~~~~~~~.............bbb......~",
+            "~~~~~~..............~~~~....~~",
+            "~~~~~~...............~~~....~~",
+            "~~~~~................~~~~~~~~~",
+            "~~~~~.................~~~~~~~~",
+            "~~~~..ff................~~~~~~",
+            "~~~~..ff.................~~~~~",
+            "~~~......ff.pp.ff.ww......~~~~",
+            "~~~......ff.pp.ffwwwww....~~~~",
+            "~~..........pp...wwwww.....~~~",
+            "~~..........pp...wwwww.....~~~",
+            "~~..........pp....www......~~~",
+            "~...........pp........fff..~~~",
+            "~...........ppppppppppfff..~~~",
+            "~...........pppppppppp.....~~~",
+            "~~..........pp......pp....~~~~",
+            "~~.fff......pp......pp...~~~~~",
+            "~~~fff......pp......pp.~~~~~~~",
+            "~~~.........pp......pppbbb~~~~",
+            "~~~~........pp........~~~~~~~~",
+            "~~~..ppppppppp.........~~~~~~~",
+            "~~~..ppppppppp.fff......~~~~~~",
+            "~~..........pp.fff.......~~~~~",
+            "~~.ooooo....pp...........~~~~~",
+            "~~~ooooo....pp...........~~~~~",
+            "~~~ooooo....pp............~~~~",
+            "~~~~....ppppppppppp.......~~~~",
+            "~~~~....ppppppppppp.......~~~~",
+            "~~~~~..............sssss.~~~~~",
+            "~~~~~sssssssssssssssssss~~~~~~",
+            "~~~~~~sssssssssssssssss~~~~~~~",
+            "~~~~~~~~ssssssssssss~~~~~~~~~~",
+            "~~~~~~~~~~~~ssss~~~~~~~~~~~~~~",
+            "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+            "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+            "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+    ]
+
     static func starter() -> WorldSave {
         var s = WorldSave()
-        s.herX = 6; s.herY = 12
-        s.himX = 8; s.himY = 12
-        s.ground = Array(repeating: .grass, count: s.width * s.height)
-        // (左, 右, 上, 下)，都含
-        let layout: [(WorldGround, [(Int, Int, Int, Int)])] = [
-            (.sand, [(0, 15, 0, 0), (0, 15, 23, 23), (0, 0, 0, 23), (15, 15, 0, 23), (1, 3, 21, 22), (13, 14, 1, 2)]),
-            (.path, [(3, 8, 7, 8), (7, 8, 7, 22), (9, 13, 13, 14)]),
-            (.water, [(10, 13, 3, 5)]),
-            (.soil, [(10, 13, 17, 19)]),
-            (.flowers, [(2, 4, 10, 11), (12, 14, 9, 10), (3, 5, 17, 18), (9, 10, 21, 22)])
-        ]
-        for (g, rects) in layout {
-            for (x0, x1, y0, y1) in rects {
-                for y in y0...y1 { for x in x0...x1 { s.ground[y * s.width + x] = g } }
-            }
-        }
+        s.width = starterMap[0].count
+        s.height = starterMap.count
+        s.ground = starterMap.flatMap { $0.map(WorldGround.from) }
+        s.herX = 12; s.herY = 12
+        s.himX = 13; s.himY = 12
         s.objects = starterObjects()
         s.decor = starterDecor
         s.art = artVersion
@@ -321,20 +371,32 @@ final class WorldStore: ObservableObject {
                 objs.append(WorldObject(source: "f:" + k.id, x: x, y: y, w: k.sprite.width >= 20 ? 2 : 1))
             }
         }
-        put("椅", 11, 7)
-        put("桌", 5, 16)
+        put("椅", 16, 10)
+        put("桌", 10, 32)
         return objs
     }
 
     /// 一开始岛上就有的景。坐标是图的左下角那一格
     static var starterDecor: [WorldDecor] {
         let list: [(WorldDecorKind, Int, Int)] = [
-            (.houseOrange, 2, 6), (.treeBig, 11, 2), (.treePink, 1, 9), (.treeGreen, 13, 7),
-            (.treeBigPink, 10, 11), (.pine, 1, 15), (.treeSmall, 5, 11), (.bonsai, 13, 15),
-            (.treeOrange, 12, 22), (.treePink, 4, 22), (.bush, 6, 5), (.bush, 9, 9), (.berry, 3, 13),
-            (.berryBlue, 14, 20), (.stump, 9, 19), (.rocks, 13, 2), (.rock, 9, 3), (.boulder, 2, 19),
-            (.sunflower, 1, 7), (.flowerY, 6, 13), (.daisy, 9, 16), (.clover, 6, 19),
-            (.fence, 10, 16), (.fence, 12, 16), (.crate, 14, 17), (.waterBarrel, 6, 7), (.cabin, 10, 23)
+            (.houseOrange, 11, 10), (.treeBigPink, 24, 5), (.cabin, 9, 29), (.shop, 15, 29), (.fence, 3, 26), (.fence, 5, 26),
+            (.crate, 8, 28), (.waterBarrel, 8, 29), (.barrel, 7, 26), (.sunflower, 3, 30), (.sunflower, 4, 30), (.sunflower, 5, 30),
+            (.sunflower, 6, 30), (.boulder, 2, 16), (.rocks, 22, 10), (.rock, 24, 19), (.pebble, 22, 21), (.bushThick, 6, 34),
+            (.grassTall, 21, 32), (.treeSmall, 22, 31), (.pebbleBrown, 11, 35), (.rockBrown, 15, 35), (.treePink, 8, 12), (.treePink, 15, 15),
+            (.treeSmall, 9, 17), (.treeGreen, 15, 23), (.treeOrange, 17, 27), (.treePink, 20, 29), (.berry, 9, 21), (.berryBlue, 16, 21),
+            (.bush, 10, 13), (.bush, 14, 13), (.bushSmall, 11, 15), (.bushThick, 14, 21), (.stump, 6, 18), (.flowerY, 10, 19),
+            (.daisy, 16, 9), (.clover, 18, 20), (.fern, 16, 12), (.fern, 22, 14), (.grass, 17, 16), (.bonsai, 7, 6),
+            (.bonsai, 14, 3), (.bonsai, 17, 7), (.bonsai, 8, 8), (.bonsai, 17, 5), (.pine, 11, 6), (.olive, 15, 8),
+            (.bonsai, 19, 7), (.bonsai, 9, 6), (.bonsai, 5, 8), (.bonsai, 8, 4), (.bonsai, 3, 20), (.olive, 6, 13),
+            (.treeSmall, 4, 11), (.treeSmall, 6, 15), (.treeSmall, 1, 18), (.treeSmall, 3, 13), (.treeGreen, 19, 10), (.treeGreen, 4, 23),
+            (.olive, 21, 25), (.treeSmall, 24, 17), (.treeSmall, 15, 11), (.treeSmall, 18, 24), (.grassTall, 23, 15), (.grass, 11, 14),
+            (.flowerR, 6, 5), (.bush, 22, 26), (.flowerY, 22, 20), (.clover, 8, 20), (.fern, 18, 22), (.bushSmall, 11, 26),
+            (.bush, 16, 19), (.grassTall, 21, 16), (.daisy, 5, 20), (.clover, 21, 11), (.clover, 26, 16), (.flowerY, 22, 17),
+            (.daisy, 26, 6), (.grassTall, 8, 15), (.grass, 24, 31), (.bush, 20, 11), (.bushSmall, 16, 5), (.grassTall, 23, 20),
+            (.bushSmall, 11, 23), (.bushSmall, 24, 20), (.fern, 14, 19), (.bushThick, 8, 19), (.flowerY, 5, 12), (.daisy, 14, 23),
+            (.grassTall, 10, 18), (.daisy, 18, 16), (.grassTall, 26, 14), (.bushSmall, 24, 28), (.flowerR, 14, 15), (.flowerR, 9, 23),
+            (.flowerR, 10, 3), (.grass, 19, 4), (.pebbleBrown, 24, 12), (.pebbleBrown, 22, 16), (.pebbleBrown, 11, 17), (.stumpBig, 15, 25),
+            (.stumpBig, 17, 9)
         ]
         return list.map { WorldDecor(kind: $0.0.rawValue, x: $0.1, y: $0.2) }
     }
@@ -390,7 +452,7 @@ final class WorldStore: ObservableObject {
     var height: Int { save.height }
 
     func ground(_ x: Int, _ y: Int) -> WorldGround {
-        guard x >= 0, y >= 0, x < width, y < height else { return .water }
+        guard x >= 0, y >= 0, x < width, y < height else { return .sea }
         return save.ground[y * width + x]
     }
 
@@ -526,7 +588,7 @@ final class WorldStore: ObservableObject {
 
     /// 这一格挨着水没有（钓鱼要站在水边）
     func nearWater(_ x: Int, _ y: Int) -> Bool {
-        [(0, 1), (0, -1), (1, 0), (-1, 0), (0, 0)].contains { ground(x + $0.0, y + $0.1) == .water && x + $0.0 >= 0 && y + $0.1 >= 0 && x + $0.0 < width && y + $0.1 < height }
+        [(0, 1), (0, -1), (1, 0), (-1, 0), (0, 0)].contains { ground(x + $0.0, y + $0.1).isWater && x + $0.0 >= 0 && y + $0.1 >= 0 && x + $0.0 < width && y + $0.1 < height }
     }
 
     @discardableResult
@@ -604,7 +666,7 @@ final class WorldStore: ObservableObject {
         let p = personActions.map(\.name)
         if !p.isEmpty { lines.append("对她能做的：" + p.joined(separator: "、")) }
         let water = (0..<(width * height)).filter { save.ground[$0] == .water }.count
-        if water > 0 { lines.append("有 \(water) 格是水，走不进去。") }
+        if water > 0 { lines.append("池塘 \(water) 格；池塘和海都走不进去，挨着水能钓鱼。") }
         if farmOn {
             let crops = save.crops.compactMap { (k, c) -> String? in
                 guard let s = WorldFarm.seed(c.kind) else { return nil }
@@ -668,7 +730,7 @@ enum WorldTools {
         switch (args["do"] as? String) ?? "" {
         case "walk":
             guard let x = int("x"), let y = int("y") else { return ("走到哪？给 x 和 y。", true) }
-            if w.ground(x, y).blocked { return ("那一格是水，走不进去。", true) }
+            if w.ground(x, y).blocked { return ("那一格是水（池塘或海），走不进去。", true) }
             w.walkHim(x, y)
             return ("走到了 (\(x),\(y))。", false)
         case "say":
