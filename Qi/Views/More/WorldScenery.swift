@@ -505,26 +505,48 @@ struct AmbientLayer: View {
                         r.fill(Path(ellipseIn: CGRect(x: 0, y: -3.2, width: f * 2, height: 6.4)), with: .color(col))
                         g.fill(Path(CGRect(x: -0.6, y: -3, width: 1.2, height: 6)), with: .color(Color(hexString: "6E5A4A")!))
                     }
-                } else {
-                    // 夜色
-                    gc.fill(Path(CGRect(x: 0, y: 0, width: w, height: h)),
-                            with: .color(Color(red: 0.12, green: 0.14, blue: 0.31).opacity(0.42)))
-                    var lit = gc
-                    lit.blendMode = .plusLighter
-                    for p in lights {
-                        lit.fill(Path(ellipseIn: CGRect(x: p.x - 70, y: p.y - 70, width: 140, height: 140)),
-                                 with: .radialGradient(Gradient(colors: [Color(red: 1, green: 0.84, blue: 0.55).opacity(0.5), .clear]),
-                                                       center: p, startRadius: 0, endRadius: 70))
-                    }
-                    // 萤火虫
-                    for i in 0..<(season == .winter ? 0 : 22) {
-                        let x = Self.noise(i, 50) * w + CGFloat(sin(t * 0.9 + Double(i))) * 10
-                        let y = Self.noise(i, 51) * h + CGFloat(cos(t * 1.2 + Double(i))) * 8
-                        let a = 0.5 + 0.5 * sin(t * 2 + Double(i))
-                        lit.fill(Path(ellipseIn: CGRect(x: x - 6, y: y - 6, width: 12, height: 12)),
-                                 with: .radialGradient(Gradient(colors: [Color(red: 1, green: 0.96, blue: 0.67).opacity(0.95 * a), .clear]),
-                                                       center: CGPoint(x: x, y: y), startRadius: 0, endRadius: 6))
-                    }
+                }
+            }
+        }
+        .frame(width: CGFloat(width) * tile, height: CGFloat(height) * tile)
+        .allowsHitTesting(false)
+    }
+}
+
+/// 夜里亮着的：门窗、路灯、灯串、篝火的光晕和萤火虫。压暗那层之上单独画，不被一起压暗
+struct NightGlow: View {
+    let width: Int
+    let height: Int
+    let tile: CGFloat
+    let lights: [CGPoint]
+    var season: WorldSeason = .spring
+
+    private static func noise(_ i: Int, _ k: Int) -> CGFloat {
+        let v = sin(Double(i) * 12.9898 + Double(k) * 78.233) * 43758.5453
+        return CGFloat(v - floor(v))
+    }
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 20)) { ctx in
+            let t = ctx.date.timeIntervalSinceReferenceDate
+            Canvas { gc, size in
+                var lit = gc
+                lit.blendMode = .plusLighter
+                for p in lights {
+                    let r = CGRect(x: p.x - 70, y: p.y - 70, width: 140, height: 140)
+                    let g = Gradient(colors: [Color(red: 1, green: 0.84, blue: 0.55).opacity(0.5), .clear])
+                    lit.fill(Path(ellipseIn: r), with: .radialGradient(g, center: p, startRadius: 0, endRadius: 70))
+                }
+                let count = season == .winter ? 0 : 22
+                for i in 0..<count {
+                    let wob: CGFloat = CGFloat(sin(t * 0.9 + Double(i))) * 10
+                    let bob: CGFloat = CGFloat(cos(t * 1.2 + Double(i))) * 8
+                    let x = Self.noise(i, 50) * size.width + wob
+                    let y = Self.noise(i, 51) * size.height + bob
+                    let a: Double = 0.5 + 0.5 * sin(t * 2 + Double(i))
+                    let g = Gradient(colors: [Color(red: 1, green: 0.96, blue: 0.67).opacity(0.95 * a), .clear])
+                    lit.fill(Path(ellipseIn: CGRect(x: x - 6, y: y - 6, width: 12, height: 12)),
+                             with: .radialGradient(g, center: CGPoint(x: x, y: y), startRadius: 0, endRadius: 6))
                 }
             }
         }

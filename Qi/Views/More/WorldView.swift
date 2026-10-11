@@ -32,7 +32,7 @@ struct WorldView: View {
 
     /// 铺地的几种画法
     enum GroundTool: String, CaseIterable, Identifiable {
-        case brush, line, rect, fill
+        case brush, line, rect, fill, erase
         var id: String { rawValue }
         var label: String {
             switch self {
@@ -40,6 +40,7 @@ struct WorldView: View {
             case .line: return "铺路"
             case .rect: return "方框"
             case .fill: return "油漆桶"
+            case .erase: return "橡皮"
             }
         }
         var icon: String {
@@ -48,6 +49,7 @@ struct WorldView: View {
             case .line: return "point.topleft.down.to.point.bottomright.curvepath"
             case .rect: return "rectangle"
             case .fill: return "drop"
+            case .erase: return "eraser"
             }
         }
         var hint: String {
@@ -56,6 +58,7 @@ struct WorldView: View {
             case .line: return "点起点、再点终点，中间铺一条路（先横后竖）。"
             case .rect: return "点一个角、再点对角，整片铺满。"
             case .fill: return "点一格，跟它连在一起的同一种地全换掉。"
+            case .erase: return "划过的地方变回草地：路、田、石板、沙、木地板都能擦掉。"
             }
         }
     }
@@ -75,7 +78,11 @@ struct WorldView: View {
     @State private var storyShown: WorldStory?
     @State private var showGuide = false
     @State private var enterHome = false
-    @State private var groundPick: WorldGround = .wood
+    @State private var groundPick: WorldGround = .path
+    /// 画笔这一笔划过的格子：先画在上面，松手才真的铺（铺的时候不卡）
+    @State private var stroke: [Int: WorldGround] = [:]
+    @State private var stashTab = false
+    @State private var stashPick: String?
     @State private var itemPick: String?
     @State private var itemFilter: FurnitureKind.Category = .furniture
     @State private var menuFor: WorldObject?
@@ -321,9 +328,20 @@ struct WorldView: View {
         GeometryReader { geo in
             let content = CGSize(width: CGFloat(world.width) * tile + seaPad * 2,
                                  height: CGFloat(world.height) * tile + seaPad * 2)
-            map
-                .padding(seaPad)
-                .background(sea)
+            ZStack {
+                map
+                    .padding(seaPad)
+                    .background(sea)
+                    .overlay(alignment: .topLeading) {
+                        if !stroke.isEmpty { strokeLayer.padding(seaPad) }
+                    }
+                if WorldStore.isNight {
+                    // 岛和海一起暗下来
+                    Color(red: 0.12, green: 0.14, blue: 0.31).opacity(0.42).allowsHitTesting(false)
+                    NightGlow(width: world.width, height: world.height, tile: tile, lights: nightLights, season: world.season)
+                        .padding(seaPad)
+                }
+            }
                 .frame(width: content.width, height: content.height)
                 .scaleEffect(zoom)
                 .offset(pan)
@@ -372,7 +390,8 @@ struct WorldView: View {
                     }
                 }
         }
-        .background(sea.ignoresSafeArea())
+        .background(sea.ignoresSafeArea().overlay(
+            WorldStore.isNight ? Color(red: 0.12, green: 0.14, blue: 0.31).opacity(0.42).ignoresSafeArea() : nil))
     }
 
     /// 左上角：在哪座岛、岛几级、这一级走到哪了。点开是攻略
@@ -445,13 +464,15 @@ struct WorldView: View {
     }
 
     private func dragGesture(_ screen: CGSize, _ content: CGSize) -> some Gesture {
-        DragGesture(minimumDistance: mode == .ground && groundTool == .brush ? 0 : 6)
+        DragGesture(minimumDistance: mode == .ground && (groundTool == .brush || groundTool == .erase) ? 0 : 6)
             .onChanged { v in
                 guard zoomStart == nil else { return }
-                if mode == .ground && groundTool == .brush {
-                    // 画笔：手指划过的格子都铺上，一笔算一步撤销
-                    if !brushing { world.checkpoint(); brushing = true }
-                    if let c = cell(at: v.location, screen, content) { world.paint(groundPick, [c]) }
+                if mode == .ground && (groundTool == .brush || groundTool == .erase) {
+                    // 画笔 / 橡皮：划过的格子先攒着画在上面，松手一次铺上（一笔算一步撤销）
+                    brushing = true
+                    if let c = cell(at: v.location, screen, content) {
+                        stroke[c.1 * world.width + c.0] = groundTool == .erase ? .grass : groundPick
+                    }
                     return
                 }
                 if mode == .select && boxing {
@@ -466,6 +487,13 @@ struct WorldView: View {
             }
             .onEnded { _ in
                 panStart = pan
+                if brushing, !stroke.isEmpty {
+                    world.checkpoint()
+                    var byKind: [WorldGround: [(Int, Int)]] = [:]
+                    for (i, g) in stroke { byKind[g, default: []].append((i % world.width, i / world.width)) }
+                    for (g, cells) in byKind { world.paint(g, cells) }
+                    stroke = [:]
+                }
                 brushing = false
                 if let b = box {
                     let got = world.items(inX: b.x0, b.x1, y: b.y0, b.y1)
@@ -547,6 +575,13 @@ struct WorldView: View {
             world.walkHer(x, y)
         case .place:
             guard !moved else { return }
+            if stashTab {
+                guard let key = stashPick else { return }
+                world.checkpoint()
+                if !world.placeFromStash(key, x, y) { world.undo() }
+                if (world.save.stash[key] ?? 0) == 0 { stashPick = nil }
+                return
+            }
             if sceneryTab {
                 guard let k = decorPick else { return }
                 guard world.canBuild(k) else {
@@ -563,9 +598,9 @@ struct WorldView: View {
             world.place(src, x, y, w: w)
         case .ground:
             switch groundTool {
-            case .brush:
+            case .brush, .erase:
                 world.checkpoint()
-                world.paint(groundPick, [(x, y)])
+                world.paint(groundTool == .erase ? .grass : groundPick, [(x, y)])
             case .line, .rect:
                 guard let a = anchor else { anchor = (x, y); return }
                 world.checkpoint()
@@ -866,7 +901,11 @@ struct WorldView: View {
             case .ground:
                 HStack(spacing: 6) {
                     ForEach(GroundTool.allCases) { t in
-                        toolChip(t.label, t.icon, on: groundTool == t) { groundTool = t; anchor = nil }
+                        toolChip(t.label, t.icon, on: groundTool == t) {
+                            groundTool = t; anchor = nil
+                            // 铺路就铺岛上原来那种小路
+                            if t == .line { groundPick = .path }
+                        }
                     }
                 }
                 .padding(.horizontal, 16)
@@ -928,9 +967,9 @@ struct WorldView: View {
                         world.checkpoint(); world.rotateDecor(selDecor)
                     }
                     toolChip("换材料", "paintpalette", on: false) { showMaterials = true }
-                    toolChip("删除", "trash", on: false, tint: Color(hexString: "D9707F")!) {
+                    toolChip("收进仓库", "archivebox", on: false, tint: Color(hexString: "C9707F")!) {
                         world.checkpoint()
-                        world.removeItems(decor: selDecor, objects: selObj)
+                        world.stashItems(decor: selDecor, objects: selObj)
                         clearSelection()
                     }
                 }
@@ -977,13 +1016,18 @@ struct WorldView: View {
         VStack(spacing: 8) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    Button("风景") { sceneryTab = true }
+                    Button("仓库" + (world.save.stash.isEmpty ? "" : " \(world.save.stash.values.reduce(0, +))")) { stashTab = true; sceneryTab = false }
+                        .font(.app(11.5, weight: stashTab ? .semibold : .regular))
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Capsule().fill(stashTab ? app.settings.accentColor.opacity(0.2) : Theme.softFillDeep))
+                        .buttonStyle(.plain)
+                    Button("风景") { sceneryTab = true; stashTab = false }
                         .font(.app(11.5, weight: sceneryTab ? .semibold : .regular))
                         .padding(.horizontal, 10).padding(.vertical, 5)
                         .background(Capsule().fill(sceneryTab ? app.settings.accentColor.opacity(0.2) : Theme.softFillDeep))
                         .buttonStyle(.plain)
                     ForEach(FurnitureKind.Category.allCases.filter { $0 != .wear }) { c in
-                        Button(c.rawValue) { itemFilter = c; sceneryTab = false }
+                        Button(c.rawValue) { itemFilter = c; sceneryTab = false; stashTab = false }
                             .font(.app(11.5, weight: !sceneryTab && itemFilter == c ? .semibold : .regular))
                             .padding(.horizontal, 10).padding(.vertical, 5)
                             .background(Capsule().fill(!sceneryTab && itemFilter == c ? app.settings.accentColor.opacity(0.2) : Theme.softFillDeep))
@@ -992,7 +1036,9 @@ struct WorldView: View {
                 }
                 .padding(.horizontal, 16)
             }
-            if sceneryTab {
+            if stashTab {
+                stashRow
+            } else if sceneryTab {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach([String?](arrayLiteral: nil) + Self.families.map { Optional($0) }, id: \.self) { f in
@@ -1046,6 +1092,60 @@ struct WorldView: View {
             }
             }
         }
+    }
+
+    /// 仓库里收着的：点一件，再点岛上一格摆回去
+    @ViewBuilder
+    private var stashRow: some View {
+        if world.save.stash.isEmpty {
+            Text("「选择」里选中东西点「收进仓库」，它们会在这里，随时能摆回去。")
+                .font(.app(11)).foregroundStyle(Theme.textMuted(scheme))
+                .padding(.horizontal, 16)
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(world.save.stash.keys.sorted(), id: \.self) { key in
+                        Button { stashPick = key } label: {
+                            VStack(spacing: 3) {
+                                Group {
+                                    if let k = WorldDecorKind(rawValue: key) {
+                                        let s = IslandArt.size(of: k.sprite)
+                                        IslandSprite(key: k.sprite, scale: 40 / max(s.width, s.height))
+                                    } else {
+                                        objectImage(key)
+                                    }
+                                }
+                                .frame(width: 40, height: 40)
+                                .overlay(alignment: .topTrailing) {
+                                    Text("\(world.save.stash[key] ?? 0)")
+                                        .font(.app(9.5, weight: .semibold)).foregroundStyle(.white)
+                                        .padding(.horizontal, 4).background(Capsule().fill(app.settings.accentColor))
+                                }
+                                Text(WorldDecorKind(rawValue: key)?.label ?? world.name(of: WorldObject(source: key, x: 0, y: 0)))
+                                    .font(.app(9.5)).lineLimit(1).frame(width: 52)
+                            }
+                            .padding(4)
+                            .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(stashPick == key ? app.settings.accentColor.opacity(0.18) : Theme.softFillDeep))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+
+    /// 画笔正在划的那几格：先用这块地的颜色铺一层，松手后换成真的地
+    private var strokeLayer: some View {
+        Canvas { gc, _ in
+            for (i, g) in stroke {
+                let r = CGRect(x: CGFloat(i % world.width) * tile, y: CGFloat(i / world.width) * tile, width: tile, height: tile)
+                gc.fill(Path(r), with: .color(g.color.opacity(0.9)))
+            }
+        }
+        .frame(width: CGFloat(world.width) * tile, height: CGFloat(world.height) * tile)
+        .allowsHitTesting(false)
     }
 
     private func itemCell(_ src: String, name: String) -> some View {
@@ -1135,6 +1235,10 @@ struct IslandGround: View, Equatable {
         .task(id: key) {
             let k = key
             if let c = IslandArt.cachedGround(k) { image = c; return }
+            if image != nil {
+                try? await Task.sleep(nanoseconds: 120_000_000)
+                guard !Task.isCancelled else { return }
+            }
             let g = ground, w = width, h = height, s = season
             let img = await Task.detached(priority: .userInitiated) { IslandPaint.render(g, width: w, height: h, season: s) }.value
             guard !Task.isCancelled, let img else { return }

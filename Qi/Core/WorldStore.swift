@@ -115,6 +115,8 @@ struct WorldSave: Codable {
     var buildXP = 0
     /// 她手动选的季节；nil = 跟着日子
     var seasonPick: String? = nil
+    /// 仓库：收起来的景（键是景的名字）和东西（键是 source），值是几件
+    var stash: [String: Int] = [:]
 }
 
 /// 一格庄稼。长多快按真实时间算，浇一次水快一截
@@ -196,6 +198,7 @@ extension WorldSave {
         buildXPDay = (try? c.decodeIfPresent(String.self, forKey: .buildXPDay)) ?? ""
         buildXP = (try? c.decodeIfPresent(Int.self, forKey: .buildXP)) ?? 0
         seasonPick = try? c.decodeIfPresent(String.self, forKey: .seasonPick)
+        stash = (try? c.decodeIfPresent([String: Int].self, forKey: .stash)) ?? [:]
     }
 }
 
@@ -283,9 +286,20 @@ final class WorldStore: ObservableObject {
     static let shared = WorldStore()
 
     @Published private(set) var save = WorldSave() {
-        didSet { if loaded { Storage.save(save, to: "world.json") } }
+        // 一笔一笔铺地的时候会改得很勤：停一下再存，不每改一格就写一次盘
+        didSet { if loaded { scheduleSave() } }
     }
     private var loaded = false
+    private var saveTask: Task<Void, Never>?
+
+    private func scheduleSave() {
+        saveTask?.cancel()
+        saveTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            guard let self, !Task.isCancelled else { return }
+            Storage.save(self.save, to: "world.json")
+        }
+    }
 
     /// 头上正在冒的表情（她 / 他），过几秒自己消
     @Published var herEmote: String?
@@ -610,6 +624,40 @@ final class WorldStore: ObservableObject {
         }
         for o in save.objects where o.y >= ly && o.y <= hy && o.x + o.w - 1 >= lx && o.x <= hx { os.insert(o.id) }
         return (ds, os)
+    }
+
+    /// 收进仓库：从岛上拿下来，仓库里记一件
+    func stashItems(decor ds: Set<UUID>, objects os: Set<UUID>) {
+        guard !ds.isEmpty || !os.isEmpty else { return }
+        var v = save
+        for d in decor where ds.contains(d.id) {
+            let k = WorldDecorKind.resolve(d.kind)?.rawValue ?? d.kind
+            v.stash[k, default: 0] += 1
+        }
+        for o in v.objects where os.contains(o.id) { v.stash[o.source, default: 0] += 1 }
+        v.decor = decor.filter { !ds.contains($0.id) }
+        v.objects.removeAll { os.contains($0.id) }
+        save = v
+    }
+
+    /// 从仓库拿一件摆到这一格。摆成了返回 true
+    @discardableResult
+    func placeFromStash(_ key: String, _ x: Int, _ y: Int) -> Bool {
+        guard (save.stash[key] ?? 0) > 0 else { return false }
+        if let k = WorldDecorKind(rawValue: key) {
+            let before = decor.count
+            addDecor(k.rawValue, x, y)
+            guard decor.count > before else { return false }
+        } else {
+            var w = 1
+            if key.hasPrefix("f:"), let k = FurnitureCatalog.kind(String(key.dropFirst(2))), k.sprite.width >= 20 { w = 2 }
+            guard place(key, x, y, w: w) != nil else { return false }
+        }
+        var v = save
+        v.stash[key, default: 1] -= 1
+        if (v.stash[key] ?? 0) <= 0 { v.stash[key] = nil }
+        save = v
+        return true
     }
 
     func removeItems(decor ds: Set<UUID>, objects os: Set<UUID>) {

@@ -184,6 +184,8 @@ enum IslandPaint {
         // ── 一般地块：填色 → 纹理 → 上沿左沿背光、下沿受光、外圈描边
         func terrain(_ k: WorldGround, _ cols: [RGB], _ rim: RGB, wobble: Double, seed: Double,
                      _ texture: (Int, Int, Int) -> Void) -> [Bool] {
+            // 岛上没有这种地就不用算
+            guard g.contains(k) else { return [Bool](repeating: false, count: N) }
             let m = field({ kind($0, $1) == k }, tw, th, wobble: wobble, k: seed)
             let d = dist(m, W, H, 4)
             func on(_ x: Int, _ y: Int) -> Bool { x >= 0 && y >= 0 && x < W && y < H && m[y * W + x] }
