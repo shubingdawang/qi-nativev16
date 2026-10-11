@@ -167,6 +167,21 @@ enum IslandArt {
         return UIImage(cgImage: cg)
     }
 
+    /// 她的小人（不收饱和度，原色）。col：站 / 左脚 / 右脚；row：朝下 / 朝上 / 朝左
+    static func girl(_ col: Int, _ row: Int) -> UIImage? {
+        let key = "girl#\(col),\(row)"
+        if let c = crops[key] { return c }
+        if sheets["girl"] == nil,
+           let url = Bundle.main.url(forResource: "island_girl", withExtension: "png"),
+           let raw = UIImage(contentsOfFile: url.path) {
+            sheets["girl"] = raw
+        }
+        guard let cg = sheets["girl"]?.cgImage?.cropping(to: CGRect(x: col * 16, y: row * 25, width: 16, height: 25)) else { return nil }
+        let img = UIImage(cgImage: cg)
+        crops[key] = img
+        return img
+    }
+
     /// 素材里的一张（树、花、房子……）
     static func sprite(_ key: String) -> UIImage? {
         if let c = crops[key] { return c }

@@ -62,17 +62,31 @@ struct WorldView: View {
 
     private var him: String { app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName }
 
-    var body: some View {
+    /// 存档里两个人在哪一格（变了就让画面上的人走过去）
+    private var herCell: Int { world.save.herX * 1000 + world.save.herY }
+    private var himCell: Int { world.save.himX * 1000 + world.save.himY }
+
+    private var stage: some View {
         VStack(spacing: 0) {
             island
             bottom
         }
-        .onChange(of: world.save.herX * 1000 + world.save.herY) { _, _ in
-            herWalk.walk(to: world.save.herX, world.save.herY) { world.route(from: $0, to: $1) }
-        }
-        .onChange(of: world.save.himX * 1000 + world.save.himY) { _, _ in
-            himWalk.walk(to: world.save.himX, world.save.himY) { world.route(from: $0, to: $1) }
-        }
+        .onChange(of: herCell) { _, _ in walkHerFigure() }
+        .onChange(of: himCell) { _, _ in walkHimFigure() }
+    }
+
+    private func walkHerFigure() {
+        let w = world
+        herWalk.walk(to: w.save.herX, w.save.herY) { w.route(from: $0, to: $1) }
+    }
+
+    private func walkHimFigure() {
+        let w = world
+        himWalk.walk(to: w.save.himX, w.save.himY) { w.route(from: $0, to: $1) }
+    }
+
+    var body: some View {
+        stage
         .navigationTitle("小岛")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -443,27 +457,22 @@ struct WorldView: View {
         .allowsHitTesting(false)
     }
 
+    /// 人站在格子里：脚踩在这一格靠下的地方，上面留着冒表情、说话的位置
+    private func standing(_ pos: CGPoint) -> CGPoint {
+        CGPoint(x: pos.x * tile + tile / 2, y: (pos.y + 1) * tile - 5 - 70)
+    }
+
     private var her: some View {
         VStack(spacing: 2) {
             emote(world.herEmote)
-            Group {
-                if let n = app.settings.userAvatarName, let img = ImageStore.thumb(n, maxPixel: 120) {
-                    Image(uiImage: img).resizable().scaledToFill()
-                } else {
-                    Color(hexString: "F4A7B9")!
+            IslandGirl(walker: herWalk, scale: tile / CGFloat(IslandArt.px))
+                .background(alignment: .bottom) {
+                    Ellipse().fill(Color(red: 0.31, green: 0.23, blue: 0.31).opacity(0.22))
+                        .frame(width: 30, height: 8).offset(y: 3)
                 }
-            }
-            .frame(width: 34, height: 34)
-            .clipShape(Circle())
-            .overlay(Circle().stroke(.white, lineWidth: 2))
-            .overlay(Circle().stroke(Color(hexString: "F4A7B9")!.opacity(0.6), lineWidth: 1).padding(-3))
-            .background(
-                Ellipse().fill(Color(red: 0.2, green: 0.25, blue: 0.15).opacity(0.2))
-                    .frame(width: 26, height: 7).blur(radius: 1.5).offset(y: 21)
-            )
         }
-        .offset(y: herWalk.moving ? -2 : 0)
-        .position(x: herWalk.pos.x * tile + tile / 2, y: herWalk.pos.y * tile + tile / 2 - 6)
+        .frame(width: tile * 3, height: 140, alignment: .bottom)
+        .position(standing(herWalk.pos))
         .allowsHitTesting(false)
     }
 
@@ -479,15 +488,17 @@ struct WorldView: View {
             } else {
                 emote(world.himEmote)
             }
-            ClawdView(mood: world.himEmote == nil ? .idle : .happy, scale: 1.2, wornIDs: room.wornIDs)
-                .frame(width: 44, height: 44)
-                .background(
-                    Ellipse().fill(Color(red: 0.2, green: 0.25, blue: 0.15).opacity(0.2))
-                        .frame(width: 30, height: 7).blur(radius: 1.5).offset(y: 21)
-                )
+            // 他就是 clawd：走路的时候迈步，身上戴着的照样戴着
+            ClawdView(mood: himWalk.moving ? .walking : (world.himEmote == nil ? .idle : .happy),
+                      scale: 1.5, wornIDs: room.wornIDs)
+                .frame(width: 54, height: 54)
+                .background(alignment: .bottom) {
+                    Ellipse().fill(Color(red: 0.31, green: 0.23, blue: 0.31).opacity(0.22))
+                        .frame(width: 34, height: 8).offset(y: 1)
+                }
         }
-        .offset(y: himWalk.moving ? -2 : 0)
-        .position(x: himWalk.pos.x * tile + tile / 2, y: himWalk.pos.y * tile + tile / 2 - 8)
+        .frame(width: tile * 3, height: 140, alignment: .bottom)
+        .position(standing(himWalk.pos))
         .allowsHitTesting(false)
     }
 
@@ -726,6 +737,37 @@ final class IslandWalker: ObservableObject {
                 try? await Task.sleep(nanoseconds: UInt64(self.step * 1_000_000_000))
             }
             if !Task.isCancelled { self.moving = false }
+        }
+    }
+}
+
+/// 岛上的她：16×25 像素的小人（`island_girl.png`：三列 = 站、迈左脚、迈右脚；三行 = 朝下、朝上、朝左，朝右是朝左翻过来）
+struct IslandGirl: View {
+    @ObservedObject var walker: IslandWalker
+    let scale: CGFloat
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.14, paused: !walker.moving)) { ctx in
+            // 走路：站 → 左脚 → 站 → 右脚，迈步的那两帧人往上抬一像素
+            let beat = walker.moving ? Int(ctx.date.timeIntervalSinceReferenceDate / 0.14) % 4 : 0
+            let col = [0, 1, 0, 2][beat]
+            let row: Int = {
+                switch walker.facing {
+                case .down: return 0
+                case .up: return 1
+                case .left, .right: return 2
+                }
+            }()
+            Group {
+                if let img = IslandArt.girl(col, row) {
+                    Image(uiImage: img).resizable().interpolation(.none)
+                } else {
+                    Color.clear
+                }
+            }
+            .frame(width: 16 * scale, height: 25 * scale)
+            .scaleEffect(x: walker.facing == .right ? -1 : 1, y: 1)
+            .offset(y: col == 0 ? 0 : -scale)
         }
     }
 }
