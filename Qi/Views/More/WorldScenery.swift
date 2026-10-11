@@ -451,8 +451,10 @@ struct AmbientLayer: View {
                 if season == .winter {
                     // 雪：一颗颗方的，慢慢往下、左右晃
                     for i in 0..<60 {
-                        let x = (Self.noise(i, 70) * w + CGFloat(sin(t * 0.8 + Double(i)) * 14)).truncatingRemainder(dividingBy: w)
-                        let y = (Self.noise(i, 71) * h + CGFloat(t * Double(18 + i % 4 * 6))).truncatingRemainder(dividingBy: h)
+                        let sway: CGFloat = CGFloat(sin(t * 0.8 + Double(i)) * 14)
+                        let fall: CGFloat = CGFloat(t * Double(18 + i % 4 * 6))
+                        let x = (Self.noise(i, 70) * w + sway).truncatingRemainder(dividingBy: w)
+                        let y = (Self.noise(i, 71) * h + fall).truncatingRemainder(dividingBy: h)
                         dot(x, y, Color.white.opacity(0.9), i % 7 == 0 ? 2 : 1)
                     }
                 }
@@ -470,19 +472,22 @@ struct AmbientLayer: View {
                     }
                     // 飘落的：春天花瓣、秋天叶子；冬天下雪（见下面）；夏天不飘
                     if season == .spring || season == .autumn {
-                        // 飘落的花瓣
+                        // 飘落的：春天花瓣、秋天叶子。一大一小两块方的，跟地面一个画法
+                        let autumn = season == .autumn
+                        let big: Color = autumn ? Color(red: 0.95, green: 0.62, blue: 0.40) : Color(red: 0.96, green: 0.71, blue: 0.78)
+                        let small: Color = autumn ? Color(red: 0.93, green: 0.77, blue: 0.42) : Color(red: 0.91, green: 0.55, blue: 0.66)
                         for i in 0..<10 {
-                            let x = (Self.noise(i, 40) * w + CGFloat(t * 6 * Double(1 + i % 3))).truncatingRemainder(dividingBy: w)
-                            let y = (Self.noise(i, 41) * h + CGFloat(t * 12)).truncatingRemainder(dividingBy: h)
-                            // 像素花瓣：一大一小两块方的，跟地面一个画法
-                            let px = (x / 3).rounded() * 3, py = (y / 3).rounded() * 3
+                            let drift: Double = t * 6 * Double(1 + i % 3)
+                            let x0: CGFloat = Self.noise(i, 40) * w + CGFloat(drift)
+                            let y0: CGFloat = Self.noise(i, 41) * h + CGFloat(t * 12)
+                            let x = x0.truncatingRemainder(dividingBy: w)
+                            let y = y0.truncatingRemainder(dividingBy: h)
+                            let px: CGFloat = (x / 3).rounded() * 3
+                            let py: CGFloat = (y / 3).rounded() * 3
                             let flip = Int(t * 2 + Double(i)) % 2 == 0
-                            gc.fill(Path(CGRect(x: px, y: py, width: 6, height: 3)),
-                                    with: .color((season == .autumn ? Color(red: 0.95, green: 0.62, blue: 0.40) : Color(red: 0.96, green: 0.71, blue: 0.78)).opacity(0.95)))
-                            gc.fill(Path(CGRect(x: px + (flip ? 0 : 3), y: py + 3, width: 3, height: 3)),
-                                    with: .color((season == .autumn ? Color(red: 0.93, green: 0.77, blue: 0.42) : Color(red: 0.91, green: 0.55, blue: 0.66)).opacity(0.95)))
+                            gc.fill(Path(CGRect(x: px, y: py, width: 6, height: 3)), with: .color(big.opacity(0.95)))
+                            gc.fill(Path(CGRect(x: px + (flip ? 0 : 3), y: py + 3, width: 3, height: 3)), with: .color(small.opacity(0.95)))
                         }
-
                     }
                     // 两只蝴蝶
                     for (i, col) in (season == .winter ? [] : [Color(hexString: "F7D36B")!, Color(hexString: "C9B6E8")!]).enumerated() {
