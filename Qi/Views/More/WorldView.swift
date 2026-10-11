@@ -44,21 +44,20 @@ struct WorldView: View {
     @State private var fishing = false
     @State private var caught: String?
 
-    private let tile: CGFloat = 40
+    /// 一格 48 点 = 素材里 16 像素放大三倍
+    private let tile: CGFloat = 48
 
     private var him: String { app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName }
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollView([.horizontal, .vertical], showsIndicators: false) {
+                // 外面一圈海跟着岛一起滚，跟格子对齐
                 map
-                    .padding(34)
+                    .padding(tile * 2)
+                    .background(sea)
             }
-            .background(
-                LinearGradient(colors: [Color(hexString: "A7D1E1")!, Color(hexString: "93C2D6")!],
-                               startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea()
-            )
+            .background(sea.ignoresSafeArea())
             .defaultScrollAnchor(.center)
             bottom
         }
@@ -99,7 +98,7 @@ struct WorldView: View {
         .alert(caught.map { "钓到了\($0)" } ?? "", isPresented: Binding(get: { caught != nil }, set: { if !$0 { caught = nil } })) {
             Button("放进篮子") { caught = nil }
         }
-        .confirmationDialog(decorMenu.flatMap { WorldDecorKind(rawValue: $0.kind)?.label } ?? "",
+        .confirmationDialog(decorMenu.flatMap { WorldDecorKind.resolve($0.kind)?.label } ?? "",
                             isPresented: Binding(get: { decorMenu != nil }, set: { if !$0 { decorMenu = nil } }),
                             titleVisibility: .visible) {
             if let d = decorMenu {
@@ -121,14 +120,23 @@ struct WorldView: View {
         }
     }
 
-    /// 晚上亮着的：路灯的灯头、小屋的窗
+    /// 晚上亮着的：每座房子的门窗
     private var nightLights: [CGPoint] {
-        world.decor.compactMap { d -> CGPoint? in
-            switch d.kind {
-            case "lamp": return CGPoint(x: CGFloat(d.x) * tile + tile / 2, y: CGFloat(d.y) * tile + tile * 0.92 - 41)
-            case "house": return CGPoint(x: CGFloat(d.x) * tile + tile, y: CGFloat(d.y) * tile + tile * 1.3)
-            default: return nil
-            }
+        let sc = tile / CGFloat(IslandArt.px)
+        return world.decor.compactMap { d -> CGPoint? in
+            guard let k = WorldDecorKind.resolve(d.kind), k.isHouse else { return nil }
+            let s = IslandArt.size(of: k.sprite)
+            return CGPoint(x: CGFloat(d.x) * tile + s.width * sc / 2, y: CGFloat(d.y + 1) * tile - 14 * sc)
+        }
+    }
+
+    /// 海：素材里的水铺满
+    @ViewBuilder
+    private var sea: some View {
+        if let img = IslandArt.sea {
+            Image(uiImage: img).resizable(resizingMode: .tile)
+        } else {
+            Color(hexString: "6FC3D6")!
         }
     }
 
@@ -150,32 +158,27 @@ struct WorldView: View {
     private var map: some View {
         let w = CGFloat(world.width) * tile, h = CGFloat(world.height) * tile
         return ZStack(alignment: .topLeading) {
-            GroundCanvas(ground: world.save.ground, width: world.width, height: world.height, tile: tile)
+            IslandGround(ground: world.save.ground, width: world.width, height: world.height, tile: tile)
                 .equatable()
             if world.farmOn { cropLayer }
             // 摆东西、铺地、拿走的时候显示淡淡的格线，方便对位置
             if mode != .walk { gridLines }
-            DecorCanvas(decor: world.decor, tile: tile, width: world.width, height: world.height,
-                        night: WorldStore.isNight)
-                .equatable()
-            ForEach(world.save.objects) { o in objectView(o) }
-            her
-            himView
+            // 景、摆的东西、两个人按脚下那一行排前后：站在树下面一行的人挡住树，站在树后面的被树挡住
+            ZStack(alignment: .topLeading) {
+                ForEach(world.decor) { d in
+                    decorView(d).zIndex(Double(d.y) + 0.5)
+                }
+                ForEach(world.save.objects) { o in
+                    objectView(o).zIndex(Double(o.y) + 0.6)
+                }
+                her.zIndex(Double(world.save.herY) + 0.7)
+                himView.zIndex(Double(world.save.himY) + 0.75)
+            }
+            .frame(width: w, height: h, alignment: .topLeading)
             AmbientLayer(width: world.width, height: world.height, tile: tile,
                          night: WorldStore.isNight, lights: nightLights)
         }
         .frame(width: w, height: h, alignment: .topLeading)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        // 岛边：一圈沙滩、外沿一道浪花，底下压一层影子
-        .background(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(Color(hexString: "F3E6C6")!)
-                .padding(-7)
-                .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(.white.opacity(0.6), lineWidth: 1.5)
-                    .padding(-9))
-                .shadow(color: Color(red: 0.16, green: 0.27, blue: 0.35).opacity(0.28), radius: 18, y: 8)
-        )
         .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 0)
@@ -198,7 +201,7 @@ struct WorldView: View {
             guard !moved else { return }
             if x == world.save.himX && y == world.save.himY { personMenu = true; return }
             if let o = world.object(at: x, y) { menuFor = o; return }
-            if let d = world.decor(at: x, y), !world.actions(forDecor: d).isEmpty { decorMenu = d; return }
+            if let d = world.decor(at: x, y, base: true), !world.actions(forDecor: d).isEmpty { decorMenu = d; return }
             if world.farmOn, world.ground(x, y) == .soil { soilAt = (x, y); return }
             if world.farmOn, world.ground(x, y) == .water {
                 // 点水：走到旁边的岸上钓鱼
@@ -293,6 +296,19 @@ struct WorldView: View {
         .allowsHitTesting(false)
     }
 
+    /// 一样景：图的左下角对着那一格的左下角
+    @ViewBuilder
+    private func decorView(_ d: WorldDecor) -> some View {
+        if let k = WorldDecorKind.resolve(d.kind) {
+            let sc = tile / CGFloat(IslandArt.px)
+            let s = IslandArt.size(of: k.sprite)
+            IslandSprite(key: k.sprite, scale: sc)
+                .position(x: CGFloat(d.x) * tile + s.width * sc / 2,
+                          y: CGFloat(d.y + 1) * tile - s.height * sc / 2)
+                .allowsHitTesting(false)
+        }
+    }
+
     @ViewBuilder
     private func objectImage(_ source: String) -> some View {
         if source.hasPrefix("f:"), let k = FurnitureCatalog.kind(String(source.dropFirst(2))) {
@@ -352,13 +368,13 @@ struct WorldView: View {
                     Color(hexString: "F4A7B9")!
                 }
             }
-            .frame(width: 30, height: 30)
+            .frame(width: 34, height: 34)
             .clipShape(Circle())
             .overlay(Circle().stroke(.white, lineWidth: 2))
             .overlay(Circle().stroke(Color(hexString: "F4A7B9")!.opacity(0.6), lineWidth: 1).padding(-3))
             .background(
                 Ellipse().fill(Color(red: 0.2, green: 0.25, blue: 0.15).opacity(0.2))
-                    .frame(width: 24, height: 7).blur(radius: 1.5).offset(y: 19)
+                    .frame(width: 26, height: 7).blur(radius: 1.5).offset(y: 21)
             )
         }
         .position(x: CGFloat(world.save.herX) * tile + tile / 2, y: CGFloat(world.save.herY) * tile + tile / 2 - 6)
@@ -377,11 +393,11 @@ struct WorldView: View {
             } else {
                 emote(world.himEmote)
             }
-            ClawdView(mood: world.himEmote == nil ? .idle : .happy, scale: 1.05, wornIDs: room.wornIDs)
-                .frame(width: 38, height: 38)
+            ClawdView(mood: world.himEmote == nil ? .idle : .happy, scale: 1.2, wornIDs: room.wornIDs)
+                .frame(width: 44, height: 44)
                 .background(
                     Ellipse().fill(Color(red: 0.2, green: 0.25, blue: 0.15).opacity(0.2))
-                        .frame(width: 28, height: 7).blur(radius: 1.5).offset(y: 18)
+                        .frame(width: 30, height: 7).blur(radius: 1.5).offset(y: 21)
                 )
         }
         .position(x: CGFloat(world.save.himX) * tile + tile / 2, y: CGFloat(world.save.himY) * tile + tile / 2 - 8)
@@ -482,10 +498,9 @@ struct WorldView: View {
                         ForEach(WorldDecorKind.allCases) { k in
                             Button { decorPick = k } label: {
                                 VStack(spacing: 3) {
-                                    DecorCanvas(decor: [WorldDecor(kind: k.rawValue, x: 0, y: 1)], tile: 24,
-                                                width: 2, height: 2, night: false)
+                                    let s = IslandArt.size(of: k.sprite)
+                                    IslandSprite(key: k.sprite, scale: 40 / max(s.width, s.height))
                                         .frame(width: 40, height: 40)
-                                        .clipped()
                                     Text(k.label).font(.app(9.5)).lineLimit(1).frame(width: 52)
                                 }
                                 .padding(4)
@@ -564,172 +579,25 @@ struct WorldView: View {
     }
 }
 
-/// 小岛的地面。
+/// 小岛的地面：素材拼好的一张小图（一格 16 像素）放大，不插值。
 ///
-/// 草地是整片底色加大块柔和的明暗（不按格子变，看不出格子）；
-/// 小路、木地板、田、水各自是**圆角连成一整块**，外面一道细描边；
-/// 草叶、三叶草、花、石子按位置算出来，每次画都在同一个地方。
-///
-/// ⚠️ 只在地块变了的时候重画（`Equatable` 只比 `ground`），
+/// ⚠️ 只在地块变了的时候重新拼（`Equatable` 只比 `ground`），
 /// 两个人走路、冒表情都不会让它跟着重算一遍。
-struct GroundCanvas: View, Equatable {
+struct IslandGround: View, Equatable {
     let ground: [WorldGround]
     let width: Int
     let height: Int
     let tile: CGFloat
 
-    static func == (a: GroundCanvas, b: GroundCanvas) -> Bool {
+    static func == (a: IslandGround, b: IslandGround) -> Bool {
         a.ground == b.ground && a.width == b.width && a.height == b.height && a.tile == b.tile
     }
 
-    private func at(_ x: Int, _ y: Int) -> WorldGround? {
-        guard x >= 0, y >= 0, x < width, y < height else { return nil }
-        return ground[y * width + x]
-    }
-
-    private static func noise(_ x: Int, _ y: Int, _ k: Int = 0) -> CGFloat {
-        let v = sin(Double(x) * 12.9898 + Double(y) * 78.233 + Double(k) * 37.719) * 43758.5453
-        return CGFloat(v - floor(v))
-    }
-
-    private static func hex(_ h: String, _ a: Double = 1) -> Color { Color(hexString: h)!.opacity(a) }
-
     var body: some View {
-        Canvas { gc, size in
-            let t = tile
-            let full = CGRect(origin: .zero, size: size)
-            // 草地底色
-            gc.fill(Path(full), with: .color(Self.hex("C8DEAF")))
-            // 大块柔和的明暗
-            gc.drawLayer { layer in
-                layer.clip(to: Path(full))
-                layer.addFilter(.blur(radius: 30))
-                for i in 0..<28 {
-                    let cx = Self.noise(i, 3) * size.width, cy = Self.noise(i, 7) * size.height
-                    let r = 60 + Self.noise(i, 9) * 90
-                    layer.fill(Path(ellipseIn: CGRect(x: cx - r, y: cy - r * 0.7, width: r * 2, height: r * 1.4)),
-                               with: .color(i % 2 == 0 ? Self.hex("B9D3A0", 0.32) : Self.hex("D3E6BC", 0.36)))
-                }
-            }
-            // 一簇一簇的草、几株三叶草
-            for i in 0..<160 {
-                let cx = Self.noise(i, 21) * size.width, cy = Self.noise(i, 23) * size.height
-                guard let g = at(Int(cx / t), Int(cy / t)), g == .grass || g == .flowers else { continue }
-                var p = Path()
-                for j in 0..<3 {
-                    let px = cx + CGFloat(j - 1) * 3, h: CGFloat = j == 1 ? 7 : 5
-                    p.move(to: CGPoint(x: px, y: cy))
-                    p.addLine(to: CGPoint(x: px + CGFloat(j - 1) * 1.5, y: cy - h))
-                }
-                gc.stroke(p, with: .color(Self.hex("93B87E", 0.82)), style: StrokeStyle(lineWidth: 1.1, lineCap: .round))
-            }
-            for i in 0..<44 {
-                let cx = Self.noise(i, 31) * size.width, cy = Self.noise(i, 33) * size.height
-                guard at(Int(cx / t), Int(cy / t)) == .grass else { continue }
-                for (dx, dy) in [(0.0, -2.0), (2.0, 1.0), (-2.0, 1.0)] {
-                    gc.fill(Path(ellipseIn: CGRect(x: cx + dx - 2, y: cy + dy - 2, width: 4, height: 4)),
-                            with: .color(Self.hex("A9CB92")))
-                }
-            }
-
-            // 成块的地：先画一圈描边色（往外扩一点），再画本色
-            let regions: [(WorldGround, String, String)] = [
-                (.path, "EDE3D0", "D4C5A9"), (.sand, "F2E5C4", "DCCBA3"), (.wood, "DFBE98", "AE875F"),
-                (.soil, "A8805D", "7E5B3E"), (.water, "A9D5E6", "7DAEC4")
-            ]
-            for (kind, fill, rim) in regions {
-                region(gc, kind, color: Self.hex(rim), inset: 2)
-                region(gc, kind, color: Self.hex(fill), inset: 0)
-            }
-
-            // 每种地块自己的细节
-            for y in 0..<height {
-                for x in 0..<width {
-                    guard let k = at(x, y) else { continue }
-                    let r = CGRect(x: CGFloat(x) * t, y: CGFloat(y) * t, width: t, height: t)
-                    switch k {
-                    case .path, .sand:
-                        for i in 0..<2 {
-                            let px = r.minX + Self.noise(x, y, i + 3) * (t - 12) + 6
-                            let py = r.minY + Self.noise(x, y, i + 5) * (t - 12) + 6
-                            gc.fill(Path(ellipseIn: CGRect(x: px, y: py, width: 5, height: 3.5)),
-                                    with: .color(Self.hex(k == .path ? "DCCFB6" : "E2D2AE")))
-                        }
-                    case .wood:
-                        for i in 1..<3 {
-                            let yy = r.minY + CGFloat(i) * t / 3
-                            var p = Path()
-                            p.move(to: CGPoint(x: r.minX + (at(x - 1, y) == .wood ? 0 : 3), y: yy))
-                            p.addLine(to: CGPoint(x: r.maxX - (at(x + 1, y) == .wood ? 0 : 3), y: yy))
-                            gc.stroke(p, with: .color(Self.hex("C69F78")), lineWidth: 1.2)
-                        }
-                        if (x + y) % 2 == 0 {
-                            var p = Path()
-                            p.move(to: CGPoint(x: r.midX, y: r.minY + 2))
-                            p.addLine(to: CGPoint(x: r.midX, y: r.minY + t / 3))
-                            gc.stroke(p, with: .color(Self.hex("C69F78")), lineWidth: 0.8)
-                        }
-                    case .soil:
-                        for i in 1..<4 {
-                            let yy = r.minY + CGFloat(i) * t / 4
-                            let x0 = r.minX + (at(x - 1, y) == .soil ? 0 : 5)
-                            let x1 = r.maxX - (at(x + 1, y) == .soil ? 0 : 5)
-                            var a = Path(); a.move(to: CGPoint(x: x0, y: yy - 1)); a.addLine(to: CGPoint(x: x1, y: yy - 1))
-                            gc.stroke(a, with: .color(Self.hex("8A6545")), lineWidth: 2)
-                            var b = Path(); b.move(to: CGPoint(x: x0, y: yy + 1)); b.addLine(to: CGPoint(x: x1, y: yy + 1))
-                            gc.stroke(b, with: .color(Self.hex("BF9775", 0.8)), lineWidth: 1)
-                        }
-                    case .water:
-                        for i in 0..<2 {
-                            let yy = r.minY + 13 + CGFloat(i) * 14
-                            let xx = r.minX + 6 + CGFloat((x * 7 + i * 11) % 10)
-                            var p = Path()
-                            p.move(to: CGPoint(x: xx, y: yy))
-                            p.addQuadCurve(to: CGPoint(x: xx + 14, y: yy), control: CGPoint(x: xx + 7, y: yy - 4))
-                            gc.stroke(p, with: .color(.white.opacity(0.75)), style: StrokeStyle(lineWidth: 1.1, lineCap: .round))
-                        }
-                    case .flowers:
-                        let cols = ["F4A7B9", "FFFFFF", "FBE27A", "C9B6E8"]
-                        for i in 0..<4 {
-                            let cx = r.minX + Self.noise(x, y, i + 11) * (t - 14) + 7
-                            let cy = r.minY + Self.noise(x, y, i + 17) * (t - 14) + 7
-                            let c = Self.hex(cols[(x + y + i) % cols.count])
-                            for (dx, dy) in [(0.0, -2.4), (2.4, 0.0), (0.0, 2.4), (-2.4, 0.0)] {
-                                gc.fill(Path(ellipseIn: CGRect(x: cx + dx - 2.2, y: cy + dy - 2.2, width: 4.4, height: 4.4)),
-                                        with: .color(c))
-                            }
-                            gc.fill(Path(ellipseIn: CGRect(x: cx - 1.4, y: cy - 1.4, width: 2.8, height: 2.8)),
-                                    with: .color(Self.hex("F2C230")))
-                        }
-                    case .grass:
-                        break
-                    }
-                }
-            }
-        }
-        .frame(width: CGFloat(width) * tile, height: CGFloat(height) * tile)
-        .allowsHitTesting(false)
-    }
-
-    /// 一种地块整片画成圆润的一块：每格一个圆角块，跟同类邻居之间用矩形接上
-    private func region(_ gc: GraphicsContext, _ kind: WorldGround, color: Color, inset: CGFloat) {
-        let t = tile, rad: CGFloat = 13
-        for y in 0..<height {
-            for x in 0..<width where at(x, y) == kind {
-                let r = CGRect(x: CGFloat(x) * t - inset, y: CGFloat(y) * t - inset,
-                               width: t + inset * 2, height: t + inset * 2)
-                gc.fill(Path(roundedRect: r, cornerRadius: rad + inset), with: .color(color))
-                if at(x + 1, y) == kind {
-                    gc.fill(Path(CGRect(x: CGFloat(x) * t + t / 2, y: r.minY, width: t, height: r.height)), with: .color(color))
-                }
-                if at(x, y + 1) == kind {
-                    gc.fill(Path(CGRect(x: r.minX, y: CGFloat(y) * t + t / 2, width: r.width, height: t)), with: .color(color))
-                }
-                if at(x + 1, y) == kind, at(x, y + 1) == kind, at(x + 1, y + 1) == kind {
-                    gc.fill(Path(CGRect(x: CGFloat(x) * t + t / 2, y: CGFloat(y) * t + t / 2, width: t, height: t)),
-                            with: .color(color))
-                }
-            }
-        }
+        Image(uiImage: IslandArt.ground(ground, width: width, height: height))
+            .resizable()
+            .interpolation(.none)
+            .frame(width: CGFloat(width) * tile, height: CGFloat(height) * tile)
+            .allowsHitTesting(false)
     }
 }

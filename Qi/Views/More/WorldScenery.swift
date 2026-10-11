@@ -1,260 +1,296 @@
 import SwiftUI
+import UIKit
+import CoreImage
 
-// MARK: - 小岛的风景
+// MARK: - 小岛的画（Ninja Adventure 素材包，CC0，见 Resources/Island/LICENSE-Island.txt）
 //
-// 树、灌木、石头、篱笆、小屋这些「景」，跟她摆的家具分开：
-// 它们是岛本来就有的，也能在「摆东西 → 风景」里加、在「拿走」里拿掉。
-// 画法是柔和的插画：几团圆叠出树冠、底下一层深色压出体积、脚下一团软影子。
+// 地面：按格子算好一整张 16 像素一格的小图（草地底 + 小草小花 + 路 / 水 / 沙 / 田按八邻居拼接），
+//      放大的时候不插值，像素清清楚楚。只在地块变了的时候重新拼。
+// 景：树、花、石头、房子……都是素材包里切出来的图，按格子摆，下沿对齐格子下沿。
 
 enum WorldDecorKind: String, CaseIterable, Identifiable {
-    case tree, blossom, pine, bush, berry, rock, rocks, stump, mushroom, tallgrass,
-         lamp, fence, lily, reed, stone, bench, house, mailbox, sign, well, pot
+    case treeBig, treePink, treeGreen, treeOrange, treeSnow, treeBigPink, pine, treeSmall, bonsai,
+         bush, berry, berryBlue, sunflower, flowerY, flowerR, daisy, clover, fern, stump, rock, rocks, boulder,
+         houseOrange, houseBeige, houseRed, shop, cabin, fence, barrel, crate, waterBarrel
     var id: String { rawValue }
+
     var label: String {
         switch self {
-        case .tree: return "大树"
-        case .blossom: return "樱花树"
-        case .pine: return "松树"
+        case .treeBig: return "大树"
+        case .treePink: return "樱花树"
+        case .treeGreen: return "绿树"
+        case .treeOrange: return "秋树"
+        case .treeSnow: return "雪树"
+        case .treeBigPink: return "大樱花"
+        case .pine: return "松树林"
+        case .treeSmall: return "小树"
+        case .bonsai: return "松树"
         case .bush: return "灌木"
         case .berry: return "莓果丛"
-        case .rock: return "石头"
-        case .rocks: return "碎石"
+        case .berryBlue: return "蓝莓丛"
+        case .sunflower: return "向日葵"
+        case .flowerY: return "小黄花"
+        case .flowerR: return "红花"
+        case .daisy: return "雏菊"
+        case .clover: return "三叶草"
+        case .fern: return "蕨"
         case .stump: return "树桩"
-        case .mushroom: return "蘑菇"
-        case .tallgrass: return "高草"
-        case .lamp: return "路灯"
+        case .rock: return "石头"
+        case .rocks: return "石堆"
+        case .boulder: return "大岩石"
+        case .houseOrange: return "小屋"
+        case .houseBeige: return "米色小屋"
+        case .houseRed: return "红瓦小屋"
+        case .shop: return "小卖铺"
+        case .cabin: return "木屋"
         case .fence: return "篱笆"
-        case .lily: return "荷叶"
-        case .reed: return "芦苇"
-        case .stone: return "踏脚石"
-        case .bench: return "长椅"
-        case .house: return "小屋"
-        case .mailbox: return "信箱"
-        case .sign: return "木牌"
-        case .well: return "水井"
-        case .pot: return "花盆"
+        case .barrel: return "木桶"
+        case .crate: return "果篮"
+        case .waterBarrel: return "菜盆"
+        }
+    }
+
+    /// 素材图里那一张
+    var sprite: String {
+        switch self {
+        case .treeBig: return "tree_big"
+        case .treePink: return "tree_pink"
+        case .treeGreen: return "tree_green"
+        case .treeOrange: return "tree_orange"
+        case .treeSnow: return "tree_snow"
+        case .treeBigPink: return "tree_bigpink"
+        case .pine: return "pine_big"
+        case .treeSmall: return "tree_small"
+        case .bonsai: return "pine_small"
+        case .bush: return "bush2"
+        case .berry: return "berry_o"
+        case .berryBlue: return "berry_b"
+        case .sunflower: return "sunflower"
+        case .flowerY: return "flower_y"
+        case .flowerR: return "flower_r"
+        case .daisy: return "daisy"
+        case .clover: return "clover"
+        case .fern: return "fern"
+        case .stump: return "stump2"
+        case .rock: return "rock_g"
+        case .rocks: return "rocks_b"
+        case .boulder: return "boulder"
+        case .houseOrange: return "house_orange"
+        case .houseBeige: return "house_beige"
+        case .houseRed: return "house_red"
+        case .shop: return "shop"
+        case .cabin: return "cabin"
+        case .fence: return "fence_h"
+        case .barrel: return "barrel_w"
+        case .crate: return "crate"
+        case .waterBarrel: return "pot_veg"
+        }
+    }
+
+    var isHouse: Bool { [.houseOrange, .houseBeige, .houseRed, .shop, .cabin].contains(self) }
+
+    /// 占几格（宽、高），按图的大小算。摆的时候左下角对着点的那一格
+    var cells: (w: Int, h: Int) {
+        guard let r = IslandAtlas.sprites[sprite] else { return (1, 1) }
+        return ((r.w + 15) / 16, (r.h + 15) / 16)
+    }
+
+    /// 上一版（手画的那套）存下来的名字，换成这套里最像的
+    static func resolve(_ raw: String) -> WorldDecorKind? {
+        if let k = WorldDecorKind(rawValue: raw) { return k }
+        switch raw {
+        case "tree": return .treeBig
+        case "blossom": return .treePink
+        case "pine": return .pine
+        case "bush": return .bush
+        case "berry": return .berry
+        case "rock": return .rock
+        case "rocks": return .rocks
+        case "stump": return .stump
+        case "mushroom": return .flowerR
+        case "tallgrass": return .fern
+        case "house": return .houseOrange
+        case "fence": return .fence
+        case "well", "pot": return .waterBarrel
+        default: return nil
         }
     }
 }
 
-struct DecorCanvas: View, Equatable {
-    let decor: [WorldDecor]
-    let tile: CGFloat
-    let width: Int
-    let height: Int
-    let night: Bool
+@MainActor
+enum IslandArt {
 
-    static func == (a: DecorCanvas, b: DecorCanvas) -> Bool {
-        a.decor == b.decor && a.night == b.night && a.tile == b.tile
+    /// 一格在素材图里是 16 像素
+    static let px = 16
+
+    private static var sheets: [String: UIImage] = [:]
+    private static var crops: [String: UIImage] = [:]
+    private static var groundCache: (key: Int, image: UIImage)?
+
+    static func sheet(_ name: String) -> UIImage? {
+        if let s = sheets[name] { return s }
+        guard let url = Bundle.main.url(forResource: "island_" + name, withExtension: "png"),
+              let raw = UIImage(contentsOfFile: url.path) else { return nil }
+        // 原图颜色偏冲，整张收一点饱和度，地面和景一起柔下来
+        var img = raw
+        if let ci = CIImage(image: raw)?.applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 0.88]),
+           let cg = CIContext(options: [.workingColorSpace: NSNull()]).createCGImage(ci, from: ci.extent) {
+            img = UIImage(cgImage: cg)
+        }
+        sheets[name] = img
+        return img
     }
 
-    private static func noise(_ x: Int, _ y: Int, _ k: Int = 0) -> CGFloat {
+    private static func cut(_ sheetName: String, _ r: CGRect) -> UIImage? {
+        guard let s = sheet(sheetName), let cg = s.cgImage?.cropping(to: r) else { return nil }
+        return UIImage(cgImage: cg)
+    }
+
+    /// 素材里的一张（树、花、房子……）
+    static func sprite(_ key: String) -> UIImage? {
+        if let c = crops[key] { return c }
+        guard let r = IslandAtlas.sprites[key],
+              let img = cut(r.sheet, CGRect(x: r.x, y: r.y, width: r.w, height: r.h)) else { return nil }
+        crops[key] = img
+        return img
+    }
+
+    static func size(of key: String) -> CGSize {
+        guard let r = IslandAtlas.sprites[key] else { return CGSize(width: 16, height: 16) }
+        return CGSize(width: r.w, height: r.h)
+    }
+
+    /// 某一格（列、行）的那一小块
+    private static func tile(_ sheetName: String, _ cx: Int, _ cy: Int) -> UIImage? {
+        let key = "\(sheetName)#\(cx),\(cy)"
+        if let c = crops[key] { return c }
+        guard let img = cut(sheetName, CGRect(x: cx * px, y: cy * px, width: px, height: px)) else { return nil }
+        crops[key] = img
+        return img
+    }
+
+    private static func noise(_ x: Int, _ y: Int, _ k: Int = 0) -> Double {
         let v = sin(Double(x) * 12.9898 + Double(y) * 78.233 + Double(k) * 37.719) * 43758.5453
-        return CGFloat(v - floor(v))
-    }
-    private static func c(_ h: String, _ a: Double = 1) -> Color { Color(hexString: h)!.opacity(a) }
-
-    var body: some View {
-        Canvas { gc, _ in
-            for d in decor.sorted(by: { $0.y < $1.y }) {
-                guard let k = WorldDecorKind(rawValue: d.kind) else { continue }
-                draw(gc, k, d.x, d.y)
-            }
-        }
-        .frame(width: CGFloat(width) * tile, height: CGFloat(height) * tile)
-        .allowsHitTesting(false)
+        return v - floor(v)
     }
 
-    // MARK: 小工具
-
-    private func blob(_ gc: GraphicsContext, _ x: CGFloat, _ y: CGFloat, _ r: CGFloat, _ col: Color) {
-        gc.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)), with: .color(col))
-    }
-
-    private func shadow(_ gc: GraphicsContext, _ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat) {
-        gc.drawLayer { l in
-            l.addFilter(.blur(radius: 2))
-            l.fill(Path(ellipseIn: CGRect(x: x - w, y: y - h, width: w * 2, height: h * 2)),
-                   with: .color(Color(red: 0.2, green: 0.25, blue: 0.15).opacity(0.2)))
+    /// 每种地块用哪张图、哪一块（拼接那五行的左上角）
+    private static func block(_ g: WorldGround) -> (String, Int, Int)? {
+        switch g {
+        case .path: return ("TilesetFloor", 0, 7)
+        case .sand: return ("TilesetFloor", 0, 0)
+        case .soil: return ("TilesetFloor", 11, 14)
+        case .water: return ("TilesetWater", 0, 6)
+        default: return nil
         }
     }
 
-    private func rr(_ gc: GraphicsContext, _ r: CGRect, _ rad: CGFloat, _ col: Color) {
-        gc.fill(Path(roundedRect: r, cornerRadius: rad), with: .color(col))
+    /// 周围八格的位：左上、上、右上、右、右下、下、左下、左。角只在两条边都相同的时候才算
+    private static func mask(_ at: (Int, Int) -> WorldGround?, _ x: Int, _ y: Int, _ k: WorldGround) -> Int {
+        func s(_ dx: Int, _ dy: Int) -> Bool { at(x + dx, y + dy) == k }
+        let t = s(0, -1), r = s(1, 0), b = s(0, 1), l = s(-1, 0)
+        let bits = [s(-1, -1) && t && l, t, s(1, -1) && t && r, r, s(1, 1) && b && r, b, s(-1, 1) && b && l, l]
+        var m = 0
+        for (i, v) in bits.enumerated() where v { m |= 1 << i }
+        return m
     }
 
-    private func line(_ gc: GraphicsContext, _ pts: [CGPoint], _ col: Color, _ w: CGFloat) {
-        var p = Path()
-        p.addLines(pts)
-        gc.stroke(p, with: .color(col), style: StrokeStyle(lineWidth: w, lineCap: .round))
+    private static func closest(_ m: Int) -> (Int, Int) {
+        if let hit = IslandAtlas.blob[m] { return hit }
+        var best = IslandAtlas.blob.first!.value, bestD = 99
+        for (k, v) in IslandAtlas.blob {
+            let d = (k ^ m).nonzeroBitCount
+            if d < bestD { bestD = d; best = v }
+        }
+        return best
     }
 
-    // MARK: 每一样
+    /// 整片地面拼成一张小图（一格 16 像素）。地块不变就用上次那张
+    static func ground(_ g: [WorldGround], width w: Int, height h: Int) -> UIImage {
+        var hasher = Hasher()
+        hasher.combine(g); hasher.combine(w); hasher.combine(h)
+        let key = hasher.finalize()
+        if let c = groundCache, c.key == key { return c.image }
 
-    private func draw(_ base: GraphicsContext, _ k: WorldDecorKind, _ gx: Int, _ gy: Int) {
-        let t = tile
-        let x = CGFloat(gx) * t + t / 2
-        let b = CGFloat(gy) * t + t * 0.92
-        var gc = base
-        switch k {
-        case .tree, .blossom:
-            let big = k == .tree
-            let (dk, d, m, l) = big ? ("5F8F55", "79A86A", "92BF7C", "B5D79B") : ("CF7F98", "E59AB0", "F1B5C6", "FAD6E0")
-            gc.translateBy(x: x, y: b); gc.scaleBy(x: 1.35, y: 1.35); gc.translateBy(x: -x, y: -b)
-            shadow(gc, x + 10, b, 32, 10)
-            rr(gc, CGRect(x: x - 4.5, y: b - 30, width: 9, height: 30), 3, Self.c("8E6A4C"))
-            gc.fill(Path(CGRect(x: x - 1.5, y: b - 28, width: 2, height: 24)), with: .color(Self.c("A98260")))
-            blob(gc, x - 14, b - 37, 18, Self.c(dk)); blob(gc, x + 14, b - 39, 18, Self.c(dk)); blob(gc, x, b - 55, 22, Self.c(dk))
-            blob(gc, x - 14, b - 40, 17, Self.c(d)); blob(gc, x + 14, b - 42, 17, Self.c(d)); blob(gc, x, b - 58, 21, Self.c(d))
-            blob(gc, x - 6, b - 50, 17, Self.c(m)); blob(gc, x + 10, b - 56, 14, Self.c(m))
-            blob(gc, x - 8, b - 62, 10, Self.c(l)); blob(gc, x + 4, b - 67, 6, Self.c(l))
-            for i in 0..<7 {
-                blob(gc, x - 20 + Self.noise(gx, gy, i) * 40, b - 74 + Self.noise(gx, gy, i + 3) * 36,
-                     big ? 1.6 : 2, big ? Self.c("D2ECB4", 0.9) : .white)
-            }
-        case .pine:
-            gc.translateBy(x: x, y: b); gc.scaleBy(x: 1.3, y: 1.3); gc.translateBy(x: -x, y: -b)
-            shadow(gc, x + 6, b, 22, 7)
-            gc.fill(Path(CGRect(x: x - 3, y: b - 14, width: 6, height: 14)), with: .color(Self.c("8A6A4E")))
-            for (col, w, y) in [("4F8268", 28.0, b - 8), ("5E9478", 26.0, b - 10), ("6FA587", 21.0, b - 28), ("83B798", 15.0, b - 44)] {
-                var p = Path()
-                p.move(to: CGPoint(x: x - w, y: y))
-                p.addQuadCurve(to: CGPoint(x: x + w, y: y), control: CGPoint(x: x, y: y - 34))
-                p.closeSubpath()
-                gc.fill(p, with: .color(Self.c(col)))
-            }
-        case .bush, .berry:
-            shadow(gc, x + 4, b, 20, 6)
-            blob(gc, x - 9, b - 9, 11, Self.c("83B26F")); blob(gc, x + 9, b - 9, 11, Self.c("83B26F"))
-            blob(gc, x, b - 15, 13, Self.c("98C483")); blob(gc, x - 4, b - 19, 5, Self.c("B6D89E"))
-            if k == .berry {
-                for i in 0..<5 {
-                    blob(gc, x - 12 + Self.noise(gx, gy, i) * 24, b - 22 + Self.noise(gx, gy, i + 5) * 16, 2.2, Self.c("D9546E"))
+        func at(_ x: Int, _ y: Int) -> WorldGround? {
+            guard x >= 0, y >= 0, x < w, y < h else { return nil }
+            return g[y * w + x]
+        }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        let img = UIGraphicsImageRenderer(size: CGSize(width: w * px, height: h * px), format: format).image { ctx in
+            ctx.cgContext.interpolationQuality = .none
+            let flowerKeys = ["flower_y", "daisy", "flower_r", "clover"]
+            for y in 0..<h {
+                for x in 0..<w {
+                    let r = CGRect(x: x * px, y: y * px, width: px, height: px)
+                    // 草地底：大多是干净的那块，偶尔一块带纹样
+                    let n = noise(x, y)
+                    let base = n < 0.12 ? tile("TilesetFloor", 1 + Int(n * 100) % 3, 12) : tile("TilesetFloor", 0, 12)
+                    base?.draw(in: r)
+                    guard let k = at(x, y) else { continue }
+                    switch k {
+                    case .grass, .flowers:
+                        // 零星的小草小花
+                        if noise(x, y, 5) < (k == .flowers ? 0.0 : 0.16) {
+                            tile("TilesetFloorDetail", Int(noise(x, y, 6) * 9), 2)?.draw(in: r)
+                        }
+                        if k == .flowers {
+                            for i in 0..<2 {
+                                let key = flowerKeys[(x * 3 + y + i) % flowerKeys.count]
+                                let s: CGFloat = 10
+                                let fx = CGFloat(x * px) + CGFloat(noise(x, y, i + 11)) * (CGFloat(px) - s)
+                                let fy = CGFloat(y * px) + CGFloat(noise(x, y, i + 13)) * (CGFloat(px) - s)
+                                sprite(key)?.draw(in: CGRect(x: fx, y: fy, width: s, height: s))
+                            }
+                        }
+                    case .wood:
+                        tile("TilesetWater", 1 + x % 3, 13 + y % 2)?.draw(in: r)
+                    default:
+                        if let bl = block(k) {
+                            let (sheetName, bx, by) = bl
+                            let (rx, ry) = closest(mask(at, x, y, k))
+                            tile(sheetName, bx + rx, by + ry)?.draw(in: r)
+                        }
+                    }
                 }
             }
-        case .rock, .rocks:
-            let n = k == .rocks ? 3 : 1
-            for i in 0..<n {
-                let ox: CGFloat = n > 1 ? CGFloat(i - 1) * 12 : 0, s: CGFloat = n > 1 ? 0.6 : 1
-                shadow(gc, x + ox + 3, b, 14 * s, 4 * s)
-                gc.fill(Path(ellipseIn: CGRect(x: x + ox - 15 * s, y: b - 19 * s, width: 30 * s, height: 22 * s)),
-                        with: .color(Self.c("B9B2A7")))
-                gc.fill(Path(ellipseIn: CGRect(x: x + ox - 11 * s, y: b - 16 * s, width: 14 * s, height: 8 * s)),
-                        with: .color(Self.c("D4CEC4")))
-            }
-        case .stump:
-            shadow(gc, x + 3, b, 12, 4)
-            rr(gc, CGRect(x: x - 10, y: b - 14, width: 20, height: 14), 4, Self.c("9A7354"))
-            gc.fill(Path(ellipseIn: CGRect(x: x - 10, y: b - 18, width: 20, height: 8)), with: .color(Self.c("D8B48C")))
-            gc.stroke(Path(ellipseIn: CGRect(x: x - 5, y: b - 16, width: 10, height: 4)), with: .color(Self.c("B48C66")), lineWidth: 1)
-        case .mushroom:
-            for (i, (dx, dy)) in [(-6.0, 0.0), (6.0, 3.0)].enumerated() {
-                shadow(gc, x + dx, b, 6, 2)
-                gc.fill(Path(CGRect(x: x + dx - 2, y: b - 9 + dy, width: 4, height: 9 - dy)), with: .color(Self.c("F6EDE2")))
-                var cap = Path()
-                cap.addArc(center: CGPoint(x: x + dx, y: b - 10 + dy), radius: 7, startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
-                cap.closeSubpath()
-                gc.fill(cap, with: .color(Self.c(i == 1 ? "E8758F" : "F09A62")))
-                blob(gc, x + dx - 2, b - 13 + dy, 1.2, .white)
-            }
-        case .tallgrass:
-            for i in 0..<9 {
-                let px = x - 14 + CGFloat(i) * 3.5, h = 12 + Self.noise(gx, gy, i) * 12
-                var p = Path()
-                p.move(to: CGPoint(x: px, y: b))
-                p.addQuadCurve(to: CGPoint(x: px + CGFloat(i % 3 - 1) * 3, y: b - h), control: CGPoint(x: px + 2, y: b - h / 2))
-                gc.stroke(p, with: .color(Self.c(i % 2 == 1 ? "7EA96A" : "9BC284")), style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
-            }
-        case .lamp:
-            shadow(gc, x, b, 7, 3)
-            gc.fill(Path(CGRect(x: x - 1.5, y: b - 38, width: 3, height: 38)), with: .color(Self.c("5E5652")))
-            rr(gc, CGRect(x: x - 6, y: b - 46, width: 12, height: 9), 2, Self.c("5E5652"))
-            rr(gc, CGRect(x: x - 4, y: b - 44, width: 8, height: 6), 1, night ? Self.c("FFE2A0") : Self.c("F6EBD3"))
-        case .fence:
-            let left = CGFloat(gx) * t
-            gc.fill(Path(CGRect(x: left, y: b - 16, width: t, height: 3.5)), with: .color(Self.c("C9A47D")))
-            gc.fill(Path(CGRect(x: left, y: b - 8, width: t, height: 3.5)), with: .color(Self.c("C9A47D")))
-            for px in [left + 4, left + t - 9] {
-                rr(gc, CGRect(x: px, y: b - 22, width: 5, height: 22), 2, Self.c("B48C66"))
-            }
-        case .lily:
-            let X = CGFloat(gx) * t + 18, Y = CGFloat(gy) * t + 20
-            var p = Path()
-            p.move(to: CGPoint(x: X, y: Y))
-            p.addArc(center: CGPoint(x: X, y: Y), radius: 8, startAngle: .radians(0.3), endAngle: .radians(2 * .pi - 0.1), clockwise: false)
-            p.closeSubpath()
-            gc.fill(p, with: .color(Self.c("7FB27A")))
-            blob(gc, X + 3, Y - 2, 2.5, Self.c("F4A7B9"))
-        case .reed:
-            for i in 0..<4 {
-                let px = CGFloat(gx) * t + 10 + CGFloat(i) * 6
-                let tipX = px + (i % 2 == 1 ? 3 : -2), tipY = b - 26 - CGFloat(i) * 2
-                var p = Path()
-                p.move(to: CGPoint(x: px, y: b))
-                p.addQuadCurve(to: CGPoint(x: tipX, y: tipY), control: CGPoint(x: px + 2, y: b - 14))
-                gc.stroke(p, with: .color(Self.c("7E9E63")), lineWidth: 1.4)
-                gc.fill(Path(ellipseIn: CGRect(x: tipX - 1.8, y: tipY - 6, width: 3.6, height: 8)), with: .color(Self.c("9C7B58")))
-            }
-        case .stone:
-            let cy = CGFloat(gy) * t + t / 2
-            gc.fill(Path(ellipseIn: CGRect(x: x - 11, y: cy - 7, width: 22, height: 14)), with: .color(Self.c("D9D3C8")))
-            gc.fill(Path(ellipseIn: CGRect(x: x - 8, y: cy - 4.5, width: 10, height: 5)), with: .color(Self.c("E9E4DB")))
-        case .bench:
-            shadow(gc, x + t / 2, b, 30, 6)
-            rr(gc, CGRect(x: x - 14, y: b - 16, width: t + 20, height: 6), 2, Self.c("B48C66"))
-            rr(gc, CGRect(x: x - 14, y: b - 26, width: t + 20, height: 5), 2, Self.c("B48C66"))
-            gc.fill(Path(CGRect(x: x - 10, y: b - 10, width: 3, height: 10)), with: .color(Self.c("8E6A4C")))
-            gc.fill(Path(CGRect(x: x + t + 1, y: b - 10, width: 3, height: 10)), with: .color(Self.c("8E6A4C")))
-        case .house:
-            let X = CGFloat(gx) * t, Y = CGFloat(gy) * t, w = 2 * t, h = 2 * t
-            shadow(gc, X + w / 2 + 8, Y + h + 4, w / 2 + 10, 10)
-            gc.fill(Path(CGRect(x: X + 6, y: Y + h * 0.45, width: w - 12, height: h * 0.55)), with: .color(Self.c("F6EFE4")))
-            gc.fill(Path(CGRect(x: X + w - 22, y: Y + 8, width: 7, height: 14)), with: .color(Self.c("B98E86")))
-            var roof = Path()
-            roof.move(to: CGPoint(x: X - 2, y: Y + h * 0.5))
-            roof.addLine(to: CGPoint(x: X + w / 2, y: Y + 4))
-            roof.addLine(to: CGPoint(x: X + w + 2, y: Y + h * 0.5))
-            roof.closeSubpath()
-            gc.fill(roof, with: .color(Self.c("E9A8B4")))
-            for i in 1..<4 {
-                line(gc, [CGPoint(x: X + w / 2 - CGFloat(i) * 9, y: Y + 4 + CGFloat(i) * 9),
-                          CGPoint(x: X + w / 2 + CGFloat(i) * 9, y: Y + 4 + CGFloat(i) * 9)], Self.c("AA5A6E", 0.35), 1)
-            }
-            rr(gc, CGRect(x: X + w / 2 - 7, y: Y + h - 22, width: 14, height: 22), 6, Self.c("C9A47D"))
-            let win = night ? Self.c("FFDFA0") : Self.c("CFE3EE")
-            rr(gc, CGRect(x: X + 12, y: Y + h * 0.6, width: 14, height: 12), 3, win)
-            rr(gc, CGRect(x: X + w - 26, y: Y + h * 0.6, width: 14, height: 12), 3, win)
-        case .mailbox:
-            shadow(gc, x, b, 8, 3)
-            gc.fill(Path(CGRect(x: x - 1.5, y: b - 18, width: 3, height: 18)), with: .color(Self.c("8E6A4C")))
-            rr(gc, CGRect(x: x - 8, y: b - 28, width: 16, height: 11), 5, Self.c("E8758F"))
-            gc.fill(Path(CGRect(x: x + 5, y: b - 30, width: 2, height: 6)), with: .color(Self.c("C9415E")))
-            gc.fill(Path(CGRect(x: x + 5, y: b - 30, width: 5, height: 3)), with: .color(Self.c("F2C230")))
-        case .sign:
-            shadow(gc, x, b, 8, 3)
-            gc.fill(Path(CGRect(x: x - 1.5, y: b - 22, width: 3, height: 22)), with: .color(Self.c("8E6A4C")))
-            rr(gc, CGRect(x: x - 13, y: b - 30, width: 26, height: 11), 3, Self.c("D9B58F"))
-            line(gc, [CGPoint(x: x - 8, y: b - 24.5), CGPoint(x: x + 8, y: b - 24.5)], Self.c("A98260"), 1)
-        case .well:
-            shadow(gc, x + 3, b, 18, 5)
-            rr(gc, CGRect(x: x - 14, y: b - 16, width: 28, height: 16), 6, Self.c("C9C2B7"))
-            gc.fill(Path(ellipseIn: CGRect(x: x - 11, y: b - 20, width: 22, height: 8)), with: .color(Self.c("A9D5E6")))
-            gc.fill(Path(CGRect(x: x - 13, y: b - 38, width: 3, height: 22)), with: .color(Self.c("8E6A4C")))
-            gc.fill(Path(CGRect(x: x + 10, y: b - 38, width: 3, height: 22)), with: .color(Self.c("8E6A4C")))
-            var roof = Path()
-            roof.move(to: CGPoint(x: x - 17, y: b - 36)); roof.addLine(to: CGPoint(x: x, y: b - 46))
-            roof.addLine(to: CGPoint(x: x + 17, y: b - 36)); roof.closeSubpath()
-            gc.fill(roof, with: .color(Self.c("E9A8B4")))
-        case .pot:
-            shadow(gc, x, b, 9, 3)
-            var p = Path()
-            p.move(to: CGPoint(x: x - 8, y: b - 12)); p.addLine(to: CGPoint(x: x + 8, y: b - 12))
-            p.addLine(to: CGPoint(x: x + 6, y: b)); p.addLine(to: CGPoint(x: x - 6, y: b)); p.closeSubpath()
-            gc.fill(p, with: .color(Self.c("D98B6A")))
-            blob(gc, x - 4, b - 16, 5, Self.c("88B874")); blob(gc, x + 4, b - 17, 5, Self.c("88B874"))
-            blob(gc, x, b - 21, 5, Self.c("9CC786"))
-            blob(gc, x - 2, b - 23, 2.2, Self.c("F4A7B9")); blob(gc, x + 3, b - 19, 2, Self.c("FBE27A"))
         }
+        groundCache = (key, img)
+        return img
+    }
+
+    /// 海：素材里那块干净的水。放大三倍、不插值，铺满背景
+    static var sea: UIImage? {
+        if let c = crops["sea@3"] { return c }
+        guard let t = tile("TilesetWater", 1, 8) else { return nil }
+        let format = UIGraphicsImageRendererFormat()
+        let side = CGFloat(px * 3)
+        let img = UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { ctx in
+            ctx.cgContext.interpolationQuality = .none
+            t.draw(in: CGRect(x: 0, y: 0, width: side, height: side))
+        }
+        crops["sea@3"] = img
+        return img
+    }
+}
+
+/// 一样景：切出来的图，按 tile 放大、不插值
+struct IslandSprite: View {
+    let key: String
+    let scale: CGFloat
+
+    var body: some View {
+        let s = IslandArt.size(of: key)
+        Group {
+            if let img = IslandArt.sprite(key) {
+                Image(uiImage: img).resizable().interpolation(.none)
+            } else {
+                Color.clear
+            }
+        }
+        .frame(width: s.width * scale, height: s.height * scale)
     }
 }
 
@@ -293,11 +329,13 @@ struct AmbientLayer: View {
                     for i in 0..<10 {
                         let x = (Self.noise(i, 40) * w + CGFloat(t * 6 * Double(1 + i % 3))).truncatingRemainder(dividingBy: w)
                         let y = (Self.noise(i, 41) * h + CGFloat(t * 12)).truncatingRemainder(dividingBy: h)
-                        var g = gc
-                        g.translateBy(x: x, y: y)
-                        g.rotate(by: .radians(t * 0.8 + Double(i)))
-                        g.fill(Path(ellipseIn: CGRect(x: -3.2, y: -1.8, width: 6.4, height: 3.6)),
-                               with: .color(Color(red: 0.96, green: 0.71, blue: 0.78).opacity(0.9)))
+                        // 像素花瓣：一大一小两块方的，跟地面一个画法
+                        let px = (x / 3).rounded() * 3, py = (y / 3).rounded() * 3
+                        let flip = Int(t * 2 + Double(i)) % 2 == 0
+                        gc.fill(Path(CGRect(x: px, y: py, width: 6, height: 3)),
+                                with: .color(Color(red: 0.96, green: 0.71, blue: 0.78).opacity(0.95)))
+                        gc.fill(Path(CGRect(x: px + (flip ? 0 : 3), y: py + 3, width: 3, height: 3)),
+                                with: .color(Color(red: 0.91, green: 0.55, blue: 0.66).opacity(0.95)))
                     }
                     // 两只蝴蝶
                     for (i, col) in [Color(hexString: "F7D36B")!, Color(hexString: "C9B6E8")!].enumerated() {

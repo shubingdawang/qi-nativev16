@@ -76,6 +76,8 @@ struct WorldSave: Codable {
     var basket: [String: Int] = [:]
     /// 风景。nil = 老存档还没铺过，打开时铺一套
     var decor: [WorldDecor]? = nil
+    /// 地图是第几版画法。比现在的旧，打开时换成新的地和景（摆的东西、田里的、篮子都留着）
+    var art: Int = 0
 }
 
 /// 一格庄稼。长多快按真实时间算，浇一次水快一截
@@ -148,6 +150,7 @@ extension WorldSave {
         crops = (try? c.decodeIfPresent([String: WorldCrop].self, forKey: .crops)) ?? [:]
         basket = (try? c.decodeIfPresent([String: Int].self, forKey: .basket)) ?? [:]
         decor = try? c.decodeIfPresent([WorldDecor].self, forKey: .decor)
+        art = (try? c.decodeIfPresent(Int.self, forKey: .art)) ?? 0
     }
 }
 
@@ -248,63 +251,109 @@ final class WorldStore: ObservableObject {
         var s = Storage.load(WorldSave.self, from: "world.json") ?? WorldSave()
         if s.ground.count != s.width * s.height { s = Self.starter() }
         if s.decor == nil { s.decor = Self.starterDecor }
+        if s.art < Self.artVersion { Self.upgrade(&s) }
         save = s
         loaded = true
     }
 
-    /// 第一次打开：一片草地，一条小路，一个小池塘，摆几件
+    /// 地图画法的版本：2 = 像素素材那一版
+    static let artVersion = 2
+
+    /// 老存档换成新画法：地和景换成新的，摆的东西留着（落在水里或压着景的拿掉），田里不在田上的拿掉
+    private static func upgrade(_ s: inout WorldSave) {
+        let fresh = starter()
+        let old = s
+        s.width = fresh.width; s.height = fresh.height
+        s.ground = fresh.ground
+        s.decor = fresh.decor
+        s.herX = fresh.herX; s.herY = fresh.herY
+        s.himX = fresh.himX; s.himY = fresh.himY
+        let bases = Set((fresh.decor ?? []).flatMap { d -> [Int] in
+            guard let k = WorldDecorKind.resolve(d.kind) else { return [d.y * fresh.width + d.x] }
+            return (d.x..<(d.x + k.cells.w)).map { d.y * fresh.width + $0 }
+        })
+        // 第一次打开时自动摆的那几件，跟着换成新的位置
+        let oldStarter = Set(["床", "沙发", "桌", "花"].compactMap { w in
+            FurnitureCatalog.all.first(where: { $0.name.contains(w) && $0.category != .wear }).map { "f:" + $0.id }
+        })
+        let wasStarter = !old.objects.isEmpty && old.objects.allSatisfy { oldStarter.contains($0.source) }
+        s.objects = wasStarter ? fresh.objects : old.objects.filter { o in
+            o.x < fresh.width && o.y < fresh.height
+                && fresh.ground[o.y * fresh.width + o.x] != .water && !bases.contains(o.y * fresh.width + o.x)
+        }
+        s.crops = old.crops.filter { k, _ in
+            let xy = k.split(separator: ",").compactMap { Int($0) }
+            return xy.count == 2 && xy[0] < fresh.width && xy[1] < fresh.height
+                && fresh.ground[xy[1] * fresh.width + xy[0]] == .soil
+        }
+        s.art = artVersion
+    }
+
+    /// 第一次打开：海边一圈沙滩，小屋前一条小路通到南边的木屋，东北角一汪池塘，路旁一块田
     static func starter() -> WorldSave {
         var s = WorldSave()
+        s.herX = 6; s.herY = 12
+        s.himX = 8; s.himY = 12
         s.ground = Array(repeating: .grass, count: s.width * s.height)
-        for y in 0..<s.height { s.ground[y * s.width + 7] = .path }
-        for x in 0..<s.width { s.ground[14 * s.width + x] = .path }
-        for (x, y) in [(11, 4), (12, 4), (11, 5), (12, 5), (13, 5), (12, 6), (11, 6), (13, 4), (10, 5)] { s.ground[y * s.width + x] = .water }
-        for x in 2...5 { for y in 3...7 { s.ground[y * s.width + x] = .wood } }
-        for (x, y) in [(1, 18), (2, 18), (1, 19), (13, 20), (14, 20), (14, 21)] { s.ground[y * s.width + x] = .flowers }
-        for x in 9...12 { for y in 18...20 { s.ground[y * s.width + x] = .soil } }
+        // (左, 右, 上, 下)，都含
+        let layout: [(WorldGround, [(Int, Int, Int, Int)])] = [
+            (.sand, [(0, 15, 0, 0), (0, 15, 23, 23), (0, 0, 0, 23), (15, 15, 0, 23), (1, 3, 21, 22), (13, 14, 1, 2)]),
+            (.path, [(3, 8, 7, 8), (7, 8, 7, 22), (9, 13, 13, 14)]),
+            (.water, [(10, 13, 3, 5)]),
+            (.soil, [(10, 13, 17, 19)]),
+            (.flowers, [(2, 4, 10, 11), (12, 14, 9, 10), (3, 5, 17, 18), (9, 10, 21, 22)])
+        ]
+        for (g, rects) in layout {
+            for (x0, x1, y0, y1) in rects {
+                for y in y0...y1 { for x in x0...x1 { s.ground[y * s.width + x] = g } }
+            }
+        }
+        s.objects = starterObjects()
+        s.decor = starterDecor
+        s.art = artVersion
+        return s
+    }
+
+    private static func starterObjects() -> [WorldObject] {
         var objs: [WorldObject] = []
         func put(_ word: String, _ x: Int, _ y: Int) {
             if let k = FurnitureCatalog.all.first(where: { $0.name.contains(word) && $0.category != .wear }) {
                 objs.append(WorldObject(source: "f:" + k.id, x: x, y: y, w: k.sprite.width >= 20 ? 2 : 1))
             }
         }
-        put("床", 2, 3)
-        put("沙发", 4, 6)
-        put("桌", 9, 16)
-        put("花", 12, 9)
-        s.objects = objs
-        s.decor = starterDecor
-        return s
+        put("椅", 11, 7)
+        put("桌", 5, 16)
+        return objs
     }
 
-    /// 一开始岛上就有的景：边上一圈树、小屋和它旁边的小东西、池塘边的荷叶芦苇
+    /// 一开始岛上就有的景。坐标是图的左下角那一格
     static var starterDecor: [WorldDecor] {
-        let list: [(String, Int, Int)] = [
-            ("house", 2, 1), ("mailbox", 6, 2), ("sign", 8, 8), ("well", 14, 10), ("pot", 1, 7), ("pot", 6, 7),
-            ("tree", 10, 0), ("pine", 13, 0), ("tree", 15, 1), ("blossom", 0, 9), ("pine", 0, 11), ("tree", 0, 15),
-            ("pine", 15, 6), ("tree", 15, 13), ("blossom", 15, 16), ("pine", 0, 23), ("tree", 2, 23), ("blossom", 13, 23),
-            ("pine", 15, 22), ("tree", 5, 12),
-            ("bush", 5, 9), ("berry", 9, 10), ("bush", 12, 12), ("bush", 1, 20), ("berry", 14, 19), ("bush", 6, 19),
-            ("rock", 10, 22), ("rocks", 4, 21), ("stump", 13, 9), ("mushroom", 15, 12), ("mushroom", 3, 13),
-            ("tallgrass", 11, 9), ("tallgrass", 3, 19), ("tallgrass", 12, 22),
-            ("lamp", 8, 13), ("lamp", 6, 15), ("fence", 9, 16), ("fence", 10, 16), ("fence", 11, 16), ("fence", 12, 16),
-            ("lily", 11, 5), ("lily", 13, 4), ("lily", 10, 5), ("reed", 14, 5), ("reed", 9, 6),
-            ("stone", 8, 6), ("stone", 9, 7), ("bench", 3, 16)
+        let list: [(WorldDecorKind, Int, Int)] = [
+            (.houseOrange, 2, 6), (.treeBig, 11, 2), (.treePink, 1, 9), (.treeGreen, 13, 7),
+            (.treeBigPink, 10, 11), (.pine, 1, 15), (.treeSmall, 5, 11), (.bonsai, 13, 15),
+            (.treeOrange, 12, 22), (.treePink, 4, 22), (.bush, 6, 5), (.bush, 9, 9), (.berry, 3, 13),
+            (.berryBlue, 14, 20), (.stump, 9, 19), (.rocks, 13, 2), (.rock, 9, 3), (.boulder, 2, 19),
+            (.sunflower, 1, 7), (.flowerY, 6, 13), (.daisy, 9, 16), (.clover, 6, 19),
+            (.fence, 10, 16), (.fence, 12, 16), (.crate, 14, 17), (.waterBarrel, 6, 7), (.cabin, 10, 23)
         ]
-        return list.map { WorldDecor(kind: $0.0, x: $0.1, y: $0.2) }
+        return list.map { WorldDecor(kind: $0.0.rawValue, x: $0.1, y: $0.2) }
     }
 
     var decor: [WorldDecor] { save.decor ?? [] }
 
-    func decor(at x: Int, _ y: Int) -> WorldDecor? {
-        decor.last { d in
-            if d.kind == "house" { return x >= d.x && x <= d.x + 1 && y >= d.y && y <= d.y + 1 }
-            return d.x == x && d.y == y
+    /// 这一格上的景。base = 只算脚下那一排（走路时点树冠不算点到树）；不然算整张图盖住的格子
+    func decor(at x: Int, _ y: Int, base: Bool = false) -> WorldDecor? {
+        decor.filter { d in
+            guard let k = WorldDecorKind.resolve(d.kind) else { return d.x == x && d.y == y }
+            let c = k.cells
+            let top = base ? d.y - (k.isHouse ? 1 : 0) : d.y - c.h + 1
+            return x >= d.x && x < d.x + c.w && y >= top && y <= d.y
         }
+        .max { $0.y < $1.y }
     }
 
     func addDecor(_ kind: String, _ x: Int, _ y: Int) {
-        guard x >= 0, y >= 0, x < width, y < height, decor(at: x, y) == nil else { return }
+        guard x >= 0, y >= 0, x < width, y < height, decor(at: x, y, base: true) == nil else { return }
         var list = decor
         list.append(WorldDecor(kind: kind, x: x, y: y))
         save.decor = list
@@ -316,8 +365,9 @@ final class WorldStore: ObservableObject {
 
     /// 景上能做的事（长椅能坐、小屋能进去躺着……按景的名字配模组）
     func actions(forDecor d: WorldDecor) -> [WorldAction] {
-        let n = WorldDecorKind(rawValue: d.kind)?.label ?? ""
-        let alias = d.kind == "house" ? n + "床沙发" : n
+        let k = WorldDecorKind.resolve(d.kind)
+        let n = k?.label ?? ""
+        let alias = k?.isHouse == true ? n + "床沙发" : n
         return WorldMods.all.filter(modOn).flatMap(\.actions).filter { a in
             !a.match.isEmpty && a.match.contains { alias.contains($0) }
         }
@@ -364,7 +414,7 @@ final class WorldStore: ObservableObject {
     func remove(_ id: UUID) { save.objects.removeAll { $0.id == id } }
 
     func name(of o: WorldObject) -> String {
-        if o.source.hasPrefix("d:") { return WorldDecorKind(rawValue: String(o.source.dropFirst(2)))?.label ?? "那儿" }
+        if o.source.hasPrefix("d:") { return WorldDecorKind.resolve(String(o.source.dropFirst(2)))?.label ?? "那儿" }
         if o.source.hasPrefix("f:") { return FurnitureCatalog.kind(String(o.source.dropFirst(2)))?.name ?? "东西" }
         if o.source.hasPrefix("p:"),
            let id = UUID(uuidString: String(o.source.dropFirst(2))),
@@ -546,6 +596,11 @@ final class WorldStore: ObservableObject {
                 lines.append("[\(i + 1)] \(name(of: o)) @ (\(o.x),\(o.y))" + (acts.isEmpty ? "" : " 可以：" + acts.joined(separator: "、")))
             }
         }
+        let marks = decor.compactMap { d -> String? in
+            guard let k = WorldDecorKind.resolve(d.kind), k.isHouse || k.cells.h >= 3 else { return nil }
+            return "\(k.label) (\(d.x),\(d.y))"
+        }
+        if !marks.isEmpty { lines.append("岛上的景：" + marks.joined(separator: "、")) }
         let p = personActions.map(\.name)
         if !p.isEmpty { lines.append("对她能做的：" + p.joined(separator: "、")) }
         let water = (0..<(width * height)).filter { save.ground[$0] == .water }.count
@@ -592,7 +647,7 @@ enum WorldTools {
                "看你们俩的小岛：地图多大、你和她站在哪、岛上摆了什么、每件东西上能一起做什么、最近发生了什么。",
                [:]),
             fn("world_act",
-               "在小岛上动一下：走到某格（walk）、头上说一句（say）、跟她在某件东西上一起做件事（interact，要东西编号和事情名字）、直接对她做件事（touch，要事情名字）、摆一件东西（place，要家具名字和格子）、拿走一件（remove，要东西编号）、在田里种（plant，要格子和种子名字）、浇水（water）、收（harvest）、在水边钓鱼（fish）。",
+               "在小岛上动一下：走到某格（walk）、头上说一句（say）、跟她在某件东西上一起做件事（interact，要东西编号和事情名字）、直接对她做件事（touch，要事情名字）、摆一件东西（place，要家具或景的名字和格子；景有：" + WorldDecorKind.allCases.map(\.label).joined(separator: "、") + "）、拿走一件（remove，要东西编号）、在田里种（plant，要格子和种子名字）、浇水（water）、收（harvest）、在水边钓鱼（fish）。",
                [
                 "do": ["type": "string", "enum": ["walk", "say", "interact", "touch", "place", "remove",
                                                   "plant", "water", "harvest", "fish"]],
@@ -601,7 +656,7 @@ enum WorldTools {
                 "text": ["type": "string", "description": "say 时说的话"],
                 "object": ["type": "integer", "description": "world_look 里东西的编号"],
                 "action": ["type": "string", "description": "要做的事的名字，如「一起躺着」「抱一下」"],
-                "item": ["type": "string", "description": "place 时家具的名字"]
+                "item": ["type": "string", "description": "place 时家具或景的名字"]
                ])
         ]
     }
@@ -640,6 +695,15 @@ enum WorldTools {
         case "place":
             let want = (args["item"] as? String ?? "").trimmingCharacters(in: .whitespaces)
             guard let x = int("x"), let y = int("y") else { return ("摆在哪？给 x 和 y。", true) }
+            // 景（树、花、石头、房子）：坐标是它的左下角
+            if !want.isEmpty, let d = WorldDecorKind.allCases.first(where: { $0.label == want })
+                ?? WorldDecorKind.allCases.first(where: { want.contains($0.label) }) {
+                let before = w.decor.count
+                w.addDecor(d.rawValue, x, y)
+                guard w.decor.count > before else { return ("那一格已经有景了，或者出了岛。", true) }
+                w.log("你在 (\(x),\(y)) " + (d.label.contains("树") ? "种了一棵" : "摆了") + d.label + "。")
+                return ("摆好了\(d.label)。", false)
+            }
             guard let k = FurnitureCatalog.all.first(where: { $0.name == want && $0.category != .wear })
                     ?? FurnitureCatalog.all.first(where: { $0.name.contains(want) && $0.category != .wear }),
                   !want.isEmpty else { return ("没有叫「\(want)」的东西。", true) }

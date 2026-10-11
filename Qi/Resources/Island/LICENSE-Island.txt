@@ -1,0 +1,3 @@
+island_Tileset*.png 取自 Ninja Adventure - Asset Pack（Pixel-Boy & AAA）
+https://pixel-boy.itch.io/ninja-adventure-asset-pack
+授权：Creative Commons Zero (CC0)，可自由使用、修改、分发。
