@@ -51,6 +51,8 @@ struct ClawdHomeView: View {
     @State private var using: RoomUse = .stand
     /// 他正躺在哪张床上（躺着的时候按床的朝向摆身子、盖被子）
     @State private var lyingBed: Furniture?
+    /// 这会儿是 `keepSleeping` 让他躺在床上的
+    @State private var sleptHere = false
 
     // MARK: 手上的东西
 
@@ -398,6 +400,61 @@ struct ClawdHomeView: View {
     }
 
     /// 晚上多半去床上：这间有能躺的就挑它
+    /// 他真睡着了（`SleepCycle`）：去床上躺着。返回 true = 这会儿在睡，别的都别动。
+    /// 醒了、或者状态还写着「在睡觉」其实早起来了：起来，状态改回去
+    @discardableResult
+    private func keepSleeping() -> Bool {
+        let isLie: (Furniture) -> Bool = { f in
+            FurnitureCatalog.shape(of: f.kind).actions.contains { $0 == "躺下" || $0 == "钻被窝" }
+        }
+        guard SleepCycle.shared.isAsleep() else {
+            if store.clawdDoing == .sleeping, using != .lie {
+                store.clawdDoing = .idling
+            }
+            if store.clawdDoing == .sleeping, sleptHere {
+                // 刚睡醒：从床上起来
+                sleptHere = false
+                using = .stand
+                store.useItem = nil
+                store.useStyle = .stand
+                mood = .idle
+                store.clawdDoing = .idling
+                say(["醒了", "唔……天亮了", "睡饱了"].randomElement() ?? "醒了")
+            }
+            return false
+        }
+        // 先找他现在这间的床，没有就去有床的那间
+        var room = store.clawdRoom
+        var bed = store.furniture(in: room).first(where: isLie)
+        if bed == nil {
+            for r in HomeRoom.allCases {
+                if let b = store.furniture(in: r).first(where: isLie) { room = r; bed = b; break }
+            }
+        }
+        guard let bed else {
+            store.clawdDoing = .sleeping
+            mood = .lying
+            return true
+        }
+        if store.clawdRoom != room { store.clawdRoom = room }
+        if !sleptHere || store.useItem != bed.id {
+            if let size = roomSize, size.width > 1 {
+                let geo = IsoRoom.fit(in: size, as: store.projection)
+                let p = RoomActs.bedTop(of: bed, in: geo)
+                clawdX = p.x / size.width
+                clawdY = p.y / size.height
+            }
+            lyingBed = bed
+            using = .lie
+            store.useItem = bed.id
+            store.useStyle = .lie
+            sleptHere = true
+        }
+        mood = .lying
+        store.clawdDoing = .sleeping
+        return true
+    }
+
     private func nightBed() -> Furniture? {
         guard isNightNow, Double.random(in: 0...1) < 0.6 else { return nil }
         return store.furniture(in: store.clawdRoom).filter { f in
@@ -539,6 +596,7 @@ struct ClawdHomeView: View {
             // 格子从 8 变 16 那一次，老坐标乘 2 搬过来。只跑一次。
             store.migrateFiner()
             // 进来就落在他待着的那一间（她要的）
+            keepSleeping()
             if viewing == nil, following { viewing = store.clawdRoom }
             startWalking()
             startHim()
@@ -2277,6 +2335,8 @@ struct ClawdHomeView: View {
                 try? await Task.sleep(nanoseconds: wait)
                 if Task.isCancelled { return }
                 patience.relax()        // 晾着的时候气自己消，见 relax 的注释
+                // 他睡着呢：躺着，不溜达（她拎起他的时候不管）
+                if !held, keepSleeping() { continue }
                 if !patience.sulking, mood == .upset, Date() >= touchUntil {
                     mood = .idle        // 气消了，脸也松开
                 }

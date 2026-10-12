@@ -9,6 +9,8 @@ struct RootView: View {
     // 要等下一次别的什么状态变了才顺带刷出来——看起来就是"打电话有延迟"。
     @ObservedObject private var calls = CallStore.shared
     @State private var selection = 0
+    /// 去过的那几页
+    @State private var visited: Set<Int> = [0]
     @State private var navOpen = false
     /// 开屏那扇雾窗已经擦开了没有。**只在冷启动这一次**是 false
     @State private var splashDone = false
@@ -17,14 +19,12 @@ struct RootView: View {
         ZStack {
             WallpaperBackground()
 
-            Group {
-                switch selection {
-                case 0: ChatView(space: .chat, title: "絮语")
-                case 1: WorkshopView()
-                case 2: NotesView()
-                default: SettingsView()
-                }
-            }
+            // 去过的页留着，切过去只是显示出来——以前每切一次都把整页重建一遍
+            // （聊天页几百条消息要重新排），她说的「点导航切页面有些卡」就是这一下
+            page(0) { ChatView(space: .chat, title: "絮语") }
+            page(1) { WorkshopView() }
+            page(2) { NotesView() }
+            page(3) { SettingsView() }
 
             NavDrawerBar(selection: $selection, isOpen: $navOpen,
                          canAutoHide: selection <= 1)
@@ -141,7 +141,13 @@ struct RootView: View {
             // 于是通知代理明明收到了，页面还是停在默认那一页。
             openFromBanner()
         }
-        .onChange(of: selection) { _, v in
+        .onChange(of: selection) { old, v in
+            visited.insert(old)
+            visited.insert(v)
+            // 聊天页留着不走了，onDisappear 不会再响：她看没看着聊天页在这儿记
+            app.isChatVisible = (v == 0)
+            // 切走时把键盘收起来（输入框那一页还留着，不收的话键盘会挂在别的页上）
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             if v > 1 {
                 withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) { navOpen = true }
             }
@@ -167,6 +173,17 @@ struct RootView: View {
         }
 
 
+    }
+
+    /// 一页：没去过就不建；去过的留着，不是当前这页就藏起来、不接触摸
+    @ViewBuilder
+    private func page<V: View>(_ i: Int, @ViewBuilder _ content: () -> V) -> some View {
+        if visited.contains(i) || selection == i {
+            content()
+                .opacity(selection == i ? 1 : 0)
+                .allowsHitTesting(selection == i)
+                .accessibilityHidden(selection != i)
+        }
     }
 
     /// 从横幅点进来那一下：翻到他说话的那个窗口。

@@ -110,6 +110,9 @@ struct ClawdRoamer: View {
     private let left: Double = 0.02
     private let right: Double = 0.98
 
+    /// 站在输入框上的时候小一点（她说「在输入框上 clawd 有点大了」）
+    private var rigScale: CGFloat { perchBottom == nil ? 1.65 : 1.3 }
+
     var body: some View {
         GeometryReader { geo in
             VStack(alignment: .center, spacing: 3) {
@@ -156,7 +159,7 @@ struct ClawdRoamer: View {
                              tilt: peekTilt,
                              // ⚠️ 1.1 × 1.5 = 1.65。换图纸那次欠的账：图纸从 54 格缩到 36 格（3 格/单位 → 2 格/单位），躯干跟着从 33 格变成 22 格，**scale 没跟着调，他在所有地方都缩了三分之一**。22 × s_new = 33 × s_old → 每一处 scale 都要 ×1.5 才回到原来那么大。
                              // 站在输入框上的时候小一点（她说「在输入框上 clawd 有点大了」）
-                             scale: perchBottom == nil ? 1.65 : 1.3,
+                             scale: rigScale,
                              beat: rigBeat,
                              rise: carryRise,
                              shadow: true)
@@ -173,8 +176,14 @@ struct ClawdRoamer: View {
                     // 顺便放大一圈——它只有三十几个点宽，按准太难了。
                     .contentShape(Rectangle().inset(by: -14))
             }
+            // ⚠️ 头顶冒的那句话不许改他的位置：以前整块（话 + 他）按中心摆，
+            // 冒话的时候整块变高、他往下沉；话一消失他又往上跳——
+            // 她报的「站在输入框上，过一会儿自己飞上去」。
+            // 现在这一块固定是他自己那么高、底对齐，话往上溢出去。
+            .frame(height: 36 * rigScale, alignment: .bottom)
+            // 站在输入框上：脚底（图纸第 31 行，比中心低 13 格）踩在输入栏上沿
             .position(x: posX * geo.size.width,
-                      y: perchBottom.map { geo.size.height - $0 - 28 } ?? posY * geo.size.height)
+                      y: perchBottom.map { geo.size.height - $0 - 13 * rigScale - 1 } ?? posY * geo.size.height)
             .onAppear { pageWidth = geo.size.width }
             .onChange(of: geo.size.width) { _, w in pageWidth = w }
             // 拎着的时候要跟手，所以不给动画

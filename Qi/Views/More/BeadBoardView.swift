@@ -19,7 +19,9 @@ struct BeadListView: View {
     private func startWith(_ img: UIImage) {
         cropNew = nil
         let name = ImageStore.save(ImageStore.downscale(img, maxSide: 1600)) ?? ""
-        let p = store.create(size: newSize, refImage: name)
+        var p = store.create(size: newSize, refImage: name)
+        p.fitToReference(img)
+        store.save(p)
         creating = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { editing = p }
     }
@@ -102,7 +104,7 @@ struct BeadListView: View {
                                     .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
                                         .fill(Theme.softFillDeep))
                                 Text(p.name).font(.app(12.5)).lineLimit(1)
-                                Text("\(p.size)×\(p.size) · \(p.filled) 颗")
+                                Text("\(p.w)×\(p.h) · \(p.filled) 颗")
                                     .font(.app(10.5))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
@@ -207,13 +209,14 @@ struct BeadThumb: View {
     let project: BeadProject
     var body: some View {
         Canvas { gc, sz in
-            let n = project.size
-            let cell = min(sz.width, sz.height) / CGFloat(n)
+            let w = project.w, h = project.h
+            let cell = min(sz.width / CGFloat(w), sz.height / CGFloat(h))
+            let ox = (sz.width - cell * CGFloat(w)) / 2, oy = (sz.height - cell * CGFloat(h)) / 2
             for i in 0..<project.cells.count {
                 let hex = project.cells[i]
                 guard !hex.isEmpty, let c = UIColor(beadHex: hex) else { continue }
-                let r = CGRect(x: CGFloat(i % n) * cell, y: CGFloat(i / n) * cell, width: cell, height: cell)
-                gc.fill(Path(r.insetBy(dx: cell * 0.03, dy: cell * 0.03)), with: .color(Color(c)))
+                let r = CGRect(x: ox + CGFloat(i % w) * cell, y: oy + CGFloat(i / w) * cell, width: cell, height: cell)
+                gc.fill(Path(r.insetBy(dx: -0.3, dy: -0.3)), with: .color(Color(c)))
             }
         }
     }
@@ -286,16 +289,26 @@ struct BeadEditorView: View {
         p.refImage = name
         p.refScale = 1; p.refRotation = 0; p.refX = 0; p.refY = 0; p.refShown = true
         refUIImage = ImageStore.cached(name)
+        // 板上还空着：板子直接改成跟底图一样的格数，底图铺满
+        if p.filled == 0 { notice = p.fitToReference(img) } else { p.refFill = false }
         BeadStore.shared.save(p)
     }
+
+    /// 「对齐底图」：板子改成底图的格数、底图铺满（已经放的豆子留着）
+    private func alignToReference() {
+        guard let img = refUIImage else { return }
+        pushUndo()
+        notice = p.fitToReference(img)
+    }
+    @State private var notice: String?
 
     var body: some View {
         VStack(spacing: 0) {
             topBar
             GeometryReader { geo in
-                let side = min(geo.size.width - 24, geo.size.height - 12)
-                board(side: side)
-                    .frame(width: side, height: side)
+                let cell = min((geo.size.width - 24) / CGFloat(p.w), (geo.size.height - 12) / CGFloat(p.h))
+                board(cell: cell)
+                    .frame(width: cell * CGFloat(p.w), height: cell * CGFloat(p.h))
                     .scaleEffect(zoom)
                     .offset(pan)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -363,9 +376,9 @@ struct BeadEditorView: View {
 
     // MARK: 板
 
-    private func board(side: CGFloat) -> some View {
-        let n = p.size
-        let cell = side / CGFloat(n)
+    private func board(cell: CGFloat) -> some View {
+        let n = p.w
+        let bw = cell * CGFloat(p.w), bh = cell * CGFloat(p.h)
         return ZStack {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(Color(hexString: "F7F5F2")!)
@@ -391,8 +404,9 @@ struct BeadEditorView: View {
                         gc.fill(Path(ellipseIn: CGRect(x: r.midX - d / 2, y: r.midY - d / 2, width: d, height: d)),
                                 with: .color(Color.black.opacity(0.12)))
                     } else if let c = UIColor(beadHex: hex) {
-                        // 方形像素：一整格一个色块，格与格之间留一道细缝
-                        gc.fill(Path(r.insetBy(dx: cell * 0.03, dy: cell * 0.03)), with: .color(Color(c)))
+                        // 方形像素：一整格一个色块，格与格之间**不留缝**——拼出来就是一张像素图。
+                        // 往外多铺一丝，免得两格接缝处抗锯齿出一道浅线
+                        gc.fill(Path(r.insetBy(dx: -0.3, dy: -0.3)), with: .color(Color(c)))
                     }
                 }
             }
@@ -402,15 +416,15 @@ struct BeadEditorView: View {
         .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
         .contentShape(Rectangle())
         .gesture(drawGesture(cell: cell), including: (tool == .hand || tool == .reference) ? .subviews : .all)
-        .simultaneousGesture(refDrag(side: side), including: tool == .reference ? .all : .subviews)
+        .simultaneousGesture(refDrag(width: bw, height: bh), including: tool == .reference ? .all : .subviews)
         .simultaneousGesture(refZoom, including: tool == .reference ? .all : .subviews)
         .simultaneousGesture(refTurn, including: tool == .reference ? .all : .subviews)
     }
 
     private func cellIndex(_ pt: CGPoint, cell: CGFloat) -> Int? {
         let col = Int(pt.x / cell), row = Int(pt.y / cell)
-        guard col >= 0, row >= 0, col < p.size, row < p.size else { return nil }
-        return row * p.size + col
+        guard col >= 0, row >= 0, col < p.w, row < p.h else { return nil }
+        return row * p.w + col
     }
 
     private func drawGesture(cell: CGFloat) -> some Gesture {
@@ -438,7 +452,7 @@ struct BeadEditorView: View {
     }
 
     private func flood(from start: Int) {
-        let n = p.size
+        let n = p.w, rowsN = p.h
         let target = p.cells[start]
         guard target != color else { return }
         var stack = [start]
@@ -451,7 +465,7 @@ struct BeadEditorView: View {
             if c > 0 { stack.append(i - 1) }
             if c < n - 1 { stack.append(i + 1) }
             if r > 0 { stack.append(i - n) }
-            if r < n - 1 { stack.append(i + n) }
+            if r < rowsN - 1 { stack.append(i + n) }
         }
     }
 
@@ -478,13 +492,13 @@ struct BeadEditorView: View {
     }
 
     // 参考图：拖动挪位置、两指放大、两指旋转
-    private func refDrag(side: CGFloat) -> some Gesture {
+    private func refDrag(width: CGFloat, height: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 2)
             .onChanged { v in
                 if refBase == nil { refBase = (p.refScale, p.refRotation, p.refX, p.refY) }
                 guard let b = refBase else { return }
-                p.refX = b.x + Double(v.translation.width / side)
-                p.refY = b.y + Double(v.translation.height / side)
+                p.refX = b.x + Double(v.translation.width / width)
+                p.refY = b.y + Double(v.translation.height / height)
             }
             .onEnded { _ in refBase = nil }
     }
@@ -601,6 +615,9 @@ struct BeadEditorView: View {
                     Button {
                         p.refScale = 1; p.refRotation = 0; p.refX = 0; p.refY = 0
                     } label: { Text("摆正").font(.app(12.5)) }
+                    Button { alignToReference() } label: {
+                        Label("对齐底图", systemImage: "grid").font(.app(12.5))
+                    }
                 }
                 Spacer(minLength: 0)
             }
@@ -618,7 +635,7 @@ struct BeadEditorView: View {
                             .background(Capsule().fill(app.settings.accentColor.opacity(0.2)))
                     }
                 }
-                Text(tool == .reference ? "在板上拖动挪参考图，两指放大、旋转。" : "拖动挪板子，两指放大。")
+                Text(notice ?? (tool == .reference ? "在板上拖动挪参考图，两指放大、旋转。「对齐底图」：板子改成底图的格数，一格对一格。" : "拖动挪板子，两指放大。"))
                     .font(.app(10.5))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -642,7 +659,7 @@ struct BeadExportView: View {
     let project: BeadProject
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
-    @State private var look: BeadStore.Look = .bead
+    @State private var look: BeadStore.Look = .pixel
     @State private var placing: PlacingImage?
 
     var body: some View {
@@ -892,4 +909,22 @@ struct ImportPlacementView: View {
 struct CropJob: Identifiable {
     let id = UUID()
     let image: UIImage
+}
+
+extension BeadProject {
+    /// 板子按底图定格数，底图铺满。返回一句告诉她改成了什么
+    @discardableResult
+    mutating func fitToReference(_ img: UIImage) -> String {
+        refScale = 1; refRotation = 0; refX = 0; refY = 0
+        refFill = true
+        if let g = BeadGrid.detect(img) {
+            resize(g.cols, g.rows)
+            return "认出底图是 \(g.cols)×\(g.rows) 格，板子改成一样的，一格对一格。"
+        }
+        // 认不出格子：宽不变，行数按图的长宽比来，底图正好铺满
+        let ih = img.size.height, iw = img.size.width
+        let nh = iw > 0 ? max(4, min(128, Int((Double(w) * Double(ih / iw)).rounded()))) : h
+        resize(w, nh)
+        return "底图没认出格子，板子按图的比例改成 \(w)×\(nh)，底图铺满。"
+    }
 }

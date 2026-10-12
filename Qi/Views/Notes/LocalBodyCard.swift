@@ -12,6 +12,7 @@ struct LocalBodyCard: View {
 
     @ObservedObject private var store = BodyStore.shared
     @State private var showLedger = false
+    @State private var showDreams = false
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
 
@@ -197,10 +198,11 @@ struct LocalBodyCard: View {
 
                 // 词与梦：一头是她说的话进他身体里，
                 // 一头是他身体里的东西自己冒出来。
-                NavigationLink { TriggersDreamsView() } label: {
+                // ⚠️ 札记这一页外面没有 NavigationStack，NavigationLink 点了没反应——改成弹出来
+                Button { showDreams = true } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "moon.stars").font(.app(12))
-                        Text("词与梦").font(.app(13))
+                        Text("词与梦 · 作息").font(.app(13))
                         Spacer()
                         if DreamStore.shared.untold != nil {
                             Text("他做了个梦")
@@ -252,6 +254,10 @@ struct LocalBodyCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard()
         .onAppear { app.catchUpBody() }
+        .sheet(isPresented: $showDreams) {
+            NavigationStack { TriggersDreamsView() }
+                .environmentObject(app)
+        }
         .confirmationDialog("结算最近这段？", isPresented: $confirmSettle,
                             titleVisibility: .visible) {
             Button("算") {

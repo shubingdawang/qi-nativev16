@@ -452,6 +452,8 @@ enum RoomActs {
                           Double(cell.gy) + Double(s.d - 1) / 2)
         let h = seatHeight(item.kind) ?? s.tall * 0.8
         p.y -= geo.unitH * 0.72 * CGFloat(h)
+        // 平面屋正对着床：床垫在床的半腰，再往上抬一截（她报的「位置偏下」）
+        if geo.projection == .flat { p.y -= geo.unitH * CGFloat(s.tall) * 0.38 }
         return p
     }
 
