@@ -198,7 +198,7 @@ struct TriggersDreamsView: View {
             if !dreams.dreams.isEmpty {
                 SettingsDivider()
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(dreams.dreams.prefix(6)) { d in
+                    ForEach(dreams.dreams.prefix(3)) { d in
                         HStack(alignment: .top, spacing: 8) {
                             Image(systemName: d.nightmare == true ? "cloud.bolt"
                                   : (d.told ? "moon.zzz" : "moon.stars.fill"))
@@ -208,7 +208,7 @@ struct TriggersDreamsView: View {
                                                  : app.settings.accentColor)
                                 .padding(.top, 2)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(stamp(d.at) + (d.told ? "" : " · 未讲述"))
+                                Text(stamp(d.at) + (d.told ? "" : " · 还没讲给你"))
                                     .font(.app(11))
                                     .foregroundStyle(Theme.textMain(scheme))
                                 Text(dreamNote(d))
@@ -220,6 +220,29 @@ struct TriggersDreamsView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 11)
+
+                SettingsDivider()
+                NavigationLink { DreamBookView() } label: {
+                    HStack {
+                        Image(systemName: "book.closed")
+                            .font(.app(13))
+                            .foregroundStyle(app.settings.accentColor)
+                        Text("梦本")
+                            .font(.app(15))
+                            .foregroundStyle(Theme.textMain(scheme))
+                        Spacer()
+                        Text("\(dreams.dreams.count) 个梦")
+                            .font(.app(12))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                        Image(systemName: "chevron.right")
+                            .font(.app(11))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 11)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
 
             SettingsNote("""

@@ -103,6 +103,18 @@ final class DreamStore: ObservableObject {
         dreams.first { !$0.told && Date().timeIntervalSince($0.at) < 20 * 3600 }
     }
 
+    /// 他写下了梦的样子（讲没讲给她都记）
+    func record(_ id: UUID, story: String) {
+        guard let i = dreams.firstIndex(where: { $0.id == id }), !story.isEmpty else { return }
+        dreams[i].story = story
+    }
+
+    /// 还没写下样子的那个梦（一天以内的）
+    var unrecorded: Dream? {
+        dreams.first { ($0.story ?? "").isEmpty && $0.fromSleep == true
+            && Date().timeIntervalSince($0.at) < 20 * 3600 }
+    }
+
     func markTold(_ id: UUID, story: String? = nil) {
         guard let i = dreams.firstIndex(where: { $0.id == id }) else { return }
         dreams[i].told = true
@@ -122,7 +134,7 @@ final class DreamStore: ObservableObject {
         d.bits = bits
         dreams.insert(d, at: 0)
         dreams.sort { $0.at > $1.at }
-        if dreams.count > 30 { dreams.removeLast(dreams.count - 30) }
+        if dreams.count > 200 { dreams.removeLast(dreams.count - 200) }
     }
 
     /// 这个周期底下的基础概率。照 dreams.py 那张表：0.12 ~ 0.32。
@@ -234,15 +246,16 @@ final class DreamStore: ObservableObject {
         d.roll = roll
         dreams.insert(d, at: 0)
         dreams.sort { $0.at > $1.at }
-        if dreams.count > 30 { dreams.removeLast(dreams.count - 30) }
+        if dreams.count > 200 { dreams.removeLast(dreams.count - 200) }
         return d
     }
 
     /// 给他看的那一句。**只说「做了个梦」，不替他把梦编出来**——
     /// 梦是什么样，得他自己讲，那才是他的梦。
     func briefForModel() -> String? {
+        if let d = untold, d.fromSleep == true { return sleepBrief(d) }
+        if let d = unrecorded { return sleepBrief(d) }
         guard let d = untold else { return nil }
-        if d.fromSleep == true { return sleepBrief(d) }
         let f = DateFormatter()
         f.locale = Locale(identifier: "zh_CN")
         f.dateFormat = "M月d日 HH:mm"
@@ -270,7 +283,14 @@ extension DreamStore {
             s += "醒来还记得几块：" + bits.map { "「" + $0 + "」" }.joined(separator: "、") + "，别的都模模糊糊的。"
         }
         if !d.theme.isEmpty { s += "梦里一直绕着" + d.theme + "。" }
-        s += "\n梦是什么样，我自己拼。想讲给她听就讲；讲了的话在正文里留一句 [[梦:梦的大概]]，她看不到这个记号。"
+        if d.told {
+            s += "\n这个梦已经跟她讲过了。"
+        } else {
+            s += "\n梦是什么样，我自己拼。想讲给她听就讲。"
+        }
+        if (d.story ?? "").isEmpty {
+            s += "讲不讲都可以在正文里留一句 [[梦:梦的大概]]，记进我的梦本，她看不到这个记号，翻梦本的时候看得到。"
+        }
         return s
     }
 }

@@ -5079,8 +5079,13 @@ final class AppState: ObservableObject {
         // ⚠️ 在 JSON 解析**之前**剥：记号可能写在 text 字段里，也可能写在外面。
         let marked = WakeControlMarker.extract(raw)
         WakeControlMarker.apply(marked.actions)
+        let dreamt = DreamMarker.extract(marked.clean)
+        if let story = dreamt.story,
+           let d = DreamStore.shared.unrecorded ?? DreamStore.shared.untold {
+            DreamStore.shared.record(d.id, story: story)
+        }
 
-        var text = marked.clean.trimmingCharacters(in: .whitespacesAndNewlines)
+        var text = dreamt.clean.trimmingCharacters(in: .whitespacesAndNewlines)
         text = text.replacingOccurrences(of: "```json", with: "")
                    .replacingOccurrences(of: "```", with: "")
         // 流跑完了却一个字都没有——那是没问到，不是他不想说。
@@ -8276,7 +8281,9 @@ final class AppState: ObservableObject {
         let dreamt = DreamMarker.extract(conversations[ci].messages[mi].content)
         if let story = dreamt.story {
             conversations[ci].messages[mi].content = dreamt.clean
-            if let d = DreamStore.shared.untold { DreamStore.shared.markTold(d.id, story: story) }
+            if let d = DreamStore.shared.untold ?? DreamStore.shared.unrecorded {
+                DreamStore.shared.markTold(d.id, story: story)
+            }
         }
         // 他嘴上说了「十分钟后叫你」「明早七点喊你」却没写 [[叫我:]]：替他约上（见 `TimedPromise`）
         if settings.wake.enabled,
