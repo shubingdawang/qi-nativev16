@@ -27,6 +27,8 @@ struct StickerLibraryView: View {
     /// GIF 那一栏点「从相册」时开的选择器
     @State private var pickingAnimated = false
     @State private var editing: Sticker?
+    /// 做动图：从哪张开始（nil 图 = 进去再挑）
+    @State private var animating: GifStart?
     /// 正在让他写关键词
     @State private var tagging = false
     @State private var tagNote: String?
@@ -186,6 +188,7 @@ struct StickerLibraryView: View {
         .sheet(item: $editing) { s in
             StickerEditorView(sticker: s)
         }
+        .fullScreenCover(item: $animating) { g in GifMakerView(image: g.image, name: g.name) }
         .sheet(isPresented: $harvesting) {
             HarvestSheet(kind: tab == 2 ? "gif" : "sticker")
         }
@@ -277,6 +280,18 @@ struct StickerLibraryView: View {
                         }
                         .buttonStyle(.plain)
                         .disabled(tagging)
+                    }
+                    // 动图工坊：一张图加字、加动画，存成 GIF
+                    if tab == 1 {
+                        Button {
+                            animating = GifStart(image: nil, name: "")
+                        } label: {
+                            Image(systemName: "sparkles")
+                                .font(.app(15))
+                                .foregroundStyle(app.settings.accentColor)
+                                .frame(width: 30, height: 32)
+                        }
+                        .buttonStyle(.plain)
                     }
                     // 从聊天里收。**她发过的图直接摆出来，别让她再去相册翻一遍**
                     if !app.unclaimedChatImages(limit: 1).isEmpty {
@@ -373,6 +388,11 @@ struct StickerLibraryView: View {
                                 editing = sticker
                             } label: {
                                 Label("修改描述", systemImage: "pencil")
+                            }
+                            Button {
+                                animating = GifStart(image: GifMakerView.firstFrame(sticker), name: sticker.name)
+                            } label: {
+                                Label("做成动图（加字、加动画）", systemImage: "sparkles")
                             }
                             Button {
                                 var s = sticker

@@ -289,7 +289,10 @@ struct ClawdRigView: View {
     private func arm(_ side: Side) -> some View {
         ClawdArmView(onLeft: side == .left,
                      angle: side == .left ? plan.leftArm : plan.rightArm,
-                     scale: scale)
+                     scale: scale,
+                     // 睡着、躺着的时候衣服不穿（同身上那几件）
+                     sleeve: mood == .sleeping || mood == .lying ? nil
+                        : CustomWearStore.shared.sleeve(wornIDs, left: side == .left))
     }
 
     /// 举过头顶的那只手臂。
@@ -384,6 +387,8 @@ struct ClawdArmView: View {
     /// 抬多少度（0 = 垂着）
     let angle: Double
     let scale: CGFloat
+    /// 她自己画的那套衣服的袖子：跟手一起转（见 `OutfitCutter`）
+    var sleeve: UIImage? = nil
 
     var body: some View {
         // 肩膀在图纸上的位置：身子左边缘 / 右边缘那一格，手臂那五行
@@ -393,7 +398,22 @@ struct ClawdArmView: View {
         // 手往外只露 `armOut` 格，剩下的往身子里塞——所以左上角
         // 从肩膀往外退 `armOut`，而不是退整条手臂的长度。
         let left = shoulderX - CGFloat(ClawdRig.armOut)
+        let m = CGFloat(OutfitCutter.margin)
         PixelSpriteView(sprite: ClawdRig.arm, scale: scale)
+            .frame(width: CGFloat(ClawdRig.arm.width) * scale,
+                   height: CGFloat(ClawdRig.arm.height) * scale, alignment: .topLeading)
+            // 袖子比手那一块四周各大 m 格，挂在手上、跟着手一起转
+            .overlay(alignment: .topLeading) {
+                if let sleeve {
+                    Image(uiImage: sleeve)
+                        .resizable()
+                        .interpolation(.none)
+                        .frame(width: (CGFloat(ClawdRig.arm.width) + 2 * m) * scale,
+                               height: (CGFloat(ClawdRig.arm.height) + 2 * m) * scale)
+                        .offset(x: -m * scale, y: -m * scale)
+                        .allowsHitTesting(false)
+                }
+            }
             // ⚠️ 支点是**手臂的正中心**，不是内侧边。
             //
             // 手一共 8 格长、外面只露 4 格，所以正中心正好落在肩膀那条线上

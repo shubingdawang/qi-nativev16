@@ -14,6 +14,25 @@ struct BeadListView: View {
     @State private var creating = false
     @State private var pickedRef: PhotosPickerItem?
     @State private var cropNew: CropJob?
+    @State private var keyword = ""
+    @State private var newName = ""
+    @State private var renamingItem: BeadProject?
+    @State private var renameText = ""
+
+    private var shownProjects: [BeadProject] {
+        let k = keyword.trimmingCharacters(in: .whitespaces)
+        guard !k.isEmpty else { return store.projects }
+        return store.projects.filter { $0.name.localizedCaseInsensitiveContains(k) }
+    }
+
+    /// 新板起名：她填了用她的，没填就「拼豆 N」
+    private func named(_ p: BeadProject) -> BeadProject {
+        var p = p
+        let n = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !n.isEmpty { p.name = n; store.save(p) }
+        newName = ""
+        return p
+    }
 
     /// 用裁好的图建一块新板
     private func startWith(_ img: UIImage) {
@@ -22,6 +41,7 @@ struct BeadListView: View {
         var p = store.create(size: newSize, refImage: name)
         p.fitToReference(img)
         store.save(p)
+        p = named(p)
         creating = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { editing = p }
     }
@@ -53,6 +73,15 @@ struct BeadListView: View {
                                 .fill(Theme.softFillDeep))
                     }
                     .buttonStyle(.plain)
+                }
+
+                if store.projects.count > 3 || !keyword.isEmpty {
+                    HStack(spacing: 6) {
+                        Image(systemName: Icon.search).font(.app(12)).foregroundStyle(Theme.textMuted(scheme))
+                        TextField("按名字找", text: $keyword).font(.app(13)).textFieldStyle(.plain)
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 9)
+                    .background(Capsule().fill(Theme.softFillDeep))
                 }
 
                 if store.projects.isEmpty {
@@ -96,7 +125,7 @@ struct BeadListView: View {
                 }
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 12)], spacing: 12) {
-                    ForEach(store.projects) { p in
+                    ForEach(shownProjects) { p in
                         Button { editing = p } label: {
                             VStack(spacing: 6) {
                                 BeadThumb(project: p)
@@ -113,11 +142,17 @@ struct BeadListView: View {
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
+                            Button { renameText = p.name; renamingItem = p } label: {
+                                Label("改名", systemImage: "pencil")
+                            }
                             Button(role: .destructive) { deleting = p } label: {
                                 Label("删除", systemImage: Icon.trash)
                             }
                         }
                     }
+                }
+                if shownProjects.isEmpty && !keyword.isEmpty {
+                    Text("没有叫「\(keyword)」的板").font(.app(12)).foregroundStyle(Theme.textMuted(scheme))
                 }
             }
             .padding(.horizontal, 16)
@@ -137,6 +172,18 @@ struct BeadListView: View {
                 importPick = nil
             }
         }
+        .alert("改名", isPresented: Binding(get: { renamingItem != nil },
+                                          set: { if !$0 { renamingItem = nil } })) {
+            TextField("名字", text: $renameText)
+            Button("取消", role: .cancel) { renamingItem = nil }
+            Button("好") {
+                if var p = renamingItem {
+                    let n = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !n.isEmpty { p.name = n; store.save(p) }
+                }
+                renamingItem = nil
+            }
+        }
         .confirmationDialog("删除这块拼豆板？", isPresented: Binding(get: { deleting != nil },
                                                              set: { if !$0 { deleting = nil } }),
                             titleVisibility: .visible) {
@@ -151,6 +198,11 @@ struct BeadListView: View {
     private var createSheet: some View {
         VStack(spacing: 18) {
             Text("新的拼豆板").font(.app(16, weight: .semibold)).padding(.top, 22)
+            TextField("起个名字（可以不填）", text: $newName)
+                .font(.app(14))
+                .padding(.horizontal, 12).padding(.vertical, 9)
+                .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
+                .padding(.horizontal, 20)
             Picker("大小", selection: $newSize) {
                 ForEach([16, 24, 32, 48, 64], id: \.self) { n in Text("\(n)×\(n)").tag(n) }
             }
@@ -158,7 +210,7 @@ struct BeadListView: View {
             .padding(.horizontal, 20)
             HStack(spacing: 12) {
                 Button {
-                    let p = store.create(size: newSize)
+                    let p = named(store.create(size: newSize))
                     creating = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { editing = p }
                 } label: {
@@ -661,6 +713,8 @@ struct BeadExportView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var look: BeadStore.Look = .pixel
     @State private var placing: PlacingImage?
+    @State private var cutting: CutJob?
+    @State private var animating: PlacingImage?
 
     var body: some View {
         NavigationStack {
@@ -686,9 +740,35 @@ struct BeadExportView: View {
                         .background(Capsule().fill(Color.accentColor))
                 }
                 .padding(.horizontal, 24)
+                HStack(spacing: 10) {
+                    Button {
+                        cutting = CutJob(cut: OutfitCutter(w: project.w, h: project.h, cells: project.cells))
+                    } label: {
+                        Label("做成 clawd 的衣服", systemImage: "tshirt").font(.app(13.5, weight: .medium))
+                            .frame(maxWidth: .infinity).padding(.vertical, 11)
+                            .background(Capsule().fill(Theme.softFillDeep))
+                    }
+                    Button {
+                        animating = PlacingImage(image: BeadStore.render(project, look: .pixel, cellPx: 8))
+                    } label: {
+                        Label("做成动图", systemImage: "sparkles").font(.app(13.5, weight: .medium))
+                            .frame(maxWidth: .infinity).padding(.vertical, 11)
+                            .background(Capsule().fill(Theme.softFillDeep))
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 24)
+                Text("「做成 clawd 的衣服」：画的是穿着衣服的 clawd 就行，会自动抠掉他自己的身子，穿上后跟着他所有动作走。")
+                    .font(.app(11))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 28)
                 Spacer()
             }
             .padding(.top, 16)
+            .fullScreenCover(item: $cutting) { job in
+                OutfitCutView(cut: job.cut, name: project.name)
+            }
+            .fullScreenCover(item: $animating) { a in GifMakerView(image: a.image, name: project.name) }
             .navigationTitle("导出")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button("关闭") { dismiss() } } }
@@ -737,6 +817,7 @@ struct ImportPlacementView: View {
     @State private var offset: CGSize = .zero
     @State private var offsetBase: CGSize = .zero
     @State private var done: String?
+    @State private var autoCut: CutJob?
 
     var body: some View {
         NavigationStack {
@@ -808,6 +889,16 @@ struct ImportPlacementView: View {
                             }
                         }
                         .pickerStyle(.segmented)
+                        Button {
+                            if let g = OutfitCutter.grid(from: image) {
+                                autoCut = CutJob(cut: OutfitCutter(w: g.w, h: g.h, cells: g.cells))
+                            }
+                        } label: {
+                            Label("画的是穿着衣服的 clawd？自动抠出衣服", systemImage: "scissors")
+                                .font(.app(12.5))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(app.settings.accentColor)
                         HStack {
                             TextField("名字，如：小草帽", text: $wearName)
                                 .font(.app(13))
@@ -834,6 +925,7 @@ struct ImportPlacementView: View {
                 .padding(.bottom, 12)
             }
             .padding(.top, 10)
+            .fullScreenCover(item: $autoCut) { job in OutfitCutView(cut: job.cut, name: source) }
             .navigationTitle("摆好再存")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button("关闭") { dismiss() } } }
@@ -887,7 +979,8 @@ struct ImportPlacementView: View {
             }
         case .sticker:
             let img = rendered(px: 512)
-            if let data = img.pngData(), StickerStore.shared.add(data: data, ext: "png", owner: "user") != nil {
+            if let data = img.pngData(), var s = StickerStore.shared.add(data: data, ext: "png", owner: "user") {
+                if !source.isEmpty { s.name = source; StickerStore.shared.update(s) }
                 done = "已存到表情包。"
             } else {
                 done = "没存上，再试一次。"
@@ -903,6 +996,12 @@ struct ImportPlacementView: View {
             }
         }
     }
+}
+
+/// 要抠的那套衣服
+struct CutJob: Identifiable {
+    let id = UUID()
+    let cut: OutfitCutter
 }
 
 /// 要裁的那张图

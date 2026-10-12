@@ -12,6 +12,9 @@ struct CustomWear: Codable, Identifiable, Hashable {
     var imageName: String
     var slot: String
     var createdAt = Date()
+    /// 袖子（跟着手转的那两块，见 `OutfitCutter`）。没有就是 nil
+    var armL: String?
+    var armR: String?
 }
 
 extension CustomWear {
@@ -22,6 +25,8 @@ extension CustomWear {
         imageName = (try? c.decodeIfPresent(String.self, forKey: .imageName)) ?? ""
         slot = (try? c.decodeIfPresent(String.self, forKey: .slot)) ?? "head"
         createdAt = (try? c.decodeIfPresent(Date.self, forKey: .createdAt)) ?? Date()
+        armL = (try? c.decodeIfPresent(String.self, forKey: .armL)) ?? nil
+        armR = (try? c.decodeIfPresent(String.self, forKey: .armR)) ?? nil
     }
 }
 
@@ -55,9 +60,31 @@ final class CustomWearStore: ObservableObject {
         return item
     }
 
+    /// 她画的一整套（`OutfitCutter` 抠出来的）：身子那层 + 两只袖子
+    @discardableResult
+    func addOutfit(_ layers: OutfitCutter.Layers, name: String) -> CustomWear? {
+        guard var item = add(layers.body, slot: .outer, name: name) else { return nil }
+        item.armL = layers.left.flatMap { ImageStore.save($0) }
+        item.armR = layers.right.flatMap { ImageStore.save($0) }
+        items[0] = item
+        return item
+    }
+
+    /// 身上穿着的那几件里，左手 / 右手的袖子
+    func sleeve(_ wornIDs: [String], left: Bool) -> UIImage? {
+        for id in wornIDs where id.hasPrefix("cw_") {
+            guard let item = items.first(where: { $0.id == id }),
+                  let name = left ? item.armL : item.armR else { continue }
+            return ImageStore.cached(name)
+        }
+        return nil
+    }
+
     func delete(_ id: String) {
         guard let i = items.firstIndex(where: { $0.id == id }) else { return }
         if ClawdStore.shared.isWearing(id) { ClawdStore.shared.wear(id) }
+        if let a = items[i].armL { ImageStore.delete(a) }
+        if let a = items[i].armR { ImageStore.delete(a) }
         ImageStore.delete(items[i].imageName)
         items.remove(at: i)
     }

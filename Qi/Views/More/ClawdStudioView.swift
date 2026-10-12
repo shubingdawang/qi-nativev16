@@ -154,6 +154,7 @@ struct ClawdStudioView: View {
     @State private var name = ""
     @State private var desc = ""
     @State private var notice: String?
+    @State private var animating: GifStart?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -172,11 +173,26 @@ struct ClawdStudioView: View {
                     Text("保存到表情库").font(.app(14))
                 }
             }
+            // 现在这张拿去加字、加动画
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Task { @MainActor in
+                        if let d = await canvas.snapshot(), let img = UIImage(data: d) {
+                            animating = GifStart(image: img, name: "")
+                        } else {
+                            notice = "画面还没准备好，等一下再试。"
+                        }
+                    }
+                } label: {
+                    Image(systemName: "sparkles")
+                }
+            }
         }
         .onAppear { rerender() }
         .onChange(of: svg) { _, _ in rerender() }
         .onChange(of: css) { _, _ in rerender() }
         .sheet(isPresented: $saving) { saveSheet }
+        .fullScreenCover(item: $animating) { g in GifMakerView(image: g.image, name: g.name) }
         .alert("提示", isPresented: Binding(get: { notice != nil },
                                           set: { if !$0 { notice = nil } })) {
             Button("好") { notice = nil }
