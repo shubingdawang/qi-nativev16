@@ -129,6 +129,31 @@ struct OutfitCutter {
         return out
     }()
 
+    /// clawd 身子（不算手脚）在画布上哪几格
+    static let bodyCells: [(Int, Int)] = {
+        var out: [(Int, Int)] = []
+        for (y, row) in ClawdSprites.idle.rows.enumerated() where y >= ClawdRig.bodyTop && y < ClawdRig.legTop {
+            for (x, ch) in row.enumerated() where ch != "." && x >= ClawdRig.bodyLeft && x <= ClawdRig.bodyRight {
+                out.append((x, y))
+            }
+        }
+        return out
+    }()
+
+    /// 衣服该盖住的地方却露出了 clawd 的身子：图纸上那儿是空的，他身上却有
+    func exposedBody() -> Int {
+        let rem = removed()
+        var n = 0
+        for (bx, by) in Self.bodyCells {
+            let gx = Int(((Double(bx) + 0.5) - offX) / scale)
+            let gy = Int(((Double(by) + 0.5) - offY) / scale)
+            guard gx >= 0, gy >= 0, gx < w, gy < h else { n += 1; continue }
+            let i = gy * w + gx
+            if !rem[i] && cells[i].isEmpty { n += 1 }
+        }
+        return n
+    }
+
     /// 眼睛被衣服盖住了几格
     func coveredEyes() -> Int {
         let rem = removed()
@@ -144,11 +169,13 @@ struct OutfitCutter {
         return n
     }
 
-    /// 眼睛被盖住的话，在附近上下左右挪一点、大小调一点，挑盖得最少、挪得最少的那个
+    /// 眼睛被盖住、或者身子露出一截的话，在附近上下左右挪一点、大小调一点，
+    /// 挑「盖眼睛 + 露身子」最少、挪得最少的那个（盖眼睛算两倍）
     mutating func uncoverEyes() {
-        guard coveredEyes() > 0 else { return }
+        func score() -> Int { coveredEyes() * 2 + exposedBody() }
+        guard score() > 0 else { return }
         let base = (s: scale, x: offX, y: offY)
-        var best = (cover: coveredEyes(), cost: 0.0, s: scale, x: offX, y: offY)
+        var best = (cover: score(), cost: 0.0, s: scale, x: offX, y: offY)
         let cx = (Self.target.x0 + Self.target.x1) / 2, by = Self.target.y1
         for k in [1.0, 0.96, 1.04, 0.92, 1.08] {
             for dy in stride(from: -2.5, through: 2.5, by: 0.5) {
@@ -156,7 +183,7 @@ struct OutfitCutter {
                     scale = base.s * k
                     offX = cx - (cx - base.x) * k + dx
                     offY = by - (by - base.y) * k + dy
-                    let c = coveredEyes()
+                    let c = score()
                     let cost = abs(dy) + abs(dx) + abs(k - 1) * 20
                     if c < best.cover || (c == best.cover && cost < best.cost) {
                         best = (c, cost, scale, offX, offY)
