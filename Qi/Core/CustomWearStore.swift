@@ -17,6 +17,9 @@ struct CustomWear: Codable, Identifiable, Hashable {
     var armR: String?
     /// 眼睛画在这件衣服上面（她画的整套衣服默认开）
     var eyesOnTop: Bool?
+    /// 眼睛挪几格（挪到她画眼睛的地方）
+    var eyeDX: Int?
+    var eyeDY: Int?
 }
 
 extension CustomWear {
@@ -30,6 +33,8 @@ extension CustomWear {
         armL = (try? c.decodeIfPresent(String.self, forKey: .armL)) ?? nil
         armR = (try? c.decodeIfPresent(String.self, forKey: .armR)) ?? nil
         eyesOnTop = (try? c.decodeIfPresent(Bool.self, forKey: .eyesOnTop)) ?? nil
+        eyeDX = (try? c.decodeIfPresent(Int.self, forKey: .eyeDX)) ?? nil
+        eyeDY = (try? c.decodeIfPresent(Int.self, forKey: .eyeDY)) ?? nil
     }
 }
 
@@ -68,6 +73,8 @@ final class CustomWearStore: ObservableObject {
     func addOutfit(_ layers: OutfitCutter.Layers, name: String, eyesOnTop: Bool = true) -> CustomWear? {
         guard var item = add(layers.body, slot: .outer, name: name) else { return nil }
         item.eyesOnTop = eyesOnTop
+        item.eyeDX = layers.eyeDX
+        item.eyeDY = layers.eyeDY
         item.armL = layers.left.flatMap { ImageStore.save($0) }
         item.armR = layers.right.flatMap { ImageStore.save($0) }
         items[0] = item
@@ -77,6 +84,16 @@ final class CustomWearStore: ObservableObject {
     /// 身上穿着的有没有要露眼睛的
     func eyesOnTop(_ wornIDs: [String]) -> Bool {
         wornIDs.contains { id in id.hasPrefix("cw_") && items.first(where: { $0.id == id })?.eyesOnTop == true }
+    }
+
+    /// 眼睛要挪几格（穿着的那件里第一件要露眼睛的）
+    func eyeShift(_ wornIDs: [String]) -> (dx: Int, dy: Int) {
+        for id in wornIDs where id.hasPrefix("cw_") {
+            if let item = items.first(where: { $0.id == id }), item.eyesOnTop == true {
+                return (item.eyeDX ?? 0, item.eyeDY ?? 0)
+            }
+        }
+        return (0, 0)
     }
 
     /// 身上穿着的那几件里，左手 / 右手的袖子

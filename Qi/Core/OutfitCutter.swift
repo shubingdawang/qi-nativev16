@@ -154,11 +154,34 @@ struct OutfitCutter {
         return n
     }
 
-    /// 眼睛被衣服盖住了几格
+    /// 她画的 clawd 眼睛（被身子围住的深色小块）落在画布哪儿。没画就是 nil
+    func drawnEyeCenter() -> (x: Double, y: Double)? {
+        let rem = removed()
+        var sx = 0.0, sy = 0.0, n = 0.0
+        for i in 0..<(w * h) where rem[i] && !clawdColors.contains(cells[i]) {
+            guard let (r, g, b) = Self.rgb(cells[i]), r + g + b < 240 else { continue }
+            sx += offX + (Double(i % w) + 0.5) * scale
+            sy += offY + (Double(i / w) + 0.5) * scale
+            n += 1
+        }
+        return n > 0 ? (sx / n, sy / n) : nil
+    }
+
+    /// 他的眼睛要挪几格，才落在她画眼睛的地方（眼睛露在外面时才挪）
+    var eyeShift: (dx: Int, dy: Int) {
+        guard eyesOnTop, let c = drawnEyeCenter(), !Self.eyeCells.isEmpty else { return (0, 0) }
+        let ex = Self.eyeCells.reduce(0.0) { $0 + Double($1.0) + 0.5 } / Double(Self.eyeCells.count)
+        let ey = Self.eyeCells.reduce(0.0) { $0 + Double($1.1) + 0.5 } / Double(Self.eyeCells.count)
+        return (Int((c.x - ex).rounded()), Int((c.y - ey).rounded()))
+    }
+
+    /// 眼睛被衣服盖住了几格（按挪过以后的位置算）
     func coveredEyes() -> Int {
         let rem = removed()
+        let sh = eyeShift
         var n = 0
-        for (ex, ey) in Self.eyeCells {
+        for (ex0, ey0) in Self.eyeCells {
+            let ex = ex0 + sh.dx, ey = ey0 + sh.dy
             // 这一格画布的中心落在图纸哪一格
             let gx = Int(((Double(ex) + 0.5) - offX) / scale)
             let gy = Int(((Double(ey) + 0.5) - offY) / scale)
@@ -200,6 +223,24 @@ struct OutfitCutter {
         var body: UIImage
         var left: UIImage?
         var right: UIImage?
+        var eyeDX = 0
+        var eyeDY = 0
+    }
+
+    /// 眼睛挪走以后，原来那双的位置用他身子的颜色盖上（不然会有四只眼睛）。
+    /// 上下各多盖一行：闭眼、笑眼那几帧眼睛的位置略有不同
+    private func eyePatch() -> [(CGRect, UIColor)] {
+        let sh = eyeShift
+        guard sh.dx != 0 || sh.dy != 0 else { return [] }
+        let col = UIColor(ClawdSprites.idle.palette["p"] ?? .orange)
+        var seen = Set<Int>()
+        var out: [(CGRect, UIColor)] = []
+        for (x, y) in Self.eyeCells {
+            for yy in (y - 1)...(y + 1) where seen.insert(yy * 64 + x).inserted {
+                out.append((CGRect(x: x, y: yy, width: 1, height: 1), col))
+            }
+        }
+        return out
     }
 
     /// 一格画布 = 多少像素
@@ -214,7 +255,7 @@ struct OutfitCutter {
         let rightX = CGFloat(ClawdRig.bodyRight + 1 - ClawdRig.armOut)
         let armY = CGFloat(ClawdRig.armRow)
         // 每一格归哪一层
-        var bodyCells: [(CGRect, UIColor)] = []
+        var bodyCells: [(CGRect, UIColor)] = eyePatch()
         var leftCells: [(CGRect, UIColor)] = []
         var rightCells: [(CGRect, UIColor)] = []
         for i in 0..<(w * h) where !rem[i] {
@@ -233,9 +274,11 @@ struct OutfitCutter {
         }
         let body = Self.paint(bodyCells, size: CGSize(width: n, height: n))
         let sleeveSize = CGSize(width: armW + 2 * M, height: armH + 2 * M)
+        let sh = eyeShift
         return Layers(body: body,
                       left: leftCells.isEmpty ? nil : Self.paint(leftCells, size: sleeveSize),
-                      right: rightCells.isEmpty ? nil : Self.paint(rightCells, size: sleeveSize))
+                      right: rightCells.isEmpty ? nil : Self.paint(rightCells, size: sleeveSize),
+                      eyeDX: sh.dx, eyeDY: sh.dy)
     }
 
     private static func paint(_ cells: [(CGRect, UIColor)], size: CGSize) -> UIImage {
@@ -293,7 +336,8 @@ struct OutfitCutter {
             if eyesOnTop {
                 g.setFillColor(UIColor(s.palette["k"] ?? .black).cgColor)
                 for (x, y) in Self.eyeCells {
-                    g.fill(CGRect(x: CGFloat(x) * k, y: CGFloat(y) * k, width: k, height: k))
+                    g.fill(CGRect(x: CGFloat(x + layers.eyeDX) * k, y: CGFloat(y + layers.eyeDY) * k,
+                                  width: k, height: k))
                 }
             }
         }

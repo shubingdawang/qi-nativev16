@@ -130,8 +130,9 @@ struct OutfitCutView: View {
                 nudge("下", "arrow.down") { cut.offY += 0.5; refresh() }
             }
             HStack {
-                Toggle("眼睛露在衣服外面", isOn: Binding(get: { cut.eyesOnTop },
-                                                    set: { cut.eyesOnTop = $0; refresh() }))
+                Toggle(cut.drawnEyeCenter() != nil ? "眼睛按我画的位置" : "眼睛露在衣服外面",
+                       isOn: Binding(get: { cut.eyesOnTop },
+                                     set: { cut.eyesOnTop = $0; cut.autoFit(); refresh() }))
                     .font(.app(13))
                     .tint(app.settings.accentColor)
                 Spacer(minLength: 12)

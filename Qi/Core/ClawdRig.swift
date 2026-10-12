@@ -220,7 +220,10 @@ struct ClawdRigView: View {
                 }
                 // 她画的衣服要露眼睛：眼睛盖回衣服上面
                 if CustomWearStore.shared.eyesOnTop(wornIDs) {
+                    // 挪到她画眼睛的那个位置（原来那双在衣服那一层已经用身子的颜色盖上了）
+                    let sh = CustomWearStore.shared.eyeShift(wornIDs)
                     PixelSpriteView(sprite: ClawdRig.eyesOnly(body0), scale: scale)
+                        .offset(x: CGFloat(sh.dx) * scale, y: CGFloat(sh.dy) * scale)
                 }
             }
             }
