@@ -214,8 +214,23 @@ enum VoiceStore {
         try? FileManager.default.removeItem(at: url(name))
     }
 
-    /// 大概多少秒。mp3 没读头，按常见码率估个数，只是给进度条看的
+    /// 合成出来的语音存之前先修一遍（长停顿剪短、冲上去的地方压回来），修不了就原样存
+    static func saveTidied(_ data: Data) async -> String? {
+        let t = await VoiceTidy.tidy(data)
+        return save(t.data, ext: t.ext)
+    }
+
+    nonisolated(unsafe) private static let lengths = NSCache<NSString, NSNumber>()
+
+    /// 多少秒。先读文件头拿真长度（剪过停顿的 m4a 码率跟她录的不一样，按大小估会估错），
+    /// 读不了再按常见码率估个数
     static func duration(_ name: String) -> Double {
+        if let n = lengths.object(forKey: name as NSString) { return n.doubleValue }
+        if let f = try? AVAudioFile(forReading: url(name)), f.fileFormat.sampleRate > 0, f.length > 0 {
+            let s = max(1, Double(f.length) / f.fileFormat.sampleRate)
+            lengths.setObject(NSNumber(value: s), forKey: name as NSString)
+            return s
+        }
         let path = url(name)
         guard let size = try? FileManager.default
             .attributesOfItem(atPath: path.path)[.size] as? Int else { return 0 }

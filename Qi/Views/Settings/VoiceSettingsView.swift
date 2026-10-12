@@ -226,7 +226,7 @@ struct VoiceSettingsView: View {
         Task {
             do {
                 let data = try await TTSAPI.synthesize("在呢，听得见吗。", with: voice)
-                if let file = VoiceStore.save(data) {
+                if let file = await VoiceStore.saveTidied(data) {
                     VoicePlayer.shared.toggle(file)
                     notice = "放出来了"
                     // 顺手替他听一遍**他自己的声音**。

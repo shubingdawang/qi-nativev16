@@ -3914,7 +3914,7 @@ final class AppState: ObservableObject {
             }
             return spoken.note.isEmpty ? "念不出来" : spoken.note
         }
-        guard let file = VoiceStore.save(data) else { return "存不下来" }
+        guard let file = await VoiceStore.saveTidied(data) else { return "存不下来" }
         guard let ci2 = index(of: conversationID),
               let mi2 = conversations[ci2].messages.firstIndex(where: { $0.id == messageID })
         else { return nil }
@@ -4480,9 +4480,9 @@ final class AppState: ObservableObject {
             // 回听用的那条：两段都是合成出来的才拼（mp3 帧直接接得上）
             if let a = headSpoken.data {
                 if let t = tailSpoken {
-                    if let b = t.data { reply.voiceFile = VoiceStore.save(a + b) }
+                    if let b = t.data { reply.voiceFile = await VoiceStore.saveTidied(a + b) }
                 } else {
-                    reply.voiceFile = VoiceStore.save(a)
+                    reply.voiceFile = await VoiceStore.saveTidied(a)
                 }
             }
             reply.systemVoice = headSpoken.systemVoice || (tailSpoken?.systemVoice ?? false)
@@ -4493,7 +4493,7 @@ final class AppState: ObservableObject {
         // 出声。**挨个试配着的音色，全挂了退到系统的声音**——
         // 以前只用第一个，那一家挂掉就彻底没声音。
         let spoken = await TTSAPI.speak(VoiceDirection.forSpeech(raw), using: voices)
-        if let data = spoken.data, let file = VoiceStore.save(data) {
+        if let data = spoken.data, let file = await VoiceStore.saveTidied(data) {
             reply.voiceFile = file
         }
         reply.systemVoice = spoken.systemVoice
@@ -6022,7 +6022,7 @@ final class AppState: ObservableObject {
                         ? "配的音色都没通，语音发不出去（\(spoken.note)）。要不直接打字说？"
                         : "念不出来。", true)
             }
-            guard let file = VoiceStore.save(data) else {
+            guard let file = await VoiceStore.saveTidied(data) else {
                 return ("语音存不下来，空间可能满了。", true)
             }
             if let cid = activeToolConversationID, let i = index(of: cid) {
@@ -8256,6 +8256,13 @@ final class AppState: ObservableObject {
         if !waked.actions.isEmpty {
             conversations[ci].messages[mi].content = waked.clean
             WakeControlMarker.apply(waked.actions)
+        }
+        // 他嘴上说了「十分钟后叫你」「明早七点喊你」却没写 [[叫我:]]：替他约上（见 `TimedPromise`）
+        if settings.wake.enabled,
+           !waked.actions.contains(where: { $0.kind == "叫我" }),
+           let hit = TimedPromise.find(in: conversations[ci].messages[mi].content) {
+            let one = WakeControl.shared.scheduleSelf(at: hit.at, note: "你答应过她：" + hit.sentence)
+            WakeEngine.shared.scheduleSelfWakeNotice(one)
         }
         // 这一轮提示词里投过的 missed：**回复真的落定了才算告诉过他**。
         // ⚠️ 报了错、或者一个字都没回的那一轮不算——他其实没读到。
