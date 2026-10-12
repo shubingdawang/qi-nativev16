@@ -1901,6 +1901,16 @@ struct MessageListView: View {
     @ObservedObject private var jump = ChatJump.shared
     /// 刚跳到的那一条：亮一下，两秒后淡掉
     @State private var flashID: UUID?
+    /// 哪一轮翻到了旧版（这一轮 → 翻页的那一条）。旧版是那一轮整段的字，
+    /// 后面跟着的语音、卡片是现在这版的，翻到旧版时一起收起来
+    @State private var oldPage: [UUID: UUID] = [:]
+
+    /// 这一条要不要因为同一轮前面那条翻到了旧版而收起来
+    private func hiddenByPage(_ stored: ChatMessage, at index: Int) -> Bool {
+        guard let t = stored.turnID, let pid = oldPage[t], pid != stored.id,
+              let pi = conversation.messages.firstIndex(where: { $0.id == pid }) else { return false }
+        return pi < index
+    }
 
     @EnvironmentObject var app: AppState
     // 他正在蹦的字（见 `LiveStream`）。
@@ -1963,7 +1973,9 @@ struct MessageListView: View {
                             DayMark(date: day.date, hourOnly: day.sameDay)
                         }
                         // 正在出字的那一条自己订阅 LiveStream，别的不动
-                        if stored.isStreaming {
+                        if hiddenByPage(stored, at: index) {
+                            EmptyView()
+                        } else if stored.isStreaming {
                             LiveRow(stored: stored) { merged in
                                 bubbleRow(tokenPlaced(merged, at: index), stored: stored, index: index)
                             }
@@ -2230,7 +2242,11 @@ struct MessageListView: View {
                 onOpenLibrary: { place in onOpenLibrary(place) },
                 onCloseMenu: onCloseMenu,
                 showsHeader: showsHeader(at: index),
-                onMention: { onMention($0) }
+                onMention: { onMention($0) },
+                onPage: { p in
+                    guard let t = message.turnID else { return }
+                    oldPage[t] = p > 0 ? message.id : nil
+                }
             )
             .equatable()
             .background(flashBand(message.id))
@@ -2833,7 +2849,11 @@ private struct LiveTyping: View {
 
     var body: some View {
         let m = live.merged(last)
-        if m.role != .assistant
+        if let run = m.toolRuns.last, m.role == .assistant, !run.finished {
+            // 正在跑工具：点点后面写他在干什么
+            TypingBubble(name: m.senderName, status: AppState.activityText(for: NativeTools.shortName(run.toolName)) + "…")
+                .padding(.top, 2)
+        } else if m.role != .assistant
             || (m.content.isEmpty && m.toolRuns.isEmpty && (m.reasoning ?? "").isEmpty) {
             TypingBubble(name: m.role == .assistant ? m.senderName : "")
                 .padding(.top, 2)

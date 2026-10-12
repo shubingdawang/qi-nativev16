@@ -2034,7 +2034,20 @@ final class AppState: ObservableObject {
                     for call in calls {
                         if Task.isCancelled { break }
                         self.activeToolConversationID = conversationID
+                        // 跑之前先挂一条「正在做」：录一段长语音、做网页这种要几十秒，
+                        // 那几十秒里屏幕上得看得见他在干什么，不能只剩三个点（她报的「三十秒才出来」）
+                        let runningID = UUID()
+                        self.withAssistant(assistantID, in: conversationID) { m in
+                            var one = ToolRun(toolName: call.name, arguments: call.arguments)
+                            one.id = runningID
+                            one.serverName = NativeTools.isNative(call.name) ? "本机" : "—"
+                            one.reasonMark = (m.reasoning ?? "").count
+                            m.toolRuns.append(one)
+                        }
                         let run = await self.execute(call)
+                        self.withAssistant(assistantID, in: conversationID) { m in
+                            m.toolRuns.removeAll { $0.id == runningID }
+                        }
                         self.appendToolRun(run, to: assistantID, in: conversationID)
                         apiMessages.append(ChatAPI.OutgoingMessage(
                             role: "tool", text: run.result, toolCallID: call.id))
@@ -3624,6 +3637,8 @@ final class AppState: ObservableObject {
             return "在翻你的工资本"
         case "candy_jar", "candy_status":
             return "在摸糖罐"
+        case "send_voice_message":
+            return "在录语音"
         case "world_look", "world_act":
             return "在小岛上"
         case "get_pulse_status":

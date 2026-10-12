@@ -39,6 +39,8 @@ struct MessageBubbleView: View {
     var showsHeader: Bool = true
     /// 长按头像，把这个人 @ 进输入框。群聊里才接。
     var onMention: (String) -> Void = { _ in }
+    /// 翻到第几版报上去：翻到旧版时，这一轮后面那几条（语音、卡片）是现在这版的，得一起收起来
+    var onPage: (Int) -> Void = { _ in }
     /// 翻到第几版。0 = 现在这版，1 起是改之前的旧版。
     /// **放在存储属性后面**——夹在中间会把外面那个按顺序传参的调用搞乱。
     @State private var editPage = 0
@@ -619,6 +621,7 @@ struct MessageBubbleView: View {
         HStack(spacing: 8) {
             Button {
                 editPage = max(0, editPage - 1)
+                onPage(editPage)
             } label: {
                 Image(systemName: "chevron.left").font(.app(10))
             }
@@ -630,6 +633,7 @@ struct MessageBubbleView: View {
 
             Button {
                 editPage = min(message.edits.count, editPage + 1)
+                onPage(editPage)
             } label: {
                 Image(systemName: "chevron.right").font(.app(10))
             }
@@ -2180,6 +2184,8 @@ struct DashedLine: Shape {
 struct TypingBubble: View {
 
     var name: String = ""
+    /// 点点后面那句（「在录语音」）。空着就只有三个点
+    var status: String = ""
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
     @State private var phase = 0
@@ -2201,6 +2207,12 @@ struct TypingBubble: View {
                             .fill(Theme.textMuted(scheme).opacity(phase == i ? 0.85 : 0.3))
                             .frame(width: 6, height: 6)
                             .offset(y: phase == i ? -2.5 : 0)
+                    }
+                    if !status.isEmpty {
+                        Text(status)
+                            .font(.app(12))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                            .padding(.leading, 4)
                     }
                 }
                 .padding(.horizontal, 15)
