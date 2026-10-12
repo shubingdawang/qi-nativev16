@@ -114,7 +114,7 @@ private struct FlowChips: View {
     }
 }
 
-private struct ChipFlow: Layout {
+private struct ChipFlow: SwiftUI.Layout {
     var spacing: CGFloat
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
