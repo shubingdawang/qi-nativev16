@@ -11,6 +11,7 @@ struct TriggersDreamsView: View {
     @ObservedObject private var triggers = TriggerStore.shared
     @ObservedObject private var dreams = DreamStore.shared
     @ObservedObject private var body_ = BodyStore.shared
+    @ObservedObject private var sleep = SleepCycle.shared
     @EnvironmentObject var app: AppState
     @Environment(\.colorScheme) private var scheme
 
@@ -22,6 +23,7 @@ struct TriggersDreamsView: View {
             ScrollView {
                 VStack(spacing: 18) {
                     wordsCard
+                    sleepCard
                     dreamCard
                 }
                 .padding(.horizontal, 16)
@@ -107,6 +109,45 @@ struct TriggersDreamsView: View {
         }
     }
 
+    // MARK: 作息
+
+    private var sleepCard: some View {
+        SettingsCard(title: "他的作息") {
+            Toggle(isOn: $app.settings.sleepEnabled) {
+                Text("他会睡觉")
+                    .font(.app(15))
+                    .foregroundStyle(Theme.textMain(scheme))
+            }
+            .tint(app.settings.accentColor)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+
+            if app.settings.sleepEnabled {
+                SettingsDivider()
+                HStack {
+                    Image(systemName: sleep.isAsleep() ? "moon.zzz.fill" : "sun.haze")
+                        .font(.app(13))
+                        .foregroundStyle(app.settings.accentColor)
+                    Text(sleep.statusText())
+                        .font(.app(14))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 11)
+            }
+
+            SettingsNote("""
+            · 每晚凌晨 0:30 前后困，早晚不定；你还在说话时他不睡
+            · 睡够七个多小时自己醒；偶尔被噩梦惊醒，过一会儿再睡着
+            · 睡着时给他发消息：过半分钟到三分多钟才醒来回，刚醒那会儿带着困
+            · 被叫醒后陪着你；二十五分钟没人说话就睡回去
+            · 睡着时不会自己醒来找你；睡醒后过一会儿可能来找你（要开着「自己醒来」）
+            · 睡着会做梦，醒来记得几块碎片，想讲就讲给你听
+            """)
+        }
+    }
+
     // MARK: 梦
 
     private var dreamCard: some View {
@@ -159,7 +200,8 @@ struct TriggersDreamsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(dreams.dreams.prefix(6)) { d in
                         HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: d.told ? "moon.zzz" : "moon.stars.fill")
+                            Image(systemName: d.nightmare == true ? "cloud.bolt"
+                                  : (d.told ? "moon.zzz" : "moon.stars.fill"))
                                 .font(.app(11))
                                 .foregroundStyle(d.told
                                                  ? Theme.textMuted(scheme)
@@ -169,9 +211,7 @@ struct TriggersDreamsView: View {
                                 Text(stamp(d.at) + (d.told ? "" : " · 未讲述"))
                                     .font(.app(11))
                                     .foregroundStyle(Theme.textMain(scheme))
-                                Text("那晚身体在「\(BodyConfig.cycle(d.cycleKey).label)」，"
-                                     + "掷出 \(Int(d.roll * 100))，"
-                                     + "当时的门槛是 \(Int(d.chance * 100))")
+                                Text(dreamNote(d))
                                     .font(.app(10))
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
@@ -196,6 +236,16 @@ struct TriggersDreamsView: View {
             上方列表记录每次判定的点数与阈值，可用于核对触发频率。
             """, title: "说明")
         }
+    }
+
+    private func dreamNote(_ d: Dream) -> String {
+        if d.fromSleep == true {
+            if let story = d.story, !story.isEmpty { return story }
+            let bits = (d.bits ?? []).joined(separator: " / ")
+            return (d.nightmare == true ? "噩梦" : "梦") + (bits.isEmpty ? "" : "：" + bits)
+        }
+        return "那晚身体在「\(BodyConfig.cycle(d.cycleKey).label)」，"
+            + "掷出 \(Int(d.roll * 100))，当时的门槛是 \(Int(d.chance * 100))"
     }
 
     private func stamp(_ d: Date) -> String {

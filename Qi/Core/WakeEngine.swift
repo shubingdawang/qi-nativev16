@@ -163,6 +163,7 @@ final class WakeEngine: ObservableObject {
         // 只在 `opportunity` 里加是不够的——兜底通知是另一条进来的路，
         // 漏一条就等于没加。（「上下游各做一半、中间没接上」那个教训。）
         guard !app.spokeRecently(within: config.idleDelay) else { return }
+        guard !SleepCycle.shared.isAsleep() else { return }
 
         running = true
         var s = state
@@ -219,8 +220,8 @@ final class WakeEngine: ObservableObject {
             let hours = -log(u) / lambda
             t = t.addingTimeInterval(hours * 3600)
             guard t < end else { break }
-            // 安静时段不吵
-            if isQuiet(t) { continue }
+            // 安静时段不吵；他多半睡着的点也不排
+            if isQuiet(t) || SleepCycle.shared.likelyAsleep(at: t) { continue }
             out.append(t)
             budget -= 1
         }
@@ -252,6 +253,11 @@ final class WakeEngine: ObservableObject {
 
     /// 把从上次到现在这段时间补算完。中间攒够 θ 就醒一次。
     func advance(now: Date = Date()) {
+        // 他睡觉那一套先补算。刚自然醒（两小时以内）：过一会儿给他一次机会来找她
+        if case .wokeUp(let at)? = SleepCycle.shared.advance(now: now),
+           now.timeIntervalSince(at) < 2 * 3600 {
+            aimNext(afterMinutes: Double.random(in: 8...40))
+        }
         // 他设的控制先过一遍期（到期回默认），调制只在这一次里算一次——
         // 下面那个循环最多跑七天、一分钟一步，每步都去读欲望和念头池太贵。
         WakeControl.shared.expire(now: now)
@@ -367,6 +373,8 @@ final class WakeEngine: ObservableObject {
         guard let app else { return }
         guard state.firedToday < config.dailyLimit else { return }
         guard !isQuiet(now) else { return }
+        // 他睡着呢
+        guard !SleepCycle.shared.isAsleep(now) else { return }
         // 勿扰开着就别醒。
         //
         // 安静时段管的是**每天固定那几个钟头**，勿扰管的是**临时的**：
@@ -606,6 +614,8 @@ final class WakeEngine: ObservableObject {
     private func firePrecise(_ ctx: AppState.PreciseWakeContext, at now: Date,
                              done: @escaping @MainActor (Bool) -> Void) {
         guard let app else { return }
+        // 睡着的话，到点这一下把他叫起来
+        SleepCycle.shared.rouse(by: ctx.source, now: now)
         running = true
         let before = (fired: state.firedToday, last: state.lastFire)
         var s = state

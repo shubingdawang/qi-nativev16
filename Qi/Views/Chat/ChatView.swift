@@ -2846,10 +2846,14 @@ private struct LiveRow<Content: View>: View {
 private struct LiveTyping: View {
     let last: ChatMessage
     @ObservedObject private var live = LiveStream.shared
+    @EnvironmentObject private var app: AppState
 
     var body: some View {
         let m = live.merged(last)
-        if let run = m.toolRuns.last, m.role == .assistant, !run.finished {
+        if m.role == .assistant, m.content.isEmpty, !app.dozing.isEmpty {
+            TypingBubble(name: m.senderName, status: "睡着了…")
+                .padding(.top, 2)
+        } else if let run = m.toolRuns.last, m.role == .assistant, !run.finished {
             // 正在跑工具：点点后面写他在干什么
             TypingBubble(name: m.senderName, status: AppState.activityText(for: NativeTools.shortName(run.toolName)) + "…")
                 .padding(.top, 2)

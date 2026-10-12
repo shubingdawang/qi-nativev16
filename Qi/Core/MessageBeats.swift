@@ -168,6 +168,7 @@ enum MessageBeats {
         text = MoodTagMarker.extract(text).clean
         // 调唤醒方式那几个记号也只剥不认（认在 `AppState` 收尾那一处）
         text = WakeControlMarker.extract(text).clean
+        text = DreamMarker.extract(text).clean
         // 他给图写的那句描述、跟她许的那个承诺，也只剥不认。
         //
         // 她报的：「我能看见他的 img。」——这两样以前只在落库那一步剥，

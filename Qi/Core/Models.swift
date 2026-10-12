@@ -862,6 +862,8 @@ struct AppSettings: Codable {
     var pricing = Pricing()
     /// 让他自己醒来。默认关着——醒一次就是一次调用。
     var wake = WakeConfig()
+    /// 他会睡觉：凌晨十二点到一点左右睡，睡饱了醒（见 `SleepCycle`）
+    var sleepEnabled: Bool = true
 
     /// 他的身体那一套。
     ///
@@ -1123,6 +1125,7 @@ extension AppSettings {
         searxHost = (try? c.decodeIfPresent(String.self, forKey: .searxHost)) ?? ""
         pricing = (try? c.decodeIfPresent(Pricing.self, forKey: .pricing)) ?? Pricing()
         wake = (try? c.decodeIfPresent(WakeConfig.self, forKey: .wake)) ?? WakeConfig()
+        sleepEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .sleepEnabled)) ?? true
         bodyEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .bodyEnabled)) ?? true
         bodyByKeyword = (try? c.decodeIfPresent(Bool.self, forKey: .bodyByKeyword)) ?? false
         typingRhythm = (try? c.decodeIfPresent(Bool.self, forKey: .typingRhythm)) ?? true

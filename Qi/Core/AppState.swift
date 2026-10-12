@@ -79,6 +79,8 @@ final class AppState: ObservableObject {
 
     /// 正在请求中的会话 ID，用来禁用发送按钮
     @Published var runningConversationIDs: Set<UUID> = []
+    /// 他睡着、正被她的消息慢慢叫醒的那几个窗口
+    @Published var dozing: Set<UUID> = []
     /// 上一次叫他（她发消息、或者他自己醒来）出了错的那几窗：顶上显示「对方不在线」，
     /// 下一次成功说上话就撤掉
     @Published var offlineIDs: Set<UUID> = []
@@ -1883,9 +1885,20 @@ final class AppState: ObservableObject {
         // 照样会断。断了现在至少有「重试」可以点（v99 加的）。
         let bgTask = UIApplication.shared.beginBackgroundTask(withName: "qi.stream") { }
 
+        // 他睡着的话，被她的消息叫醒要一会儿（见 `SleepCycle`）
+        let nap = conv.space == ChatSpace.chat.rawValue && !conv.isGroup
+            ? SleepCycle.shared.herMessage() : nil
+
         let task = Task { @MainActor in
             defer { UIApplication.shared.endBackgroundTask(bgTask) }
             do {
+                if let nap {
+                    self.dozing.insert(conversationID)
+                    defer { self.dozing.remove(conversationID) }
+                    try? await Task.sleep(nanoseconds: UInt64(nap * 1_000_000_000))
+                }
+                // 等他醒的时候她按了停止：收尾 `cancelStream` 已经做了
+                if Task.isCancelled { return }
                 // 到回合数了就先滚一次雪球（她把「滚雪球压缩」关掉就直接跳过）。
                 // **必须在拼消息之前**——压完之后前面那堆原文才换成浓缩件。
                 //
@@ -4096,7 +4109,9 @@ final class AppState: ObservableObject {
         // 六道关卡（时间窗/她安静多久/冷却/周期概率）全在本机算，
         // 掷中了只是攒着——讲不讲要等她下次说话，
         // **绝不半夜自己开一次请求**（见 DreamStore 开头那段）。
-        DreamStore.shared.rollIfDue(lastHerMessageAt: lastHer)
+        if !settings.sleepEnabled {
+            DreamStore.shared.rollIfDue(lastHerMessageAt: lastHer)
+        }
     }
 
     /// 结算最近这一段聊天对身体的影响。
@@ -8257,6 +8272,12 @@ final class AppState: ObservableObject {
             conversations[ci].messages[mi].content = waked.clean
             WakeControlMarker.apply(waked.actions)
         }
+        // 他讲了梦，留了一句大概（见 `DreamMarker`）
+        let dreamt = DreamMarker.extract(conversations[ci].messages[mi].content)
+        if let story = dreamt.story {
+            conversations[ci].messages[mi].content = dreamt.clean
+            if let d = DreamStore.shared.untold { DreamStore.shared.markTold(d.id, story: story) }
+        }
         // 他嘴上说了「十分钟后叫你」「明早七点喊你」却没写 [[叫我:]]：替他约上（见 `TimedPromise`）
         if settings.wake.enabled,
            !waked.actions.contains(where: { $0.kind == "叫我" }),
@@ -8867,6 +8888,11 @@ final class AppState: ObservableObject {
         // 而且**绝不半夜自己开一次请求**。
         if let dream = DreamStore.shared.briefForModel() {
             sys += "\n\n" + dream
+        }
+        // 他睡没睡、刚被吵醒、过了平常睡的点（见 `SleepCycle`）
+        if conv.space == ChatSpace.chat.rawValue, !conv.isGroup,
+           let sleep = SleepCycle.shared.promptLine() {
+            sys += "\n\n" + sleep
         }
 
         // 她这会儿在听什么。**放着才带**，停了就一个字都不说。

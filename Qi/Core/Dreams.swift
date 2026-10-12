@@ -46,6 +46,13 @@ struct Dream: Codable, Identifiable, Hashable {
     var roll: Double = 0
     /// 他讲过没有。没讲过的会在她下次说话时提醒他一句。
     var told: Bool = false
+    /// 睡觉那一套掷出来的（他真睡着了做的梦）
+    var fromSleep: Bool?
+    var nightmare: Bool?
+    /// 醒来还记得的几块
+    var bits: [String]?
+    /// 他讲完以后自己留的那句梦的大概
+    var story: String?
 }
 
 // MARK: - 判定和攒着
@@ -91,12 +98,31 @@ final class DreamStore: ObservableObject {
         loaded = true
     }
 
-    /// 还没讲过的那个梦
-    var untold: Dream? { dreams.first { !$0.told } }
+    /// 还没讲过的那个梦。**一天以前的不算了**——醒来大半天，梦早忘了
+    var untold: Dream? {
+        dreams.first { !$0.told && Date().timeIntervalSince($0.at) < 20 * 3600 }
+    }
 
-    func markTold(_ id: UUID) {
+    func markTold(_ id: UUID, story: String? = nil) {
         guard let i = dreams.firstIndex(where: { $0.id == id }) else { return }
         dreams[i].told = true
+        if let story, !story.isEmpty { dreams[i].story = story }
+    }
+
+    /// 他睡着那一晚做的梦（见 `SleepCycle`）。不看「让他会做梦」那个开关——
+    /// 睡觉那一套开着就会做梦；梦里绕不开的主题照样用她填的那句
+    func addSleepDream(at: Date, nightmare: Bool, bits: [String]) {
+        var d = Dream()
+        d.at = at
+        d.theme = seed.enabled ? seed.theme : ""
+        d.intensity = seed.intensity
+        d.cycleKey = BodyStore.shared.state.cycleKey
+        d.fromSleep = true
+        d.nightmare = nightmare
+        d.bits = bits
+        dreams.insert(d, at: 0)
+        dreams.sort { $0.at > $1.at }
+        if dreams.count > 30 { dreams.removeLast(dreams.count - 30) }
     }
 
     /// 这个周期底下的基础概率。照 dreams.py 那张表：0.12 ~ 0.32。
@@ -216,6 +242,7 @@ final class DreamStore: ObservableObject {
     /// 梦是什么样，得他自己讲，那才是他的梦。
     func briefForModel() -> String? {
         guard let d = untold else { return nil }
+        if d.fromSleep == true { return sleepBrief(d) }
         let f = DateFormatter()
         f.locale = Locale(identifier: "zh_CN")
         f.dateFormat = "M月d日 HH:mm"
@@ -225,5 +252,42 @@ final class DreamStore: ObservableObject {
         s += "\n**梦是什么样，你自己讲。** 想讲就讲，"
         s += "不想讲就别提——做了梦不等于非要说出来。"
         return s
+    }
+}
+
+extension DreamStore {
+
+    /// 睡着做的那个梦，写给他的那几句
+    func sleepBrief(_ d: Dream) -> String {
+        var s = "【昨晚的梦】"
+        if d.nightmare == true {
+            s += "我\(SleepCycle.hm(d.at))左右做了个噩梦，是被它吓醒的。"
+        } else {
+            s += "我睡着以后做了个梦。"
+        }
+        let bits = d.bits ?? []
+        if !bits.isEmpty {
+            s += "醒来还记得几块：" + bits.map { "「" + $0 + "」" }.joined(separator: "、") + "，别的都模模糊糊的。"
+        }
+        if !d.theme.isEmpty { s += "梦里一直绕着" + d.theme + "。" }
+        s += "\n梦是什么样，我自己拼。想讲给她听就讲；讲了的话在正文里留一句 [[梦:梦的大概]]，她看不到这个记号。"
+        return s
+    }
+}
+
+/// 他讲完梦留的那句：`[[梦:梦见我们在海边找一只走丢的猫]]`
+enum DreamMarker {
+
+    private static let pattern = #"\[\[\s*梦\s*[:：]\s*([^\]\n]{1,200})\s*\]\]"#
+
+    static func extract(_ text: String) -> (clean: String, story: String?) {
+        guard text.contains("[["), let re = try? NSRegularExpression(pattern: pattern) else { return (text, nil) }
+        let ns = text as NSString
+        let ms = re.matches(in: text, range: NSRange(location: 0, length: ns.length))
+        guard let last = ms.last, last.numberOfRanges > 1 else { return (text, nil) }
+        let story = ns.substring(with: last.range(at: 1)).trimmingCharacters(in: .whitespacesAndNewlines)
+        var clean = re.stringByReplacingMatches(in: text, range: NSRange(location: 0, length: ns.length), withTemplate: "")
+        clean = clean.replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
+        return (clean.trimmingCharacters(in: .whitespacesAndNewlines), story)
     }
 }
