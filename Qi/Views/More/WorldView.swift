@@ -175,7 +175,7 @@ struct WorldView: View {
             .navigationDestination(isPresented: $enterHome) {
                 ZStack {
                     WallpaperBackground()
-                    ClawdHomeView()
+                    ClawdHomeView(backToIsland: { enterHome = false })
                 }
             }
             .sheet(isPresented: $showGuide) {
@@ -616,7 +616,6 @@ struct WorldView: View {
                 guard let ref = selectionAnchor else { movingSel = false; return }
                 world.checkpoint()
                 if !world.moveItems(decor: selDecor, objects: selObj, dx: x - ref.x, dy: y - ref.y) { world.undo() }
-                movingSel = false
                 return
             }
             if let o = world.object(at: x, y) {
@@ -962,7 +961,7 @@ struct WorldView: View {
             .padding(.horizontal, 16)
             if selectionCount > 0 {
                 HStack(spacing: 6) {
-                    toolChip(movingSel ? "点目标格" : "移动", "arrow.up.and.down.and.arrow.left.and.right", on: movingSel) { movingSel.toggle() }
+                    toolChip(movingSel ? "挪好了" : "移动", "arrow.up.and.down.and.arrow.left.and.right", on: movingSel) { movingSel.toggle() }
                     toolChip("旋转", "arrow.triangle.2.circlepath", on: false) {
                         world.checkpoint(); world.rotateDecor(selDecor)
                     }
@@ -976,7 +975,7 @@ struct WorldView: View {
                 .padding(.horizontal, 16)
             }
             Text(selectionCount > 0
-                 ? "已选 \(selectionCount) 件。" + (movingSel ? "点一格，选中的整体挪过去。" : "")
+                 ? "已选 \(selectionCount) 件。" + (movingSel ? "点哪格就挪到哪格，可以一直点着挪；挪好了点「挪好了」。" : "")
                  : (boxing ? "拖一下框住一片。关掉框选就能拖动画面。" : "点东西选中，再点一下取消；可以一次选好多件。"))
                 .font(.app(11)).foregroundStyle(Theme.textMuted(scheme))
                 .padding(.horizontal, 16)

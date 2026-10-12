@@ -20,17 +20,9 @@ struct ImageCropView: View {
 
     var body: some View {
         let img = upright
+        // 放在导航栏里：取消 / 好 在状态栏下面，不跟时间、电量挤在一起
+        NavigationStack {
         VStack(spacing: 0) {
-            HStack {
-                Button("取消") { cancel() }
-                Spacer()
-                Text("裁剪").font(.app(15, weight: .semibold))
-                Spacer()
-                Button("好") { done(crop(img)) }.fontWeight(.semibold)
-            }
-            .padding(.horizontal, 18).padding(.vertical, 12)
-            .foregroundStyle(.white)
-
             GeometryReader { geo in
                 let fit = fitted(img.size, in: geo.size)
                 ZStack(alignment: .topLeading) {
@@ -82,6 +74,18 @@ struct ImageCropView: View {
                 .onChange(of: square) { _, on in if on { makeSquare(img.size) } }
         }
         .background(Color.black.ignoresSafeArea())
+        .navigationTitle("裁剪")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Color.black, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) { Button("取消") { cancel() }.foregroundStyle(.white) }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("好") { done(crop(img)) }.fontWeight(.semibold).foregroundStyle(.white)
+            }
+        }
+        }
     }
 
     private var handle: some View {

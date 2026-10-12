@@ -13,6 +13,8 @@ struct ClawdHomeView: View {
     /// 关掉这一层。点他的气泡回聊天页靠它——
     /// 小屋是盖在聊天页上的一张 sheet，关掉就回去了。
     @Environment(\.dismiss) private var dismiss
+    /// 从小岛进屋时传进来：左上角多一颗「回小岛」（这一页把导航栏藏了，没有返回键）
+    var backToIsland: (() -> Void)? = nil
 
     @State private var tab = 0            // 0 房间，1 柜子，2 商店
     /// 商店里买完那一句。**买完不跳回房间**——她报的「在商店购买物品会自动回到房间的页面」，
@@ -693,6 +695,19 @@ struct ClawdHomeView: View {
 
     private var headerRow: some View {
         HStack(spacing: 10) {
+            if let back = backToIsland {
+                Button(action: back) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left").font(.system(size: 12, weight: .semibold))
+                        Text("回小岛").font(.app(12.5))
+                    }
+                    .foregroundStyle(Theme.textMain(scheme))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Theme.softFillDeep))
+                }
+                .buttonStyle(.plain)
+            }
             // 点金币栏 = 自己改金币。她要的：「再来一个作弊系统，
             // 就是关于我的金币，点击目前的金币栏我可以随意增减我的金币数量。」
             Button { cheating = true } label: {

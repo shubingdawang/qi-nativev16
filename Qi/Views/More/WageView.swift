@@ -281,8 +281,6 @@ struct WageView: View {
             // 设过的那一天点进去**直接是总结**；空的那一天有班表就先看班表，没有才进编辑
             if rec != nil {
                 summary = WageDayRef(date: date)
-            } else if !store.isPayday(date), let r = store.roster(on: date) {
-                preview = r.image
             } else {
                 editing = WageDayRef(date: date)
             }
@@ -332,9 +330,9 @@ struct WageView: View {
                         if pay { Image(systemName: "yensign").foregroundStyle(Self.payRed) }
                         if ann { Image(systemName: "heart.fill").foregroundStyle(Color(hexString: "E8758F")!) }
                     }
-                    .font(.system(size: 7, weight: .semibold))
-                    .padding(.trailing, 5)
-                    .padding(.top, 4)
+                    .font(.system(size: 6, weight: .bold))
+                    .padding(.trailing, 3)
+                    .padding(.top, 2)
                 }
             }
             .overlay(alignment: .bottom) {
@@ -758,9 +756,8 @@ struct WageSummaryCard: View {
                     value("这一天还没有记录")
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            // 内容少的时候也别成一条扁扁的长条：按钮压到底下，卡片高度至少有宽度的大半
-            Spacer(minLength: 0)
+            // 内容少的时候也别成一条扁扁的长条：内容区至少这么高（卡片大约是 4:5，不细长也不扁）
+            .frame(maxWidth: .infinity, minHeight: 190, alignment: .topLeading)
 
             if confirming {
                 VStack(spacing: 8) {
@@ -787,7 +784,8 @@ struct WageSummaryCard: View {
             }
         }
         .padding(20)
-        .frame(maxWidth: 340, minHeight: 300)
+        .frame(maxWidth: 340)
+        .fixedSize(horizontal: false, vertical: true)
         // ⚠️ 弹窗要读得清，底不能太透：用系统材质，**不套 `.shadow`**——
         // 阴影会让 Material 离屏渲染，玻璃就退化成一块近似纯色（Theme.swift 里记过）。
         .background(
@@ -967,6 +965,7 @@ struct WageDayEditor: View {
     @State private var amountBox = TextBox()
     /// 备注的字也放盒子里，打字时整页不重画
     @State private var noteBox = TextBox()
+    @State private var rosterShown: String?
     /// 从外面换格子里的字（改某一笔、记完清空）时 +1，让格子按盒子重新起
     @State private var fieldsToken = 0
     /// 「记一笔」能不能点。只在能/不能翻转的那一下更新
@@ -1026,6 +1025,7 @@ struct WageDayEditor: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(alignment: .leading, spacing: 14) {
+                            if let r = store.roster(on: date) { rosterCard(r) }
                             if store.isPayday(date) { WagePayCard(date: date) }
                             WageAnniversaryCard(date: date)
                             noteCard
@@ -1069,6 +1069,14 @@ struct WageDayEditor: View {
                 }
             }
             .onAppear { hourlyText = WageStore.money(day.hourly); noteBox.text = day.note }
+            .fullScreenCover(item: Binding(get: { rosterShown.map { WageImageRef(name: $0) } },
+                                           set: { rosterShown = $0?.name })) { ref in
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    if let img = ImageStore.cached(ref.name) { WageZoomImage(image: img).padding(20) }
+                }
+                .onTapGesture { rosterShown = nil }
+            }
             // 没点「完成」就走了（取消、下滑）：这一次新存的图全删，原来的一张不动
             .onDisappear {
                 if !committed { for n in addedNow { ImageStore.delete(n) } }
@@ -1091,6 +1099,24 @@ struct WageDayEditor: View {
                 }
             }
         }
+    }
+
+    /// 这一天的班表：点开看大图（能放大）
+    private func rosterCard(_ r: WageRoster) -> some View {
+        Button { rosterShown = r.image } label: {
+            HStack(spacing: 12) {
+                WageThumb(name: r.image, size: 64)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("这天的班表").font(.app(14, weight: .semibold)).foregroundStyle(Theme.textMain(scheme))
+                    Text("点开看大图").font(.app(11.5)).foregroundStyle(Theme.textMuted(scheme))
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(Theme.textMuted(scheme))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .glassCard()
     }
 
     /// 备注：写这一天想记的话，会显示在当天的卡片里
@@ -2356,4 +2382,10 @@ struct WageNoteField: View {
             .onAppear { if !ready { text = box.text; ready = true } }
             .onChange(of: text) { _, v in box.text = v }
     }
+}
+
+/// 全屏看的那张图
+struct WageImageRef: Identifiable {
+    let name: String
+    var id: String { name }
 }

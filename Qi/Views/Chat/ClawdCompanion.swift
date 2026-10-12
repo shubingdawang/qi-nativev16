@@ -174,7 +174,7 @@ struct ClawdRoamer: View {
                     .contentShape(Rectangle().inset(by: -14))
             }
             .position(x: posX * geo.size.width,
-                      y: perchBottom.map { geo.size.height - $0 - 17 } ?? posY * geo.size.height)
+                      y: perchBottom.map { geo.size.height - $0 - 28 } ?? posY * geo.size.height)
             .onAppear { pageWidth = geo.size.width }
             .onChange(of: geo.size.width) { _, w in pageWidth = w }
             // 拎着的时候要跟手，所以不给动画
