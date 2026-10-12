@@ -89,9 +89,10 @@ struct RoomShellPainter {
         let n = Double(g.size), across = Double(g.across)
         let wallPx = Double(g.wallH / px)
         // 等距：墙角（地板最里那个顶点）和两面墙的另一头
-        let corner = g.point(0, 0).offsetBy(dy: -g.tileH / 2)
-        let leftEnd = g.point(0, n - 1).offsetBy(dx: -g.tileW / 2)
-        let rightEnd = g.point(n - 1, 0).offsetBy(dx: g.tileW / 2)
+        let c0 = g.point(0, 0), l0 = g.point(0, n - 1), r0 = g.point(n - 1, 0)
+        let corner = CGPoint(x: c0.x, y: c0.y - g.tileH / 2)
+        let leftEnd = CGPoint(x: l0.x - g.tileW / 2, y: l0.y)
+        let rightEnd = CGPoint(x: r0.x + g.tileW / 2, y: r0.y)
         // 平面：后墙
         let backY = g.point(0, 0).y - g.rowPitch / 2
         let backHalf = g.tileW * g.flatWide(-0.5) * CGFloat(g.cols) / 2
