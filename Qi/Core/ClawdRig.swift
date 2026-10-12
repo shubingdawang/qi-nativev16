@@ -218,6 +218,10 @@ struct ClawdRigView: View {
                 if !wornIDs.isEmpty {
                     PixelSpriteView(sprite: ClawdRig.propsOnly(body0), scale: scale)
                 }
+                // 她画的衣服要露眼睛：眼睛盖回衣服上面
+                if CustomWearStore.shared.eyesOnTop(wornIDs) {
+                    PixelSpriteView(sprite: ClawdRig.eyesOnly(body0), scale: scale)
+                }
             }
             }
             // 身子和穿戴件是一块的：一起抬、一起歪。⚠️ 支点在**脚底**
@@ -623,6 +627,18 @@ enum ClawdRig {
         return out
     }
     nonisolated(unsafe) private static var propCache: [Int: PixelSprite] = [:]
+
+    /// 只留眼睛（`k`）。她画的衣服盖住了脸的时候，眼睛盖回衣服上面——
+    /// 跟着这一帧走，眨眼、闭眼、哭都照样看得见
+    static func eyesOnly(_ s: PixelSprite) -> PixelSprite {
+        let key = s.key
+        if let hit = eyeCache[key] { return hit }
+        let rows = s.rows.map { row -> String in String(row.map { $0 == "k" ? "k" : "." }) }
+        let out = PixelSprite(rows, s.palette)
+        eyeCache[key] = out
+        return out
+    }
+    nonisolated(unsafe) private static var eyeCache: [Int: PixelSprite] = [:]
 
     static func stripArms(_ s: PixelSprite) -> PixelSprite {
         let rows = s.rows.map { row -> String in

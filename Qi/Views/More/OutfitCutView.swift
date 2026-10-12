@@ -129,13 +129,26 @@ struct OutfitCutView: View {
                 nudge("上", "arrow.up") { cut.offY -= 0.5; refresh() }
                 nudge("下", "arrow.down") { cut.offY += 0.5; refresh() }
             }
-            Button {
-                cut.autoFit(); refresh()
-            } label: {
-                Label("自动对齐", systemImage: "wand.and.stars").font(.app(12.5))
+            HStack {
+                Toggle("眼睛露在衣服外面", isOn: Binding(get: { cut.eyesOnTop },
+                                                    set: { cut.eyesOnTop = $0; refresh() }))
+                    .font(.app(13))
+                    .tint(app.settings.accentColor)
+                Spacer(minLength: 12)
+                Button {
+                    cut.autoFit(); refresh()
+                } label: {
+                    Label("自动对齐", systemImage: "wand.and.stars").font(.app(12.5))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(app.settings.accentColor)
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(app.settings.accentColor)
+            Text(cut.coveredEyes() > 0 && !cut.eyesOnTop
+                 ? "眼睛还被衣服盖住一点，可以挪一挪，或者打开「眼睛露在衣服外面」。"
+                 : "眨眼、闭眼这些表情跟着他走。")
+                .font(.app(10.5))
+                .foregroundStyle(Theme.textMuted(scheme))
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(14)
         .glassCard(padding: 0)
@@ -166,7 +179,8 @@ struct OutfitCutView: View {
 
     private func save() {
         let n = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let item = CustomWearStore.shared.addOutfit(cut.render(), name: n.isEmpty ? "我画的衣服" : n) else {
+        guard let item = CustomWearStore.shared.addOutfit(cut.render(), name: n.isEmpty ? "我画的衣服" : n,
+                                                           eyesOnTop: cut.eyesOnTop) else {
             done = "没存上，再试一次。"
             return
         }

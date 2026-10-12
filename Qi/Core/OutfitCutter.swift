@@ -117,6 +117,54 @@ struct OutfitCutter {
         scale = s
         offX = (t.x0 + t.x1) / 2 - Double(x0 + x1 + 1) / 2 * s
         offY = t.y1 - Double(y1 + 1) * s
+        uncoverEyes()
+    }
+
+    /// clawd 的眼睛在画布上哪几格（站着那张）
+    static let eyeCells: [(Int, Int)] = {
+        var out: [(Int, Int)] = []
+        for (y, row) in ClawdSprites.idle.rows.enumerated() {
+            for (x, ch) in row.enumerated() where ch == "k" { out.append((x, y)) }
+        }
+        return out
+    }()
+
+    /// 眼睛被衣服盖住了几格
+    func coveredEyes() -> Int {
+        let rem = removed()
+        var n = 0
+        for (ex, ey) in Self.eyeCells {
+            // 这一格画布的中心落在图纸哪一格
+            let gx = Int(((Double(ex) + 0.5) - offX) / scale)
+            let gy = Int(((Double(ey) + 0.5) - offY) / scale)
+            guard gx >= 0, gy >= 0, gx < w, gy < h else { continue }
+            let i = gy * w + gx
+            if !rem[i] && !cells[i].isEmpty { n += 1 }
+        }
+        return n
+    }
+
+    /// 眼睛被盖住的话，在附近上下左右挪一点、大小调一点，挑盖得最少、挪得最少的那个
+    mutating func uncoverEyes() {
+        guard coveredEyes() > 0 else { return }
+        let base = (s: scale, x: offX, y: offY)
+        var best = (cover: coveredEyes(), cost: 0.0, s: scale, x: offX, y: offY)
+        let cx = (Self.target.x0 + Self.target.x1) / 2, by = Self.target.y1
+        for k in [1.0, 0.96, 1.04, 0.92, 1.08] {
+            for dy in stride(from: -2.5, through: 2.5, by: 0.5) {
+                for dx in stride(from: -1.0, through: 1.0, by: 0.5) {
+                    scale = base.s * k
+                    offX = cx - (cx - base.x) * k + dx
+                    offY = by - (by - base.y) * k + dy
+                    let c = coveredEyes()
+                    let cost = abs(dy) + abs(dx) + abs(k - 1) * 20
+                    if c < best.cover || (c == best.cover && cost < best.cost) {
+                        best = (c, cost, scale, offX, offY)
+                    }
+                }
+            }
+        }
+        scale = best.s; offX = best.x; offY = best.y
     }
 
     // MARK: 出图
@@ -181,6 +229,9 @@ struct OutfitCutter {
             }
     }
 
+    /// 眼睛画在衣服上面
+    var eyesOnTop = true
+
     /// 给她看的样子：站着的 clawd 穿上这件（静止那一帧）
     func preview() -> UIImage {
         let layers = render()
@@ -212,6 +263,12 @@ struct OutfitCutter {
                                   width: r.size.width, height: r.size.height))
             }
             layers.body.draw(in: CGRect(x: 0, y: 0, width: n * k, height: n * k))
+            if eyesOnTop {
+                g.setFillColor(UIColor(s.palette["k"] ?? .black).cgColor)
+                for (x, y) in Self.eyeCells {
+                    g.fill(CGRect(x: CGFloat(x) * k, y: CGFloat(y) * k, width: k, height: k))
+                }
+            }
         }
     }
 
