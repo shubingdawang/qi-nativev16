@@ -122,7 +122,7 @@ struct IsoRoomView<Clawd: View>: View {
             let night = RoomClock.night(at: tick.date, mode: store.dayMode)
             let windows = windowSpots(geoRoom)
             ZStack(alignment: .topLeading) {
-                walls(geoRoom)
+                walls(geoRoom, size: geo.size)
                 RoomWallDetail(room: geoRoom, windows: windows, night: night,
                                // 她问「这些小点点是什么」——看不出是什么的点子就是脏，关掉
                                grain: false,
@@ -308,15 +308,8 @@ struct IsoRoomView<Clawd: View>: View {
                             .scaledToFill()
                     }
                     .clipShape(geoRoom.floorPath)
-            } else {
-                // ⚠️ 棋盘格那一版**也走这儿**，不再单独写一遍。
-                // `RoomFinish.floor("")` 就是 `.checker`，画出来跟原来一模一样
-                // （连色号都是同两个）。
-                // 同一件事只留一个算法——留两个的话，改了一个另一个就开始撒谎。
-                FloorFinishView(kind: RoomFinish.floor(token),
-                                room: geoRoom, scheme: scheme,
-                                theme: RoomFinish.theme(token))
             }
+            // 内置地板画在墙那一层的像素图里（见 `walls` / `RoomPixelShell`）
             // 正在拖的那一件，把它要落的几格点亮
             if let id = dragging,
                let f = store.furniture(in: room).first(where: { $0.id == id }) {
@@ -349,12 +342,25 @@ struct IsoRoomView<Clawd: View>: View {
         }
     }
 
-    private func walls(_ geoRoom: IsoRoom) -> some View {
+    private func walls(_ geoRoom: IsoRoom, size: CGSize) -> some View {
         // 跟地板一样：这个字符串要么是她那张图的文件名，要么是内置的记号
         let token = store.wallpaper(of: room)
         let paper = RoomFinish.isBuiltIn(token) ? nil : ImageStore.cached(token)
         let finish = RoomFinish.wall(token)
+        let floorToken = store.flooring(of: room)
+        let boards = RoomFinish.isBuiltIn(floorToken) ? nil : ImageStore.cached(floorToken)
         return ZStack(alignment: .topLeading) {
+            // 内置的墙纸和地板：小岛那种像素画法，一整张画好（见 `RoomPixelShell`）。
+            // 拿**不带横向偏移**的那间屋画，平面屋左右拖的时候整张跟着挪，不用重画
+            RoomPixelShell(room: IsoRoom.fit(in: size, as: store.projection),
+                           size: size,
+                           wall: finish,
+                           floor: RoomFinish.floor(floorToken),
+                           theme: RoomFinish.theme(token),
+                           floorTheme: RoomFinish.theme(floorToken),
+                           paintWalls: paper == nil,
+                           paintFloor: boards == nil)
+                .offset(x: store.projection == .flat ? store.flatPanX : 0)
             // 她自己那张墙纸。**必须按墙的形状裁**——
             // 直接贴一张矩形上去就是一块补丁盖在屋子上，两面墙全糊住了。
             //
@@ -387,20 +393,8 @@ struct IsoRoomView<Clawd: View>: View {
                     .overlay {
                         geoRoom.rightWallPath.fill(Color.black.opacity(0.16))
                     }
-            } else {
-                // 内置那几档。`.plain` 就是原来那版纯色——
-                // `WallFinishView` 碰上 `.plain` 只铺底色，什么花纹都不画，
-                // 所以「什么都没选」和「选了纯色」走的是同一条路。
-                //
-                // ⚠️ 右面墙照旧**压暗一档**。等距屋的立体感八成来自
-                // 「两个面不是同一个亮度」——花纹换了，这条不能跟着换掉。
-                WallFinishView(kind: finish, base: geoRoom.leftWallBase,
-                               height: geoRoom.wallH, tone: wallL, seam: seamTone)
-                    .clipShape(geoRoom.leftWallPath)
-                WallFinishView(kind: finish, base: geoRoom.rightWallBase,
-                               height: geoRoom.wallH, tone: wallR, seam: seamTone)
-                    .clipShape(geoRoom.rightWallPath)
             }
+            // 内置那几档在上面那张像素图里（右面墙照旧暗一档）
             geoRoom.leftWallPath.stroke(Color.black.opacity(0.08), lineWidth: 1)
             geoRoom.rightWallPath.stroke(Color.black.opacity(0.08), lineWidth: 1)
 
