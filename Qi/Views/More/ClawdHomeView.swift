@@ -105,6 +105,12 @@ struct ClawdHomeView: View {
     /// 以前松手只认床（`layDownAct`），别的一律「就待这儿吧」然后回去溜达，
     /// 过五到十几秒才轮到抽家具，抽中的还不一定是这件。
     @State private var aimedItem: UUID?
+    /// 她点了「一起…」：他走过去做的就是这一个动作，不随机挑
+    @State private var forcedAct: String?
+    /// 那个动作做完要办的事（一起做饭 → 菜进柜子）
+    @State private var afterAct: (() -> Void)?
+    @State private var afterActFor: UUID?
+    @ObservedObject private var play = HomePlay.shared
     /// 朝哪边走。左右翻个身，看着才像在走而不是在平移。
     @State private var facingLeft = false
     /// 这一趟走多久。远一点就走久一点。
@@ -455,6 +461,152 @@ struct ClawdHomeView: View {
         return true
     }
 
+    // MARK: 能玩的那几样（见 `HomePlay`）
+
+    /// 一起做什么：按这件家具能做的动作挑一个
+    private func together(_ kindID: String) -> (label: String, act: String)? {
+        let names = RoomActs.acts(for: kindID).map(\.name)
+        let table: [(String, String)] = [("看电视", "拉他一起看电视"), ("打游戏", "一起打游戏"),
+                                         ("做饭", "一起做饭"), ("听歌", "一起听歌"),
+                                         ("弹琴", "让他弹一首"), ("弹吉他", "让他弹一首"),
+                                         ("看书", "一起看书"), ("烤火", "一起烤火")]
+        for (act, label) in table where names.contains(act) { return (label, act) }
+        return nil
+    }
+
+    /// 叫他过来做这件事。他睡着就不叫（返回 false）
+    @discardableResult
+    private func callHim(_ item: Furniture, act: String, after: (() -> Void)? = nil) -> Bool {
+        guard !SleepCycle.shared.isAsleep() else { return false }
+        guard !hiding else { return false }
+        if let r = HomeRoom(rawValue: item.room), store.clawdRoom != r { store.clawdRoom = r }
+        // 手上正做的先放下
+        using = .stand
+        store.useItem = nil
+        store.useStyle = .stand
+        mood = .idle
+        forcedAct = act
+        afterAct = after
+        afterActFor = after == nil ? nil : item.id
+        aimedItem = item.id
+        startWalking()
+        return true
+    }
+
+    /// 她点的那个动作（只给她点的那一件用一次）
+    private func takeForced(_ ok: Bool) -> RoomAct? {
+        defer { forcedAct = nil }
+        guard ok, let n = forcedAct else { return nil }
+        return RoomActs.act(n)
+    }
+
+    private func flash(_ text: String) {
+        notice = text
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_600_000_000)
+            if notice == text { notice = nil }
+        }
+    }
+
+    private func waterPlant(_ item: Furniture) {
+        let r = play.water(item.id)
+        store.coins += r.coins
+        flash(r.text)
+        if app.settings.haptics { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+        callHim(item, act: "浇水")
+    }
+
+    private func feedFish(_ item: Furniture) {
+        let r = play.feed(item.id)
+        store.coins += r.coins
+        flash(r.text)
+        callHim(item, act: "喂鱼")
+    }
+
+    private func doTogether(_ item: Furniture, _ act: String) {
+        let cook: (() -> Void)? = act == "做饭" ? { cookDish() } : nil
+        if callHim(item, act: act, after: cook) {
+            flash("他过来了")
+        } else {
+            flash(hiding ? "他还藏着呢" : "他睡着呢，等他醒了再一起")
+        }
+    }
+
+    /// 一起做完饭：一份菜进柜子，可以拿出来喂他
+    private func cookDish() {
+        let menu = ["ramen", "cookies", "macaron", "sushi", "hotpot", "bubbletea"]
+            .compactMap { FurnitureCatalog.kind($0) }
+        guard let dish = menu.randomElement() else { return }
+        var f = Furniture(kind: dish.id)
+        f.hidden = true
+        f.room = HomeRoom.home(for: dish).rawValue
+        store.owned.append(f)
+        play.noteCooked()
+        say(["做好了！", "尝尝看", "香吧"].randomElement() ?? "做好了")
+        flash("做好了一份「" + dish.name + "」，放进柜子了，可以拿出来喂他")
+    }
+
+    /// 今天他藏的那一样还没找到
+    private var treasureOpen: Bool {
+        guard let t = play.state.treasure else { return false }
+        return t.day == HomePlay.day() && !t.found
+    }
+
+    private func searchTreasure(_ item: Furniture) {
+        let r = play.search(item.id)
+        store.coins += r.coins
+        flash(r.text)
+        if app.settings.haptics {
+            UIImpactFeedbackGenerator(style: r.found ? .medium : .rigid).impactOccurred()
+        }
+        if r.found {
+            mood = .happy
+            say(["被你找到了", "藏得不好吗", "给你的"].randomElement() ?? "被你找到了")
+        }
+    }
+
+    /// 进屋时把今天的那一样藏好，告诉她藏在哪间屋
+    private func hideTodayTreasure() {
+        let items = store.owned.filter { !$0.hidden && !$0.carried && $0.gx >= 0 }
+        guard let t = play.todayTreasure(among: items), !t.found,
+              let spot = items.first(where: { $0.id == t.furniture }) else { return }
+        let room = HomeRoom(rawValue: spot.room)?.rawValue ?? "屋"
+        flash("今天他在「" + room + "」里藏了一样东西，点家具「翻一翻」找找看")
+    }
+
+    /// 早上醒了第一次见：伸个懒腰；快到睡觉的点：自己回卧室。做了返回 true
+    private func routineBeat() async -> Bool {
+        let sleep = SleepCycle.shared
+        guard sleep.enabled, let night = sleep.state.night else { return false }
+        let now = Date()
+        let today = HomePlay.day(now)
+        if let w = night.wokeAt, HomePlay.day(w) == today, play.state.morningDay != today,
+           Calendar.current.component(.hour, from: now) < 14 {
+            play.markMorning()
+            mood = .exercise
+            store.clawdDoing = .playing
+            say(["早上好～", "伸个懒腰", "睡饱了"].randomElement() ?? "早上好")
+            try? await Task.sleep(nanoseconds: 4_500_000_000)
+            mood = .idle
+            store.clawdDoing = .idling
+            return true
+        }
+        if night.onset == nil, now < night.bedtime, night.bedtime.timeIntervalSince(now) < 3600,
+           play.state.eveningDay != today {
+            play.markEvening()
+            let isBed: (Furniture) -> Bool = { f in
+                FurnitureCatalog.shape(of: f.kind).actions.contains { $0 == "躺下" || $0 == "钻被窝" }
+            }
+            if let r = HomeRoom.allCases.first(where: { store.furniture(in: $0).contains(where: isBed) }),
+               store.clawdRoom != r {
+                store.clawdRoom = r
+                say(["该准备睡了", "去卧室", "困了"].randomElement() ?? "该准备睡了")
+                return true
+            }
+        }
+        return false
+    }
+
     private func nightBed() -> Furniture? {
         guard isNightNow, Double.random(in: 0...1) < 0.6 else { return nil }
         return store.furniture(in: store.clawdRoom).filter { f in
@@ -597,6 +749,7 @@ struct ClawdHomeView: View {
             store.migrateFiner()
             // 进来就落在他待着的那一间（她要的）
             keepSleeping()
+            hideTodayTreasure()
             if viewing == nil, following { viewing = store.clawdRoom }
             startWalking()
             startHim()
@@ -1370,6 +1523,20 @@ struct ClawdHomeView: View {
             titleVisibility: .visible
         ) {
             if let item = acting {
+                // 小屋里能玩的那几样（见 `HomePlay`），排在最前面
+                if play.isPlant(item.kind) {
+                    Button(play.thirsty(item.id) ? "浇水（它渴了）"
+                           : "浇水 · " + HomePlay.stageNames[play.stage(item.id)]) { waterPlant(item) }
+                }
+                if play.isTank(item.kind) {
+                    Button(play.hungry(item.id) ? "喂鱼（饿了）" : "喂鱼") { feedFish(item) }
+                }
+                if let t = together(item.kind) {
+                    Button(t.label) { doTogether(item, t.act) }
+                }
+                if treasureOpen {
+                    Button("翻一翻，找他藏的东西") { searchTreasure(item) }
+                }
                 // ⚠️⚠️ **素材库排在相册前面，而且永远都在。**
                 //
                 // 她报的：「clawd 小屋我没找到素材库在哪里。
@@ -2337,6 +2504,8 @@ struct ClawdHomeView: View {
                 patience.relax()        // 晾着的时候气自己消，见 relax 的注释
                 // 他睡着呢：躺着，不溜达（她拎起他的时候不管）
                 if !held, keepSleeping() { continue }
+                // 早上醒了第一次见：伸个懒腰；快到睡觉的点：自己回卧室
+                if !held, await routineBeat() { continue }
                 if !patience.sulking, mood == .upset, Date() >= touchUntil {
                     mood = .idle        // 气消了，脸也松开
                 }
@@ -2385,7 +2554,7 @@ struct ClawdHomeView: View {
                    aimed != nil || Double.random(in: 0...1) < 0.42,
                    let item = aimed ?? nightBed() ?? store.furniture(in: store.clawdRoom).randomElement(),
                    let kind = FurnitureCatalog.kind(item.kind),
-                   let chosen = pickAct(for: kind.id) {
+                   let chosen = takeForced(aimed != nil) ?? pickAct(for: kind.id) {
 
                     let geo = IsoRoom.fit(in: size, as: store.projection)
                     let itemCell = store.cell(of: item)
@@ -2528,6 +2697,12 @@ struct ClawdHomeView: View {
                     store.useItem = nil
                     store.useStyle = .stand
                     if Task.isCancelled { return }
+                    // 她叫他一起做的那件做完了：该给的给（一起做饭 → 菜进柜子）
+                    if afterActFor == item.id, let done = afterAct {
+                        afterAct = nil
+                        afterActFor = nil
+                        done()
+                    }
                     mood = .idle
                     store.clawdDoing = .idling
                     continue

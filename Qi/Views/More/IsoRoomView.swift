@@ -71,6 +71,8 @@ struct IsoRoomView<Clawd: View>: View {
 
     @EnvironmentObject private var app: AppState
     @Environment(\.colorScheme) private var scheme
+    /// 绿植渴没渴、鱼饿没饿（头上那个小标记）
+    @ObservedObject private var play = HomePlay.shared
 
     @State private var dragging: UUID?
     @State private var dragCell: (gx: Int, gy: Int) = (0, 0)
@@ -912,6 +914,16 @@ struct IsoRoomView<Clawd: View>: View {
                 PixelSpriteView(sprite: sprite, scale: scale)
             }
         }
+        // 绿植渴了 / 开花了、鱼饿了：头上冒一个小标记
+        .overlay(alignment: .top) {
+            if let mark = careMark(item) {
+                Text(mark)
+                    .font(.system(size: max(10, geoRoom.tileW * 0.42)))
+                    .offset(y: -geoRoom.tileW * 0.45)
+                    .allowsHitTesting(false)
+                    .transition(.scale.combined(with: .opacity))
+            }
+        }
         // 她的图是**贴边裁过**的（导入时裁的），
         // 所以底边就是这件东西的落脚线：往上抬半张图，再压回格子上
         // ⚠️ 她的图那一支贴的也是**地砖下沿**（`tileBottom`），
@@ -973,6 +985,17 @@ struct IsoRoomView<Clawd: View>: View {
         }
         .onTapGesture { onTapFurniture(item) }
         .gesture(dragGesture(item, s, geoRoom))
+    }
+
+    /// 这件头上该冒什么：渴了一滴水、开花了一朵花、鱼饿了一条鱼。没事就不冒
+    private func careMark(_ item: Furniture) -> String? {
+        if play.isPlant(item.kind) {
+            if play.thirsty(item.id) { return "💧" }
+            if play.plant(item.id).bloomed { return "🌸" }
+            return nil
+        }
+        if play.isTank(item.kind), play.hungry(item.id) { return "🐟" }
+        return nil
     }
 
     /// 挂在墙上／放在台面上的，要往上抬多少。摆在地上的是零。
