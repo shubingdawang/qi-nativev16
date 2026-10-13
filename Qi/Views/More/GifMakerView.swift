@@ -19,6 +19,8 @@ struct GifSpec {
     var textSize: Double = 0.15
     var textColor = "FFFFFF"
     var strokeColor = "4A3442"
+    /// 描边多粗（占字号的比例）。0 = 不描
+    var strokeWidth: Double = 0.09
     var font: GifFont = .rounded
     var textAnim: GifTextAnim = .none
     /// 一圈多快（1 = 两秒一圈）
@@ -331,10 +333,21 @@ enum GifFrame {
             }
             let at = CGPoint(x: x + dx, y: cy - font.lineHeight / 2 + dy)
             g.saveGState()
-            // 先描边、再填色：描边一圈粗一点，字小也看得清
-            NSAttributedString(string: p, attributes: [
-                .font: font, .strokeColor: stroke, .strokeWidth: 22
-            ]).draw(at: at)
+            // 描边：同一个字用描边色绕一圈画 16 次，叠出一圈**圆的**边——
+            // 以前用字体自带的描边，转角是尖的，看着有毛刺
+            let r = CGFloat(spec.strokeWidth) * size
+            if r > 0.3 {
+                let outline = NSAttributedString(string: p, attributes: [.font: font, .foregroundColor: stroke])
+                for k in 0..<16 {
+                    let a = Double(k) / 16 * 2 * .pi
+                    outline.draw(at: CGPoint(x: at.x + CGFloat(cos(a)) * r, y: at.y + CGFloat(sin(a)) * r))
+                }
+                // 里面再补一圈，粗描边时中间不漏
+                for k in 0..<8 {
+                    let a = Double(k) / 8 * 2 * .pi
+                    outline.draw(at: CGPoint(x: at.x + CGFloat(cos(a)) * r * 0.5, y: at.y + CGFloat(sin(a)) * r * 0.5))
+                }
+            }
             NSAttributedString(string: p, attributes: [
                 .font: font, .foregroundColor: fill
             ]).draw(at: at)
@@ -418,7 +431,15 @@ struct GifMakerView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("关闭") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("存成表情") { title = name; saving = true }
+                    Button("存成表情") {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                                        to: nil, from: nil, for: nil)
+                        title = name.isEmpty ? spec.text : name
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 350_000_000)
+                            saving = true
+                        }
+                    }
                         .disabled(base == nil && spec.text.isEmpty)
                 }
             }
@@ -565,6 +586,9 @@ struct GifMakerView: View {
             }
             row("颜色") { swatches($spec.textColor) }
             row("描边") { swatches($spec.strokeColor) }
+            row("描边粗细") {
+                Slider(value: $spec.strokeWidth, in: 0...0.22)
+            }
             row("字体") {
                 Picker("", selection: $spec.font) {
                     ForEach(GifFont.allCases) { f in Text(f.label).tag(f) }

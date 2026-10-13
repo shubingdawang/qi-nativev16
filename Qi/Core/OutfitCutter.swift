@@ -63,6 +63,10 @@ struct OutfitCutter {
     /// 哪些格要抠掉：clawd 的颜色 + 被它整圈围住的小块（眼睛、腮红）
     func removed() -> [Bool] {
         var out = cells.map { clawdColors.contains($0) }
+        // 底色：从四边连进来的近白色（她的板子常常整块铺了白豆子当底）。
+        // 牙、眼白这种在里面的白不连边，不会被当成底色
+        let bg = background()
+        for i in 0..<(w * h) where bg[i] { out[i] = true }
         var seen = Array(repeating: false, count: w * h)
         for start in 0..<(w * h) where !seen[start] && !out[start] && !cells[start].isEmpty {
             // 一块同样不是 clawd 的连通区
@@ -87,6 +91,28 @@ struct OutfitCutter {
         return out
     }
 
+    /// 从四条边往里连着的近白色格子（底色）
+    func background() -> [Bool] {
+        var bg = Array(repeating: false, count: w * h)
+        func whiteish(_ i: Int) -> Bool {
+            guard let (r, g, b) = Self.rgb(cells[i]) else { return false }
+            return min(r, g, b) > 226
+        }
+        var stack: [Int] = []
+        for x in 0..<w { stack.append(x); stack.append((h - 1) * w + x) }
+        for y in 0..<h { stack.append(y * w); stack.append(y * w + w - 1) }
+        while let i = stack.popLast() {
+            guard !bg[i], whiteish(i) else { continue }
+            bg[i] = true
+            let x = i % w, y = i / w
+            if x > 0 { stack.append(i - 1) }
+            if x < w - 1 { stack.append(i + 1) }
+            if y > 0 { stack.append(i - w) }
+            if y < h - 1 { stack.append(i + w) }
+        }
+        return bg
+    }
+
     /// 自动对齐：图纸里 clawd 那一团的外框对上画布上 clawd 的外框，脚底对脚底
     mutating func autoFit() {
         let mask = cells.map { clawdColors.contains($0) }
@@ -99,7 +125,8 @@ struct OutfitCutter {
         if x1 < x0 {
             // 没认出 clawd：整张放进他身上那一块
             var bx0 = w, bx1 = -1, by0 = h, by1 = -1
-            for i in 0..<(w * h) where !cells[i].isEmpty {
+            let bg = background()
+            for i in 0..<(w * h) where !cells[i].isEmpty && !bg[i] {
                 let x = i % w, y = i / w
                 bx0 = min(bx0, x); bx1 = max(bx1, x); by0 = min(by0, y); by1 = max(by1, y)
             }
@@ -175,6 +202,13 @@ struct OutfitCutter {
         return (Int((c.x - ex).rounded()), Int((c.y - ey).rounded()))
     }
 
+    /// 两只眼睛合起来的中心（画布格，左上角算起）
+    static var eyeCenter: CGPoint {
+        guard !eyeCells.isEmpty else { return CGPoint(x: 17, y: 20) }
+        let xs = eyeCells.map { Double($0.0) }, ys = eyeCells.map { Double($0.1) }
+        return CGPoint(x: (xs.min()! + xs.max()! + 1) / 2, y: (ys.min()! + ys.max()! + 1) / 2)
+    }
+
     /// 眼睛被衣服盖住了几格（按挪过以后的位置算）
     func coveredEyes() -> Int {
         let rem = removed()
@@ -223,15 +257,27 @@ struct OutfitCutter {
         var body: UIImage
         var left: UIImage?
         var right: UIImage?
-        var eyeDX = 0
-        var eyeDY = 0
+        var eyeDX = 0.0
+        var eyeDY = 0.0
+        var eyeScale = 1.0
+    }
+
+    /// 她自己再挪一挪眼睛（画布格）、调大小
+    var eyeNudgeX = 0.0
+    var eyeNudgeY = 0.0
+    var eyeScale = 1.0
+
+    /// 眼睛最后挪多少：按她画的位置挪 + 她自己再挪的那一点
+    var eyeOffset: (x: Double, y: Double) {
+        let sh = eyeShift
+        return (Double(sh.dx) + eyeNudgeX, Double(sh.dy) + eyeNudgeY)
     }
 
     /// 眼睛挪走以后，原来那双的位置用他身子的颜色盖上（不然会有四只眼睛）。
     /// 上下各多盖一行：闭眼、笑眼那几帧眼睛的位置略有不同
     private func eyePatch() -> [(CGRect, UIColor)] {
-        let sh = eyeShift
-        guard sh.dx != 0 || sh.dy != 0 else { return [] }
+        // 眼睛画在衣服上面的时候，原来那双一律盖掉（挪了、放大了都不会冒出第二双）
+        guard eyesOnTop else { return [] }
         let col = UIColor(ClawdSprites.idle.palette["p"] ?? .orange)
         var seen = Set<Int>()
         var out: [(CGRect, UIColor)] = []
@@ -274,11 +320,11 @@ struct OutfitCutter {
         }
         let body = Self.paint(bodyCells, size: CGSize(width: n, height: n))
         let sleeveSize = CGSize(width: armW + 2 * M, height: armH + 2 * M)
-        let sh = eyeShift
+        let off = eyeOffset
         return Layers(body: body,
                       left: leftCells.isEmpty ? nil : Self.paint(leftCells, size: sleeveSize),
                       right: rightCells.isEmpty ? nil : Self.paint(rightCells, size: sleeveSize),
-                      eyeDX: sh.dx, eyeDY: sh.dy)
+                      eyeDX: off.x, eyeDY: off.y, eyeScale: eyeScale)
     }
 
     private static func paint(_ cells: [(CGRect, UIColor)], size: CGSize) -> UIImage {
@@ -335,9 +381,13 @@ struct OutfitCutter {
             layers.body.draw(in: CGRect(x: 0, y: 0, width: n * k, height: n * k))
             if eyesOnTop {
                 g.setFillColor(UIColor(s.palette["k"] ?? .black).cgColor)
+                let c = Self.eyeCenter
+                let sc = CGFloat(layers.eyeScale)
                 for (x, y) in Self.eyeCells {
-                    g.fill(CGRect(x: CGFloat(x + layers.eyeDX) * k, y: CGFloat(y + layers.eyeDY) * k,
-                                  width: k, height: k))
+                    // 绕两只眼睛的中心放大缩小，再挪过去
+                    let ex = c.x + (CGFloat(x) - c.x) * sc + CGFloat(layers.eyeDX)
+                    let ey = c.y + (CGFloat(y) - c.y) * sc + CGFloat(layers.eyeDY)
+                    g.fill(CGRect(x: ex * k, y: ey * k, width: k * sc, height: k * sc))
                 }
             }
         }

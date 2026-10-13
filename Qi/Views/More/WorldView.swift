@@ -78,6 +78,8 @@ struct WorldView: View {
     @State private var storyShown: WorldStory?
     @State private var showGuide = false
     @State private var enterHome = false
+    /// 从哪座小屋进的家：进去先看那一间
+    @State private var homeRoom: HomeRoom = .living
     @State private var groundPick: WorldGround = .path
     /// 画笔这一笔划过的格子：先画在上面，松手才真的铺（铺的时候不卡）
     @State private var stroke: [Int: WorldGround] = [:]
@@ -175,7 +177,7 @@ struct WorldView: View {
             .navigationDestination(isPresented: $enterHome) {
                 ZStack {
                     WallpaperBackground()
-                    ClawdHomeView(backToIsland: { enterHome = false })
+                    ClawdHomeView(backToIsland: { enterHome = false }, startRoom: homeRoom)
                 }
             }
             .sheet(isPresented: $showGuide) {
@@ -233,8 +235,18 @@ struct WorldView: View {
                             isPresented: Binding(get: { decorMenu != nil }, set: { if !$0 { decorMenu = nil } }),
                             titleVisibility: .visible) {
             if let d = decorMenu {
-                if WorldDecorKind.resolve(d.kind)?.isHouse == true {
-                    Button("进屋") { decorMenu = nil; enterHome = true }
+                if let k = WorldDecorKind.resolve(d.kind), k.isHouse {
+                    Button("进屋") {
+                        decorMenu = nil
+                        // 粉顶客厅、蓝顶卧室、紫顶厨房、绿顶浴室
+                        switch k {
+                        case .cabin: homeRoom = .bedroom
+                        case .shop: homeRoom = .kitchen
+                        case .houseBeige: homeRoom = .bath
+                        default: homeRoom = .living
+                        }
+                        enterHome = true
+                    }
                 }
                 ForEach(world.actions(forDecor: d)) { a in
                     Button(a.name) {

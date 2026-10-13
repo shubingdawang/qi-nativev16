@@ -64,7 +64,9 @@ final class HomePlay: ObservableObject {
     // MARK: 绿植
 
     func isPlant(_ kindID: String) -> Bool {
-        RoomActs.acts(for: kindID).contains { $0.name == "浇水" }
+        if FurnitureCatalog.kind(kindID)?.category == .plant { return true }
+        if ["hanging", "succulent", "bonsai", "plant", "cactus"].contains(kindID) { return true }
+        return RoomActs.acts(for: kindID).contains { $0.name == "浇水" }
     }
 
     func plant(_ id: UUID) -> Plant { state.plants[id.uuidString] ?? Plant() }

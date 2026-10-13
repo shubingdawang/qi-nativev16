@@ -15,6 +15,8 @@ struct ClawdHomeView: View {
     @Environment(\.dismiss) private var dismiss
     /// 从小岛进屋时传进来：左上角多一颗「回小岛」（这一页把导航栏藏了，没有返回键）
     var backToIsland: (() -> Void)? = nil
+    /// 从小岛哪座小屋进来的：先看那一间
+    var startRoom: HomeRoom? = nil
 
     @State private var tab = 0            // 0 房间，1 柜子，2 商店
     /// 商店里买完那一句。**买完不跳回房间**——她报的「在商店购买物品会自动回到房间的页面」，
@@ -689,7 +691,8 @@ struct ClawdHomeView: View {
 
             Picker("", selection: $tab) {
                 Text("房间").tag(0)
-                Text("柜子").tag(1)
+                Text("家具").tag(1)
+                Text("衣柜").tag(3)
                 Text("商店").tag(2)
             }
             .pickerStyle(.segmented)
@@ -714,6 +717,8 @@ struct ClawdHomeView: View {
                     sheetEntry
                     cabinet
                 }
+            case 3:
+                wardrobe
             default:
                 shop
                     .overlay(alignment: .bottom) {
@@ -750,6 +755,7 @@ struct ClawdHomeView: View {
             // 进来就落在他待着的那一间（她要的）
             keepSleeping()
             hideTodayTreasure()
+            if let startRoom, viewing == nil { viewing = startRoom; following = false }
             if viewing == nil, following { viewing = store.clawdRoom }
             startWalking()
             startHim()
@@ -1523,6 +1529,9 @@ struct ClawdHomeView: View {
             titleVisibility: .visible
         ) {
             if let item = acting {
+                if ["wardrobe", "lolita_wardrobe", "vic_wardrobe", "xred_wardrobe", "rose_wardrobe"].contains(item.kind) {
+                    Button("打开衣柜") { tab = 3 }
+                }
                 // 小屋里能玩的那几样（见 `HomePlay`），排在最前面
                 if play.isPlant(item.kind) {
                     Button(play.thirsty(item.id) ? "浇水（它渴了）"
@@ -2289,7 +2298,8 @@ struct ClawdHomeView: View {
     private var cabinetGroups: [(kind: FurnitureKind, count: Int)] {
         var order: [String] = []
         var n: [String: Int] = [:]
-        for f in store.owned {
+        // 穿戴的都在衣柜那一档，这儿只放家具
+        for f in store.owned where FurnitureCatalog.kind(f.kind)?.category != .wear {
             if n[f.kind] == nil { order.append(f.kind) }
             n[f.kind, default: 0] += 1
         }
@@ -2380,6 +2390,90 @@ struct ClawdHomeView: View {
                     .foregroundStyle(Theme.textMuted(scheme))
             }
         }
+    }
+
+    // MARK: 衣柜
+
+    /// 买来的衣服 + 她自己做的衣服，点一下穿上、再点脱下
+    private var wardrobe: some View {
+        let bought = cabinetWear
+        let mine = CustomWearStore.shared.items
+        return ScrollView {
+            VStack(spacing: 14) {
+                ClawdRigView(mood: .idle, wornIDs: store.wornIDs, scale: 3.2, shadow: true)
+                    .frame(height: 36 * 3.2 * 0.62, alignment: .bottom)
+                    .clipped()
+                    .padding(.top, 6)
+                if bought.isEmpty && mine.isEmpty {
+                    Text("衣柜还是空的。商店里能买衣服，拼豆导出页能把画的做成衣服。")
+                        .font(.app(12))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 30)
+                }
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3),
+                          spacing: 12) {
+                    ForEach(bought, id: \.id) { kind in
+                        wearCard(id: kind.id, name: kind.name) {
+                            FurnitureThumb(kind: kind, height: 34, scale: 1.4)
+                        }
+                    }
+                    ForEach(mine) { w in
+                        wearCard(id: w.id, name: w.name) {
+                            if let img = CustomWearStore.shared.image(w.id) {
+                                Image(uiImage: img).resizable().interpolation(.none)
+                                    .frame(width: 44, height: 44)
+                            }
+                        }
+                        .contextMenu {
+                            Button(role: .destructive) { CustomWearStore.shared.delete(w.id) } label: {
+                                Label("删除", systemImage: Icon.trash)
+                            }
+                        }
+                    }
+                }
+                Text("轻点穿上，再点一下脱下。同一个位置一次只穿一件。")
+                    .font(.app(10))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, Layout.tabBarExpanded + 12)
+        }
+    }
+
+    /// 买过的穿戴（每种一张）
+    private var cabinetWear: [FurnitureKind] {
+        var seen = Set<String>()
+        return store.owned.compactMap { f in
+            guard let k = FurnitureCatalog.kind(f.kind), k.category == .wear,
+                  seen.insert(k.id).inserted else { return nil }
+            return k
+        }
+    }
+
+    private func wearCard<V: View>(id: String, name: String, @ViewBuilder thumb: () -> V) -> some View {
+        let on = store.isWearing(id)
+        return VStack(spacing: 6) {
+            thumb().frame(height: 44)
+            Text(name).font(.app(10)).lineLimit(1)
+                .foregroundStyle(Theme.textMain(scheme))
+            Text(on ? "脱下" : "穿上")
+                .font(.app(10.5, weight: .medium))
+                .foregroundStyle(on ? Theme.textMuted(scheme) : app.settings.accentColor)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .glassCard(padding: 0)
+        .overlay(alignment: .topTrailing) {
+            if on {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.app(12))
+                    .foregroundStyle(app.settings.accentColor)
+                    .padding(5)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { store.wear(id) }
     }
 
     // MARK: 商店

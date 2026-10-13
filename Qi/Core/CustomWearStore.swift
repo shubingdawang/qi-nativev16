@@ -18,8 +18,9 @@ struct CustomWear: Codable, Identifiable, Hashable {
     /// 眼睛画在这件衣服上面（她画的整套衣服默认开）
     var eyesOnTop: Bool?
     /// 眼睛挪几格（挪到她画眼睛的地方）
-    var eyeDX: Int?
-    var eyeDY: Int?
+    var eyeDX: Double?
+    var eyeDY: Double?
+    var eyeScale: Double?
 }
 
 extension CustomWear {
@@ -33,8 +34,9 @@ extension CustomWear {
         armL = (try? c.decodeIfPresent(String.self, forKey: .armL)) ?? nil
         armR = (try? c.decodeIfPresent(String.self, forKey: .armR)) ?? nil
         eyesOnTop = (try? c.decodeIfPresent(Bool.self, forKey: .eyesOnTop)) ?? nil
-        eyeDX = (try? c.decodeIfPresent(Int.self, forKey: .eyeDX)) ?? nil
-        eyeDY = (try? c.decodeIfPresent(Int.self, forKey: .eyeDY)) ?? nil
+        eyeDX = (try? c.decodeIfPresent(Double.self, forKey: .eyeDX)) ?? nil
+        eyeDY = (try? c.decodeIfPresent(Double.self, forKey: .eyeDY)) ?? nil
+        eyeScale = (try? c.decodeIfPresent(Double.self, forKey: .eyeScale)) ?? nil
     }
 }
 
@@ -61,7 +63,8 @@ final class CustomWearStore: ObservableObject {
 
     @discardableResult
     func add(_ image: UIImage, slot: ClawdRig.WearSlot, name: String) -> CustomWear? {
-        guard let file = ImageStore.save(image) else { return nil }
+        // ⚠️ 存 PNG：存成 jpg 的话透明的地方全变白——抠掉的脸、衣服外面那一圈都成了白块
+        guard let file = ImageStore.savePNG(image) else { return nil }
         let id = "cw_\(slot.rawValue)_" + String(UUID().uuidString.prefix(8)).lowercased()
         let item = CustomWear(id: id, name: name.isEmpty ? "自制" : name, imageName: file, slot: slot.rawValue)
         items.insert(item, at: 0)
@@ -75,8 +78,9 @@ final class CustomWearStore: ObservableObject {
         item.eyesOnTop = eyesOnTop
         item.eyeDX = layers.eyeDX
         item.eyeDY = layers.eyeDY
-        item.armL = layers.left.flatMap { ImageStore.save($0) }
-        item.armR = layers.right.flatMap { ImageStore.save($0) }
+        item.eyeScale = layers.eyeScale
+        item.armL = layers.left.flatMap { ImageStore.savePNG($0) }
+        item.armR = layers.right.flatMap { ImageStore.savePNG($0) }
         items[0] = item
         return item
     }
@@ -87,13 +91,13 @@ final class CustomWearStore: ObservableObject {
     }
 
     /// 眼睛要挪几格（穿着的那件里第一件要露眼睛的）
-    func eyeShift(_ wornIDs: [String]) -> (dx: Int, dy: Int) {
+    func eyeShift(_ wornIDs: [String]) -> (dx: Double, dy: Double, scale: Double) {
         for id in wornIDs where id.hasPrefix("cw_") {
             if let item = items.first(where: { $0.id == id }), item.eyesOnTop == true {
-                return (item.eyeDX ?? 0, item.eyeDY ?? 0)
+                return (item.eyeDX ?? 0, item.eyeDY ?? 0, item.eyeScale ?? 1)
             }
         }
-        return (0, 0)
+        return (0, 0, 1)
     }
 
     /// 身上穿着的那几件里，左手 / 右手的袖子

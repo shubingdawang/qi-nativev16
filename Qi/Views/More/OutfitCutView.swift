@@ -49,6 +49,7 @@ struct OutfitCutView: View {
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button("关闭") { dismiss() } } }
             .onAppear {
                 if title.isEmpty { title = name }
+                baseScale = cut.scale
                 refresh()
             }
             .alert(done ?? "", isPresented: Binding(get: { done != nil }, set: { if !$0 { done = nil } })) {
@@ -121,13 +122,13 @@ struct OutfitCutView: View {
 
     private var adjustCard: some View {
         VStack(spacing: 10) {
+            slider("衣服大小", value: Binding(get: { cut.scale / max(0.0001, baseScale) },
+                                           set: { zoomTo($0) }), range: 0.5...1.6)
             HStack(spacing: 10) {
-                nudge("缩小", "minus.magnifyingglass") { zoom(1 / 1.05) }
-                nudge("放大", "plus.magnifyingglass") { zoom(1.05) }
-                nudge("左", "arrow.left") { cut.offX -= 0.5; refresh() }
-                nudge("右", "arrow.right") { cut.offX += 0.5; refresh() }
-                nudge("上", "arrow.up") { cut.offY -= 0.5; refresh() }
-                nudge("下", "arrow.down") { cut.offY += 0.5; refresh() }
+                nudge("左", "arrow.left") { cut.offX -= 0.25; refresh() }
+                nudge("右", "arrow.right") { cut.offX += 0.25; refresh() }
+                nudge("上", "arrow.up") { cut.offY -= 0.25; refresh() }
+                nudge("下", "arrow.down") { cut.offY += 0.25; refresh() }
             }
             HStack {
                 Toggle(cut.drawnEyeCenter() != nil ? "眼睛按我画的位置" : "眼睛露在衣服外面",
@@ -137,12 +138,22 @@ struct OutfitCutView: View {
                     .tint(app.settings.accentColor)
                 Spacer(minLength: 12)
                 Button {
-                    cut.autoFit(); refresh()
+                    cut.autoFit(); baseScale = cut.scale
+                    cut.eyeNudgeX = 0; cut.eyeNudgeY = 0; cut.eyeScale = 1
+                    refresh()
                 } label: {
                     Label("自动对齐", systemImage: "wand.and.stars").font(.app(12.5))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(app.settings.accentColor)
+            }
+            if cut.eyesOnTop {
+                slider("眼睛左右", value: Binding(get: { cut.eyeNudgeX },
+                                              set: { cut.eyeNudgeX = $0; refresh() }), range: -6...6)
+                slider("眼睛上下", value: Binding(get: { cut.eyeNudgeY },
+                                              set: { cut.eyeNudgeY = $0; refresh() }), range: -8...8)
+                slider("眼睛大小", value: Binding(get: { cut.eyeScale },
+                                              set: { cut.eyeScale = $0; refresh() }), range: 0.6...1.8)
             }
             Text(cut.coveredEyes() > 0 && !cut.eyesOnTop
                  ? "眼睛还被衣服盖住一点，可以挪一挪，或者打开「眼睛露在衣服外面」。"
@@ -153,6 +164,23 @@ struct OutfitCutView: View {
         }
         .padding(14)
         .glassCard(padding: 0)
+    }
+
+    /// 自动对齐时的大小，滑条以它为 1
+    @State private var baseScale: Double = 1
+
+    private func zoomTo(_ v: Double) {
+        let want = baseScale * v
+        guard cut.scale > 0 else { return }
+        zoom(want / cut.scale)
+    }
+
+    private func slider(_ title: String, value: Binding<Double>, range: ClosedRange<Double>) -> some View {
+        HStack(spacing: 10) {
+            Text(title).font(.app(12.5)).foregroundStyle(Theme.textSoft(scheme))
+                .frame(width: 66, alignment: .leading)
+            Slider(value: value, in: range).tint(app.settings.accentColor)
+        }
     }
 
     /// 绕 clawd 身子中心放大缩小

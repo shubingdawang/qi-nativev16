@@ -130,6 +130,9 @@ struct IsoRoomView<Clawd: View>: View {
                                grain: false,
                                curtain: store.curtainHex)
                 floor(geoRoom)
+                    // ⚠️ 地板画在墙那一层的像素图里了，这一层本身是透明的——
+                    // 不圈出可点范围的话手指落在地板上没人接，拖动被外面的弹窗抢走（她报的「平的视角无法左右拖动，整个弹窗往下」）
+                    .contentShape(geoRoom.floorPath)
                     // ⚠️ **拖动挂在地板这一层，不挂在整块上。**
                     //
                     // 挂在整块上的话，它会跟「长按拎起一件家具」抢同一下手指。
