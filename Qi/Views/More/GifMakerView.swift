@@ -49,7 +49,8 @@ struct GifSpec {
 }
 
 enum GifMotion: String, CaseIterable, Identifiable {
-    case none, bounce, shake, heartbeat, jelly, float, jitter, walk, spin, pop, zoom
+    case none, bounce, shake, heartbeat, jelly, float, jitter, walk, spin, pop, zoom,
+         nod, sway, hop, faint, flyaway, blink
     var id: String { rawValue }
     var label: String {
         switch self {
@@ -64,6 +65,12 @@ enum GifMotion: String, CaseIterable, Identifiable {
         case .spin: return "转圈"
         case .pop: return "冒出来"
         case .zoom: return "怼脸"
+        case .nod: return "点头"
+        case .sway: return "左右摇摆"
+        case .hop: return "蹦蹦跳跳"
+        case .faint: return "倒下"
+        case .flyaway: return "飞走"
+        case .blink: return "一闪一闪"
         }
     }
 }
@@ -124,18 +131,18 @@ enum GifEffect: String, CaseIterable, Identifiable {
 enum GifSprites {
     static let heart = [".oo.oo.", "offoffo", "ofwfffo", "offfffo", ".offfo.", "..ofo..", "...o..."]
     static let spark = ["..o..", ".ofo.", "ofwfo", ".ofo.", "..o.."]
-    static let star = ["...o...", "..ofo..", "ooffoo.", "offwffo", ".offfo.", ".ofoffo", ".o...o."]
-    static let drop = ["..o..", ".ofo.", ".ofo.", "offfo", "ofwfo", "offfo", ".ooo."]
+    static let star = ["......o......", ".....ofo.....", ".....ofo.....", "....offfo....", ".oooofffoooo.", "offffwwfffffo", ".ooffwffffoo.", "...offfffo...", "...offfffo...", "...offfffo...", "..offoooffo..", "...oo...oo..."]
+    static let drop = ["..o..", ".ofo.", ".ofo.", "offfo", "owffo", "offfo", ".ooo."]
     static let note = ["...ooo", "...ofo", "...o.o", "...o..", ".ooo..", "offo..", "offo..", ".oo..."]
-    static let anger = ["ff.ff", "f...f", ".....", "f...f", "ff.ff"]
-    static let petal = [".oo.", "ofwo", "offo", ".oo."]
-    static let zee = ["oooo", "..o.", ".o..", "oooo"]
-    static let question = [".ooo.", "o...o", "...o.", "..o..", "..o..", ".....", "..o.."]
-    static let exclaim = ["o", "o", "o", "o", ".", "o"]
+    static let anger = ["....o...o....", "...ofo.ofo...", "...ofo.ofo...", ".ooffo.offoo.", "offfo...offfo", ".ooo.....ooo.", ".............", ".ooo.....ooo.", "offfo...offfo", ".ooffo.offoo.", "...ofo.ofo...", "...ofo.ofo...", "....o...o...."]
+    static let petal = ["..oooffo", ".offfffo", "offwfffo", "ofwfffo.", "offfffo.", "offfffo.", ".ooffo..", "...oo..."]
+    static let zee = [".oooooo.", "offffffo", ".ooooffo", "...offo.", "..offo..", ".offooo.", "offffffo", ".oooooo."]
+    static let question = ["..ooo..", ".offfo.", "offoffo", ".oooffo", "..offo.", "..offo.", "...oo..", "..offo.", "...oo.."]
+    static let exclaim = [".oo.", "offo", "offo", "offo", "offo", ".oo.", "offo", ".oo."]
     static let fireA = ["..o..", ".ofo.", ".ofo.", "offfo", "ofwfo", "ofwfo", ".ooo."]
     static let fireB = [".o...", ".ofo.", "offo.", "offfo", "ofwfo", "ofwfo", ".ooo."]
     static let bubble = [".ooo.", "ow..o", "o...o", "o...o", ".ooo."]
-    static let bolt = ["..oo", ".off", ".fo.", "offo", ".ff.", ".f..", "f..."]
+    static let bolt = ["....offfo", "....offo.", "...ofwfo.", "..offwo..", "..ofwfo..", ".offfooo.", "offfffffo", ".ooofffo.", "...offo..", "..offfo..", "..offo...", "..ofo....", "...o....."]
     static let flower = [".o.o.", "ofofo", ".owo.", "ofofo", ".o.o."]
 }
 
@@ -291,6 +298,31 @@ enum GifFrame {
             let e = min(1, t / 0.4)
             p.sx = 1 + 0.28 * (1 - pow(1 - e, 3)); p.sy = p.sx
             p.dy = 0.06 * e
+        case .nod:
+            // 往前点两下：绕脚底往前倾，头低下去
+            let s = max(0, sin(t * tau * 2))
+            p.rot = s * 8
+            p.sy = 1 - s * 0.05
+        case .sway:
+            p.rot = sin(t * tau) * 9
+            p.dx = sin(t * tau) * 0.03
+        case .hop:
+            let ph = (t * 4).truncatingRemainder(dividingBy: 1)
+            p.dy = -abs(sin(ph * .pi)) * 0.06
+            if ph < 0.15 || ph > 0.85 { p.sx = 1.06; p.sy = 0.92 }
+        case .faint:
+            // 晃两下，倒下去，躺一会儿
+            if t < 0.3 { p.rot = sin(t / 0.3 * tau * 2) * 6 }
+            else if t < 0.5 { p.rot = (t - 0.3) / 0.2 * 90 }
+            else { p.rot = 90 }
+        case .flyaway:
+            let e = t < 0.8 ? t / 0.8 : 1
+            p.dy = -e * e * 0.9
+            p.dx = sin(e * tau) * 0.05
+            p.alpha = t < 0.8 ? 1 - e * 0.3 : 0
+            if t >= 0.9 { p.dy = 0; p.alpha = (t - 0.9) / 0.1 }
+        case .blink:
+            p.alpha = Int(t * 6) % 2 == 0 ? 1 : 0.15
         }
         return p
     }
