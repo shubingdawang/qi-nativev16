@@ -30,8 +30,22 @@ struct GifSpec {
     var whiteBG = false
     /// 图占画面多大
     var imageScale: Double = 0.74
+    /// 特效什么颜色（空 = 那种特效自己的颜色）、多少（1 = 正常）
+    var effectColor = ""
+    var effectAmount: Double = 1
+    /// 自己做的逐帧动画。有它就按它画，不走上面那套动作
+    var anim: GifAnim?
+    /// 正在编辑第几帧（预览停在这一帧，不播）；淡影显示哪一帧
+    var editFrame: Int?
+    var onionFrame: Int?
 
     static let frames = 24
+
+    /// 导出几帧：逐帧动画不补间时就是她摆的那几帧
+    var exportFrames: Int {
+        if let a = anim, !a.tween { return a.count }
+        return Self.frames
+    }
 }
 
 enum GifMotion: String, CaseIterable, Identifiable {
@@ -55,40 +69,74 @@ enum GifMotion: String, CaseIterable, Identifiable {
 }
 
 enum GifEffect: String, CaseIterable, Identifiable {
-    case none, hearts, sparkles, rain, sweat, anger, notes, petals, sleepy, question, fire, tears
+    case none, hearts, sparkles, stars, rain, sweat, anger, notes, petals, sleepy, question, exclaim,
+         fire, tears, confetti, bubbles, blush, lightning, flowers, shine, speed
     var id: String { rawValue }
     var label: String {
         switch self {
         case .none: return "无"
         case .hearts: return "冒爱心"
         case .sparkles: return "闪闪"
+        case .stars: return "转星星"
         case .rain: return "下雨"
         case .sweat: return "流汗"
         case .anger: return "生气"
         case .notes: return "哼歌"
-        case .petals: return "飘花"
+        case .petals: return "飘花瓣"
         case .sleepy: return "犯困"
         case .question: return "问号"
+        case .exclaim: return "感叹号"
         case .fire: return "燃起来"
         case .tears: return "掉眼泪"
+        case .confetti: return "撒彩纸"
+        case .bubbles: return "吐泡泡"
+        case .blush: return "脸红"
+        case .lightning: return "被雷劈"
+        case .flowers: return "开小花"
+        case .shine: return "集中线"
+        case .speed: return "飞快"
         }
     }
-    var glyph: String {
+    /// 这种特效自己的颜色
+    var tint: String {
         switch self {
-        case .none: return ""
-        case .hearts: return "💕"
-        case .sparkles: return "✨"
-        case .rain: return "💧"
-        case .sweat: return "💦"
-        case .anger: return "💢"
-        case .notes: return "🎵"
-        case .petals: return "🌸"
-        case .sleepy: return "💤"
-        case .question: return "❓"
-        case .fire: return "🔥"
-        case .tears: return "💧"
+        case .hearts: return "F2708F"
+        case .sparkles, .stars: return "FFD45E"
+        case .rain, .sweat, .tears, .bubbles: return "8FD0F0"
+        case .anger: return "EF5350"
+        case .notes: return "9D8BE0"
+        case .petals, .flowers: return "F6A9C0"
+        case .sleepy: return "A9B8E8"
+        case .question, .exclaim: return "FFB547"
+        case .fire: return "FF8A3D"
+        case .confetti: return "F2708F"
+        case .blush: return "F48FA5"
+        case .lightning: return "FFE14D"
+        case .shine, .speed: return "FFFFFF"
+        case .none: return "FFFFFF"
         }
     }
+    /// 画在图后面的（不挡住脸）
+    var behind: Bool { [.rain, .petals, .confetti, .shine, .speed].contains(self) }
+}
+
+/// 特效用的小像素图：`f` 填色、`w` 高光、`o` 描边、`.` 空。都是一笔一笔画的，不用 emoji
+enum GifSprites {
+    static let heart = [".oo.oo.", "offoffo", "ofwfffo", "offfffo", ".offfo.", "..ofo..", "...o..."]
+    static let spark = ["..o..", ".ofo.", "ofwfo", ".ofo.", "..o.."]
+    static let star = ["...o...", "..ofo..", "ooffoo.", "offwffo", ".offfo.", ".ofoffo", ".o...o."]
+    static let drop = ["..o..", ".ofo.", ".ofo.", "offfo", "ofwfo", "offfo", ".ooo."]
+    static let note = ["...ooo", "...ofo", "...o.o", "...o..", ".ooo..", "offo..", "offo..", ".oo..."]
+    static let anger = ["ff.ff", "f...f", ".....", "f...f", "ff.ff"]
+    static let petal = [".oo.", "ofwo", "offo", ".oo."]
+    static let zee = ["oooo", "..o.", ".o..", "oooo"]
+    static let question = [".ooo.", "o...o", "...o.", "..o..", "..o..", ".....", "..o.."]
+    static let exclaim = ["o", "o", "o", "o", ".", "o"]
+    static let fireA = ["..o..", ".ofo.", ".ofo.", "offfo", "ofwfo", "ofwfo", ".ooo."]
+    static let fireB = [".o...", ".ofo.", "offo.", "offfo", "ofwfo", "ofwfo", ".ooo."]
+    static let bubble = [".ooo.", "ow..o", "o...o", "o...o", ".ooo."]
+    static let bolt = ["..oo", ".off", ".fo.", "offo", ".ff.", ".f..", "f..."]
+    static let flower = [".o.o.", "ofofo", ".owo.", "ofofo", ".o.o."]
 }
 
 enum GifFont: String, CaseIterable, Identifiable {
@@ -145,14 +193,11 @@ enum GifFrame {
             g.setFillColor(UIColor.white.cgColor)
             g.fill(CGRect(x: 0, y: 0, width: side, height: side))
         }
-        // 身后那一层特效（下雨、飘花）
-        if [.rain, .petals].contains(spec.effect) {
-            drawEffect(spec.effect, side: side, t: t)
-        }
+        // 图摆在哪：特效围着它冒
+        let box = imageBox(image, spec: spec, side: side)
+        if spec.effect.behind { drawEffect(spec, box: box, side: side, t: t) }
         if let image { drawImage(image, spec: spec, side: side, t: t, in: g) }
-        if ![.rain, .petals, .none].contains(spec.effect) {
-            drawEffect(spec.effect, side: side, t: t)
-        }
+        if spec.effect != .none, !spec.effect.behind { drawEffect(spec, box: box, side: side, t: t) }
         drawText(spec, side: side, t: t)
     }
 
@@ -162,7 +207,8 @@ enum GifFrame {
         let box = side * CGFloat(spec.imageScale)
         let fit = min(box / iw, box / ih)
         let w = iw * fit, h = ih * fit
-        let m = motion(spec.motion, t: t)
+        // 正在编辑某一帧时不套整体动作，停在原位好摆
+        let m = spec.editFrame == nil ? motion(spec.motion, t: t) : Pose()
         g.saveGState()
         g.interpolationQuality = spec.pixel ? .none : .high
         // 绕脚底变形（蹦跳、果冻落地时是脚底不动）
@@ -172,8 +218,27 @@ enum GifFrame {
         g.rotate(by: CGFloat(m.rot) * .pi / 180)
         g.scaleBy(x: CGFloat(m.sx), y: CGFloat(m.sy))
         g.setAlpha(CGFloat(m.alpha))
-        image.draw(in: CGRect(x: -w / 2, y: -h, width: w, height: h))
+        let local = CGRect(x: -w / 2, y: -h, width: w, height: h)
+        if let anim = spec.anim {
+            if let o = spec.onionFrame, o >= 0 {
+                drawParts(anim, in: local, t: t, frame: o, alpha: 0.3, pixel: spec.pixel, in: g)
+            }
+            drawParts(anim, in: local, t: t, frame: spec.editFrame, alpha: CGFloat(m.alpha), pixel: spec.pixel, in: g)
+        } else {
+            image.draw(in: local)
+        }
         g.restoreGState()
+    }
+
+    /// 图在画面上占的那一块（不算动作）
+    static func imageBox(_ image: UIImage?, spec: GifSpec, side: CGFloat) -> CGRect {
+        guard let image, image.size.width > 0, image.size.height > 0 else {
+            return CGRect(x: side * 0.2, y: side * 0.2, width: side * 0.6, height: side * 0.6)
+        }
+        let box = side * CGFloat(spec.imageScale)
+        let fit = min(box / image.size.width, box / image.size.height)
+        let w = image.size.width * fit, h = image.size.height * fit
+        return CGRect(x: side / 2 - w / 2, y: side / 2 - h / 2, width: w, height: h)
     }
 
     struct Pose { var dx = 0.0, dy = 0.0, rot = 0.0, sx = 1.0, sy = 1.0, alpha = 1.0 }
@@ -230,65 +295,175 @@ enum GifFrame {
         return p
     }
 
-    /// 身边飘的那些。每一颗的位置只由 t 和它自己的序号算出来，一圈首尾接得上
-    private static func drawEffect(_ e: GifEffect, side: CGFloat, t: Double) {
-        guard e != .none else { return }
-        let glyph = e.glyph
-        func put(_ x: Double, _ y: Double, _ size: Double, _ alpha: Double, _ rot: Double = 0) {
+    /// 身边冒的那些。每一颗的位置只由 t 和它自己的序号算出来，一圈首尾接得上。
+    /// 画的是小像素图（`GifSprites`），颜色、多少她能调
+    private static func drawEffect(_ spec: GifSpec, box: CGRect, side: CGFloat, t: Double) {
+        let e = spec.effect
+        guard e != .none, let g = UIGraphicsGetCurrentContext() else { return }
+        let col = UIColor(beadHex: spec.effectColor.isEmpty ? e.tint : spec.effectColor) ?? .white
+        let ink = UIColor(beadHex: "4A3442") ?? .black
+        let hi = UIColor.white
+        let ps = max(1.5, (side / 72).rounded())        // 一个像素多大
+        let amount = max(0.4, spec.effectAmount)
+        let tau = 2 * Double.pi
+        func n(_ base: Int) -> Int { max(1, Int((Double(base) * amount).rounded())) }
+        func put(_ rows: [String], _ cx: CGFloat, _ cy: CGFloat, alpha: CGFloat = 1, k: CGFloat = 1,
+                 fill: UIColor? = nil) {
             guard alpha > 0.02 else { return }
-            let font = UIFont.systemFont(ofSize: CGFloat(size) * side)
-            let s = NSAttributedString(string: glyph, attributes: [.font: font])
-            let sz = s.size()
-            guard let g = UIGraphicsGetCurrentContext() else { return }
+            let p = ps * k
+            let hgt = CGFloat(rows.count), wid = CGFloat(rows.first?.count ?? 0)
+            let x0 = (cx - wid * p / 2).rounded(), y0 = (cy - hgt * p / 2).rounded()
             g.saveGState()
-            g.setAlpha(CGFloat(alpha))
-            g.translateBy(x: CGFloat(x) * side, y: CGFloat(y) * side)
-            g.rotate(by: CGFloat(rot) * .pi / 180)
-            s.draw(at: CGPoint(x: -sz.width / 2, y: -sz.height / 2))
+            g.setAlpha(alpha)
+            for (y, row) in rows.enumerated() {
+                for (x, ch) in row.enumerated() {
+                    let c: UIColor
+                    switch ch {
+                    case "f": c = fill ?? col
+                    case "w": c = hi
+                    case "o": c = ink
+                    default: continue
+                    }
+                    g.setFillColor(c.cgColor)
+                    g.fill(CGRect(x: x0 + CGFloat(x) * p, y: y0 + CGFloat(y) * p, width: p + 0.5, height: p + 0.5))
+                }
+            }
             g.restoreGState()
         }
-        let tau = 2 * Double.pi
+        let top = box.minY, midX = box.midX
         switch e {
-        case .hearts, .notes, .sleepy, .fire:
+        case .hearts, .notes:
             // 从身边往上冒，越高越淡
-            let n = e == .sleepy ? 3 : 4
-            for i in 0..<n {
-                let ph = (t + Double(i) / Double(n)).truncatingRemainder(dividingBy: 1)
-                let side0 = e == .sleepy ? 0.72 : (i % 2 == 0 ? 0.22 : 0.78)
-                let x = side0 + sin(ph * tau + Double(i)) * 0.04 + (e == .sleepy ? ph * 0.1 : 0)
-                let y = 0.55 - ph * 0.45
-                let size = (e == .sleepy ? 0.07 + ph * 0.06 : 0.1)
-                put(x, y, size, ph < 0.15 ? ph / 0.15 : 1 - (ph - 0.15) / 0.85)
+            let rows = e == .hearts ? GifSprites.heart : GifSprites.note
+            let k = n(4)
+            for i in 0..<k {
+                let ph = (t + Double(i) / Double(k)).truncatingRemainder(dividingBy: 1)
+                let left = i % 2 == 0
+                let x = (left ? box.minX : box.maxX) + CGFloat(sin(ph * tau + Double(i)) * 6) + (left ? -6 : 6)
+                let y = box.midY - CGFloat(ph) * box.height * 0.8
+                let a = ph < 0.15 ? ph / 0.15 : 1 - (ph - 0.15) / 0.85
+                put(rows, x, y, alpha: CGFloat(a), k: 0.9 + CGFloat(ph) * 0.4)
             }
         case .sparkles:
-            let spots: [(Double, Double)] = [(0.2, 0.25), (0.8, 0.3), (0.15, 0.62), (0.85, 0.66), (0.5, 0.12)]
-            for (i, s) in spots.enumerated() {
+            let spots: [(CGFloat, CGFloat)] = [(-0.1, 0.05), (1.08, 0.12), (-0.05, 0.6), (1.05, 0.7), (0.5, -0.12), (0.2, -0.05)]
+            for (i, sp) in spots.prefix(n(5)).enumerated() {
                 let ph = (t * 2 + Double(i) * 0.37).truncatingRemainder(dividingBy: 1)
                 let a = sin(ph * .pi)
-                put(s.0, s.1, 0.06 + a * 0.05, a)
+                put(GifSprites.spark, box.minX + box.width * sp.0, box.minY + box.height * sp.1,
+                    alpha: CGFloat(a), k: 0.8 + CGFloat(a) * 0.6)
             }
-        case .rain, .petals:
-            let n = e == .rain ? 9 : 7
-            for i in 0..<n {
-                let x0 = (Double(i) + 0.5) / Double(n) + sin(Double(i) * 2.3) * 0.04
-                let ph = (t * (e == .rain ? 2 : 1) + Double(i) * 0.29).truncatingRemainder(dividingBy: 1)
-                let x = x0 + (e == .petals ? sin(ph * tau + Double(i)) * 0.05 : 0)
-                put(x, -0.05 + ph * 1.1, e == .rain ? 0.05 : 0.07, 0.9, e == .petals ? ph * 360 : 0)
+        case .stars:
+            // 一圈星星绕着头顶转
+            let k = n(4)
+            for i in 0..<k {
+                let a = (t + Double(i) / Double(k)) * tau
+                put(GifSprites.star, midX + CGFloat(cos(a)) * box.width * 0.42,
+                    top + CGFloat(sin(a)) * box.height * 0.08 - ps * 3)
+            }
+        case .rain, .petals, .confetti:
+            let k = n(e == .rain ? 10 : 8)
+            let palette = ["F2708F", "FFD45E", "8FD0F0", "B8DE9C", "C9A7DE"]
+            for i in 0..<k {
+                let x0 = (Double(i) + 0.5) / Double(k) + sin(Double(i) * 2.3) * 0.04
+                let speed = e == .rain ? 2.0 : 1.0
+                let ph = (t * speed + Double(i) * 0.29).truncatingRemainder(dividingBy: 1)
+                let x = CGFloat(x0 + (e == .rain ? 0 : sin(ph * tau + Double(i)) * 0.05)) * side
+                let y = CGFloat(-0.05 + ph * 1.1) * side
+                switch e {
+                case .rain: put(GifSprites.drop, x, y, alpha: 0.85, k: 0.7)
+                case .petals: put(GifSprites.petal, x, y, alpha: 0.95)
+                default:
+                    let c = UIColor(beadHex: palette[i % palette.count]) ?? col
+                    put(["ff", "ff"], x, y, fill: spec.effectColor.isEmpty ? c : col)
+                }
             }
         case .sweat:
             let ph = t.truncatingRemainder(dividingBy: 1)
-            put(0.78, 0.2 + ph * 0.18, 0.1, ph < 0.8 ? 1 : (1 - ph) / 0.2)
+            put(GifSprites.drop, box.maxX - box.width * 0.12, top + box.height * (0.08 + CGFloat(ph) * 0.25),
+                alpha: ph < 0.8 ? 1 : CGFloat((1 - ph) / 0.2), k: 1.2)
         case .anger:
-            let a = 0.6 + 0.4 * abs(sin(t * tau * 2))
-            put(0.76, 0.2, 0.09 + 0.03 * a, 1)
-        case .question:
-            let a = sin(t * tau) * 12
-            put(0.78, 0.18, 0.12, 1, a)
-        case .tears:
-            for i in 0..<2 {
-                let ph = (t * 2 + Double(i) * 0.5).truncatingRemainder(dividingBy: 1)
-                put(i == 0 ? 0.36 : 0.64, 0.45 + ph * 0.3, 0.06, 1 - ph)
+            let a = 0.8 + 0.35 * abs(sin(t * tau * 2))
+            put(GifSprites.anger, box.maxX - box.width * 0.1, top + box.height * 0.08, k: CGFloat(a) * 1.4)
+        case .sleepy:
+            let k = n(3)
+            for i in 0..<k {
+                let ph = (t + Double(i) / Double(k)).truncatingRemainder(dividingBy: 1)
+                put(GifSprites.zee, box.maxX + CGFloat(ph) * box.width * 0.2, top + box.height * 0.2 - CGFloat(ph) * box.height * 0.4,
+                    alpha: CGFloat(1 - ph), k: 0.8 + CGFloat(ph) * 0.8, fill: col)
             }
+        case .question, .exclaim:
+            let a = sin(t * tau) * 0.15
+            let rows = e == .question ? GifSprites.question : GifSprites.exclaim
+            put(rows, box.maxX - box.width * 0.05, top - ps * 2 + CGFloat(a) * ps * 10, k: 1.5, fill: col)
+        case .fire:
+            let k = n(5)
+            for i in 0..<k {
+                let flick = Int(t * 12 + Double(i)) % 2 == 0
+                let x = box.minX + box.width * (CGFloat(i) + 0.5) / CGFloat(k)
+                put(flick ? GifSprites.fireA : GifSprites.fireB, x, box.maxY - ps * 3, k: 1.3)
+            }
+        case .tears:
+            for i in 0..<n(2) {
+                let ph = (t * 2 + Double(i) * 0.5).truncatingRemainder(dividingBy: 1)
+                let x = box.minX + box.width * (i % 2 == 0 ? 0.32 : 0.68)
+                put(GifSprites.drop, x, box.midY + CGFloat(ph) * box.height * 0.35, alpha: CGFloat(1 - ph), k: 0.8)
+            }
+        case .bubbles:
+            for i in 0..<n(5) {
+                let ph = (t + Double(i) * 0.21).truncatingRemainder(dividingBy: 1)
+                let x = box.maxX + CGFloat(sin(ph * tau * 2 + Double(i))) * 8
+                put(GifSprites.bubble, x, box.midY - CGFloat(ph) * box.height * 0.9, alpha: CGFloat(1 - ph * 0.8),
+                    k: 0.7 + CGFloat(ph) * 0.8)
+            }
+        case .blush:
+            // 两团腮红 + 三道斜线，一闪一闪
+            let a = 0.6 + 0.4 * abs(sin(t * tau))
+            for sx in [0.3, 0.7] {
+                put([".fff.", "fffff", ".fff."], box.minX + box.width * CGFloat(sx), box.minY + box.height * 0.55,
+                    alpha: CGFloat(a), k: 1.3)
+            }
+        case .lightning:
+            let on = Int(t * 8) % 2 == 0
+            if on {
+                g.saveGState()
+                g.setFillColor(UIColor.white.withAlphaComponent(0.25).cgColor)
+                g.fill(CGRect(x: 0, y: 0, width: side, height: side))
+                g.restoreGState()
+            }
+            put(GifSprites.bolt, box.midX + box.width * 0.25, top - ps * 2, alpha: on ? 1 : 0.6, k: 2)
+        case .flowers:
+            for i in 0..<n(6) {
+                let a = Double(i) / Double(n(6)) * tau + t * tau * 0.25
+                let ph = (t * 2 + Double(i) * 0.3).truncatingRemainder(dividingBy: 1)
+                put(GifSprites.flower, midX + CGFloat(cos(a)) * box.width * 0.62,
+                    box.midY + CGFloat(sin(a)) * box.height * 0.55, alpha: CGFloat(0.5 + 0.5 * sin(ph * .pi)))
+            }
+        case .shine:
+            // 集中线：从中心往外一圈长短不一的线，慢慢转
+            g.saveGState()
+            g.setStrokeColor(col.withAlphaComponent(0.85).cgColor)
+            g.setLineWidth(ps)
+            let c = CGPoint(x: box.midX, y: box.midY)
+            let k = n(28)
+            for i in 0..<k {
+                let a = Double(i) / Double(k) * tau + t * 0.6
+                let r0 = side * (i % 2 == 0 ? 0.36 : 0.42), r1 = side * 0.75
+                g.move(to: CGPoint(x: c.x + CGFloat(cos(a)) * r0, y: c.y + CGFloat(sin(a)) * r0))
+                g.addLine(to: CGPoint(x: c.x + CGFloat(cos(a)) * r1, y: c.y + CGFloat(sin(a)) * r1))
+            }
+            g.strokePath()
+            g.restoreGState()
+        case .speed:
+            g.saveGState()
+            g.setFillColor(col.withAlphaComponent(0.8).cgColor)
+            for i in 0..<n(8) {
+                let ph = (t * 3 + Double(i) * 0.37).truncatingRemainder(dividingBy: 1)
+                let y = box.minY + box.height * CGFloat(Double(i) / Double(n(8)))
+                let len = side * 0.18
+                let x = box.minX - CGFloat(ph) * side * 0.5
+                g.fill(CGRect(x: x.rounded() - len, y: y.rounded(), width: len, height: ps))
+            }
+            g.restoreGState()
         case .none:
             break
         }
@@ -358,7 +533,10 @@ enum GifFrame {
     /// 存成 GIF
     static func gif(_ image: UIImage?, spec: GifSpec, side: CGFloat = 240) -> Data? {
         let data = NSMutableData()
-        let n = GifSpec.frames
+        var spec = spec
+        spec.editFrame = nil
+        spec.onionFrame = nil
+        let n = spec.exportFrames
         guard let dest = CGImageDestinationCreateWithData(data, UTType.gif.identifier as CFString, n, nil)
         else { return nil }
         let delay = 2.0 / Double(n) / max(0.25, spec.speed)
@@ -414,6 +592,16 @@ struct GifMakerView: View {
     @State private var title = ""
     @State private var notice: String?
     @State private var dragFrom: (x: Double, y: Double)?
+    // 逐帧那一档
+    @State private var animFrame = 0
+    @State private var animPart: UUID?
+    @State private var animTool: GifAnimEditor.Tool = .pose
+    @State private var animPlaying = false
+    @State private var onion = true
+    @State private var poseFrom: PartPose?
+    @State private var cutRect: CGRect?
+    @State private var rotFrom: Double?
+    @State private var scaleFrom: Double?
 
     private let textColors = ["FFFFFF", "4A3442", "F4A9BB", "FFD86B", "A8D8F0", "B8DE9C", "E8758F", "1A1717"]
 
@@ -464,7 +652,7 @@ struct GifMakerView: View {
                 Button("取消", role: .cancel) {}
                 Button("存") { save() }
             } message: {
-                Text("存进表情库「我的」里，一圈 \(GifSpec.frames) 帧。")
+                Text("存进表情库「我的」里，一圈 \(spec.exportFrames) 帧。")
             }
             .alert(notice ?? "", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
                 Button("好") { notice = nil }
@@ -483,13 +671,15 @@ struct GifMakerView: View {
         TimelineView(.animation) { ctx in
             let period = 2.0 / max(0.25, spec.speed)
             let raw = ctx.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period
-            // 跟导出一样按 24 帧一跳，预览看到的就是存下来的节奏
-            let t = (raw * Double(GifSpec.frames)).rounded(.down) / Double(GifSpec.frames)
+            // 跟导出一样按帧一跳，预览看到的就是存下来的节奏
+            let nf = Double(spec.exportFrames)
+            let t = (raw * nf).rounded(.down) / nf
+            let shown = previewSpec
             Canvas { gc, size in
                 let side = min(size.width, size.height)
                 gc.withCGContext { cg in
                     UIGraphicsPushContext(cg)
-                    GifFrame.draw(base, spec: spec, side: side, t: t)
+                    GifFrame.draw(base, spec: shown, side: side, t: t)
                     UIGraphicsPopContext()
                 }
             }
@@ -504,17 +694,158 @@ struct GifMakerView: View {
                 }
             }
         }
+        .overlay(alignment: .topLeading) { animOverlay }
         .contentShape(Rectangle())
-        // 在预览上拖：挪字
-        .gesture(DragGesture(minimumDistance: 4)
+        // 在预览上拖：逐帧那一档按工具来，别的时候挪字
+        .gesture(stageDrag)
+        .simultaneousGesture(stageTurn)
+        .simultaneousGesture(stageZoom)
+    }
+
+    /// 预览用的参数：编辑逐帧、没在播的时候停在那一帧，带淡影
+    private var previewSpec: GifSpec {
+        var s = spec
+        if section == 4, spec.anim != nil, !animPlaying {
+            s.editFrame = animFrame
+            s.onionFrame = onion && animFrame > 0 ? animFrame - 1 : nil
+        }
+        return s
+    }
+
+    private var editingAnim: Bool { section == 4 && spec.anim != nil && !animPlaying }
+
+    /// 图在预览上占的那一块
+    private var stageBox: CGRect { GifFrame.imageBox(base, spec: spec, side: 260) }
+
+    private var selectedPart: UUID? { animPart ?? spec.anim?.parts.first?.id }
+
+    /// 选中部位的转轴、正在框的那一块
+    @ViewBuilder
+    private var animOverlay: some View {
+        if editingAnim, let a = spec.anim, let id = selectedPart, let part = a.parts.first(where: { $0.id == id }) {
+            let b = stageBox
+            let pose = a.pose(id, frame: animFrame)
+            let pv = CGPoint(x: b.minX + part.pivot.x * b.width + CGFloat(pose.dx) * b.width,
+                             y: b.minY + part.pivot.y * b.height + CGFloat(pose.dy) * b.width)
+            ZStack(alignment: .topLeading) {
+                Circle().stroke(app.settings.accentColor, lineWidth: 2)
+                    .frame(width: 14, height: 14)
+                    .position(pv)
+                Circle().fill(app.settings.accentColor).frame(width: 4, height: 4).position(pv)
+                if let r = cutRect {
+                    Rectangle().stroke(app.settings.accentColor, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                        .frame(width: r.width, height: r.height)
+                        .position(x: r.midX, y: r.midY)
+                }
+            }
+            .frame(width: 260, height: 260)
+            .allowsHitTesting(false)
+        }
+    }
+
+    /// 预览上一点 → 部位那张图上的像素
+    private func pixel(_ p: CGPoint, in img: UIImage) -> CGPoint {
+        let b = stageBox
+        return CGPoint(x: (p.x - b.minX) / b.width * img.size.width,
+                       y: (p.y - b.minY) / b.height * img.size.height)
+    }
+
+    private var stageDrag: some Gesture {
+        DragGesture(minimumDistance: 0)
             .onChanged { v in
-                guard !spec.text.isEmpty else { return }
+                if editingAnim {
+                    animDrag(v)
+                    return
+                }
+                guard !spec.text.isEmpty, v.translation != .zero else { return }
                 if dragFrom == nil { dragFrom = (spec.textX, spec.textY) }
                 guard let f = dragFrom else { return }
                 spec.textX = min(0.95, max(0.05, f.x + Double(v.translation.width / 260)))
                 spec.textY = min(0.95, max(0.05, f.y + Double(v.translation.height / 260)))
             }
-            .onEnded { _ in dragFrom = nil })
+            .onEnded { v in
+                dragFrom = nil
+                if editingAnim { animDragEnded(v) }
+            }
+    }
+
+    private func animDrag(_ v: DragGesture.Value) {
+        guard let id = selectedPart else { return }
+        switch animTool {
+        case .pose:
+            guard v.translation != .zero else { return }
+            if poseFrom == nil { poseFrom = spec.anim?.pose(id, frame: animFrame) }
+            guard var p = poseFrom else { return }
+            let w = max(1, stageBox.width)
+            p.dx += Double(v.translation.width / w)
+            p.dy += Double(v.translation.height / w)
+            spec.anim?.frames[animFrame][id] = p
+        case .rect:
+            let a = v.startLocation, b = v.location
+            cutRect = CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(a.x - b.x), height: abs(a.y - b.y))
+        default:
+            break
+        }
+    }
+
+    private func animDragEnded(_ v: DragGesture.Value) {
+        poseFrom = nil
+        guard var a = spec.anim, let id = selectedPart,
+              let part = a.parts.first(where: { $0.id == id }) else { return }
+        switch animTool {
+        case .rect:
+            defer { cutRect = nil }
+            guard let r = cutRect, r.width > 4, r.height > 4, let px = GifAnim.pixels(part.image) else { return }
+            let p0 = pixel(CGPoint(x: r.minX, y: r.minY), in: part.image)
+            let p1 = pixel(CGPoint(x: r.maxX, y: r.maxY), in: part.image)
+            let mask = GifAnim.rectMask(px, CGRect(x: p0.x, y: p0.y, width: p1.x - p0.x, height: p1.y - p0.y))
+            if let new = a.cut(from: id, mask: mask, name: "部位\(a.parts.count)") {
+                spec.anim = a
+                animPart = new
+            } else { notice = "这一块里没有东西" }
+        case .wand:
+            guard let px = GifAnim.pixels(part.image) else { return }
+            let p = pixel(v.location, in: part.image)
+            let mask = GifAnim.wandMask(px, Int(p.x), Int(p.y))
+            if let new = a.cut(from: id, mask: mask, name: "部位\(a.parts.count)") {
+                spec.anim = a
+                animPart = new
+            } else { notice = "点在选中部位有颜色的地方" }
+        case .pivot:
+            let b = stageBox
+            guard let k = a.parts.firstIndex(where: { $0.id == id }) else { return }
+            a.parts[k].pivot = CGPoint(x: min(1, max(0, (v.location.x - b.minX) / b.width)),
+                                       y: min(1, max(0, (v.location.y - b.minY) / b.height)))
+            spec.anim = a
+        case .pose:
+            break
+        }
+    }
+
+    private var stageTurn: some Gesture {
+        RotateGesture()
+            .onChanged { v in
+                guard editingAnim, animTool == .pose, let id = selectedPart else { return }
+                let now = spec.anim?.pose(id, frame: animFrame) ?? PartPose()
+                if rotFrom == nil { rotFrom = now.rot }
+                var p = now
+                p.rot = (rotFrom ?? 0) + v.rotation.degrees
+                spec.anim?.frames[animFrame][id] = p
+            }
+            .onEnded { _ in rotFrom = nil }
+    }
+
+    private var stageZoom: some Gesture {
+        MagnifyGesture()
+            .onChanged { v in
+                guard editingAnim, animTool == .pose, let id = selectedPart else { return }
+                let now = spec.anim?.pose(id, frame: animFrame) ?? PartPose()
+                if scaleFrom == nil { scaleFrom = now.scale }
+                var p = now
+                p.scale = min(3, max(0.2, (scaleFrom ?? 1) * Double(v.magnification)))
+                spec.anim?.frames[animFrame][id] = p
+            }
+            .onEnded { _ in scaleFrom = nil }
     }
 
     private var pickButtons: some View {
@@ -539,18 +870,28 @@ struct GifMakerView: View {
             Text("动作").tag(0)
             Text("特效").tag(1)
             Text("文字").tag(2)
+            Text("逐帧").tag(4)
             Text("其他").tag(3)
         }
         .pickerStyle(.segmented)
         .padding(.horizontal, 16)
+        .onChange(of: section) { _, v in
+            // 第一次进逐帧：整张图当第一个部位，整体动作先关掉（不然跟她摆的动作叠在一起）
+            if v == 4, spec.anim == nil, let base {
+                spec.anim = GifAnim.start(base)
+                spec.motion = .none
+                animFrame = 0
+                animPart = nil
+            }
+        }
     }
 
     @ViewBuilder
     private var controls: some View {
         switch section {
         case 0: chips(GifMotion.allCases, selected: spec.motion, label: { $0.label }) { spec.motion = $0 }
-        case 1: chips(GifEffect.allCases, selected: spec.effect, label: { e in
-                    e == .none ? "无" : e.glyph + " " + e.label }) { spec.effect = $0 }
+        case 1: effectControls
+        case 4: animControls
         case 2: textControls
         default: otherControls
         }
@@ -572,6 +913,64 @@ struct GifMakerView: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+
+    private var effectControls: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            chips(GifEffect.allCases, selected: spec.effect, label: { $0.label }) { spec.effect = $0 }
+            if spec.effect != .none {
+                row("多少") { Slider(value: $spec.effectAmount, in: 0.5...2.5) }
+                row("颜色") {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            Button { spec.effectColor = "" } label: {
+                                Text("原色").font(.app(11))
+                                    .padding(.horizontal, 8).frame(height: 26)
+                                    .background(Capsule().fill(spec.effectColor.isEmpty
+                                                               ? app.settings.accentColor.opacity(0.2) : Theme.softFillDeep))
+                            }
+                            .buttonStyle(.plain)
+                            swatchRow($spec.effectColor)
+                        }
+                    }
+                }
+            }
+        }
+        .tint(app.settings.accentColor)
+    }
+
+    @ViewBuilder
+    private var animControls: some View {
+        if base == nil {
+            Text("先挑一张图").font(.app(13)).foregroundStyle(Theme.textMuted(scheme))
+        } else if spec.anim != nil {
+            GifAnimEditor(anim: Binding(get: { spec.anim ?? GifAnim() }, set: { spec.anim = $0 }),
+                          frame: $animFrame, selected: $animPart, tool: $animTool,
+                          playing: $animPlaying, onion: $onion)
+            Button("不用逐帧了（回到上面那些动作）") {
+                spec.anim = nil
+                section = 0
+            }
+            .font(.app(12))
+            .foregroundStyle(Theme.textMuted(scheme))
+            .padding(.top, 6)
+        }
+    }
+
+    private func swatchRow(_ value: Binding<String>) -> some View {
+        HStack(spacing: 8) {
+            ForEach(textColors, id: \.self) { hex in
+                Button { value.wrappedValue = hex } label: {
+                    Circle().fill(Color(hexString: hex) ?? .white)
+                        .frame(width: 26, height: 26)
+                        .overlay(Circle().stroke(Color.black.opacity(0.15), lineWidth: 0.6))
+                        .overlay(Circle().stroke(app.settings.accentColor, lineWidth: value.wrappedValue == hex ? 2.2 : 0)
+                            .padding(-3))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 3)
     }
 
     private var textControls: some View {
@@ -688,7 +1087,7 @@ struct GifMakerView: View {
             let n = title.trimmingCharacters(in: .whitespacesAndNewlines)
             s.name = n.isEmpty ? (spec.text.isEmpty ? "动图" : spec.text) : n
             // 描述替她写好一句（他靠描述知道这张什么时候用），想改去表情库里改
-            var about = (name.isEmpty ? "一张会动的表情" : name) + "，" + spec.motion.label
+            var about = (name.isEmpty ? "一张会动的表情" : name) + "，" + (spec.anim != nil ? "自己摆的动作" : spec.motion.label)
             if spec.effect != .none { about += "，" + spec.effect.label }
             if !spec.text.isEmpty { about += "，写着「" + spec.text + "」" }
             s.description = about
