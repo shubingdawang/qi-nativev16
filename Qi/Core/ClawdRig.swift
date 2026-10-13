@@ -166,6 +166,11 @@ struct ClawdRigView: View {
         }
     }
 
+    /// 穿着她画的、要把眼睛露在外面的衣服（睡着、躺着不叠衣服，照原样）
+    private var eyesOnCloth: Bool {
+        mood != .sleeping && mood != .lying && CustomWearStore.shared.eyesOnTop(wornIDs)
+    }
+
     /// 我们自己拼的那只：手臂能转、能举家具、能穿戴。
     private var rigBody: some View {
         ZStack(alignment: .topLeading) {
@@ -185,8 +190,11 @@ struct ClawdRigView: View {
                 arm(.right)
             }
 
-            // 身子（图纸上原来那两块手已经抠掉了，见 `stripArms`）
-            PixelSpriteView(sprite: body0, scale: scale)
+            // 身子（图纸上原来那两块手已经抠掉了，见 `stripArms`）。
+            // 她画的衣服要露眼睛时，身子这层不画眼睛：眼睛统一由上面那层画。
+            // 以前身子这层的眼睛还在，衣服图缩放后边上差半个像素，
+            // 原来那双眼睛就从缝里漏出一条黑线
+            PixelSpriteView(sprite: eyesOnCloth ? ClawdRig.noEyes(body0) : body0, scale: scale)
 
             // 身上穿戴的那件（帽子、眼镜、围巾、背包、靴子…）。
             //
@@ -646,6 +654,17 @@ enum ClawdRig {
         return out
     }
     nonisolated(unsafe) private static var eyeCache: [Int: PixelSprite] = [:]
+
+    /// 眼睛（`k`）换成身子的颜色：眼睛另外画在衣服上面的时候用
+    static func noEyes(_ s: PixelSprite) -> PixelSprite {
+        let key = s.key
+        if let hit = noEyeCache[key] { return hit }
+        let rows = s.rows.map { row -> String in String(row.map { $0 == "k" ? "p" : $0 }) }
+        let out = PixelSprite(rows, s.palette)
+        noEyeCache[key] = out
+        return out
+    }
+    nonisolated(unsafe) private static var noEyeCache: [Int: PixelSprite] = [:]
 
     static func stripArms(_ s: PixelSprite) -> PixelSprite {
         let rows = s.rows.map { row -> String in
