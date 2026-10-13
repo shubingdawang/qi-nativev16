@@ -143,7 +143,7 @@ enum GifSprites {
     static let fireA = ["..o..", ".ofo.", ".ofo.", "offfo", "ofwfo", "ofwfo", ".ooo."]
     static let fireB = [".o...", ".ofo.", "offo.", "offfo", "ofwfo", "ofwfo", ".ooo."]
     static let bubble = [".ooo.", "ow..o", "o...o", "o...o", ".ooo."]
-    static let bolt = [".....ooo.", "....offfo", "....offo.", "...ofwfo.", "..offwo..", "..ofwfo..", ".offfooo.", "offfffffo", ".ooofffo.", "...offo..", "..offfo..", "..offo...", "..ofo....", "...o....."]
+    static let bolt = [".......o.", "......ofo", ".....offo", "....ofwfo", "...ofwfo.", "..ofwfoo.", ".offffffo", "offfffffo", ".oooofffo", "...offfo.", "..offfo..", "..offo...", ".offo....", ".ofo.....", "..o......"]
     static let flower = [".o.o.", "ofofo", ".owo.", "ofofo", ".o.o."]
 }
 
