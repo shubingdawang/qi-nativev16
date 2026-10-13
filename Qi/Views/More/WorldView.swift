@@ -704,7 +704,16 @@ struct WorldView: View {
                     func dot(_ x: Int, _ y: Int, _ col: Color) {
                         gc.fill(Path(CGRect(x: ox + CGFloat(x) * sc, y: oy + CGFloat(y) * sc, width: sc, height: sc)), with: .color(col))
                     }
-                    for (x, y, col) in WorldCropArt.pixels(stage: WorldFarm.stage(c, now: ctx.date), fruit: s.color) { dot(x, y, col) }
+                    // 种过的那一格先堆一块垄：深色、有亮边暗边，跟没种的平地一眼分得开
+                    for (x, y, col) in WorldCropArt.bed() { dot(x, y, col) }
+                    let st = WorldFarm.stage(c, now: ctx.date)
+                    for (x, y, col) in WorldCropArt.outlined(WorldCropArt.pixels(stage: st, fruit: s.color)) { dot(x, y, col) }
+                    // 刚种下：插一根小牌子，牌子是种的东西的颜色
+                    if st == 0 { for (x, y, col) in WorldCropArt.marker(s.color) { dot(x, y, col) } }
+                    // 熟了：头上闪一下
+                    if st >= 3, Int(ctx.date.timeIntervalSinceReferenceDate / 60) % 2 == 0 {
+                        for (x, y) in [(13, 2), (12, 3), (14, 3), (13, 4), (13, 3)] { dot(x, y, WorldCropArt.drop[1]) }
+                    }
                     // 刚浇过水：旁边一颗水珠
                     if c.lastWatered.map({ ctx.date.timeIntervalSince($0) < 1800 }) == true {
                         dot(13, 10, WorldCropArt.drop[1]); dot(13, 11, WorldCropArt.drop[0]); dot(12, 11, WorldCropArt.drop[0])
@@ -1351,17 +1360,61 @@ enum WorldCropArt {
     static let drop = [Color(hexString: "8ECCD3")!, Color(hexString: "E6F7F6")!]
     private static let outline = Color(hexString: "4E3A4F")!
 
+    /// 一块垄：比格子小一圈，顶上一道亮边、底下一道暗边，中间两道沟
+    static func bed() -> [(Int, Int, Color)] {
+        let base = Color(hexString: "7C5646")!, hi = Color(hexString: "A07A62")!
+        let lo = Color(hexString: "5A3B32")!, furrow = Color(hexString: "6A4739")!
+        var p: [(Int, Int, Color)] = []
+        for y in 4...14 {
+            for x in 1...14 {
+                var c = base
+                if y == 4 { c = hi } else if y == 14 { c = lo } else if x == 1 || x == 14 { c = lo }
+                else if y == 9 || y == 12 { c = furrow }
+                p.append((x, y, c))
+            }
+        }
+        return p
+    }
+
+    /// 刚种下时插的小牌子：一根杆 + 一面种子颜色的小旗
+    static func marker(_ fruit: String) -> [(Int, Int, Color)] {
+        let pole = Color(hexString: "C9A27A")!, col = Color(hexString: fruit) ?? .pink
+        var p: [(Int, Int, Color)] = [(12, 5, pole), (12, 6, pole), (12, 7, pole), (12, 8, pole), (12, 9, pole)]
+        for (x, y) in [(10, 3), (11, 3), (12, 3), (13, 3), (10, 4), (11, 4), (12, 4), (13, 4)] { p.append((x, y, col)) }
+        for (x, y) in [(9, 2), (10, 2), (11, 2), (12, 2), (13, 2), (14, 2), (9, 3), (14, 3), (9, 4), (14, 4),
+                       (9, 5), (10, 5), (11, 5), (13, 5), (14, 5)] { p.append((x, y, outline)) }
+        return p
+    }
+
+    /// 给一棵苗描一圈深边（格子里四邻是空的那一侧）
+    static func outlined(_ px: [(Int, Int, Color)]) -> [(Int, Int, Color)] {
+        var filled = Set<Int>()
+        for (x, y, _) in px { filled.insert(y * 32 + x) }
+        var edge: [(Int, Int, Color)] = []
+        var seen = Set<Int>()
+        for (x, y, _) in px {
+            for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                let nx = x + dx, ny = y + dy
+                guard nx >= 0, ny >= 0, nx < 16, ny < 16 else { continue }
+                let k = ny * 32 + nx
+                if !filled.contains(k), seen.insert(k).inserted { edge.append((nx, ny, outline)) }
+            }
+        }
+        return edge + px
+    }
+
     static func pixels(stage: Int, fruit: String) -> [(Int, Int, Color)] {
         var p: [(Int, Int, Color)] = []
         let d = leaf[0], m = leaf[1], l = leaf[2]
         switch stage {
         case 0:
-            // 刚种下：三颗种子，上面一点亮
-            for x in [4, 8, 11] { p += [(x, 13, seed), (x + 1, 13, seed), (x, 12, Color(hexString: "9A6E64")!)] }
+            // 刚种下：垄正中一颗种子，冒一点点芽尖
+            p += [(7, 10, seed), (8, 10, seed), (7, 11, seed), (8, 11, seed), (7, 9, m), (8, 8, l)]
         case 1:
-            // 发芽：一根茎、两片小叶子
-            p += [(8, 13, d), (8, 12, d), (8, 11, m)]
-            p += [(6, 10, m), (7, 10, l), (7, 11, d), (9, 10, l), (10, 10, m), (9, 11, d)]
+            // 发芽：一根茎、两片叶子，比原来大一号
+            p += [(8, 12, d), (8, 11, d), (8, 10, m), (8, 9, m)]
+            p += [(5, 9, m), (6, 9, l), (7, 9, l), (6, 10, d), (7, 10, m)]
+            p += [(9, 8, l), (10, 8, l), (11, 8, m), (9, 9, m), (10, 9, d)]
         default:
             // 长叶：一棵小苗，三层叶子
             for y in 6...13 { p.append((8, y, y > 10 ? d : m)) }
