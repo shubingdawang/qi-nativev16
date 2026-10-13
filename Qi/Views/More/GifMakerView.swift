@@ -50,7 +50,7 @@ struct GifSpec {
 
 enum GifMotion: String, CaseIterable, Identifiable {
     case none, bounce, shake, heartbeat, jelly, float, jitter, walk, spin, pop, zoom,
-         nod, sway, hop, faint, flyaway, blink
+         nod, faint, flyaway, blink, peek, turn, shy
     var id: String { rawValue }
     var label: String {
         switch self {
@@ -66,11 +66,12 @@ enum GifMotion: String, CaseIterable, Identifiable {
         case .pop: return "冒出来"
         case .zoom: return "怼脸"
         case .nod: return "点头"
-        case .sway: return "左右摇摆"
-        case .hop: return "蹦蹦跳跳"
         case .faint: return "倒下"
         case .flyaway: return "飞走"
         case .blink: return "一闪一闪"
+        case .peek: return "探头"
+        case .turn: return "转身"
+        case .shy: return "缩一下"
         }
     }
 }
@@ -303,13 +304,6 @@ enum GifFrame {
             let s = max(0, sin(t * tau * 2))
             p.rot = s * 8
             p.sy = 1 - s * 0.05
-        case .sway:
-            p.rot = sin(t * tau) * 9
-            p.dx = sin(t * tau) * 0.03
-        case .hop:
-            let ph = (t * 4).truncatingRemainder(dividingBy: 1)
-            p.dy = -abs(sin(ph * .pi)) * 0.06
-            if ph < 0.15 || ph > 0.85 { p.sx = 1.06; p.sy = 0.92 }
         case .faint:
             // 晃两下，倒下去，躺一会儿
             if t < 0.3 { p.rot = sin(t / 0.3 * tau * 2) * 6 }
@@ -323,6 +317,20 @@ enum GifFrame {
             if t >= 0.9 { p.dy = 0; p.alpha = (t - 0.9) / 0.1 }
         case .blink:
             p.alpha = Int(t * 6) % 2 == 0 ? 1 : 0.15
+        case .peek:
+            // 从底下冒上来，左右看一眼，再缩回去
+            let up: Double
+            if t < 0.25 { up = t / 0.25 } else if t < 0.75 { up = 1 } else { up = 1 - (t - 0.75) / 0.25 }
+            p.dy = (1 - up) * 0.75
+            if t >= 0.3 && t < 0.7 { p.rot = sin((t - 0.3) / 0.4 * tau) * 8 }
+        case .turn:
+            // 左右翻过来再翻回去
+            p.sx = cos(t * tau)
+            if abs(p.sx) < 0.08 { p.sx = p.sx < 0 ? -0.08 : 0.08 }
+        case .shy:
+            let s = t < 0.5 ? sin(t / 0.5 * .pi) : 0
+            p.sx = 1 - s * 0.18; p.sy = 1 - s * 0.24
+            p.dx = -s * 0.03
         }
         return p
     }
