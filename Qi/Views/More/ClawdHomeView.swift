@@ -109,6 +109,8 @@ struct ClawdHomeView: View {
     @State private var aimedItem: UUID?
     /// 点家具弹的那个菜单（贴着家具，见 `AnchoredMenu`）、手指点在哪儿
     @State private var homeMenu: AnchorMenuState?
+    @State private var reediting: CutEdit?
+    @ObservedObject private var customWear = CustomWearStore.shared
     @State private var tapAt: CGPoint = .zero
     /// 她点了「一起…」：他走过去做的就是这一个动作，不随机挑
     @State private var forcedAct: String?
@@ -2359,7 +2361,7 @@ struct ClawdHomeView: View {
     /// 买来的衣服 + 她自己做的衣服，点一下穿上、再点脱下
     private var wardrobe: some View {
         let bought = cabinetWear
-        let mine = CustomWearStore.shared.items
+        let mine = customWear.items
         return ScrollView {
             VStack(spacing: 14) {
                 // 整只放出来，帽子、头上的东西都看得见
@@ -2387,20 +2389,42 @@ struct ClawdHomeView: View {
                                     .frame(width: 44, height: 44)
                             }
                         }
+                        // 长按：回到做衣服那一页接着改（换部件、调大小位置）
                         .contextMenu {
+                            if let d = w.design {
+                                Button { reediting = CutEdit(id: w.id, name: w.name, cut: OutfitCutter(d)) } label: {
+                                    Label("修改这件（换部件、调大小位置）", systemImage: "pencil")
+                                }
+                            } else {
+                                Menu("改成哪个部件") {
+                                    ForEach(0..<CustomWearStore.slots.count, id: \.self) { i in
+                                        Button(CustomWearStore.slots[i].1) {
+                                            CustomWearStore.shared.changeSlot(w.id, to: CustomWearStore.slots[i].0)
+                                        }
+                                    }
+                                }
+                            }
                             Button(role: .destructive) { CustomWearStore.shared.delete(w.id) } label: {
                                 Label("删除", systemImage: Icon.trash)
                             }
                         }
                     }
                 }
-                Text("轻点穿上，再点一下脱下。同一个位置一次只穿一件。")
+                Text("轻点穿上，再点一下脱下；长按自己做的那件可以修改。")
                     .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
             .padding(.horizontal, 16)
             .padding(.bottom, Layout.tabBarExpanded + 12)
         }
+        .fullScreenCover(item: $reediting) { e in OutfitCutView(cut: e.cut, name: e.name, replacing: e.id) }
+    }
+
+    /// 衣柜里长按改的那一件
+    struct CutEdit: Identifiable {
+        let id: String
+        let name: String
+        let cut: OutfitCutter
     }
 
     /// 买过的穿戴（每种一张）

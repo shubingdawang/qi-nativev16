@@ -28,6 +28,8 @@ struct BeadProject: Codable, Identifiable, Hashable {
     var refY: Double = 0
     /// 参考图整张铺满板子（底图的格子跟板子的格子一一对上）。nil / false = 等比放进去
     var refFill: Bool?
+    /// 存成了零件（表情工坊「零件」那一页、动图「逐帧」里能加进来）
+    var asPart: Bool?
     var updatedAt = Date()
 
     init(size: Int, rows: Int? = nil, name: String = "") {
@@ -65,6 +67,7 @@ extension BeadProject {
         let count = size * (rows ?? size)
         if cells.count != count { cells = Array(repeating: "", count: count) }
         refFill = (try? c.decodeIfPresent(Bool.self, forKey: .refFill)) ?? nil
+        asPart = (try? c.decodeIfPresent(Bool.self, forKey: .asPart)) ?? nil
         refImage = (try? c.decodeIfPresent(String.self, forKey: .refImage)) ?? ""
         refOpacity = (try? c.decodeIfPresent(Double.self, forKey: .refOpacity)) ?? 0.5
         refShown = (try? c.decodeIfPresent(Bool.self, forKey: .refShown)) ?? true

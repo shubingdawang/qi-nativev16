@@ -714,6 +714,7 @@ struct BeadExportView: View {
     @State private var look: BeadStore.Look = .pixel
     @State private var placing: PlacingImage?
     @State private var cutting: CutJob?
+    @State private var partSaved = false
     @State private var animating: PlacingImage?
 
     var body: some View {
@@ -756,6 +757,20 @@ struct BeadExportView: View {
                             .background(Capsule().fill(Theme.softFillDeep))
                     }
                 }
+                Button {
+                    // 存成零件：就是给这块板打个记号，改这块板零件跟着变
+                    var p = BeadStore.shared.project(project.id) ?? project
+                    p.asPart = true
+                    BeadStore.shared.save(p)
+                    partSaved = true
+                } label: {
+                    Label(partSaved ? "已存成零件（表情工坊 → 零件）" : "存成零件", systemImage: "puzzlepiece")
+                        .font(.app(13.5, weight: .medium))
+                        .frame(maxWidth: .infinity).padding(.vertical, 11)
+                        .background(Capsule().fill(Theme.softFillDeep))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 24)
                 .buttonStyle(.plain)
                 .padding(.horizontal, 24)
                 Text("「做成 clawd 的衣服」：画的是穿着衣服的 clawd 就行，会自动抠掉他自己的身子，穿上后跟着他所有动作走。")

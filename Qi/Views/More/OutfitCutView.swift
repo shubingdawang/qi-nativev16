@@ -7,6 +7,8 @@ struct OutfitCutView: View {
 
     @State var cut: OutfitCutter
     var name: String = ""
+    /// 改的是衣柜里已有的那一件：存的时候替掉它
+    var replacing: String? = nil
 
     @EnvironmentObject private var app: AppState
     @Environment(\.dismiss) private var dismiss
@@ -21,6 +23,7 @@ struct OutfitCutView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
+                    slotPicker
                     preview
                     colorsCard
                     adjustCard
@@ -78,6 +81,22 @@ struct OutfitCutView: View {
                 .font(.app(10.5))
                 .foregroundStyle(Theme.textMuted(scheme))
                 .padding(.bottom, 6)
+        }
+    }
+
+    /// 这是什么：整套衣服，还是只是一顶帽子、一副眼镜……
+    private var slotPicker: some View {
+        let options: [(ClawdRig.WearSlot, String)] = [(.outer, "整套"), (.head, "帽子"), (.face, "脸上"),
+                                                      (.neck, "脖子"), (.back, "背上"), (.feet, "脚上")]
+        return VStack(alignment: .leading, spacing: 6) {
+            Text("这是什么").font(.app(12.5, weight: .medium)).foregroundStyle(Theme.textSoft(scheme))
+            Picker("", selection: Binding(get: { cut.slot }, set: { cut.setSlot($0); baseScale = cut.scale; refresh() })) {
+                ForEach(options, id: \.0) { o in Text(o.1).tag(o.0) }
+            }
+            .pickerStyle(.segmented)
+            Text(cut.isOutfit ? "画的是穿着衣服的 clawd：抠掉他自己的颜色，穿上后袖子跟着手转。"
+                              : "只画了这一件：直接摆到他身上，大小位置用下面的滑条调。")
+                .font(.app(10.5)).foregroundStyle(Theme.textMuted(scheme))
         }
     }
 
@@ -209,7 +228,8 @@ struct OutfitCutView: View {
     private func save() {
         let n = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let item = CustomWearStore.shared.addOutfit(cut.render(), name: n.isEmpty ? "我画的衣服" : n,
-                                                           eyesOnTop: cut.eyesOnTop) else {
+                                                           eyesOnTop: cut.eyesOnTop, slot: cut.slot,
+                                                           design: cut.design, replacing: replacing) else {
             done = "没存上，再试一次。"
             return
         }

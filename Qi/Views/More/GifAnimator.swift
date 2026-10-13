@@ -17,10 +17,12 @@ import UIKit
 struct GifPart: Identifiable {
     let id = UUID()
     var name: String
-    /// 跟底图一样大的一张图，只有这个部位的像素
+    /// 这个部位的图（切出来的跟底图一样大，只有这个部位的像素；零件就是零件那张）
     var image: UIImage
-    /// 转轴在图上的位置（0…1）
+    /// 转轴在整张图上的位置（0…1）
     var pivot: CGPoint
+    /// 这张图摆在整张图的哪一块（0…1）。切出来的就是整块
+    var rect = CGRect(x: 0, y: 0, width: 1, height: 1)
 }
 
 struct PartPose: Equatable {
@@ -164,17 +166,41 @@ struct GifAnim {
         }
         guard any, let piece = Self.image(out), let rest = Self.image(src) else { return nil }
         parts[k].image = rest
-        let pivot = CGPoint(x: (Double(x0 + x1) / 2 + 0.5) / Double(src.w),
-                            y: (Double(y0 + y1) / 2 + 0.5) / Double(src.h))
-        let part = GifPart(name: name, image: piece, pivot: pivot)
+        // 转轴先放在切出来那一块的中间（换成整张图上的位置）
+        let r = parts[k].rect
+        let pivot = CGPoint(x: r.minX + (Double(x0 + x1) / 2 + 0.5) / Double(src.w) * r.width,
+                            y: r.minY + (Double(y0 + y1) / 2 + 0.5) / Double(src.h) * r.height)
+        var part = GifPart(name: name, image: piece, pivot: pivot)
+        part.rect = r
         // 切出来的放在原来那块的上面一层
         parts.insert(part, at: k + 1)
         return part.id
     }
 
+    /// 加一个零件（拼豆存的）：摆在正中间，宽占整张的三分之一
+    mutating func addPart(_ raw: UIImage, name: String, baseAspect: Double) {
+        let img = Self.normalized(raw)
+        let iw = Double(img.size.width), ih = Double(img.size.height)
+        guard iw > 0, ih > 0 else { return }
+        let w = 0.34
+        let h = w * (ih / iw) * baseAspect
+        let rect = CGRect(x: 0.5 - w / 2, y: 0.5 - h / 2, width: w, height: h)
+        var p = GifPart(name: name, image: img, pivot: CGPoint(x: 0.5, y: 0.5))
+        p.rect = rect
+        parts.append(p)
+    }
+
     /// 把一个部位并回它下面那一层（切错了用）
     mutating func merge(_ id: UUID) {
-        guard let k = parts.firstIndex(where: { $0.id == id }), k > 0 else { return }
+        guard let k = parts.firstIndex(where: { $0.id == id }), k > 0,
+              parts[k].rect == parts[k - 1].rect else {
+            // 零件那种自己一块的，并不回去，直接拿掉
+            if let k = parts.firstIndex(where: { $0.id == id }), k > 0 {
+                parts.remove(at: k)
+                for f in frames.indices { frames[f][id] = nil }
+            }
+            return
+        }
         let size = parts[k - 1].image.size
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
@@ -204,7 +230,9 @@ extension GifFrame {
             g.translateBy(x: pv.x + CGFloat(p.dx) * w, y: pv.y + CGFloat(p.dy) * w)
             g.rotate(by: CGFloat(p.rot) * .pi / 180)
             g.scaleBy(x: CGFloat(p.scale), y: CGFloat(p.scale))
-            part.image.draw(in: CGRect(x: local.minX - pv.x, y: local.minY - pv.y, width: w, height: h))
+            let r = part.rect
+            part.image.draw(in: CGRect(x: local.minX + r.minX * w - pv.x, y: local.minY + r.minY * h - pv.y,
+                                       width: r.width * w, height: r.height * h))
             g.restoreGState()
         }
     }
@@ -220,14 +248,16 @@ struct GifAnimEditor: View {
     @Binding var tool: Tool
     @Binding var playing: Bool
     @Binding var onion: Bool
+    /// 工具底下多一排（点选像素那几个按钮）
+    var extras: AnyView? = nil
 
     enum Tool: String, CaseIterable, Identifiable {
-        case pose, rect, wand, pivot
+        case pose, paint, wand, pivot
         var id: String { rawValue }
         var label: String {
             switch self {
             case .pose: return "摆动作"
-            case .rect: return "框一块"
+            case .paint: return "点选像素"
             case .wand: return "点同色"
             case .pivot: return "设转轴"
             }
@@ -235,9 +265,9 @@ struct GifAnimEditor: View {
         var hint: String {
             switch self {
             case .pose: return "在预览上拖动挪选中的部位，两指转、两指放大；底下的滑条能细调"
-            case .rect: return "在预览上框出一块，切成一个新部位"
-            case .wand: return "点一下，把同一个颜色连着的那一片切成新部位（像素图最好用）"
-            case .pivot: return "点一下，把选中部位的转轴设在那儿（手臂设在肩膀上）"
+            case .paint: return "在预览上一格一格点，或者按住拖着涂；选好了点「切成部位」"
+            case .wand: return "点一下，把同一个颜色连着的那一片加进选区（像素图最好用）"
+            case .pivot: return "点一下或者拖到想要的地方松手，转轴就设在那儿（手臂设在肩膀上）"
             }
         }
     }
@@ -254,6 +284,7 @@ struct GifAnimEditor: View {
             }
             .pickerStyle(.segmented)
             Text(tool.hint).font(.app(10.5)).foregroundStyle(Theme.textMuted(scheme))
+            if let extras { extras }
 
             // 部位
             Text("部位").font(.app(12, weight: .medium)).foregroundStyle(Theme.textSoft(scheme))
@@ -274,7 +305,7 @@ struct GifAnimEditor: View {
                         .buttonStyle(.plain)
                         .contextMenu {
                             if anim.parts.first?.id != p.id {
-                                Button("并回下面那块") { anim.merge(p.id); selected = nil }
+                                Button("并回下面那块（零件就拿掉）") { anim.merge(p.id); selected = nil }
                             }
                         }
                     }
@@ -357,5 +388,109 @@ struct GifAnimEditor: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(Theme.textMain(scheme))
+    }
+}
+
+// MARK: - 点选像素
+
+extension GifAnim {
+
+    /// 像素图一格是几个像素（拼豆导出的一格是好几个像素，点一下选的是一整格）。
+    /// 认不出格子的（照片这种）按长边分成 96 格左右
+    static func cellSize(_ p: Pixels) -> Double {
+        var hist: [Int: Int] = [:]
+        var total = 0
+        func key(_ i: Int) -> Int {
+            let o = i * 4
+            guard p.data[o + 3] > 16 else { return -1 }
+            return Int(p.data[o]) << 16 | Int(p.data[o + 1]) << 8 | Int(p.data[o + 2])
+        }
+        // 同一个颜色连着几个像素：不算贴着边的那一段（可能被截了）
+        func runs(_ n: Int, _ index: (Int) -> Int) {
+            var start = 0, last = key(index(0))
+            for i in 1...n {
+                let k = i < n ? key(index(i)) : -2
+                guard k != last else { continue }
+                if last >= 0, start > 0, i < n { hist[i - start, default: 0] += 1; total += 1 }
+                start = i
+                last = k
+            }
+        }
+        for y in 0..<p.h { runs(p.w) { y * p.w + $0 } }
+        for x in 0..<p.w { runs(p.h) { $0 * p.w + x } }
+        let fallback = max(1, Double(max(p.w, p.h)) / 96)
+        guard total >= 12 else { return fallback }
+        let need = max(3, total / 20)
+        guard let l = hist.keys.sorted().first(where: { (hist[$0] ?? 0) >= need }), l >= 2 else { return fallback }
+        // 缩放过的像素图一格是 6、7 个像素交替：取平均，再按整张有几列对齐
+        let near = [l, l + 1]
+        let n = near.reduce(0) { $0 + (hist[$1] ?? 0) }
+        var c = Double(near.reduce(0) { $0 + $1 * (hist[$1] ?? 0) }) / Double(max(1, n))
+        let cols = (Double(p.w) / c).rounded()
+        if cols > 0 { c = Double(p.w) / cols }
+        return max(1, c)
+    }
+}
+
+/// 逐帧里「点选像素」「点同色」正在选的那一片（还没切）
+struct PaintSel {
+    let part: UUID
+    let px: GifAnim.Pixels
+    /// 一格是几个像素
+    let cell: Double
+    var mask: [Bool]
+    var count = 0
+    var overlay: UIImage?
+
+    /// 在 (x, y) 那一格（加上周围 radius 格）选上 / 擦掉
+    mutating func paint(at x: Double, _ y: Double, radius: Int, erase: Bool) -> Bool {
+        guard x >= 0, y >= 0, x < Double(px.w), y < Double(px.h) else { return false }
+        let gx = Int(x / cell), gy = Int(y / cell)
+        var changed = false
+        for cy in (gy - radius)...(gy + radius) {
+            for cx in (gx - radius)...(gx + radius) {
+                let x0 = max(0, Int((Double(cx) * cell).rounded())), x1 = min(px.w, Int((Double(cx + 1) * cell).rounded()))
+                let y0 = max(0, Int((Double(cy) * cell).rounded())), y1 = min(px.h, Int((Double(cy + 1) * cell).rounded()))
+                guard x1 > x0, y1 > y0 else { continue }
+                for yy in y0..<y1 {
+                    for xx in x0..<x1 {
+                        let i = yy * px.w + xx
+                        if erase {
+                            if mask[i] { mask[i] = false; count -= 1; changed = true }
+                        } else if !mask[i], px.data[i * 4 + 3] > 16 {
+                            mask[i] = true; count += 1; changed = true
+                        }
+                    }
+                }
+            }
+        }
+        return changed
+    }
+
+    /// 点同色那一片并进来 / 擦出去
+    mutating func add(_ m: [Bool], erase: Bool) -> Bool {
+        guard m.count == mask.count else { return false }
+        var changed = false
+        for i in m.indices where m[i] && mask[i] == erase {
+            mask[i] = !erase
+            count += erase ? -1 : 1
+            changed = true
+        }
+        return changed
+    }
+
+    /// 选中的像素涂一层主题色，盖在部位上给她看
+    func overlayImage(_ c: (CGFloat, CGFloat, CGFloat)) -> UIImage? {
+        var out = GifAnim.Pixels(w: px.w, h: px.h, data: [UInt8](repeating: 0, count: px.w * px.h * 4))
+        let a: CGFloat = 0.62
+        func ch(_ v: CGFloat) -> UInt8 { UInt8(max(0, min(1, v)) * a * 255) }
+        let r = ch(c.0), g = ch(c.1), b = ch(c.2), al = UInt8(a * 255)
+        for i in mask.indices where mask[i] {
+            out.data[i * 4] = r
+            out.data[i * 4 + 1] = g
+            out.data[i * 4 + 2] = b
+            out.data[i * 4 + 3] = al
+        }
+        return GifAnim.image(out)
     }
 }

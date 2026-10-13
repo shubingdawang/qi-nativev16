@@ -21,6 +21,24 @@ struct CustomWear: Codable, Identifiable, Hashable {
     var eyeDX: Double?
     var eyeDY: Double?
     var eyeScale: Double?
+    /// 做这件时的原图和调好的那些数：长按回到做衣服那一页接着改
+    var design: OutfitDesign?
+}
+
+/// 一件衣服的原图 + 调好的参数（存下来好回去改）
+struct OutfitDesign: Codable, Hashable {
+    var w: Int
+    var h: Int
+    var cells: [String]
+    var slot: String
+    var clawdColors: [String]
+    var scale: Double
+    var offX: Double
+    var offY: Double
+    var eyesOnTop: Bool
+    var eyeNudgeX: Double
+    var eyeNudgeY: Double
+    var eyeScale: Double
 }
 
 extension CustomWear {
@@ -37,6 +55,7 @@ extension CustomWear {
         eyeDX = (try? c.decodeIfPresent(Double.self, forKey: .eyeDX)) ?? nil
         eyeDY = (try? c.decodeIfPresent(Double.self, forKey: .eyeDY)) ?? nil
         eyeScale = (try? c.decodeIfPresent(Double.self, forKey: .eyeScale)) ?? nil
+        design = (try? c.decodeIfPresent(OutfitDesign.self, forKey: .design)) ?? nil
     }
 }
 
@@ -73,8 +92,18 @@ final class CustomWearStore: ObservableObject {
 
     /// 她画的一整套（`OutfitCutter` 抠出来的）：身子那层 + 两只袖子
     @discardableResult
-    func addOutfit(_ layers: OutfitCutter.Layers, name: String, eyesOnTop: Bool = true) -> CustomWear? {
-        guard var item = add(layers.body, slot: .outer, name: name) else { return nil }
+    func addOutfit(_ layers: OutfitCutter.Layers, name: String, eyesOnTop: Bool = true,
+                   slot: ClawdRig.WearSlot = .outer, design: OutfitDesign? = nil,
+                   replacing old: String? = nil) -> CustomWear? {
+        // 改的是原来那件：先脱下、删掉，新的一件替上
+        var wasWearing = false
+        if let old, items.contains(where: { $0.id == old }) {
+            wasWearing = ClawdStore.shared.isWearing(old)
+            delete(old)
+        }
+        guard var item = add(layers.body, slot: slot, name: name) else { return nil }
+        item.design = design
+        defer { if wasWearing, !ClawdStore.shared.isWearing(item.id) { ClawdStore.shared.wear(item.id) } }
         item.eyesOnTop = eyesOnTop
         item.eyeDX = layers.eyeDX
         item.eyeDY = layers.eyeDY
@@ -108,6 +137,18 @@ final class CustomWearStore: ObservableObject {
             return ImageStore.cached(name)
         }
         return nil
+    }
+
+    /// 只改它穿在哪儿（老的那几件没存原图，图不变，换个位置）
+    func changeSlot(_ id: String, to slot: ClawdRig.WearSlot) {
+        guard let i = items.firstIndex(where: { $0.id == id }) else { return }
+        let wearing = ClawdStore.shared.isWearing(id)
+        if wearing { ClawdStore.shared.wear(id) }
+        var item = items[i]
+        item.id = "cw_\(slot.rawValue)_" + String(UUID().uuidString.prefix(8)).lowercased()
+        item.slot = slot.rawValue
+        items[i] = item
+        if wearing { ClawdStore.shared.wear(item.id) }
     }
 
     func delete(_ id: String) {

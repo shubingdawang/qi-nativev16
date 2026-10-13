@@ -29,6 +29,7 @@ struct StickerLibraryView: View {
     @State private var editing: Sticker?
     /// 做动图：从哪张开始（nil 图 = 进去再挑）
     @State private var animating: GifStart?
+    @State private var exportNote: String?
     /// 正在让他写关键词
     @State private var tagging = false
     @State private var tagNote: String?
@@ -189,6 +190,9 @@ struct StickerLibraryView: View {
             StickerEditorView(sticker: s)
         }
         .fullScreenCover(item: $animating) { g in GifMakerView(image: g.image, name: g.name) }
+        .alert(exportNote ?? "", isPresented: Binding(get: { exportNote != nil }, set: { if !$0 { exportNote = nil } })) {
+            Button("好") { exportNote = nil }
+        }
         .sheet(isPresented: $harvesting) {
             HarvestSheet(kind: tab == 2 ? "gif" : "sticker")
         }
@@ -393,6 +397,15 @@ struct StickerLibraryView: View {
                                 animating = GifStart(image: GifMakerView.firstFrame(sticker), name: sticker.name)
                             } label: {
                                 Label("做成动图（加字、加动画）", systemImage: "sparkles")
+                            }
+                            Button {
+                                let url = store.url(of: sticker)
+                                Task { @MainActor in exportNote = await StickerExport.saveToPhotos(url) }
+                            } label: {
+                                Label("存到手机相册", systemImage: "square.and.arrow.down")
+                            }
+                            ShareLink(item: store.url(of: sticker)) {
+                                Label("分享", systemImage: "square.and.arrow.up")
                             }
                             Button {
                                 var s = sticker

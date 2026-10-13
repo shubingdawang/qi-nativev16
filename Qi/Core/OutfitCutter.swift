@@ -35,6 +35,23 @@ struct OutfitCutter {
         autoFit()
     }
 
+    /// 从存下来的那一份接着改
+    init(_ d: OutfitDesign) {
+        self.w = d.w; self.h = d.h; self.cells = d.cells
+        self.clawdColors = Set(d.clawdColors)
+        self.scale = d.scale; self.offX = d.offX; self.offY = d.offY
+        self.slot = ClawdRig.WearSlot(rawValue: d.slot) ?? .outer
+        self.eyesOnTop = d.eyesOnTop
+        self.eyeNudgeX = d.eyeNudgeX; self.eyeNudgeY = d.eyeNudgeY; self.eyeScale = d.eyeScale
+    }
+
+    /// 存下来，好回去改
+    var design: OutfitDesign {
+        OutfitDesign(w: w, h: h, cells: cells, slot: slot.rawValue, clawdColors: Array(clawdColors),
+                     scale: scale, offX: offX, offY: offY, eyesOnTop: eyesOnTop,
+                     eyeNudgeX: eyeNudgeX, eyeNudgeY: eyeNudgeY, eyeScale: eyeScale)
+    }
+
     /// 图纸里用到的颜色，按用得多少排
     var colors: [String] {
         var n: [String: Int] = [:]
@@ -114,7 +131,49 @@ struct OutfitCutter {
     }
 
     /// 自动对齐：图纸里 clawd 那一团的外框对上画布上 clawd 的外框，脚底对脚底
+    /// 这件穿在哪儿。整套（外套）才抠 clawd、分袖子；帽子这些只是一件，直接摆到那个位置
+    var slot: ClawdRig.WearSlot = .outer
+
+    var isOutfit: Bool { slot == .outer || slot == .body }
+
+    /// 换一个位置：整套就照着 clawd 抠；单件不抠颜色、眼睛也不动
+    mutating func setSlot(_ s: ClawdRig.WearSlot) {
+        slot = s
+        clawdColors = isOutfit ? Self.guessClawd(cells) : []
+        eyesOnTop = isOutfit
+        eyeNudgeX = 0; eyeNudgeY = 0; eyeScale = 1
+        autoFit()
+    }
+
+    /// 单件摆到他身上那个位置：帽子扣在头顶、眼镜在眼睛那儿、鞋在脚底……
+    private mutating func placePiece() {
+        let bg = background()
+        var bx0 = w, bx1 = -1, by0 = h, by1 = -1
+        for i in 0..<(w * h) where !cells[i].isEmpty && !bg[i] && !clawdColors.contains(cells[i]) {
+            let x = i % w, y = i / w
+            bx0 = min(bx0, x); bx1 = max(bx1, x); by0 = min(by0, y); by1 = max(by1, y)
+        }
+        guard bx1 >= bx0 else { return }
+        let pw = Double(bx1 - bx0 + 1), ph = Double(by1 - by0 + 1)
+        let cx = 17.0
+        // 每个位置：多宽、哪条边对在哪一行
+        let width: Double, anchorY: Double, bottomAnchored: Bool
+        switch slot {
+        case .head:  width = 22; anchorY = 16.5; bottomAnchored = true     // 帽檐压在头顶往下两格
+        case .face:  width = 18; anchorY = 20.5; bottomAnchored = false    // 中间对着眼睛
+        case .neck, .scarf: width = 20; anchorY = 23.5; bottomAnchored = false
+        case .back:  width = 16; anchorY = 22; bottomAnchored = false
+        case .feet:  width = 20; anchorY = 32; bottomAnchored = true
+        default:     width = 22; anchorY = 22; bottomAnchored = false
+        }
+        let s = width / pw
+        scale = s
+        offX = cx - (Double(bx0) + pw / 2) * s
+        offY = bottomAnchored ? anchorY - (Double(by0) + ph) * s : anchorY - (Double(by0) + ph / 2) * s
+    }
+
     mutating func autoFit() {
+        guard isOutfit else { placePiece(); return }
         let mask = cells.map { clawdColors.contains($0) }
         var x0 = w, x1 = -1, y0 = h, y1 = -1
         for i in 0..<(w * h) where mask[i] {
@@ -309,7 +368,7 @@ struct OutfitCutter {
             let x = Double(i % w), y = Double(i / w)
             let r = CGRect(x: offX + x * scale, y: offY + y * scale, width: scale, height: scale)
             let cx = r.midX, cy = r.midY
-            let nearArm = cy >= armY - 2 && cy <= armY + armH + 2
+            let nearArm = isOutfit && cy >= armY - 2 && cy <= armY + armH + 2
             if nearArm && cx < CGFloat(ClawdRig.bodyLeft) {
                 leftCells.append((r.offsetBy(dx: -(leftX - M), dy: -(armY - M)), c))
             } else if nearArm && cx > CGFloat(ClawdRig.bodyRight + 1) {
