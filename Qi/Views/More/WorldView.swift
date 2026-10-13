@@ -78,6 +78,9 @@ struct WorldView: View {
     @State private var storyShown: WorldStory?
     @State private var showGuide = false
     @State private var enterHome = false
+    /// 贴着点的东西弹出来的菜单（见 `AnchoredMenu`）
+    @State private var islandMenu: AnchorMenuState?
+    @State private var tapGlobal: CGPoint = .zero
     /// 从哪座小屋进的家：进去先看那一间
     @State private var homeRoom: HomeRoom = .living
     @State private var groundPick: WorldGround = .path
@@ -157,6 +160,61 @@ struct WorldView: View {
     }
 
     /// 走到桥头停下来：过桥
+    // MARK: 贴着点的地方弹的菜单
+
+    private func showPersonMenu() {
+        islandMenu = AnchorMenuState(title: him, items: world.personActions.map { a in
+            AnchorMenuItem(title: a.name) { doAction(a, on: nil) }
+        }, at: tapGlobal)
+    }
+
+    private func showObjectMenu(_ o: WorldObject) {
+        var items = world.actions(for: o).map { a in AnchorMenuItem(title: a.name) { doAction(a, on: o) } }
+        items.append(AnchorMenuItem(title: "走过去") { world.walkHer(o.x, min(o.y + 1, world.height - 1)) })
+        islandMenu = AnchorMenuState(title: world.name(of: o), items: items, at: tapGlobal)
+    }
+
+    private func showDecorMenu(_ d: WorldDecor) {
+        guard let k = WorldDecorKind.resolve(d.kind) else { return }
+        var items: [AnchorMenuItem] = []
+        if k.isHouse {
+            items.append(AnchorMenuItem(title: "进屋") {
+                // 粉顶客厅、蓝顶卧室、紫顶厨房、绿顶浴室
+                switch k {
+                case .cabin: homeRoom = .bedroom
+                case .shop: homeRoom = .kitchen
+                case .houseBeige: homeRoom = .bath
+                default: homeRoom = .living
+                }
+                enterHome = true
+            })
+        }
+        for a in world.actions(forDecor: d) {
+            items.append(AnchorMenuItem(title: a.name) {
+                let line = world.perform(a, onDecor: d, byHer: true)
+                app.tellHim("小岛上，" + line)
+            })
+        }
+        islandMenu = AnchorMenuState(title: k.label, items: items, at: tapGlobal)
+    }
+
+    private func showSoilMenu(_ x: Int, _ y: Int) {
+        var items: [AnchorMenuItem] = []
+        if let c = world.crop(x, y) {
+            if WorldFarm.stage(c) == 3 {
+                items.append(AnchorMenuItem(title: "收") { world.harvest(x, y, byHer: true) })
+            }
+            items.append(AnchorMenuItem(title: "浇水") { world.water(x, y, byHer: true) })
+        } else {
+            for s in WorldFarm.seeds {
+                items.append(AnchorMenuItem(title: "种\(s.name)（约 \(Int(s.hours)) 小时熟）") {
+                    world.plant(s, x, y, byHer: true)
+                })
+            }
+        }
+        islandMenu = AnchorMenuState(title: soilTitle(x, y), items: items, at: tapGlobal)
+    }
+
     private func arrived() {
         guard !herWalk.moving, let e = world.exit(at: world.save.herX, world.save.herY) else { return }
         if world.unlocked(e.to) {
@@ -170,6 +228,7 @@ struct WorldView: View {
     /// 剧情、攻略两个弹窗
     private var staged: some View {
         stage
+            .anchoredMenu($islandMenu)
             .sheet(item: $storyShown) { st in
                 WorldStorySheet(story: st, him: him) { line in app.tellHim("小岛上，你们一起经历了" + line) }
                     .presentationDetents([.medium, .large])
@@ -323,7 +382,11 @@ struct WorldView: View {
 
     private var soilTitle: String {
         guard let at = soilAt else { return "" }
-        guard let c = world.crop(at.x, at.y), let s = WorldFarm.seed(c.kind) else { return "一块空田" }
+        return soilTitle(at.x, at.y)
+    }
+
+    private func soilTitle(_ x: Int, _ y: Int) -> String {
+        guard let c = world.crop(x, y), let s = WorldFarm.seed(c.kind) else { return "一块空田" }
         return s.name + "：" + ["刚种下", "发芽了", "长叶了", "熟了"][WorldFarm.stage(c)] + (c.waters > 0 ? " · 浇过 \(c.waters) 次水" : "")
     }
 
@@ -362,6 +425,8 @@ struct WorldView: View {
                 .contentShape(Rectangle())
                 .gesture(dragGesture(geo.size, content).simultaneously(with: zoomGesture(geo.size, content)))
                 .simultaneousGesture(SpatialTapGesture().onEnded { v in
+                    let o = geo.frame(in: .global).origin
+                    tapGlobal = CGPoint(x: v.location.x + o.x, y: v.location.y + o.y)
                     if let c = cell(at: v.location, geo.size, content) { tap(c.0, c.1, moved: false) }
                 })
                 .onAppear {
@@ -539,11 +604,15 @@ struct WorldView: View {
         return ZStack(alignment: .topLeading) {
             IslandGround(ground: world.save.ground, width: world.width, height: world.height, tile: tile, season: world.season)
                 .equatable()
-            if world.farmOn { cropLayer }
             // 摆东西、铺地、拿走的时候显示淡淡的格线，方便对位置
             if mode != .walk { gridLines }
             // 景、摆的东西、两个人按脚下那一行排前后：站在树下面一行的人挡住树，站在树后面的被树挡住
             ZStack(alignment: .topLeading) {
+                if world.farmOn {
+                    ForEach(Array(world.save.crops.keys).sorted(), id: \.self) { key in
+                        cropCell(key).zIndex(cropZ(key))
+                    }
+                }
                 ForEach(world.decor) { d in
                     decorView(d).zIndex(Double(d.y) + 0.5)
                 }
@@ -574,10 +643,10 @@ struct WorldView: View {
                 if let why = world.lockReason(e.to) { world.show(why) }
                 return
             }
-            if x == world.save.himX && y == world.save.himY { personMenu = true; return }
-            if let o = world.object(at: x, y) { menuFor = o; return }
-            if let d = world.decor(at: x, y, base: true), !world.actions(forDecor: d).isEmpty { decorMenu = d; return }
-            if world.farmOn, world.ground(x, y) == .soil { soilAt = (x, y); return }
+            if x == world.save.himX && y == world.save.himY { showPersonMenu(); return }
+            if let o = world.object(at: x, y) { showObjectMenu(o); return }
+            if let d = world.decor(at: x, y, base: true), !world.actions(forDecor: d).isEmpty { showDecorMenu(d); return }
+            if world.farmOn, world.ground(x, y) == .soil { showSoilMenu(x, y); return }
             if world.farmOn, world.ground(x, y).isWater {
                 // 点水：走到旁边的岸上钓鱼
                 if let shore = shore(near: x, y) { world.walkHer(shore.0, shore.1) }
@@ -690,6 +759,50 @@ struct WorldView: View {
             // 钓到稀罕的才告诉他
             if ["锦鲤", "珍珠", "漂流瓶", "一朵睡莲"].contains(got) { app.tellHim("小岛上，她在水边钓到了\(got)。") }
         }
+    }
+
+    /// 这一格作物排在第几层：平时在这一行的景物下面；被一件景物的图盖住的话，画在那件前面
+    private func cropZ(_ key: String) -> Double {
+        let xy = key.split(separator: ",").compactMap { Int($0) }
+        guard xy.count == 2 else { return 0 }
+        let x = xy[0], y = xy[1]
+        var z = Double(y) + 0.45
+        for d in world.decor {
+            guard let k = WorldDecorKind.resolve(d.kind) else { continue }
+            let tall = Int((IslandArt.size(of: k.sprite).height / CGFloat(IslandArt.px)).rounded(.up))
+            if x >= d.x && x < d.x + k.cells.w && y <= d.y && y > d.y - tall {
+                z = max(z, Double(d.y) + 0.56)
+            }
+        }
+        return z
+    }
+
+    /// 一格作物（每分钟刷一次）
+    private func cropCell(_ key: String) -> some View {
+        let xy = key.split(separator: ",").compactMap { Int($0) }
+        return TimelineView(.periodic(from: .now, by: 60)) { ctx in
+            Canvas { gc, _ in
+                guard xy.count == 2, let c = world.save.crops[key], let s = WorldFarm.seed(c.kind) else { return }
+                let sc = tile / CGFloat(IslandArt.px)
+                func dot(_ x: Int, _ y: Int, _ col: Color) {
+                    gc.fill(Path(CGRect(x: CGFloat(x) * sc, y: CGFloat(y) * sc, width: sc, height: sc)), with: .color(col))
+                }
+                for (x, y, col) in WorldCropArt.bed() { dot(x, y, col) }
+                let st = WorldFarm.stage(c, now: ctx.date)
+                for (x, y, col) in WorldCropArt.outlined(WorldCropArt.pixels(stage: st, fruit: s.color)) { dot(x, y, col) }
+                if st == 0 { for (x, y, col) in WorldCropArt.marker(s.color) { dot(x, y, col) } }
+                if st >= 3, Int(ctx.date.timeIntervalSinceReferenceDate / 60) % 2 == 0 {
+                    for (x, y) in [(13, 2), (12, 3), (14, 3), (13, 4), (13, 3)] { dot(x, y, WorldCropArt.drop[1]) }
+                }
+                if c.lastWatered.map({ ctx.date.timeIntervalSince($0) < 1800 }) == true {
+                    dot(13, 10, WorldCropArt.drop[1]); dot(13, 11, WorldCropArt.drop[0]); dot(12, 11, WorldCropArt.drop[0])
+                    dot(13, 12, WorldCropArt.drop[0])
+                }
+            }
+        }
+        .frame(width: tile, height: tile)
+        .position(x: (CGFloat(xy.first ?? 0) + 0.5) * tile, y: (CGFloat(xy.last ?? 0) + 0.5) * tile)
+        .allowsHitTesting(false)
     }
 
     /// 庄稼：种子 → 芽 → 叶 → 结果，按像素画（一格 16 像素，跟地面一个颗粒）。每分钟刷一次

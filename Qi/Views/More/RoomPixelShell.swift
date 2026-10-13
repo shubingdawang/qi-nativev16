@@ -22,13 +22,15 @@ struct RoomPixelShell: View {
     let floorTheme: RoomTheme?
     var paintWalls = true
     var paintFloor = true
+    /// 左右各多画多宽（平面屋能左右拖，拖到头那一截也得有墙有地）
+    var margin: CGFloat = 0
 
     @State private var image: UIImage?
 
     private var key: String {
         [room.projection.rawValue, "\(Int(size.width))x\(Int(size.height))",
          wall.rawValue, floor.rawValue, theme?.id ?? "-", floorTheme?.id ?? "-",
-         paintWalls ? "w" : "", paintFloor ? "f" : ""].joined(separator: "|")
+         paintWalls ? "w" : "", paintFloor ? "f" : "", "\(Int(margin))"].joined(separator: "|")
     }
 
     var body: some View {
@@ -37,7 +39,8 @@ struct RoomPixelShell: View {
                 Image(uiImage: image)
                     .resizable()
                     .interpolation(.none)
-                    .frame(width: size.width, height: size.height)
+                    .frame(width: size.width + margin * 2, height: size.height)
+                    .offset(x: -margin)
             }
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
@@ -50,7 +53,7 @@ struct RoomPixelShell: View {
             let job = RoomShellPainter(room: room, size: size, wall: wall, floor: floor,
                                        wallHexes: theme?.wallColors(.light) ?? [],
                                        floorHexes: floorTheme?.floorColors(.light) ?? [],
-                                       paintWalls: paintWalls, paintFloor: paintFloor)
+                                       paintWalls: paintWalls, paintFloor: paintFloor, margin: margin)
             let k = key
             let img = await Task.detached(priority: .userInitiated) { job.render() }.value
             if let img { RoomShellPainter.cache.setObject(img, forKey: k as NSString) }
@@ -70,6 +73,7 @@ struct RoomShellPainter {
     let floorHexes: [String]
     let paintWalls: Bool
     let paintFloor: Bool
+    var margin: CGFloat = 0
 
     nonisolated(unsafe) static let cache: NSCache<NSString, UIImage> = {
         let c = NSCache<NSString, UIImage>()
@@ -81,7 +85,7 @@ struct RoomShellPainter {
 
     func render() -> UIImage? {
         let px = RoomPixel.px(room)
-        let W = Int((size.width / px).rounded(.up)), H = Int((size.height / px).rounded(.up))
+        let W = Int(((size.width + margin * 2) / px).rounded(.up)), H = Int((size.height / px).rounded(.up))
         guard W > 0, H > 0, W * H < 3_000_000 else { return nil }
         var buf = [UInt32](repeating: 0, count: W * H)
         let pal = palette()
@@ -102,7 +106,7 @@ struct RoomShellPainter {
 
         for j in 0..<H {
             for i in 0..<W {
-                let p = CGPoint(x: (CGFloat(i) + 0.5) * px, y: (CGFloat(j) + 0.5) * px)
+                let p = CGPoint(x: (CGFloat(i) + 0.5) * px - margin, y: (CGFloat(j) + 0.5) * px)
                 var c: RGB?
                 // 地板
                 let t = g.tile(at: p)

@@ -107,6 +107,9 @@ struct ClawdHomeView: View {
     /// 以前松手只认床（`layDownAct`），别的一律「就待这儿吧」然后回去溜达，
     /// 过五到十几秒才轮到抽家具，抽中的还不一定是这件。
     @State private var aimedItem: UUID?
+    /// 点家具弹的那个菜单（贴着家具，见 `AnchoredMenu`）、手指点在哪儿
+    @State private var homeMenu: AnchorMenuState?
+    @State private var tapAt: CGPoint = .zero
     /// 她点了「一起…」：他走过去做的就是这一个动作，不随机挑
     @State private var forcedAct: String?
     /// 那个动作做完要办的事（一起做饭 → 菜进柜子）
@@ -461,6 +464,50 @@ struct ClawdHomeView: View {
         mood = .lying
         store.clawdDoing = .sleeping
         return true
+    }
+
+    /// 点一件家具弹出来的那几条
+    private func furnitureMenu(_ item: Furniture) -> [AnchorMenuItem] {
+        var m: [AnchorMenuItem] = []
+        if ["wardrobe", "lolita_wardrobe", "vic_wardrobe", "xred_wardrobe", "rose_wardrobe"].contains(item.kind) {
+            m.append(AnchorMenuItem(title: "打开衣柜") { tab = 3 })
+        }
+        if play.isPlant(item.kind) {
+            m.append(AnchorMenuItem(title: play.thirsty(item.id) ? "浇水（它渴了）"
+                                    : "浇水 · " + HomePlay.stageNames[play.stage(item.id)]) { waterPlant(item) })
+        }
+        if play.isTank(item.kind) {
+            m.append(AnchorMenuItem(title: play.hungry(item.id) ? "喂鱼（饿了）" : "喂鱼") { feedFish(item) })
+        }
+        if let t = together(item.kind) {
+            m.append(AnchorMenuItem(title: t.label) { doTogether(item, t.act) })
+        }
+        if treasureOpen {
+            m.append(AnchorMenuItem(title: "翻一翻，找他藏的东西") { searchTreasure(item) })
+        }
+        m.append(AnchorMenuItem(title: "从素材库挑一张") { dressing = item; pickingPiece = true })
+        m.append(AnchorMenuItem(title: item.imageName.isEmpty ? "从相册挑一张原图" : "再换一张原图") {
+            dressing = item; pickingImage = true
+        })
+        if !item.imageName.isEmpty {
+            m.append(AnchorMenuItem(title: "换回画的这版") { store.undress(item.id) })
+        }
+        if store.projection == .iso {
+            m.append(AnchorMenuItem(title: item.facesRight ? "改为靠左墙" : "改为靠右墙") { store.flipFacing(item.id) })
+        }
+        if RoomClock.glow(of: item.kind) != nil {
+            m.append(AnchorMenuItem(title: store.lightsOff.contains(item.id) ? "开灯" : "关灯") {
+                _ = store.toggleLight(item.id)
+            })
+        }
+        m.append(AnchorMenuItem(title: "复制一件摆旁边") { say(store.duplicate(item.id)) })
+        m.append(AnchorMenuItem(title: "搬到别的房间") { sending = item })
+        m.append(AnchorMenuItem(title: "收起来") { store.toggleHidden(item.id) })
+        m.append(AnchorMenuItem(title: "卖掉，退一半的币", destructive: true) {
+            store.sell(item.id)
+            say("卖掉了，退回一半的币")
+        })
+        return m
     }
 
     // MARK: 能玩的那几样（见 `HomePlay`）
@@ -1343,7 +1390,11 @@ struct ClawdHomeView: View {
                             onTapFurniture: { f in
                                 // ⚠️ 藏着的时候点家具 = **找他**，不是开家具的菜单。
                                 // 两件事抢同一个点击，得让捉迷藏先。
-                                guard hiding else { acting = f; return }
+                                guard hiding else {
+                                    homeMenu = AnchorMenuState(title: FurnitureCatalog.kind(f.kind)?.name ?? "这件",
+                                                               items: furnitureMenu(f), at: tapAt)
+                                    return
+                                }
                                 if f.id == hideSpot {
                                     reveal(found: true)
                                 } else {
@@ -1362,6 +1413,7 @@ struct ClawdHomeView: View {
                                     }
                                 }
                             },
+                            onTapFurnitureAt: { _, p in tapAt = p },
                             // ⚠️ **他不在这一间就不画他。**
                             //
                             // 她说的：「clawd 在哪个房间，我打开小屋就会呈现哪个房间。」
@@ -1522,97 +1574,7 @@ struct ClawdHomeView: View {
         // 挑到 `roomAndHands` 整块的底下去了。
         // 家具的小菜单挂在房间这一层，不跟外面「接他进来」那个挤在同一个 View 上。
         // 两个 confirmationDialog 叠在同一处，SwiftUI 只认得住一个。
-        .confirmationDialog(
-            acting.flatMap { FurnitureCatalog.kind($0.kind)?.name } ?? "这件",
-            isPresented: Binding(get: { acting != nil },
-                                 set: { if !$0 { acting = nil } }),
-            titleVisibility: .visible
-        ) {
-            if let item = acting {
-                if ["wardrobe", "lolita_wardrobe", "vic_wardrobe", "xred_wardrobe", "rose_wardrobe"].contains(item.kind) {
-                    Button("打开衣柜") { tab = 3 }
-                }
-                // 小屋里能玩的那几样（见 `HomePlay`），排在最前面
-                if play.isPlant(item.kind) {
-                    Button(play.thirsty(item.id) ? "浇水（它渴了）"
-                           : "浇水 · " + HomePlay.stageNames[play.stage(item.id)]) { waterPlant(item) }
-                }
-                if play.isTank(item.kind) {
-                    Button(play.hungry(item.id) ? "喂鱼（饿了）" : "喂鱼") { feedFish(item) }
-                }
-                if let t = together(item.kind) {
-                    Button(t.label) { doTogether(item, t.act) }
-                }
-                if treasureOpen {
-                    Button("翻一翻，找他藏的东西") { searchTreasure(item) }
-                }
-                // ⚠️⚠️ **素材库排在相册前面，而且永远都在。**
-                //
-                // 她报的：「clawd 小屋我没找到素材库在哪里。
-                // 　我长按家具点击『用我的图』弹出来的是让我在相册导入，
-                // 　这个地方应该连接的是素材库，
-                // 　因为只有素材库是我已经确定好的图。」
-                //
-                // 两件事都栽在同一句话上——上一版这儿写着
-                // 「素材库是空的就不摆这一条，一个点进去什么都没有的入口只是噪音」。
-                //
-                // 那句话是错的，而且错得跟念头池、动态那两次一模一样：
-                // **一个空着才需要被发现的入口，恰恰在空着的时候被藏了起来。**
-                // 库是空的 → 入口不出现 → 她永远填不满它 → 库永远是空的。
-                // `PieceBankSheet` 里那段「素材库还是空的，去哪儿切」的提示
-                // 写得好好的，可她一次都没机会看见。
-                //
-                // 顺序也倒过来：**素材库在前，相册在后**。
-                // 她说得对——素材库里那些是她已经切好、确定要用的；
-                // 相册是原始素材，还得再切一遍。默认该给确定的那个。
-                Button("从素材库挑一张") {
-                    dressing = item
-                    pickingPiece = true
-                }
-                Button(item.imageName.isEmpty ? "从相册挑一张原图" : "再换一张原图") {
-                    dressing = item
-                    pickingImage = true
-                }
-                if !item.imageName.isEmpty {
-                    Button("换回画的这版") { store.undress(item.id) }
-                }
-                // 贴哪面墙。
-                //
-                // 她说的：「等距又不是只有一面墙，两面墙都应该可以放东西才对。
-                // 本身靠左墙放的转方向之后就可以放在右墙不突兀了。」
-                //
-                // ⚠️ 字面写**改完是什么样**，不写「转方向」——
-                // 她定的规矩：前端只说作用和用法。
-                // 一个只有两档的东西，直接拿另一档当按钮名最清楚。
-                //
-                // 平面屋里不摆这一条：那一档用的是正面图，本来就不分左右。
-                if store.projection == .iso {
-                    Button(item.facesRight ? "改为靠左墙" : "改为靠右墙") {
-                        store.flipFacing(item.id)
-                    }
-                }
-                // 买过之后也能换一间。
-                //
-                // 她报的：「家具分区太绝对了，桌子也可以摆在卧室，
-                // 但现在只能摆在餐厅。」——买下来归哪一间只是个默认，
-                // 可**改这个默认的路以前不存在**：一件东西落在餐厅就出不来了。
-                if RoomClock.glow(of: item.kind) != nil {
-                    Button(store.lightsOff.contains(item.id) ? "开灯" : "关灯") {
-                        store.toggleLight(item.id)
-                    }
-                }
-                Button("复制一件摆旁边") { say(store.duplicate(item.id)) }
-                Button("搬到别的房间") { sending = item }
-                Button("收起来") { store.toggleHidden(item.id) }
-                Button("卖掉，退一半的币", role: .destructive) {
-                    store.sell(item.id)
-                    say("卖掉了，退回一半的币")
-                }
-            }
-            Button("取消", role: .cancel) { }
-        } message: {
-            Text("长按可移动至房间内任意位置")
-        }
+        .anchoredMenu($homeMenu)
         // ⚠️ 「从整版图里取家具」那个 sheet **不在这儿**，挂在按钮自己身上
         // （见 `sheetEntry`）。它以前挂在这一层，而这一层是**房间那一档**——
         // 她在「柜子」那一档点按钮的时候，这个 `.sheet` 压根不在视图树里，
@@ -2400,10 +2362,10 @@ struct ClawdHomeView: View {
         let mine = CustomWearStore.shared.items
         return ScrollView {
             VStack(spacing: 14) {
+                // 整只放出来，帽子、头上的东西都看得见
                 ClawdRigView(mood: .idle, wornIDs: store.wornIDs, scale: 3.2, shadow: true)
-                    .frame(height: 36 * 3.2 * 0.62, alignment: .bottom)
-                    .clipped()
-                    .padding(.top, 6)
+                    .frame(width: 36 * 3.2, height: 36 * 3.2)
+                    .padding(.top, 2)
                 if bought.isEmpty && mine.isEmpty {
                     Text("衣柜还是空的。商店里能买衣服，拼豆导出页能把画的做成衣服。")
                         .font(.app(12))

@@ -59,6 +59,8 @@ struct IsoRoomView<Clawd: View>: View {
     var floorBottom: Double
 
     var onTapFurniture: (Furniture) -> Void
+    /// 点家具时手指在哪儿（全局坐标）：菜单贴着它弹。先于 `onTapFurniture` 叫
+    var onTapFurnitureAt: ((Furniture, CGPoint) -> Void)? = nil
     /// 他现在在这一间吗。不在就不画，也不进排序。
     var clawdHere: Bool = false
     /// 捉迷藏找了半天没找着：这一件晃一下、亮一圈，告诉她「就在这儿」。
@@ -364,7 +366,8 @@ struct IsoRoomView<Clawd: View>: View {
                            theme: RoomFinish.theme(token),
                            floorTheme: RoomFinish.theme(floorToken),
                            paintWalls: paper == nil,
-                           paintFloor: boards == nil)
+                           paintFloor: boards == nil,
+                           margin: store.projection == .flat ? IsoRoom.fit(in: size, as: .flat).maxPan + 12 : 0)
                 .offset(x: store.projection == .flat ? store.flatPanX : 0)
             // 她自己那张墙纸。**必须按墙的形状裁**——
             // 直接贴一张矩形上去就是一块补丁盖在屋子上，两面墙全糊住了。
@@ -986,7 +989,10 @@ struct IsoRoomView<Clawd: View>: View {
                 }
             }
         }
-        .onTapGesture { onTapFurniture(item) }
+        .onTapGesture(count: 1, coordinateSpace: .global) { p in
+            onTapFurnitureAt?(item, p)
+            onTapFurniture(item)
+        }
         .gesture(dragGesture(item, s, geoRoom))
     }
 

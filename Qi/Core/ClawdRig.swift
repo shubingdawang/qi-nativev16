@@ -1088,6 +1088,9 @@ struct ClawdWornView: View {
             // 关了插值按最近邻缩小，被吃掉的正是那些小块。
             Image(uiImage: worn)
                 .resizable()
+                // 她自己做的衣服是一格一格的像素图：不柔化。柔化的话衣服边缘半透明，
+                // 底下他的身子透出一条橙线（她报的「朝哪边哪边多一条橙色」）
+                .interpolation(id.hasPrefix("cw_") ? .none : .high)
                 .frame(width: CGFloat(ClawdRig.canvas) * scale,
                        height: CGFloat(ClawdRig.canvas) * scale)
         } else if let art = ClawdRig.wearArt(id),
