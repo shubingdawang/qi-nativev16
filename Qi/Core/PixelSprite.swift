@@ -1093,6 +1093,166 @@ enum ClawdSprites {
         "...................................."
     ], palette)
 
+    /// 走路一：左前、右前那两条腿抬起来往前迈，膝盖弯着、离地一格；身子跟着抬一点
+    static let walkA = PixelSprite([
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        ".........pp.pp.......pp.pp..........",
+        "............pp..........pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
+    ], palette)
+
+    /// 走路二：四条腿都落地
+    static let walkB = PixelSprite([
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
+    ], palette)
+
+    /// 走路三：换另外两条腿抬起来往前迈
+    static let walkC = PixelSprite([
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp...pp.....pp...pp.........",
+        "........pp..........pp..............",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
+    ], palette)
+
+    /// 走路四：又都落地（手摆到另一边）
+    static let walkD = PixelSprite([
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......ppppkkppppppppppkkpppp........",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..ppppppppkkppppppppppkkpppppppp....",
+        "..pppppppppppppppppppppppppppppp....",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "......pppppppppppppppppppppp........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "........pp..pp......pp..pp..........",
+        "....................................",
+        "....................................",
+        "....................................",
+        "...................................."
+    ], palette)
+
     /// 搬东西：两只手都放低到身前，像抱着一个箱子
     static let carry = PixelSprite([
         "....................................",
@@ -2297,7 +2457,9 @@ enum ClawdMood: String, Codable {
             return [(ClawdSprites.happy, 0.35), (ClawdSprites.idle, 0.35)]
         case .walking:
             // 0.16 秒换一次脚。再慢就看着像在滑，再快腿会糊成一团。
-            return [(ClawdSprites.walk1, 0.16), (ClawdSprites.walk2, 0.16)]
+            // 四帧一步：两组腿轮流抬，抬起来那条膝盖是弯的（不再是两帧直腿来回换）
+            return [(ClawdSprites.walkA, 0.12), (ClawdSprites.walkB, 0.1),
+                    (ClawdSprites.walkC, 0.12), (ClawdSprites.walkD, 0.1)]
         case .carrying:
             return [(ClawdSprites.carry, 1.2), (ClawdSprites.idle, 0.9)]
         case .hauling:
@@ -2337,7 +2499,8 @@ enum ClawdMood: String, Codable {
             return [(ClawdSprites.blink, 1.2), (ClawdSprites.idle, 0.5)]
         case .flail:
             // 抓狂：两只手甩得飞快。借走路那两帧，把时间压到最短
-            return [(ClawdSprites.walk1, 0.07), (ClawdSprites.walk2, 0.07)]
+            return [(ClawdSprites.walkA, 0.06), (ClawdSprites.walkB, 0.05),
+                    (ClawdSprites.walkC, 0.06), (ClawdSprites.walkD, 0.05)]
         case .drowsy:
             // 越眨越久，最后就睡过去了
             return [(ClawdSprites.idle, 1.0), (ClawdSprites.blink, 0.55),
