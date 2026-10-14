@@ -186,8 +186,8 @@ struct ClawdRigView: View {
                 armUp(onLeft: true)
                 armUp(onLeft: false)
             } else {
-                arm(.left)
-                arm(.right)
+                arm(.left).offset(y: walkSink * scale)
+                arm(.right).offset(y: walkSink * scale)
             }
 
             // 身子（图纸上原来那两块手已经抠掉了，见 `stripArms`）。
@@ -353,8 +353,22 @@ struct ClawdRigView: View {
     // MARK: 这一刻该摆成什么样
 
     private var plan: ClawdRig.Plan {
-        ClawdRig.plan(pose: pose, beat: beat,
-                      itemW: itemSize.w, itemH: itemSize.h, rise: rise)
+        var p = ClawdRig.plan(pose: pose, beat: beat,
+                              itemW: itemSize.w, itemH: itemSize.h, rise: rise)
+        // 走路：两只手跟着步子一前一后摆（蹲下那一帧一只抬起来、一只放低，下一步换过来）
+        if mood == .walking, pose == .none, frames.count == 4 {
+            switch frame % 4 {
+            case 0: p.leftArm = 22; p.rightArm = -12
+            case 2: p.leftArm = -12; p.rightArm = 22
+            default: break
+            }
+        }
+        return p
+    }
+
+    /// 走路蹲下的那两帧，身子沉了一格，手跟着沉
+    private var walkSink: CGFloat {
+        mood == .walking && pose == .none && frames.count == 4 && frame % 2 == 0 ? 1 : 0
     }
 
     /// 手上那件在图纸上占多大（格）。
