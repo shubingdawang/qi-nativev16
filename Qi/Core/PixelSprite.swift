@@ -101,10 +101,15 @@ struct PixelSpriteView: View {
                           next == c {
                         run += 1
                     }
+                    // 多铺的那半个点只往**里面**铺（右边、下边还有色块的时候），
+                    // 压住两块之间的缝。最外沿不铺：外沿多出来的半个点衣服盖不住，
+                    // 穿着她画的衣服时身子会从边上露出一条橙线（他朝哪边翻过来就露在哪边）
+                    let moreRight: CGFloat = sprite.color(x: x + run, y: y) != nil ? 0.5 : 0
+                    let moreDown: CGFloat = sprite.color(x: x, y: y + 1) != nil ? 0.5 : 0
                     let rect = CGRect(x: CGFloat(x) * scale,
                                       y: CGFloat(y) * scale,
-                                      width: CGFloat(run) * scale + 0.5,
-                                      height: scale + 0.5)
+                                      width: CGFloat(run) * scale + moreRight,
+                                      height: scale + moreDown)
                     context.fill(Path(rect), with: .color(tint ?? c))
                     x += run
                 }

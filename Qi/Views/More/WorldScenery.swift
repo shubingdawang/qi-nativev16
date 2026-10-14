@@ -16,7 +16,8 @@ enum WorldDecorKind: String, CaseIterable, Identifiable {
          signpost, greenhouse, lighthouse, telescope,
          scarecrow, haybale, wheelbarrow, well, beehive, flowerpot, roseArch,
          fountain, picnic, umbrella, deckchair, shells, rowboat, campfire,
-         logpile, tent, mushrooms, birdhouse, reeds, stones, lanterns
+         logpile, tent, mushrooms, birdhouse, reeds, stones, lanterns,
+         windmill, wheat, coralPink, seaweed, snowman, sled
     var id: String { rawValue }
 
     var label: String {
@@ -81,6 +82,12 @@ enum WorldDecorKind: String, CaseIterable, Identifiable {
         case .reeds: return "芦苇"
         case .stones: return "踏脚石"
         case .lanterns: return "一串小灯"
+        case .windmill: return "风车"
+        case .wheat: return "麦子"
+        case .coralPink: return "粉珊瑚"
+        case .seaweed: return "水草"
+        case .snowman: return "雪人"
+        case .sled: return "雪橇"
         }
     }
 
@@ -146,8 +153,17 @@ enum WorldDecorKind: String, CaseIterable, Identifiable {
         case .reeds: return "reeds"
         case .stones: return "stones"
         case .lanterns: return "lanterns"
+        case .windmill: return "windmill"
+        case .wheat: return "wheat"
+        case .coralPink: return "coral_pink"
+        case .seaweed: return "seaweed"
+        case .snowman: return "snowman"
+        case .sled: return "sled"
         }
     }
+
+    /// 长在水下的（隔着水面看，画淡一点）
+    var underwater: Bool { self == .coralPink || self == .seaweed }
 
     var isHouse: Bool { [.houseOrange, .cabin, .shop, .houseBeige].contains(self) }
 
@@ -173,6 +189,10 @@ enum WorldDecorKind: String, CaseIterable, Identifiable {
         case .campfire, .logpile, .tent: return "露营"
         case .mushrooms: return "花"
         case .stones: return "石头"
+        case .windmill: return "地标"
+        case .wheat: return "田园"
+        case .coralPink, .seaweed: return "水上"
+        case .snowman, .sled: return "雪地"
         }
     }
 
@@ -193,7 +213,7 @@ enum WorldDecorKind: String, CaseIterable, Identifiable {
     var blocks: Bool {
         switch self {
         case .daisy, .clover, .flowerY, .flowerR, .tulipPeach, .lavender, .sunflower, .lily, .pebble,
-             .flowerpot, .picnic, .shells, .rowboat, .mushrooms, .reeds, .stones: return false
+             .flowerpot, .picnic, .shells, .rowboat, .mushrooms, .reeds, .stones, .wheat, .coralPink, .seaweed: return false
         default: return true
         }
     }

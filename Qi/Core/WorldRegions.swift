@@ -48,7 +48,10 @@ enum WorldRegions {
         .init(id: "songlin", name: "松林", theme: "密密的松树、林子里的木屋、温泉", level: 6, story: "forest_sound", mapX: 0.10, mapY: 0.48),
         .init(id: "xingqiu", name: "星丘", theme: "开阔的草坡、观星台", level: 8, story: "flower_night", mapX: 0.80, mapY: 0.10),
         .init(id: "guoyuan", name: "果园", theme: "一排排果树、莓果丛、熬果酱的小屋", level: 4, story: nil, mapX: 0.76, mapY: 0.68),
-        .init(id: "xiaozhen", name: "小镇", theme: "喷泉广场、四间铺子、集市", level: 6, story: nil, mapX: 0.14, mapY: 0.90)
+        .init(id: "xiaozhen", name: "小镇", theme: "喷泉广场、四间铺子、集市", level: 6, story: nil, mapX: 0.14, mapY: 0.90),
+        .init(id: "fengche", name: "风车岛", theme: "一座大风车、一片麦田、烤面包的磨坊", level: 7, story: nil, mapX: 0.95, mapY: 0.36),
+        .init(id: "shanhu", name: "珊瑚礁", theme: "一圈沙洲围着环礁湖，湖里长着珊瑚", level: 8, story: nil, mapX: 0.70, mapY: 0.95),
+        .init(id: "xuedao", name: "雪岛", theme: "一年到头都是冬天：雪松、雪人、结冰的湖", level: 9, story: nil, mapX: 0.10, mapY: 0.12)
     ]
 
     static func info(_ id: String) -> WorldRegionInfo? { all.first { $0.id == id } }
@@ -270,7 +273,25 @@ enum WorldStories {
                    lines: ["一大早广场上就支起了摊子，有人在卖刚出炉的面包，香味飘了半条街。",
                            "你把篮子里的东西一样一样摆出来，跟摊主讨价还价，最后多换了一颗糖。",
                            "他就站在你身后，帮你拎着篮子。"],
-                   xp: 30)
+                   xp: 30),
+        WorldStory(id: "windmill_wind", title: "风车转起来", region: "fengche", spot: .decor([.windmill]), level: 7, night: false,
+                   hint: "白天去风车岛的风车底下。",
+                   lines: ["风一吹，四片扇叶慢慢转起来，吱呀吱呀的，影子一下一下扫过麦田。",
+                           "你站在扇叶的影子里，一会儿亮一会儿暗，忍不住跟着影子走了两步。",
+                           "他就站在麦田边上，看你踩影子。"],
+                   xp: 30),
+        WorldStory(id: "reef_light", title: "湖底的光", region: "shanhu", spot: .ground([.water]), level: 8, night: false, chance: 0.6,
+                   hint: "白天在珊瑚礁的环礁湖边点几下。",
+                   lines: ["湖水清得能看见底，阳光照下去，在珊瑚上晃成一片一片的光斑。",
+                           "一群小鱼从你脚边游过去，又游回来，好像在看你。",
+                           "你蹲下来把手伸进水里，它们一下子全散开了。"],
+                   xp: 30),
+        WorldStory(id: "first_snow", title: "第一场雪", region: "xuedao", spot: .decor([.snowman, .cabin]), level: 9,
+                   hint: "去雪岛的雪人或者小木屋旁边。",
+                   lines: ["一踩上雪岛，鞋子就陷进雪里，咯吱一声。",
+                           "你呵了一口气，看它在空中变成一小团白雾，又呵了一口。",
+                           "他把自己的围巾解下来，绕在了你脖子上。"],
+                   xp: 35)
     ]
 
     static func story(_ id: String) -> WorldStory? { all.first { $0.id == id } }

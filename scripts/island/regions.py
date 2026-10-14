@@ -23,6 +23,7 @@ SPRITE = {
     "flowerpot": "flowerpot", "roseArch": "rose_arch", "fountain": "fountain", "picnic": "picnic", "umbrella": "umbrella",
     "deckchair": "deckchair", "shells": "shells", "rowboat": "rowboat", "campfire": "campfire", "logpile": "logpile",
     "mushrooms": "mushrooms", "birdhouse": "birdhouse", "reeds": "reeds", "tent": "tent", "stones": "stones", "lanterns": "lanterns",
+    "windmill": "windmill", "wheat": "wheat", "coralPink": "coral_pink", "seaweed": "seaweed", "snowman": "snowman", "sled": "sled",
 }
 FLOWERS = ["daisy", "clover", "flowerY", "flowerR", "tulipPeach", "lavender"]
 
@@ -40,7 +41,8 @@ def sizes():
     for k in ("fl_daisy", "fl_pink", "fl_yellow", "tulip_pink", "tulip_peach", "lavender", "sunflower", "fence", "fence_v",
               "crate", "barrel", "stump", "lamp", "mailbox", "bench", "lily",
               "scarecrow", "haybale", "wheelbarrow", "well", "beehive", "flowerpot", "rose_arch", "fountain", "picnic", "umbrella",
-              "deckchair", "shells", "rowboat", "campfire", "logpile", "mushrooms", "birdhouse", "reeds", "tent", "stones", "lanterns"):
+              "deckchair", "shells", "rowboat", "campfire", "logpile", "mushrooms", "birdhouse", "reeds", "tent", "stones", "lanterns",
+              "windmill", "wheat", "coral_pink", "seaweed", "snowman", "sled"):
         names[k] = "s_" + k + ".png"
     for k, n in names.items():
         im = Image.open(os.path.join(HERE, n)); out[k] = im.size
@@ -55,7 +57,7 @@ def cells_of(kind):
     w, h = SZ[SPRITE[kind]]
     return (w + 15) // 16, (h + 15) // 16
 
-BLOCKING_FREE = set(FLOWERS + ["sunflower", "lily", "pebble", "shells", "stones", "mushrooms", "picnic", "reeds", "flowerpot"])
+BLOCKING_FREE = set(FLOWERS + ["sunflower", "lily", "pebble", "shells", "stones", "mushrooms", "picnic", "reeds", "flowerpot", "wheat"])
 
 class Region:
     def __init__(self, rid, name, W, H, ctrl, seed, extra_land=()):
@@ -170,6 +172,7 @@ def huadao():
     R.put("w", [(17, 21), (18, 21), (17, 17)])
     R.bridge([(0, 14), (1, 14), (2, 14)], "home", (0, 14), (28, 4))
     R.bridge([(12, 0), (12, 1)], "xingqiu", (12, 0), (12, 23))
+    R.bridge([(24, 12), (25, 12)], "fengche", (25, 12), (2, 11))
     R.add("fountain", 11, 16, ground=("t",), nudge=1)
     R.add("greenhouse", 15, 12, nudge=2)
     R.add("shop", 5, 27)
@@ -215,6 +218,7 @@ def yuewan():
     R.rect("t", 18, 21, 5, 7)
     R.bridge([(12, 0), (12, 1)], "home", (12, 0), (13, 36))
     R.bridge([(0, 12), (1, 12)], "xiaozhen", (0, 12), (22, 10))
+    R.bridge([(26, 7), (27, 7)], "shanhu", (27, 7), (2, 7))
     R.add("lighthouse", 22, 9)
     R.add("cabin", 4, 12)
     R.add("signpost", 8, 8)
@@ -247,6 +251,7 @@ def songlin():
     R.rect("w", 15, 19, 20, 23)
     R.put("w", [(16, 24), (17, 24), (14, 21)])
     R.bridge([(25, 15)], "home", (25, 15), (2, 16))
+    R.bridge([(10, 0), (10, 1)], "xuedao", (10, 0), (12, 22))
     R.add("cabin", 6, 12)
     R.add("signpost", 14, 12)
     R.add("bench", 11, 23)
@@ -341,6 +346,81 @@ def xiaozhen():
     R.scatter(FLOWERS + ["stones"], (2, 23, 2, 21), 20)
     return R
 
+# ───────────────────────── 风车岛：一座大风车，一片一片的麦子，磨坊烤面包，草垛、推车、向日葵
+
+def fengche():
+    R = Region("fengche", "风车岛", 24, 24, [(3, 3), (9, 1.6), (16, 2), (21, 4), (22.4, 10), (21.6, 16), (20, 21.4),
+                                            (13, 22.4), (6, 21.6), (2.2, 17), (1.8, 9)], 81)
+    R.rect("p", 2, 12, 11, 12)
+    R.rect("p", 11, 12, 3, 20)
+    R.bridge([(0, 11), (1, 11)], "huadao", (0, 11), (23, 12))
+    R.add("windmill", 13, 10, nudge=1)
+    R.add("houseOrange", 4, 9)
+    R.add("signpost", 9, 13)
+    # 麦田：路东南、西南两大片，一行一行
+    for (x0, x1, y0, y1) in [(14, 20, 14, 19), (3, 9, 15, 19)]:
+        # 麦子一格挨一格种满（图比一格高，但只占根部那一格，不然隔一行才放得下）
+        for y in range(y0, y1 + 1):
+            for x in range(x0, x1 + 1):
+                if R.G[y][x] == "." and (x, y) not in R.occ:
+                    R.decor.append(("wheat", x, y)); R.occ.add((x, y))
+    R.add("scarecrow", 17, 16, nudge=2)
+    R.add("haybale", 15, 6); R.add("haybale", 18, 6); R.add("haybale", 6, 12); R.add("wheelbarrow", 13, 13, nudge=2)
+    R.add("crate", 8, 9); R.add("barrel", 2, 9); R.add("well", 7, 5)
+    for (x, y) in [(10, 4), (13, 8), (10, 15), (13, 20)]: R.add("lamp", x, y, ground=(".", "p"), nudge=1)
+    R.add("bench", 8, 13)
+    R.scatter(["sunflower", "sunflower", "sunflower", "flowerY", "daisy"], (2, 21, 2, 21), 16)
+    R.scatter(["treeGreen", "treeSmall", "bush", "olive"], (2, 21, 2, 21), 7)
+    return R
+
+# ───────────────────────── 珊瑚礁：一圈沙洲围着一汪浅浅的环礁湖，湖里长着珊瑚，潜水小屋、小船、遮阳伞
+
+def shanhu():
+    R = Region("shanhu", "珊瑚礁", 22, 20, [(3, 3), (9, 1.6), (15, 2), (20, 4), (20.6, 10), (19.6, 16), (13, 18.6),
+                                           (6, 18), (2, 14), (1.6, 8)], 91)
+    for y in range(R.H):
+        for x in range(R.W):
+            if R.G[y][x] != "~": R.G[y][x] = "s"
+    # 中间的环礁湖
+    for y in range(R.H):
+        for x in range(R.W):
+            if ((x + 0.5 - 11.5) / 6.2) ** 2 + ((y + 0.5 - 10.5) / 4.6) ** 2 < 1: R.G[y][x] = "w"
+    R.rect(".", 3, 7, 3, 5)
+    R.bridge([(0, 7), (1, 7)], "yuewan", (0, 7), (25, 7))
+    R.add("cabin", 3, 5, ground=(".", "s"))
+    R.add("signpost", 8, 4, ground=("s", "."))
+    for (x, y) in [(16, 3), (5, 16)]: R.add("umbrella", x, y, ground=("s",))
+    for (x, y) in [(18, 4), (8, 17)]: R.add("deckchair", x, y, ground=("s",))
+    R.add("campfire", 17, 16, ground=("s",)); R.add("lanterns", 12, 3, ground=("s",))
+    # 湖里：珊瑚、小船
+    for (x, y) in [(8, 9), (10, 12), (13, 8), (15, 11), (12, 10), (9, 11), (14, 13), (16, 9)]:
+        R.water_decor("coralPink" if (x + y) % 2 else "seaweed", x, y)
+    R.boat(10, 14)
+    R.scatter(["shells", "shells", "stones", "pebble"], (1, 20, 1, 18), 12, ground=("s",))
+    R.scatter(["olive", "treeSmall", "rocks"], (1, 20, 1, 18), 5, ground=("s", "."))
+    return R
+
+# ───────────────────────── 雪岛：一年到头都是冬天，松树压着雪，小木屋、雪人、雪橇、结冰的小湖、篝火
+
+def xuedao():
+    R = Region("xuedao", "雪岛", 26, 26, [(4, 3), (11, 1.8), (18, 2.4), (23, 5), (24, 11), (23, 17), (22, 22),
+                                          (15, 24.6), (8, 23.6), (3, 19), (2, 11)], 101)
+    R.rect("p", 12, 13, 13, 25)
+    R.rect("p", 6, 19, 12, 13)
+    R.rect("w", 15, 20, 5, 8)
+    R.bridge([(12, 25), (12, 24)], "songlin", (12, 25), (10, 2))
+    R.add("cabin", 5, 11)
+    R.add("signpost", 14, 15)
+    R.add("campfire", 9, 16); R.add("logpile", 4, 14); R.add("tent", 17, 18)
+    for (x, y) in [(7, 18), (19, 11), (15, 21)]: R.add("snowman", x, y, nudge=2)
+    R.add("sled", 16, 10, nudge=2); R.add("sled", 8, 21, nudge=2)
+    for (x, y) in [(11, 11), (14, 11), (11, 18), (14, 22)]: R.add("lamp", x, y, ground=(".", "p"), nudge=1)
+    R.add("lanterns", 9, 10)
+    R.add("bench", 15, 15)
+    R.scatter(["pine", "pine", "pine", "bonsai", "bonsai"], (2, 23, 2, 23), 26)
+    R.scatter(["rock", "pebble", "stump", "bush"], (2, 23, 2, 23), 10)
+    return R
+
 # ───────────────────────── 栖岛：在原来的布置上添一些（已有的景不动）
 
 NINJA = {"tree_big": "treeBig", "tree_pink": "treePink", "tree_green": "treeGreen", "tree_orange": "treeOrange",
@@ -398,7 +478,7 @@ HOME_EXITS = [
 ]
 
 if __name__ == "__main__":
-    regs = [huadao(), yuewan(), songlin(), xingqiu(), guoyuan(), xiaozhen()]
+    regs = [huadao(), yuewan(), songlin(), xingqiu(), guoyuan(), xiaozhen(), fengche(), shanhu(), xuedao()]
     out = {"home": dict(exits=HOME_EXITS, **home_extras())}
     for R in regs:
         R.ascii()

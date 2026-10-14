@@ -1222,7 +1222,16 @@ extension WorldStore {
     var level: Int { WorldLevel.level(save.xp) }
 
     /// 岛上现在是什么季节
-    var season: WorldSeason { save.seasonPick.flatMap(WorldSeason.init(rawValue:)) ?? WorldSeason.now }
+    /// 雪岛一年到头都是冬天
+    var season: WorldSeason {
+        if save.region == "xuedao" { return .winter }
+        return save.seasonPick.flatMap(WorldSeason.init(rawValue:)) ?? WorldSeason.now
+    }
+
+    /// 某座岛现在什么季节（画桥那头的岛用）
+    func season(of region: String) -> WorldSeason {
+        region == "xuedao" ? .winter : (save.seasonPick.flatMap(WorldSeason.init(rawValue:)) ?? WorldSeason.now)
+    }
 
     func pickSeason(_ s: WorldSeason?) {
         var v = save

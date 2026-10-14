@@ -351,6 +351,89 @@ final class IslandPlay: ObservableObject {
         return "熬好了一罐\(name)，放进小岛的篮子里了"
     }
 
+    // MARK: 风车岛
+
+    /// 这一格麦子割过没有（割过的显示麦茬，几个钟头后长回来）
+    func wheatCut(_ x: Int, _ y: Int) -> Bool { wait("wheat", x, y, hours: 4) > 0 }
+
+    func cutWheat(_ d: WorldDecor) -> String {
+        let w = wait("wheat", d.x, d.y, hours: 4)
+        guard w == 0 else { return "这一格刚割过，\(Self.later(w))长回来" }
+        mark("wheat", d.x, d.y)
+        give("麦子")
+        world.gain(1)
+        world.log("她割了一把麦子。")
+        return "割下一把麦子（篮子里 \(count("麦子")) 把）"
+    }
+
+    /// 三把麦子磨一袋面粉
+    func mill() -> String {
+        guard count("麦子") >= 3 else { return "麦子不够，要 3 把（现在 \(count("麦子")) 把）。去麦田里割" }
+        _ = take("麦子", 3)
+        give("面粉")
+        world.flash("sparkles")
+        world.gain(4)
+        world.log("风车把三把麦子磨成了一袋面粉。")
+        return "风车吱呀吱呀转了一圈，磨出一袋面粉"
+    }
+
+    /// 一袋面粉烤两个面包
+    func bake() -> String {
+        guard take("面粉") else { return "没有面粉。先在风车那儿把麦子磨成面粉" }
+        give("面包", 2)
+        world.flash("heart")
+        world.gain(5)
+        world.log("她在磨坊烤了两个面包。")
+        return "烤好了两个面包，热乎乎的，放进篮子了"
+    }
+
+    // MARK: 珊瑚礁
+
+    static let fishes = ["小丑鱼", "蓝唐王鱼", "海龟", "海星", "水母", "章鱼", "海马", "刺豚", "鳐鱼", "神仙鱼"]
+
+    func dive(_ x: Int, _ y: Int) -> String {
+        let w = wait("dive", x, y, hours: 1)
+        guard w == 0 else { return "这一片刚潜过，换个地方，或者\(Self.later(w))再来" }
+        mark("dive", x, y)
+        let seen = book("鱼")
+        let left = Self.fishes.filter { !seen.contains($0) }
+        let got = (left.isEmpty || Bool.random() == false && !seen.isEmpty) ? (Self.fishes.randomElement() ?? "小丑鱼")
+                                                                            : (left.randomElement() ?? "小丑鱼")
+        let first = collect("鱼", got)
+        world.flash("bubbles.and.sparkles")
+        world.gain(first ? 6 : 2)
+        world.log("她潜进环礁湖，看见了\(got)。")
+        return "潜下去看见了\(got)" + (first ? "（第一次见，记进鱼图鉴 \(seen.count + 1)/\(Self.fishes.count)）" : "")
+    }
+
+    // MARK: 雪岛
+
+    /// 堆一个雪人：真的在那一格立起来（一天最多三个）
+    func buildSnowman(_ x: Int, _ y: Int) -> String {
+        let today = WageStore.key(Date())
+        let key = "snowman:" + today
+        let n = s.book[key]?.count ?? 0
+        guard n < 3 else { return "今天已经堆了三个雪人了，手都冻红了，明天再堆" }
+        guard world.decor(at: x, y, base: true) == nil else { return "这儿已经有东西了，换一块空地" }
+        world.addDecor(WorldDecorKind.snowman.rawValue, x, y)
+        var list = s.book[key] ?? []
+        list.append("\(x),\(y)")
+        s.book[key] = list
+        world.flash("snowflake")
+        world.log("你们一起堆了一个雪人。")
+        return "她拉着你在雪岛堆了一个雪人，用两颗小石头当眼睛，还把自己的帽子给它戴上了。"
+    }
+
+    func together(_ what: String, cooldownHours: Double, line: String) -> String? {
+        let w = wait(what, 0, 0, hours: cooldownHours)
+        guard w == 0 else { return nil }
+        mark(what, 0, 0)
+        world.flash("heart")
+        world.gain(4)
+        world.log(line)
+        return line
+    }
+
     // MARK: 小镇
 
     /// 收东西的价钱（币）。漂流瓶留着走剧情，不收
@@ -373,6 +456,8 @@ final class IslandPlay: ObservableObject {
         case "扇贝", "海螺": return 4
         case "粉色贝壳", "星星砂": return 6
         case "南瓜": return 12
+        case "麦子": return 2
+        case "面粉": return 8
         case "西瓜": return 40
         case "玫瑰": return 30
         case "樱桃番茄": return 10

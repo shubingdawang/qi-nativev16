@@ -262,6 +262,39 @@ struct WorldView: View {
             if k == .houseBeige {
                 items.append(AnchorMenuItem(title: "熬果酱（篮子里 \(play.fruitCount) 个果子）") { world.show(play.makeJam()) })
             }
+        case "fengche":
+            if k == .wheat {
+                items.append(AnchorMenuItem(title: play.wheatCut(d.x, d.y) ? "割过了（等它长回来）" : "割麦子") {
+                    world.show(play.cutWheat(d))
+                })
+            }
+            if k == .windmill {
+                items.append(AnchorMenuItem(title: "磨面粉（篮子里 \(play.count("麦子")) 把麦子）") { world.show(play.mill()) })
+            }
+            if k == .houseOrange {
+                items.append(AnchorMenuItem(title: "烤面包（篮子里 \(play.count("面粉")) 袋面粉）") { world.show(play.bake()) })
+            }
+        case "shanhu":
+            if k == .coralPink || k == .seaweed {
+                items.append(AnchorMenuItem(title: "潜下去看看") { world.show(play.dive(d.x, d.y)) })
+            }
+        case "xuedao":
+            if k == .sled {
+                items.append(AnchorMenuItem(title: "一起坐雪橇") {
+                    if let line = play.together("sled", cooldownHours: 1,
+                                                line: "她拽着你坐上雪橇，从雪坡上一路滑下去，最后一起栽进雪堆里。") {
+                        offer("小岛上，" + line)
+                    } else { world.show("刚滑完，歇一会儿再来") }
+                })
+            }
+            if k == .campfire {
+                items.append(AnchorMenuItem(title: "一起烤火") {
+                    if let line = play.together("fire", cooldownHours: 1,
+                                                line: "她拉着你坐到雪岛的篝火边，把冻红的手伸过去烤，又塞进你口袋里。") {
+                        offer("小岛上，" + line)
+                    } else { world.show("刚烤过火，身上还暖着") }
+                })
+            }
         case "xiaozhen":
             // 杂货铺和集市的摊子收东西；面包店、邮局、种子店各管各的
             if [.shop, .umbrella, .crate, .barrel].contains(k) {
@@ -886,9 +919,12 @@ struct WorldView: View {
         let w = CGFloat(n.data.width) * tile, h = CGFloat(n.data.height) * tile
         let fogged = !n.open || world.celebrating == n.exit.to
         return ZStack(alignment: .topLeading) {
-            IslandGround(ground: ground, width: n.data.width, height: n.data.height, tile: tile, season: world.season)
+            IslandGround(ground: ground, width: n.data.width, height: n.data.height, tile: tile,
+                         season: world.season(of: n.exit.to))
                 .equatable()
-            ForEach(n.data.decor) { d in decorView(d).zIndex(Double(d.y) + 0.5) }
+            ForEach(n.data.decor) { d in
+                decorView(d, list: n.data.decor, season: world.season(of: n.exit.to)).zIndex(Double(d.y) + 0.5)
+            }
             ForEach(n.data.objects) { o in objectView(o).zIndex(Double(o.y) + 0.6) }
         }
         .frame(width: w, height: h, alignment: .topLeading)
@@ -1066,6 +1102,43 @@ struct WorldView: View {
             // 月湾的沙滩、松林的温泉
             if world.save.region == "yuewan", world.ground(x, y) == .sand { showBeachMenu(x, y); return }
             if world.save.region == "songlin", world.ground(x, y) == .water { showSpringMenu(x, y); return }
+            if world.save.region == "shanhu", world.ground(x, y) == .water {
+                islandMenu = AnchorMenuState(title: "环礁湖", items: [
+                    AnchorMenuItem(title: "潜下去看看") { world.show(play.dive(x, y)) },
+                    AnchorMenuItem(title: "钓鱼") { if let s = shore(near: x, y) { world.walkHer(s.0, s.1) }; startFishing() }
+                ], at: tapGlobal)
+                return
+            }
+            if world.save.region == "xuedao" {
+                let g = world.ground(x, y)
+                if g == .water {
+                    islandMenu = AnchorMenuState(title: "结冰的湖", items: [
+                        AnchorMenuItem(title: "一起溜冰") {
+                            if let line = play.together("skate", cooldownHours: 1,
+                                                        line: "她拉着你走上结冰的湖面，脚下一滑，两个人抱着转了半圈才站稳。") {
+                                offer("小岛上，" + line)
+                            } else { world.show("刚溜完，腿还软着") }
+                        }
+                    ], at: tapGlobal)
+                    return
+                }
+                if g == .grass || g == .sand {
+                    islandMenu = AnchorMenuState(title: "雪地", items: [
+                        AnchorMenuItem(title: "一起堆雪人") {
+                            let line = play.buildSnowman(x, y)
+                            if line.hasPrefix("她") { offer("小岛上，" + line) } else { world.show(line) }
+                        },
+                        AnchorMenuItem(title: "打雪仗") {
+                            if let line = play.together("snowball", cooldownHours: 0.5,
+                                                        line: "她偷偷团了个雪球砸在你背上，转身就跑，没跑两步就被你追上了。") {
+                                offer("小岛上，" + line)
+                            } else { world.show("刚打完一场，手冻得握不住雪了") }
+                        },
+                        AnchorMenuItem(title: "走过去") { world.walkHer(x, y) }
+                    ], at: tapGlobal)
+                    return
+                }
+            }
             if world.farmOn, world.ground(x, y) == .soil { showSoilMenu(x, y); return }
             if world.farmOn, world.ground(x, y).isWater {
                 // 点水：走到旁边的岸上钓鱼
@@ -1261,18 +1334,38 @@ struct WorldView: View {
     }
 
     /// 一样景：图的左下角对着那一格的左下角
+    /// 麦子那一格画哪张：左右挨着的是不是也是麦子（边上那格收矮收稀），割过的画麦茬
+    private func spriteKey(_ d: WorldDecor, _ k: WorldDecorKind, in list: [WorldDecor], live: Bool) -> String {
+        guard k == .wheat else { return k.sprite }
+        if live, play.wheatCut(d.x, d.y) { return "wheat_cut" }
+        // 割过的那格不算麦子：缺口两边也收矮收稀，不是一刀切的直边
+        func standing(_ x: Int) -> Bool {
+            list.contains { $0.kind == d.kind && $0.y == d.y && $0.x == x } && !(live && play.wheatCut(x, d.y))
+        }
+        let l = standing(d.x - 1), r = standing(d.x + 1)
+        switch (l, r) {
+        case (true, true): return "wheat"
+        case (false, true): return "wheat_l"
+        case (true, false): return "wheat_r"
+        default: return "wheat_one"
+        }
+    }
+
     @ViewBuilder
-    private func decorView(_ d: WorldDecor) -> some View {
+    private func decorView(_ d: WorldDecor, list: [WorldDecor]? = nil, season: WorldSeason? = nil) -> some View {
         if let k = WorldDecorKind.resolve(d.kind) {
             let sc = tile / CGFloat(IslandArt.px)
-            let s = IslandArt.size(of: k.sprite)
+            let key = spriteKey(d, k, in: list ?? world.decor, live: list == nil)
+            let s = IslandArt.size(of: key)
             // 比占的格子窄的居中；睡莲浮在那一格水面上
             let left = ((CGFloat(k.cells.w * IslandArt.px) - s.width) / 2).rounded(.down)
             let bottom = k == .lily ? CGFloat(d.y) * tile + (2 + s.height) * sc : CGFloat(d.y + 1) * tile
-            IslandSprite(key: k.sprite, scale: sc, season: world.season)
+            IslandSprite(key: key, scale: sc, season: season ?? world.season)
+                // 珊瑚、水草长在水下：隔着一层水看，透出底下的水色，淡一些
+                .opacity(k.underwater ? 0.62 : 1)
                 .scaleEffect(x: d.flip == true ? -1 : 1, y: 1)
                 .background(alignment: .bottom) {
-                    if k.blocks {
+                    if k.blocks && !k.underwater {
                         Ellipse().fill(Color(red: 0.31, green: 0.23, blue: 0.31).opacity(0.2))
                             .frame(width: s.width * sc * 0.8, height: 4 * sc)
                             .offset(y: 1.5 * sc)
@@ -2117,6 +2210,7 @@ struct WorldGuideSheet: View {
                     collectRow("蘑菇", play.book("蘑菇").count, 4)
                     collectRow("果酱", play.book("果酱").count, IslandPlay.fruits.count)
                     collectRow("稀有花", play.book("稀有花").count, 1)
+                    collectRow("鱼（珊瑚礁）", play.book("鱼").count, IslandPlay.fishes.count)
                     HStack {
                         Text("松林的小松鼠").font(.app(13))
                         Spacer()
@@ -2175,7 +2269,10 @@ struct WorldGuideSheet: View {
         ("松林", "点蘑菇采蘑菇；点松树捡松果、喂松鼠，喂得多了它会认得你；池塘是温泉，能一起泡。"),
         ("星丘", "晚上用观星台认星座，攒满星座图鉴；晚上天上偶尔划过流星，点它许个愿。"),
         ("果园", "点果树、莓果丛摘果子；果酱小屋里 3 个果子熬一罐果酱（小屋的灶台也能熬）。"),
-        ("小镇", "点铺子、集市的摊子「赶集」，把篮子里的花束、贝壳、蘑菇、果酱、鱼卖掉换币，币能在小屋商店里用。")
+        ("小镇", "杂货铺、集市的摊子「赶集」卖篮子里的东西换币；面包店买面包；邮局写明信片给他；种子店买稀有种子回栖岛种。"),
+        ("风车岛", "点麦子「割麦子」（割过的几个钟头后长回来）；风车把 3 把麦子磨成一袋面粉；磨坊用面粉烤面包。"),
+        ("珊瑚礁", "点湖里的珊瑚或湖水「潜下去看看」，看见的鱼记进鱼图鉴；湖边也能钓鱼。"),
+        ("雪岛", "一年到头都是冬天。点雪地堆雪人（真的立在那儿）、打雪仗；结冰的湖上溜冰；坐雪橇；篝火边烤火。")
     ]
 
     static let tips = [
@@ -2189,7 +2286,8 @@ struct WorldGuideSheet: View {
     /// 群岛小地图：每座岛一个点，连着桥，没解锁的灰着
     private var islandMap: some View {
         let links = [("home", "huadao"), ("home", "yuewan"), ("home", "songlin"), ("huadao", "xingqiu"),
-                     ("home", "guoyuan"), ("yuewan", "xiaozhen")]
+                     ("home", "guoyuan"), ("yuewan", "xiaozhen"), ("huadao", "fengche"), ("yuewan", "shanhu"),
+                     ("songlin", "xuedao")]
         return GeometryReader { g in
             let pt = { (id: String) -> CGPoint in
                 let i = WorldRegions.info(id)!

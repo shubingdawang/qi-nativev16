@@ -82,8 +82,18 @@ def render(rows, decor, path):
     g = terrain.render(rows)
     g = bridges(g, G)
     layer = []
+    # 麦田：左右挨着的才连成一片，边上那格收矮收稀（跟 App 里 spriteKey 一样）
+    wheat = {(x, y) for k, x, y in decor if k == "wheat"}
     for kind, x, y in decor:
-        im = sprite(SPRITE[kind])
+        key = SPRITE[kind]
+        if kind == "wheat":
+            l, r = (x - 1, y) in wheat, (x + 1, y) in wheat
+            key = {(True, True): "wheat", (False, True): "wheat_l", (True, False): "wheat_r", (False, False): "wheat_one"}[(l, r)]
+        im = sprite(key)
+        if kind in ("coralPink", "seaweed"):
+            # 长在水下：隔着水面看，淡一些（App 里 opacity 0.62）
+            a = np.array(im.convert("RGBA")).astype(float); a[..., 3] *= 0.62
+            im = Image.fromarray(a.astype("uint8"), "RGBA")
         cw = (im.width + 15) // 16 * 16
         px = x * PX + (cw - im.width) // 2
         py = (y + 1) * PX - im.height if kind != "lily" else y * PX + 2
@@ -116,7 +126,7 @@ if __name__ == "__main__":
     base = [(NINJA[k], x, y) for k, x, y in dd["decor"]] + [("lamp", 11, 15), ("lamp", 14, 23), ("mailbox", 10, 10),
             ("bench", 18, 16), ("lily", 18, 13), ("lily", 20, 12)]
     render(["".join(r) for r in rows], base + [tuple(t) for t in data["home"]["extra"]], os.path.join(HERE, "region_home.png"))
-    for rid in ("huadao", "yuewan", "songlin", "xingqiu", "guoyuan", "xiaozhen"):
+    for rid in ("huadao", "yuewan", "songlin", "xingqiu", "guoyuan", "xiaozhen", "fengche", "shanhu", "xuedao"):
         d = data[rid]
         render(d["map"], [tuple(t) for t in d["decor"]], os.path.join(HERE, "region_" + rid + ".png"))
     print("ok")
