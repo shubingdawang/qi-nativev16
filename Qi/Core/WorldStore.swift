@@ -1262,6 +1262,16 @@ extension WorldStore {
 
     var exits: [WorldExit] { WorldRegions.exits(save.region) }
 
+    /// 别的岛现在什么样（画在桥那头）：去过的按存下来的，没去过的按第一次去时的样子
+    func regionData(_ id: String) -> WorldRegionData? {
+        if let d = save.regions[id] { return d }
+        if let hit = Self.freshCache[id] { return hit }
+        guard let d = WorldRegions.fresh(id) else { return nil }
+        Self.freshCache[id] = d
+        return d
+    }
+    private static var freshCache: [String: WorldRegionData] = [:]
+
     func exit(at x: Int, _ y: Int) -> WorldExit? {
         exits.first { $0.trigger.count == 2 && $0.trigger[0] == x && $0.trigger[1] == y }
     }
