@@ -90,6 +90,13 @@ struct WorldView: View {
     @State private var offers: [String] = []
     /// 稻草人正在一格一格浇
     @State private var scarecrowWatering = false
+    // 各岛的玩法（见 `IslandPlay`）
+    @ObservedObject private var play = IslandPlay.shared
+    @State private var bouquetOpen = false
+    @State private var marketOpen = false
+    @State private var wishing = false
+    @State private var postcard = false
+    @State private var seedShop = false
     @State private var tapGlobal: CGPoint = .zero
     /// 从哪座小屋进的家：进去先看那一间
     @State private var homeRoom: HomeRoom = .living
@@ -193,7 +200,7 @@ struct WorldView: View {
     /// 一件景上能做的事。稻草人不用浇水：换成它帮忙把田里的一格一格浇了
     private func decorItems(_ d: WorldDecor) -> [AnchorMenuItem] {
         guard let k = WorldDecorKind.resolve(d.kind) else { return [] }
-        var items: [AnchorMenuItem] = []
+        var items: [AnchorMenuItem] = regionItems(d, k)
         var acts = world.actions(forDecor: d)
         if k == .scarecrow {
             acts.removeAll { $0.name.contains("浇") }
@@ -206,6 +213,125 @@ struct WorldView: View {
             })
         }
         return items
+    }
+
+    /// 这座岛自己的玩法：花岛采花、月湾捡贝壳、松林采蘑菇……
+    private func regionItems(_ d: WorldDecor, _ k: WorldDecorKind) -> [AnchorMenuItem] {
+        var items: [AnchorMenuItem] = []
+        switch world.save.region {
+        case "huadao":
+            if IslandPlay.flowerOf[k] != nil {
+                items.append(AnchorMenuItem(title: "采一朵") { world.show(play.pickFlower(d, k)) })
+            }
+            if k == .shop {
+                items.append(AnchorMenuItem(title: "扎一束花") { bouquetOpen = true })
+            }
+            if k == .greenhouse {
+                items.append(AnchorMenuItem(title: "温室里那盆（\(play.greenhouseState)）") { world.show(play.greenhouse()) })
+            }
+        case "yuewan":
+            if k == .shells || k == .stones || k == .pebble {
+                items.append(AnchorMenuItem(title: IslandPlay.lowTide ? "捡贝壳" : "捡贝壳（还没退潮）") {
+                    world.show(play.beachcomb(d.x, d.y))
+                })
+            }
+            if k == .lighthouse {
+                items.append(AnchorMenuItem(title: WorldStore.isNight ? "一起点亮灯塔" : "点亮灯塔（晚上）") {
+                    if let line = play.lightTheLighthouse() { offer("小岛上，" + line) }
+                    else { world.show(WorldStore.isNight ? "灯塔已经亮着了" : "天黑了再来点灯") }
+                })
+            }
+        case "songlin":
+            if k == .mushrooms {
+                items.append(AnchorMenuItem(title: "采蘑菇") { world.show(play.pickMushroom(d)) })
+            }
+            if k == .pine || k == .bonsai {
+                items.append(AnchorMenuItem(title: "捡松果") { world.show(play.pickPinecone(d)) })
+                items.append(AnchorMenuItem(title: "喂松鼠（篮子里 \(play.count("松果")) 个松果）") {
+                    world.show(play.feedSquirrel())
+                })
+            }
+        case "xingqiu":
+            if k == .telescope {
+                items.append(AnchorMenuItem(title: WorldStore.isNight ? "认星座" : "认星座（晚上）") { world.show(play.stargaze()) })
+            }
+        case "guoyuan":
+            if IslandPlay.fruitOf[k] != nil {
+                items.append(AnchorMenuItem(title: "摘果子") { world.show(play.pickFruit(d, k)) })
+            }
+            if k == .houseBeige {
+                items.append(AnchorMenuItem(title: "熬果酱（篮子里 \(play.fruitCount) 个果子）") { world.show(play.makeJam()) })
+            }
+        case "xiaozhen":
+            // 杂货铺和集市的摊子收东西；面包店、邮局、种子店各管各的
+            if [.shop, .umbrella, .crate, .barrel].contains(k) {
+                items.append(AnchorMenuItem(title: "赶集（卖篮子里的东西）") { marketOpen = true })
+            }
+            if k == .houseOrange {
+                items.append(AnchorMenuItem(title: "买一个面包（8 币）") { world.show(play.buyBread()) })
+                if play.count("面包") > 0 {
+                    items.append(AnchorMenuItem(title: "一起吃面包") {
+                        if let line = play.eatBread() { offer("小岛上，" + line) }
+                    })
+                }
+            }
+            if k == .cabin {
+                items.append(AnchorMenuItem(title: "写张明信片给他") { postcard = true })
+            }
+            if k == .houseBeige {
+                items.append(AnchorMenuItem(title: "买种子") { seedShop = true })
+            }
+        default:
+            break
+        }
+        // 踩得过去的小东西（花、贝壳、蘑菇）：也能直接走过去
+        if !items.isEmpty, !k.blocks {
+            items.append(AnchorMenuItem(title: "走过去") { world.walkHer(d.x, d.y) })
+        }
+        return items
+    }
+
+    /// 各岛的小屋叫什么（栖岛上是房间名）
+    private func decorTitle(_ k: WorldDecorKind) -> String {
+        guard k.isHouse else { return k.label }
+        switch (world.save.region, k) {
+        case ("home", _): return k.label
+        case ("huadao", .shop): return "花店"
+        case ("songlin", .cabin): return "木屋"
+        case ("yuewan", .cabin): return "渔夫的木屋"
+        case ("guoyuan", .houseBeige): return "果酱小屋"
+        case ("xiaozhen", .shop): return "杂货铺"
+        case ("xiaozhen", .houseOrange): return "面包店"
+        case ("xiaozhen", .cabin): return "邮局"
+        case ("xiaozhen", .houseBeige): return "种子店"
+        default: return "小屋"
+        }
+    }
+
+    /// 月湾的沙滩：退潮捡贝壳、堆沙堡
+    private func showBeachMenu(_ x: Int, _ y: Int) {
+        islandMenu = AnchorMenuState(title: IslandPlay.lowTide ? "沙滩（退潮了）" : "沙滩", items: [
+            AnchorMenuItem(title: IslandPlay.lowTide ? "捡贝壳" : "捡贝壳（还没退潮）") { world.show(play.beachcomb(x, y)) },
+            AnchorMenuItem(title: "一起堆沙堡") {
+                let line = play.sandcastle()
+                if line.hasPrefix("她") { offer("小岛上，" + line) } else { world.show(line) }
+            },
+            AnchorMenuItem(title: "走过去") { world.walkHer(x, y) }
+        ], at: tapGlobal)
+    }
+
+    /// 松林的池塘是温泉
+    private func showSpringMenu(_ x: Int, _ y: Int) {
+        islandMenu = AnchorMenuState(title: "温泉", items: [
+            AnchorMenuItem(title: "一起泡温泉") {
+                if let s = shore(near: x, y) { world.walkHer(s.0, s.1) }
+                if let line = play.hotSpring() { offer("小岛上，" + line) } else { world.show("刚泡完，歇一会儿再来") }
+            },
+            AnchorMenuItem(title: "钓鱼") {
+                if let s = shore(near: x, y) { world.walkHer(s.0, s.1) }
+                startFishing()
+            }
+        ], at: tapGlobal)
     }
 
     /// 稻草人一格一格浇过去（刚浇过的跳过）
@@ -227,7 +353,7 @@ struct WorldView: View {
     private func showDecorMenu(_ d: WorldDecor) {
         guard let k = WorldDecorKind.resolve(d.kind) else { return }
         var items: [AnchorMenuItem] = []
-        if k.isHouse {
+        if k.isHouse, world.save.region == "home" {
             items.append(AnchorMenuItem(title: "进屋") {
                 // 粉顶客厅、蓝顶卧室、紫顶厨房、绿顶浴室
                 switch k {
@@ -240,7 +366,7 @@ struct WorldView: View {
             })
         }
         items += decorItems(d)
-        islandMenu = AnchorMenuState(title: k.label, items: items, at: tapGlobal)
+        islandMenu = AnchorMenuState(title: decorTitle(k), items: items, at: tapGlobal)
     }
 
     /// 田的菜单。extra：这一格上还站着人、摆着稻草人时，把那几样接在后面
@@ -255,6 +381,12 @@ struct WorldView: View {
             for s in WorldFarm.seeds {
                 items.append(AnchorMenuItem(title: "种\(s.name)（约 \(Int(s.hours)) 小时熟）") {
                     world.plant(s, x, y, byHer: true)
+                })
+            }
+            // 小镇种子店买来的：一包种一格
+            for s in WorldFarm.rareSeeds where play.seedPackets(s) > 0 {
+                items.append(AnchorMenuItem(title: "种\(s.name)（还有 \(play.seedPackets(s)) 包）") {
+                    if play.useSeedPacket(s) { world.plant(s, x, y, byHer: true) }
                 })
             }
         }
@@ -301,6 +433,37 @@ struct WorldView: View {
             .sheet(isPresented: $showGuide) {
                 WorldGuideSheet { id in travelByMap(id) }
                     .presentationDetents([.large])
+            }
+            .sheet(isPresented: $bouquetOpen) {
+                BouquetSheet { desc in
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 600_000_000)
+                        offer("小岛上，她在花岛的花店扎了一束花（\(desc)），送给你。")
+                    }
+                }
+                .presentationDetents([.medium, .large])
+            }
+            .sheet(isPresented: $marketOpen) { MarketSheet().presentationDetents([.medium, .large]) }
+            .sheet(isPresented: $postcard) {
+                LineSheet(title: "写张明信片", placeholder: "写给他的话", action: "寄出去") { text in
+                    world.log("她在小镇的邮局寄了一张明信片。")
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 600_000_000)
+                        offer("小岛上，她在小镇的邮局给你寄了一张明信片，上面写着：「\(text)」。")
+                    }
+                }
+                .presentationDetents([.height(260)])
+            }
+            .sheet(isPresented: $seedShop) { SeedShopSheet().presentationDetents([.medium, .large]) }
+            .sheet(isPresented: $wishing) {
+                LineSheet(title: "对着流星许个愿", placeholder: "许什么愿呢", action: "许愿") { text in
+                    play.wish(text)
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 600_000_000)
+                        offer("小岛上，她对着星丘的流星许了个愿：「\(text)」。")
+                    }
+                }
+                .presentationDetents([.height(260)])
             }
     }
 
@@ -515,6 +678,11 @@ struct WorldView: View {
                         look(at: CGPoint(x: e.trigger[0], y: e.trigger[1]), geo.size, content)
                     }
                 }
+                .overlay {
+                    if world.save.region == "xingqiu", WorldStore.isNight {
+                        MeteorLayer { wishing = true }
+                    }
+                }
                 .overlay(alignment: .topLeading) { levelBadge.padding(12) }
                 .overlay(alignment: .top) {
                     if let n = world.notice {
@@ -585,7 +753,7 @@ struct WorldView: View {
     private func travelByMap(_ id: String) {
         guard id != world.save.region, world.unlocked(id) else { return }
         // 落在通往那座岛的桥头（随便哪座岛连过去的那座桥都行）
-        let all = ["home", "huadao", "yuewan", "songlin", "xingqiu"].flatMap { WorldRegions.exits($0) }
+        let all = WorldRegions.all.map(\.id).flatMap { WorldRegions.exits($0) }
         guard let into = all.first(where: { $0.to == id }) else { return }
         world.travel(WorldExit(to: id, cells: [], trigger: [], arrive: into.arrive))
         showGuide = false
@@ -889,11 +1057,15 @@ struct WorldView: View {
                 showPersonMenu(); return
             }
             if let o = world.object(at: x, y) { showObjectMenu(o); return }
-            if let d = world.decor(at: x, y, base: true), !world.actions(forDecor: d).isEmpty || WorldDecorKind.resolve(d.kind) == .scarecrow {
+            if let d = world.decor(at: x, y, base: true),
+               !decorItems(d).isEmpty || (WorldDecorKind.resolve(d.kind)?.isHouse == true && world.save.region == "home") {
                 // 稻草人插在田里：田照样能种，稻草人那几样接在后面
                 if onSoil { showSoilMenu(x, y, extra: decorItems(d)); return }
                 showDecorMenu(d); return
             }
+            // 月湾的沙滩、松林的温泉
+            if world.save.region == "yuewan", world.ground(x, y) == .sand { showBeachMenu(x, y); return }
+            if world.save.region == "songlin", world.ground(x, y) == .water { showSpringMenu(x, y); return }
             if world.farmOn, world.ground(x, y) == .soil { showSoilMenu(x, y); return }
             if world.farmOn, world.ground(x, y).isWater {
                 // 点水：走到旁边的岸上钓鱼
@@ -1930,6 +2102,35 @@ struct WorldGuideSheet: View {
                 }
 
                 Section {
+                    ForEach(Self.plays, id: \.0) { p in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(p.0).font(.app(13.5, weight: .medium))
+                            Text(p.1).font(.app(12)).foregroundStyle(.secondary)
+                        }
+                    }
+                } header: { Text("各岛能玩什么") }
+
+                Section {
+                    let play = IslandPlay.shared
+                    collectRow("贝壳", play.book("贝壳").count, IslandPlay.shellNames.count + 1)
+                    collectRow("星座", play.book("星座").count, IslandPlay.constellations.count)
+                    collectRow("蘑菇", play.book("蘑菇").count, 4)
+                    collectRow("果酱", play.book("果酱").count, IslandPlay.fruits.count)
+                    collectRow("稀有花", play.book("稀有花").count, 1)
+                    HStack {
+                        Text("松林的小松鼠").font(.app(13))
+                        Spacer()
+                        Text(play.squirrelLevel).font(.app(12.5)).foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Text("篮子").font(.app(13))
+                        Spacer()
+                        Text(world.basketText.replacingOccurrences(of: "篮子里：", with: ""))
+                            .font(.app(12)).foregroundStyle(.secondary).multilineTextAlignment(.trailing)
+                    }
+                } header: { Text("收集") }
+
+                Section {
                     ForEach(WorldStories.all) { st in
                         let done = world.save.stories.contains(st.id)
                         VStack(alignment: .leading, spacing: 4) {
@@ -1959,6 +2160,24 @@ struct WorldGuideSheet: View {
         }
     }
 
+    private func collectRow(_ name: String, _ n: Int, _ total: Int) -> some View {
+        HStack {
+            Text(name).font(.app(13))
+            Spacer()
+            Text("\(n) / \(total)").font(.app(12.5)).foregroundStyle(n >= total ? app.settings.accentColor : .secondary)
+        }
+    }
+
+    static let plays: [(String, String)] = [
+        ("栖岛", "种田、浇水、收菜；水边钓鱼；进屋找 clawd。"),
+        ("花岛", "点花「采一朵」；花店里挑几朵扎一束花，可以送给他，也能拿去小镇卖；温室里种一盆稀有的花，一天后开花。"),
+        ("月湾", "早上 6～9 点、傍晚 5～8 点退潮，点沙滩、贝壳能捡贝壳，偶尔挖到宝箱；能一起堆沙堡；晚上一起点亮灯塔。"),
+        ("松林", "点蘑菇采蘑菇；点松树捡松果、喂松鼠，喂得多了它会认得你；池塘是温泉，能一起泡。"),
+        ("星丘", "晚上用观星台认星座，攒满星座图鉴；晚上天上偶尔划过流星，点它许个愿。"),
+        ("果园", "点果树、莓果丛摘果子；果酱小屋里 3 个果子熬一罐果酱（小屋的灶台也能熬）。"),
+        ("小镇", "点铺子、集市的摊子「赶集」，把篮子里的花束、贝壳、蘑菇、果酱、鱼卖掉换币，币能在小屋商店里用。")
+    ]
+
     static let tips = [
         "铺地：「铺路」点起点再点终点，中间一条路；「方框」点两个对角铺满一片；「油漆桶」把连在一起的同一种地全换掉。",
         "选择：点东西选中，「框选」拖一下选一片，「同类全选」把岛上同一种的都选上。",
@@ -1969,7 +2188,8 @@ struct WorldGuideSheet: View {
 
     /// 群岛小地图：每座岛一个点，连着桥，没解锁的灰着
     private var islandMap: some View {
-        let links = [("home", "huadao"), ("home", "yuewan"), ("home", "songlin"), ("huadao", "xingqiu")]
+        let links = [("home", "huadao"), ("home", "yuewan"), ("home", "songlin"), ("huadao", "xingqiu"),
+                     ("home", "guoyuan"), ("yuewan", "xiaozhen")]
         return GeometryReader { g in
             let pt = { (id: String) -> CGPoint in
                 let i = WorldRegions.info(id)!

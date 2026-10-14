@@ -498,6 +498,12 @@ struct ClawdHomeView: View {
         if let t = together(item.kind) {
             m.append(AnchorMenuItem(title: t.label) { doTogether(item, t.act) })
         }
+        // 灶台：果园摘来的果子熬果酱（三个一罐，果酱在小岛的篮子里，能拿去小镇卖）
+        if together(item.kind)?.act == "做饭", IslandPlay.shared.fruitCount >= 3 {
+            m.append(AnchorMenuItem(title: "用果园的果子熬果酱（\(IslandPlay.shared.fruitCount) 个）") {
+                say(IslandPlay.shared.makeJam())
+            })
+        }
         if treasureOpen {
             m.append(AnchorMenuItem(title: "翻一翻，找他藏的东西") { searchTreasure(item) })
         }

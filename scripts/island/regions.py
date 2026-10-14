@@ -214,6 +214,7 @@ def yuewan():
     R.rect("p", 6, 6, 6, 18)
     R.rect("t", 18, 21, 5, 7)
     R.bridge([(12, 0), (12, 1)], "home", (12, 0), (13, 36))
+    R.bridge([(0, 12), (1, 12)], "xiaozhen", (0, 12), (22, 10))
     R.add("lighthouse", 22, 9)
     R.add("cabin", 4, 12)
     R.add("signpost", 8, 8)
@@ -286,6 +287,60 @@ def xingqiu():
     R.scatter(FLOWERS + ["sunflower", "mushrooms", "stones"], (2, 21, 2, 22), 36)
     return R
 
+
+# ───────────────────────── 果园：一排一排的果树，莓果丛，熬果酱的小屋，蜂箱、草垛、推车
+
+def guoyuan():
+    R = Region("guoyuan", "果园", 24, 22, [(3, 1.2), (9, 1.4), (15, 2), (20.6, 3.4), (22.4, 8), (21.6, 13), (22.2, 18),
+                                          (17, 20.6), (10, 20.4), (4.4, 19.6), (2, 14), (2.6, 8), (1.6, 4)], 61)
+    # 从桥头往东一条路，再从中间往南穿过果树
+    R.rect("p", 2, 13, 2, 3)
+    R.rect("p", 11, 12, 2, 18)
+    R.rect("p", 5, 18, 16, 17)
+    R.bridge([(0, 2), (1, 2)], "home", (0, 2), (24, 22))
+    # 熬果酱的小屋、门口的井和果箱
+    R.add("houseBeige", 4, 15)
+    R.add("well", 9, 14); R.add("crate", 3, 18); R.add("crate", 4, 18); R.add("barrel", 9, 18)
+    R.add("signpost", 13, 4)
+    for (x, y) in [(10, 6), (13, 10), (10, 14), (14, 18)]: R.add("lamp", x, y, ground=(".", "p"), nudge=1)
+    # 果树：路西边两排大果树，东边小果树，最东边一片莓果丛
+    for (x, y) in [(3, 7), (7, 7), (3, 11), (7, 11)]: R.add("treeBig", x, y, nudge=1)
+    for (x, y) in [(14, 7), (17, 7), (20, 7), (14, 10), (17, 10), (20, 10), (14, 13), (17, 13)]: R.add("olive", x, y, nudge=1)
+    for (x, y) in [(19, 13), (20, 15), (18, 15), (16, 15)]: R.add("berry", x, y, nudge=1)
+    # 蜂箱、草垛、推车、野餐、鸟屋
+    R.add("beehive", 15, 4); R.add("beehive", 17, 4); R.add("haybale", 19, 18); R.add("haybale", 7, 19)
+    R.add("wheelbarrow", 13, 15); R.add("picnic", 16, 18); R.add("birdhouse", 5, 4)
+    R.add("bench", 13, 6)
+    R.scatter(["sunflower", "sunflower", "daisy", "flowerY", "clover", "tulipPeach"], (2, 21, 2, 19), 22)
+    R.scatter(["bush", "treeSmall", "stump"], (2, 21, 2, 19), 5)
+    return R
+
+# ───────────────────────── 小镇：喷泉广场，四间铺子，广场边一排集市摊子，路灯、长椅、花盆
+
+def xiaozhen():
+    R = Region("xiaozhen", "小镇", 26, 24, [(4, 2), (10, 1.4), (17, 1.8), (22, 3.4), (23.4, 8), (23, 14), (22.4, 19),
+                                           (17, 22.4), (10, 22.2), (4, 21), (1.8, 15), (2.2, 8)], 71)
+    # 东边桥头进来一条大路，十字路口是石板广场
+    R.rect("p", 3, 22, 10, 11)
+    R.rect("p", 11, 12, 2, 21)
+    R.rect("t", 9, 15, 8, 13)
+    R.bridge([(25, 10), (24, 10), (23, 10)], "yuewan", (25, 10), (2, 12))
+    R.add("fountain", 11, 12, ground=("t",), nudge=1)
+    # 四间铺子：杂货铺、面包店、邮局、种子店
+    R.add("shop", 3, 8); R.add("houseOrange", 15, 7); R.add("cabin", 3, 19); R.add("houseBeige", 16, 20)
+    R.add("mailbox", 8, 18); R.add("signpost", 21, 9)
+    # 集市：广场南边一排伞、果箱、水桶
+    for (x, y) in [(14, 16), (17, 16)]: R.add("umbrella", x, y)
+    for (x, y) in [(16, 17), (19, 16), (14, 18)]: R.add("crate", x, y)
+    R.add("barrel", 20, 17); R.add("barrel", 8, 15)
+    for (x, y) in [(8, 8), (16, 8), (8, 14), (16, 14), (20, 12), (5, 12)]: R.add("lamp", x, y, ground=(".", "p", "t"), nudge=1)
+    R.add("bench", 9, 7, ground=(".", "t")); R.add("bench", 13, 15, ground=(".", "t"))
+    for (x, y) in [(7, 9), (17, 12), (6, 15), (19, 21)]: R.add("flowerpot", x, y, ground=(".", "p", "t"))
+    R.add("lanterns", 13, 6); R.add("well", 6, 5); R.add("roseArch", 10, 20)
+    R.scatter(["treeGreen", "pinkSmall", "treeSmall", "olive", "bush"], (2, 23, 2, 21), 14)
+    R.scatter(FLOWERS + ["stones"], (2, 23, 2, 21), 20)
+    return R
+
 # ───────────────────────── 栖岛：在原来的布置上添一些（已有的景不动）
 
 NINJA = {"tree_big": "treeBig", "tree_pink": "treePink", "tree_green": "treeGreen", "tree_orange": "treeOrange",
@@ -307,7 +362,7 @@ def home_extras():
     for k, x, y in base:
         if k == "lily": continue
         for f in R.foot(k, x, y): R.occ.add(f)
-    for c in [(29, 4), (13, 37), (13, 38), (13, 39), (0, 16)]: R.put("b", [c])
+    for c in [(29, 4), (13, 37), (13, 38), (13, 39), (0, 16), (26, 22), (27, 22), (28, 22), (29, 22)]: R.put("b", [c])
     # 小屋前一小片石板
     stone = [(x, y) for x in range(10, 16) for y in range(11, 13) if R.G[y][x] in (".", "f", "p")]
     R.put("t", stone)
@@ -338,10 +393,12 @@ HOME_EXITS = [
     {"to": "huadao", "cells": [[29, 4]], "trigger": [29, 4], "arrive": [3, 14]},
     {"to": "yuewan", "cells": [[13, 37], [13, 38], [13, 39]], "trigger": [13, 39], "arrive": [12, 2]},
     {"to": "songlin", "cells": [[0, 16]], "trigger": [0, 16], "arrive": [24, 15]},
+    # 东边湾里那截栈桥接长到边上，去果园
+    {"to": "guoyuan", "cells": [[26, 22], [27, 22], [28, 22], [29, 22]], "trigger": [29, 22], "arrive": [2, 2]},
 ]
 
 if __name__ == "__main__":
-    regs = [huadao(), yuewan(), songlin(), xingqiu()]
+    regs = [huadao(), yuewan(), songlin(), xingqiu(), guoyuan(), xiaozhen()]
     out = {"home": dict(exits=HOME_EXITS, **home_extras())}
     for R in regs:
         R.ascii()

@@ -116,7 +116,7 @@ if __name__ == "__main__":
     base = [(NINJA[k], x, y) for k, x, y in dd["decor"]] + [("lamp", 11, 15), ("lamp", 14, 23), ("mailbox", 10, 10),
             ("bench", 18, 16), ("lily", 18, 13), ("lily", 20, 12)]
     render(["".join(r) for r in rows], base + [tuple(t) for t in data["home"]["extra"]], os.path.join(HERE, "region_home.png"))
-    for rid in ("huadao", "yuewan", "songlin", "xingqiu"):
+    for rid in ("huadao", "yuewan", "songlin", "xingqiu", "guoyuan", "xiaozhen"):
         d = data[rid]
         render(d["map"], [tuple(t) for t in d["decor"]], os.path.join(HERE, "region_" + rid + ".png"))
     print("ok")

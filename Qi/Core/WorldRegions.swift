@@ -46,7 +46,9 @@ enum WorldRegions {
         .init(id: "huadao", name: "花岛", theme: "一片一片的花田、温室、花店", level: 3, story: nil, mapX: 0.78, mapY: 0.40),
         .init(id: "yuewan", name: "月湾", theme: "月牙形的沙洲、灯塔、夜里的湾", level: 5, story: "bottle", mapX: 0.46, mapY: 0.88),
         .init(id: "songlin", name: "松林", theme: "密密的松树、林子里的木屋、温泉", level: 6, story: "forest_sound", mapX: 0.10, mapY: 0.48),
-        .init(id: "xingqiu", name: "星丘", theme: "开阔的草坡、观星台", level: 8, story: "flower_night", mapX: 0.80, mapY: 0.10)
+        .init(id: "xingqiu", name: "星丘", theme: "开阔的草坡、观星台", level: 8, story: "flower_night", mapX: 0.80, mapY: 0.10),
+        .init(id: "guoyuan", name: "果园", theme: "一排排果树、莓果丛、熬果酱的小屋", level: 4, story: nil, mapX: 0.76, mapY: 0.68),
+        .init(id: "xiaozhen", name: "小镇", theme: "喷泉广场、四间铺子、集市", level: 6, story: nil, mapX: 0.14, mapY: 0.90)
     ]
 
     static func info(_ id: String) -> WorldRegionInfo? { all.first { $0.id == id } }
@@ -256,7 +258,19 @@ enum WorldStories {
                    lines: ["望远镜有点重，你调了半天焦，看见的只是一团模糊的光。",
                            "后来干脆不看镜子了，就躺在草坡上，用眼睛看。",
                            "星星多到数不过来。你随便指了一颗，说那颗是你们的。"],
-                   xp: 40, unlocks: [.telescope])
+                   xp: 40, unlocks: [.telescope]),
+        WorldStory(id: "orchard_first", title: "第一筐果子", region: "guoyuan", spot: .decor([.treeBig, .olive]), level: 4,
+                   hint: "去果园的果树底下点一下。",
+                   lines: ["果树比看起来的高，最红的那个挂在最上面，你踮着脚够了半天也没够着。",
+                           "最后是他把你托起来，你一伸手就摘到了，还顺手多摘了两个。",
+                           "你把最红的那个在衣角上擦了擦，咬了一口，又递到他嘴边。"],
+                   xp: 25),
+        WorldStory(id: "market_morning", title: "赶集的早上", region: "xiaozhen", spot: .decor([.fountain]), level: 6, night: false,
+                   hint: "白天去小镇的喷泉广场。",
+                   lines: ["一大早广场上就支起了摊子，有人在卖刚出炉的面包，香味飘了半条街。",
+                           "你把篮子里的东西一样一样摆出来，跟摊主讨价还价，最后多换了一颗糖。",
+                           "他就站在你身后，帮你拎着篮子。"],
+                   xp: 30)
     ]
 
     static func story(_ id: String) -> WorldStory? { all.first { $0.id == id } }

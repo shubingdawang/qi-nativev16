@@ -146,7 +146,22 @@ enum WorldFarm {
         WorldSeed(id: "pumpkin", name: "南瓜", hours: 16, color: "D96B3A")
     ]
 
-    static func seed(_ id: String) -> WorldSeed? { seeds.first { $0.id == id } }
+    /// 小镇种子店卖的：买一包种一格
+    static let rareSeeds: [WorldSeed] = [
+        WorldSeed(id: "watermelon", name: "西瓜", hours: 18, color: "4FA85A"),
+        WorldSeed(id: "rose", name: "玫瑰", hours: 14, color: "D9415E"),
+        WorldSeed(id: "cherrytomato", name: "樱桃番茄", hours: 6, color: "F0544F")
+    ]
+
+    static func price(of s: WorldSeed) -> Int {
+        switch s.id {
+        case "watermelon": return 20
+        case "rose": return 25
+        default: return 12
+        }
+    }
+
+    static func seed(_ id: String) -> WorldSeed? { seeds.first { $0.id == id } ?? rareSeeds.first { $0.id == id } }
 
     /// 0 刚种下 · 1 发芽 · 2 长叶 · 3 熟了
     static func stage(_ c: WorldCrop, now: Date = Date()) -> Int {
@@ -1013,6 +1028,14 @@ final class WorldStore: ObservableObject {
         gain(["锦鲤", "珍珠", "漂流瓶", "一朵睡莲"].contains(got) ? 10 : 4)
         after("fish")
         return got
+    }
+
+    /// 篮子里加几个（负数是拿走；拿到 0 就不列了）
+    func addBasket(_ name: String, _ n: Int) {
+        var v = save
+        let now = (v.basket[name] ?? 0) + n
+        v.basket[name] = now > 0 ? now : nil
+        save = v
     }
 
     var basketText: String {
