@@ -23,6 +23,7 @@ struct SettingsView: View {
     /// 占了多少地方。**进这一页才算**——要走几百个文件，
     /// 每次刷设置都算一遍太亏
     @State private var usage: StorageUsage.Report?
+    @State private var locationAssist = UserDefaults.standard.bool(forKey: BackgroundKeeper.key)
     /// 「重新采集声音样本」的确认和回执
     @State private var askResetVoice = false
     @State private var voiceResetDone = false
@@ -942,6 +943,31 @@ struct SettingsView: View {
 
             SettingsNote("开启后回车键为发送；关闭时回车键为换行。默认关闭。",
                          title: "说明")
+
+            // 一个子视图包一层，免得这一段子视图太多
+            Group {
+            SettingsDivider()
+
+            Toggle(isOn: Binding(get: { locationAssist }, set: { on in
+                locationAssist = on
+                UserDefaults.standard.set(on, forKey: BackgroundKeeper.key)
+                if on { BackgroundKeeper.shared.requestPermission() }
+            })) {
+                Text("用定位辅助完成回复")
+                    .font(.app(15))
+                    .foregroundStyle(Theme.textMain(scheme))
+            }
+            .tint(app.settings.accentColor)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+
+            SettingsNote("""
+            切出 App 时，用最低精度的定位让正在进行的回复和工具继续运行，最后一件做完即停止。不保存、不发送位置；运行时状态栏显示定位标记。
+            等待定时消息时不会启动；不保证一定不中断（系统回收内存、手动划掉 App 时仍会停止）。需要允许「使用 App 期间」的定位。
+            """ + (locationAssist ? "
+
+现在：" + BackgroundKeeper.shared.permissionText : ""), title: "说明")
+            }
             }
         }
     }

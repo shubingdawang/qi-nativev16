@@ -160,6 +160,8 @@ enum MessageBeats {
         text = MemoryUseMarker.extract(text).clean
         // 他要留到之后的那一句也一样（见 `KeepMarker`）
         text = KeepMarker.extract(text).clean
+        // 抽屉里的东西也只藏不认（收尾那一下才收进抽屉，见 `DrawerMarker`）
+        text = DrawerMarker.hide(text)
         // 关窗那个记号也剥掉。⚠️ 这儿**只剥不认**——
         // 真正记下来是在收尾那一处（`AppState`），
         // 流式的时候每来一个字都会走一遍这儿，认在这儿等于关八百次。

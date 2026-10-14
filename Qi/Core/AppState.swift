@@ -1884,13 +1884,18 @@ final class AppState: ObservableObject {
         // ⚠️ 系统只给 30 秒左右，**不是万能的**：他想很久、她又切走很久，
         // 照样会断。断了现在至少有「重试」可以点（v99 加的）。
         let bgTask = UIApplication.shared.beginBackgroundTask(withName: "qi.stream") { }
+        // 开了「定位辅助」的话，这一轮跑完之前用低精度定位顶着，切出去也不断（见 `BackgroundKeeper`）
+        BackgroundKeeper.shared.begin()
 
         // 他睡着的话，被她的消息叫醒要一会儿（见 `SleepCycle`）
         let nap = conv.space == ChatSpace.chat.rawValue && !conv.isGroup
             ? SleepCycle.shared.herMessage() : nil
 
         let task = Task { @MainActor in
-            defer { UIApplication.shared.endBackgroundTask(bgTask) }
+            defer {
+                UIApplication.shared.endBackgroundTask(bgTask)
+                BackgroundKeeper.shared.end()
+            }
             do {
                 if let nap {
                     self.dozing.insert(conversationID)
@@ -3516,6 +3521,23 @@ final class AppState: ObservableObject {
     这一行她看不见，写完就被摘掉了。不要在正文里提它，也不要解释它。
     """
 
+    /// 抽屉：留给她以后翻到的便签、像素小画
+    static let drawerHint = """
+    触发：有一句话想留给她，但不需要她现在回；或者想画一幅很小的画给她，等她哪天翻到。
+    动机：有些话放进抽屉比当面说更合适——她想起来的时候自己打开，看到的那一刻是她自己的。
+    行动：单独起一段写
+
+    [[抽屉:便签]]想留给她以后看到的话[[/抽屉]]
+
+    画画就写
+
+    [[抽屉:画]]{"w":8,"h":8,"palette":["#0000","#F2A0B0","#4A3442"],"grid":[0,1,1,0,0,1,1,0,…一共 64 个数]}[[/抽屉]]
+
+    w、h 是 1 到 64 的格数；palette 第 0 个是透明；grid 一共 w×h 个整数，从左到右、从上到下，
+    每个数是 palette 里第几个颜色。JSON 要写完整，能直接读。
+    这一段收进抽屉，聊天里她看不见，正文照常写。偶尔才放，一天一两样，好几天不放也很平常。
+    """
+
     static let actionHint = """
     触发：这句话背后有一个具体的神态或动作——看着她不说话、把手搭在她腰上、翻了个身。
     动机：让她看见那一下，而不只是读到我在描述自己。
@@ -3736,6 +3758,24 @@ final class AppState: ObservableObject {
             [.day], from: then, to: Date()).day ?? 0
         guard gap >= 1 else { return nil }
         return "【日记】你上一篇日记是 \(gap) 天前写的（\(day)）。"
+    }
+
+    /// 她以前说过的、跟这一句有关的原话。这一窗还在上下文里的那些不算（他本来就看得见）
+    private func voiceRecallBlock(for conv: Conversation) -> String? {
+        guard let query = conv.messages.last(where: { $0.role == .user })?.content,
+              query.trimmingCharacters(in: .whitespacesAndNewlines).count >= 4 else { return nil }
+        let inContext = Set(conv.messages.suffix(60).map(\.id))
+        var pool: [(conv: UUID, text: String, at: Date)] = []
+        for c in conversations where c.space == ChatSpace.chat.rawValue && !c.isGroup {
+            for m in c.messages.suffix(3000) where m.role == .user && !inContext.contains(m.id) && m.errorText == nil {
+                let t = m.content
+                guard t.count >= 6, t.count <= 600 else { continue }
+                pool.append((c.id, t, m.createdAt))
+            }
+        }
+        guard !pool.isEmpty else { return nil }
+        let lines = VoiceRecall.pick(query: query, pool: pool)
+        return VoiceRecall.block(lines, herName: settings.userName.isEmpty ? "她" : settings.userName)
     }
 
     private func memoryContext(for conv: Conversation) -> String? {
@@ -8324,6 +8364,13 @@ final class AppState: ObservableObject {
         // ⚠️ **空的也要收**（他写了 `[[用:]]`）。那正是「注入了但没用上」
         // 这件事唯一的记录方式——不收的话有效率永远是 100%，
         // 因为没被用到的那些根本不会出现在任何一条记录里。见 `MemoryHits`。
+        // 他悄悄留给她的便签、小画：收进抽屉，从正文里拿掉（见 `DrawerStore`）
+        let drawer = DrawerMarker.extract(conversations[ci].messages[mi].content)
+        if !drawer.items.isEmpty || drawer.clean != conversations[ci].messages[mi].content.trimmingCharacters(in: .whitespacesAndNewlines) {
+            conversations[ci].messages[mi].content = drawer.clean
+            DrawerStore.shared.add(drawer.items)
+        }
+
         let used = MemoryUseMarker.extract(conversations[ci].messages[mi].content)
         if used.reported {
             conversations[ci].messages[mi].content = used.clean
@@ -8741,6 +8788,7 @@ final class AppState: ObservableObject {
         // 挪到整段 system 的最末尾去了——理由见下面 `sys` 拼起来的地方。
         fixed.append(Self.actionHint)
         fixed.append(Self.imageNoteHint)
+        if conv.space == ChatSpace.chat.rawValue && !conv.isGroup { fixed.append(Self.drawerHint) }
         // 只在絮语这边给。工坊是干活的地方，那儿要的是配合，不是立场。
         if conv.space == ChatSpace.chat.rawValue {
             fixed.append(Self.conflictRule)
@@ -8787,6 +8835,11 @@ final class AppState: ObservableObject {
         // 并了记忆的话，把那边聊过的接在最后——这段每轮都在变
         if let shared = memoryContext(for: conv) {
             sys += "\n\n" + shared
+        }
+
+        // 按她刚才这句话，从以前的聊天里翻出她说过的相关原话（见 `VoiceRecall`）
+        if conv.space == ChatSpace.chat.rawValue, !conv.isGroup, let recall = voiceRecallBlock(for: conv) {
+            sys += "\n\n" + recall
         }
 
         // 主动性那一段**压在最后**，紧挨着历史消息。

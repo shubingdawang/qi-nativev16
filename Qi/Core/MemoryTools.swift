@@ -1168,10 +1168,10 @@ enum MemoryTools {
         let core = m.memories.filter { $0.level >= 4 }
         let rest = m.memories.filter { $0.level < 4 }.prefix(20)
         if !core.isEmpty {
-            parts.append("【核心记忆】\n" + core.map(line).joined(separator: "\n"))
+            parts.append("【核心记忆】确认过的事，可以当真用。\n" + core.map(line).joined(separator: "\n"))
         }
         if !rest.isEmpty {
-            parts.append("【别的记得住的】\n" + rest.map(line).joined(separator: "\n"))
+            parts.append("【别的记得住的】也是记下来的事，旧一点的可能已经变了。\n" + rest.map(line).joined(separator: "\n"))
         }
 
         // 还悬着没了结的（Ombre-Brain 那套里最有用的一条：
@@ -1206,7 +1206,7 @@ enum MemoryTools {
             let rows = m.transcripts.map { t in
                 "· 《\(t.title)》[\(t.id)] \(t.summary ?? "还没写摘要")"
             }
-            parts.append("【一起经历过的】共 \(m.transcripts.count) 份存档\n"
+            parts.append("【一起经历过的】共 \(m.transcripts.count) 份存档。摘要是转述，细节要原话的话按编号翻出来看。\n"
                          + rows.joined(separator: "\n"))
         }
 

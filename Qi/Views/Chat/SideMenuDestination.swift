@@ -29,6 +29,7 @@ struct SideMenuDestination: View {
         case "moments":    MomentsView()
         case "quests":     QuestView()
         case "thoughts":   ThoughtPoolView()
+        case "drawer":     DrawerView()
         case "call":       CallHistoryView()
         case "fortune":    DivinationView()
         case "clawd":      ClawdHomeView()

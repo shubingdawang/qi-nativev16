@@ -235,6 +235,8 @@ struct SideMenuPanel: View {
     @Environment(\.colorScheme) private var scheme
     /// 现在停在哪一项上
     @State private var scrolledID: String?
+    /// 抽屉里有没有他新放的（有就让那一项的图标呼吸）
+    @ObservedObject private var drawer = DrawerStore.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -413,9 +415,16 @@ struct SideMenuPanel: View {
             onSelect(item)
         } label: {
             HStack(spacing: 13) {
-                Image(systemName: item.icon)
+                Group {
+                    // 抽屉里有他新放的东西：图标轻轻呼吸，不写数字、不挂红点
+                    if item.id == "drawer", drawer.unseen > 0 {
+                        DrawerBreath(icon: item.icon, tint: app.settings.accentColor)
+                    } else {
+                        Image(systemName: item.icon)
+                            .foregroundStyle(Theme.textSoft(scheme))
+                    }
+                }
                     .font(.app(16, weight: .regular))
-                    .foregroundStyle(Theme.textSoft(scheme))
                     .frame(width: 24)
                 Text(item.title)
                     .font(.app(16, weight: .medium))
@@ -432,6 +441,20 @@ struct SideMenuPanel: View {
 }
 
 /// 按下去轻轻陷一下
+/// 抽屉图标的呼吸：慢慢亮、慢慢暗
+struct DrawerBreath: View {
+    let icon: String
+    let tint: Color
+    @State private var up = false
+    var body: some View {
+        Image(systemName: icon + ".fill")
+            .foregroundStyle(tint)
+            .opacity(up ? 1 : 0.35)
+            .scaleEffect(up ? 1.08 : 0.94)
+            .onAppear { withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { up = true } }
+    }
+}
+
 struct SideMenuRowStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -454,6 +477,7 @@ struct SideMenuItem: Identifiable, Hashable {
         .init(id: "moments",   title: "动态", icon: "square.stack"),
         .init(id: "quests",    title: "小事", icon: "checklist"),
         .init(id: "thoughts",  title: "念头池", icon: "drop"),
+        .init(id: "drawer",    title: "抽屉", icon: "tray"),
         .init(id: "call",      title: "通话", icon: "phone"),
         .init(id: "fortune",   title: "占卜", icon: "sparkles"),
         .init(id: "clawd",     title: "clawd", icon: "pawprint"),
