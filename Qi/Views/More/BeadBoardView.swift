@@ -160,7 +160,12 @@ struct BeadListView: View {
         }
         .navigationTitle("拼豆")
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $creating) { createSheet.presentationDetents([.medium]) }
+        .sheet(isPresented: $creating) {
+            createSheet
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background(WallpaperBackground())
+                .presentationDetents([.medium])
+        }
         .fullScreenCover(item: $editing) { p in BeadEditorView(projectID: p.id) }
         .fullScreenCover(item: $placing) { p in ImportPlacementView(image: p.image, source: "导入的图片") }
         .onChange(of: importPick) { _, item in
@@ -771,8 +776,6 @@ struct BeadExportView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal, 24)
-                .buttonStyle(.plain)
-                .padding(.horizontal, 24)
                 Text("「做成 clawd 的衣服」：画的是穿着衣服的 clawd 就行，会自动抠掉他自己的身子，穿上后跟着他所有动作走。")
                     .font(.app(11))
                     .foregroundStyle(.secondary)
@@ -780,6 +783,8 @@ struct BeadExportView: View {
                 Spacer()
             }
             .padding(.top, 16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(WallpaperBackground())
             .fullScreenCover(item: $cutting) { job in
                 OutfitCutView(cut: job.cut, name: project.name)
             }
@@ -940,6 +945,7 @@ struct ImportPlacementView: View {
                 .padding(.bottom, 12)
             }
             .padding(.top, 10)
+            .background(WallpaperBackground())
             .fullScreenCover(item: $autoCut) { job in OutfitCutView(cut: job.cut, name: source) }
             .navigationTitle("摆好再存")
             .navigationBarTitleDisplayMode(.inline)
@@ -1031,8 +1037,16 @@ extension BeadProject {
     mutating func fitToReference(_ img: UIImage) -> String {
         refScale = 1; refRotation = 0; refX = 0; refY = 0
         refFill = true
-        if let g = BeadGrid.detect(img) {
+        if let g = BeadGrid.grid(img) {
             resize(g.cols, g.rows)
+            // 底图按认出的格宽放大，第一条格线对上板子左上角（图纸边上裁掉的半格露在板子外面）
+            let iw = Double(g.w) / g.cell, ih = Double(g.h) / g.cell
+            let cols = Double(g.cols), rows = Double(g.rows)
+            let fit = min(cols / iw, rows / ih)
+            refFill = false
+            refScale = 1 / fit
+            refX = (-g.ox / g.cell + iw / 2 - cols / 2) / cols
+            refY = (-g.oy / g.cell + ih / 2 - rows / 2) / rows
             return "认出底图是 \(g.cols)×\(g.rows) 格，板子改成一样的，一格对一格。"
         }
         // 认不出格子：宽不变，行数按图的长宽比来，底图正好铺满

@@ -80,6 +80,10 @@ struct WorldView: View {
     @State private var enterHome = false
     /// 贴着点的东西弹出来的菜单（见 `AnchoredMenu`）
     @State private var islandMenu: AnchorMenuState?
+    /// 要告诉他的事，先问她（见 `himOffer`）
+    @State private var offers: [String] = []
+    /// 稻草人正在一格一格浇
+    @State private var scarecrowWatering = false
     @State private var tapGlobal: CGPoint = .zero
     /// 从哪座小屋进的家：进去先看那一间
     @State private var homeRoom: HomeRoom = .living
@@ -174,6 +178,43 @@ struct WorldView: View {
         islandMenu = AnchorMenuState(title: world.name(of: o), items: items, at: tapGlobal)
     }
 
+    /// 告诉他之前先问她：告诉就发过去，不告诉就存进「事件」
+    private func offer(_ line: String) { offers.append(line) }
+
+    /// 一件景上能做的事。稻草人不用浇水：换成它帮忙把田里的一格一格浇了
+    private func decorItems(_ d: WorldDecor) -> [AnchorMenuItem] {
+        guard let k = WorldDecorKind.resolve(d.kind) else { return [] }
+        var items: [AnchorMenuItem] = []
+        var acts = world.actions(forDecor: d)
+        if k == .scarecrow {
+            acts.removeAll { $0.name.contains("浇") }
+            items.append(AnchorMenuItem(title: "让稻草人帮忙浇田") { scarecrowWater() })
+        }
+        for a in acts {
+            items.append(AnchorMenuItem(title: a.name) {
+                let line = world.perform(a, onDecor: d, byHer: true)
+                offer("小岛上，" + line)
+            })
+        }
+        return items
+    }
+
+    /// 稻草人一格一格浇过去（刚浇过的跳过）
+    private func scarecrowWater() {
+        guard !scarecrowWatering else { return }
+        let cells = world.thirstyCrops
+        guard !cells.isEmpty else { world.show("田里的都浇过了"); return }
+        scarecrowWatering = true
+        Task { @MainActor in
+            for (x, y) in cells {
+                world.water(x, y, byHer: true, walk: false)
+                try? await Task.sleep(nanoseconds: 350_000_000)
+            }
+            scarecrowWatering = false
+            world.show("稻草人浇好了 \(cells.count) 格")
+        }
+    }
+
     private func showDecorMenu(_ d: WorldDecor) {
         guard let k = WorldDecorKind.resolve(d.kind) else { return }
         var items: [AnchorMenuItem] = []
@@ -189,16 +230,12 @@ struct WorldView: View {
                 enterHome = true
             })
         }
-        for a in world.actions(forDecor: d) {
-            items.append(AnchorMenuItem(title: a.name) {
-                let line = world.perform(a, onDecor: d, byHer: true)
-                app.tellHim("小岛上，" + line)
-            })
-        }
+        items += decorItems(d)
         islandMenu = AnchorMenuState(title: k.label, items: items, at: tapGlobal)
     }
 
-    private func showSoilMenu(_ x: Int, _ y: Int) {
+    /// 田的菜单。extra：这一格上还站着人、摆着稻草人时，把那几样接在后面
+    private func showSoilMenu(_ x: Int, _ y: Int, extra: [AnchorMenuItem] = []) {
         var items: [AnchorMenuItem] = []
         if let c = world.crop(x, y) {
             if WorldFarm.stage(c) == 3 {
@@ -212,6 +249,7 @@ struct WorldView: View {
                 })
             }
         }
+        items += extra
         islandMenu = AnchorMenuState(title: soilTitle(x, y), items: items, at: tapGlobal)
     }
 
@@ -230,7 +268,13 @@ struct WorldView: View {
         stage
             .anchoredMenu($islandMenu)
             .sheet(item: $storyShown) { st in
-                WorldStorySheet(story: st, him: him) { line in app.tellHim("小岛上，你们一起经历了" + line) }
+                WorldStorySheet(story: st, him: him) { line in
+                    // 等剧情那页收起来再问
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 600_000_000)
+                        offer("小岛上，你们一起经历了" + line)
+                    }
+                }
                     .presentationDetents([.medium, .large])
             }
             .navigationDestination(isPresented: $enterHome) {
@@ -247,6 +291,7 @@ struct WorldView: View {
 
     var body: some View {
         staged
+        .himOffer($offers, source: "小岛")
         .navigationTitle("小岛")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -310,7 +355,7 @@ struct WorldView: View {
                 ForEach(world.actions(forDecor: d)) { a in
                     Button(a.name) {
                         let line = world.perform(a, onDecor: d, byHer: true)
-                        app.tellHim("小岛上，" + line)
+                        offer("小岛上，" + line)
                         decorMenu = nil
                     }
                 }
@@ -392,8 +437,8 @@ struct WorldView: View {
 
     private func doAction(_ a: WorldAction, on o: WorldObject?) {
         let line = world.perform(a, on: o, byHer: true)
-        // 告诉他，他在聊天里接着演
-        app.tellHim("小岛上，" + line)
+        // 先问她要不要告诉他；告诉了他在聊天里接着演
+        offer("小岛上，" + line)
         menuFor = nil
     }
 
@@ -643,9 +688,26 @@ struct WorldView: View {
                 if let why = world.lockReason(e.to) { world.show(why) }
                 return
             }
-            if x == world.save.himX && y == world.save.himY { showPersonMenu(); return }
+            let onSoil = world.farmOn && world.ground(x, y) == .soil
+            if x == world.save.himX && y == world.save.himY {
+                // 他站在田上：先给田的菜单，最后一条是对他做点什么
+                if onSoil {
+                    showSoilMenu(x, y, extra: [AnchorMenuItem(title: "对\(him)做点什么…") {
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 250_000_000)
+                            showPersonMenu()
+                        }
+                    }])
+                    return
+                }
+                showPersonMenu(); return
+            }
             if let o = world.object(at: x, y) { showObjectMenu(o); return }
-            if let d = world.decor(at: x, y, base: true), !world.actions(forDecor: d).isEmpty { showDecorMenu(d); return }
+            if let d = world.decor(at: x, y, base: true), !world.actions(forDecor: d).isEmpty || WorldDecorKind.resolve(d.kind) == .scarecrow {
+                // 稻草人插在田里：田照样能种，稻草人那几样接在后面
+                if onSoil { showSoilMenu(x, y, extra: decorItems(d)); return }
+                showDecorMenu(d); return
+            }
             if world.farmOn, world.ground(x, y) == .soil { showSoilMenu(x, y); return }
             if world.farmOn, world.ground(x, y).isWater {
                 // 点水：走到旁边的岸上钓鱼
@@ -757,7 +819,7 @@ struct WorldView: View {
             caught = got
             fishing = false
             // 钓到稀罕的才告诉他
-            if ["锦鲤", "珍珠", "漂流瓶", "一朵睡莲"].contains(got) { app.tellHim("小岛上，她在水边钓到了\(got)。") }
+            if ["锦鲤", "珍珠", "漂流瓶", "一朵睡莲"].contains(got) { offer("小岛上，她在水边钓到了\(got)。") }
         }
     }
 
@@ -766,7 +828,8 @@ struct WorldView: View {
         let xy = key.split(separator: ",").compactMap { Int($0) }
         guard xy.count == 2 else { return 0 }
         let x = xy[0], y = xy[1]
-        var z = Double(y) + 0.45
+        // 田贴着地：排在上一行的人、景前面就够了，不压住站在田上、田后面的人
+        var z = Double(y) - 0.35
         for d in world.decor {
             guard let k = WorldDecorKind.resolve(d.kind) else { continue }
             let tall = Int((IslandArt.size(of: k.sprite).height / CGFloat(IslandArt.px)).rounded(.up))
@@ -1325,6 +1388,7 @@ struct WorldView: View {
                     }
                 }
             }
+            .transparentList()
             .navigationTitle("模组")
             .navigationBarTitleDisplayMode(.inline)
         }
@@ -1703,6 +1767,7 @@ struct WorldGuideSheet: View {
                     ForEach(Self.tips, id: \.self) { t in Text(t).font(.app(12.5)) }
                 } header: { Text("基建小技巧") }
             }
+            .transparentList()
             .navigationTitle("攻略")
             .navigationBarTitleDisplayMode(.inline)
         }

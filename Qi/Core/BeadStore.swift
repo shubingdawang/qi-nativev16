@@ -108,6 +108,8 @@ final class BeadStore: ObservableObject {
         var p = p
         p.updatedAt = Date()
         if let i = projects.firstIndex(where: { $0.id == p.id }) {
+            // 拼豆页手里那份是打开时拿的，没有后来在导出页打的「零件」记号：留着原来的
+            if p.asPart == nil { p.asPart = projects[i].asPart }
             projects[i] = p
         } else {
             projects.insert(p, at: 0)
@@ -289,11 +291,32 @@ extension UIColor {
 // MARK: - 认出图纸上有几格
 
 /// 她垫的常常是一张拼豆图纸（一格一格、格里写着色号）。
-/// 看横竖两个方向上颜色跳变的节奏，找出一格多宽，算出一共几列几行。
+/// 看横竖两个方向上颜色跳变的节奏，找出一格多宽、格线从哪儿开始，算出一共几列几行。
 /// 认不出来（照片、没有格子的图）返回 nil。
+///
+/// 一格的宽不一定是整数个点，图纸边上也常常裁掉半格：
+/// 所以找的是「一格多宽 + 第一条格线在哪」，不是「一共几格」。
+/// 两个方向用同一个格宽（拼豆格子是方的），长方形的图纸也对得上。
 enum BeadGrid {
 
+    struct Found {
+        var cols: Int
+        var rows: Int
+        /// 一格多宽（缩放后那张图上的点）
+        var cell: Double
+        /// 第一条竖 / 横格线在哪
+        var ox: Double
+        var oy: Double
+        /// 缩放后那张图多大
+        var w: Int
+        var h: Int
+    }
+
     static func detect(_ image: UIImage) -> (cols: Int, rows: Int)? {
+        grid(image).map { ($0.cols, $0.rows) }
+    }
+
+    static func grid(_ image: UIImage) -> Found? {
         guard let cg = image.cgImage else { return nil }
         let scale = min(1, 900 / Double(max(cg.width, cg.height)))
         let W = max(8, Int(Double(cg.width) * scale)), H = max(8, Int(Double(cg.height) * scale))
@@ -301,6 +324,7 @@ enum BeadGrid {
               let ctx = CGContext(data: nil, width: W, height: H, bitsPerComponent: 8, bytesPerRow: W * 4,
                                   space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
         else { return nil }
+        // 直接画 CGImage：内存里第 0 行就是图的最上面那行
         ctx.draw(cg, in: CGRect(x: 0, y: 0, width: W, height: H))
         guard let raw = ctx.data else { return nil }
         let px = raw.bindMemory(to: UInt8.self, capacity: W * H * 4)
@@ -316,18 +340,30 @@ enum BeadGrid {
         for x in 0..<W {
             for y in 0..<(H - 1) { rowP[y] += abs(gray[(y + 1) * W + x] - gray[y * W + x]) }
         }
-        guard let c = count(colP), let r = count(rowP) else { return nil }
-        // 两个方向一格应该差不多宽（拼豆格子是方的）
-        let cw = Double(W) / Double(c), rh = Double(H) / Double(r)
-        guard abs(cw - rh) / max(cw, rh) < 0.2 else { return nil }
-        return (c, r)
+        let cp = detrend(colP), rp = detrend(rowP)
+        let ax = period(cp), ay = period(rp)
+        // 格宽：两个方向都认出来就挑得分高的那个细调；只认出一个就两边都用它
+        var cell: Double
+        switch (ax, ay) {
+        case let (a?, b?):
+            guard abs(a.cell - b.cell) / max(a.cell, b.cell) < 0.2 else { return nil }
+            cell = refine(cp, rp, around: a.score >= b.score ? a.cell : b.cell)
+        case let (a?, nil): cell = refine(cp, rp, around: a.cell)
+        case let (nil, b?): cell = refine(cp, rp, around: b.cell)
+        default: return nil
+        }
+        guard cell >= 4 else { return nil }
+        let ox = offset(cp, cell).o, oy = offset(rp, cell).o
+        // 最左、最上那一格被裁掉一大半的不算
+        let cols = Int(((Double(W) - ox) / cell).rounded())
+        let rows = Int(((Double(H) - oy) / cell).rounded())
+        guard (4...128).contains(cols), (4...128).contains(rows) else { return nil }
+        return Found(cols: cols, rows: rows, cell: cell, ox: ox, oy: oy, w: W, h: H)
     }
 
-    /// 一条跳变曲线上有几格
-    private static func count(_ raw: [Double]) -> Int? {
+    /// 去掉慢慢起伏的那部分，只留一格一格的节奏
+    private static func detrend(_ raw: [Double]) -> [Double] {
         let n = raw.count
-        guard n >= 16 else { return nil }
-        // 去掉慢慢起伏的那部分，只留一格一格的节奏
         var p = [Double](repeating: 0, count: n)
         let win = 9
         for i in 0..<n {
@@ -336,11 +372,17 @@ enum BeadGrid {
             for j in a...b { s += raw[j] }
             p[i] = raw[i] - s / Double(b - a + 1)
         }
+        return p
+    }
+
+    /// 一格大概多宽（自相关最短的那个够高的峰）
+    private static func period(_ p: [Double]) -> (cell: Double, score: Double)? {
+        let n = p.count
+        guard n >= 16 else { return nil }
         let energy = p.reduce(0) { $0 + $1 * $1 }
         guard energy > 0 else { return nil }
-        // 自相关：隔多少个点最像自己
-        let lo = 5, hi = n / 4
-        guard hi > lo else { return nil }
+        let lo = 5, hi = n / 3
+        guard hi > lo + 1 else { return nil }
         var ac = [Double](repeating: 0, count: hi + 1)
         for L in lo...hi {
             var s = 0.0
@@ -348,27 +390,44 @@ enum BeadGrid {
             ac[L] = s / energy
         }
         guard let peak = ac[lo...hi].max(), peak > 0.25 else { return nil }
-        // 取最短的那个够高的峰（两格、三格也会是峰）
-        var period = (lo...hi).max(by: { ac[$0] < ac[$1] }) ?? lo
+        var L0 = (lo...hi).max(by: { ac[$0] < ac[$1] }) ?? lo
         for L in (lo + 1)..<hi where ac[L] >= peak * 0.8 && ac[L] >= ac[L - 1] && ac[L] >= ac[L + 1] {
-            period = L
+            L0 = L
             break
         }
-        // 一格不一定是整数个点：在附近几个格数里挑格线最对得上的
-        let guess = Int((Double(n) / Double(period)).rounded())
-        var best = guess, bestScore = -Double.infinity
-        for k in max(4, guess - 3)...min(128, guess + 3) {
-            let step = Double(n) / Double(k)
-            var s = 0.0
-            for j in 1..<k {
-                let x = Int((Double(j) * step).rounded())
+        return (Double(L0), ac[L0])
+    }
+
+    /// 格线落在 o, o+s, o+2s… 上时，那几处跳变有多强（取平均）
+    private static func offset(_ p: [Double], _ s: Double) -> (o: Double, score: Double) {
+        let n = p.count
+        var best = (o: 0.0, score: -Double.infinity)
+        var o = 0.0
+        while o < s {
+            var sum = 0.0, k = 0
+            var x = o
+            while x < Double(n) {
+                let i = Int(x.rounded())
                 var m = -Double.infinity
-                for d in -1...1 where x + d >= 0 && x + d < n { m = max(m, p[x + d]) }
-                s += m
+                for d in -1...1 where i + d >= 0 && i + d < n { m = max(m, p[i + d]) }
+                if m > -Double.infinity { sum += m; k += 1 }
+                x += s
             }
-            s /= Double(k - 1)
-            if s > bestScore { bestScore = s; best = k }
+            if k > 0, sum / Double(k) > best.score { best = (o, sum / Double(k)) }
+            o += 0.5
         }
-        return (4...128).contains(best) ? best : nil
+        return best
+    }
+
+    /// 在大概的格宽附近细找：两个方向的格线一起对得最齐的那个（可以不是整数）
+    private static func refine(_ cp: [Double], _ rp: [Double], around c: Double) -> Double {
+        var best = (s: c, score: -Double.infinity)
+        var s = c * 0.9
+        while s <= c * 1.1 {
+            let score = offset(cp, s).score + offset(rp, s).score
+            if score > best.score { best = (s, score) }
+            s += 0.05
+        }
+        return best.s
     }
 }

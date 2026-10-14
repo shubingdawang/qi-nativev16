@@ -100,6 +100,7 @@ struct ChatView: View {
     @State private var jumpTo: UUID?
     @State private var pickedItems: [PhotosPickerItem] = []
     @State private var showingPlus = false
+    @State private var showingEvents = false
     @State private var pendingImages: [UIImage] = []
     /// 已经原样存好的动图（gif）。**不走 pendingImages**——
     /// 那条路要过一遍 UIImage，动画会被压成第一帧。
@@ -945,8 +946,13 @@ struct ChatView: View {
                     Button("文件") { picking = .files }
                     // 戳一戳也是「发点什么」——发过去的是一件事，不是一句话
                     Button("戳一戳") { panel = .poke }
+                    // 小岛上「先存着」的那些事：挑几件发给他当个话题
+                    Button(HimEvents.shared.items.isEmpty ? "事件" : "事件（\(HimEvents.shared.items.count)）") {
+                        showingEvents = true
+                    }
                     Button("取消", role: .cancel) {}
                 }
+                .sheet(isPresented: $showingEvents) { HimEventsSheet() }
 
                 Button {
                     hideKeyboard()

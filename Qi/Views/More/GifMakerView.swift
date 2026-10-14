@@ -35,6 +35,8 @@ struct GifSpec {
     var effectAmount: Double = 1
     /// 每一颗挪了多少（以画面边长为 1），没挪的不在里面
     var effectOffsets: [Int: CGPoint] = [:]
+    /// 特效一圈里动几遍（1 = 原来的快慢）。整数，首尾才接得上
+    var effectSpeed: Double = 1
     /// 自己做的逐帧动画。有它就按它画，不走上面那套动作
     var anim: GifAnim?
     /// 正在编辑第几帧（预览停在这一帧，不播）；淡影显示哪一帧
@@ -52,7 +54,10 @@ struct GifSpec {
 
 enum GifMotion: String, CaseIterable, Identifiable {
     case none, bounce, shake, heartbeat, jelly, float, jitter, walk, spin, pop, zoom,
-         nod, faint, flyaway, blink, peek, turn, shy
+         nod, faint, flyaway, blink, peek, turn, shy,
+         breathe, bow, tilt, drop, sink, slidein,
+         rock, shiver, dizzy, rocket, squash, stretch,
+         hopside, excited, sneak, wiggle, knockout, pulse
     var id: String { rawValue }
     var label: String {
         switch self {
@@ -74,6 +79,24 @@ enum GifMotion: String, CaseIterable, Identifiable {
         case .peek: return "探头"
         case .turn: return "转身"
         case .shy: return "缩一下"
+        case .breathe: return "呼吸"
+        case .bow: return "鞠躬"
+        case .tilt: return "歪头"
+        case .drop: return "从天而降"
+        case .sink: return "沉下去"
+        case .slidein: return "滑进滑出"
+        case .rock: return "前后摇"
+        case .shiver: return "打哆嗦"
+        case .dizzy: return "晕乎乎"
+        case .rocket: return "冲上天"
+        case .squash: return "被压扁"
+        case .stretch: return "伸懒腰"
+        case .hopside: return "左右跳"
+        case .excited: return "激动"
+        case .sneak: return "蹑手蹑脚"
+        case .wiggle: return "扭来扭去"
+        case .knockout: return "被弹飞"
+        case .pulse: return "忽大忽小"
         }
     }
 }
@@ -235,7 +258,10 @@ enum GifFrame {
             }
             drawParts(anim, in: local, t: t, frame: spec.editFrame, alpha: CGFloat(m.alpha), pixel: spec.pixel, in: g)
         } else {
+            // ⚠️ UIImage.draw 总是不透明地画，外面的 setAlpha 管不住：画进透明层，合上去时才按透明度算
+            g.beginTransparencyLayer(auxiliaryInfo: nil)
             image.draw(in: local)
+            g.endTransparencyLayer()
         }
         g.restoreGState()
     }
@@ -333,6 +359,109 @@ enum GifFrame {
             let s = t < 0.5 ? sin(t / 0.5 * .pi) : 0
             p.sx = 1 - s * 0.18; p.sy = 1 - s * 0.24
             p.dx = -s * 0.03
+        case .breathe:
+            let s = sin(t * tau)
+            p.sy = 1 + s * 0.04; p.sx = 1 - s * 0.02
+        case .bow:
+            // 弯下去停一下，再直起来
+            let e: Double = t < 0.3 ? t / 0.3 : (t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4)
+            p.rot = 28 * e * e * (3 - 2 * e)
+        case .tilt:
+            p.rot = t < 0.5 ? -10 * sin(t / 0.5 * .pi) : 10 * sin((t - 0.5) / 0.5 * .pi)
+        case .drop:
+            // 从上面掉下来，落地扁一下，再弹一小下
+            if t < 0.35 {
+                let e = t / 0.35
+                p.dy = -0.9 * (1 - e * e)
+            } else if t < 0.45 {
+                p.sy = 0.75; p.sx = 1.2
+            } else if t < 0.6 {
+                p.dy = -sin((t - 0.45) / 0.15 * .pi) * 0.05
+            }
+        case .sink:
+            if t < 0.4 {
+                p.dy = t / 0.4 * 0.6; p.alpha = 1 - t / 0.4 * 0.9
+            } else if t < 0.6 {
+                p.dy = 0.6; p.alpha = 0.1
+            } else {
+                let e = (t - 0.6) / 0.4
+                p.dy = (1 - e) * 0.6; p.alpha = 0.1 + e * 0.9
+            }
+        case .slidein:
+            func ease(_ x: Double) -> Double { x * x * (3 - 2 * x) }
+            if t < 0.3 { p.dx = -0.8 * (1 - ease(t / 0.3)) }
+            else if t < 0.7 { p.rot = sin((t - 0.3) / 0.4 * tau) * 3 }
+            else { p.dx = 0.8 * ease((t - 0.7) / 0.3) }
+        case .rock:
+            p.rot = sin(t * tau * 2) * 14
+        case .shiver:
+            let k = Int(t * 48)
+            p.dx = (k % 2 == 0 ? 1 : -1) * 0.006
+            p.sy = 0.97
+        case .dizzy:
+            p.dx = cos(t * tau * 2) * 0.04
+            p.rot = sin(t * tau * 2) * 10
+            p.dy = sin(t * tau * 4) * 0.01
+        case .rocket:
+            // 蹲一下，冲上去，从上面落回来
+            if t < 0.25 {
+                let s = sin(t / 0.25 * .pi / 2)
+                p.sy = 1 - 0.2 * s; p.sx = 1 + 0.1 * s
+            } else if t < 0.6 {
+                let e = (t - 0.25) / 0.35
+                p.dy = -e * e * 1.3; p.sy = 1.15; p.sx = 0.9
+            } else if t < 0.75 {
+                p.alpha = 0
+            } else {
+                p.dy = -(1 - (t - 0.75) / 0.25) * 1.0
+            }
+        case .squash:
+            if t < 0.15 {
+                let e = t / 0.15
+                p.sy = 1 - 0.55 * e; p.sx = 1 + 0.4 * e
+            } else if t < 0.6 {
+                p.sy = 0.45; p.sx = 1.4
+            } else if t < 0.75 {
+                let e = (t - 0.6) / 0.15
+                p.sy = 0.45 + 0.7 * e; p.sx = 1.4 - 0.5 * e
+            } else {
+                let e = (t - 0.75) / 0.25
+                p.sy = 1 + 0.15 * cos(e * .pi * 3) * (1 - e); p.sx = 1 - 0.08 * cos(e * .pi * 3) * (1 - e)
+            }
+        case .stretch:
+            let e = sin(t * .pi)
+            p.sy = 1 + 0.22 * e; p.sx = 1 - 0.08 * e
+            p.rot = sin(t * tau) * 3
+        case .hopside:
+            let ph = (t * 2).truncatingRemainder(dividingBy: 1)
+            p.dy = -sin(ph * .pi) * 0.12
+            p.dx = t < 0.5 ? -0.08 + 0.16 * ph : 0.08 - 0.16 * ph
+        case .excited:
+            let ph = (t * 4).truncatingRemainder(dividingBy: 1)
+            p.dy = -abs(sin(ph * .pi)) * 0.06
+            p.rot = sin(t * tau * 4) * 5
+        case .sneak:
+            // 弓着身子挪过去，转身挪回来
+            p.dx = sin(t * tau) * 0.2
+            p.dy = -abs(sin(t * tau * 4)) * 0.015
+            p.sy = 0.9
+            p.sx = cos(t * tau) >= 0 ? 1.05 : -1.05
+        case .wiggle:
+            p.rot = sin(t * tau * 4) * 7
+            p.sx = 1 + sin(t * tau * 4) * 0.04
+        case .knockout:
+            // 被打飞出去转着圈，再从上面掉回来
+            if t < 0.5 {
+                let e = t / 0.5
+                p.dx = 1.2 * e; p.dy = -sin(e * .pi) * 0.5; p.rot = e * 540
+            } else if t < 0.7 {
+                p.alpha = 0
+            } else {
+                let e = (t - 0.7) / 0.3
+                p.dy = -0.9 * (1 - e) * (1 - e)
+            }
+        case .pulse:
+            p.sx = 1 + 0.12 * sin(t * tau * 2); p.sy = p.sx
         }
         return p
     }
@@ -357,7 +486,9 @@ enum GifFrame {
         return out
     }
 
-    private static func drawEffect(_ spec: GifSpec, box: CGRect, side: CGFloat, t: Double) {
+    private static func drawEffect(_ spec: GifSpec, box: CGRect, side: CGFloat, t t0: Double) {
+        // 快慢：一圈里多走几遍（整数遍，首尾接得上）
+        let t = (t0 * max(1, spec.effectSpeed.rounded())).truncatingRemainder(dividingBy: 1)
         let e = spec.effect
         guard e != .none, let g = UIGraphicsGetCurrentContext() else { return }
         let col = UIColor(beadHex: spec.effectColor.isEmpty ? e.tint : spec.effectColor) ?? .white
@@ -638,12 +769,16 @@ struct GifStart: Identifiable {
     let id = UUID()
     let image: UIImage?
     let name: String
+    /// 进来先停在哪一档（4 = 逐帧）
+    var section = 0
 }
 
 struct GifMakerView: View {
 
     var image: UIImage?
     var name: String = ""
+    /// 进来先停在哪一档（4 = 逐帧）
+    var startSection = 0
 
     @EnvironmentObject private var app: AppState
     @Environment(\.dismiss) private var dismiss
@@ -667,6 +802,16 @@ struct GifMakerView: View {
     @State private var onion = true
     @State private var poseFrom: PartPose?
     @State private var sel: PaintSel?
+    // 逐帧那一档的画面放大
+    @State private var viewZoom: CGFloat = 1
+    @State private var viewPan: CGSize = .zero
+    @State private var panning = false
+    @State private var panFrom: CGSize?
+    @State private var zoomFrom: CGFloat = 1
+    @State private var zoomPanFrom: CGSize = .zero
+    @State private var pinching = false
+    @State private var dragging = false
+    @State private var selBefore: PaintSel?
     @State private var selErase = false
     @State private var brush = 1
     @State private var pivotAt: CGPoint?
@@ -707,8 +852,9 @@ struct GifMakerView: View {
             .onAppear {
                 if base == nil, let image {
                     base = image
-                    spec.pixel = max(image.size.width, image.size.height) <= 160
+                    spec.pixel = Self.looksPixel(image)
                 }
+                if startSection != 0, section == 0, base != nil { section = startSection }
             }
             .onChange(of: photo) { _, item in
                 guard let item else { return }
@@ -738,18 +884,76 @@ struct GifMakerView: View {
 
     private func use(_ img: UIImage) {
         base = img
-        spec.pixel = max(img.size.width, img.size.height) <= 160
+        spec.pixel = Self.looksPixel(img)
+    }
+
+    /// 像素图（小图，或者拼豆导出那种一格好几个像素的）：放大不插值
+    static func looksPixel(_ img: UIImage) -> Bool {
+        if max(img.size.width, img.size.height) <= 160 { return true }
+        guard let px = GifAnim.pixels(GifAnim.normalized(img)) else { return false }
+        return GifAnim.detectedCell(px) != nil
     }
 
     // MARK: 预览
 
     private var stage: some View {
+        ZStack(alignment: .topLeading) {
+            stageCanvas
+            animOverlay
+            effectOverlay
+        }
+        .frame(width: stageSide, height: stageSide, alignment: .topLeading)
+        .scaleEffect(viewZoom, anchor: .topLeading)
+        .offset(viewPan)
+        .frame(width: stageSide, height: stageSide, alignment: .topLeading)
+        .background(TransparencyGrid())
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(alignment: .center) {
+            if base == nil {
+                VStack(spacing: 10) {
+                    Text("先挑一张图").font(.app(13)).foregroundStyle(Theme.textMuted(scheme))
+                    pickButtons
+                }
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if viewZoom > 1.01 {
+                Button { viewZoom = 1; viewPan = .zero; panning = false } label: {
+                    Label("还原", systemImage: "arrow.down.right.and.arrow.up.left").font(.app(11))
+                        .padding(.horizontal, 8).padding(.vertical, 5)
+                        .background(Capsule().fill(.ultraThinMaterial))
+                }
+                .buttonStyle(.plain)
+                .padding(8)
+            }
+        }
+        .contentShape(Rectangle())
+        // 在预览上拖：逐帧那一档按工具来，别的时候挪字
+        .gesture(stageDrag)
+        .simultaneousGesture(stageTurn)
+        .simultaneousGesture(stageZoom)
+        .animation(.easeInOut(duration: 0.2), value: stageSide)
+        .onChange(of: section) { _, v in if v != 4 { viewZoom = 1; viewPan = .zero; panning = false } }
+    }
+
+    /// 预览上的一点 → 放大以前那张图上的位置
+    private func cpt(_ p: CGPoint) -> CGPoint {
+        CGPoint(x: (p.x - viewPan.width) / viewZoom, y: (p.y - viewPan.height) / viewZoom)
+    }
+
+    /// 放大以后画面别挪出框
+    private func clampPan(_ p: CGSize) -> CGSize {
+        let lim = (viewZoom - 1) * stageSide
+        return CGSize(width: min(0, max(-lim, p.width)), height: min(0, max(-lim, p.height)))
+    }
+
+    private var stageCanvas: some View {
         TimelineView(.animation) { ctx in
             let period = 2.0 / max(0.25, spec.speed)
             let raw = ctx.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period
-            // 跟导出一样按帧一跳，预览看到的就是存下来的节奏。摆特效位置时停在开头那一刻
+            // 跟导出一样按帧一跳，预览看到的就是存下来的节奏
             let nf = Double(spec.exportFrames)
-            let t = placingEffect ? 0 : (raw * nf).rounded(.down) / nf
+            let t = (raw * nf).rounded(.down) / nf
             let shown = previewSpec
             Canvas { gc, size in
                 let side = min(size.width, size.height)
@@ -761,23 +965,6 @@ struct GifMakerView: View {
             }
         }
         .frame(width: stageSide, height: stageSide)
-        .background(TransparencyGrid().clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous)))
-        .overlay(alignment: .center) {
-            if base == nil {
-                VStack(spacing: 10) {
-                    Text("先挑一张图").font(.app(13)).foregroundStyle(Theme.textMuted(scheme))
-                    pickButtons
-                }
-            }
-        }
-        .overlay(alignment: .topLeading) { animOverlay }
-        .overlay(alignment: .topLeading) { effectOverlay }
-        .contentShape(Rectangle())
-        // 在预览上拖：逐帧那一档按工具来，别的时候挪字
-        .gesture(stageDrag)
-        .simultaneousGesture(stageTurn)
-        .simultaneousGesture(stageZoom)
-        .animation(.easeInOut(duration: 0.2), value: stageSide)
     }
 
     /// 预览用的参数：编辑逐帧、没在播的时候停在那一帧，带淡影
@@ -929,7 +1116,16 @@ struct GifMakerView: View {
         DragGesture(minimumDistance: 0)
             .onChanged { v in
                 if editingAnim {
-                    animDrag(v)
+                    if !dragging { dragging = true; selBefore = sel }
+                    if pinching { return }
+                    if panning {
+                        if panFrom == nil { panFrom = viewPan }
+                        let f = panFrom ?? .zero
+                        viewPan = clampPan(CGSize(width: f.width + v.translation.width, height: f.height + v.translation.height))
+                        return
+                    }
+                    animDrag(loc: cpt(v.location),
+                             tr: CGSize(width: v.translation.width / viewZoom, height: v.translation.height / viewZoom))
                     return
                 }
                 guard !placingEffect, !spec.text.isEmpty, v.translation != .zero else { return }
@@ -940,45 +1136,48 @@ struct GifMakerView: View {
             }
             .onEnded { v in
                 dragFrom = nil
-                if editingAnim { animDragEnded(v) }
+                dragging = false
+                panFrom = nil
+                if editingAnim, !pinching, !panning { animDragEnded(loc: cpt(v.location)) }
+                if pinching { pivotAt = nil; poseFrom = nil }
             }
     }
 
-    private func animDrag(_ v: DragGesture.Value) {
+    private func animDrag(loc: CGPoint, tr: CGSize) {
         guard let id = selectedPart else { return }
         switch animTool {
         case .pose:
-            guard v.translation != .zero else { return }
+            guard tr != .zero else { return }
             if poseFrom == nil { poseFrom = spec.anim?.pose(id, frame: animFrame) }
             guard var p = poseFrom else { return }
             let w = max(1, stageBox.width)
-            p.dx += Double(v.translation.width / w)
-            p.dy += Double(v.translation.height / w)
+            p.dx += Double(tr.width / w)
+            p.dy += Double(tr.height / w)
             spec.anim?.frames[animFrame][id] = p
         case .paint:
             // 点一下选一格，拖着就一路涂过去
             guard let a = spec.anim, let part = a.parts.first(where: { $0.id == id }),
                   ensureSel(part), var s = sel else { return }
-            let (x, y) = partPixel(v.location, part, a.pose(id, frame: animFrame), s.px)
+            let (x, y) = partPixel(loc, part, a.pose(id, frame: animFrame), s.px)
             if s.paint(at: x, y, radius: brush - 1, erase: selErase) {
                 s.overlay = s.overlayImage(selTint)
                 sel = s
             }
         case .pivot:
-            pivotAt = v.location
+            pivotAt = loc
         case .wand:
             break
         }
     }
 
-    private func animDragEnded(_ v: DragGesture.Value) {
+    private func animDragEnded(loc: CGPoint) {
         poseFrom = nil
         guard let a = spec.anim, let id = selectedPart,
               let part = a.parts.first(where: { $0.id == id }) else { return }
         switch animTool {
         case .wand:
             guard ensureSel(part), var s = sel else { return }
-            let (x, y) = partPixel(v.location, part, a.pose(id, frame: animFrame), s.px)
+            let (x, y) = partPixel(loc, part, a.pose(id, frame: animFrame), s.px)
             guard x >= 0, y >= 0 else { notice = "点在选中部位有颜色的地方"; return }
             let m = GifAnim.wandMask(s.px, Int(x), Int(y))
             if s.add(m, erase: selErase) {
@@ -987,7 +1186,7 @@ struct GifMakerView: View {
             } else if !selErase { notice = "点在选中部位有颜色的地方" }
         case .pivot:
             pivotAt = nil
-            setPivot(v.location, id)
+            setPivot(loc, id)
         case .pose, .paint:
             break
         }
@@ -1037,6 +1236,9 @@ struct GifMakerView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 100)
+                Toggle(isOn: $panning) { Image(systemName: "hand.draw") }
+                    .toggleStyle(.button)
+                    .tint(app.settings.accentColor)
                 if animTool == .paint {
                     Picker("", selection: $brush) {
                         Text("1 格").tag(1)
@@ -1064,6 +1266,8 @@ struct GifMakerView: View {
                 .foregroundStyle(Theme.textMain(scheme))
                 .disabled(!has)
             }
+            Text("两指捏开放大画面；点手的图标后单指拖动是挪画面，再点一下回来继续选。")
+                .font(.app(10.5)).foregroundStyle(Theme.textMuted(scheme))
         }
     }
 
@@ -1083,14 +1287,39 @@ struct GifMakerView: View {
     private var stageZoom: some Gesture {
         MagnifyGesture()
             .onChanged { v in
-                guard editingAnim, animTool == .pose, let id = selectedPart else { return }
+                guard editingAnim else { return }
+                if animTool != .pose {
+                    // 放大画面：捏的那一点不动
+                    if !pinching {
+                        pinching = true
+                        zoomFrom = viewZoom
+                        zoomPanFrom = viewPan
+                        // 两根手指落下时第一根已经涂了几格：退回去
+                        if animTool == .paint { sel = selBefore }
+                        pivotAt = nil
+                    }
+                    let z0 = zoomFrom, p0 = zoomPanFrom
+                    let c = CGPoint(x: (v.startLocation.x - p0.width) / z0, y: (v.startLocation.y - p0.height) / z0)
+                    viewZoom = min(6, max(1, z0 * v.magnification))
+                    viewPan = clampPan(CGSize(width: v.startLocation.x - c.x * viewZoom,
+                                              height: v.startLocation.y - c.y * viewZoom))
+                    return
+                }
+                guard let id = selectedPart else { return }
                 let now = spec.anim?.pose(id, frame: animFrame) ?? PartPose()
                 if scaleFrom == nil { scaleFrom = now.scale }
                 var p = now
                 p.scale = min(3, max(0.2, (scaleFrom ?? 1) * Double(v.magnification)))
                 spec.anim?.frames[animFrame][id] = p
             }
-            .onEnded { _ in scaleFrom = nil }
+            .onEnded { _ in
+                scaleFrom = nil
+                // 手指全抬起来以后再让拖动生效
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 150_000_000)
+                    pinching = false
+                }
+            }
     }
 
     private var pickButtons: some View {
@@ -1171,7 +1400,7 @@ struct GifMakerView: View {
                 if effectEditing {
                     let none = GifFrame.effectAnchors(base, spec: spec, side: stageSide).isEmpty
                     Text(none ? "这个特效是一整片的，没有一颗一颗的位置。"
-                              : "预览停在开头那一刻；拖圆点，那一颗就从那儿开始飘。")
+                              : "圆点是每一颗开始的地方；拖圆点，那一颗就从那儿开始飘，预览照样在动。")
                         .font(.app(10.5)).foregroundStyle(Theme.textMuted(scheme))
                     if !spec.effectOffsets.isEmpty {
                         Button("全部回到原来的位置") { spec.effectOffsets = [:] }
@@ -1179,6 +1408,13 @@ struct GifMakerView: View {
                     }
                 }
                 row("多少") { Slider(value: $spec.effectAmount, in: 0.5...2.5) }
+                row("快慢") {
+                    HStack(spacing: 8) {
+                        Slider(value: $spec.effectSpeed, in: 1...4, step: 1)
+                        Text("×\(Int(spec.effectSpeed))").font(.app(12)).foregroundStyle(Theme.textSoft(scheme))
+                            .frame(width: 30)
+                    }
+                }
                 row("颜色") {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
@@ -1319,13 +1555,17 @@ struct GifMakerView: View {
                             if let img = Self.firstFrame(s) { use(img) }
                             choosing = false
                         } label: {
-                            StickerImage(sticker: s, size: 62).frame(height: 68)
+                            // 图本身不接手势（allowsHitTesting(false)），按钮得自己有一块能点的地方
+                            StickerImage(sticker: s, size: 62)
+                                .frame(maxWidth: .infinity, minHeight: 68)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
                 }
                 .padding(16)
             }
+            .background(WallpaperBackground())
             .navigationTitle("挑一张表情")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button("取消") { choosing = false } } }
@@ -1379,6 +1619,7 @@ struct GifMakerView: View {
                 }
                 .padding(16)
             }
+            .background(WallpaperBackground())
             .navigationTitle("加零件")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button("取消") { pickingPart = false } } }
@@ -1415,6 +1656,8 @@ struct GifMakerView: View {
             .buttonStyle(.plain)
         }
         .padding(20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(WallpaperBackground())
         .presentationDetents([.height(250)])
         .onAppear { titleFocused = true }
     }

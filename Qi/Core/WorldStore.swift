@@ -807,8 +807,13 @@ final class WorldStore: ObservableObject {
             // 小花小草踩得过去
             guard k.blocks else { continue }
             let rows = k.isHouse ? 2 : 1
+            // 树只挡树干那一两格（树冠底下走得过去）。以前整棵树的宽都挡，
+            // 樱花小岛上那棵把桥头那一格整个隔开了，站在那儿点哪都走不到
+            let tree = k.family == "大树" || k.family == "小树"
+            let w = k.cells.w
+            let cols = tree && w >= 3 ? ((w - 1) / 2)...(w / 2) : 0...(max(1, w) - 1)
             for dy in 0..<rows {
-                for dx in 0..<k.cells.w where d.x + dx < width && d.y - dy >= 0 {
+                for dx in cols where d.x + dx < width && d.y - dy >= 0 {
                     set.insert((d.y - dy) * width + d.x + dx)
                 }
             }
@@ -821,18 +826,38 @@ final class WorldStore: ObservableObject {
     }
 
     /// 点的那一格走不进去（水里、树干上），就找离它最近、走得到的一格
+    ///
+    /// 只挑**真的走得到**的格子（以前只看那一格能不能站，走不到也照样把人放过去，
+    /// 页面上就成了直接飞过去）。点的那格走不到，就走到离它最近、走得到的一格；太远就不动
     private func reachable(near x: Int, _ y: Int, from: (Int, Int)) -> (Int, Int)? {
         let blocked = blockedCells()
-        func ok(_ x: Int, _ y: Int) -> Bool { x >= 0 && y >= 0 && x < width && y < height && !blocked.contains(y * width + x) }
-        if ok(x, y) { return (x, y) }
-        var best: (Int, Int)?, bestD = Int.max
-        for dy in -2...2 {
-            for dx in -2...2 where ok(x + dx, y + dy) {
-                let d = dx * dx + dy * dy
-                if d < bestD, route(from: from, to: (x + dx, y + dy), blocked: blocked) != nil { bestD = d; best = (x + dx, y + dy) }
+        let w = width, h = height
+        guard from.0 >= 0, from.1 >= 0, from.0 < w, from.1 < h else { return nil }
+        // 从站的地方出发，能走到的所有格子
+        var seen = [Bool](repeating: false, count: w * h)
+        let start = from.1 * w + from.0
+        var queue = [start], head = 0
+        seen[start] = true
+        while head < queue.count {
+            let c = queue[head]; head += 1
+            let cx = c % w, cy = c / w
+            for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                let nx = cx + dx, ny = cy + dy
+                guard nx >= 0, ny >= 0, nx < w, ny < h else { continue }
+                let n = ny * w + nx
+                guard !seen[n], !blocked.contains(n) else { continue }
+                seen[n] = true
+                queue.append(n)
             }
         }
-        return best
+        if x >= 0, y >= 0, x < w, y < h, seen[y * w + x] { return (x, y) }
+        var best: (Int, Int)?, bestD = Int.max
+        for c in queue {
+            let dx = c % w - x, dy = c / w - y
+            let d = dx * dx + dy * dy
+            if d < bestD { bestD = d; best = (c % w, c / w) }
+        }
+        return bestD <= 8 ? best : nil
     }
 
     /// 从一格走到另一格的路线（上下左右一步一步，不含起点）。走不到返回 nil
@@ -938,13 +963,15 @@ final class WorldStore: ObservableObject {
     }
 
     @discardableResult
-    func water(_ x: Int, _ y: Int, byHer: Bool) -> String {
+    func water(_ x: Int, _ y: Int, byHer: Bool, walk: Bool = true) -> String {
         guard var c = crop(x, y), let s = WorldFarm.seed(c.kind) else { return "那一格没种东西。" }
         if let last = c.lastWatered, Date().timeIntervalSince(last) < 1800 { return "\(s.name)刚浇过，过一会儿再浇。" }
         c.waters += 1
         c.lastWatered = Date()
         save.crops["\(x),\(y)"] = c
-        if byHer { walkHer(x, min(y + 1, height - 1)) } else { walkHim(x, min(y + 1, height - 1)) }
+        if walk {
+            if byHer { walkHer(x, min(y + 1, height - 1)) } else { walkHim(x, min(y + 1, height - 1)) }
+        }
         flash("drop")
         let line = (byHer ? "她" : "他") + "给\(s.name)浇了水。"
         log(line)
@@ -965,6 +992,16 @@ final class WorldStore: ObservableObject {
         gain(8)
         after("harvest")
         return line
+    }
+
+    /// 还没浇过（半小时内没浇）的那几格，从上往下、从左往右
+    var thirstyCrops: [(Int, Int)] {
+        save.crops.compactMap { k, c -> (Int, Int)? in
+            if let last = c.lastWatered, Date().timeIntervalSince(last) < 1800 { return nil }
+            let xy = k.split(separator: ",").compactMap { Int($0) }
+            return xy.count == 2 ? (xy[0], xy[1]) : nil
+        }
+        .sorted { $0.1 == $1.1 ? $0.0 < $1.0 : $0.1 < $1.1 }
     }
 
     /// 钓一下。返回钓到的东西

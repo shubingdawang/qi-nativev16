@@ -23,6 +23,12 @@ struct GifPart: Identifiable {
     var pivot: CGPoint
     /// 这张图摆在整张图的哪一块（0…1）。切出来的就是整块
     var rect = CGRect(x: 0, y: 0, width: 1, height: 1)
+    /// 加长以前的样子（没加长过就是 nil）
+    var source: UIImage?
+    /// 往上、下、左、右各加长了几格
+    var grow = [0, 0, 0, 0]
+    /// 一格是几个像素（加长时按格子重复）
+    var cell: Double?
 }
 
 struct PartPose: Equatable {
@@ -32,10 +38,15 @@ struct PartPose: Equatable {
     /// 转多少度
     var rot = 0.0
     var scale = 1.0
+    /// 这一帧暗多少（0 = 不暗）：走路时后面那条腿
+    var shade = 0.0
+    /// 这一帧往前 / 往后挪几层（0 = 原来的层次）
+    var z = 0
 
     static func lerp(_ a: PartPose, _ b: PartPose, _ t: Double) -> PartPose {
         PartPose(dx: a.dx + (b.dx - a.dx) * t, dy: a.dy + (b.dy - a.dy) * t,
-                 rot: a.rot + (b.rot - a.rot) * t, scale: a.scale + (b.scale - a.scale) * t)
+                 rot: a.rot + (b.rot - a.rot) * t, scale: a.scale + (b.scale - a.scale) * t,
+                 shade: a.shade + (b.shade - a.shade) * t, z: a.z)
     }
 }
 
@@ -166,6 +177,8 @@ struct GifAnim {
         }
         guard any, let piece = Self.image(out), let rest = Self.image(src) else { return nil }
         parts[k].image = rest
+        parts[k].source = nil
+        parts[k].grow = [0, 0, 0, 0]
         // 转轴先放在切出来那一块的中间（换成整张图上的位置）
         let r = parts[k].rect
         let pivot = CGPoint(x: r.minX + (Double(x0 + x1) / 2 + 0.5) / Double(src.w) * r.width,
@@ -188,6 +201,73 @@ struct GifAnim {
         var p = GifPart(name: name, image: img, pivot: CGPoint(x: 0.5, y: 0.5))
         p.rect = rect
         parts.append(p)
+    }
+
+    /// 加长：把这个部位中间那一格一行（列）往外重复 n 次，两头的样子不变。
+    /// dir：0 上、1 下、2 左、3 右
+    mutating func setGrow(_ id: UUID, dir: Int, cells: Int) {
+        guard let k = parts.firstIndex(where: { $0.id == id }), (0..<4).contains(dir),
+              parts[k].grow[dir] != cells else { return }
+        if parts[k].source == nil { parts[k].source = parts[k].image }
+        guard let src = parts[k].source, var px = Self.pixels(src) else { return }
+        let cell = parts[k].cell ?? Self.cellSize(px)
+        parts[k].cell = cell
+        parts[k].grow[dir] = max(0, cells)
+        let g = parts[k].grow
+        px = Self.stretch(px, horizontal: true, forward: true, cells: g[3], cell: cell)
+        px = Self.stretch(px, horizontal: true, forward: false, cells: g[2], cell: cell)
+        px = Self.stretch(px, horizontal: false, forward: true, cells: g[1], cell: cell)
+        px = Self.stretch(px, horizontal: false, forward: false, cells: g[0], cell: cell)
+        if let img = Self.image(px) { parts[k].image = img }
+    }
+
+    /// 有颜色那一段正中间的一格，往 forward（右 / 下）或反方向重复 n 次
+    static func stretch(_ p: Pixels, horizontal: Bool, forward: Bool, cells n: Int, cell: Double) -> Pixels {
+        guard n > 0 else { return p }
+        let W = p.w, H = p.h
+        let len = horizontal ? W : H, other = horizontal ? H : W
+        func idx(_ along: Int, _ across: Int) -> Int { horizontal ? across * W + along : along * W + across }
+        var lo = len, hi = -1
+        for a in 0..<len {
+            for b in 0..<other where p.data[idx(a, b) * 4 + 3] > 16 {
+                lo = min(lo, a); hi = max(hi, a)
+                break
+            }
+        }
+        guard hi >= lo else { return p }
+        let ci = Int((Double(lo + hi) / 2 / cell).rounded(.down))
+        let s0 = Int((Double(ci) * cell).rounded())
+        let s1 = max(s0 + 1, Int((Double(ci + 1) * cell).rounded()))
+        let sw = s1 - s0, shift = n * sw
+        var out = p
+        for a in 0..<len {
+            let src: Int
+            if forward {
+                if a < s1 { continue }
+                src = a < s1 + shift ? s0 + (a - s1) % sw : a - shift
+            } else {
+                if a >= s0 { continue }
+                src = a >= s0 - shift ? s0 + (a - (s0 - shift)) % sw : a + shift
+            }
+            for b in 0..<other {
+                let d = idx(a, b) * 4
+                if src >= 0 && src < len {
+                    let s = idx(src, b) * 4
+                    for c in 0..<4 { out.data[d + c] = p.data[s + c] }
+                } else {
+                    for c in 0..<4 { out.data[d + c] = 0 }
+                }
+            }
+        }
+        return out
+    }
+
+    /// 整个部位往前 / 往后挪一层（所有帧都是）
+    mutating func move(_ id: UUID, by d: Int) {
+        guard let k = parts.firstIndex(where: { $0.id == id }) else { return }
+        let to = k + d
+        guard to >= 0, to < parts.count else { return }
+        parts.swapAt(k, to)
     }
 
     /// 把一个部位并回它下面那一层（切错了用）
@@ -221,18 +301,33 @@ extension GifFrame {
     static func drawParts(_ anim: GifAnim, in local: CGRect, t: Double, frame: Int?, alpha: CGFloat,
                           pixel: Bool, in g: CGContext) {
         let w = local.width, h = local.height
-        for part in anim.parts {
-            let p = frame.map { anim.pose(part.id, frame: $0) } ?? anim.pose(part.id, t: t)
+        // 这一帧的前后：按「原来第几层 + 这一帧挪了几层」排
+        let posed = anim.parts.enumerated().map { i, part in
+            (part, frame.map { anim.pose(part.id, frame: $0) } ?? anim.pose(part.id, t: t), i)
+        }
+        .sorted { ($0.1.z * 1000 + $0.2) < ($1.1.z * 1000 + $1.2) }
+        for (part, p, _) in posed {
             let pv = CGPoint(x: local.minX + part.pivot.x * w, y: local.minY + part.pivot.y * h)
             g.saveGState()
+            // ⚠️ UIImage.draw 自己总是不透明地画，外面 setAlpha 管不住它：
+            // 画进一个透明层里，透明度在这一层合上去的时候才算（「一闪一闪」、淡影就靠这个）
             g.setAlpha(alpha)
+            g.beginTransparencyLayer(auxiliaryInfo: nil)
             g.interpolationQuality = pixel ? .none : .high
             g.translateBy(x: pv.x + CGFloat(p.dx) * w, y: pv.y + CGFloat(p.dy) * w)
             g.rotate(by: CGFloat(p.rot) * .pi / 180)
             g.scaleBy(x: CGFloat(p.scale), y: CGFloat(p.scale))
             let r = part.rect
-            part.image.draw(in: CGRect(x: local.minX + r.minX * w - pv.x, y: local.minY + r.minY * h - pv.y,
-                                       width: r.width * w, height: r.height * h))
+            let rect = CGRect(x: local.minX + r.minX * w - pv.x, y: local.minY + r.minY * h - pv.y,
+                              width: r.width * w, height: r.height * h)
+            part.image.draw(in: rect)
+            if p.shade > 0.01 {
+                // 只压暗有颜色的地方
+                g.setBlendMode(.sourceAtop)
+                g.setFillColor(UIColor.black.withAlphaComponent(CGFloat(min(0.85, p.shade))).cgColor)
+                g.fill(rect)
+            }
+            g.endTransparencyLayer()
             g.restoreGState()
         }
     }
@@ -276,6 +371,7 @@ struct GifAnimEditor: View {
     @Environment(\.colorScheme) private var scheme
 
     private var sel: UUID? { selected ?? anim.parts.first?.id }
+    @State private var growDir = 3
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -304,6 +400,8 @@ struct GifAnimEditor: View {
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
+                            Button("往前一层") { anim.move(p.id, by: 1) }
+                            Button("往后一层") { anim.move(p.id, by: -1) }
                             if anim.parts.first?.id != p.id {
                                 Button("并回下面那块（零件就拿掉）") { anim.merge(p.id); selected = nil }
                             }
@@ -364,6 +462,38 @@ struct GifAnimEditor: View {
                 slider("上下", value: Binding(get: { b.wrappedValue.dy }, set: { b.wrappedValue.dy = $0 }), -0.5...0.5)
                 slider("旋转", value: Binding(get: { b.wrappedValue.rot }, set: { b.wrappedValue.rot = $0 }), -180...180)
                 slider("大小", value: Binding(get: { b.wrappedValue.scale }, set: { b.wrappedValue.scale = $0 }), 0.3...2)
+                slider("阴影", value: Binding(get: { b.wrappedValue.shade }, set: { b.wrappedValue.shade = $0 }), 0...0.7)
+                HStack(spacing: 10) {
+                    Text("前后").font(.app(12.5)).foregroundStyle(Theme.textSoft(scheme)).frame(width: 40, alignment: .leading)
+                    Stepper(value: Binding(get: { b.wrappedValue.z }, set: { b.wrappedValue.z = $0 }), in: -3...3) {
+                        Text(b.wrappedValue.z == 0 ? "原来的层次" : (b.wrappedValue.z > 0 ? "往前 \(b.wrappedValue.z) 层" : "往后 \(-b.wrappedValue.z) 层"))
+                            .font(.app(12))
+                    }
+                }
+                Text("阴影和前后只管这一帧：走路时哪条腿在后面，就在那几帧把它压暗、往后放。")
+                    .font(.app(10.5)).foregroundStyle(Theme.textMuted(scheme))
+
+                // 加长：手、腿切出来以后不够长
+                if let k = anim.parts.firstIndex(where: { $0.id == id }) {
+                    Text("加长这个部位").font(.app(12, weight: .medium)).foregroundStyle(Theme.textSoft(scheme))
+                    Picker("", selection: $growDir) {
+                        Text("往上").tag(0)
+                        Text("往下").tag(1)
+                        Text("往左").tag(2)
+                        Text("往右").tag(3)
+                    }
+                    .pickerStyle(.segmented)
+                    HStack(spacing: 10) {
+                        Text("\(anim.parts[k].grow[growDir]) 格").font(.app(12.5)).foregroundStyle(Theme.textSoft(scheme))
+                            .frame(width: 40, alignment: .leading)
+                        Slider(value: Binding(get: { Double(anim.parts[k].grow[growDir]) },
+                                              set: { anim.setGrow(id, dir: growDir, cells: Int($0.rounded())) }),
+                               in: 0...12, step: 1)
+                            .tint(app.settings.accentColor)
+                    }
+                    Text("中间那一格往外重复，两头的样子不变；每帧都是这么长。")
+                        .font(.app(10.5)).foregroundStyle(Theme.textMuted(scheme))
+                }
             }
         }
     }
@@ -398,6 +528,11 @@ extension GifAnim {
     /// 像素图一格是几个像素（拼豆导出的一格是好几个像素，点一下选的是一整格）。
     /// 认不出格子的（照片这种）按长边分成 96 格左右
     static func cellSize(_ p: Pixels) -> Double {
+        detectedCell(p) ?? max(1, Double(max(p.w, p.h)) / 96)
+    }
+
+    /// 认得出的格子多大；不像像素图（照片、1:1 的小图）返回 nil
+    static func detectedCell(_ p: Pixels) -> Double? {
         var hist: [Int: Int] = [:]
         var total = 0
         func key(_ i: Int) -> Int {
@@ -418,10 +553,9 @@ extension GifAnim {
         }
         for y in 0..<p.h { runs(p.w) { y * p.w + $0 } }
         for x in 0..<p.w { runs(p.h) { $0 * p.w + x } }
-        let fallback = max(1, Double(max(p.w, p.h)) / 96)
-        guard total >= 12 else { return fallback }
+        guard total >= 12 else { return nil }
         let need = max(3, total / 20)
-        guard let l = hist.keys.sorted().first(where: { (hist[$0] ?? 0) >= need }), l >= 2 else { return fallback }
+        guard let l = hist.keys.sorted().first(where: { (hist[$0] ?? 0) >= need }), l >= 2 else { return nil }
         // 缩放过的像素图一格是 6、7 个像素交替：取平均，再按整张有几列对齐
         let near = [l, l + 1]
         let n = near.reduce(0) { $0 + (hist[$1] ?? 0) }

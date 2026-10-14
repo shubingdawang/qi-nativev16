@@ -2605,6 +2605,20 @@ struct ClawdView: View {
                             PixelSpriteView(sprite: ClawdRig.propsOnly(sprites[min(frame, sprites.count - 1)].0),
                                             scale: scale)
                         }
+                        // 她画的衣服要露眼睛：眼睛盖回衣服上面，挪到她画眼睛的地方（跟聊天页那只一样）。
+                        // 以前这儿没画，小屋、小岛上的他穿了衣服就没有眼睛
+                        if CustomWearStore.shared.eyesOnTop(wornIDs) {
+                            let s = pose == .none ? sprites[min(frame, sprites.count - 1)].0 : sprites[0].0
+                            let sh = CustomWearStore.shared.eyeShift(wornIDs)
+                            let ec = OutfitCutter.eyeCenter
+                            PixelSpriteView(sprite: ClawdRig.eyesOnly(s), scale: scale)
+                                .frame(width: CGFloat(s.width) * scale, height: CGFloat(s.height) * scale,
+                                       alignment: .topLeading)
+                                .scaleEffect(CGFloat(sh.scale),
+                                             anchor: UnitPoint(x: ec.x / CGFloat(max(1, s.width)),
+                                                               y: ec.y / CGFloat(max(1, s.height))))
+                                .offset(x: CGFloat(sh.dx) * scale, y: CGFloat(sh.dy) * scale)
+                        }
                     }
                     .allowsHitTesting(false)
             }

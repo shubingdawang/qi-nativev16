@@ -482,8 +482,9 @@ struct OutfitCutter {
     static func grid(from image: UIImage) -> (w: Int, h: Int, cells: [String])? {
         var p = BeadProject(size: 32)
         p.refFill = true
-        if let g = BeadGrid.detect(image) {
-            p.resize(g.cols, g.rows)
+        if BeadGrid.grid(image) != nil {
+            // 认出格子：跟垫底图一样，格线对格线
+            p.fitToReference(image)
         } else {
             // 认不出格子：按小边 32 格读
             let iw = image.size.width, ih = image.size.height

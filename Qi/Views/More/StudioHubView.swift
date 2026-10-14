@@ -15,6 +15,7 @@ struct StudioHubView: View {
     @State private var editing: BeadProject?
     @State private var animating: GifStart?
     @State private var photo: PhotosPickerItem?
+    @State private var pickingBead = false
 
     var body: some View {
         VStack(spacing: 10) {
@@ -34,7 +35,8 @@ struct StudioHubView: View {
         .navigationTitle("表情工坊")
         .navigationBarTitleDisplayMode(.inline)
         .fullScreenCover(item: $editing) { p in BeadEditorView(projectID: p.id) }
-        .fullScreenCover(item: $animating) { g in GifMakerView(image: g.image, name: g.name) }
+        .fullScreenCover(item: $animating) { g in GifMakerView(image: g.image, name: g.name, startSection: g.section) }
+        .sheet(isPresented: $pickingBead) { beadPicker }
         .onChange(of: photo) { _, item in
             guard let item else { return }
             Task { @MainActor in
@@ -99,7 +101,7 @@ struct StudioHubView: View {
                     .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
                     .frame(maxWidth: .infinity, alignment: .leading)
-                entry("从拼豆挑", "circle.grid.3x3") { tab = 0 }
+                entry("从拼豆挑", "circle.grid.3x3") { pickingBead = true }
                 PhotosPicker(selection: $photo, matching: .images) {
                     entryLabel("从相册挑", "photo")
                 }
@@ -113,7 +115,7 @@ struct StudioHubView: View {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 80), spacing: 10)], spacing: 10) {
                         ForEach(store.projects.prefix(12)) { p in
                             Button {
-                                animating = GifStart(image: BeadStore.render(p, look: .pixel, cellPx: 8), name: p.name)
+                                animating = GifStart(image: BeadStore.render(p, look: .pixel, cellPx: 8), name: p.name, section: 4)
                             } label: {
                                 BeadThumb(project: p)
                                     .aspectRatio(1, contentMode: .fit)
@@ -127,6 +129,41 @@ struct StudioHubView: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, Layout.tabBarExpanded + 12)
+        }
+    }
+
+    /// 挑一块拼豆：直接进动图「逐帧」
+    private var beadPicker: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 90), spacing: 12)], spacing: 12) {
+                    ForEach(store.projects) { p in
+                        Button {
+                            pickingBead = false
+                            let img = BeadStore.render(p, look: .pixel, cellPx: 8)
+                            Task { @MainActor in
+                                try? await Task.sleep(nanoseconds: 350_000_000)
+                                animating = GifStart(image: img, name: p.name, section: 4)
+                            }
+                        } label: {
+                            VStack(spacing: 6) {
+                                BeadThumb(project: p)
+                                    .aspectRatio(1, contentMode: .fit)
+                                    .padding(6)
+                                    .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
+                                Text(p.name).font(.app(11)).lineLimit(1).foregroundStyle(Theme.textMain(scheme))
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(16)
+            }
+            .background(WallpaperBackground())
+            .navigationTitle("挑一块拼豆")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("取消") { pickingBead = false } } }
         }
     }
 

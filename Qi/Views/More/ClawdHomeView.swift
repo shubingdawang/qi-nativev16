@@ -163,6 +163,10 @@ struct ClawdHomeView: View {
     /// 房间那一块有多大。算「他该坐在凳子的哪个点」要用——
     /// **跟画屋子那边用的是同一个 `IsoRoom.fit`**，各算各的必然对不齐。
     @State private var roomSize: CGSize?
+    /// 进来以后第一次摆好位置没有
+    @State private var placedOnce = false
+    /// 进来第一圈早点走起来，不让她干等十来秒
+    @State private var firstStroll = true
 
     // ── 她的手（`ClawdTouch.swift`）
     /// 现在选的是哪个手势
@@ -277,6 +281,16 @@ struct ClawdHomeView: View {
     /// 她报的「走在最下一排也没有在屋里」有一半是这个：不是范围算错了，
     /// 是他压根没被重新安置过。
     private func settleHim() {
+        // 刚进来第一次量出屋子：站到地板中间那一带，不是贴着最外那一排
+        //（默认那个 0.78 是按立体屋定的，平面屋一夹就夹到了最下沿）
+        if !placedOnce, roomSize != nil, mood != .lying, using != .lie {
+            placedOnce = true
+            let b = band
+            let mid = onFloor(Double.random(in: 0.35...0.65), b.top + (b.bottom - b.top) * Double.random(in: 0.35...0.6))
+            clawdX = mid.x
+            clawdY = mid.y
+            return
+        }
         let p = onFloor(clawdX, clawdY)
         guard abs(p.x - clawdX) > 0.0001 || abs(p.y - clawdY) > 0.0001 else { return }
         clawdX = p.x
@@ -2578,7 +2592,8 @@ struct ClawdHomeView: View {
                 // 她刚把他放到某件家具上：马上用，不等
                 let wait: UInt64 = aimedItem != nil
                     ? 150_000_000
-                    : UInt64.random(in: 5...12) * 1_000_000_000
+                    : (firstStroll ? 1_500_000_000 : UInt64.random(in: 5...12) * 1_000_000_000)
+                firstStroll = false
                 try? await Task.sleep(nanoseconds: wait)
                 if Task.isCancelled { return }
                 patience.relax()        // 晾着的时候气自己消，见 relax 的注释
