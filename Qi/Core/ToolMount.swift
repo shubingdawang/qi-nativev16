@@ -90,7 +90,9 @@ final class ToolMount {
         ToolGroup(id: "wage", title: "工资",
                   summary: "排班、薪资、每日记账和账上的图",
                   tools: ["read_wage", "set_shift", "wage_ledger", "wage_image", "wage_move_day"],
-                  keywords: ["工资", "上班", "下班", "排班", "早班", "中班", "晚班", "通班", "时薪",
+                  // 「班表」以前不在这里：她追问「班表你说了三天了」，这组没挂上，他手里没有工具，只能嘴上说去查
+                  keywords: ["工资", "上班", "下班", "排班", "早班", "中班", "晚班", "通班", "时薪", "班表", "班次",
+                             "休息日", "调休", "轮休", "值班", "加班", "几号上", "周几上",
                              "记账", "账", "花了", "花费", "多少钱", "块钱", "元", "赚", "薪"]),
         ToolGroup(id: "self", title: "他自己的设定",
                   summary: "改说好的规矩、写给下一个自己的交接",
@@ -223,6 +225,15 @@ final class ToolMount {
         for g in Self.groups where g.keywords.contains(where: { talk.contains($0) })
             || g.tools.contains(where: { talk.contains($0) }) {
             on.insert(g.id)
+        }
+
+        // ②½ 他答应过、还没做的事：那件事要用的工具一直挂着，
+        // 不然他记得「我说过要去查」，手里却没有能查的东西，只能再说一遍「我去查」
+        let owed = MemoryStore.shared.openPromises.map(\.text).joined(separator: "\n").lowercased()
+        if !owed.isEmpty {
+            for g in Self.groups where g.keywords.contains(where: { owed.contains($0) }) {
+                on.insert(g.id)
+            }
         }
 
         // ③ 她最近一句发了图
