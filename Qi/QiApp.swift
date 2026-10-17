@@ -53,6 +53,8 @@ struct QiApp: App {
         .onChange(of: phase) { _, newPhase in
             switch newPhase {
             case .active:
+                // 回来的时候还在转圈、却没有哪一轮在管它的那条，放下来
+                app.sweepAllStuck()
                 // 「开两小时」那种到点了自己松开，别等她想起来再去关。
                 // 读的地方一律走 app.dndOn（它自己会算过没过期），
                 // 这一下只是把界面上那面旗子也收掉。

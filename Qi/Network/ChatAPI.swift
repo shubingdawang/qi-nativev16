@@ -86,6 +86,7 @@ enum ChatAPI {
     ) -> AsyncThrowingStream<StreamEvent, Error> {
 
         AsyncThrowingStream { continuation in
+            let quiet = QuietWatch()
             let task = Task {
                 do {
                     /// 发一次。返回逐字流，或者把对面报的错抛出来。
@@ -186,11 +187,18 @@ enum ChatAPI {
                         }
                     }
 
+                    do {
                     for try await line in bytes.lines {
                         if Task.isCancelled { break }
+                        quiet.heard()
                         guard line.hasPrefix("data:") else { continue }
                         let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
-                        if payload.isEmpty || payload == "[DONE]" { continue }
+                        // ⚠️ `[DONE]` 就是说完了，**到这儿就收**。
+                        // 以前这里是 `continue`：等对面自己把连接关掉才算完。
+                        // 有的中转发完 `[DONE]` 不关连接，这一轮就一直挂着——
+                        // token 数早到了，正文却一直攒着没写回去，气泡上停在「…」
+                        if payload == "[DONE]" { break }
+                        if payload.isEmpty { continue }
                         guard let data = payload.data(using: .utf8),
                               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
                         else { continue }
@@ -228,6 +236,7 @@ enum ChatAPI {
 
                         if let reason = choice["finish_reason"] as? String {
                             continuation.yield(.finish(reason))
+                            quiet.ended()
                         }
 
                         guard let delta = choice["delta"] as? [String: Any] else { continue }
@@ -272,6 +281,11 @@ enum ChatAPI {
                             }
                         }
                     }
+                    } catch where quiet.fired {
+                        // 说完了（给过 finish_reason）却既不发 `[DONE]` 也不关连接，
+                        // 被下面那只看门的掐断：当作正常说完，往下收尾
+                        Console.log(.net, "对面说完不挂线 → " + model, "已经收尾")
+                    }
                     // ⚠️⚠️ **中转一个 usage 都没给的话，也要记下这一次调用。**
                     //
                     // 她报的：「足迹里设置了每次金额也不计算了。」
@@ -305,7 +319,34 @@ enum ChatAPI {
                     continuation.finish(throwing: error)
                 }
             }
-            continuation.onTermination = { _ in task.cancel() }
+            // 看门的：给过 finish_reason 以后六秒再没动静，就当它说完了
+            let dog = Task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    if quiet.shouldCut(after: 6) { task.cancel(); break }
+                }
+            }
+            continuation.onTermination = { _ in task.cancel(); dog.cancel() }
+        }
+    }
+
+    /// 流式那一路「多久没动静了」。读的那一头和看门的那一头不在同一个线程上，所以加锁
+    final class QuietWatch: @unchecked Sendable {
+        private let lock = NSLock()
+        private var last = Date()
+        private var endedAt: Date?
+        private var cut = false
+
+        func heard() { lock.lock(); last = Date(); lock.unlock() }
+        func ended() { lock.lock(); if endedAt == nil { endedAt = Date() }; lock.unlock() }
+        /// 是不是看门的掐断的
+        var fired: Bool { lock.lock(); defer { lock.unlock() }; return cut }
+
+        func shouldCut(after seconds: TimeInterval) -> Bool {
+            lock.lock(); defer { lock.unlock() }
+            guard endedAt != nil, !cut, Date().timeIntervalSince(last) >= seconds else { return false }
+            cut = true
+            return true
         }
     }
 

@@ -118,6 +118,7 @@ final class AppState: ObservableObject {
         providers = Storage.load([Provider].self, from: "providers.json") ?? []
         conversations = Storage.load([Conversation].self, from: "conversations.json") ?? []
         Self.tidyThinkTags(&conversations)
+        Self.settleStreaming(&conversations)
         settings = Storage.load(AppSettings.self, from: "settings.json") ?? AppSettings()
         mcpServers = Storage.load([MCPServer].self, from: "mcp.json") ?? MCPServer.defaults
         voices = Storage.load([VoiceService].self, from: "voices.json") ?? VoiceService.defaults
@@ -1415,6 +1416,7 @@ final class AppState: ObservableObject {
         placeholder.senderName = member.name
         conversations[ci].messages.append(placeholder)
         let assistantID = placeholder.id
+        liveAssistants[assistantID] = conversationID
 
         // 群里也一样，到回合数就先滚一次雪球（关着就跳过）。
         // 压完得重新取一遍这一窗——上面那个 ci 是压之前的。
@@ -1834,6 +1836,8 @@ final class AppState: ObservableObject {
             endStreamBuffer(conversations[i].messages[last].id, in: id)
             conversations[i].messages[last].isStreaming = false
         }
+        for (mid, cid) in liveAssistants where cid == id { liveAssistants[mid] = nil }
+        sweepStuck(id)
     }
 
     private func runTurn(_ conversationID: UUID) {
@@ -1863,6 +1867,7 @@ final class AppState: ObservableObject {
         activeToolTurnID = turn
         conversations[i].messages.append(placeholder)
         let assistantID = placeholder.id
+        liveAssistants[assistantID] = conversationID
         runningConversationIDs.insert(conversationID)
 
         // 灵动岛上开一条。这样她锁着屏、切去别的 App，
@@ -1903,7 +1908,11 @@ final class AppState: ObservableObject {
                     try? await Task.sleep(nanoseconds: UInt64(nap * 1_000_000_000))
                 }
                 // 等他醒的时候她按了停止：收尾 `cancelStream` 已经做了
-                if Task.isCancelled { return }
+                if Task.isCancelled {
+                    self.liveAssistants[assistantID] = nil
+                    self.sweepStuck(conversationID)
+                    return
+                }
                 // 到回合数了就先滚一次雪球（她把「滚雪球压缩」关掉就直接跳过）。
                 // **必须在拼消息之前**——压完之后前面那堆原文才换成浓缩件。
                 //
@@ -2189,6 +2198,59 @@ final class AppState: ObservableObject {
     /// （抹是对的，不然新旧两截会拼在一起）→ 换完那次又断网 → 收场时正文是空的。
     /// 现在抹掉的先收着，**只有在「最后一无所获」的时候才还回去**。
     private var droppedText: [UUID: String] = [:]
+
+    /// 正在出字的那几条：消息 id → 哪一窗。占位一放下就登记，收尾（说完、出错、按停止）就撤。
+    ///
+    /// 她报的：「他回答了，clawd 也显示说完了，token 总数也出现了，
+    /// 但 thinking 和正文依旧是…的状态，除非大退 app。」
+    /// 气泡认的是那条消息自己的 `isStreaming`：有哪条路没把它放下来，它就一直转圈。
+    /// 有了这张表，不在表里却还标着「正在出字」的，就是没人管的那条，扫尾时放下来。
+    private var liveAssistants: [UUID: UUID] = [:]
+
+    /// 把这一窗里没人管的「正在出字」放下来：攒着的字写回去；什么都没有的空占位直接撤掉。
+    func sweepStuck(_ conversationID: UUID) {
+        guard let ci = index(of: conversationID) else { return }
+        let stuck = conversations[ci].messages
+            .filter { $0.isStreaming && liveAssistants[$0.id] == nil }
+            .map(\.id)
+        guard !stuck.isEmpty else { return }
+        for id in stuck {
+            endStreamBuffer(id, in: conversationID)
+            droppedText[id] = nil
+        }
+        guard let ci2 = index(of: conversationID) else { return }
+        for mi in conversations[ci2].messages.indices.reversed() {
+            let m = conversations[ci2].messages[mi]
+            guard stuck.contains(m.id) else { continue }
+            if m.role == .assistant, m.isEmptyContent, (m.reasoning ?? "").isEmpty,
+               m.toolRuns.isEmpty, m.errorText == nil {
+                conversations[ci2].messages.remove(at: mi)
+            } else {
+                conversations[ci2].messages[mi].isStreaming = false
+            }
+        }
+        saveConversations()
+    }
+
+    /// 每一窗都扫一遍（App 回到前台的时候）
+    func sweepAllStuck() {
+        for c in conversations where c.messages.contains(where: { $0.isStreaming }) {
+            sweepStuck(c.id)
+        }
+    }
+
+    /// 开 App 的时候：这时候什么都没在跑，存档里还标着「正在出字」的全是上次没收尾的
+    static func settleStreaming(_ all: inout [Conversation]) {
+        for ci in all.indices {
+            all[ci].messages.removeAll {
+                $0.isStreaming && $0.role == .assistant && $0.isEmptyContent
+                    && ($0.reasoning ?? "").isEmpty && $0.toolRuns.isEmpty && $0.errorText == nil
+            }
+            for mi in all[ci].messages.indices where all[ci].messages[mi].isStreaming {
+                all[ci].messages[mi].isStreaming = false
+            }
+        }
+    }
 
     private func dropStreamBuffer(_ assistantID: UUID) {
         let live = LiveStream.shared.take(assistantID)
@@ -8212,13 +8274,19 @@ final class AppState: ObservableObject {
     private var lastFinish: [UUID: String] = [:]
 
     private func finishStreaming(assistantID: UUID, in conversationID: UUID) {
+        liveAssistants[assistantID] = nil
+        // 收完这一条，把这一窗里别的没人管的「…」一起收掉（见 `sweepStuck`）
+        defer { sweepStuck(conversationID) }
         droppedText[assistantID] = nil
         // ⚠️ **第一件事：把攒着的那几个字写回去。**
         // 不刷的话最后不到 80 毫秒那一截永远到不了屏幕上，
         // 而下面那一堆洗标记、抽 promise、存库都要读 `content`。
         endStreamBuffer(assistantID, in: conversationID)
-        runningConversationIDs.remove(conversationID)
-        streamTasks[conversationID] = nil
+        // 同一窗里还有一条正在出字（她回话途中又触发了一轮）：那一轮还没完，「正在说」和停止键都留给它
+        if !liveAssistants.values.contains(conversationID) {
+            runningConversationIDs.remove(conversationID)
+            streamTasks[conversationID] = nil
+        }
 
         // 灵动岛那条收尾。这里是**所有正常结束路径的必经之地**，
         // 放在这儿才不会漏掉某一条分支把它挂在岛上不下来。
