@@ -39,7 +39,7 @@ struct SideMenuDestination: View {
         case "library":    BookshelfView()
         case "trash":      TrashView()
         case "memo":       MemoListView()
-        case "wage":       WageView()
+        case "wage":       WageHubView()
         case "candy":      CandyJarView()
         case "beads":      StudioHubView()
         case "island":     WorldView()

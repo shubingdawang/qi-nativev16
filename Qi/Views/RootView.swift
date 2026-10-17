@@ -128,6 +128,16 @@ struct RootView: View {
             app.noteMissedCall(m.call, note: m.note)
             calls.missed = nil
         }
+        // 记账里摊销的东西：隔几天在顶上问一句还在不在用（见 `BookReminderLayer`）
+        .overlay(alignment: .top) { BookReminderLayer(accent: app.settings.accentColor) }
+        // 他提了一笔账：卡片摆在底下等她点头（见 `AppState.askBook`）
+        .overlay {
+            if let id = app.bookAsk, let p = AccountBook.shared.pending.first(where: { $0.id == id }) {
+                BookAskLayer(proposal: p, accent: app.settings.accentColor) { app.answerBook($0) }
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: app.bookAsk)
         // 开屏：一扇起了雾的窗（见 `SplashView`）。压在所有东西上面，擦开就走
         .overlay { splashLayer }
         .onAppear {

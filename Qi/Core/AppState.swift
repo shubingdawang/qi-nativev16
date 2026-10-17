@@ -1827,6 +1827,7 @@ final class AppState: ObservableObject {
         // 正卡在「问她一句」上的话，按停止就当她说了不做——
         // 不接这一下的话，那个 continuation 永远等不到人，这一轮就吊死了
         if toolConfirmResume != nil { answerToolConfirm(false) }
+        if bookAskResume != nil { answerBook(.later) }
         // 按了停止，岛上那条也得跟着撤，不然会一直挂着
         IslandController.shared.end(immediately: true)
         if let i = index(of: id),
@@ -2749,6 +2750,8 @@ final class AppState: ObservableObject {
             // 工资页（排班、记账、挂图）。纯本机，一直给——
             // 她单独不想让他动的话，工具面板里那几件可以一件件关。
             native += WageTools.definitions()
+            // 记账页（看账、提一笔等她确认）。纯本机
+            native += BookTools.definitions()
             // 糖罐（看罐、吃、喂、图鉴、药效）。纯本机
             native += CandyTools.definitions()
             // 小岛（看地图、走、说、一起做事、摆东西）。纯本机
@@ -3713,6 +3716,7 @@ final class AppState: ObservableObject {
         case "wage_ledger":                   return "改了一笔账"
         case "wage_image":                    return "给一笔账挂了图"
         case "wage_move_day":                 return "把一天的记录挪了日期"
+        case "book_entry":                    return "写了一笔账给她确认"
         default:                              return nil
         }
     }
@@ -3730,7 +3734,7 @@ final class AppState: ObservableObject {
             return "在写日记"
         case "period_status", "log_period", "add_period_note":
             return "在看你的日子"
-        case "read_wage", "set_shift", "wage_ledger", "wage_image", "wage_move_day":
+        case "read_wage", "set_shift", "wage_ledger", "wage_image", "wage_move_day", "read_book", "book_entry":
             return "在翻你的工资本"
         case "candy_jar", "candy_status":
             return "在摸糖罐"
@@ -5996,6 +6000,48 @@ final class AppState: ObservableObject {
         }
     }
 
+    // MARK: 他提的账，等她点头
+
+    enum BookAnswer { case approved, revise(String), later }
+
+    /// 正摆在她面前的那张（`AccountBook.pending` 里的 id）
+    @Published var bookAsk: UUID?
+    private var bookAskResume: ((BookAnswer) -> Void)?
+    private var bookAskTimeout: Task<Void, Never>?
+
+    /// 她点了同意 / 写了修改意见 / 先放着
+    func answerBook(_ a: BookAnswer) {
+        bookAskTimeout?.cancel()
+        bookAskTimeout = nil
+        let id = bookAsk
+        bookAsk = nil
+        if let id {
+            switch a {
+            case .approved: AccountBook.shared.approve(id)
+            case .revise: AccountBook.shared.dismiss(id)
+            case .later: break
+            }
+        }
+        let resume = bookAskResume
+        bookAskResume = nil
+        resume?(a)
+    }
+
+    /// 摆一张卡给她看，等她答。四分钟没人理就先收进记账页「等你确认」里，这一轮接着走
+    private func askBook(_ p: BookProposal) async -> BookAnswer {
+        AccountBook.shared.propose(p)
+        guard bookAskResume == nil else { return .later }
+        return await withCheckedContinuation { cont in
+            bookAskResume = { cont.resume(returning: $0) }
+            bookAsk = p.id
+            bookAskTimeout = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 240 * 1_000_000_000)
+                guard !Task.isCancelled, self.bookAskResume != nil else { return }
+                self.answerBook(.later)
+            }
+        }
+    }
+
     // MARK: 本地工具
 
     /// 当前正在回话的那个窗口，本地工具要往里面塞东西
@@ -6106,6 +6152,15 @@ final class AppState: ObservableObject {
         // 只有 wage_image 真的会叫它，读记录不白翻一遍聊天。
         if WageTools.handles(name) {
             return WageTools.run(name, args: args, recentImages: { self.recentUserImages() })
+        }
+
+        // 记账页：读直接给；记 / 改 / 删先弹卡片等她点头（见 `askBook`）
+        if BookTools.handles(name) {
+            if name == "read_book" { return BookTools.read(args) }
+            let (draft, why) = BookTools.draft(args, recentImages: { self.recentUserImages() })
+            guard let p = draft else { return (why, true) }
+            let answer = await askBook(p)
+            return BookTools.reply(answer, p)
         }
 
         if CandyTools.handles(name) {
