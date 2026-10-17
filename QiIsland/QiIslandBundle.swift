@@ -9,5 +9,6 @@ import SwiftUI
 struct QiIslandBundle: WidgetBundle {
     var body: some Widget {
         IslandWidget()
+        BookWidget()
     }
 }

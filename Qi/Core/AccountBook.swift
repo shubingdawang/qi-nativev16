@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import WidgetKit
 
 // MARK: - 记账
 //
@@ -175,7 +176,12 @@ final class AccountBook: ObservableObject {
     ]
 
     @Published private(set) var file = AccountBookFile() {
-        didSet { if loaded { Storage.save(file, to: "account-book.json") } }
+        didSet {
+            if loaded {
+                Storage.save(file, to: "account-book.json")
+                syncWidget()
+            }
+        }
     }
     private var loaded = false
 
@@ -414,6 +420,46 @@ final class AccountBook: ObservableObject {
     /// 用了几天
     func daysUsed(_ e: Expense) -> Int {
         max(1, dayIndex(e, e.usedUp ?? Date()) + 1)
+    }
+
+    // MARK: 桌面小组件
+
+    private var widgetTask: Task<Void, Never>?
+
+    /// 账变了：稍等一下（连着改好几笔只推一次）再推给小组件
+    func syncWidget() {
+        widgetTask?.cancel()
+        widgetTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            guard !Task.isCancelled else { return }
+            self.pushWidget()
+        }
+    }
+
+    /// 把这个月的汇总写进钥匙串（见 `BookWidgetShared.swift`），叫小组件刷新
+    func pushWidget() {
+        let now = Date()
+        var snap = BookWidgetSnapshot()
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM"
+        snap.month = f.string(from: now)
+        snap.monthTitle = "\(cal.component(.month, from: now))月"
+        let sums = byCategory(month: now, upTo: now)
+        snap.total = sums.reduce(0) { $0 + $1.1 }
+        snap.categories = sums.prefix(6).map {
+            BookWidgetSnapshot.Cat(name: $0.0.name, symbol: $0.0.symbol, amount: $0.1)
+        }
+        let today = cal.startOfDay(for: now)
+        let all = days(in: now)
+        snap.days = all.map { $0 <= today ? total(on: $0) : 0 }
+        if let first = all.first { snap.firstWeekday = cal.component(.weekday, from: first) }
+        snap.levels = file.levels
+        snap.accentHex = WakeEngine.shared.app?.settings.accentHex ?? "C47A5A"
+        snap.updated = now
+        guard let data = try? JSONEncoder().encode(snap) else { return }
+        if SharedKeychain.write(data, key: "book") {
+            WidgetCenter.shared.reloadTimelines(ofKind: "QiBook")
+        }
     }
 
     // MARK: 给他看的
