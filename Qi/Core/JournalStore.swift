@@ -662,12 +662,25 @@ final class JournalStore: ObservableObject {
         didSet { if loaded { Storage.save(pages, to: "journal.json") } }
     }
 
+    /// 书架上每个月那本的封面换成了第几种（月份 → 样式）。没换过的按月份轮着来
+    @Published var covers: [String: Int] = [:] {
+        didSet { if loaded { Storage.save(covers, to: "journal-covers.json") } }
+    }
+
     private var loaded = false
 
     private init() {
         pages = Storage.load([JournalPage].self, from: "journal.json") ?? []
+        covers = Storage.load([String: Int].self, from: "journal-covers.json") ?? [:]
         loaded = true
     }
+
+    /// 某个月那本用哪种封面
+    func cover(for month: String, number: Int) -> Int {
+        covers[month] ?? ((number + 1) % NotebookStyle.all.count)
+    }
+
+    func setCover(_ style: Int, for month: String) { covers[month] = style }
 
     /// 按月分组，新的在前。**「做完的手帐按日期放进文件夹」就是这个。**
     var byMonth: [(month: String, pages: [JournalPage])] {
