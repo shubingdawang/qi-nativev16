@@ -101,6 +101,8 @@ struct ChatView: View {
     @State private var pickedItems: [PhotosPickerItem] = []
     @State private var showingPlus = false
     @State private var showingEvents = false
+    /// 遮挡截图（见 `ChatMaskLayer`）
+    @State private var masking = false
     @State private var pendingImages: [UIImage] = []
     /// 已经原样存好的动图（gif）。**不走 pendingImages**——
     /// 那条路要过一遍 UIImage，动画会被压成第一帧。
@@ -404,6 +406,14 @@ struct ChatView: View {
                     }
                 }
         )
+        .overlay {
+            if masking {
+                ChatMaskLayer(accent: app.settings.accentColor) {
+                    withAnimation(.easeOut(duration: 0.2)) { masking = false }
+                }
+                .transition(.opacity)
+            }
+        }
         .onAppear {
             app.ensureActive(in: space)
             if space == .chat { app.isChatVisible = true }
@@ -949,6 +959,10 @@ struct ChatView: View {
                     // 小岛上「先存着」的那些事：挑几件发给他当个话题
                     Button(HimEvents.shared.items.isEmpty ? "事件" : "事件（\(HimEvents.shared.items.count)）") {
                         showingEvents = true
+                    }
+                    // 截图前往聊天上贴表情盖住不想露的地方
+                    Button("遮挡截图") {
+                        withAnimation(.easeOut(duration: 0.2)) { masking = true }
                     }
                     Button("取消", role: .cancel) {}
                 }
