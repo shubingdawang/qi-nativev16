@@ -455,7 +455,9 @@ struct AccountBookView: View {
         var out = [LegendItem(text: "0", level: 0)]
         for (i, v) in l.enumerated() {
             let lo = i == 0 ? 0 : l[i - 1]
-            let t = i == 0 ? "<" + WageStore.money(v) : WageStore.money(lo) + "–" + WageStore.money(v)
+            let hi: String = WageStore.money(v)
+            let low: String = WageStore.money(lo)
+            let t: String = i == 0 ? "<\(hi)" : "\(low)–\(hi)"
             out.append(LegendItem(text: t, level: i + 1))
         }
         if let last = l.last { out.append(LegendItem(text: "≥" + WageStore.money(last), level: l.count + 1)) }
@@ -756,23 +758,22 @@ struct ProposalCard: View {
                 CategoryIcon(category: c, size: 40, tint: accent)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(e.name.isEmpty ? c.name : e.name)
+                        .strikethrough(proposal.kind == .delete)
                         .font(.app(15, weight: .semibold))
                         .foregroundStyle(main)
-                        .strikethrough(proposal.kind == .delete)
                     Text(detail(e, c))
                         .font(.app(11.5))
                         .foregroundStyle(muted)
                 }
                 Spacer()
                 Text(BookFormat.money(e.amount))
+                    .strikethrough(proposal.kind == .delete)
                     .font(.app(17, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(main)
-                    .strikethrough(proposal.kind == .delete)
             }
             if let b = proposal.before, proposal.kind == .update {
-                Text("原来：" + book.category(b.category).name + " · " + (b.name.isEmpty ? "未命名" : b.name)
-                     + " · " + BookFormat.money(b.amount))
+                Text(beforeText(b))
                     .font(.app(11.5))
                     .foregroundStyle(muted)
             }
@@ -788,9 +789,9 @@ struct ProposalCard: View {
             }
             if !proposal.why.isEmpty {
                 Text(proposal.why)
+                    .italic()
                     .font(.app(12))
                     .foregroundStyle(main.opacity(0.8))
-                    .italic()
             }
             HStack(spacing: 10) {
                 Button(action: onApprove) {
@@ -824,6 +825,13 @@ struct ProposalCard: View {
             }
         }
         .glassCard()
+    }
+
+    private func beforeText(_ b: Expense) -> String {
+        let name: String = b.name.isEmpty ? "未命名" : b.name
+        let cat: String = book.category(b.category).name
+        let money: String = BookFormat.money(b.amount)
+        return "原来：\(cat) · \(name) · \(money)"
     }
 
     private func detail(_ e: Expense, _ c: ExpenseCategory) -> String {

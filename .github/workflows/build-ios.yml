@@ -14,6 +14,18 @@ jobs:
       - name: 拉取代码
         uses: actions/checkout@v4
 
+      # 上一次编译的中间产物。内容没变的文件直接用上次编好的，不再从零编
+      - name: 取回上次的编译缓存
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: derived-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            derived-${{ runner.os }}-
+
+      - name: 对齐文件时间（让增量编译认得出哪些没改）
+        run: python3 scripts/ci/stamp_mtimes.py
+
       - name: 看一眼 Xcode 版本
         run: |
           xcodebuild -version
@@ -40,8 +52,9 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGN_ENTITLEMENTS="" \
-            build > build.log 2>&1
-          code=$?
+            SWIFT_COMPILATION_MODE=singlefile \
+            build 2>&1 | tee build.log | grep --line-buffered -E "^(SwiftCompile|CompileSwift|CompileAssetCatalog|Ld|\*\*)" | cut -c1-160
+          code=${PIPESTATUS[0]}
           grep -E "^/.+:[0-9]+:[0-9]+: error: " build.log | sort -u | head -40 | while IFS= read -r line; do
             f=$(echo "$line" | cut -d: -f1)
             l=$(echo "$line" | cut -d: -f2)

@@ -99,7 +99,9 @@ enum BookTools {
         let total = sums.reduce(0) { $0 + $1.1 }
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM"
-        var out = f.string(from: month) + (thisMonth ? "（到今天）" : "") + " 支出 " + BookFormat.money(total)
+        let head: String = f.string(from: month)
+        let tail: String = thisMonth ? "（到今天）" : ""
+        var out = "\(head)\(tail) 支出 \(BookFormat.money(total))"
         if !sums.isEmpty {
             out += "\n分类：" + sums.map { "\($0.0.name) \(BookFormat.money($0.1))" }.joined(separator: "，")
         }
