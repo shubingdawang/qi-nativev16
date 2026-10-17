@@ -1381,6 +1381,48 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// 快捷指令送进来的一句（几点了、电量多少、她刚打开了什么 App……）：
+    /// 当旁白落进他那一窗，他接着说。`open` = 顺手翻到他那一窗
+    func shortcutToHim(_ text: String, open: Bool) {
+        guard let cid = hisConversationID() else { return }
+        if open {
+            Notifier.shared.openConversationID = cid
+        }
+        let note = "（快捷指令：" + text + "）"
+        Task { @MainActor in
+            var waited = 0
+            while self.runningConversationIDs.contains(cid), waited < 240 {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                waited += 1
+            }
+            self.send(text: note, images: [], in: cid, narration: true)
+        }
+    }
+
+    /// 不打开 App 的那一种：等他说完，人不在 App 里就发一条通知
+    func shortcutToHimAndNotify(_ text: String) async {
+        guard let cid = hisConversationID() else { return }
+        let before = conversation(cid)?.messages.count ?? 0
+        shortcutToHim(text, open: false)
+        for _ in 0..<50 {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            if let c = conversation(cid), c.messages.count > before + 1,
+               !runningConversationIDs.contains(cid) { break }
+        }
+        guard UIApplication.shared.applicationState != .active,
+              let c = conversation(cid),
+              let m = c.messages.dropFirst(before)
+                .last(where: { $0.role == .assistant && !$0.isStreaming && !$0.content.isEmpty })
+        else { return }
+        let name = settings.aiName.isEmpty ? "阿晏" : settings.aiName
+        Notifier.shared.banner(title: name, body: String(m.content.prefix(120)), conversationID: cid)
+    }
+
+    /// 只翻到他那一窗，不说话
+    func openHisChat() {
+        if let cid = hisConversationID() { Notifier.shared.openConversationID = cid }
+    }
+
     /// 群里有人 @ 了他：把那句话送进他那一窗，让他自己决定回不回、回在哪
     private func relayToHim(from who: String, text: String, group gid: UUID) {
         guard let cid = hisConversationID() else { return }

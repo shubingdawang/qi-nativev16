@@ -40,5 +40,17 @@ struct QiShortcuts: AppShortcutsProvider {
                     phrases: ["用\(.applicationName)记一笔", "\(.applicationName)记账"],
                     shortTitle: "记一笔",
                     systemImageName: "yensign.circle")
+        AppShortcut(intent: TellHimIntent(),
+                    phrases: ["用\(.applicationName)告诉他", "\(.applicationName)告诉他"],
+                    shortTitle: "告诉他",
+                    systemImageName: "bubble.left")
+        AppShortcut(intent: TellHimQuietlyIntent(),
+                    phrases: ["用\(.applicationName)悄悄告诉他"],
+                    shortTitle: "悄悄告诉他",
+                    systemImageName: "bubble.left.and.text.bubble.right")
+        AppShortcut(intent: OpenHisChatIntent(),
+                    phrases: ["打开\(.applicationName)和他的聊天", "\(.applicationName)找他"],
+                    shortTitle: "打开和他的聊天",
+                    systemImageName: "heart.text.square")
     }
 }
