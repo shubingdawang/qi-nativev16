@@ -964,9 +964,7 @@ struct SettingsView: View {
             SettingsNote("""
             切出 App 时，用最低精度的定位让正在进行的回复和工具继续运行，最后一件做完即停止。不保存、不发送位置；运行时状态栏显示定位标记。
             等待定时消息时不会启动；不保证一定不中断（系统回收内存、手动划掉 App 时仍会停止）。需要允许「使用 App 期间」的定位。
-            """ + (locationAssist ? "
-
-现在：" + BackgroundKeeper.shared.permissionText : ""), title: "说明")
+            """ + (locationAssist ? "\n\n现在：" + BackgroundKeeper.shared.permissionText : ""), title: "说明")
             }
             }
         }
