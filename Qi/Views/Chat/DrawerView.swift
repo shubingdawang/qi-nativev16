@@ -42,6 +42,8 @@ struct DrawerView: View {
                 DrawerPixel(item: item)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
+            } else if item.kind == "riddle" && !item.unlocked {
+                DrawerLock(item: item, accent: app.settings.accentColor)
             } else {
                 Text(item.text)
                     .font(.app(15))
@@ -85,5 +87,82 @@ struct DrawerPixel: View {
             }
         }
         .frame(width: side, height: side * CGFloat(item.h) / CGFloat(max(1, item.w)))
+    }
+}
+
+/// 上了谜语锁的那张：封着，写着谜面；猜中谜底才拆开
+struct DrawerLock: View {
+    let item: DrawerItem
+    let accent: Color
+
+    @ObservedObject private var store = DrawerStore.shared
+    @Environment(\.colorScheme) private var scheme
+    @State private var guess = ""
+    @State private var shake: CGFloat = 0
+    @State private var opening = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: opening ? "envelope.open" : "envelope")
+                    .font(.system(size: 17, weight: .light))
+                    .foregroundStyle(accent)
+                    .contentTransition(.symbolEffect(.replace))
+                Text("封着的一张")
+                    .font(.app(12.5, weight: .medium))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+            Text(item.riddle)
+                .font(.app(15))
+                .foregroundStyle(Theme.textMain(scheme))
+                .lineSpacing(4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 8) {
+                TextField("谜底", text: $guess)
+                    .font(.app(14))
+                    .submitLabel(.done)
+                    .onSubmit(tryOpen)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Theme.textMain(scheme).opacity(0.05)))
+                Button(action: tryOpen) {
+                    Text("拆开")
+                        .font(.app(14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 9)
+                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(accent))
+                }
+                .buttonStyle(.plain)
+            }
+            .offset(x: shake)
+            if item.tries > 0 {
+                Text(hintText)
+                    .font(.app(11.5))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+        }
+    }
+
+    private var hintText: String {
+        if item.tries >= 3, let first = item.answer.first {
+            return "猜了 \(item.tries) 次了 · 第一个字是「\(first)」，一共 \(item.answer.count) 个字"
+        }
+        return "不对，再想想（猜了 \(item.tries) 次）"
+    }
+
+    private func tryOpen() {
+        let g = guess.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !g.isEmpty else { return }
+        if store.guess(item.id, g) {
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            withAnimation(.easeOut(duration: 0.25)) { opening = true }
+        } else {
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
+            withAnimation(.default) { shake = 10 }
+            withAnimation(.interpolatingSpring(stiffness: 600, damping: 8).delay(0.05)) { shake = 0 }
+            guess = ""
+        }
     }
 }

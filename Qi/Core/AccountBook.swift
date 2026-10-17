@@ -106,6 +106,15 @@ extension BookProposal {
     }
 }
 
+/// 每个月固定要拿走的一笔：房租、通勤、话费，或者每月先存下的钱
+struct FixedItem: Codable, Identifiable, Hashable {
+    var id = UUID()
+    var name: String
+    var amount: Double
+    /// 存起来的（不是花掉的）
+    var saving = false
+}
+
 struct AccountBookFile: Codable {
     var categories: [ExpenseCategory] = AccountBook.builtinCategories
     var expenses: [Expense] = []
@@ -113,6 +122,7 @@ struct AccountBookFile: Codable {
     var levels: [Double] = [50, 100, 200, 500]
     /// 他提的、她还没点头的
     var pending: [BookProposal] = []
+    var fixed: [FixedItem] = []
 }
 
 extension AccountBookFile {
@@ -122,6 +132,7 @@ extension AccountBookFile {
         expenses = (try? c.decodeIfPresent([Expense].self, forKey: .expenses)) ?? []
         levels = (try? c.decodeIfPresent([Double].self, forKey: .levels)) ?? [50, 100, 200, 500]
         pending = (try? c.decodeIfPresent([BookProposal].self, forKey: .pending)) ?? []
+        fixed = (try? c.decodeIfPresent([FixedItem].self, forKey: .fixed)) ?? []
     }
 }
 
@@ -254,6 +265,25 @@ final class AccountBook: ObservableObject {
     func setLevels(_ l: [Double]) {
         let clean = l.filter { $0 > 0 }.sorted()
         file.levels = clean.isEmpty ? [50, 100, 200, 500] : clean
+    }
+
+    // MARK: 固定开支
+
+    var fixed: [FixedItem] { file.fixed }
+
+    func saveFixed(_ f: FixedItem) {
+        if let i = file.fixed.firstIndex(where: { $0.id == f.id }) { file.fixed[i] = f }
+        else { file.fixed.append(f) }
+    }
+
+    func deleteFixed(_ id: UUID) { file.fixed.removeAll { $0.id == id } }
+
+    /// 这个月的钱：排了的班一共能挣多少（含还没上的）+ 其他收入、固定拿走的、已经花了的
+    func moneyThisMonth(now: Date = Date()) -> (income: Double, fixed: Double, spent: Double) {
+        let end = cal.date(byAdding: DateComponents(month: 1, day: -1),
+                           to: cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now) ?? now
+        let inc = income(month: now, upTo: end)
+        return (inc.wage + inc.other, file.fixed.reduce(0) { $0 + $1.amount }, monthTotal(now, upTo: now))
     }
 
     // MARK: 他提的

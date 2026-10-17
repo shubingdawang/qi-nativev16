@@ -11,7 +11,7 @@ import SwiftUI
 /// 「先藏、收尾再存」的流式处理。
 struct DrawerItem: Codable, Identifiable, Hashable {
     var id = UUID()
-    /// "note" 便签 / "pixel" 像素画
+    /// "note" 便签 / "pixel" 像素画 / "riddle" 上了谜语锁的便签
     var kind: String
     var text: String = ""
     var w: Int = 0
@@ -20,6 +20,32 @@ struct DrawerItem: Codable, Identifiable, Hashable {
     var grid: [Int] = []
     var at = Date()
     var seen = false
+    /// 谜面 / 谜底（只有上锁的那种有）
+    var riddle: String = ""
+    var answer: String = ""
+    var unlocked = false
+    /// 猜错了几次（三次以后给一个字的提示）
+    var tries = 0
+}
+
+// 谜语那几样是后加的：老的 drawer.json 里没有这几个键，不写容错解码整个抽屉会读不出来
+extension DrawerItem {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
+        kind = (try? c.decodeIfPresent(String.self, forKey: .kind)) ?? "note"
+        text = (try? c.decodeIfPresent(String.self, forKey: .text)) ?? ""
+        w = (try? c.decodeIfPresent(Int.self, forKey: .w)) ?? 0
+        h = (try? c.decodeIfPresent(Int.self, forKey: .h)) ?? 0
+        palette = (try? c.decodeIfPresent([String].self, forKey: .palette)) ?? []
+        grid = (try? c.decodeIfPresent([Int].self, forKey: .grid)) ?? []
+        at = (try? c.decodeIfPresent(Date.self, forKey: .at)) ?? Date()
+        seen = (try? c.decodeIfPresent(Bool.self, forKey: .seen)) ?? false
+        riddle = (try? c.decodeIfPresent(String.self, forKey: .riddle)) ?? ""
+        answer = (try? c.decodeIfPresent(String.self, forKey: .answer)) ?? ""
+        unlocked = (try? c.decodeIfPresent(Bool.self, forKey: .unlocked)) ?? false
+        tries = (try? c.decodeIfPresent(Int.self, forKey: .tries)) ?? 0
+    }
 }
 
 @MainActor
@@ -49,6 +75,24 @@ final class DrawerStore: ObservableObject {
     }
 
     func remove(_ id: UUID) { items.removeAll { $0.id == id } }
+
+    /// 猜一次谜底。猜中返回 true（这张就拆开了）
+    func guess(_ id: UUID, _ raw: String) -> Bool {
+        guard let i = items.firstIndex(where: { $0.id == id }) else { return false }
+        let g = Self.norm(raw), a = Self.norm(items[i].answer)
+        guard !g.isEmpty else { return false }
+        if !a.isEmpty && (g == a || g.contains(a)) {
+            items[i].unlocked = true
+            return true
+        }
+        items[i].tries += 1
+        return false
+    }
+
+    /// 比对之前去掉空格、标点，不分大小写
+    private static func norm(_ s: String) -> String {
+        String(s.lowercased().unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) })
+    }
 }
 
 /// 回复里的抽屉块
@@ -56,7 +100,7 @@ enum DrawerMarker {
 
     static let open = "[[抽屉:"
     static let close = "[[/抽屉]]"
-    private static let pattern = #"\[\[抽屉[:：]\s*(便签|画|text|pixel)\s*\]\]([\s\S]*?)\[\[/抽屉\]\]"#
+    private static let pattern = #"\[\[抽屉[:：]\s*(便签|画|谜|text|pixel|riddle)\s*\]\]([\s\S]*?)\[\[/抽屉\]\]"#
     nonisolated(unsafe) private static let regex = try? NSRegularExpression(pattern: pattern)
 
     /// 收尾那一下用：剥掉、认出来。返回干净正文 + 这一轮留下的东西
@@ -69,6 +113,8 @@ enum DrawerMarker {
             let body = ns.substring(with: m.range(at: 2)).trimmingCharacters(in: .whitespacesAndNewlines)
             if kind == "画" || kind == "pixel", let p = pixel(body) {
                 items.append(p)
+            } else if kind == "谜" || kind == "riddle", let r = riddle(body) {
+                items.append(r)
             } else if !body.isEmpty {
                 // 画坏了（JSON 读不出）就当便签存原文，不丢
                 items.append(DrawerItem(kind: "note", text: String(body.prefix(2000))))
@@ -100,6 +146,28 @@ enum DrawerMarker {
             break
         }
         return t
+    }
+
+    /// 谜面：…… / 谜底：…… / 剩下的是拆开以后看到的话。缺谜面或谜底就不上锁
+    private static func riddle(_ body: String) -> DrawerItem? {
+        var q = "", a = ""
+        var rest: [String] = []
+        for line in body.components(separatedBy: .newlines) {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if let r = t.range(of: #"^谜面[:：]"#, options: .regularExpression) {
+                q = String(t[r.upperBound...]).trimmingCharacters(in: .whitespaces)
+            } else if let r = t.range(of: #"^谜底[:：]"#, options: .regularExpression) {
+                a = String(t[r.upperBound...]).trimmingCharacters(in: .whitespaces)
+            } else {
+                rest.append(line)
+            }
+        }
+        let note = rest.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty, !a.isEmpty, !note.isEmpty else { return nil }
+        var item = DrawerItem(kind: "riddle", text: String(note.prefix(2000)))
+        item.riddle = String(q.prefix(300))
+        item.answer = String(a.prefix(60))
+        return item
     }
 
     /// 颜色：#RGB、#RRGGBB、#RRGGBBAA 都认（透明度 00 的当透明）

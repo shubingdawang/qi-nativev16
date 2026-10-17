@@ -172,6 +172,7 @@ struct AccountBookView: View {
                 }
                 addCard
                 todaySection
+                MoneyCard(accent: accent)
             }
 
             if let d = dayShown {
