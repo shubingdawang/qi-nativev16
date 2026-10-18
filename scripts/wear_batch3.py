@@ -526,9 +526,9 @@ def knotcap(s):
         bez((2.4, 5.85), (1.4, 5.95), (1.05, 6.6), (1.05, 7.55), n=24)[1:]
     # 帽身：一整块。右边圆鼓鼓；左边塌下来，从荷叶边外面垂到脸侧，底下兜成一个软软的圆
     body = Part(bez((13.75, 5.8), (14.7, 3.2), (11.6, 1.2), (8.2, 1.35)) +
-                bez((8.2, 1.35), (4.4, 1.5), (0.9, 2.5), (0.0, 4.7)) +
-                bez((0.0, 4.7), (-0.75, 6.3), (-0.85, 7.6), (-0.35, 8.25)) +
-                bez((-0.35, 8.25), (0.1, 8.7), (0.9, 8.6), (1.3, 7.9)) +
+                bez((8.2, 1.35), (4.4, 1.5), (1.3, 2.4), (0.55, 4.4)) +
+                bez((0.55, 4.4), (0.05, 5.6), (-0.05, 7.0), (0.15, 7.75)) +
+                bez((0.15, 7.75), (0.35, 8.4), (1.0, 8.45), (1.3, 7.9)) +
                 [(2.6, 6.2), (13.0, 6.2)])
     body.shade(yel, lt, dk, edge)
     plain = np.all(body.img == rgb(yel), axis=-1)
@@ -542,15 +542,16 @@ def knotcap(s):
     crease = np.zeros_like(body.m)
     for t in np.linspace(0, 1, 40):
         crease |= near(6.2 - 5.3 * t, 1.95 + 3.0 * t * t, 0.07)
-    for k, (x0, y0) in enumerate(((-0.25, 6.0), (0.2, 6.9))):
-        for t in np.linspace(0, 1, 16):
-            crease |= near(x0 + 0.35 * t, y0 + 1.0 * t, 0.06 - 0.03 * t)
+    for t in np.linspace(0, 1, 16):
+        crease |= near(0.3 + 0.2 * t, 6.3 + 1.0 * t, 0.06 - 0.03 * t)
     body.paint(crease, dk)
     body.on(s)
     # 荷叶边：沿帽口两排圆鼓包错开叠起来，连成一整块（一条外轮廓），越往脸侧收尾越小一点
     puffs = []
     for ri, (off, start) in enumerate(((0.95, 0.8), (0.0, 0.0))):
         for x, y, f in _along(rim, lambda y: 1.6 if y < 6.1 else 0.95, off, start):
+            if ri == 0 and y > 5.2:                                  # 脸侧只留前排一排，别太厚
+                continue
             r_ = (0.8 if ri else 0.76) * (1.0 - 0.15 * max(0.0, f - 0.8) / 0.2)
             ry = r_ * (0.92 if len(puffs) % 2 else 1.0)
             puffs.append((ri, x, y, r_, ry, B.mask_of(ellipse_pts(x, y, r_, ry))))
@@ -558,7 +559,8 @@ def knotcap(s):
     for p_ in puffs:
         union |= p_[5]
     for x, y, _ in _along(rim, 0.15, 0.48):                           # 两排中间垫一条，鼓包之间不漏底
-        union |= near(x, y, 0.62)
+        if y < 5.6:
+            union |= near(x, y, 0.62)
     ruffle = Part(mask=union)
     ruffle.shade(cream, "#FFFFFF", cream_dk, cream_edge, lw=(3, 2), dw=(-4, -3))
     for ri, x, y, r_, ry, m in puffs:
