@@ -246,7 +246,20 @@ struct JournalMonthView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { opened = store.newPage(on: newPageDay) } label: {
+                Menu {
+                    Button { opened = store.newPage(on: newPageDay) } label: {
+                        Label("自己写一页", systemImage: "square.and.pencil")
+                    }
+                    Button {
+                        let f = DateFormatter()
+                        f.locale = Locale(identifier: "zh_CN")
+                        f.dateFormat = "M月d日"
+                        let day = cal.isDate(newPageDay, equalTo: Date(), toGranularity: .month) ? Date() : newPageDay
+                        app.shortcutToHim("她想让你把 \(f.string(from: day)) 做成一页手帐，用那天聊过的、她发的照片和那天的小票拼", open: true)
+                    } label: {
+                        Label("让他做这一天", systemImage: "sparkles")
+                    }
+                } label: {
                     Image(systemName: "plus")
                 }
             }

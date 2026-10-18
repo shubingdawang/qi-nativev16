@@ -84,6 +84,19 @@ struct JournalPageView: View {
             }
         }
         .toolbar {
+            // 他拼的那一页：摇一下换一种排法（只换他拼的那几样）
+            if page.auto != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
+                            JournalAuto.reroll(&page)
+                        }
+                        store.save(page)
+                    } label: {
+                        Image(systemName: "dice")
+                    }
+                }
+            }
             // 「给他看」。**默认关**——手帐上常常是随手写的心事，
             // 她点头他才看得见。开了他就能把这一页原样画成图看见，
             // 也能往右下角贴一张便签。

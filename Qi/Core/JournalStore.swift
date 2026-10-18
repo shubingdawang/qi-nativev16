@@ -238,6 +238,9 @@ struct JournalPage: Codable, Identifiable, Hashable {
     /// 她点头他才看得见——手帐尤其，那上面常常是随手写的心事。
     var shared: Bool = false
 
+    /// 他拼的这一页用了哪些料（见 `JournalAuto`）。摇骰子重排就靠它；她自己做的页是 nil
+    var auto: JournalAutoParts? = nil
+
     /// 老数据没有 shared 这一项，不补容错解码器整本手帐会读不出来
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -250,6 +253,7 @@ struct JournalPage: Codable, Identifiable, Hashable {
         elements = (try? c.decodeIfPresent([JournalElement].self, forKey: .elements)) ?? []
         updatedAt = (try? c.decodeIfPresent(Date.self, forKey: .updatedAt)) ?? Date()
         shared = (try? c.decodeIfPresent(Bool.self, forKey: .shared)) ?? false
+        auto = (try? c.decodeIfPresent(JournalAutoParts.self, forKey: .auto)) ?? nil
     }
 
     init(id: UUID = UUID(), day: Date = Date(), title: String = "",

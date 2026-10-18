@@ -7204,6 +7204,67 @@ final class AppState: ObservableObject {
                     + "东西摆在哪儿、歪多少、哪儿留白，都在图上。"
                     + "要引用她写的字就照上面这份清单，别从图上认。）", false)
 
+        case "journal_make":
+            let jr = JournalStore.shared
+            let cal = Calendar.current
+            var day = Date()
+            if let d = args["date"] as? String, !d.isEmpty {
+                let f = DateFormatter()
+                f.dateFormat = "yyyy-MM-dd"
+                guard let parsed = f.date(from: d) else { return ("日期看不懂：" + d, true) }
+                day = parsed
+            }
+            var parts = JournalAutoParts()
+            parts.title = ((args["title"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let raw = ((args["texts"] as? String) ?? "").replacingOccurrences(of: "\r", with: "")
+            parts.texts = raw.components(separatedBy: "\n\n")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            if parts.texts.count <= 1, raw.contains("\n") {
+                parts.texts = raw.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            }
+            parts.texts = Array(parts.texts.prefix(3))
+            parts.stickers = ((args["stickers"] as? String) ?? "").map { String($0) }
+                .filter { $0.unicodeScalars.contains { $0.properties.isEmojiPresentation || $0.properties.isEmoji && $0.value > 0x2000 } }
+            parts.stickers = Array(parts.stickers.prefix(3))
+            parts.stamp = String(((args["stamp"] as? String) ?? "").prefix(2))
+            parts.mood = String(((args["mood"] as? String) ?? "").prefix(40))
+            // 那天她在聊天里发的照片（复制一份，聊天删了这页还在）
+            var photos: [String] = []
+            if let cid = hisConversationID(), let conv = conversation(cid) {
+                for m in conv.messages where m.role == .user && cal.isDate(m.createdAt, inSameDayAs: day) {
+                    for n in m.imageNames where photos.count < 3 {
+                        if let data = try? Data(contentsOf: ImageStore.url(for: n)) {
+                            let ext = (n as NSString).pathExtension
+                            if let copy = ImageStore.save(data: data, ext: ext.isEmpty ? "jpg" : ext) { photos.append(copy) }
+                        }
+                    }
+                }
+            }
+            parts.photos = photos
+            // 那天的小票
+            if (args["receipt"] as? Bool) ?? true {
+                let lines = AccountBook.shared.lines(on: day)
+                if !lines.isEmpty {
+                    parts.receipt = ["小票 · " + BookFormat.day(day)]
+                        + lines.prefix(6).map { "· \($0.name) \(BookFormat.money($0.amount))" }
+                        + ["合计 " + BookFormat.money(lines.reduce(0) { $0 + $1.amount })]
+                }
+            }
+            guard !parts.title.isEmpty || !parts.texts.isEmpty else { return ("写点什么再拼", true) }
+            parts.layout = Int.random(in: 0..<JournalAuto.layoutCount)
+            var page = jr.newPage(on: cal.date(bySettingHour: 21, minute: 0, second: 0, of: day) ?? day)
+            page.title = parts.title
+            page.auto = parts
+            page.shared = true
+            page.elements = JournalAuto.compose(parts, layout: parts.layout, seed: UInt64.random(in: 1...UInt64.max))
+            let soft = JournalKit.papers.filter { $0.0 != "深棕" }
+            page.paperHex = soft.randomElement()?.1 ?? page.paperHex
+            jr.save(page)
+            return ("拼好了：\(page.dayKey) 那一页，用了 \(photos.count) 张她那天发的照片"
+                    + (parts.receipt.isEmpty ? "" : "和那天的小票")
+                    + "。她在手帐里能摇骰子换排法。", false)
+
         case "journal_note":
             let jr = JournalStore.shared
             let text = (args["text"] as? String) ?? ""

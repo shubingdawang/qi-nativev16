@@ -58,7 +58,7 @@ final class ToolMount {
                   keywords: ["书", "读到", "在读", "看到第", "章", "小说", "生词", "这句话", "这一句", "划线", "批注", "作者"]),
         ToolGroup(id: "journal", title: "手帐与旅程",
                   summary: "手帐页面、在手帐上写一句、生成一段旅程",
-                  tools: ["journal_page", "journal_note", "create_journey"],
+                  tools: ["journal_page", "journal_note", "journal_make", "create_journey"],
                   keywords: ["手帐", "手账", "这一页", "旅行", "旅程", "去哪", "想去", "出去玩"]),
         ToolGroup(id: "album", title: "相册与表情",
                   summary: "存图进表情包或相册、从相册里发、整理和删除、联网找图存下",

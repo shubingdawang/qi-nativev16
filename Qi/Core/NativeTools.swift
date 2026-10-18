@@ -153,6 +153,21 @@ enum NativeTools {
             ["date": ["type": "string", "description": "哪一天，YYYY-MM-DD。不填就是最近那一页"]],
             required: [])
 
+        add("journal_make",
+            """
+            触发：她想让你帮她把某一天做成一页手帐，或者说懒得写今天的日记。
+            动机：她那天说过的话、发过的照片、吃过的东西都在，你替她拼成一页，她翻到的时候那一天就回来了。
+            行动：写好标题、几段话（像她自己在手帐上随手写的，短一点）、挑几个贴纸；那天她在聊天里发的照片和记账里的小票会自己贴上去，排版也会自己排。她在手帐里能摇骰子换排法，也能自己挪、改。
+            """,
+            ["date": ["type": "string", "description": "哪一天，YYYY-MM-DD。不填就是今天"],
+             "title": ["type": "string", "description": "这一页的标题，几个字"],
+             "texts": ["type": "string", "description": "写在页上的几段话，段与段之间空一行，最多三段"],
+             "stickers": ["type": "string", "description": "两三个贴纸 emoji，连着写，如 🌿☕️🌙"],
+             "stamp": ["type": "string", "description": "邮票上的一个 emoji，可不填"],
+             "mood": ["type": "string", "description": "页脚一行小字：天气、心情、那天在哪，可不填"],
+             "receipt": ["type": "boolean", "description": "贴不贴那天的小票（记账里那天的每一笔），不填 = 有就贴"]],
+            required: ["title", "texts"])
+
         add("journal_note",
             """
             触发：你看完她那一页，有一句想留在**那一页上**，而不是说在聊天里。
