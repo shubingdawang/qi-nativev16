@@ -21,6 +21,7 @@ struct BookWidget: Widget {
 struct BookEntry: TimelineEntry {
     let date: Date
     let snap: BookWidgetSnapshot?
+    var why = ""
 }
 
 struct BookProvider: TimelineProvider {
@@ -35,7 +36,9 @@ struct BookProvider: TimelineProvider {
         let cal = Calendar.current
         // 过了零点「今天」要清零：零点再来一次
         let midnight = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now)) ?? now.addingTimeInterval(3600)
-        let entries = [BookEntry(date: now, snap: Self.load()), BookEntry(date: midnight, snap: Self.load())]
+        let snap = Self.load()
+        let why = SharedKeychain.diagnosis
+        let entries = [BookEntry(date: now, snap: snap, why: why), BookEntry(date: midnight, snap: snap, why: why)]
         completion(Timeline(entries: entries, policy: .after(midnight.addingTimeInterval(3600))))
     }
 
@@ -93,6 +96,13 @@ struct BookWidgetView: View {
                 Text("打开栖同步一次")
                     .font(.system(size: 12))
                     .foregroundStyle(soft)
+                if !entry.why.isEmpty {
+                    Text(entry.why)
+                        .font(.system(size: 8.5))
+                        .foregroundStyle(soft.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                }
             }
         } else {
             switch family {

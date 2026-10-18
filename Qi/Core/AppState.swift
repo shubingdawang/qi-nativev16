@@ -541,6 +541,7 @@ final class AppState: ObservableObject {
     /// 一次删掉好几句
     func deleteMessages(_ ids: Set<UUID>, in conversationID: UUID) {
         guard let i = index(of: conversationID) else { return }
+        reanchorBranches(removing: ids, in: i)
         let title = conversations[i].title
         for m in conversations[i].messages where ids.contains(m.id) {
             TrashStore.shared.keep(message: m, in: conversationID, title: title)
@@ -684,8 +685,21 @@ final class AppState: ObservableObject {
         return conversations[i].messages.filter { ids.contains($0.id) }
     }
 
+    /// 要删的那几条里有「收起来的几段」挂着的切点：切点挪到前面还留着的那一条上，
+    /// 不然删完 ‹ › 就找不到挂在哪儿，整个不见了
+    private func reanchorBranches(removing ids: Set<UUID>, in i: Int) {
+        let msgs = conversations[i].messages
+        for b in conversations[i].branches.indices {
+            guard let a = conversations[i].branches[b].afterMessageID, ids.contains(a),
+                  let ai = msgs.firstIndex(where: { $0.id == a }) else { continue }
+            let prev = msgs[..<ai].last(where: { !ids.contains($0.id) })?.id
+            conversations[i].branches[b].afterMessageID = prev
+        }
+    }
+
     func deleteMessage(_ messageID: UUID, in conversationID: UUID) {
         guard let i = index(of: conversationID) else { return }
+        reanchorBranches(removing: [messageID], in: i)
         if let m = conversations[i].messages.first(where: { $0.id == messageID }) {
             TrashStore.shared.keep(message: m, in: conversationID,
                                    title: conversations[i].title)
@@ -1823,6 +1837,9 @@ final class AppState: ObservableObject {
             .map { ($0.messages.first?.createdAt ?? $0.createdAt, $0.id) }
         if let ai = c.messages.firstIndex(where: { $0.id == anchor }), ai + 1 < c.messages.count {
             list.append((c.messages[ai + 1].createdAt, nil))
+        } else if !list.isEmpty {
+            // 正文这一段被删空了：也算一段（空的），还能翻回收起来的那几段
+            list.append((.distantFuture, nil))
         }
         list.sort { $0.0 < $1.0 }
         let ids = list.map(\.1)

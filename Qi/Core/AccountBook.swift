@@ -327,25 +327,26 @@ final class AccountBook: ObservableObject {
         cal.dateComponents([.day], from: cal.startOfDay(for: e.at), to: cal.startOfDay(for: day)).day ?? -1
     }
 
-    /// 摊销的那一笔，第 `day` 天算多少（不在范围里就是 0）
+    /// 摊销的那一笔，第 `day` 天算多少（不在范围里就是 0）。
+    ///
+    /// 还在用：按填的天数平摊。点了「已用完」：按**实际用了几天**重新平摊，
+    /// 以前每一天的那份一起改——填 100 天、第 95 天用完就是每天 1/95，
+    /// 第 105 天才用完就是每天 1/105（超出的那几天也补上）。
     func share(_ e: Expense, on day: Date) -> Double {
         guard let n = e.spreadDays, n > 1 else { return cal.isDate(e.at, inSameDayAs: day) ? e.amount : 0 }
         let k = dayIndex(e, day)
-        guard k >= 0, k < n else { return 0 }
-        let per = e.amount / Double(n)
-        if let u = e.usedUp {
-            let ku = dayIndex(e, u)
-            if k > ku { return 0 }
-            // 用完那天：剩下没摊完的都算在这一天
-            if k == ku { return per * Double(n - ku) }
+        guard k >= 0 else { return 0 }
+        if e.usedUp != nil {
+            let actual = daysUsed(e)
+            return k < actual ? e.amount / Double(actual) : 0
         }
-        return per
+        return k < n ? e.amount / Double(n) : 0
     }
 
-    /// 摊到每天是多少
+    /// 摊到每天是多少（用完了就按实际天数）
     func perDay(_ e: Expense) -> Double? {
         guard let n = e.spreadDays, n > 1 else { return nil }
-        return e.amount / Double(n)
+        return e.amount / Double(e.usedUp != nil ? daysUsed(e) : n)
     }
 
     /// 这一天的每一笔
@@ -358,8 +359,8 @@ final class AccountBook: ObservableObject {
             var images = e.images
             if let n = e.spreadDays, n > 1 {
                 let k = dayIndex(e, day) + 1
-                if let u = e.usedUp, cal.isDate(u, inSameDayAs: day), k < n {
-                    note = "摊销 · 今天用完，剩下的都算在今天"
+                if e.usedUp != nil {
+                    note = "摊销 \(k)/\(daysUsed(e)) 天 · 已用完"
                 } else {
                     note = "摊销 \(min(k, n))/\(n) 天"
                 }
@@ -455,6 +456,8 @@ final class AccountBook: ObservableObject {
     // MARK: 桌面小组件
 
     private var widgetTask: Task<Void, Never>?
+    /// 上一次推给小组件的结果（记账页最底下那行小字）
+    @Published private(set) var widgetStatus = ""
 
     /// 账变了：稍等一下（连着改好几笔只推一次）再推给小组件
     func syncWidget() {
@@ -490,6 +493,7 @@ final class AccountBook: ObservableObject {
         if SharedKeychain.write(data, key: "book") {
             WidgetCenter.shared.reloadTimelines(ofKind: "QiBook")
         }
+        widgetStatus = SharedKeychain.diagnosis
     }
 
     // MARK: 给他看的

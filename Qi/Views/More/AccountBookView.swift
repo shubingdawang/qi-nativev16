@@ -173,6 +173,12 @@ struct AccountBookView: View {
                 addCard
                 todaySection
                 MoneyCard(accent: accent)
+                if !book.widgetStatus.isEmpty {
+                    Text("小组件同步：" + book.widgetStatus)
+                        .font(.app(10))
+                        .foregroundStyle(muted.opacity(0.7))
+                        .frame(maxWidth: .infinity)
+                }
             }
 
             if let d = dayShown {
@@ -1032,31 +1038,8 @@ struct ExpenseEditor: View {
                 Text("时间").font(.app(14)).foregroundStyle(main)
             }
             .tint(accent)
-            HStack(spacing: 8) {
-                chip("现在") { e.at = Date() }
-                chip("算昨天") {
-                    let cal = Calendar.current
-                    let t = cal.dateComponents([.hour, .minute], from: e.at)
-                    if let y = cal.date(byAdding: .day, value: -1, to: Date()),
-                       let d = cal.date(bySettingHour: t.hour ?? 12, minute: t.minute ?? 0, second: 0, of: y) {
-                        e.at = d
-                    }
-                }
-            }
         }
         .glassCard()
-    }
-
-    private func chip(_ t: String, _ act: @escaping () -> Void) -> some View {
-        Button(action: act) {
-            Text(t)
-                .font(.app(12))
-                .foregroundStyle(accent)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 5)
-                .background(Capsule().fill(accent.opacity(0.1)))
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: 照片
@@ -1166,23 +1149,33 @@ struct ExpenseEditor: View {
     }
 
     private var usedUpRow: some View {
-        HStack {
-            if let u = e.usedUp {
-                Text("\(BookFormat.day(u)) 用完 · 用了 \(book.daysUsed(e)) 天")
-                    .font(.app(12.5))
-                    .foregroundStyle(muted)
-                Spacer()
-                Button("还在用") { e.usedUp = nil }
-                    .font(.app(12.5, weight: .medium))
-                    .foregroundStyle(accent)
-            } else {
-                Text("已经用了 \(book.daysUsed(e)) 天")
-                    .font(.app(12.5))
-                    .foregroundStyle(muted)
-                Spacer()
-                Button("已用完") { e.usedUp = Date() }
-                    .font(.app(12.5, weight: .medium))
-                    .foregroundStyle(accent)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                if e.usedUp != nil {
+                    Text("用了 \(book.daysUsed(e)) 天 · 每天 \(BookFormat.money(amount / Double(max(1, book.daysUsed(e)))))")
+                        .font(.app(12.5))
+                        .foregroundStyle(muted)
+                    Spacer()
+                    Button("还在用") { e.usedUp = nil }
+                        .font(.app(12.5, weight: .medium))
+                        .foregroundStyle(accent)
+                } else {
+                    Text("已经用了 \(book.daysUsed(e)) 天")
+                        .font(.app(12.5))
+                        .foregroundStyle(muted)
+                    Spacer()
+                    Button("已用完") { e.usedUp = Date() }
+                        .font(.app(12.5, weight: .medium))
+                        .foregroundStyle(accent)
+                }
+            }
+            if e.usedUp != nil {
+                // 哪天用完的可以改：以前每天那一份按实际天数重新摊
+                DatePicker(selection: Binding(get: { e.usedUp ?? Date() }, set: { e.usedUp = $0 }),
+                           in: min(e.at, Date())...Date(), displayedComponents: .date) {
+                    Text("用完那天").font(.app(13.5)).foregroundStyle(main)
+                }
+                .tint(accent)
             }
         }
     }

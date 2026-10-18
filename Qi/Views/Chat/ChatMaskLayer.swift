@@ -1,26 +1,88 @@
 import SwiftUI
 
-/// 遮挡截图：往聊天页上贴自己的表情，盖住不想给别人看的地方，点「完成」把按钮都藏起来再截图。
+/// 遮挡截图：往聊天上贴自己的表情，盖住不想给别人看的地方，点「完成」把按钮都藏起来再截图。
 ///
-/// 表情贴在屏幕上不跟着聊天滚——先把要截的那一段翻到屏幕上，再贴。
-/// 空白的地方照样能滑聊天。完成以后长按任意一个表情回到编辑。
-struct ChatMaskLayer: View {
-    let accent: Color
-    let onExit: () -> Void
+/// 贴纸**贴在聊天内容上**（`MaskStickersOverlay` 挂在消息列表里面），跟着聊天一起滚，
+/// 盖住哪句就一直盖着哪句。底下那一排表情和按钮（`ChatMaskLayer`）浮在屏幕上。
+@MainActor
+final class MaskBoard: ObservableObject {
+    static let shared = MaskBoard()
 
     struct Item: Identifiable {
         let id = UUID()
-        let sticker: Sticker
+        let image: UIImage
+        /// 在聊天内容里的位置（不是屏幕位置）
         var pos: CGPoint
         var size: CGFloat = 110
         var angle: Angle = .zero
     }
 
+    @Published var active = false
+    @Published var items: [Item] = []
+    @Published var selected: UUID?
+    @Published var done = false
+
+    /// 聊天内容左上角此刻在屏幕上的位置。滚一下变一次，**不发通知**（只在贴新的一张时读）
+    var origin: CGPoint = .zero
+
+    func add(_ sticker: Sticker, atScreen p: CGPoint) {
+        let url = StickerStore.shared.url(of: sticker)
+        guard let img = UIImage(contentsOfFile: url.path) else { return }
+        let k = CGFloat(items.count % 5)
+        let item = Item(image: img, pos: CGPoint(x: p.x - origin.x + k * 14, y: p.y - origin.y + k * 18))
+        items.append(item)
+        selected = item.id
+    }
+
+    func reset() {
+        items = []
+        selected = nil
+        done = false
+        active = false
+    }
+}
+
+/// 贴在聊天内容上的那几张（挂在消息列表的内容里，跟着一起滚）
+struct MaskStickersOverlay: View {
+    @ObservedObject private var board = MaskBoard.shared
+    let accent: Color
+
+    var body: some View {
+        if board.active {
+            GeometryReader { g in
+                let origin = g.frame(in: .global).origin
+                ZStack(alignment: .topLeading) {
+                    Color.clear
+                        .onAppear { board.origin = origin }
+                        .onChange(of: origin) { _, o in board.origin = o }
+                    ForEach($board.items) { $item in
+                        MaskSticker(item: $item,
+                                    selected: board.selected == item.id && !board.done,
+                                    done: board.done,
+                                    accent: accent,
+                                    onTap: { if !board.done { board.selected = item.id } },
+                                    onDelete: {
+                                        board.items.removeAll { $0.id == item.id }
+                                        board.selected = nil
+                                    },
+                                    onLong: {
+                                        if board.done { withAnimation(.easeOut(duration: 0.2)) { board.done = false } }
+                                    })
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// 浮在屏幕上的那一排表情和按钮
+struct ChatMaskLayer: View {
+    let accent: Color
+    let onExit: () -> Void
+
+    @ObservedObject private var board = MaskBoard.shared
     @ObservedObject private var library = StickerStore.shared
     @Environment(\.colorScheme) private var scheme
-    @State private var items: [Item] = []
-    @State private var selected: UUID?
-    @State private var done = false
     @State private var hint = false
 
     /// 自己的表情在前，他的在后
@@ -30,30 +92,15 @@ struct ChatMaskLayer: View {
 
     var body: some View {
         GeometryReader { g in
+            let center = CGPoint(x: g.frame(in: .global).midX, y: g.frame(in: .global).minY + g.size.height * 0.4)
             ZStack {
-                ForEach($items) { $item in
-                    MaskSticker(item: $item,
-                                selected: selected == item.id && !done,
-                                done: done,
-                                accent: accent,
-                                onTap: { if !done { selected = item.id } },
-                                onDelete: {
-                                    items.removeAll { $0.id == item.id }
-                                    selected = nil
-                                },
-                                onLong: {
-                                    if done { withAnimation(.easeOut(duration: 0.2)) { done = false } }
-                                })
-                }
-
-                if !done {
+                if !board.done {
                     VStack {
                         Spacer()
-                        tray(center: CGPoint(x: g.size.width / 2, y: g.size.height * 0.4))
+                        tray(center: center)
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-
                 if hint {
                     VStack {
                         Text("可以截图了 · 长按任意一个表情回到编辑")
@@ -70,14 +117,15 @@ struct ChatMaskLayer: View {
                 }
             }
         }
-        .animation(.easeOut(duration: 0.2), value: done)
+        .animation(.easeOut(duration: 0.2), value: board.done)
         .animation(.easeOut(duration: 0.25), value: hint)
     }
 
     private func tray(center: CGPoint) -> some View {
         VStack(spacing: 10) {
             HStack {
-                Text(items.isEmpty ? "点一个表情贴上去，拖动换位置，两指缩放旋转" : "选中的表情右上角 × 可以撕掉")
+                Text(board.items.isEmpty ? "点一个表情贴上去，拖动换位置，拉右下角的圆点缩放，两指旋转"
+                                         : "表情跟着聊天一起滚 · 选中的右上角 × 可以撕掉")
                     .font(.app(11.5))
                     .foregroundStyle(Theme.textMuted(scheme))
                 Spacer()
@@ -86,11 +134,7 @@ struct ChatMaskLayer: View {
                 HStack(spacing: 10) {
                     ForEach(palette) { s in
                         Button {
-                            // 一张一张往下错开一点，不全叠在正中间
-                            let k = CGFloat(items.count % 5)
-                            let item = Item(sticker: s, pos: CGPoint(x: center.x + k * 14, y: center.y + k * 18))
-                            items.append(item)
-                            selected = item.id
+                            board.add(s, atScreen: center)
                         } label: {
                             StickerImage(sticker: s, size: 52)
                                 .frame(width: 56, height: 56)
@@ -106,9 +150,7 @@ struct ChatMaskLayer: View {
                 }
             }
             HStack(spacing: 10) {
-                Button {
-                    onExit()
-                } label: {
+                Button { onExit() } label: {
                     Text("退出")
                         .font(.app(14))
                         .foregroundStyle(Theme.textMuted(scheme))
@@ -117,8 +159,8 @@ struct ChatMaskLayer: View {
                 }
                 .buttonStyle(.plain)
                 Button {
-                    items.removeAll()
-                    selected = nil
+                    board.items.removeAll()
+                    board.selected = nil
                 } label: {
                     Text("清空")
                         .font(.app(14))
@@ -127,10 +169,10 @@ struct ChatMaskLayer: View {
                         .padding(.vertical, 10)
                 }
                 .buttonStyle(.plain)
-                .disabled(items.isEmpty)
+                .disabled(board.items.isEmpty)
                 Button {
-                    selected = nil
-                    done = true
+                    board.selected = nil
+                    board.done = true
                     hint = true
                     Task { @MainActor in
                         try? await Task.sleep(nanoseconds: 2_200_000_000)
@@ -153,9 +195,9 @@ struct ChatMaskLayer: View {
     }
 }
 
-/// 贴上去的一张：拖、两指缩放旋转、选中时虚线框和 ×
+/// 贴上去的一张：拖着走、拉右下角圆点缩放、两指捏合缩放旋转
 private struct MaskSticker: View {
-    @Binding var item: ChatMaskLayer.Item
+    @Binding var item: MaskBoard.Item
     let selected: Bool
     let done: Bool
     let accent: Color
@@ -166,67 +208,88 @@ private struct MaskSticker: View {
     @State private var drag: CGSize = .zero
     @State private var pinch: CGFloat = 1
     @State private var turn: Angle = .zero
+    @State private var grow: CGFloat = 0
+
+    private var side: CGFloat { min(480, max(30, item.size * pinch + grow)) }
 
     var body: some View {
-        let side = min(420, max(30, item.size * pinch))
-        ZStack {
-            Rectangle().fill(Color.white.opacity(0.001))
-            StickerImage(sticker: item.sticker, size: side)
-        }
-        .frame(width: side, height: side)
-        .overlay {
-            if selected {
-                RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(accent, style: StrokeStyle(lineWidth: 1.2, dash: [5, 4]))
+        Image(uiImage: item.image)
+            .resizable()
+            .scaledToFit()
+            .frame(width: side, height: side)
+            .contentShape(Rectangle())
+            .overlay {
+                if selected {
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(accent, style: StrokeStyle(lineWidth: 1.2, dash: [5, 4]))
+                }
             }
-        }
-        .overlay(alignment: .topTrailing) {
-            if selected {
-                Button(action: onDelete) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundStyle(Color.white, accent)
+            .overlay(alignment: .topTrailing) {
+                if selected {
+                    Button(action: onDelete) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(Color.white, accent)
+                    }
+                    .buttonStyle(.plain)
+                    .offset(x: 11, y: -11)
                 }
-                .buttonStyle(.plain)
-                .offset(x: 10, y: -10)
             }
-        }
-        .rotationEffect(item.angle + turn)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onTap)
-        .onLongPressGesture(minimumDuration: 0.5, perform: onLong)
-        .gesture(
-            DragGesture(minimumDistance: 2)
-                .onChanged { v in
-                    guard !done else { return }
-                    onTap()
-                    drag = v.translation
+            .overlay(alignment: .bottomTrailing) {
+                if selected {
+                    // 拉这个圆点放大缩小
+                    Circle()
+                        .fill(accent)
+                        .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                        .frame(width: 22, height: 22)
+                        .offset(x: 11, y: 11)
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { v in grow = (v.translation.width + v.translation.height) / 2 }
+                                .onEnded { _ in
+                                    item.size = min(480, max(30, item.size + grow))
+                                    grow = 0
+                                }
+                        )
                 }
-                .onEnded { v in
-                    guard !done else { return }
-                    item.pos.x += v.translation.width
-                    item.pos.y += v.translation.height
-                    drag = .zero
-                }
-        )
-        .simultaneousGesture(
-            MagnifyGesture()
-                .onChanged { v in if !done { pinch = v.magnification } }
-                .onEnded { v in
-                    guard !done else { return }
-                    item.size = min(420, max(30, item.size * v.magnification))
-                    pinch = 1
-                }
-        )
-        .simultaneousGesture(
-            RotateGesture()
-                .onChanged { v in if !done { turn = v.rotation } }
-                .onEnded { v in
-                    guard !done else { return }
-                    item.angle += v.rotation
-                    turn = .zero
-                }
-        )
-        .position(x: item.pos.x + drag.width, y: item.pos.y + drag.height)
+            }
+            .rotationEffect(item.angle + turn)
+            .onTapGesture(perform: onTap)
+            .onLongPressGesture(minimumDuration: 0.5, perform: onLong)
+            .gesture(
+                SimultaneousGesture(
+                    DragGesture(minimumDistance: 1)
+                        .onChanged { v in
+                            onTap()
+                            drag = v.translation
+                        }
+                        .onEnded { v in
+                            var t = Transaction()
+                            t.disablesAnimations = true
+                            withTransaction(t) {
+                                item.pos.x += v.translation.width
+                                item.pos.y += v.translation.height
+                                drag = .zero
+                            }
+                        },
+                    SimultaneousGesture(
+                        MagnifyGesture()
+                            .onChanged { v in pinch = v.magnification }
+                            .onEnded { v in
+                                item.size = min(480, max(30, item.size * v.magnification))
+                                pinch = 1
+                            },
+                        RotateGesture()
+                            .onChanged { v in turn = v.rotation }
+                            .onEnded { v in
+                                item.angle += v.rotation
+                                turn = .zero
+                            }
+                    )
+                ),
+                including: done ? .subviews : .all
+            )
+            .position(x: item.pos.x + drag.width, y: item.pos.y + drag.height)
+            .transaction { $0.animation = nil }
     }
 }

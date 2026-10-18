@@ -31,6 +31,15 @@ enum SharedKeychain {
 
     private static let service = "qi.shared"
 
+    /// 上一次读写的结果（0 = 成功），出问题时显示出来好查
+    nonisolated(unsafe) static var lastStatus: OSStatus = 0
+    /// 上一次用的钥匙串组
+    nonisolated(unsafe) static var lastGroup = ""
+    /// 一句话写清楚上一次卡在哪
+    static var diagnosis: String {
+        lastStatus == 0 ? "正常（\(lastGroup)）" : "代码 \(lastStatus) · 组 \(lastGroup.isEmpty ? "没拿到" : lastGroup)"
+    }
+
     /// 「团队号」前缀：存一条不指定组的，读回它落在哪个组
     private static func prefix() -> String? {
         let base: [String: Any] = [
@@ -49,6 +58,7 @@ enum SharedKeychain {
             add[kSecReturnAttributes as String] = true
             status = SecItemAdd(add as CFDictionary, &result)
         }
+        if status != errSecSuccess { lastStatus = status }
         guard status == errSecSuccess,
               let attrs = result as? [String: Any],
               let group = attrs[kSecAttrAccessGroup as String] as? String,
@@ -60,7 +70,9 @@ enum SharedKeychain {
 
     @discardableResult
     static func write(_ data: Data, key: String) -> Bool {
-        guard let group else { return false }
+        lastStatus = 0
+        guard let group else { lastGroup = ""; if lastStatus == 0 { lastStatus = -1 }; return false }
+        lastGroup = group
         let q: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -71,11 +83,14 @@ enum SharedKeychain {
         var add = q
         add[kSecValueData as String] = data
         add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
+        lastStatus = SecItemAdd(add as CFDictionary, nil)
+        return lastStatus == errSecSuccess
     }
 
     static func read(key: String) -> Data? {
-        guard let group else { return nil }
+        lastStatus = 0
+        guard let group else { lastGroup = ""; if lastStatus == 0 { lastStatus = -1 }; return nil }
+        lastGroup = group
         let q: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -84,7 +99,8 @@ enum SharedKeychain {
             kSecReturnData as String: true
         ]
         var result: CFTypeRef?
-        guard SecItemCopyMatching(q as CFDictionary, &result) == errSecSuccess else { return nil }
+        lastStatus = SecItemCopyMatching(q as CFDictionary, &result)
+        guard lastStatus == errSecSuccess else { return nil }
         return result as? Data
     }
 }

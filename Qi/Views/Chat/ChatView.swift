@@ -409,6 +409,7 @@ struct ChatView: View {
         .overlay {
             if masking {
                 ChatMaskLayer(accent: app.settings.accentColor) {
+                    MaskBoard.shared.reset()
                     withAnimation(.easeOut(duration: 0.2)) { masking = false }
                 }
                 .transition(.opacity)
@@ -962,6 +963,7 @@ struct ChatView: View {
                     }
                     // 截图前往聊天上贴表情盖住不想露的地方
                     Button("遮挡截图") {
+                        MaskBoard.shared.active = true
                         withAnimation(.easeOut(duration: 0.2)) { masking = true }
                     }
                     Button("取消", role: .cancel) {}
@@ -2063,6 +2065,10 @@ struct MessageListView: View {
                         }
                         return Color.clear
                     }
+                }
+                // 遮挡截图贴的表情：贴在内容上，跟着聊天一起滚（见 `ChatMaskLayer`）
+                .overlay(alignment: .topLeading) {
+                    MaskStickersOverlay(accent: app.settings.accentColor)
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 100)

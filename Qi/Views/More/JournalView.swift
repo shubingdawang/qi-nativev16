@@ -12,6 +12,7 @@ struct JournalView: View {
 
     @State private var opened: JournalPage?
     @State private var openedMonth: String?
+    @State private var pickingMonth = false
 
     private let columns = [GridItem(.flexible(), spacing: 22), GridItem(.flexible(), spacing: 22)]
 
@@ -24,20 +25,21 @@ struct JournalView: View {
         var id: String { key }
     }
 
-    /// 书架上的每一本。这个月就算还没写也摆一本空的在最前面
+    /// 书架上的每一本：写过的月份都在（页撕光了也还在，长按能收起来），
+    /// 这个月就算还没写也摆一本空的
     private var volumes: [Volume] {
-        let cal = Calendar.current
-        var out: [Volume] = store.byMonth.map { g in
-            let d = g.pages.first?.day ?? Date()
-            return Volume(key: g.month, year: cal.component(.year, from: d),
-                          month: cal.component(.month, from: d), pages: g.pages)
-        }
+        var keys = store.shelf
+        for g in store.byMonth where !keys.contains(g.month) { keys.append(g.month) }
         let nowKey = JournalPage(day: Date()).monthKey
-        if !out.contains(where: { $0.key == nowKey }) {
-            out.insert(Volume(key: nowKey, year: cal.component(.year, from: Date()),
-                              month: cal.component(.month, from: Date()), pages: []), at: 0)
+        if !keys.contains(nowKey) { keys.append(nowKey) }
+        let groups = Dictionary(uniqueKeysWithValues: store.byMonth.map { ($0.month, $0.pages) })
+        return keys.compactMap { k -> Volume? in
+            // 「2026 年 9 月」→ 2026, 9
+            let nums = k.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+            guard nums.count >= 2 else { return nil }
+            return Volume(key: k, year: nums[0], month: nums[1], pages: groups[k] ?? [])
         }
-        return out
+        .sorted { ($0.year, $0.month) > ($1.year, $1.month) }
     }
 
     private var years: [Int] {
@@ -69,12 +71,28 @@ struct JournalView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    opened = store.newPage()
+                Menu {
+                    Button {
+                        opened = store.newPage()
+                    } label: {
+                        Label("写今天这一页", systemImage: "square.and.pencil")
+                    }
+                    Button {
+                        pickingMonth = true
+                    } label: {
+                        Label("摆一本以前的月份", systemImage: "books.vertical")
+                    }
                 } label: {
                     Image(systemName: "plus")
                 }
             }
+        }
+        .sheet(isPresented: $pickingMonth) {
+            MonthPickSheet { d in
+                store.addVolume(JournalPage(day: d).monthKey)
+                pickingMonth = false
+            }
+            .presentationDetents([.height(320)])
         }
         .navigationDestination(item: $opened) { p in
             JournalPageView(page: p)
@@ -108,6 +126,13 @@ struct JournalView: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
+            if v.pages.isEmpty && v.key != JournalPage(day: Date()).monthKey {
+                Button(role: .destructive) {
+                    withAnimation(.easeOut(duration: 0.2)) { store.removeVolume(v.key) }
+                } label: {
+                    Label("收起这一本", systemImage: "archivebox")
+                }
+            }
             ForEach(NotebookStyle.all.indices, id: \.self) { i in
                 Button {
                     withAnimation(.easeOut(duration: 0.2)) { store.setCover(i, for: v.key) }
@@ -157,9 +182,14 @@ struct JournalMonthView: View {
         }
     }
 
-    private var monthNumber: Int {
-        pages.first.map { cal.component(.month, from: $0.day) } ?? cal.component(.month, from: Date())
+    /// 「2026 年 9 月」里的年和月
+    private var keyNums: (year: Int, month: Int) {
+        let n = monthKey.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+        let now = Date()
+        return n.count >= 2 ? (n[0], n[1]) : (cal.component(.year, from: now), cal.component(.month, from: now))
     }
+
+    private var monthNumber: Int { keyNums.month }
 
     private var paper: Color { scheme == .dark ? Color(hexString: "2A2622")! : Color(hexString: "FFFDF6")! }
     private var rule: Color { scheme == .dark ? Color.white.opacity(0.07) : Color(hexString: "ECE4D5")! }
@@ -240,7 +270,9 @@ struct JournalMonthView: View {
 
     /// 在这一本里新建：这个月就记在今天，以前的月份记在那个月最后一天
     private var newPageDay: Date {
-        guard let any = pages.first?.day, !cal.isDate(any, equalTo: Date(), toGranularity: .month),
+        let k = keyNums
+        guard let any = cal.date(from: DateComponents(year: k.year, month: k.month, day: 1)),
+              !cal.isDate(any, equalTo: Date(), toGranularity: .month),
               let range = cal.range(of: .day, in: .month, for: any),
               let first = cal.date(from: cal.dateComponents([.year, .month], from: any)),
               let last = cal.date(byAdding: .day, value: range.count - 1, to: first)
@@ -403,5 +435,43 @@ struct JournalThumb: View {
         }
         .scaleEffect(e.scale)
         .rotationEffect(.degrees(e.angle))
+    }
+}
+
+/// 挑一个月份（摆一本以前的手帐本用）
+struct MonthPickSheet: View {
+    let done: (Date) -> Void
+    @State private var year = Calendar.current.component(.year, from: Date())
+    @State private var month = Calendar.current.component(.month, from: Date())
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Text("摆哪个月的那一本")
+                .font(.app(15, weight: .semibold))
+                .padding(.top, 18)
+            HStack(spacing: 0) {
+                Picker("年", selection: $year) {
+                    ForEach((2020...Calendar.current.component(.year, from: Date())).reversed(), id: \.self) { y in
+                        Text("\(String(y)) 年").tag(y)
+                    }
+                }
+                .pickerStyle(.wheel)
+                Picker("月", selection: $month) {
+                    ForEach(1...12, id: \.self) { m in Text("\(m) 月").tag(m) }
+                }
+                .pickerStyle(.wheel)
+            }
+            .frame(height: 160)
+            Button {
+                if let d = Calendar.current.date(from: DateComponents(year: year, month: month, day: 1)) { done(d) }
+            } label: {
+                Text("摆上去")
+                    .font(.app(15, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+            }
+            .buttonStyle(.borderedProminent)
+            .padding(.horizontal, 24)
+        }
     }
 }

@@ -440,6 +440,15 @@ struct MessageBubbleView: View {
                         .padding(.vertical, 6)
                         .padding(.horizontal, 12)
                         .background(bubbleShape)
+                } else if !isUser, message.isEmptyContent {
+                    // 只想了、一句没说：留一小块，长按菜单、多选都挂得上
+                    Text("没说话")
+                        .font(.app(12))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 12)
+                        .background(Capsule().strokeBorder(Theme.textMuted(scheme).opacity(0.35),
+                                                           style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
                 }
 
                 // 改过的话，底下挂一个 ‹1/3› ——翻得回去看原来写的什么。

@@ -667,12 +667,33 @@ final class JournalStore: ObservableObject {
         didSet { if loaded { Storage.save(covers, to: "journal-covers.json") } }
     }
 
+    /// 书架上摆着的那几本（月份）。**一页都不剩了也还在**，她自己收起来才拿走
+    @Published private(set) var shelf: [String] = [] {
+        didSet { if loaded { Storage.save(shelf, to: "journal-shelf.json") } }
+    }
+
     private var loaded = false
 
     private init() {
         pages = Storage.load([JournalPage].self, from: "journal.json") ?? []
         covers = Storage.load([String: Int].self, from: "journal-covers.json") ?? [:]
+        var s = Storage.load([String].self, from: "journal-shelf.json") ?? []
+        for p in pages where !s.contains(p.monthKey) { s.append(p.monthKey) }
+        // 换过封面的那几本也是摆过的
+        for k in covers.keys where !s.contains(k) { s.append(k) }
+        shelf = s
         loaded = true
+    }
+
+    /// 摆一本以前月份的（空的也行）
+    func addVolume(_ month: String) {
+        if !shelf.contains(month) { shelf.append(month) }
+    }
+
+    /// 收起一本空的
+    func removeVolume(_ month: String) {
+        guard !pages.contains(where: { $0.monthKey == month }) else { return }
+        shelf.removeAll { $0 == month }
     }
 
     /// 某个月那本用哪种封面
@@ -699,6 +720,7 @@ final class JournalStore: ObservableObject {
         var p = JournalPage(day: day)
         p.paperHex = JournalKit.papers.randomElement()?.1 ?? "F3E9D8"
         pages.insert(p, at: 0)
+        if !shelf.contains(p.monthKey) { shelf.append(p.monthKey) }
         return p
     }
 
