@@ -498,18 +498,38 @@ def rainhood_sheet():
 
 # ══════════════════════════════════════════ 奶黄睡衣套装（雨衣当睡衣）
 
+def _along(path, step, offset=0.0, start=0.0):
+    """沿一条折线每隔 step 取一个点，再往外侧（朝帽子那边）挪 offset；返回 (x, y, 走到第几成)"""
+    pts = np.array(path)
+    seg = np.hypot(*(pts[1:] - pts[:-1]).T)
+    cum = np.concatenate([[0], np.cumsum(seg)])
+    out = []
+    d = start
+    while d <= cum[-1] + 1e-6:
+        i = min(np.searchsorted(cum, d, side="right") - 1, len(seg) - 1)
+        t = (d - cum[i]) / seg[i]
+        p = pts[i] + (pts[i + 1] - pts[i]) * t
+        tx, ty = (pts[i + 1] - pts[i]) / seg[i]
+        out.append((p[0] - ty * offset, p[1] + tx * offset, d / cum[-1]))
+        d += step(p[1]) if callable(step) else step
+    return out
+
+
 def knotcap(s):
     """荷叶边睡帽：大大软软的帽身鼓在头上，往左后方塌下去一块；满身小白点；
-    帽口一圈云朵似的大荷叶边；左边一个蝴蝶结，垂两条飘带。跟睡衣同一块布。
-    跟星星睡帽那顶（歪戴、长尖往一边耷拉、毛边、绒球）完全不同。"""
+    帽口一圈云朵似的大荷叶边，从额头一直绕到左边脸侧；收尾处系一个蝴蝶结，垂两条飘带。
+    跟睡衣同一块布。跟星星睡帽那顶（歪戴、长尖往一边耷拉、毛边、绒球）完全不同。"""
     yel, lt, dk, edge = "#F2C94C", "#F8DE82", "#D4A62A", "#9C7614"
     cream, cream_dk, cream_edge = "#FFF8E6", "#EADFC4", "#B8A988"
-    # 帽身：一整块，右边圆鼓鼓，左边塌下来一大块垂到耳朵边
-    body = Part(bez((13.7, 5.7), (14.6, 3.2), (11.6, 1.2), (8.2, 1.35)) +
-                bez((8.2, 1.35), (4.6, 1.5), (1.3, 2.4), (0.55, 4.6)) +
-                bez((0.55, 4.6), (-0.6, 6.0), (-0.7, 7.8), (-0.1, 8.5)) +
-                bez((-0.1, 8.5), (0.6, 9.1), (1.5, 8.0), (2.0, 6.0)) +
-                [(13.0, 5.8)])
+    # 帽口那条线：右边额角 → 额头 → 往左下绕到脸侧（荷叶边就沿着它排）
+    rim = [(13.6, 5.75)] + bez((12.0, 5.8), (6.0, 5.8), (3.2, 5.8), (2.4, 5.85), n=20)[1:] + \
+        bez((2.4, 5.85), (1.4, 5.95), (1.05, 6.6), (1.05, 7.55), n=24)[1:]
+    # 帽身：一整块。右边圆鼓鼓；左边塌下来，从荷叶边外面垂到脸侧，底下兜成一个软软的圆
+    body = Part(bez((13.75, 5.8), (14.7, 3.2), (11.6, 1.2), (8.2, 1.35)) +
+                bez((8.2, 1.35), (4.4, 1.5), (0.9, 2.5), (0.0, 4.7)) +
+                bez((0.0, 4.7), (-0.75, 6.3), (-0.85, 7.6), (-0.35, 8.25)) +
+                bez((-0.35, 8.25), (0.1, 8.7), (0.9, 8.6), (1.3, 7.9)) +
+                [(2.6, 6.2), (13.0, 6.2)])
     body.shade(yel, lt, dk, edge)
     plain = np.all(body.img == rgb(yel), axis=-1)
     # 小白点：错开排，整片布都撒满，边上被裁掉的也照样留
@@ -518,50 +538,56 @@ def knotcap(s):
     dx = ((SX - ox) / 1.0) % 1.0 - 0.5
     dy = ((SY - 0.2) / 0.95) % 1.0 - 0.5
     body.paint(plain & (dx * dx + dy * dy < 0.045), cream)
-    # 塌下来那一块的折痕：从帽顶斜着压到左边
+    # 塌下来那一块：从帽顶斜着压下来一道折痕，再在垂下去的地方收两道褶
     crease = np.zeros_like(body.m)
     for t in np.linspace(0, 1, 40):
-        crease |= near(6.0 - 5.0 * t, 2.0 + 4.3 * t * t, 0.07)
+        crease |= near(6.2 - 5.3 * t, 1.95 + 3.0 * t * t, 0.07)
+    for k, (x0, y0) in enumerate(((-0.25, 6.0), (0.2, 6.9))):
+        for t in np.linspace(0, 1, 16):
+            crease |= near(x0 + 0.35 * t, y0 + 1.0 * t, 0.06 - 0.03 * t)
     body.paint(crease, dk)
-    # 荷叶边下面压出来的一道阴影
-    body.paint((SY > 5.0) & (SX > 1.9), dk)
     body.on(s)
-    # 帽口：一圈大荷叶边。两排圆鼓包错开叠起来连成一整块（一条外轮廓），
-    # 里面只用浅浅的弧线分出一朵朵，像云
-    rows = ((4.85, 0.78, [2.3 + 1.6 * k for k in range(8)]),
-            (5.8, 0.82, [1.5 + 1.6 * k for k in range(9)]))
+    # 荷叶边：沿帽口两排圆鼓包错开叠起来，连成一整块（一条外轮廓），越往脸侧收尾越小一点
     puffs = []
-    for ri, (cy_, r_, xs) in enumerate(rows):
-        for i, x in enumerate(xs):
-            if x <= 14.0:
-                ry = r_ * (0.92 if i % 2 else 1.0)
-                puffs.append((ri, x, cy_, r_, ry, B.mask_of(ellipse_pts(x, cy_, r_, ry))))
+    for ri, (off, start) in enumerate(((0.95, 0.8), (0.0, 0.0))):
+        for x, y, f in _along(rim, lambda y: 1.6 if y < 6.1 else 0.95, off, start):
+            r_ = (0.8 if ri else 0.76) * (1.0 - 0.15 * max(0.0, f - 0.8) / 0.2)
+            ry = r_ * (0.92 if len(puffs) % 2 else 1.0)
+            puffs.append((ri, x, y, r_, ry, B.mask_of(ellipse_pts(x, y, r_, ry))))
     union = np.zeros_like(puffs[0][5])
     for p_ in puffs:
         union |= p_[5]
+    for x, y, _ in _along(rim, 0.15, 0.48):                           # 两排中间垫一条，鼓包之间不漏底
+        union |= near(x, y, 0.62)
     ruffle = Part(mask=union)
     ruffle.shade(cream, "#FFFFFF", cream_dk, cream_edge, lw=(3, 2), dw=(-4, -3))
-    for ri, x, cy_, r_, ry, m in puffs:
-        if ri == 1:                                                  # 前排每朵的上沿压在后排上
-            ring = m & ~B.shifted(m, 2, 0) & (SY < cy_ - 0.15)
-            ruffle.paint(ring, cream_dk)
-        ruffle.paint(near(x - 0.3, cy_ - 0.28, 0.15) & m, "#FFFFFF")  # 每朵左上一点高光
+    for ri, x, y, r_, ry, m in puffs:
+        if ri == 1:                                                  # 前排每朵的外沿压在后排上
+            ring = m & ~B.shifted(m, 2, 0) & (SY < y - 0.15)
+            ruffle.paint(ring & union, cream_dk)
+        ruffle.paint(near(x - 0.3, y - 0.28, 0.15) & m, "#FFFFFF")      # 每朵左上一点高光
     ruffle.on(s)
-    # 左边的蝴蝶结：两片圆翼 + 中间的结，同一块布
-    cx, cy = 0.9, 6.15
+    # 蝴蝶结：系在荷叶边收尾的地方。先垂两条带子（压在结下面），再两片鼓鼓的翼，最后中间的结
+    cx, cy = 1.0, 8.05
+    for side, (tx, ty) in ((-1, (-0.05, 10.05)), (1, (1.5, 10.3))):
+        a0 = (cx + side * 0.05 - 0.22, cy + 0.15)
+        a1 = (cx + side * 0.05 + 0.22, cy + 0.15)
+        tail = [a0, a1] + bez(a1, (a1[0] + side * 0.25, cy + 1.0), (tx + 0.3, ty - 0.9), (tx + 0.3, ty), n=12) + \
+            [(tx, ty - 0.3)] + bez((tx - 0.3, ty), (tx - 0.3, ty - 0.9), (a0[0] + side * 0.2, cy + 1.0), a0, n=12)
+        t = Part(tail).shade(yel, lt, dk, edge, lw=(2, 1), dw=(-3, -1))
+        t.paint(near(tx + side * 0.1, ty - 0.75, 0.16), dk)                 # 带子拧过来的那一下
+        t.on(s)
     for side in (-1, 1):
-        wing = bez((cx, cy), (cx + side * 0.45, cy - 1.25), (cx + side * 1.6, cy - 1.05), (cx + side * 1.5, cy - 0.1)) + \
-            bez((cx + side * 1.5, cy - 0.1), (cx + side * 1.4, cy + 0.8), (cx + side * 0.5, cy + 0.7), (cx, cy))
+        wing = bez((cx, cy - 0.15), (cx + side * 0.5, cy - 1.0), (cx + side * 1.35, cy - 0.95), (cx + side * 1.3, cy - 0.1)) + \
+            bez((cx + side * 1.3, cy - 0.1), (cx + side * 1.25, cy + 0.65), (cx + side * 0.5, cy + 0.6), (cx, cy + 0.15))
         w = Part(wing).shade(yel, lt, dk, edge)
-        w.paint((np.abs(SY - cy + 0.05) < 0.06) & (np.abs(SX - cx) > 0.45) & (np.abs(SX - cx) < 1.2), dk)
+        # 翼往结那边收拢出的两道褶
+        for k in (-0.22, 0.22):
+            w.paint((np.abs(SY - cy - k - (SX - cx) * side * 0.05) < 0.055) &
+                    (np.abs(SX - cx) > 0.4) & (np.abs(SX - cx) < 0.85), dk)
         w.on(s)
-    # 两条飘带垂到脸边，下端剪成燕尾
-    for pts in ([(cx - 0.2, cy + 0.2), (cx + 0.1, cy + 0.3), (cx - 0.35, cy + 3.0), (cx - 0.6, cy + 2.7),
-                 (cx - 0.9, cy + 3.05)],
-                [(cx + 0.05, cy + 0.3), (cx + 0.35, cy + 0.2), (cx + 0.75, cy + 3.3), (cx + 0.45, cy + 3.05),
-                 (cx + 0.2, cy + 3.35)]):
-        Part(pts).shade(yel, lt, dk, edge, lw=(2, 2), dw=(-3, -2)).on(s)
-    Part(ellipse_pts(cx, cy, 0.42, 0.38)).shade(dk, yel, edge, edge).on(s)
+    knot = Part(ellipse_pts(cx, cy, 0.34, 0.4))
+    knot.shade(yel, lt, dk, edge, lw=(2, 2), dw=(-2, -2)).on(s)
 
 
 def pomslippers(s):
