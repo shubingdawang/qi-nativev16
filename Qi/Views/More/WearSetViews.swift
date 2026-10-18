@@ -31,7 +31,7 @@ struct WearSetPreview: View {
                     ctx.fill(r(10, 8, 1, 2), with: .color(.black))
                 }
                 ForEach(ordered, id: \.self) { id in
-                    if let img = FurnitureArt.wornImage(of: id) {
+                    if let img = FurnitureCatalog.wornImage(of: id) {
                         Image(uiImage: img)
                             .resizable()
                             .interpolation(.none)
