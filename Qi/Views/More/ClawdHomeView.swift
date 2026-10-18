@@ -2493,6 +2493,20 @@ struct ClawdHomeView: View {
                     .font(.app(10))
                     .foregroundStyle(Theme.textMuted(scheme))
 
+                // 套装：整套一起买（九折，已经有的那件跳过）；每件也在下面「穿戴」里单卖
+                Text("套装")
+                    .font(.app(13, weight: .semibold))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Text("整套购买打九折，已拥有的单件自动跳过；每件也可在「穿戴」中单独购买、拆开搭配。")
+                    .font(.app(10))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3),
+                          spacing: 10) {
+                    ForEach(WearSet.all) { set in
+                        setItem(set)
+                    }
+                }
+
                 ForEach(FurnitureKind.Category.allCases) { cat in
                     let list = FurnitureCatalog.all.filter { $0.category == cat }
                     if !list.isEmpty {
@@ -2512,6 +2526,58 @@ struct ClawdHomeView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, Layout.tabBarExpanded + 12)
         }
+    }
+
+    /// 商店里的一套
+    private func setItem(_ set: WearSet) -> some View {
+        let have = set.pieces.filter { store.count(of: $0) > 0 }.count
+        let done = have == set.pieces.count
+        let cost = store.setCost(set)
+        let afford = done || store.coins >= cost
+        return Button {
+            if done {
+                toastShop("这一套已经集齐了")
+            } else if store.buySet(set) > 0 {
+                toastShop(set.title + "买到了，收进衣柜")
+            } else {
+                toastShop("币不够，再攒攒")
+            }
+        } label: {
+            VStack(spacing: 4) {
+                WearSetPreview(pieces: set.pieces)
+                    .frame(width: 64, height: 64)
+                Text(set.name)
+                    .font(.app(10))
+                    .foregroundStyle(Theme.textMain(scheme))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text(set.color)
+                    .font(.app(9))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                HStack(spacing: 3) {
+                    Circle().fill(HomePalette.amber).frame(width: 6, height: 6)
+                    Text("\(done ? set.price : cost)")
+                        .font(HomeType.number(10))
+                }
+                .foregroundStyle(afford ? Theme.textSoft(scheme) : Theme.textMuted(scheme).opacity(0.6))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .glassCard(padding: 0)
+            .overlay(alignment: .topTrailing) {
+                if have > 0 {
+                    Text(done ? "已集齐" : "已有 \(have)/\(set.pieces.count)")
+                        .font(.app(9))
+                        .foregroundStyle(StatusTone.done.color)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Theme.softFillDeep))
+                        .padding(5)
+                }
+            }
+            .opacity(afford ? 1 : 0.55)
+        }
+        .buttonStyle(.plain)
     }
 
     /// 商店里那一句，两秒后自己收起来

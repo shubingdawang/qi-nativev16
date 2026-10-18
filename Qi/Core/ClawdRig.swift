@@ -1000,6 +1000,50 @@ enum ClawdRig {
         }
     }
 
+    /// 新画的那批衣服（`scripts/wear_export.py` 生成）穿在哪儿。每种配色各一条
+    static let extraWearSlots: [String: WearSlot] = [
+        "nightcap": .head,
+        "nightcap_pink": .head,
+        "nightcap_sage": .head,
+        "star_pj": .outer,
+        "star_pj_pink": .outer,
+        "star_pj_sage": .outer,
+        "bear_slippers": .feet,
+        "knot_cap": .head,
+        "knot_cap_pink": .head,
+        "knot_cap_blue": .head,
+        "cream_pj": .outer,
+        "cream_pj_pink": .outer,
+        "cream_pj_blue": .outer,
+        "pom_slippers": .feet,
+        "pom_slippers_pink": .feet,
+        "pom_slippers_blue": .feet,
+        "ushanka": .head,
+        "puffer": .outer,
+        "puffer_mauve": .outer,
+        "puffer_blue": .outer,
+        "snow_boots": .feet,
+        "aviator": .head,
+        "aviator_black": .head,
+        "aviator_olive": .head,
+        "bomber": .outer,
+        "bomber_black": .outer,
+        "bomber_olive": .outer,
+        "avi_scarf": .scarf,
+        "flight_boots": .feet,
+        "flight_boots_black": .feet,
+        "flight_boots_olive": .feet,
+        "straw_hat": .head,
+        "cat_beanie": .head,
+        "flower_crown": .head,
+        "hair_bow": .head,
+        "bell_collar": .neck,
+        "wings": .back,
+        "rain_boots": .feet,
+        "rain_boots_pink": .feet,
+        "rain_boots_blue": .feet,
+    ]
+
     static func wearSlot(_ id: String) -> WearSlot {
         // 她自己做的：编号里写着位置（`cw_<位置>_<短号>`，见 `CustomWearStore`）
         if id.hasPrefix("cw_") {
@@ -1007,6 +1051,7 @@ enum ClawdRig {
             if parts.count >= 3, let s = WearSlot(rawValue: String(parts[1])) { return s }
             return .head
         }
+        if let s = extraWearSlots[id] { return s }
         switch id {
         case "hat", "beret", "cap", "headphones": return .head
         case "glasses", "sunglasses": return .face

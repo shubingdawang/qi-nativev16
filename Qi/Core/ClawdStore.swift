@@ -1618,6 +1618,28 @@ final class ClawdStore: ObservableObject {
         return batch.count
     }
 
+    /// 整套买：已经有的那件跳过，剩下几件加起来打九折。钱不够就一件都不买。返回买到几件
+    @discardableResult
+    func buySet(_ set: WearSet) -> Int {
+        let missing = set.pieces.filter { count(of: $0) == 0 }.compactMap { FurnitureCatalog.kind($0) }
+        guard !missing.isEmpty else { return 0 }
+        let cost = Int((Double(missing.reduce(0) { $0 + $1.price }) * 0.9).rounded())
+        guard coins >= cost else { return 0 }
+        let before = coins
+        // 一件件按原价走 buy（它会查钱够不够），先把原价垫上，买完再按九折结账
+        coins = before + missing.reduce(0) { $0 + $1.price }
+        var got = 0
+        for k in missing { got += buy(k) }
+        coins = before - cost
+        return got
+    }
+
+    /// 这一套还差的那几件，打九折是多少
+    func setCost(_ set: WearSet) -> Int {
+        let missing = set.pieces.filter { count(of: $0) == 0 }.compactMap { FurnitureCatalog.kind($0) }
+        return Int((Double(missing.reduce(0) { $0 + $1.price }) * 0.9).rounded())
+    }
+
     /// 这一种一共有几件
     func count(of kindID: String) -> Int {
         owned.reduce(0) { $0 + ($1.kind == kindID ? 1 : 0) }
