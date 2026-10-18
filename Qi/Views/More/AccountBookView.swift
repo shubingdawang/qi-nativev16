@@ -877,6 +877,9 @@ struct ExpenseEditor: View {
     @State private var saved = false
     @State private var managing = false
     @State private var confirmDelete = false
+    /// 拍小票
+    @State private var shooting = false
+    @State private var scanning = false
 
     static let remindPresets = [0, 1, 3, 7, 14, 30]
 
@@ -940,6 +943,7 @@ struct ExpenseEditor: View {
         .onChange(of: picked) { _, items in
             guard !items.isEmpty else { return }
             Task { @MainActor in
+                var first: UIImage?
                 for it in items {
                     guard e.images.count < Expense.maxImages,
                           let data = try? await it.loadTransferable(type: Data.self),
@@ -948,11 +952,29 @@ struct ExpenseEditor: View {
                     else { continue }
                     added.insert(name)
                     e.images.append(name)
+                    if first == nil { first = raw }
                 }
                 picked = []
+                // 还没填金额：挑的第一张当小票认一下
+                if amount <= 0, let first { await scan(first) }
             }
         }
         .sheet(isPresented: $managing) { CategoryManager(accent: accent) }
+        .fullScreenCover(isPresented: $shooting) {
+            CameraPicker { img in
+                shooting = false
+                guard let img else { return }
+                Task { @MainActor in
+                    if e.images.count < Expense.maxImages,
+                       let name = ImageStore.save(ImageStore.downscale(img, maxSide: 1600)) {
+                        added.insert(name)
+                        e.images.append(name)
+                    }
+                    await scan(img)
+                }
+            }
+            .ignoresSafeArea()
+        }
         .confirmationDialog("删掉这一笔？", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("删除", role: .destructive) {
                 book.delete(e.id)
@@ -1044,9 +1066,33 @@ struct ExpenseEditor: View {
 
     // MARK: 照片
 
+    /// 认小票：金额、店名空着才填，填过的不动
+    private func scan(_ img: UIImage) async {
+        scanning = true
+        let r = await ReceiptReader.read(img)
+        scanning = false
+        if amount <= 0, let v = r.amount { amountText = WageStore.money(v) }
+        if e.name.trimmingCharacters(in: .whitespaces).isEmpty, let m = r.merchant { e.name = m }
+    }
+
     private var photoSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("照片 \(e.images.count)/\(Expense.maxImages)").font(.app(12)).foregroundStyle(muted)
+            HStack {
+                Text("照片 \(e.images.count)/\(Expense.maxImages)").font(.app(12)).foregroundStyle(muted)
+                Spacer()
+                if scanning {
+                    ProgressView().controlSize(.small)
+                    Text("在认小票…").font(.app(11.5)).foregroundStyle(muted)
+                } else {
+                    Button { shooting = true } label: {
+                        Label("拍小票", systemImage: "doc.text.viewfinder")
+                            .font(.app(12, weight: .medium))
+                            .foregroundStyle(accent)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(e.images.count >= Expense.maxImages)
+                }
+            }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(e.images, id: \.self) { n in

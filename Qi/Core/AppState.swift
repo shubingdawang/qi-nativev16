@@ -2811,6 +2811,10 @@ final class AppState: ObservableObject {
             native += WageTools.definitions()
             // 记账页（看账、提一笔等她确认）。纯本机
             native += BookTools.definitions()
+            // 当下黑板和小窝百宝箱：只在絮语这边、跟她一对一的时候给
+            if conversation?.space == ChatSpace.chat.rawValue, conversation?.isGroup == false {
+                native += NowBoardTools.definitions()
+            }
             // 糖罐（看罐、吃、喂、图鉴、药效）。纯本机
             native += CandyTools.definitions()
             // 小岛（看地图、走、说、一起做事、摆东西）。纯本机
@@ -3785,6 +3789,8 @@ final class AppState: ObservableObject {
         case "wage_image":                    return "给一笔账挂了图"
         case "wage_move_day":                 return "把一天的记录挪了日期"
         case "book_entry":                    return "写了一笔账给她确认"
+        case "board":                         return "在黑板上记了一笔"
+        case "pantry":                        return "动了一下百宝箱"
         default:                              return nil
         }
     }
@@ -6222,6 +6228,10 @@ final class AppState: ObservableObject {
             return WageTools.run(name, args: args, recentImages: { self.recentUserImages() })
         }
 
+        if NowBoardTools.handles(name) {
+            return NowBoardTools.run(name, args: args)
+        }
+
         // 记账页：读直接给；记 / 改 / 删先弹卡片等她点头（见 `askBook`）
         if BookTools.handles(name) {
             if name == "read_book" { return BookTools.read(args) }
@@ -7231,6 +7241,11 @@ final class AppState: ObservableObject {
             guard book.chapters.indices.contains(idx) else {
                 return ("这本书只有 \(book.chapters.count) 章。", true)
             }
+            // 陪她读，不替她读：她还没翻到的章不给
+            if idx > book.chapterIndex {
+                return ("她还在第 \(book.chapterIndex + 1) 章，第 \(idx + 1) 章她还没读到，这一章先不给你。"
+                        + "等她读到了再一起看。", false)
+            }
             let ch = book.chapters[idx]
             let limit = max(500, min(20000, Int((args["limit"] as? NSNumber)?.intValue ?? 4000)))
             var out = "《\(book.title)》"
@@ -7263,9 +7278,21 @@ final class AppState: ObservableObject {
                     out += "\n（这一页的图读不出来了。）"
                 }
             } else {
-                out += String(ch.text.prefix(limit))
-                if ch.text.count > limit {
-                    out += "\n\n……这一章还有 \(ch.text.count - limit) 字（要往下读就把 limit 调大）"
+                // 她正读着的这一章：只给到她读到的地方（多给一屏的余量），后面的她还没看
+                var text = ch.text
+                var cutAtHer = false
+                if idx == book.chapterIndex, book.offset < 0.97 {
+                    let seen = Int(Double(text.count) * max(0, book.offset)) + 800
+                    if seen < text.count {
+                        text = String(text.prefix(seen))
+                        cutAtHer = true
+                    }
+                }
+                out += String(text.prefix(limit))
+                if text.count > limit {
+                    out += "\n\n……她读过的这部分还有 \(text.count - limit) 字（要往下读就把 limit 调大）"
+                } else if cutAtHer {
+                    out += "\n\n（她读到这儿。这一章后面的她还没读，你也先不知道。）"
                 }
             }
             // 距上次聊这本书多久。**不给这一句他会把三天前的讨论当成刚才**
@@ -9031,6 +9058,11 @@ final class AppState: ObservableObject {
         // 按她刚才这句话，从以前的聊天里翻出她说过的相关原话（见 `VoiceRecall`）
         if conv.space == ChatSpace.chat.rawValue, !conv.isGroup, let recall = voiceRecallBlock(for: conv) {
             sys += "\n\n" + recall
+        }
+
+        // 当下黑板和百宝箱：几个小时里有效的状态、家里还剩什么（见 `NowBoard`）
+        if conv.space == ChatSpace.chat.rawValue, !conv.isGroup, let board = NowBoard.shared.surface() {
+            sys += "\n\n" + board
         }
 
         // 主动性那一段**压在最后**，紧挨着历史消息。
