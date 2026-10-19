@@ -148,6 +148,7 @@ struct ReaderView: View {
         .onAppear {
             chapter = jumpTo?.chapterIndex ?? book?.chapterIndex ?? 0
             store.readingID = bookID
+            store.markOpened(bookID)
             startTick()
         }
         .onDisappear {

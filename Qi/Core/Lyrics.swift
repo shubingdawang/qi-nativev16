@@ -11,6 +11,8 @@ struct LyricLine: Identifiable, Hashable {
     /// 这一句从第几秒开始
     let at: Double
     let text: String
+    /// 这一句的翻译（网易云原文和译文时间戳一样，并成一句）
+    var translation = ""
 }
 
 enum Lyrics {
@@ -58,9 +60,21 @@ enum Lyrics {
             return plain.enumerated().map { LyricLine(index: $0.offset, at: 0, text: $0.element) }
         }
 
-        return out.sorted { $0.0 < $1.0 }
-            .enumerated()
-            .map { LyricLine(index: $0.offset, at: $0.element.0, text: $0.element.1) }
+        // 先按时间排，同一时间的按原来的先后（原文在前、译文在后）
+        let sorted = out.enumerated().sorted { a, b in
+            a.element.0 != b.element.0 ? a.element.0 < b.element.0 : a.offset < b.offset
+        }.map { $0.element }
+        var merged: [(Double, String, String)] = []
+        for (t, s) in sorted {
+            if let last = merged.last, abs(last.0 - t) < 0.01, last.2.isEmpty, last.1 != s {
+                merged[merged.count - 1].2 = s
+            } else {
+                merged.append((t, s, ""))
+            }
+        }
+        return merged.enumerated().map {
+            LyricLine(index: $0.offset, at: $0.element.0, text: $0.element.1, translation: $0.element.2)
+        }
     }
 
     /// `01:23.45` → 83.45

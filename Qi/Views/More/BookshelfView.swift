@@ -34,6 +34,10 @@ struct BookshelfView: View {
     @State private var newShelf = ""
     @State private var openShelf: String?
     @State private var jumpTo: Annotation?
+    /// 点了哪一本（书脊抽出来那一下之后翻开）
+    @State private var openBook: UUID?
+    /// 书架上书脊朝外还是封面朝外
+    @AppStorage("shelfLook") private var shelfLook = "spine"
 
     var body: some View {
         ZStack {
@@ -119,6 +123,9 @@ struct BookshelfView: View {
         .navigationDestination(item: $jumpTo) { a in
             ReaderView(bookID: a.bookID, jumpTo: a)
         }
+        .navigationDestination(item: $openBook) { id in
+            ReaderView(bookID: id)
+        }
     }
 
     // MARK: 书架那一栏
@@ -140,6 +147,26 @@ struct BookshelfView: View {
 
                 if names.isEmpty && loose.isEmpty && !busy {
                     empty
+                }
+
+                continueSection
+
+                if !(names.isEmpty && loose.isEmpty) {
+                    HStack {
+                        Text("书架 · \(store.books.filter { $0.progress < 0.005 }.count) 本没读")
+                            .font(.app(11))
+                            .tracking(2)
+                            .foregroundStyle(Theme.textMuted(scheme))
+                        Spacer()
+                        Button {
+                            withAnimation(.easeOut(duration: 0.2)) { shelfLook = shelfLook == "spine" ? "cover" : "spine" }
+                        } label: {
+                            ShelfChip(text: shelfLook == "spine" ? "书脊 · 换封面" : "封面 · 换书脊")
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, -10)
                 }
 
                 ForEach(names, id: \.self) { name in
@@ -234,14 +261,15 @@ struct BookshelfView: View {
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .bottom, spacing: 5) {
+                HStack(alignment: .bottom, spacing: shelfLook == "spine" ? 5 : 10) {
                     ForEach(books) { book in
-                        NavigationLink {
-                            ReaderView(bookID: book.id)
-                        } label: {
-                            spine(book)
+                        Group {
+                            if shelfLook == "spine" {
+                                ShelfSpineView(book: book) { openBook = book.id }
+                            } else {
+                                ShelfStandingCover(book: book) { openBook = book.id }
+                            }
                         }
-                        .buttonStyle(.plain)
                         .contextMenu { bookMenu(book) }
                     }
                     if books.isEmpty {
@@ -252,19 +280,133 @@ struct BookshelfView: View {
                     }
                 }
                 .padding(.horizontal, 18)
+                .padding(.top, 18)
             }
-            .frame(height: 132)
+            .frame(height: 150)
 
-            // 架子那块板
-            RoundedRectangle(cornerRadius: 2)
-                .fill(LinearGradient(
-                    colors: [Theme.textMuted(scheme).opacity(0.30),
-                             Theme.textMuted(scheme).opacity(0.14)],
-                    startPoint: .top, endPoint: .bottom))
-                .frame(height: 5)
+            ShelfBoard()
                 .padding(.horizontal, 14)
-                .shadow(color: .black.opacity(0.16), radius: 3, y: 2)
         }
+    }
+
+    // MARK: 接着读
+
+    @ViewBuilder
+    private var continueSection: some View {
+        let list = store.continueBooks
+        if let first = list.first {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("接着读")
+                    .font(.app(11))
+                    .tracking(2)
+                    .foregroundStyle(Theme.textMuted(scheme))
+                    .padding(.leading, 4)
+                continueCard(first)
+                ForEach(Array(list.dropFirst().prefix(2))) { b in
+                    Button { openBook = b.id } label: { miniRow(b) }
+                        .buttonStyle(.plain)
+                        .contextMenu { bookMenu(b) }
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private var aiName: String { app.settings.aiName.isEmpty ? "阿晏" : app.settings.aiName }
+
+    private func continueCard(_ b: Book) -> some View {
+        let marks = store.annotations.filter { $0.bookID == b.id }.sorted { $0.createdAt > $1.createdAt }
+        let tint = SpineTone.color(for: b)
+        return VStack(alignment: .leading, spacing: 10) {
+            Button { openBook = b.id } label: {
+                HStack(alignment: .top, spacing: 14) {
+                    BookCover(book: b)
+                        .frame(width: 74, height: 104)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("上次读到 · 第 \(b.chapterIndex + 1) 章")
+                            .font(.app(10))
+                            .tracking(1.5)
+                            .foregroundStyle(tint)
+                        Text(b.title)
+                            .font(.app(18, weight: .semibold, design: .serif))
+                            .foregroundStyle(Theme.textMain(scheme))
+                            .lineLimit(2)
+                        if !b.author.isEmpty {
+                            Text(b.author)
+                                .font(.app(11))
+                                .foregroundStyle(Theme.textMuted(scheme))
+                                .lineLimit(1)
+                        }
+                        HStack(spacing: 6) {
+                            ShelfChip(text: "读到 \(Int(b.progress * 100))%")
+                            if b.shared { ShelfChip(text: aiName + "跟着读") }
+                        }
+                        .padding(.top, 4)
+                        GeometryReader { g in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(Theme.softFillDeep)
+                                Capsule().fill(tint).frame(width: g.size.width * min(1, max(0.02, b.progress)))
+                            }
+                        }
+                        .frame(height: 4)
+                        .padding(.top, 4)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .contextMenu { bookMenu(b) }
+
+            if let m = marks.first {
+                Divider().opacity(0.4)
+                Button { jumpTo = m } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("“" + m.quote + "”")
+                            .font(.app(12.5, design: .serif))
+                            .foregroundStyle(Theme.textMain(scheme))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        Text(markByline(m) + (m.notes.contains { $0.author == aiName } ? " · " + aiName + "在旁边写了一句 ›" : ""))
+                            .font(.app(10))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .glassBackground(radius: 20, strength: app.settings.glassOpacity)
+    }
+
+    private func miniRow(_ b: Book) -> some View {
+        HStack(spacing: 10) {
+            BookCover(book: b)
+                .frame(width: 30, height: 42)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(b.title)
+                    .font(.app(13, weight: .semibold))
+                    .foregroundStyle(Theme.textMain(scheme))
+                    .lineLimit(1)
+                if !b.author.isEmpty {
+                    Text(b.author).font(.app(10)).foregroundStyle(Theme.textMuted(scheme)).lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+            ShelfChip(text: "\(Int(b.progress * 100))%")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .glassBackground(radius: 16, strength: app.settings.glassOpacity)
+    }
+
+    /// 「你划的 · 10/06」「阿晏划的 · 10/06」
+    private func markByline(_ m: Annotation) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "MM/dd"
+        return (m.author == aiName ? aiName + "划的" : "你划的") + " · " + f.string(from: m.createdAt)
     }
 
     /// 一本书的**脊**
@@ -342,43 +484,63 @@ struct BookshelfView: View {
 
     private func markCard(_ m: Annotation) -> some View {
         let book = store.book(m.bookID)
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 6) {
-                // 那支马克笔的颜色
-                Circle().fill(m.color.opacity(0.75)).frame(width: 8, height: 8)
-                Text(shelfCrumb(book))
+                Text((book.map { $0.title } ?? "（这本书已经不在了）") + " · 第 \(m.chapterIndex + 1) 章")
                     .font(.app(10))
-                    .foregroundStyle(Theme.textMuted(scheme))
+                    .tracking(1)
+                    .foregroundStyle(book.map { SpineTone.color(for: $0) } ?? Theme.textMuted(scheme))
+                    .lineLimit(1)
                 Spacer()
                 if m.discussed {
                     Image(systemName: "bubble.left.fill")
                         .font(.app(9))
                         .foregroundStyle(app.settings.accentColor.opacity(0.8))
                 }
-                Text(String(m.createdAt.formatted(.dateTime.month().day())))
-                    .font(.app(10))
-                    .foregroundStyle(Theme.textMuted(scheme))
             }
 
-            // 划过的那句，底下垫一层马克笔
+            // 划过的那句：底下半截垫一道马克笔，像真的用荧光笔划过
             Text(MD.inline(m.quote))
                 .font(.app(14, design: .serif))
                 .foregroundStyle(Theme.textMain(scheme))
+                .lineSpacing(5)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 3)
-                .background(m.color.opacity(0.28))
+                .background(alignment: .bottom) {
+                    m.color.opacity(0.32).frame(height: 9).offset(y: -2)
+                }
+
+            Text(markByline(m))
+                .font(.app(10))
+                .foregroundStyle(Theme.textMuted(scheme))
 
             ForEach(m.notes) { n in
-                Text("⤷ \(n.author)：\(n.text)")
-                    .font(.app(12))
-                    .foregroundStyle(Theme.textSoft(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                let his = n.author == aiName
+                HStack(alignment: .top, spacing: 8) {
+                    Circle()
+                        .fill(his ? app.settings.accentColor : Color(hexString: "E8B4BC") ?? .pink)
+                        .frame(width: 20, height: 20)
+                        .overlay {
+                            Text(String((his ? aiName : "你").prefix(1)))
+                                .font(.app(9, weight: .semibold))
+                                .foregroundStyle(.white)
+                        }
+                    Text(n.text)
+                        .font(.app(12))
+                        .foregroundStyle(Theme.textMain(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(UnevenRoundedRectangle(topLeadingRadius: 4, bottomLeadingRadius: 12,
+                                                           bottomTrailingRadius: 12, topTrailingRadius: 12,
+                                                           style: .continuous)
+                            .fill(Theme.softFillDeep))
+                    Spacer(minLength: 0)
+                }
             }
         }
-        .padding(13)
-        .glassBackground(radius: 16, strength: app.settings.glassOpacity)
+        .padding(14)
+        .glassBackground(radius: 20, strength: app.settings.glassOpacity)
     }
 
     /// 「小说 · 《活着》 · 第 3 章」这种面包屑，她说要「备注那个分类里的哪一本」
@@ -422,6 +584,20 @@ struct BookshelfView: View {
             }
         } label: {
             Label("移到书架", systemImage: "arrow.right.square")
+        }
+        Menu {
+            Button("从封面取") { store.setSpine(book.id, hex: "") }
+            ForEach(SpineTone.choices, id: \.self) { hex in
+                Button {
+                    store.setSpine(book.id, hex: hex)
+                } label: {
+                    Label(hex == book.spineHex ? "这一种（现在）" : "这一种",
+                          systemImage: "circle.fill")
+                }
+                .tint(Color(hexString: hex))
+            }
+        } label: {
+            Label("书脊颜色", systemImage: "paintpalette")
         }
         Button(role: .destructive) {
             store.remove(book.id)

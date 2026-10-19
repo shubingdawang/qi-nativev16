@@ -240,6 +240,29 @@ final class LibraryStore: ObservableObject {
         books[i].coverName = fileName
     }
 
+    /// 翻开了这本
+    func markOpened(_ id: UUID) {
+        guard let i = books.firstIndex(where: { $0.id == id }) else { return }
+        books[i].lastOpenedAt = Date()
+    }
+
+    /// 书脊颜色。空 = 从封面取
+    func setSpine(_ id: UUID, hex: String) {
+        guard let i = books.firstIndex(where: { $0.id == id }) else { return }
+        books[i].spineHex = hex
+    }
+
+    /// 书房顶上「接着读」那几本：翻开过的、读过一点的，最近的在前
+    var continueBooks: [Book] {
+        func last(_ b: Book) -> Date {
+            if let d = b.lastOpenedAt { return d }
+            if let k = b.readSeconds.keys.max(), let d = WageStore.date(k) { return d }
+            return .distantPast
+        }
+        return books.filter { $0.lastOpenedAt != nil || $0.progress > 0.005 }
+            .sorted { last($0) > last($1) }
+    }
+
     func toggleShared(_ id: UUID) {
         guard let i = books.firstIndex(where: { $0.id == id }) else { return }
         books[i].shared.toggle()

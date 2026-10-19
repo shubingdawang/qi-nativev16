@@ -182,6 +182,10 @@ struct MusicLibraryView: View {
                         .foregroundStyle(.orange)
                 }
 
+                if keyword.isEmpty && !library.playable.isEmpty {
+                    shelfTop
+                }
+
                 // ⚠️ 判空要用 `playable`。库里躺着二十几条音频已经没了的记录，
                 // `tracks.isEmpty` 是 false——于是「还没有歌」那段提示不出来，
                 // 她看到的是一页什么都没有的空白。
@@ -323,6 +327,124 @@ struct MusicLibraryView: View {
         }
         .fullScreenCover(isPresented: $showingLyrics) { NowPlayingView() }
 
+    }
+
+    // MARK: 最近在听、歌单
+
+    /// 最近在听：随手叠在桌上的几张封面；歌单：一张张 CD
+    private var shelfTop: some View {
+        let recent = Array(library.recent.prefix(5))
+        let totalPlays = library.plays.values.reduce(0, +)
+        return VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("最近在听")
+                    .font(.app(24, weight: .bold))
+                    .foregroundStyle(Theme.textMain(scheme))
+                Text("库里 \(library.playable.count) 首 · 一共听完过 \(totalPlays) 次")
+                    .font(.app(11))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+            if !recent.isEmpty {
+                HStack {
+                    Text("最近").font(.app(12)).foregroundStyle(Theme.textSoft(scheme))
+                    Spacer()
+                    Text("随手放在桌上的").font(.app(11)).foregroundStyle(Theme.textMuted(scheme))
+                }
+                // 几张封面歪歪地叠着，后放的压在上面
+                GeometryReader { g in
+                    let w = min(96, g.size.width / CGFloat(max(3, recent.count)) * 1.25)
+                    let step = recent.count > 1 ? (g.size.width - w) / CGFloat(recent.count - 1) : 0
+                    ZStack(alignment: .topLeading) {
+                        ForEach(Array(recent.enumerated().reversed()), id: \.element.id) { i, t in
+                            Button { player.toggle(t) } label: {
+                                TrackArtwork(track: t, side: w)
+                                    .frame(width: w, height: w)
+                                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                                    .shadow(color: .black.opacity(0.18), radius: 7, y: 6)
+                            }
+                            .buttonStyle(.plain)
+                            .rotationEffect(.degrees([-6, 5, -3, 7, -4][i % 5]))
+                            .offset(x: CGFloat(i) * step, y: CGFloat([0, 14, -4, 12, 2][i % 5]))
+                        }
+                    }
+                }
+                .frame(height: 124)
+            }
+            HStack {
+                Text("歌单").font(.app(12)).foregroundStyle(Theme.textSoft(scheme))
+                Spacer()
+            }
+            .padding(.top, 2)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)], spacing: 16) {
+                NavigationLink { PlayCountView() } label: {
+                    cdCase(title: "听得最多", sub: "\(library.mostPlayed.count) 首 · 按次数",
+                           art: library.mostPlayed.first?.0)
+                }
+                .buttonStyle(.plain)
+                ForEach(grouped.prefix(3), id: \.0) { name, list in
+                    Button {
+                        byArtist = true
+                        keyword = name
+                    } label: {
+                        cdCase(title: name, sub: "\(list.count) 首", art: list.first)
+                    }
+                    .buttonStyle(.plain)
+                }
+                NavigationLink { NeteaseAccountView() } label: {
+                    cdCase(title: "网易云歌单", sub: "登录后看", art: nil)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.bottom, 6)
+    }
+
+    /// 一张 CD：方方的透明壳子，里面一张碟，碟面是封面，中间一圈透明
+    private func cdCase(title: String, sub: String, art: Track?) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            GeometryReader { g in
+                let side = g.size.width
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(.white.opacity(scheme == .dark ? 0.08 : 0.6))
+                        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(.white.opacity(0.85), lineWidth: 1))
+                        .shadow(color: .black.opacity(0.10), radius: 8, y: 5)
+                    // 壳子左边那条铰链
+                    Rectangle().fill(.white.opacity(0.5)).frame(width: 5)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 6)
+                    Group {
+                        if let art {
+                            TrackArtwork(track: art, side: side * 0.8)
+                        } else {
+                            LinearGradient(colors: [app.settings.accentColor.opacity(0.7),
+                                                    app.settings.accentColor.opacity(0.3)],
+                                           startPoint: .topLeading, endPoint: .bottomTrailing)
+                        }
+                    }
+                    .frame(width: side * 0.8, height: side * 0.8)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(.white.opacity(0.5), lineWidth: 1))
+                    .overlay {
+                        // 中间那圈透明的孔
+                        Circle().fill(scheme == .dark ? Color.black.opacity(0.5) : Color(white: 0.94))
+                            .frame(width: side * 0.2, height: side * 0.2)
+                            .overlay(Circle().stroke(.white.opacity(0.7), lineWidth: side * 0.03))
+                    }
+                    .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                }
+            }
+            .aspectRatio(1.12, contentMode: .fit)
+            Text(title)
+                .font(.app(13, weight: .semibold))
+                .foregroundStyle(Theme.textMain(scheme))
+                .lineLimit(1)
+            Text(sub)
+                .font(.app(10))
+                .foregroundStyle(Theme.textMuted(scheme))
+                .lineLimit(1)
+        }
     }
 
     /// 正在放的那一条。整条都能点，进歌词页。

@@ -555,6 +555,7 @@ final class MusicPlayer: NSObject, ObservableObject {
 
     func start(_ track: Track) {
         stop()
+        MusicLibrary.shared.noteRecent(track.id)
 
         // 文件不在了就直说（备份没带上那些大文件）
         if !track.localName.isEmpty, !MusicStore.exists(track.localName) {
@@ -876,6 +877,21 @@ final class MusicLibrary: ObservableObject {
 
     func countPlay(_ id: UUID) {
         plays[id.uuidString, default: 0] += 1
+    }
+
+    /// 最近放过的几首（新的在前，最多 12 首）
+    @Published private(set) var recentIDs: [String] = Storage.load([String].self, from: "music-recent.json") ?? [] {
+        didSet { Storage.save(recentIDs, to: "music-recent.json") }
+    }
+
+    func noteRecent(_ id: UUID) {
+        var r = recentIDs.filter { $0 != id.uuidString }
+        r.insert(id.uuidString, at: 0)
+        recentIDs = Array(r.prefix(12))
+    }
+
+    var recent: [Track] {
+        recentIDs.compactMap { id in playable.first { $0.id.uuidString == id } }
     }
 
     func playCount(_ t: Track) -> Int { plays[t.id.uuidString] ?? 0 }

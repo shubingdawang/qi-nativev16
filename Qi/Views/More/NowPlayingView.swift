@@ -31,7 +31,7 @@ struct NowPlayingView: View {
 
     /// 唱片页还是歌词页（记住上次看的）
     @AppStorage("nowPlayingVinyl") private var vinyl = true
-    @AppStorage("vinylStyle") private var vinylStyle = VinylStyle.glass.rawValue
+    @AppStorage("vinylStyle") private var vinylStyle = VinylStyle.tint.rawValue
 
     var body: some View {
         ZStack {
@@ -43,6 +43,22 @@ struct NowPlayingView: View {
             // 本意是让歌词有个氛围，实际效果是：**壁纸被盖住了**，
             // 而没有封面的歌只剩一块灰方块杵在那儿——比没有还难看。
             // 现在直接让壁纸透上来，跟 App 其他页一致。
+            //
+            // 「彩胶」那一档例外：她挑的是那种从封面取色、磨砂、浅色的底（不是黑的）。
+            // 封面糊开铺满，再压一层很厚的白（深色模式压黑），颜色只剩一层淡淡的光
+            if vinylStyle == VinylStyle.tint.rawValue, let t = player.current {
+                GeometryReader { g in
+                    TrackArtwork(track: t, side: max(g.size.width, g.size.height))
+                        .frame(width: g.size.width, height: g.size.height)
+                        .blur(radius: 70)
+                        .saturation(1.3)
+                        .overlay((scheme == .dark ? Color.black : Color.white).opacity(scheme == .dark ? 0.45 : 0.42))
+                        .clipped()
+                }
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+                .transition(.opacity)
+            }
 
             VStack(spacing: 0) {
                 header
@@ -73,6 +89,13 @@ struct NowPlayingView: View {
                     Spacer(minLength: 0)
                 }
                 controls
+            }
+        }
+        // 她看过彩胶那版说好看：老用户也换过去一次（以后她自己切别的就不再动）
+        .onAppear {
+            if !UserDefaults.standard.bool(forKey: "vinylTint1") {
+                vinylStyle = VinylStyle.tint.rawValue
+                UserDefaults.standard.set(true, forKey: "vinylTint1")
             }
         }
         .sheet(isPresented: $editingLyrics) { lyricsEditor }
@@ -163,14 +186,27 @@ struct NowPlayingView: View {
         let now = line.index == player.currentLine
         let mark = player.current.flatMap { marks.mark(at: line.text, in: $0) }
 
-        HStack(spacing: 4) {
-            Text(line.text)
-                .font(.app(now ? 17 : 15, weight: now ? .semibold : .regular))
-                .foregroundStyle(now ? Theme.textMain(scheme) : Theme.textMuted(scheme))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 3)
-                // 划过的垫一层马克笔（半透明，字还看得见）
-                .background(mark?.color.opacity(0.28) ?? .clear)
+        // 离正在唱的那句越远越淡
+        let gap = player.currentLine.map { abs($0 - line.index) } ?? 2
+        let fade = now ? 1 : max(0.16, 0.5 - Double(gap - 1) * 0.12)
+        HStack(alignment: .top, spacing: 4) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(line.text)
+                    .font(.app(now ? 23 : 19, weight: now ? .bold : .semibold))
+                    .foregroundStyle(Theme.textMain(scheme).opacity(fade))
+                    .multilineTextAlignment(.leading)
+                    .padding(.horizontal, 3)
+                    // 划过的垫一层马克笔（半透明，字还看得见）
+                    .background(mark?.color.opacity(0.28) ?? .clear)
+                if !line.translation.isEmpty {
+                    Text(line.translation)
+                        .font(.app(now ? 13 : 12))
+                        .foregroundStyle(Theme.textMain(scheme).opacity(now ? 0.72 : fade * 0.85))
+                        .multilineTextAlignment(.leading)
+                        .padding(.horizontal, 3)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             // 聊过的挂个小气泡，点开看当时说了什么
             if let mark, mark.discussed {
@@ -218,7 +254,7 @@ struct NowPlayingView: View {
     private var lyrics: some View {
         ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 16) {
+                LazyVStack(alignment: .leading, spacing: 22) {
                     // 上下各垫一段，第一句和最后一句也能滚到屏幕正中
                     Color.clear.frame(height: 90)
                     ForEach(player.lines) { line in
@@ -256,6 +292,17 @@ struct NowPlayingView: View {
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                         .lineLimit(1)
+                    // 唱片页底下带一句正在唱的
+                    if vinyl, let i = player.currentLine, i < player.lines.count {
+                        Text(player.lines[i].text)
+                            .font(.app(12.5))
+                            .foregroundStyle(Theme.textSoft(scheme))
+                            .lineLimit(1)
+                            .padding(.top, 4)
+                            .id(i)
+                            .transition(.opacity)
+                            .animation(.easeOut(duration: 0.3), value: i)
+                    }
                 }
             }
 

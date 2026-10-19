@@ -47,6 +47,10 @@ struct Book: Codable, Identifiable, Hashable {
     /// 阅读器开着的时候一分钟记一笔（出处：tasogare 的阅读时长打点）。
     /// 他因此答得出「今天读了多久」——那是她今天真的花掉的时间。
     var readSeconds: [String: Int] = [:]
+    /// 上一次翻开是什么时候（书房顶上「接着读」按它排）
+    var lastOpenedAt: Date? = nil
+    /// 她自己挑的书脊颜色。空 = 从封面取
+    var spineHex: String = ""
 
     /// 没封面的时候，书名怎么在书脊/封面上摆
     var coverTitle: String {
@@ -84,6 +88,8 @@ struct Book: Codable, Identifiable, Hashable {
         readMode = (try? c.decodeIfPresent(String.self, forKey: .readMode)) ?? ""
         lastTalkedAt = try? c.decodeIfPresent(Date.self, forKey: .lastTalkedAt)
         readSeconds = (try? c.decodeIfPresent([String: Int].self, forKey: .readSeconds)) ?? [:]
+        lastOpenedAt = try? c.decodeIfPresent(Date.self, forKey: .lastOpenedAt)
+        spineHex = (try? c.decodeIfPresent(String.self, forKey: .spineHex)) ?? ""
     }
 
     init(id: UUID = UUID(), title: String = "", author: String = "",

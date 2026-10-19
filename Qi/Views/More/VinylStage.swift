@@ -6,10 +6,11 @@ import SwiftUI
 /// 小螃蟹的位置她自己摆：点一下解锁（虚线圈起来），拖到想放的地方，双击锁住。
 /// 每种样子各记一份位置。
 enum VinylStyle: String, CaseIterable, Identifiable {
-    case glass, minimal, sleeve
+    case tint, glass, minimal, sleeve
     var id: String { rawValue }
     var label: String {
         switch self {
+        case .tint: return "彩胶"
         case .glass: return "毛玻璃"
         case .minimal: return "极简"
         case .sleeve: return "唱片套"
@@ -23,7 +24,7 @@ struct VinylStage: View {
     let playing: Bool
 
     @EnvironmentObject private var app: AppState
-    @AppStorage("vinylStyle") private var styleRaw = VinylStyle.glass.rawValue
+    @AppStorage("vinylStyle") private var styleRaw = VinylStyle.tint.rawValue
     @AppStorage("vinylBand") private var bandRaw = ""
     /// 一起听了多久（放歌的时候记，见 `MusicPlayer`），一直累加
     @AppStorage("listenTotalSeconds") private var listenSeconds = 0.0
@@ -34,7 +35,7 @@ struct VinylStage: View {
     @State private var unlocked: Set<String> = []
     @State private var tick: Task<Void, Never>?
 
-    private var style: VinylStyle { VinylStyle(rawValue: styleRaw) ?? .glass }
+    private var style: VinylStyle { VinylStyle(rawValue: styleRaw) ?? .tint }
 
     /// 乐队：哪只、播哪段动图
     struct Member: Identifiable {
@@ -51,6 +52,10 @@ struct VinylStage: View {
     /// 默认站位（占舞台宽高的比例）
     private func defaults(_ s: VinylStyle) -> [String: CGPoint] {
         switch s {
+        case .tint:
+            return ["listening": .init(x: 0.12, y: 0.82), "piano": .init(x: 0.88, y: 0.84),
+                    "guitar": .init(x: 0.3, y: 0.94), "singing": .init(x: 0.52, y: 0.95),
+                    "dancing": .init(x: 0.72, y: 0.94)]
         case .glass:
             return ["listening": .init(x: 0.5, y: 0.1), "piano": .init(x: 0.84, y: 0.68),
                     "guitar": .init(x: 0.14, y: 0.7), "singing": .init(x: 0.38, y: 0.9),
@@ -255,9 +260,26 @@ struct VinylStage: View {
     /// 唱片：封面做成一张大贴纸，占唱片大半；外面只留一圈细纹。
     /// 反光不在这里画——它不跟着转（见 `record` 里的 `gloss`）
     private func disc(d: CGFloat) -> some View {
-        let label = d * 0.66
+        let label = d * (style == .tint ? 0.36 : 0.66)
         ZStack {
             switch style {
+            case .tint:
+                // 彩胶：拿封面糊开当唱片本身的颜色，半透明，透出后面的底；中间贴一小张封面
+                Circle().fill(.ultraThinMaterial)
+                if let t = track {
+                    TrackArtwork(track: t, side: d)
+                        .frame(width: d, height: d)
+                        .blur(radius: d * 0.07)
+                        .saturation(1.25)
+                        .opacity(0.72)
+                        .clipShape(Circle())
+                }
+                Circle().fill(.white.opacity(scheme == .dark ? 0.04 : 0.14))
+                grooves(d: d, color: .white.opacity(0.28))
+                Circle().stroke(.white.opacity(0.65), lineWidth: 1)
+                // 贴纸外面一圈亮一点的空槽
+                Circle().stroke(.white.opacity(0.35), lineWidth: d * 0.035)
+                    .frame(width: label + d * 0.07, height: label + d * 0.07)
             case .glass:
                 // 真的毛玻璃：透出后面的壁纸，只压一层很淡的白，跟背景融在一起
                 Circle().fill(.ultraThinMaterial)
@@ -318,7 +340,7 @@ struct VinylStage: View {
         let text = Array((title.isEmpty ? "TOGETHER" : title) + " · SIDE A · " + Self.dayFormat.string(from: Date()) + " · ")
         let color: Color = {
             switch style {
-            case .glass: return Color(hexString: "A0708A")!
+            case .tint, .glass: return Color(hexString: "A0708A")!
             case .minimal: return Color(hexString: "A39D97")!
             case .sleeve: return Color(hexString: "FFECE0")!.opacity(0.75)
             }
