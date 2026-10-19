@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import UIKit
 
 // ⚠️ 这个文件在 `Qi/Core/` 和 `QiIsland/` 里**各有一份，内容一样**，改一份就要同步改另一份。
 //
@@ -35,9 +36,34 @@ enum SharedKeychain {
     nonisolated(unsafe) static var lastStatus: OSStatus = 0
     /// 上一次用的钥匙串组
     nonisolated(unsafe) static var lastGroup = ""
+    /// 钥匙串不通的时候走的那条备用路：同一个开发者的私有剪贴板（不是系统那个大剪贴板，别的 App 看不见）
+    nonisolated(unsafe) static var lastBoard = ""
     /// 一句话写清楚上一次卡在哪
     static var diagnosis: String {
-        lastStatus == 0 ? "正常（\(lastGroup)）" : "代码 \(lastStatus) · 组 \(lastGroup.isEmpty ? "没拿到" : lastGroup)"
+        let key = lastStatus == 0 ? "钥匙串正常" : "钥匙串代码 \(lastStatus)"
+        return lastBoard.isEmpty ? key + " · 组 \(lastGroup.isEmpty ? "没拿到" : lastGroup)" : key + " · " + lastBoard
+    }
+
+    private static let boardName = "qi.shared.book"
+    private static let boardType = "qi.book.snapshot"
+
+    private static func boardWrite(_ data: Data, key: String) {
+        guard let b = UIPasteboard(name: UIPasteboard.Name(boardName + "." + key), create: true) else {
+            lastBoard = "备用路建不起来"
+            return
+        }
+        b.setData(data, forPasteboardType: boardType)
+        lastBoard = "备用路已写"
+    }
+
+    private static func boardRead(key: String) -> Data? {
+        guard let b = UIPasteboard(name: UIPasteboard.Name(boardName + "." + key), create: false) else {
+            lastBoard = "备用路没找到"
+            return nil
+        }
+        let d = b.data(forPasteboardType: boardType)
+        lastBoard = d == nil ? "备用路是空的" : "走的备用路"
+        return d
     }
 
     /// 「团队号」前缀：存一条不指定组的，读回它落在哪个组
@@ -71,7 +97,9 @@ enum SharedKeychain {
     @discardableResult
     static func write(_ data: Data, key: String) -> Bool {
         lastStatus = 0
-        guard let group else { lastGroup = ""; if lastStatus == 0 { lastStatus = -1 }; return false }
+        // 两条路都写：钥匙串不通（签名不带共享权限，代码 -34018）的时候小组件读备用那条
+        boardWrite(data, key: key)
+        guard let group else { lastGroup = ""; if lastStatus == 0 { lastStatus = -1 }; return lastBoard == "备用路已写" }
         lastGroup = group
         let q: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -84,12 +112,13 @@ enum SharedKeychain {
         add[kSecValueData as String] = data
         add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
         lastStatus = SecItemAdd(add as CFDictionary, nil)
-        return lastStatus == errSecSuccess
+        return lastStatus == errSecSuccess || lastBoard == "备用路已写"
     }
 
     static func read(key: String) -> Data? {
         lastStatus = 0
-        guard let group else { lastGroup = ""; if lastStatus == 0 { lastStatus = -1 }; return nil }
+        lastBoard = ""
+        guard let group else { lastGroup = ""; if lastStatus == 0 { lastStatus = -1 }; return boardRead(key: key) }
         lastGroup = group
         let q: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -100,7 +129,7 @@ enum SharedKeychain {
         ]
         var result: CFTypeRef?
         lastStatus = SecItemCopyMatching(q as CFDictionary, &result)
-        guard lastStatus == errSecSuccess else { return nil }
+        guard lastStatus == errSecSuccess else { return boardRead(key: key) }
         return result as? Data
     }
 }

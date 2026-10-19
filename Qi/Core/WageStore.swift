@@ -279,6 +279,20 @@ struct WageRoster: Codable, Hashable, Identifiable {
     var days: Int
     var image: String
     var addedAt = Date()
+    /// 收在抽屉里（换下来的旧班表）。收着的不在日历上算
+    var stashed = false
+}
+
+extension WageRoster {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
+        start = (try? c.decodeIfPresent(String.self, forKey: .start)) ?? ""
+        days = (try? c.decodeIfPresent(Int.self, forKey: .days)) ?? 1
+        image = (try? c.decodeIfPresent(String.self, forKey: .image)) ?? ""
+        addedAt = (try? c.decodeIfPresent(Date.self, forKey: .addedAt)) ?? Date()
+        stashed = (try? c.decodeIfPresent(Bool.self, forKey: .stashed)) ?? false
+    }
 }
 
 /// 设置：时薪 + 每个班各自的默认排法 + 她自己加的班 + 发薪日 + 纪念日。
@@ -490,7 +504,8 @@ final class WageStore: ObservableObject {
         let cal = gregorian
         let day = cal.startOfDay(for: d)
         return file.rosters.filter { r in
-            guard let s = Self.date(r.start), let e = cal.date(byAdding: .day, value: r.days, to: s) else { return false }
+            guard !r.stashed, let s = Self.date(r.start),
+                  let e = cal.date(byAdding: .day, value: r.days, to: s) else { return false }
             return day >= s && day < e
         }
         .max { $0.addedAt < $1.addedAt }
@@ -502,10 +517,62 @@ final class WageStore: ObservableObject {
         guard let m0 = cal.date(from: cal.dateComponents([.year, .month], from: month)),
               let m1 = cal.date(byAdding: .month, value: 1, to: m0) else { return [] }
         return file.rosters.filter { r in
-            guard let s = Self.date(r.start), let e = cal.date(byAdding: .day, value: r.days, to: s) else { return false }
+            guard !r.stashed, let s = Self.date(r.start),
+                  let e = cal.date(byAdding: .day, value: r.days, to: s) else { return false }
             return s < m1 && e > m0
         }
         .sorted { $0.start < $1.start }
+    }
+
+    /// 抽屉里那几张，新换下来的在前
+    var stashedRosters: [WageRoster] {
+        file.rosters.filter(\.stashed).sorted { $0.addedAt > $1.addedAt }
+    }
+
+    /// 班表临时换了：旧的收进抽屉，新的这张管同样那几天
+    func replaceRoster(_ id: UUID, with image: String) {
+        guard let i = file.rosters.firstIndex(where: { $0.id == id }) else { return }
+        var f = file
+        f.rosters[i].stashed = true
+        f.rosters[i].addedAt = Date()
+        let old = f.rosters[i]
+        f.rosters.append(WageRoster(start: old.start, days: old.days, image: image))
+        file = f
+    }
+
+    /// 从抽屉里放出来：外面管着同样那几天的班表换进抽屉
+    func unstashRoster(_ id: UUID) {
+        guard let i = file.rosters.firstIndex(where: { $0.id == id }) else { return }
+        let cal = gregorian
+        var f = file
+        let r = f.rosters[i]
+        guard let s = Self.date(r.start), let e = cal.date(byAdding: .day, value: r.days, to: s) else { return }
+        for j in f.rosters.indices where j != i && !f.rosters[j].stashed {
+            guard let s2 = Self.date(f.rosters[j].start),
+                  let e2 = cal.date(byAdding: .day, value: f.rosters[j].days, to: s2) else { continue }
+            if s2 < e && e2 > s {
+                f.rosters[j].stashed = true
+                f.rosters[j].addedAt = Date()
+            }
+        }
+        f.rosters[i].stashed = false
+        f.rosters[i].addedAt = Date()
+        file = f
+    }
+
+    /// 这个月干的活实际到手多少：下个月那几个发薪日记下的实发加起来（还没记的不算）
+    func actualPay(forWorkMonth m: Date) -> (sum: Double, recorded: Int, paydays: Int) {
+        let cal = gregorian
+        guard let m0 = cal.date(from: cal.dateComponents([.year, .month], from: m)),
+              let next = cal.date(byAdding: .month, value: 1, to: m0),
+              let range = cal.range(of: .day, in: .month, for: next) else { return (0, 0, 0) }
+        var sum = 0.0, rec = 0, all = 0
+        for d in range {
+            guard let day = cal.date(byAdding: .day, value: d - 1, to: next), isPayday(day) else { continue }
+            all += 1
+            if let a = payRecord(on: day)?.actual { sum += a; rec += 1 }
+        }
+        return (sum, rec, all)
     }
 
     func addRoster(start: Date, days: Int, image: String) {

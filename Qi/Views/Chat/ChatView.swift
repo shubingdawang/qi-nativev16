@@ -69,6 +69,15 @@ struct ChatView: View {
 
     /// 把手里这份存回 `AppState`，再把新那段对话的取出来。
     /// 只在换窗口/离开页面的时候调，一次打字过程里一次都不会走到。
+    /// 小组件点进来要开的那一页（只由主聊天那一窗接）
+    private func openPendingSideMenu() {
+        guard space == .chat, let id = app.pendingSideMenu,
+              let item = SideMenuItem.all.first(where: { $0.id == id }) else { return }
+        app.pendingSideMenu = nil
+        panel = nil
+        destination = item
+    }
+
     private func syncDraft(to key: UUID) {
         if let owner = draftOwner, owner != key {
             if draftText.isEmpty { app.drafts[owner] = nil }
@@ -418,6 +427,7 @@ struct ChatView: View {
         .onAppear {
             app.ensureActive(in: space)
             if space == .chat { app.isChatVisible = true }
+            openPendingSideMenu()
             // 把这段对话上次没打完的那半句取回来
             syncDraft(to: draftKey)
         }
@@ -465,6 +475,7 @@ struct ChatView: View {
         }
         // 她在书房点了句子边上那个小气泡 → 跳回当时聊的那几句。
         // 书房是从 sheet 里起的，所以先把 sheet 关掉再滚。
+        .onChange(of: app.pendingSideMenu) { _, _ in openPendingSideMenu() }
         .onChange(of: app.pendingChatJump?.message) { _, msgID in
             guard let msgID, let want = app.pendingChatJump,
                   want.conversation == activeConversation?.id else { return }

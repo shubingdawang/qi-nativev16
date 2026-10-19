@@ -36,6 +36,14 @@ struct QiApp: App {
                 // 不需要文档选择器那份沙盒授权——
                 // 而她那台机器上，卡住的正是那份授权（见 `BackupInbox`）。
                 .onOpenURL { url in
+                    // 小组件点进来：qiapp://book → 记账那页
+                    if url.scheme == "qiapp" {
+                        if url.host == "book" {
+                            UserDefaults.standard.set(1, forKey: "wageHub.tab")
+                            app.pendingSideMenu = "wage"
+                        }
+                        return
+                    }
                     BackupInbox.shared.take(url)
                 }
                 .onAppear {

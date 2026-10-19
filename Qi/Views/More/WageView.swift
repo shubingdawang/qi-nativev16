@@ -23,6 +23,12 @@ struct WageView: View {
     /// 底下飘一下的那句提示
     @State private var notice: String?
     @State private var importing = false
+    /// 班表抽屉开着没
+    @State private var showDrawer = false
+    /// 正在换照片的那张班表
+    @State private var replacing: WageRoster?
+    @State private var replacePick = false
+    @State private var replaceItem: PhotosPickerItem?
 
     private let cal = Calendar.current
 
@@ -67,6 +73,12 @@ struct WageView: View {
                     .zIndex(10)
             }
 
+            if showDrawer {
+                rosterDrawer
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                    .zIndex(12)
+            }
+
             // 放大看一张图。**画在同一层 ZStack 里，不走 sheet / fullScreenCover**——
             // 这一页订阅着 AppState，挂 presentation 会被重建撤掉（PickHosts.swift 里记过）。
             if let name = preview {
@@ -86,6 +98,20 @@ struct WageView: View {
         .animation(.easeOut(duration: 0.18), value: preview)
         .animation(.easeOut(duration: 0.18), value: notice)
         .animation(.easeOut(duration: 0.18), value: moving)
+        .animation(.easeOut(duration: 0.18), value: showDrawer)
+        .background(SinglePhotoPickHost(open: $replacePick, picked: $replaceItem))
+        .onChange(of: replaceItem) { _, it in
+            guard let it, let old = replacing else { return }
+            Task { @MainActor in
+                if let data = try? await it.loadTransferable(type: Data.self), let img = UIImage(data: data),
+                   let name = ImageStore.save(img, quality: 0.92) {
+                    store.replaceRoster(old.id, with: name)
+                    flash("旧的那张收进抽屉了")
+                }
+                replaceItem = nil
+                replacing = nil
+            }
+        }
         .navigationTitle("工资")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -123,6 +149,26 @@ struct WageView: View {
                     .font(HomeType.number(32, weight: .semibold))
                     .foregroundStyle(Theme.textMain(scheme))
                     .contentTransition(.numericText())
+                // 实发：下个月发薪日记下的到手钱加起来
+                let real = store.actualPay(forWorkMonth: month)
+                Text("实发")
+                    .font(.app(12))
+                    .foregroundStyle(Theme.textMuted(scheme))
+                    .padding(.leading, 8)
+                if real.recorded > 0 {
+                    Text("¥" + WageStore.money(real.sum))
+                        .font(HomeType.number(16, weight: .bold))
+                        .foregroundStyle(Theme.textMain(scheme))
+                    if real.recorded < real.paydays {
+                        Text("已发 \(real.recorded)/\(real.paydays) 次")
+                            .font(.app(10.5))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
+                } else {
+                    Text("还没发")
+                        .font(.app(12, weight: .bold))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
             }
             HStack(spacing: 0) {
                 stat("上班", String(t.days) + " 天")
@@ -391,6 +437,14 @@ struct WageView: View {
                     .font(.app(13.5, weight: .medium))
                     .foregroundStyle(Theme.textMain(scheme))
                 Spacer()
+                Button { showDrawer = true } label: {
+                    Label("抽屉" + (store.stashedRosters.isEmpty ? "" : " \(store.stashedRosters.count)"),
+                          systemImage: "tray")
+                        .font(.app(12.5))
+                        .foregroundStyle(app.settings.accentColor)
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 10)
                 Button { importing = true } label: {
                     Label("导入", systemImage: "square.and.arrow.down")
                         .font(.app(12.5))
@@ -404,26 +458,44 @@ struct WageView: View {
                     .foregroundStyle(Theme.textMuted(scheme))
             } else {
                 ForEach(list) { r in
-                    Button { preview = r.image } label: {
-                        HStack(spacing: 10) {
-                            WageThumb(name: r.image, size: 46)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(rosterRange(r))
-                                    .font(.app(13))
-                                    .foregroundStyle(Theme.textMain(scheme))
-                                Text("\(r.days) 天")
-                                    .font(.app(11))
-                                    .foregroundStyle(Theme.textMuted(scheme))
+                    HStack(spacing: 10) {
+                        Button { preview = r.image } label: {
+                            HStack(spacing: 10) {
+                                WageThumb(name: r.image, size: 46)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(rosterRange(r))
+                                        .font(.app(13))
+                                        .foregroundStyle(Theme.textMain(scheme))
+                                    Text("\(r.days) 天")
+                                        .font(.app(11))
+                                        .foregroundStyle(Theme.textMuted(scheme))
+                                }
+                                Spacer(minLength: 0)
                             }
-                            Spacer(minLength: 0)
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 11))
-                                .foregroundStyle(Theme.textMuted(scheme))
+                            .contentShape(Rectangle())
                         }
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
+                        // 班表临时换了：这张收进抽屉，挑一张新照片顶上
+                        Button {
+                            replacing = r
+                            replacePick = true
+                        } label: {
+                            Label("收进抽屉", systemImage: "tray.and.arrow.down")
+                                .font(.app(11.5))
+                                .foregroundStyle(app.settings.accentColor)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 5)
+                                .background(Capsule().fill(Theme.softFillDeep))
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                     .contextMenu {
+                        Button {
+                            replacing = r
+                            replacePick = true
+                        } label: {
+                            Label("收进抽屉，换一张", systemImage: "tray.and.arrow.down")
+                        }
                         Button(role: .destructive) { store.removeRoster(r.id) } label: {
                             Label("删除这张班表", systemImage: "trash")
                         }
@@ -432,6 +504,71 @@ struct WageView: View {
             }
         }
         .glassCard()
+    }
+
+    /// 抽屉：换下来的班表。放出来就顶替外面管着同样那几天的那张（那张收进来）
+    private var rosterDrawer: some View {
+        ZStack {
+            Color.black.opacity(0.35).ignoresSafeArea()
+                .onTapGesture { showDrawer = false }
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Image(systemName: "tray").foregroundStyle(app.settings.accentColor)
+                    Text("班表抽屉").font(.app(15, weight: .semibold)).foregroundStyle(Theme.textMain(scheme))
+                    Spacer()
+                    Button { showDrawer = false } label: {
+                        Image(systemName: "xmark").font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Theme.textMuted(scheme))
+                    }
+                    .buttonStyle(.plain)
+                }
+                let list = store.stashedRosters
+                if list.isEmpty {
+                    Text("还没有换下来的班表。班表临时换了，点那张旁边的「收进抽屉」，旧的就收在这儿。")
+                        .font(.app(12))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                } else {
+                    ScrollView {
+                        VStack(spacing: 10) {
+                            ForEach(list) { r in
+                                HStack(spacing: 10) {
+                                    Button { preview = r.image } label: { WageThumb(name: r.image, size: 50) }
+                                        .buttonStyle(.plain)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(rosterRange(r)).font(.app(13)).foregroundStyle(Theme.textMain(scheme))
+                                        Text("\(r.days) 天 · " + Self.md(r.addedAt) + " 收进来")
+                                            .font(.app(11)).foregroundStyle(Theme.textMuted(scheme))
+                                    }
+                                    Spacer(minLength: 0)
+                                    Button {
+                                        store.unstashRoster(r.id)
+                                        flash("放出来了，外面那张收进抽屉")
+                                    } label: {
+                                        Text("放出来")
+                                            .font(.app(12, weight: .medium))
+                                            .foregroundStyle(.white)
+                                            .padding(.horizontal, 11)
+                                            .padding(.vertical, 6)
+                                            .background(Capsule().fill(app.settings.accentColor))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .contextMenu {
+                                    Button(role: .destructive) { store.removeRoster(r.id) } label: {
+                                        Label("删掉这张", systemImage: "trash")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 360)
+                }
+            }
+            .padding(18)
+            .frame(maxWidth: 360)
+            .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.regularMaterial))
+            .padding(.horizontal, 22)
+        }
     }
 
     private func rosterRange(_ r: WageRoster) -> String {

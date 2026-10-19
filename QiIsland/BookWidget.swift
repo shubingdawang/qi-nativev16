@@ -7,6 +7,8 @@ struct BookWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "QiBook", provider: BookProvider()) { entry in
             BookWidgetView(entry: entry)
+                // 点一下直接打开记账那页
+                .widgetURL(URL(string: "qiapp://book"))
                 .containerBackground(for: .widget) {
                     LinearGradient(colors: [Color(white: 0.99), Color(white: 0.955)],
                                    startPoint: .top, endPoint: .bottom)

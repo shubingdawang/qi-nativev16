@@ -265,6 +265,9 @@ final class AppState: ObservableObject {
     /// 处理完自己清空。
     @Published var pendingChatJump: (conversation: UUID, message: UUID)?
 
+    /// 从外面（小组件）点进来要打开侧边栏的哪一页。聊天页看见了就打开，然后清空
+    @Published var pendingSideMenu: String?
+
     /// 顺着一个「轮次记号」找回当时那一轮，跳过去。
     /// 找不到就返回 false——**别假装跳成功了**。
     @discardableResult
