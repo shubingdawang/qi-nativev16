@@ -35,8 +35,14 @@ struct GifSpec {
     var effectAmount: Double = 1
     /// 每一颗挪了多少（以画面边长为 1），没挪的不在里面
     var effectOffsets: [Int: CGPoint] = [:]
-    /// 特效一圈里动几遍（1 = 原来的快慢）。整数，首尾才接得上
+    /// 特效的快慢：1 = 原来的快慢；2、3、4 = 一圈里多走几遍；½、¼ = 慢下来
+    /// （慢下来的时候整张动图拉长成两圈、四圈，图自己的动作照常重复，首尾才接得上）
     var effectSpeed: Double = 1
+    /// 特效每一颗多大（1 = 原来那么大）
+    var effectSize: Double = 1
+
+    /// 特效慢下来的时候，整张动图是几圈
+    var loops: Int { effectSpeed < 0.99 ? max(1, Int((1 / effectSpeed).rounded())) : 1 }
     /// 自己做的逐帧动画。有它就按它画，不走上面那套动作
     var anim: GifAnim?
     /// 正在编辑第几帧（预览停在这一帧，不播）；淡影显示哪一帧
@@ -47,8 +53,8 @@ struct GifSpec {
 
     /// 导出几帧：逐帧动画不补间时就是她摆的那几帧
     var exportFrames: Int {
-        if let a = anim, !a.tween { return a.count }
-        return Self.frames
+        if let a = anim, !a.tween { return a.count * loops }
+        return Self.frames * loops
     }
 }
 
@@ -228,10 +234,12 @@ enum GifFrame {
         }
         // 图摆在哪：特效围着它冒
         let box = imageBox(image, spec: spec, side: side)
+        // 特效慢下来时整张拉长成几圈：图和字的动作每圈照常走一遍，特效整段才走一遍
+        let tm = (t * Double(spec.loops)).truncatingRemainder(dividingBy: 1)
         if spec.effect.behind { drawEffect(spec, box: box, side: side, t: t) }
-        if let image { drawImage(image, spec: spec, side: side, t: t, in: g) }
+        if let image { drawImage(image, spec: spec, side: side, t: tm, in: g) }
         if spec.effect != .none, !spec.effect.behind { drawEffect(spec, box: box, side: side, t: t) }
-        drawText(spec, side: side, t: t)
+        drawText(spec, side: side, t: tm)
     }
 
     private static func drawImage(_ image: UIImage, spec: GifSpec, side: CGFloat, t: Double, in g: CGContext) {
@@ -290,7 +298,9 @@ enum GifFrame {
             // 落地那一下扁一点
             if ph < 0.12 || ph > 0.88 { p.sx = 1.08; p.sy = 0.9 }
         case .shake:
-            p.rot = sin(t * tau * 2) * 10
+            // 摇头：左右甩，带一点点歪
+            p.dx = sin(t * tau * 3) * 0.035
+            p.rot = sin(t * tau * 3) * 4
         case .heartbeat:
             let ph = t.truncatingRemainder(dividingBy: 1)
             // 咚、咚：一大一小两下
@@ -309,9 +319,11 @@ enum GifFrame {
             p.dy = sin(t * tau) * 0.05 - 0.02
             p.rot = sin(t * tau + 1) * 3
         case .jitter:
+            // 气得发抖：鼓起来一圈，乱着抖
             let k = Int(t * 24)
-            p.dx = Double((k * 37) % 7 - 3) * 0.006
-            p.dy = Double((k * 53) % 5 - 2) * 0.006
+            p.dx = Double((k * 37) % 7 - 3) * 0.008
+            p.dy = Double((k * 53) % 5 - 2) * 0.008
+            p.sx = 1.05; p.sy = 1.05
         case .walk:
             p.rot = sin(t * tau * 2) * 6
             p.dy = -abs(sin(t * tau * 2)) * 0.03
@@ -393,11 +405,16 @@ enum GifFrame {
             else if t < 0.7 { p.rot = sin((t - 0.3) / 0.4 * tau) * 3 }
             else { p.dx = 0.8 * ease((t - 0.7) / 0.3) }
         case .rock:
-            p.rot = sin(t * tau * 2) * 14
+            // 前后摇：慢慢往前倾、往后仰，一圈一个来回
+            p.rot = sin(t * tau) * 16
+            p.sy = 1 - 0.04 * abs(sin(t * tau))
         case .shiver:
-            let k = Int(t * 48)
-            p.dx = (k % 2 == 0 ? 1 : -1) * 0.006
-            p.sy = 0.97
+            // 打哆嗦：缩着身子，一帧往左一帧往右
+            let k = Int((t * 24).rounded(.down))
+            let side: Double = k % 2 == 0 ? 1 : -1
+            p.dx = side * 0.012
+            p.rot = side * 1.5
+            p.sy = 0.95; p.sx = 0.98
         case .dizzy:
             p.dx = cos(t * tau * 2) * 0.04
             p.rot = sin(t * tau * 2) * 10
@@ -437,9 +454,11 @@ enum GifFrame {
             p.dy = -sin(ph * .pi) * 0.12
             p.dx = t < 0.5 ? -0.08 + 0.16 * ph : 0.08 - 0.16 * ph
         case .excited:
+            // 激动：原地小碎跳，一跳一缩
             let ph = (t * 4).truncatingRemainder(dividingBy: 1)
-            p.dy = -abs(sin(ph * .pi)) * 0.06
-            p.rot = sin(t * tau * 4) * 5
+            p.dy = -abs(sin(ph * .pi)) * 0.07
+            p.sx = 1 + 0.06 * sin(ph * tau)
+            p.sy = 1 - 0.06 * sin(ph * tau)
         case .sneak:
             // 弓着身子挪过去，转身挪回来
             p.dx = sin(t * tau) * 0.2
@@ -461,7 +480,8 @@ enum GifFrame {
                 p.dy = -0.9 * (1 - e) * (1 - e)
             }
         case .pulse:
-            p.sx = 1 + 0.12 * sin(t * tau * 2); p.sy = p.sx
+            // 忽大忽小：慢慢变大再慢慢缩回去（心跳是咚咚两下，这个是一整口气）
+            p.sx = 1 + 0.22 * sin(t * tau); p.sy = p.sx
         }
         return p
     }
@@ -489,12 +509,14 @@ enum GifFrame {
     private static func drawEffect(_ spec: GifSpec, box: CGRect, side: CGFloat, t t0: Double) {
         // 快慢：一圈里多走几遍（整数遍，首尾接得上）
         let t = (t0 * max(1, spec.effectSpeed.rounded())).truncatingRemainder(dividingBy: 1)
+        // 本来只有一颗的那几种，多少调大了也能多冒几颗：换个位置、错开一点节奏
+        let spots: [(CGFloat, CGFloat)] = [(0, 0), (-0.78, 0.04), (-0.4, -0.12), (-0.2, 0.3)]
         let e = spec.effect
         guard e != .none, let g = UIGraphicsGetCurrentContext() else { return }
         let col = UIColor(beadHex: spec.effectColor.isEmpty ? e.tint : spec.effectColor) ?? .white
         let ink = UIColor(beadHex: "4A3442") ?? .black
         let hi = UIColor.white
-        let ps = max(1.5, (side / 72).rounded())        // 一个像素多大
+        let ps = max(1, (side / 72).rounded() * CGFloat(max(0.4, spec.effectSize)))   // 一个像素多大
         let amount = max(0.4, spec.effectAmount)
         let tau = 2 * Double.pi
         func n(_ base: Int) -> Int { max(1, Int((Double(base) * amount).rounded())) }
@@ -576,12 +598,18 @@ enum GifFrame {
                 }
             }
         case .sweat:
-            let ph = t.truncatingRemainder(dividingBy: 1)
-            put(0, GifSprites.drop, box.maxX - box.width * 0.12, top + box.height * (0.08 + CGFloat(ph) * 0.25),
-                alpha: ph < 0.8 ? 1 : CGFloat((1 - ph) / 0.2), k: 1.2)
+            for i in 0..<min(spots.count, n(1)) {
+                let ph = (t + Double(i) * 0.37).truncatingRemainder(dividingBy: 1)
+                put(i, GifSprites.drop, box.maxX - box.width * 0.12 + box.width * spots[i].0,
+                    top + box.height * (0.08 + spots[i].1 + CGFloat(ph) * 0.25),
+                    alpha: ph < 0.8 ? 1 : CGFloat((1 - ph) / 0.2), k: 1.2)
+            }
         case .anger:
-            let a = 0.8 + 0.35 * abs(sin(t * tau * 2))
-            put(0, GifSprites.anger, box.maxX - box.width * 0.1, top + box.height * 0.08, k: CGFloat(a) * 1.4)
+            for i in 0..<min(spots.count, n(1)) {
+                let a = 0.8 + 0.35 * abs(sin(t * tau * 2 + Double(i)))
+                put(i, GifSprites.anger, box.maxX - box.width * 0.1 + box.width * spots[i].0,
+                    top + box.height * (0.08 + spots[i].1), k: CGFloat(a) * 1.4)
+            }
         case .sleepy:
             let k = n(3)
             for i in 0..<k {
@@ -590,9 +618,12 @@ enum GifFrame {
                     alpha: CGFloat(1 - ph), k: 0.8 + CGFloat(ph) * 0.8, fill: col)
             }
         case .question, .exclaim:
-            let a = sin(t * tau) * 0.15
             let rows = e == .question ? GifSprites.question : GifSprites.exclaim
-            put(0, rows, box.maxX - box.width * 0.05, top - ps * 2 + CGFloat(a) * ps * 10, k: 1.5, fill: col)
+            for i in 0..<min(spots.count, n(1)) {
+                let a = sin(t * tau + Double(i) * 1.7) * 0.15
+                put(i, rows, box.maxX - box.width * 0.05 + box.width * spots[i].0,
+                    top - ps * 2 + box.height * spots[i].1 + CGFloat(a) * ps * 10, k: 1.5, fill: col)
+            }
         case .fire:
             let k = n(5)
             for i in 0..<k {
@@ -628,7 +659,11 @@ enum GifFrame {
                 g.fill(CGRect(x: 0, y: 0, width: side, height: side))
                 g.restoreGState()
             }
-            put(0, GifSprites.bolt, box.midX + box.width * 0.25, top - ps * 2, alpha: on ? 1 : 0.6, k: 2)
+            for i in 0..<min(spots.count, n(1)) {
+                let lit = Int(t * 8 + Double(i)) % 2 == 0
+                put(i, GifSprites.bolt, box.midX + box.width * (0.25 + spots[i].0 * 0.6),
+                    top - ps * 2 + box.height * spots[i].1, alpha: lit ? 1 : 0.6, k: 2)
+            }
         case .flowers:
             for i in 0..<n(6) {
                 let a = Double(i) / Double(n(6)) * tau + t * tau * 0.25
@@ -737,7 +772,7 @@ enum GifFrame {
         let n = spec.exportFrames
         guard let dest = CGImageDestinationCreateWithData(data, UTType.gif.identifier as CFString, n, nil)
         else { return nil }
-        let delay = 2.0 / Double(n) / max(0.25, spec.speed)
+        let delay = 2.0 * Double(spec.loops) / Double(n) / max(0.25, spec.speed)
         CGImageDestinationSetProperties(dest, [
             kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0]
         ] as CFDictionary)
@@ -949,7 +984,7 @@ struct GifMakerView: View {
 
     private var stageCanvas: some View {
         TimelineView(.animation) { ctx in
-            let period = 2.0 / max(0.25, spec.speed)
+            let period = 2.0 * Double(spec.loops) / max(0.25, spec.speed)
             let raw = ctx.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period
             // 跟导出一样按帧一跳，预览看到的就是存下来的节奏
             let nf = Double(spec.exportFrames)
@@ -1389,6 +1424,16 @@ struct GifMakerView: View {
         }
     }
 
+    static let effectSpeeds: [Double] = [0.25, 0.5, 1, 2, 3, 4]
+
+    static func speedLabel(_ v: Double) -> String {
+        switch v {
+        case 0.25: return "×¼"
+        case 0.5:  return "×½"
+        default:   return "×\(Int(v))"
+        }
+    }
+
     private var effectControls: some View {
         VStack(alignment: .leading, spacing: 12) {
             chips(GifEffect.allCases, selected: spec.effect, label: { $0.label }) {
@@ -1407,12 +1452,23 @@ struct GifMakerView: View {
                             .font(.app(12.5))
                     }
                 }
-                row("多少") { Slider(value: $spec.effectAmount, in: 0.5...2.5) }
-                row("快慢") {
+                row("多少") { Slider(value: $spec.effectAmount, in: 0.5...4) }
+                row("大小") {
                     HStack(spacing: 8) {
-                        Slider(value: $spec.effectSpeed, in: 1...4, step: 1)
-                        Text("×\(Int(spec.effectSpeed))").font(.app(12)).foregroundStyle(Theme.textSoft(scheme))
-                            .frame(width: 30)
+                        Slider(value: $spec.effectSize, in: 0.5...2.5)
+                        Text(String(format: "×%.1f", spec.effectSize)).font(.app(12))
+                            .foregroundStyle(Theme.textSoft(scheme))
+                            .frame(width: 36)
+                    }
+                }
+                row("快慢") {
+                    // 往左慢、往右快：¼ ½ 1 2 3 4
+                    HStack(spacing: 8) {
+                        Slider(value: Binding(get: { Double(Self.effectSpeeds.firstIndex(of: spec.effectSpeed) ?? 2) },
+                                              set: { spec.effectSpeed = Self.effectSpeeds[Int($0.rounded())] }),
+                               in: 0...Double(Self.effectSpeeds.count - 1), step: 1)
+                        Text(Self.speedLabel(spec.effectSpeed)).font(.app(12)).foregroundStyle(Theme.textSoft(scheme))
+                            .frame(width: 36)
                     }
                 }
                 row("颜色") {

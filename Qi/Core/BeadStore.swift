@@ -41,6 +41,9 @@ struct BeadProject: Codable, Identifiable, Hashable {
 
     var w: Int { size }
     var h: Int { rows ?? size }
+
+    /// 一边最多多少格（拼大图用）
+    static let maxSide = 200
     var filled: Int { cells.filter { !$0.isEmpty }.count }
 
     /// 改格数。原来放的豆子按左上角对齐留下来
@@ -318,7 +321,8 @@ enum BeadGrid {
 
     static func grid(_ image: UIImage) -> Found? {
         guard let cg = image.cgImage else { return nil }
-        let scale = min(1, 900 / Double(max(cg.width, cg.height)))
+        // 大图（一百多格的图纸）格线很细：缩到 1600 还看得清，缩到 900 就糊成一片认不出了
+        let scale = min(1, 1600 / Double(max(cg.width, cg.height)))
         let W = max(8, Int(Double(cg.width) * scale)), H = max(8, Int(Double(cg.height) * scale))
         guard let space = CGColorSpace(name: CGColorSpace.sRGB),
               let ctx = CGContext(data: nil, width: W, height: H, bitsPerComponent: 8, bytesPerRow: W * 4,
@@ -357,7 +361,7 @@ enum BeadGrid {
         // 最左、最上那一格被裁掉一大半的不算
         let cols = Int(((Double(W) - ox) / cell).rounded())
         let rows = Int(((Double(H) - oy) / cell).rounded())
-        guard (4...128).contains(cols), (4...128).contains(rows) else { return nil }
+        guard (4...BeadProject.maxSide).contains(cols), (4...BeadProject.maxSide).contains(rows) else { return nil }
         return Found(cols: cols, rows: rows, cell: cell, ox: ox, oy: oy, w: W, h: H)
     }
 

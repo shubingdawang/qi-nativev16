@@ -209,7 +209,7 @@ struct BeadListView: View {
                 .background(RoundedRectangle(cornerRadius: 12).fill(Theme.softFillDeep))
                 .padding(.horizontal, 20)
             Picker("大小", selection: $newSize) {
-                ForEach([16, 24, 32, 48, 64], id: \.self) { n in Text("\(n)×\(n)").tag(n) }
+                ForEach([16, 32, 48, 64, 96, 128], id: \.self) { n in Text("\(n)").tag(n) }
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, 20)
@@ -682,6 +682,17 @@ struct BeadEditorView: View {
                 HStack(spacing: 10) {
                     Image(systemName: "circle.lefthalf.filled").font(.app(12))
                     Slider(value: $p.refOpacity, in: 0.05...1)
+                    // 格数：大图格子不够细就糊成一团，先改细再铺
+                    Menu {
+                        ForEach([32, 48, 64, 96, 128, 160, 200], id: \.self) { n in
+                            Button("宽 \(n) 格" + (n == p.w ? "（现在）" : "")) { regrid(n) }
+                        }
+                    } label: {
+                        Label("\(p.w)×\(p.h)", systemImage: "square.grid.3x3")
+                            .font(.app(12.5, weight: .medium))
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .background(Capsule().fill(Theme.softFillDeep))
+                    }
                     Menu {
                         Button("照着铺（换成色板里的颜色）") { traceAll(exact: false) }
                         Button("照着铺（用原图的颜色）") { traceAll(exact: true) }
@@ -700,6 +711,19 @@ struct BeadEditorView: View {
         }
         .foregroundStyle(Theme.textSoft(scheme))
         .padding(.horizontal, 16)
+    }
+
+    /// 改格数：宽 n 格，高按底图的长宽比；铺过的话按新格数重新照着铺一遍
+    private func regrid(_ n: Int) {
+        guard let img = refUIImage, img.size.width > 0 else { return }
+        pushUndo()
+        let traced = p.filled > 0
+        let nh = max(4, min(BeadProject.maxSide, Int((Double(n) * Double(img.size.height / img.size.width)).rounded())))
+        p.resize(n, nh)
+        p.refScale = 1; p.refRotation = 0; p.refX = 0; p.refY = 0
+        p.refFill = true
+        if traced { p.cells = BeadStore.trace(p, image: img, exact: false) }
+        notice = "改成 \(n)×\(nh) 了" + (traced ? "，照着重新铺了一遍" : "，点「一键铺豆」照着铺")
     }
 
     private func traceAll(exact: Bool) {
@@ -1051,7 +1075,7 @@ extension BeadProject {
         }
         // 认不出格子：宽不变，行数按图的长宽比来，底图正好铺满
         let ih = img.size.height, iw = img.size.width
-        let nh = iw > 0 ? max(4, min(128, Int((Double(w) * Double(ih / iw)).rounded()))) : h
+        let nh = iw > 0 ? max(4, min(BeadProject.maxSide, Int((Double(w) * Double(ih / iw)).rounded()))) : h
         resize(w, nh)
         return "底图没认出格子，板子按图的比例改成 \(w)×\(nh)，底图铺满。"
     }

@@ -1400,7 +1400,7 @@ final class AppState: ObservableObject {
 
     /// 快捷指令送进来的一句（几点了、电量多少、她刚打开了什么 App……）：
     /// 当旁白落进他那一窗，他接着说。`open` = 顺手翻到他那一窗
-    func shortcutToHim(_ text: String, open: Bool) {
+    func shortcutToHim(_ text: String, open: Bool, images: [UIImage] = []) {
         guard let cid = hisConversationID() else { return }
         if open {
             Notifier.shared.openConversationID = cid
@@ -1412,7 +1412,7 @@ final class AppState: ObservableObject {
                 try? await Task.sleep(nanoseconds: 500_000_000)
                 waited += 1
             }
-            self.send(text: note, images: [], in: cid, narration: true)
+            self.send(text: note, images: images, in: cid, narration: true)
         }
     }
 
@@ -1465,10 +1465,10 @@ final class AppState: ObservableObject {
     }
 
     /// 不打开 App 的那一种：等他说完，人不在 App 里就发一条通知
-    func shortcutToHimAndNotify(_ text: String) async {
+    func shortcutToHimAndNotify(_ text: String, images: [UIImage] = []) async {
         guard let cid = hisConversationID() else { return }
         let before = conversation(cid)?.messages.count ?? 0
-        shortcutToHim(text, open: false)
+        shortcutToHim(text, open: false, images: images)
         for _ in 0..<50 {
             try? await Task.sleep(nanoseconds: 500_000_000)
             if let c = conversation(cid), c.messages.count > before + 1,
@@ -7576,6 +7576,37 @@ final class AppState: ObservableObject {
             case .notFound:
                 return ("没有这一段（`\(thread)`）。此刻那一段里的 id 是带在 E 后面的。", true)
             }
+
+        case "plan_check_in":
+            var at: Date?
+            if let m = args["in_minutes"] as? Double, m > 0 {
+                at = Date().addingTimeInterval(m * 60)
+            } else if let m = args["in_minutes"] as? Int, m > 0 {
+                at = Date().addingTimeInterval(Double(m) * 60)
+            } else if let s = (args["at"] as? String)?.trimmingCharacters(in: .whitespaces), !s.isEmpty {
+                let f = DateFormatter()
+                f.dateFormat = "HH:mm"
+                if let t = f.date(from: s) {
+                    let cal = Calendar.current
+                    let c = cal.dateComponents([.hour, .minute], from: t)
+                    var d = cal.date(bySettingHour: c.hour ?? 0, minute: c.minute ?? 0, second: 0, of: Date()) ?? Date()
+                    if d < Date() { d = cal.date(byAdding: .day, value: 1, to: d) ?? d }
+                    at = d
+                }
+            }
+            if (args["cancel"] as? Bool) == true {
+                CheckPlan.current = nil
+                return ("撤了，不查了。", false)
+            }
+            guard let at else { return ("什么时候查？给 in_minutes（几分钟后）或 at（HH:mm）。", true) }
+            let raw = (args["items"] as? String) ?? ""
+            var items = CheckPlan.all.filter { raw.contains($0) || raw.contains(String($0.prefix(2))) }
+            if items.isEmpty { items = ["在做什么"] }
+            CheckPlan.current = CheckPlan(at: at, items: items, why: (args["why"] as? String) ?? "")
+            let f = DateFormatter()
+            f.dateFormat = "HH:mm"
+            return ("定好了：\(f.string(from: at)) 之后查「\(items.joined(separator: "、"))」。"
+                    + "她手机上的快捷指令会隔一阵来问，到点那次就按你要的收好交过来（她没装那条快捷指令的话就不会来）。", false)
 
         case "check_in":
             // 查岗。**不发邮件、不过服务器**——理由写在 Whereabouts.swift 开头。
