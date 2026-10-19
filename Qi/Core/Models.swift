@@ -686,6 +686,8 @@ struct AppSettings: Codable {
     var drawModel: String = ""
     /// 开屏那扇雾窗要不要（见 `SplashView`）。默认开
     var splashOn: Bool = true
+    /// 开屏用哪一版：perch 枝头（默认）、window 雾窗
+    var splashStyle: String = "perch"
     /// 话题池：开不开、多久抓一轮、用哪个模型筛。
     ///
     /// ⚠️ **模型单独一个字段，不跟 `helperModel` 共用。**
@@ -1068,6 +1070,7 @@ extension AppSettings {
         helperModel = (try? c.decodeIfPresent(String.self, forKey: .helperModel)) ?? ""
         drawModel = (try? c.decodeIfPresent(String.self, forKey: .drawModel)) ?? ""
         splashOn = (try? c.decodeIfPresent(Bool.self, forKey: .splashOn)) ?? true
+        splashStyle = (try? c.decodeIfPresent(String.self, forKey: .splashStyle)) ?? "perch"
         topicPoolOn = (try? c.decodeIfPresent(Bool.self, forKey: .topicPoolOn)) ?? false
         topicModel = (try? c.decodeIfPresent(String.self, forKey: .topicModel)) ?? ""
         topicEveryHours = (try? c.decodeIfPresent(Double.self, forKey: .topicEveryHours)) ?? 6

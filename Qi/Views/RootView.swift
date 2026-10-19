@@ -210,7 +210,11 @@ struct RootView: View {
     @ViewBuilder
     private var splashLayer: some View {
         if app.settings.splashOn && !splashDone {
-            SplashView { splashDone = true }
+            if app.settings.splashStyle == "window" {
+                SplashView { splashDone = true }
+            } else {
+                PerchSplashView { splashDone = true }
+            }
         }
     }
 }

@@ -258,7 +258,18 @@ struct AppearanceView: View {
             .tint(app.settings.accentColor)
             .padding(.horizontal, 16)
             .padding(.vertical, 11)
-            SettingsNote("打开 App 时先是毛玻璃上的一扇彩绘玻璃拱窗：手指点、划窗里会起涟漪，拨窗上的珍珠串会晃；轻点一下进入。只在冷启动时出现。")
+            if app.settings.splashOn {
+                Picker("", selection: $app.settings.splashStyle) {
+                    Text("枝头").tag("perch")
+                    Text("雾窗").tag("window")
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+            }
+            SettingsNote(app.settings.splashStyle == "window"
+                         ? "打开 App 时先是毛玻璃上的一扇彩绘玻璃拱窗：手指点、划窗里会起涟漪，拨窗上的珍珠串会晃；轻点一下进入。只在冷启动时出现。"
+                         : "打开 App 时一根细枝长出来，clawd 蹦上枝头，「栖」字晕开，三秒后自己进去；轻点一下直接进。只在冷启动时出现。")
         }
     }
 
