@@ -243,6 +243,7 @@ struct IsoRoomView<Clawd: View>: View {
             //
             // 可点范围不能跟着放大：那条裙底下是空气，
             // 算进去的话她点屋外一片空白也会当成点在地板上。
+            .compositingGroup()
             .clipShape(geoRoom.clipPath)
             .contentShape(geoRoom.roomPath)
             // 拖到他身上的时候，在他脚下点一圈光——
@@ -805,6 +806,9 @@ struct IsoRoomView<Clawd: View>: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // ⚠️ 先合成一层再裁：她报了两轮「拖到边上墙和地板没了、家具还在」——
+        // 家具一件件各带阴影、缩放、手势，直接裁时有的没被裁住，合成一张再裁就一个不漏
+        .compositingGroup()
         .clipShape(insideFrame(geoRoom))
     }
 

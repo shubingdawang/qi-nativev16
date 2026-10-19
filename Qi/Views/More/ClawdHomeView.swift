@@ -1573,6 +1573,7 @@ struct ClawdHomeView: View {
             // 而他是按**屋子内部**的坐标摆的。两边差着一个屋子的原点，
             // 所以这儿把屋子在外层里的位置也记下来（`roomOrigin`），
             // 拖到哪儿先减掉它再跟他比（见 `toRoom`）。
+            .compositingGroup()
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             // 房间那一块有多大、在外层的什么位置。
             // **在 onAppear／onChange 里记**，不在 body 里直接写 @State——

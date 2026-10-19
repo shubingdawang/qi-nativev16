@@ -961,8 +961,8 @@ def body(s):
     s.rect(2, 6, 11, 7, SKIN)
     s.rect(0, 9, 2, 2, SKIN)
     s.rect(13, 9, 2, 2, SKIN)
-    s.rect(4, 8, 1, 2, "#000000")
-    s.rect(10, 8, 1, 2, "#000000")
+    s.rect(4, 7, 1, 2, "#000000")
+    s.rect(10, 7, 1, 2, "#000000")
     # ⚠️ **不画嘴。** 她说的：「非必要的时候 clawd 不要有嘴。」
     # `anatomy.md` 里那一句本来就标着 optional mouth。
 
