@@ -53,6 +53,13 @@ enum JournalKind: String, Codable, CaseIterable {
     /// （她说的那层「黑底」是投影，为了让它看着像贴上去的）。
     /// 名字换成「透明贴」，再加一句说明——见 `JournalKind.hint`。
     case cutout   = "剪贴"
+    /// 一根横过去的绳子：照片、贴纸、便签拖到绳边会挂上去（带小木夹）
+    case rope     = "晾衣绳"
+    /// 照片的拍摄信息：时间、地点、光圈快门。他拼页时自动放，不在加号里
+    case strip    = "快门条"
+
+    /// 加号那一排里摆哪几样（快门条是照片读出来的，不让手加）
+    static var addable: [JournalKind] { allCases.filter { $0 != .strip } }
 
     var icon: String {
         switch self {
@@ -69,6 +76,8 @@ enum JournalKind: String, Codable, CaseIterable {
         case .frame:   return "rectangle.inset.filled"
         case .quote:   return "quote.opening"
         case .cutout:  return "scissors"
+        case .rope:    return "scribble"
+        case .strip:   return "camera.aperture"
         }
     }
 
@@ -93,6 +102,8 @@ enum JournalKind: String, Codable, CaseIterable {
             return "会压缩重存，可以选边框。"
         case .quote:
             return "一句话加引号，底下署名。"
+        case .rope:
+            return "照片、贴纸、便签拖到绳子边上会挂上去；拖绳子，挂着的一起走。"
         default:
             return ""
         }
@@ -162,6 +173,10 @@ struct JournalElement: Codable, Identifiable, Hashable {
     var charColors: [String] = []
     /// 逐个字的大小倍数。空 = 都一样大。规矩同上。
     var charScales: [Double] = []
+    /// 照片的色调：warm / mono / cyan，空 = 原色（整页风格会改它）
+    var tone: String = ""
+    /// 挂在哪根晾衣绳上（那根绳的 id）。空 = 没挂
+    var hangOn: String = ""
 
     /// 第 n 个字什么颜色
     func inkAt(_ i: Int) -> Color {
@@ -210,6 +225,8 @@ extension JournalElement {
         inkHex = (try? c.decodeIfPresent(String.self, forKey: .inkHex)) ?? ""
         charColors = (try? c.decodeIfPresent([String].self, forKey: .charColors)) ?? []
         charScales = (try? c.decodeIfPresent([Double].self, forKey: .charScales)) ?? []
+        tone = (try? c.decodeIfPresent(String.self, forKey: .tone)) ?? ""
+        hangOn = (try? c.decodeIfPresent(String.self, forKey: .hangOn)) ?? ""
     }
 }
 
@@ -240,6 +257,10 @@ struct JournalPage: Codable, Identifiable, Hashable {
 
     /// 他拼的这一页用了哪些料（见 `JournalAuto`）。摇骰子重排就靠它；她自己做的页是 nil
     var auto: JournalAutoParts? = nil
+    /// 这一页有多长：1 = 一屏，「加长」一次多半屏，最多 3 屏
+    var length: Double = 1
+    /// 整页风格（`JournalTheme.id`）。空 = 没用过
+    var themeID: String = ""
 
     /// 老数据没有 shared 这一项，不补容错解码器整本手帐会读不出来
     init(from decoder: Decoder) throws {
@@ -254,6 +275,8 @@ struct JournalPage: Codable, Identifiable, Hashable {
         updatedAt = (try? c.decodeIfPresent(Date.self, forKey: .updatedAt)) ?? Date()
         shared = (try? c.decodeIfPresent(Bool.self, forKey: .shared)) ?? false
         auto = (try? c.decodeIfPresent(JournalAutoParts.self, forKey: .auto)) ?? nil
+        length = max(1, (try? c.decodeIfPresent(Double.self, forKey: .length)) ?? 1)
+        themeID = (try? c.decodeIfPresent(String.self, forKey: .themeID)) ?? ""
     }
 
     init(id: UUID = UUID(), day: Date = Date(), title: String = "",
@@ -316,7 +339,14 @@ enum JournalKit {
     static let paperPatterns: [(String, String)] = [
         ("素", "plain"), ("格纹", "grid"), ("横线", "ruled"),
         ("点阵", "dot"), ("方格", "graph"), ("竖条", "stripe"),
-        ("斜纹", "diag"), ("十字", "cross"), ("稿纸", "manuscript")
+        ("斜纹", "diag"), ("十字", "cross"), ("稿纸", "manuscript"),
+        ("纤维", "fiber"), ("水彩", "water"), ("星点", "stars"),
+        ("粉笔灰", "chalk"), ("双框", "double"), ("虚线", "dashrule")
+    ]
+
+    /// 字体。走 `pattern`（文字本来不用这个字段）
+    static let fonts: [(String, String)] = [
+        ("宋体", ""), ("黑体", "sans"), ("等宽", "mono"), ("圆体", "round")
     ]
 
     /// 胶带的花纹。同样是画出来的，所以换个颜色就是另一卷。
@@ -650,6 +680,12 @@ enum JournalKit {
             e.colorHex = "FFFFFF"
         case .quote:
             e.colorHex = "3A362E"
+        case .rope:
+            e.colorHex = "8A7356"
+            e.angle = 0
+        case .strip:
+            e.colorHex = "3A362E"
+            e.angle = 0
         }
         return e
     }
@@ -676,6 +712,16 @@ final class JournalStore: ObservableObject {
         didSet { if loaded { Storage.save(shelf, to: "journal-shelf.json") } }
     }
 
+    /// 撕掉的页：30 天内能放回去，过了才真的删（连同上面的照片）
+    @Published private(set) var trash: [JournalTrashed] = [] {
+        didSet { if loaded { Storage.save(trash, to: "journal-trash.json") } }
+    }
+
+    /// 她点「交给他」交过来的那几天：挑的照片和读出来的拍摄信息、想要的感觉、她说的一句
+    @Published private(set) var asks: [JournalAsk] = [] {
+        didSet { if loaded { Storage.save(asks, to: "journal-asks.json") } }
+    }
+
     private var loaded = false
 
     private init() {
@@ -686,8 +732,56 @@ final class JournalStore: ObservableObject {
         // 换过封面的那几本也是摆过的
         for k in covers.keys where !s.contains(k) { s.append(k) }
         shelf = s
+        trash = Storage.load([JournalTrashed].self, from: "journal-trash.json") ?? []
+        asks = Storage.load([JournalAsk].self, from: "journal-asks.json") ?? []
         loaded = true
+        purgeTrash()
     }
+
+    // MARK: 撕掉的页
+
+    nonisolated static let trashDays = 30
+
+    /// 过了 30 天的真删掉
+    private func purgeTrash(now: Date = Date()) {
+        let old = trash.filter { now.timeIntervalSince($0.at) > Double(Self.trashDays) * 86400 }
+        guard !old.isEmpty else { return }
+        for t in old { dropImages(of: t.page) }
+        trash.removeAll { t in old.contains { $0.id == t.id } }
+    }
+
+    private func dropImages(of p: JournalPage) {
+        let inUse = Set(pages.flatMap { $0.elements.map(\.imageName) })
+        for e in p.elements where !e.imageName.isEmpty && !inUse.contains(e.imageName) {
+            ImageStore.delete(e.imageName)
+        }
+    }
+
+    /// 放回去
+    func restore(_ id: UUID) {
+        guard let t = trash.first(where: { $0.id == id }) else { return }
+        trash.removeAll { $0.id == id }
+        pages.insert(t.page, at: 0)
+        if !shelf.contains(t.page.monthKey) { shelf.append(t.page.monthKey) }
+    }
+
+    /// 在「最近撕掉的」里再删一次：这回真没了
+    func purge(_ id: UUID) {
+        guard let t = trash.first(where: { $0.id == id }) else { return }
+        trash.removeAll { $0.id == id }
+        dropImages(of: t.page)
+    }
+
+    // MARK: 交给他
+
+    func addAsk(_ a: JournalAsk) {
+        asks.removeAll { $0.dayKey == a.dayKey }
+        asks.append(a)
+    }
+
+    func ask(for dayKey: String) -> JournalAsk? { asks.last { $0.dayKey == dayKey } }
+
+    func clearAsk(_ dayKey: String) { asks.removeAll { $0.dayKey == dayKey } }
 
     /// 摆一本以前月份的（空的也行）
     func addVolume(_ month: String) {
@@ -738,12 +832,10 @@ final class JournalStore: ObservableObject {
         }
     }
 
+    /// 撕掉一页：先放进「最近撕掉的」，30 天后才连照片一起删
     func remove(_ id: UUID) {
-        // 页面上贴的照片跟着一起删，不然图会一直躺在磁盘上
         if let p = pages.first(where: { $0.id == id }) {
-            for e in p.elements where !e.imageName.isEmpty {
-                ImageStore.delete(e.imageName)
-            }
+            trash.insert(JournalTrashed(page: p, at: Date()), at: 0)
         }
         pages.removeAll { $0.id == id }
     }
@@ -789,5 +881,17 @@ final class JournalStore: ObservableObject {
         pages[i].elements.append(e)
         pages[i].updatedAt = Date()
         return true
+    }
+}
+
+/// 撕掉的那一页和撕掉的时候
+struct JournalTrashed: Codable, Identifiable, Hashable {
+    var page: JournalPage
+    var at: Date
+    var id: UUID { page.id }
+
+    /// 还剩几天就真删了
+    var daysLeft: Int {
+        max(0, JournalStore.trashDays - Int(Date().timeIntervalSince(at) / 86400))
     }
 }

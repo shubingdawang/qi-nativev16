@@ -13,6 +13,7 @@ struct JournalView: View {
     @State private var opened: JournalPage?
     @State private var openedMonth: String?
     @State private var pickingMonth = false
+    @State private var showingTrash = false
 
     private let columns = [GridItem(.flexible(), spacing: 22), GridItem(.flexible(), spacing: 22)]
 
@@ -82,6 +83,12 @@ struct JournalView: View {
                     } label: {
                         Label("摆一本以前的月份", systemImage: "books.vertical")
                     }
+                    Button {
+                        showingTrash = true
+                    } label: {
+                        Label("最近撕掉的" + (store.trash.isEmpty ? "" : "（\(store.trash.count)）"),
+                              systemImage: "trash")
+                    }
                 } label: {
                     Image(systemName: "plus")
                 }
@@ -94,6 +101,7 @@ struct JournalView: View {
             }
             .presentationDetents([.height(320)])
         }
+        .sheet(isPresented: $showingTrash) { JournalTrashSheet() }
         .navigationDestination(item: $opened) { p in
             JournalPageView(page: p)
         }
@@ -160,6 +168,7 @@ struct JournalMonthView: View {
 
     @State private var opened: JournalPage?
     @State private var confirmDelete: JournalPage?
+    @State private var handingOff = false
 
     private let cal = Calendar.current
 
@@ -251,13 +260,9 @@ struct JournalMonthView: View {
                         Label("自己写一页", systemImage: "square.and.pencil")
                     }
                     Button {
-                        let f = DateFormatter()
-                        f.locale = Locale(identifier: "zh_CN")
-                        f.dateFormat = "M月d日"
-                        let day = cal.isDate(newPageDay, equalTo: Date(), toGranularity: .month) ? Date() : newPageDay
-                        app.shortcutToHim("她想让你把 \(f.string(from: day)) 做成一页手帐，用那天聊过的、她发的照片和那天的小票拼", open: true)
+                        handingOff = true
                     } label: {
-                        Label("让他做这一天", systemImage: "sparkles")
+                        Label("交给他做一天", systemImage: "sparkles")
                     }
                 } label: {
                     Image(systemName: "plus")
@@ -266,6 +271,15 @@ struct JournalMonthView: View {
         }
         .navigationDestination(item: $opened) { p in
             JournalPageView(page: p)
+        }
+        .sheet(isPresented: $handingOff) {
+            JournalHandOffSheet(
+                startDay: cal.isDate(newPageDay, equalTo: Date(), toGranularity: .month) ? Date() : newPageDay,
+                accent: app.settings.accentColor
+            ) { day, datas, moods, note in
+                let a = app
+                Task { @MainActor in await a.handJournalToHim(day: day, datas: datas, moods: moods, note: note) }
+            }
         }
         .confirmationDialog("撕掉这一页？", isPresented: Binding(
             get: { confirmDelete != nil },
@@ -277,7 +291,7 @@ struct JournalMonthView: View {
             }
             Button("取消", role: .cancel) { confirmDelete = nil }
         } message: {
-            Text("该页上的照片将一并删除。")
+            Text("撕掉的页留 30 天，书架右上角 ＋ →「最近撕掉的」里能放回来。")
         }
     }
 
@@ -372,11 +386,12 @@ struct JournalThumb: View {
         ZStack {
             (Color(hexString: page.paperHex) ?? Color(hexString: "F3E9D8")!)
             GeometryReader { geo in
+                // 加长过的页只露最上面那一屏
                 ForEach(page.elements.sorted { $0.z < $1.z }) { e in
                     thumb(e)
                         .scaleEffect(height / 132)
                         .position(x: e.x * geo.size.width,
-                                  y: e.y * geo.size.height)
+                                  y: e.y * geo.size.height * max(1, page.length))
                 }
             }
         }
@@ -410,6 +425,10 @@ struct JournalThumb: View {
             case .clip:
                 RoundedRectangle(cornerRadius: 1).fill(e.color)
                     .frame(width: 6, height: 9)
+            case .rope:
+                Capsule().fill(e.color).frame(width: 66, height: 1.2)
+            case .strip:
+                Rectangle().fill(e.color.opacity(0.25)).frame(width: 40, height: 4)
             case .note:
                 Rectangle().fill(e.color).frame(width: 30, height: 25)
             case .photo:

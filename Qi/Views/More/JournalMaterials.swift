@@ -35,7 +35,9 @@ struct JournalPaperView: View {
 
     /// 纹路的颜色：比纸底深一点点。**不用固定的灰**——
     /// 深棕纸上压一层灰线会脏，压一层"更深的自己"才像纸的压纹。
-    private var lineColor: Color { Color.black.opacity(0.07) }
+    private var lineColor: Color {
+        JournalTheme.luma(hex) < 0.45 ? Color.white.opacity(0.10) : Color.black.opacity(0.07)
+    }
 
     var body: some View {
         base.overlay {
@@ -49,6 +51,12 @@ struct JournalPaperView: View {
                 case "diag":   diag(&ctx, size, step: 20)
                 case "cross":  cross(&ctx, size, step: 24)
                 case "manuscript": manuscript(&ctx, size)
+                case "fiber":  fiber(&ctx, size)
+                case "water":  water(&ctx, size)
+                case "stars":  stars(&ctx, size)
+                case "chalk":  chalk(&ctx, size)
+                case "double": double(&ctx, size)
+                case "dashrule": dashRule(&ctx, size)
                 default:       break
                 }
             }
@@ -123,6 +131,92 @@ struct JournalPaperView: View {
             y += step
         }
         ctx.stroke(p, with: .color(lineColor), lineWidth: 0.6)
+    }
+
+    /// 同一个种子撒出来一样，换页面尺寸也不跳
+    private func scatter(_ n: Int, _ size: CGSize, seed: UInt64, _ draw: (CGPoint, Double) -> Void) {
+        var s = seed
+        func next() -> Double {
+            s = s &* 6364136223846793005 &+ 1442695040888963407
+            return Double(s >> 11) / Double(1 << 53)
+        }
+        for _ in 0..<n { draw(CGPoint(x: next() * size.width, y: next() * size.height), next()) }
+    }
+
+    /// 宣纸：一根根细短的纤维
+    private func fiber(_ ctx: inout GraphicsContext, _ size: CGSize) {
+        var p = Path()
+        scatter(Int(size.width * size.height / 900), size, seed: 7) { pt, r in
+            let a = r * .pi * 2, l = 6 + r * 14
+            p.move(to: pt)
+            p.addQuadCurve(to: CGPoint(x: pt.x + cos(a) * l, y: pt.y + sin(a) * l),
+                           control: CGPoint(x: pt.x + cos(a + 0.6) * l * 0.5, y: pt.y + sin(a + 0.6) * l * 0.5))
+        }
+        ctx.stroke(p, with: .color(Color.black.opacity(0.045)), lineWidth: 0.6)
+    }
+
+    /// 水彩：四角晕开一点淡色
+    private func water(_ ctx: inout GraphicsContext, _ size: CGSize) {
+        let blooms: [(CGPoint, Color)] = [
+            (CGPoint(x: 0, y: 0), Color(red: 0.56, green: 0.67, blue: 0.78)),
+            (CGPoint(x: size.width, y: size.height), Color(red: 0.68, green: 0.77, blue: 0.64)),
+            (CGPoint(x: size.width, y: 0), Color(red: 0.89, green: 0.63, blue: 0.68)),
+            (CGPoint(x: 0, y: size.height), Color(red: 0.84, green: 0.79, blue: 0.62)),
+        ]
+        let r = max(size.width, size.height) * 0.42
+        for (i, (c, col)) in blooms.enumerated() {
+            let rr = r * (i < 2 ? 1 : 0.7)
+            ctx.fill(Path(ellipseIn: CGRect(x: c.x - rr, y: c.y - rr, width: rr * 2, height: rr * 2)),
+                     with: .radialGradient(Gradient(colors: [col.opacity(i < 2 ? 0.30 : 0.2), col.opacity(0)]),
+                                           center: c, startRadius: 0, endRadius: rr))
+        }
+    }
+
+    /// 夜航：星点
+    private func stars(_ ctx: inout GraphicsContext, _ size: CGSize) {
+        scatter(Int(size.width * size.height / 2600), size, seed: 11) { pt, r in
+            let d = 0.8 + r * 1.6
+            ctx.fill(Path(ellipseIn: CGRect(x: pt.x, y: pt.y, width: d, height: d)),
+                     with: .color(Color(red: 1, green: 0.98, blue: 0.9).opacity(0.25 + r * 0.45)))
+        }
+    }
+
+    /// 黑板：一点粉笔灰和擦过的痕迹
+    private func chalk(_ ctx: inout GraphicsContext, _ size: CGSize) {
+        for (x, y, w) in [(0.25, 0.75, 0.7), (0.78, 0.22, 0.5)] {
+            let rect = CGRect(x: size.width * (x - w / 2), y: size.height * (y - 0.12),
+                              width: size.width * w, height: size.height * 0.24)
+            ctx.fill(Path(ellipseIn: rect),
+                     with: .radialGradient(Gradient(colors: [Color.white.opacity(0.07), .clear]),
+                                           center: CGPoint(x: rect.midX, y: rect.midY),
+                                           startRadius: 0, endRadius: rect.width / 2))
+        }
+        scatter(Int(size.width * size.height / 1500), size, seed: 5) { pt, r in
+            ctx.fill(Path(ellipseIn: CGRect(x: pt.x, y: pt.y, width: 1.2, height: 1.2)),
+                     with: .color(Color.white.opacity(0.05 + r * 0.08)))
+        }
+    }
+
+    /// 学院手抄：四周两道细框
+    private func double(_ ctx: inout GraphicsContext, _ size: CGSize) {
+        let c = Color(red: 0.54, green: 0.45, blue: 0.34).opacity(0.55)
+        for inset in [CGFloat(10), 14] {
+            ctx.stroke(Path(CGRect(x: inset, y: inset, width: size.width - inset * 2,
+                                   height: size.height - inset * 2)),
+                       with: .color(c), lineWidth: 0.8)
+        }
+    }
+
+    /// 小票：一道道虚线
+    private func dashRule(_ ctx: inout GraphicsContext, _ size: CGSize) {
+        var p = Path()
+        var y: CGFloat = 46
+        while y <= size.height - 20 {
+            p.move(to: CGPoint(x: 18, y: y)); p.addLine(to: CGPoint(x: size.width - 18, y: y))
+            y += 44
+        }
+        ctx.stroke(p, with: .color(Color.black.opacity(0.16)),
+                   style: StrokeStyle(lineWidth: 0.8, dash: [4, 3]))
     }
 
     private func ruled(_ ctx: inout GraphicsContext, _ size: CGSize, step: CGFloat) {

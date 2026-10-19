@@ -157,15 +157,19 @@ enum NativeTools {
             """
             触发：她想让你帮她把某一天做成一页手帐，或者说懒得写今天的日记。
             动机：她那天说过的话、发过的照片、吃过的东西都在，你替她拼成一页，她翻到的时候那一天就回来了。
-            行动：写好标题、几段话（像她自己在手帐上随手写的，短一点）、挑几个贴纸；那天她在聊天里发的照片和记账里的小票会自己贴上去，排版也会自己排。她在手帐里能摇骰子换排法，也能自己挪、改。
+            行动：写好标题、几段话（像她自己在手帐上随手写的，短一点）、挑几个贴纸；她点「交给他」交来的照片（没有就用那天她在聊天里发的）、照片的拍摄时间地点和记账里的小票会自己贴上去，排版也会自己排。她在手帐里能摇骰子换排法和风格，也能自己挪、改。
+
+            注意：她交过来时说了想要的感觉，就照那个感觉挑 layout 和 style；读不到的拍摄信息别编。
             """,
             ["date": ["type": "string", "description": "哪一天，YYYY-MM-DD。不填就是今天"],
              "title": ["type": "string", "description": "这一页的标题，几个字"],
-             "texts": ["type": "string", "description": "写在页上的几段话，段与段之间空一行，最多三段"],
+             "texts": ["type": "string", "description": "写在页上的几段话，段与段之间空一行，最多四段"],
              "stickers": ["type": "string", "description": "两三个贴纸 emoji，连着写，如 🌿☕️🌙"],
              "stamp": ["type": "string", "description": "邮票上的一个 emoji，可不填"],
              "mood": ["type": "string", "description": "页脚一行小字：天气、心情、那天在哪，可不填"],
-             "receipt": ["type": "boolean", "description": "贴不贴那天的小票（记账里那天的每一笔），不填 = 有就贴"]],
+             "receipt": ["type": "boolean", "description": "贴不贴那天的小票（记账里那天的每一笔），不填 = 有就贴"],
+             "layout": ["type": "string", "description": "排法，可不填：交错、大图在上、字多、拼贴、拍立得墙、明信片、时间线、信纸、便签墙、撕页日历、胶片条、只留重点、晾起来"],
+             "style": ["type": "string", "description": "整页风格，可不填：青墨素纸、复古胶片、牛皮纸、宣纸、和纸、水彩、自然提纯、学院手抄、手绘草稿、单色极简、小票、蓝晒、夜航、黑板"]],
             required: ["title", "texts"])
 
         add("journal_note",

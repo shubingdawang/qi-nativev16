@@ -38,6 +38,11 @@ struct JournalPageView: View {
     @State private var showingPhotoPicker = false
     /// 正在擦哪一件。`nil` = 没在擦。
     @State private var erasing: ErasePick?
+    /// 撤回用：改之前的样子，一步一份（最多留 40 步）
+    @State private var history: [JournalPage] = []
+    @State private var undoing = false
+    /// 这次拿掉的照片：先不删文件（撤回还要用），离开这一页时没人用了才删
+    @State private var dropped: Set<String> = []
 
     /// 要擦的那一件：哪个元素、擦的是哪张图
     struct ErasePick: Identifiable {
@@ -119,7 +124,16 @@ struct JournalPageView: View {
                 }
             }
         }
-        .onDisappear { store.save(page) }
+        .onDisappear {
+            store.save(page)
+            let inUse = Set(page.elements.map(\.imageName))
+            for n in dropped where !inUse.contains(n) { ImageStore.delete(n) }
+        }
+        .onChange(of: page) { old, _ in
+            if undoing { undoing = false; return }
+            history.append(old)
+            if history.count > 40 { history.removeFirst() }
+        }
         .sheet(isPresented: $showingQuotes) {
             QuotePickerSheet { text, who in
                 var e = JournalKit.make(.quote)
@@ -156,26 +170,97 @@ struct JournalPageView: View {
 
     private var canvas: some View {
         GeometryReader { geo in
-            ZStack {
-                // 纸。**跟快照共用同一份** `JournalPaperView`——
-                // 纸纹在这儿画一套、那儿画一套的话，
-                // 他看到的那张迟早跟她屏幕上的对不上
-                JournalPaperView(hex: page.paperHex, pattern: page.paperPattern,
-                                 weave: page.paperWeave)
-                    .onTapGesture { picked = nil; charFocus = nil }
+            // 加长过的页：宽不变，高是一屏的几倍，上下滑着看
+            let full = CGSize(width: max(1, geo.size.width - 28),
+                              height: max(1, geo.size.height - 20) * max(1, page.length))
+            ScrollView(.vertical, showsIndicators: page.length > 1) {
+                ZStack {
+                    // 纸。**跟快照共用同一份** `JournalPaperView`——
+                    // 纸纹在这儿画一套、那儿画一套的话，
+                    // 他看到的那张迟早跟她屏幕上的对不上
+                    JournalPaperView(hex: page.paperHex, pattern: page.paperPattern,
+                                     weave: page.paperWeave)
+                        .onTapGesture { picked = nil; charFocus = nil }
 
-                ForEach(page.elements.sorted { $0.z < $1.z }) { e in
-                    element(e, in: geo.size)
+                    ForEach(page.elements.sorted { $0.z < $1.z }) { e in
+                        element(e, in: full)
+                    }
                 }
+                .frame(width: full.width, height: full.height)
+                // 手柄要按「手指相对元素中心转了多少度」来算，
+                // 所以得有一个跟这张纸对齐的坐标系。
+                .coordinateSpace(name: Self.canvasSpace)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
             }
-            // 手柄要按「手指相对元素中心转了多少度」来算，
-            // 所以得有一个跟这张纸对齐的坐标系。
-            .coordinateSpace(name: Self.canvasSpace)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            // 一屏的页不用滑；选中东西的时候也不滑，免得拖东西变成翻页
+            .scrollDisabled(page.length <= 1 || picked != nil)
         }
+    }
+
+    // MARK: 晾衣绳
+
+    /// 一样东西大概有多高的一半（没缩放）。挂上绳子要按它把顶边对到绳上
+    private func halfHeight(_ e: JournalElement) -> CGFloat {
+        switch e.kind {
+        case .photo:   return e.pattern == "white" ? 67 : (e.pattern == "film" ? 69 : 60)
+        case .frame:   return 76
+        case .sticker: return 36
+        case .cutout:  return 46
+        case .note:    return 48
+        case .stamp:   return 31
+        case .quote:   return 40
+        default:       return 0
+        }
+    }
+
+    /// 拖完一样东西：顶边落在某根绳子边上就挂上去（夹子夹住），离远了就取下来
+    private func hangIfNear(_ id: UUID, in size: CGSize) {
+        guard let i = page.elements.firstIndex(where: { $0.id == id }) else { return }
+        let e = page.elements[i]
+        let h = halfHeight(e) * e.scale
+        guard h > 0 else { return }
+        let cx = e.x * size.width, cy = e.y * size.height
+        var best: (rope: JournalElement, y: CGFloat)?
+        for r in page.elements where r.kind == .rope && abs(r.angle) < 10 {
+            let rx = r.x * size.width, ry = r.y * size.height
+            guard let dy = JournalRopeGeometry.dy(atX: (cx - rx) / r.scale) else { continue }
+            let ropeY = ry + dy * r.scale
+            let gap = abs((cy - h) - ropeY)
+            if gap < 30, best.map({ gap < abs((cy - h) - $0.y) }) ?? true {
+                best = (r, ropeY)
+            }
+        }
+        if let b = best {
+            page.elements[i].hangOn = b.rope.id.uuidString
+            page.elements[i].y = (b.y + h - 2) / size.height
+            page.elements[i].angle = max(-8, min(8, page.elements[i].angle))
+        } else if !e.hangOn.isEmpty {
+            page.elements[i].hangOn = ""
+        }
+    }
+
+    // MARK: 撤回、加长
+
+    private func undo() {
+        guard let last = history.popLast() else { return }
+        undoing = true
+        page = last
+        picked = nil
+        charFocus = nil
+        store.save(page)
+    }
+
+    /// 往下多半屏。东西留在原来的地方（比例跟着换算）
+    private func lengthen() {
+        let old = max(1, page.length)
+        guard old < 3 else { return }
+        let new = old + 0.5
+        for i in page.elements.indices { page.elements[i].y *= old / new }
+        page.length = new
+        store.save(page)
     }
 
     /// 这张纸的坐标系。手柄算角度要用。
@@ -243,13 +328,24 @@ struct JournalPageView: View {
                         dragBy = v.translation
                     }
                     .onEnded { v in
+                        let dx = v.translation.width / size.width
+                        let dy = v.translation.height / size.height
                         commit(e.id) {
-                            $0.x = min(1.05, max(-0.05,
-                                $0.x + v.translation.width / size.width))
-                            $0.y = min(1.05, max(-0.05,
-                                $0.y + v.translation.height / size.height))
+                            $0.x = min(1.05, max(-0.05, $0.x + dx))
+                            $0.y = min(1.05, max(-0.05, $0.y + dy))
                             $0.z = nextZ
                         }
+                        if e.kind == .rope {
+                            // 拖绳子：挂着的那几样跟着走
+                            let rid = e.id.uuidString
+                            for i in page.elements.indices where page.elements[i].hangOn == rid {
+                                page.elements[i].x += dx
+                                page.elements[i].y += dy
+                            }
+                        } else {
+                            hangIfNear(e.id, in: size)
+                        }
+                        store.save(page)
                         dragBy = .zero
                     }
             )
@@ -427,7 +523,8 @@ struct JournalPageView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(JournalKind.allCases, id: \.self) { kind in
+                    paletteButton("arrow.uturn.backward", "撤回", enabled: !history.isEmpty) { undo() }
+                    ForEach(JournalKind.addable, id: \.self) { kind in
                         Button {
                             add(kind)
                         } label: {
@@ -453,7 +550,7 @@ struct JournalPageView: View {
                         VStack(spacing: 3) {
                             Image(systemName: "doc.plaintext")
                                 .font(.app(15))
-                            Text("纸底")
+                            Text("纸和风格")
                                 .font(.app(9))
                         }
                         .foregroundStyle(Theme.textSoft(scheme))
@@ -462,11 +559,22 @@ struct JournalPageView: View {
                             .fill(Theme.softFillDeep))
                     }
                     .buttonStyle(.plain)
+                    paletteButton("arrow.down.to.line.compact", "加长", enabled: page.length < 3) { lengthen() }
                 }
                 .padding(.horizontal, 14)
             }
 
             if showingPapers {
+                // 整页风格：纸、字、胶带、照片边框和色调一起换，位置不动
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 7) {
+                        ForEach(JournalTheme.all) { t in
+                            themeChip(t)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                }
+
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 7) {
                         // 现成的几张纸之外，也能自己调一个——
@@ -619,6 +727,7 @@ struct JournalPageView: View {
     /// 这一类有没有可选的样子。没有就返回 nil，那一排不出现。
     static func styles(for kind: JournalKind) -> [(String, String)]? {
         switch kind {
+        case .text:  return JournalKit.fonts
         case .frame: return JournalKit.frameStyles
         case .photo: return JournalKit.photoEdges
         case .note:  return JournalKit.noteStyles
@@ -806,7 +915,7 @@ struct JournalPageView: View {
                 // ⚠️ 「改文字」得单独给个钮。
                 // 以前是「选中之后再点一下」进编辑，可现在点字是选那个字——
                 // 一个动作不能既是选字又是改内容。
-                if e.kind == .text || e.kind == .note || e.kind == .quote {
+                if e.kind == .text || e.kind == .note || e.kind == .quote || e.kind == .strip {
                     small("改文字") {
                         draftText = e.text
                         editingText = e
@@ -1056,7 +1165,13 @@ struct JournalPageView: View {
             }
             small("置顶") { commit(e.id) { $0.z = nextZ } }
             small("删除") {
-                if !e.imageName.isEmpty { ImageStore.delete(e.imageName) }
+                if !e.imageName.isEmpty { dropped.insert(e.imageName) }
+                if e.kind == .rope {
+                    let rid = e.id.uuidString
+                    for i in page.elements.indices where page.elements[i].hangOn == rid {
+                        page.elements[i].hangOn = ""
+                    }
+                }
                 page.elements.removeAll { $0.id == e.id }
                 picked = nil
                 charFocus = nil
@@ -1067,6 +1182,60 @@ struct JournalPageView: View {
         .padding(.trailing, 12)
         .frame(maxHeight: .infinity)
         .background(.ultraThinMaterial)
+    }
+
+    /// 加号那一排里的一个钮（撤回、加长）
+    private func paletteButton(_ icon: String, _ title: String, enabled: Bool,
+                               _ act: @escaping () -> Void) -> some View {
+        Button(action: act) {
+            VStack(spacing: 3) {
+                Image(systemName: icon).font(.app(15))
+                Text(title).font(.app(9))
+            }
+            .foregroundStyle(Theme.textSoft(scheme).opacity(enabled ? 1 : 0.35))
+            .frame(width: 52, height: 46)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Theme.softFillDeep))
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+    }
+
+    /// 风格那一排里的一格：纸的小样 + 字 + 一小截胶带
+    private func themeChip(_ t: JournalTheme) -> some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.25)) {
+                JournalTheme.apply(t, to: &page, seed: Int.random(in: 0..<10))
+            }
+            store.save(page)
+        } label: {
+            VStack(spacing: 3) {
+                JournalPaperView(hex: t.paper, pattern: t.pattern, weave: t.weave)
+                    .frame(width: 46, height: 32)
+                    .overlay(alignment: .bottomLeading) {
+                        Text("字")
+                            .font(.system(size: 11, weight: .medium,
+                                          design: JournalElementView.design(t.font)))
+                            .foregroundStyle(Color(hexString: t.ink) ?? .black)
+                            .padding(4)
+                    }
+                    .overlay(alignment: .topTrailing) {
+                        Rectangle().fill((Color(hexString: t.tapes[0]) ?? .gray).opacity(0.85))
+                            .frame(width: 16, height: 6)
+                            .rotationEffect(.degrees(-12))
+                            .padding(4)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(app.settings.accentColor,
+                                          lineWidth: page.themeID == t.id ? 2 : 0)
+                    }
+                Text(t.name)
+                    .font(.app(9))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private func small(_ t: String, run: @escaping () -> Void) -> some View {
@@ -1163,7 +1332,7 @@ struct JournalPageView: View {
             guard let name else { return }
             await MainActor.run {
                 commit(id) {
-                    if !$0.imageName.isEmpty { ImageStore.delete($0.imageName) }
+                    if !$0.imageName.isEmpty { dropped.insert($0.imageName) }
                     $0.imageName = name
                 }
                 photoItem = nil

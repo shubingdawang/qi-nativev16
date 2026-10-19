@@ -27,12 +27,46 @@ struct JournalElementView: View {
 
     init(_ e: JournalElement) { self.e = e }
 
+    /// 字体：整页风格改的是 `pattern`
+    static func design(_ key: String) -> Font.Design {
+        switch key {
+        case "mono":  return .monospaced
+        case "sans":  return .default
+        case "round": return .rounded
+        default:      return .serif
+        }
+    }
+
     var body: some View {
+        content
+            .overlay(alignment: .top) {
+                // 挂在晾衣绳上的那几样：顶上一只小木夹
+                if !e.hangOn.isEmpty {
+                    JournalPeg().offset(y: -7)
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
             switch e.kind {
             case .text:
                 // 逐字设过颜色／大小的走 `JournalCharText`，没设过的它自己
                 // 退回一个 `Text`——那条快路上换行断词全归系统管。
-                JournalCharText(element: e)
+                JournalCharText(element: e, design: Self.design(e.pattern))
+
+            case .rope:
+                JournalRope(color: e.color)
+
+            case .strip:
+                Text(e.text)
+                    .font(.system(size: 9.5, design: .monospaced))
+                    .foregroundStyle(e.color)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(e.color.opacity(0.09))
 
             case .tape:
                 // 胶带：半透明一条，两头是撕开的毛边，花纹画在上面
@@ -152,6 +186,7 @@ struct JournalElementView: View {
                             .scaledToFill()
                             .frame(width: 120, height: 120)
                             .clipped()
+                            .modifier(JournalPhotoTone(tone: e.tone))
                     } else {
                         Rectangle().fill(Color.gray.opacity(0.3))
                             .frame(width: 120, height: 120)
@@ -165,6 +200,7 @@ struct JournalElementView: View {
                     if let img = ImageStore.load(e.imageName) {
                         Image(uiImage: img).resizable().scaledToFill()
                             .frame(width: 116, height: 116).clipped()
+                            .modifier(JournalPhotoTone(tone: e.tone))
                     } else {
                         Rectangle().fill(Color(hexString: "DDD8CE")!)
                             .frame(width: 116, height: 116)
@@ -265,12 +301,14 @@ enum JournalSnapshot {
     /// 不截屏、不用她配合、不需要那一页正开着。
     /// 她随手做的一页，他什么时候想看都能看到当时的样子。
     static func png(_ page: JournalPage) -> UIImage? {
+        // 加长过的页照比例画长（宽不变）
+        let full = CGSize(width: size.width, height: size.height * max(1, page.length))
         let renderer = ImageRenderer(content:
-            JournalCanvas(page: page, size: size)
+            JournalCanvas(page: page, size: full)
                 .environment(\.colorScheme, .light)   // 手帐是纸，永远按浅色画
         )
-        renderer.scale = 2
-        renderer.proposedSize = ProposedViewSize(size)
+        renderer.scale = page.length > 1.5 ? 1.5 : 2
+        renderer.proposedSize = ProposedViewSize(full)
         return renderer.uiImage
     }
 
@@ -325,9 +363,90 @@ enum JournalSnapshot {
                 lines.append("· 一道胶带" + (p.isEmpty || p == "素" ? "" : "（" + p + "）"))
             case .clip:
                 lines.append("· 一个夹子")
+            case .rope:
+                lines.append("· 一根晾衣绳")
+            case .strip:
+                lines.append("· 拍摄信息：" + e.text)
             }
         }
         if page.elements.isEmpty { lines.append("（这一页还是空的）") }
         return lines.joined(separator: "\n")
+    }
+}
+
+// MARK: - 晾衣绳、小木夹、照片色调
+
+/// 一根微微下垂的绳子，两头各一颗钉子。绳子形状跟 `JournalRopeGeometry` 算的一样
+struct JournalRope: View {
+    let color: Color
+
+    var body: some View {
+        Canvas { ctx, size in
+            let g = JournalRopeGeometry.self
+            var p = Path()
+            p.move(to: CGPoint(x: g.inset, y: g.endY))
+            p.addQuadCurve(to: CGPoint(x: g.width - g.inset, y: g.endY),
+                           control: CGPoint(x: g.width / 2, y: g.endY + g.sag * 2))
+            ctx.stroke(p, with: .color(color), style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+            for x in [g.inset, g.width - g.inset] {
+                ctx.fill(Path(ellipseIn: CGRect(x: x - 3, y: g.endY - 3, width: 6, height: 6)),
+                         with: .color(color.opacity(0.9)))
+            }
+        }
+        .frame(width: JournalRopeGeometry.width, height: JournalRopeGeometry.height)
+    }
+}
+
+/// 绳子的尺寸（元素自己的坐标，没缩放）。贴东西挂上去要按它算绳在哪
+enum JournalRopeGeometry {
+    static let width: CGFloat = 300
+    static let height: CGFloat = 44
+    static let inset: CGFloat = 5
+    /// 两头离顶上多远
+    static let endY: CGFloat = 7
+    /// 中间往下垂多少
+    static let sag: CGFloat = 26
+
+    /// 绳子在横坐标 x（相对绳子中心，没缩放）处离绳子中心的竖直距离
+    static func dy(atX x: CGFloat) -> CGFloat? {
+        let half = width / 2 - inset
+        guard abs(x) <= half else { return nil }
+        let t = (x + half) / (half * 2)
+        return (endY - height / 2) + sag * 4 * t * (1 - t)
+    }
+}
+
+/// 挂东西的小木夹
+struct JournalPeg: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+            .fill(Color(hexString: "C9A27A") ?? .brown)
+            .overlay {
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .strokeBorder(Color(hexString: "8A6A48") ?? .brown, lineWidth: 0.8)
+            }
+            .overlay { Rectangle().fill(Color(hexString: "8A6A48") ?? .brown).frame(width: 7, height: 0.8) }
+            .frame(width: 7, height: 15)
+            .shadow(color: .black.opacity(0.18), radius: 1, y: 1)
+    }
+}
+
+/// 照片的色调：整页风格换的
+struct JournalPhotoTone: ViewModifier {
+    let tone: String
+
+    func body(content: Content) -> some View {
+        switch tone {
+        case "warm":
+            content.saturation(0.82)
+                .colorMultiply(Color(red: 1, green: 0.95, blue: 0.86))
+        case "mono":
+            content.grayscale(1).contrast(1.05)
+        case "cyan":
+            content.grayscale(1)
+                .colorMultiply(Color(red: 0.62, green: 0.72, blue: 0.84))
+        default:
+            content
+        }
     }
 }

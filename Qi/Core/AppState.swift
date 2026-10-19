@@ -1413,6 +1413,54 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// 手帐本里点「交给他」：读照片的拍摄信息、存成一张请求，再把照片和说明送进他那一窗
+    func handJournalToHim(day: Date, datas: [Data], moods: [String], note: String) async {
+        guard let cid = hisConversationID() else { return }
+        var photos: [JournalAskPhoto] = []
+        var images: [UIImage] = []
+        var places: [String: String] = [:]
+        for d in datas.prefix(JournalHandOffSheet.maxPhotos) {
+            var info = JournalPhotoInfo.read(d)
+            guard let img = UIImage(data: d),
+                  let name = ImageStore.save(ImageStore.downscale(img, maxSide: 1600)) else { continue }
+            info.name = name
+            if let la = info.lat, let lo = info.lon {
+                // 挨得很近的几张只问一次地名
+                let key = String(format: "%.3f,%.3f", la, lo)
+                if let hit = places[key] {
+                    info.place = hit
+                } else {
+                    info.place = await JournalPhotoInfo.place(lat: la, lon: lo)
+                    places[key] = info.place
+                }
+            }
+            photos.append(info)
+            images.append(ImageStore.downscale(img, maxSide: 1024))
+        }
+        let page = JournalPage(day: day)
+        JournalStore.shared.addAsk(JournalAsk(dayKey: page.dayKey, photos: photos, moods: moods, note: note))
+
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "M月d日"
+        var lines = ["（她把 \(f.string(from: day)) 交给你做一页手帐"
+                     + (photos.isEmpty ? "，没挑照片（用那天她在聊天里发的）。" : "，附了 \(photos.count) 张照片，按顺序：")]
+        let marks = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨"]
+        for (i, p) in photos.enumerated() {
+            lines.append(marks[min(i, marks.count - 1)] + " " + (p.line.isEmpty ? "拍摄信息读不到" : p.line))
+        }
+        if !moods.isEmpty { lines.append("她想要的感觉：" + moods.joined(separator: "、")) }
+        if !note.isEmpty { lines.append("她说：「" + note + "」") }
+        lines.append("看完照片用 journal_make 拼这一页（date 填 \(page.dayKey)）。照片和拍摄信息会自己放上去，你写标题和几段话；读不到的信息别编。）")
+        Notifier.shared.openConversationID = cid
+        var waited = 0
+        while runningConversationIDs.contains(cid), waited < 240 {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            waited += 1
+        }
+        send(text: lines.joined(separator: "\n"), images: images, in: cid, narration: true)
+    }
+
     /// 不打开 App 的那一种：等他说完，人不在 App 里就发一条通知
     func shortcutToHimAndNotify(_ text: String) async {
         guard let cid = hisConversationID() else { return }
@@ -7223,25 +7271,45 @@ final class AppState: ObservableObject {
             if parts.texts.count <= 1, raw.contains("\n") {
                 parts.texts = raw.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
             }
-            parts.texts = Array(parts.texts.prefix(3))
+            parts.texts = Array(parts.texts.prefix(4))
             parts.stickers = ((args["stickers"] as? String) ?? "").map { String($0) }
                 .filter { $0.unicodeScalars.contains { $0.properties.isEmojiPresentation || $0.properties.isEmoji && $0.value > 0x2000 } }
             parts.stickers = Array(parts.stickers.prefix(3))
             parts.stamp = String(((args["stamp"] as? String) ?? "").prefix(2))
             parts.mood = String(((args["mood"] as? String) ?? "").prefix(40))
-            // 那天她在聊天里发的照片（复制一份，聊天删了这页还在）
+            // 她点「交给他」交过来的照片优先；没有就用那天她在聊天里发的（都复制一份，删了原图这页还在）
+            let dayKey = JournalPage(day: day).dayKey
+            let ask = jr.ask(for: dayKey)
             var photos: [String] = []
-            if let cid = hisConversationID(), let conv = conversation(cid) {
+            var times: [String] = []
+            func copy(_ n: String) -> String? {
+                guard let data = try? Data(contentsOf: ImageStore.url(for: n)) else { return nil }
+                let ext = (n as NSString).pathExtension
+                return ImageStore.save(data: data, ext: ext.isEmpty ? "jpg" : ext)
+            }
+            let hm = DateFormatter()
+            hm.dateFormat = "HH:mm"
+            if let ask, !ask.photos.isEmpty {
+                for ph in ask.photos.prefix(4) {
+                    if let c = copy(ph.name) {
+                        photos.append(c)
+                        times.append(ph.time.map { hm.string(from: $0) } ?? "")
+                    }
+                }
+                parts.strip = ask.photos.first { !$0.shot.isEmpty || !$0.place.isEmpty }?.line ?? ""
+                parts.place = ask.photos.first { !$0.place.isEmpty }?.place ?? ""
+            } else if let cid = hisConversationID(), let conv = conversation(cid) {
                 for m in conv.messages where m.role == .user && cal.isDate(m.createdAt, inSameDayAs: day) {
-                    for n in m.imageNames where photos.count < 3 {
-                        if let data = try? Data(contentsOf: ImageStore.url(for: n)) {
-                            let ext = (n as NSString).pathExtension
-                            if let copy = ImageStore.save(data: data, ext: ext.isEmpty ? "jpg" : ext) { photos.append(copy) }
+                    for n in m.imageNames where photos.count < 4 {
+                        if let c = copy(n) {
+                            photos.append(c)
+                            times.append(hm.string(from: m.createdAt))
                         }
                     }
                 }
             }
             parts.photos = photos
+            parts.times = times
             // 那天的小票
             if (args["receipt"] as? Bool) ?? true {
                 let lines = AccountBook.shared.lines(on: day)
@@ -7252,18 +7320,30 @@ final class AppState: ObservableObject {
                 }
             }
             guard !parts.title.isEmpty || !parts.texts.isEmpty else { return ("写点什么再拼", true) }
-            parts.layout = Int.random(in: 0..<JournalAuto.layoutCount)
+            // 排法和风格：他点名的 > 她要的感觉 > 随便来
+            let wish = JournalAuto.pick(moods: ask?.moods ?? [])
+            if let l = args["layout"] as? String, let i = JournalAuto.layoutIndex(named: l) {
+                parts.layout = i
+            } else if let i = wish.layouts.randomElement() {
+                parts.layout = i
+            } else {
+                parts.layout = Int.random(in: 0..<JournalAuto.layoutCount)
+            }
+            var theme: JournalTheme?
+            if let st = (args["style"] as? String)?.trimmingCharacters(in: .whitespaces), !st.isEmpty {
+                theme = JournalTheme.find(st) ?? JournalTheme.all.first { $0.name == st || st.contains($0.name) }
+            }
+            if theme == nil, let id = wish.themes.randomElement() { theme = JournalTheme.find(id) }
+            if theme == nil { theme = JournalTheme.all.randomElement() }
             var page = jr.newPage(on: cal.date(bySettingHour: 21, minute: 0, second: 0, of: day) ?? day)
             page.title = parts.title
-            page.auto = parts
             page.shared = true
-            page.elements = JournalAuto.compose(parts, layout: parts.layout, seed: UInt64.random(in: 1...UInt64.max))
-            let soft = JournalKit.papers.filter { $0.0 != "深棕" }
-            page.paperHex = soft.randomElement()?.1 ?? page.paperHex
+            JournalAuto.build(parts, theme: theme, into: &page)
             jr.save(page)
-            return ("拼好了：\(page.dayKey) 那一页，用了 \(photos.count) 张她那天发的照片"
+            jr.clearAsk(dayKey)
+            return ("拼好了：\(page.dayKey) 那一页，排法「\(JournalAuto.layoutNames[parts.layout])」、风格「\(theme?.name ?? "")」，用了 \(photos.count) 张照片"
                     + (parts.receipt.isEmpty ? "" : "和那天的小票")
-                    + "。她在手帐里能摇骰子换排法。", false)
+                    + "。她在手帐里能摇骰子换排法和风格。", false)
 
         case "journal_note":
             let jr = JournalStore.shared
