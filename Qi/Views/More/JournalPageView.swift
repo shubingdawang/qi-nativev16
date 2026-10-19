@@ -223,7 +223,7 @@ struct JournalPageView: View {
         let h = halfHeight(e) * e.scale
         guard h > 0 else { return }
         let cx = e.x * size.width, cy = e.y * size.height
-        var best: (rope: JournalElement, y: CGFloat)?
+        var best: (rope: JournalElement, y: Double)?
         for r in page.elements where r.kind == .rope && abs(r.angle) < 10 {
             let rx = r.x * size.width, ry = r.y * size.height
             guard let dy = JournalRopeGeometry.dy(atX: (cx - rx) / r.scale) else { continue }
