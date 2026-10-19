@@ -867,6 +867,10 @@ struct ExpenseEditor: View {
     @State private var amountText: String
     @State private var spreadOn: Bool
     @State private var daysText: String
+    /// 按用量算（一包几片）
+    @State private var countOn: Bool
+    @State private var packText: String
+    @State private var unitText: String
     /// 0 = 不问，-1 = 自己填
     @State private var remind: Int
     @State private var remindText: String
@@ -891,6 +895,9 @@ struct ExpenseEditor: View {
         _amountText = State(initialValue: start.amount > 0 ? WageStore.money(start.amount) : "")
         _spreadOn = State(initialValue: (start.spreadDays ?? 0) > 1)
         _daysText = State(initialValue: start.spreadDays.map { String($0) } ?? "")
+        _countOn = State(initialValue: (start.packCount ?? 0) > 0)
+        _packText = State(initialValue: start.packCount.map { String($0) } ?? "")
+        _unitText = State(initialValue: start.unit)
         let r = start.remindEvery ?? 0
         _remind = State(initialValue: Self.remindPresets.contains(r) ? r : -1)
         _remindText = State(initialValue: r > 0 ? String(r) : "")
@@ -1134,17 +1141,54 @@ struct ExpenseEditor: View {
 
     // MARK: 摊销
 
+    /// 0 整笔，1 按天摊，2 按用量
+    private var mode: Binding<Int> {
+        Binding(get: { countOn ? 2 : (spreadOn ? 1 : 0) },
+                set: { v in
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        spreadOn = v == 1
+                        countOn = v == 2
+                    }
+                })
+    }
+
     private var spreadSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Toggle(isOn: $spreadOn.animation(.easeOut(duration: 0.2))) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("按天摊开算").font(.app(14)).foregroundStyle(main)
-                    Text("能用很久的东西：每天只算一份，用完那天把剩下的一起算上")
-                        .font(.app(11))
-                        .foregroundStyle(muted)
-                }
+            Text("怎么算").font(.app(14)).foregroundStyle(main)
+            Picker("", selection: mode) {
+                Text("整笔").tag(0)
+                Text("按天摊").tag(1)
+                Text("按用量").tag(2)
             }
-            .tint(accent)
+            .pickerStyle(.segmented)
+            Text(countOn ? "数得清的东西（卫生巾、药）：一包几片，每天用了几就算几份。从买的那天起，每天的编辑页里会问「今天用了吗」，用完就不再出现"
+                 : spreadOn ? "能用很久的东西：每天只算一份，用完那天把剩下的一起算上"
+                 : "整笔算在花钱那天")
+                .font(.app(11))
+                .foregroundStyle(muted)
+            if countOn {
+                HStack(spacing: 6) {
+                    Text("一包几").font(.app(13.5)).foregroundStyle(main)
+                    Spacer()
+                    TextField("20", text: $packText)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .font(.app(14, weight: .medium))
+                        .frame(width: 60)
+                    TextField("片", text: $unitText)
+                        .multilineTextAlignment(.center)
+                        .font(.app(13.5))
+                        .frame(width: 36)
+                        .padding(.vertical, 4)
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Theme.softFillDeep))
+                }
+                if let n = Int(packText), n > 0, amount > 0 {
+                    Text("每" + unitName + "约 " + BookFormat.money(amount / Double(n)))
+                        .font(.app(11.5))
+                        .foregroundStyle(accent)
+                }
+                if !isNew { countUsedRow }
+            }
             if spreadOn {
                 HStack(spacing: 6) {
                     Text("用多少天").font(.app(13.5)).foregroundStyle(main)
@@ -1192,6 +1236,43 @@ struct ExpenseEditor: View {
             }
         }
         .glassCard()
+    }
+
+    private var unitName: String {
+        let u = unitText.trimmingCharacters(in: .whitespaces)
+        return u.isEmpty ? "片" : u
+    }
+
+    /// 按用量算的那一笔：用了几、还剩几，可以提前标成用完
+    private var countUsedRow: some View {
+        let total = min(Int(packText) ?? 0, e.usage.values.reduce(0, +))
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("已用 \(total)/\(Int(packText) ?? 0) " + unitName)
+                    .font(.app(12.5))
+                    .foregroundStyle(muted)
+                Spacer()
+                if e.usedUp != nil {
+                    Button("还没用完") { e.usedUp = nil }
+                        .font(.app(12.5, weight: .medium))
+                        .foregroundStyle(accent)
+                } else {
+                    Button("已用完") { e.usedUp = Date() }
+                        .font(.app(12.5, weight: .medium))
+                        .foregroundStyle(accent)
+                }
+            }
+            if e.usedUp != nil {
+                DatePicker(selection: Binding(get: { e.usedUp ?? Date() }, set: { e.usedUp = $0 }),
+                           in: min(e.at, Date())...Date(), displayedComponents: .date) {
+                    Text("用完那天").font(.app(13.5)).foregroundStyle(main)
+                }
+                .tint(accent)
+                Text("没用的那几" + unitName + "算在这一天")
+                    .font(.app(11))
+                    .foregroundStyle(muted)
+            }
+        }
     }
 
     private var usedUpRow: some View {
@@ -1247,11 +1328,20 @@ struct ExpenseEditor: View {
         out.name = out.name.trimmingCharacters(in: .whitespacesAndNewlines)
         out.note = out.note.trimmingCharacters(in: .whitespacesAndNewlines)
         if out.name.isEmpty { out.name = book.category(out.category).name }
-        if spreadOn, let n = Int(daysText), n > 1 {
+        if countOn, let n = Int(packText), n > 0 {
+            out.packCount = n
+            out.unit = unitName
+            out.spreadDays = nil
+            out.remindEvery = nil
+        } else if spreadOn, let n = Int(daysText), n > 1 {
+            out.packCount = nil
+            out.usage = [:]
             out.spreadDays = n
             let r = remind == -1 ? (Int(remindText) ?? 0) : remind
             out.remindEvery = r > 0 ? r : nil
         } else {
+            out.packCount = nil
+            out.usage = [:]
             out.spreadDays = nil
             out.remindEvery = nil
             out.usedUp = nil

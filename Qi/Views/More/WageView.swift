@@ -994,6 +994,10 @@ struct WageDayEditor: View {
     private let existed: Bool
     @State private var confirmingDelete = false
 
+    /// 记账里按用量算的那几样（卫生巾、药）：这一天用了几。点「完成」才写回去
+    @State private var usageList: [Expense] = []
+    @State private var usage: [UUID: Int] = [:]
+
     /// 打开时直接改的那一笔
     private let editEntry: UUID?
     @FocusState private var whatFocused: Bool
@@ -1028,6 +1032,7 @@ struct WageDayEditor: View {
                             if let r = store.roster(on: date) { rosterCard(r) }
                             if store.isPayday(date) { WagePayCard(date: date) }
                             WageAnniversaryCard(date: date)
+                            if !usageList.isEmpty { usageCard }
                             noteCard
                             shiftCard
                             if day.shift != nil { rateCard }
@@ -1068,7 +1073,13 @@ struct WageDayEditor: View {
                     .fontWeight(.semibold)
                 }
             }
-            .onAppear { hourlyText = WageStore.money(day.hourly); noteBox.text = day.note }
+            .onAppear {
+                hourlyText = WageStore.money(day.hourly)
+                noteBox.text = day.note
+                let book = AccountBook.shared
+                usageList = book.usageItems(on: date)
+                usage = Dictionary(uniqueKeysWithValues: usageList.map { ($0.id, book.used($0, on: date)) })
+            }
             .fullScreenCover(item: Binding(get: { rosterShown.map { WageImageRef(name: $0) } },
                                            set: { rosterShown = $0?.name })) { ref in
                 ZStack {
@@ -1119,6 +1130,47 @@ struct WageDayEditor: View {
         .glassCard()
     }
 
+    /// 今天用了吗：记账里按用量算的东西，买了以后每天问一句，用完就不再出现
+    private var usageCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "checklist").foregroundStyle(Theme.textMuted(scheme))
+                Text("今天用了吗").font(.app(14, weight: .semibold)).foregroundStyle(Theme.textMain(scheme))
+            }
+            ForEach(usageList) { e in
+                usageRow(e)
+            }
+        }
+        .glassCard()
+    }
+
+    private func usageRow(_ e: Expense) -> some View {
+        let p = e.packCount ?? 0
+        let before = AccountBook.shared.usedBefore(e, date)
+        let n = usage[e.id] ?? 0
+        let room = max(1, p - before)
+        return VStack(alignment: .leading, spacing: 6) {
+            Toggle(isOn: Binding(get: { n > 0 },
+                                 set: { on in withAnimation(.easeOut(duration: 0.2)) { usage[e.id] = on ? 1 : 0 } })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(e.name).font(.app(13.5)).foregroundStyle(Theme.textMain(scheme))
+                    Text("剩 \(max(0, p - before - n))/\(p) " + e.unit)
+                        .font(.app(11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                }
+            }
+            .tint(app.settings.accentColor)
+            if n > 0 {
+                Stepper(value: Binding(get: { usage[e.id] ?? 1 }, set: { usage[e.id] = $0 }),
+                        in: 1...room) {
+                    Text("用了 \(n) " + e.unit)
+                        .font(.app(12.5))
+                        .foregroundStyle(Theme.textSoft(scheme))
+                }
+            }
+        }
+    }
+
     /// 备注：写这一天想记的话，会显示在当天的卡片里
     private var noteCard: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1136,6 +1188,7 @@ struct WageDayEditor: View {
         day.note = noteBox.text.trimmingCharacters(in: .whitespacesAndNewlines)
         commitDraftEntry()
         store.put(day, on: date)
+        for e in usageList { AccountBook.shared.setUsage(e.id, on: date, count: usage[e.id] ?? 0) }
         committed = true
         let kept = Set(day.entries.flatMap(\.images))
         for n in addedNow.union(original).subtracting(kept) {

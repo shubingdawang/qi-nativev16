@@ -59,6 +59,12 @@ struct Expense: Codable, Identifiable, Hashable {
     var usedUp: Date?
     /// 上次问的时候
     var lastAsked: Date?
+    /// 按用量算：一包几片。nil = 不按用量（卫生巾、药这种数得清的东西用）
+    var packCount: Int?
+    /// 按用量算的单位：片、颗、个
+    var unit = "片"
+    /// 按用量算：每天用了几（`WageStore.key` 那天 → 数量）
+    var usage: [String: Int] = [:]
 
     static let maxImages = 5
 }
@@ -77,6 +83,9 @@ extension Expense {
         remindEvery = (try? c.decodeIfPresent(Int.self, forKey: .remindEvery)) ?? nil
         usedUp = (try? c.decodeIfPresent(Date.self, forKey: .usedUp)) ?? nil
         lastAsked = (try? c.decodeIfPresent(Date.self, forKey: .lastAsked)) ?? nil
+        packCount = (try? c.decodeIfPresent(Int.self, forKey: .packCount)) ?? nil
+        unit = (try? c.decodeIfPresent(String.self, forKey: .unit)) ?? "片"
+        usage = (try? c.decodeIfPresent([String: Int].self, forKey: .usage)) ?? [:]
     }
 }
 
@@ -333,6 +342,7 @@ final class AccountBook: ObservableObject {
     /// 以前每一天的那份一起改——填 100 天、第 95 天用完就是每天 1/95，
     /// 第 105 天才用完就是每天 1/105（超出的那几天也补上）。
     func share(_ e: Expense, on day: Date) -> Double {
+        if let p = e.packCount, p > 0 { return countShare(e, pack: p, on: day) }
         guard let n = e.spreadDays, n > 1 else { return cal.isDate(e.at, inSameDayAs: day) ? e.amount : 0 }
         let k = dayIndex(e, day)
         guard k >= 0 else { return 0 }
@@ -349,15 +359,80 @@ final class AccountBook: ObservableObject {
         return e.amount / Double(e.usedUp != nil ? daysUsed(e) : n)
     }
 
+    // MARK: 按用量算
+
+    func isCounted(_ e: Expense) -> Bool { (e.packCount ?? 0) > 0 }
+
+    /// 那一天用了几
+    func used(_ e: Expense, on day: Date) -> Int { e.usage[WageStore.key(day)] ?? 0 }
+
+    /// 那一天之前一共用了几（不含那天）
+    func usedBefore(_ e: Expense, _ day: Date) -> Int {
+        let k = WageStore.key(day)
+        return e.usage.filter { $0.key < k }.reduce(0) { $0 + $1.value }
+    }
+
+    /// 一共用了几（封顶一包）
+    func usedTotal(_ e: Expense) -> Int {
+        min(e.packCount ?? 0, e.usage.values.reduce(0, +))
+    }
+
+    /// 还剩几
+    func left(_ e: Expense) -> Int { max(0, (e.packCount ?? 0) - usedTotal(e)) }
+
+    /// 按用量算的那一笔，这一天算多少：用了几就算几份；点了「已用完」，剩下的记在那天
+    private func countShare(_ e: Expense, pack p: Int, on day: Date) -> Double {
+        let d = cal.startOfDay(for: day)
+        guard d >= cal.startOfDay(for: e.at) else { return 0 }
+        if let u = e.usedUp, d > cal.startOfDay(for: u) { return 0 }
+        let before = usedBefore(e, day)
+        let today = min(used(e, on: day), max(0, p - before))
+        var n = today
+        if let u = e.usedUp, cal.isDate(u, inSameDayAs: day) { n += max(0, p - before - today) }
+        return e.amount * Double(n) / Double(p)
+    }
+
+    /// 这一天的编辑页里要问「今天用了吗」的那几样：买了以后、还没用完的；
+    /// 用完以后就不再出现（用完之前那几天照样能改）
+    func usageItems(on day: Date) -> [Expense] {
+        let d = cal.startOfDay(for: day)
+        return file.expenses.filter { e in
+            guard let p = e.packCount, p > 0, d >= cal.startOfDay(for: e.at) else { return false }
+            if let u = e.usedUp, d > cal.startOfDay(for: u) { return false }
+            return used(e, on: day) > 0 || usedBefore(e, day) < p
+        }
+        .sorted { $0.at < $1.at }
+    }
+
+    /// 记那一天用了几。0 = 没用
+    func setUsage(_ id: UUID, on day: Date, count: Int) {
+        guard let i = file.expenses.firstIndex(where: { $0.id == id }) else { return }
+        let k = WageStore.key(day)
+        if count > 0 { file.expenses[i].usage[k] = count } else { file.expenses[i].usage[k] = nil }
+    }
+
     /// 这一天的每一笔
     func lines(on day: Date) -> [BookLine] {
         var out: [BookLine] = []
         for e in file.expenses {
             let v = share(e, on: day)
-            guard v > 0.0001 else { continue }
+            let counted = isCounted(e)
+            // 按用量算的：买的那天就算还没用，也列出来（不然这一笔哪天都看不见）
+            guard v > 0.0001 || (counted && cal.isDate(e.at, inSameDayAs: day)) else { continue }
             var note = ""
             var images = e.images
-            if let n = e.spreadDays, n > 1 {
+            if let p = e.packCount, p > 0 {
+                let u = used(e, on: day)
+                let rest = max(0, p - usedBefore(e, day) - u)
+                if cal.isDate(e.at, inSameDayAs: day) && u == 0 {
+                    note = "一包 \(p) \(e.unit) · 按用量算"
+                } else if let done = e.usedUp, cal.isDate(done, inSameDayAs: day) {
+                    note = "用了 \(u) \(e.unit) · 已用完"
+                } else {
+                    note = "用了 \(u) \(e.unit) · 剩 \(rest)/\(p)"
+                }
+                if !cal.isDate(e.at, inSameDayAs: day) { images = [] }
+            } else if let n = e.spreadDays, n > 1 {
                 let k = dayIndex(e, day) + 1
                 if e.usedUp != nil {
                     note = "摊销 \(k)/\(daysUsed(e)) 天 · 已用完"
@@ -506,6 +581,10 @@ final class AccountBook: ObservableObject {
         f.locale = Locale(identifier: "zh_CN")
         f.dateFormat = "M月d日 HH:mm"
         var s = "[\(shortID(e))] \(f.string(from: e.at)) · \(category(e.category).name) · \(e.name) ¥\(WageStore.money(e.amount))"
+        if let p = e.packCount, p > 0 {
+            s += " · 按用量算：一包 \(p) \(e.unit)，已用 \(usedTotal(e))"
+            if let u = e.usedUp { s += "，\(f.string(from: u)) 用完" }
+        }
         if let n = e.spreadDays, n > 1 {
             s += " · 摊 \(n) 天（每天 ¥\(WageStore.money(e.amount / Double(n)))）"
             if let u = e.usedUp { s += "，\(f.string(from: u)) 用完" }
