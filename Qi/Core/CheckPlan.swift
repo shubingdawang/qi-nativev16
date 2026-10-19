@@ -57,7 +57,7 @@ struct CheckReportIntent: AppIntent {
     @Parameter(title: "在做什么")
     var doing: String?
 
-    @Parameter(title: "截图", supportedContentTypes: [.image])
+    @Parameter(title: "截图", supportedTypeIdentifiers: ["public.image"])
     var shot: IntentFile?
 
     @Parameter(title: "健康数据")
