@@ -16,11 +16,13 @@ from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "Qi", "Core", "PixelSprite.swift")
-SHIFT = 2
+SHIFT = int(next((a.split('=')[1] for a in sys.argv if a.startswith('--shift=')), '2'))
 SKIP = {"lying", "lying2", "sleep", "bubble"}
 EYE_CHARS = set("kEf")
 COLS = set(range(8, 14)) | set(range(20, 26))
-ROWS = range(16, 27)
+ROWS = range(15, 23)
+# 哭的那两张眼泪一直流到下面，整条一起挪
+TEAR_ROWS = range(15, 27)
 
 
 def blocks(text):
@@ -30,10 +32,10 @@ def blocks(text):
         yield m.group(1), start + m.start(2), start + m.end(2), m.group(2)
 
 
-def shift_rows(rows):
+def shift_rows(rows, name=""):
     g = [list(r) for r in rows]
     moved = []
-    for r in ROWS:
+    for r in (TEAR_ROWS if name.startswith("cry") else ROWS):
         if r >= len(g):
             continue
         for c in sorted(COLS):
@@ -42,7 +44,7 @@ def shift_rows(rows):
     for r, c, _ in moved:
         g[r][c] = "p" if (14 <= r <= 27 and 6 <= c <= 27) else "."
     for r, c, ch in moved:
-        if r - SHIFT >= 0:
+        if 0 <= r - SHIFT < len(g):
             g[r - SHIFT][c] = ch
     return ["".join(x) for x in g]
 
@@ -84,19 +86,25 @@ def main():
             if name in SKIP:
                 continue
             rows = re.findall(r'"([^"]*)"', block)
-            new = shift_rows(rows)
+            new = shift_rows(rows, name)
             if new == rows:
                 continue
-            nb = block
-            for old_r, new_r in zip(rows, new):
-                nb = nb.replace('"' + old_r + '"', '"' + new_r + '"', 1) if old_r != new_r else nb
-            out = out[:a] + nb + out[b:]
+            # ⚠️ 按行号一行一行换，不能按字符串找：图纸里好几行长得一模一样，找第一个会换错行
+            nl = chr(10)
+            lines = block.split(nl)
+            k = 0
+            for li, line in enumerate(lines):
+                m = re.search(r'"([^"]*)"', line)
+                if m and k < len(new):
+                    lines[li] = line[:m.start(1)] + new[k] + line[m.end(1):]
+                    k += 1
+            out = out[:a] + nl.join(lines) + out[b:]
         open(SRC, "w", encoding="utf-8", newline="").write(out)
-        for n in ("glasses", "sunglasses"):
+        for n in (() if "--no-glasses" in sys.argv else ("glasses", "sunglasses")):
             p = os.path.join(ROOT, "Qi", "Resources", "furniture", "wear_" + n + ".png")
             im = Image.open(p).convert("RGBA")
             up = Image.new("RGBA", im.size, (0, 0, 0, 0))
-            up.paste(im, (0, -SHIFT * 8))
+            up.paste(im, (0, -SHIFT * 8))  # 图纸一行 = 图上 8 像素
             up.save(p, optimize=True)
         print("applied")
 
