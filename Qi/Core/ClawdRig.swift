@@ -877,7 +877,7 @@ enum ClawdRig {
     /// ## 怎么定位
     ///
     /// 图纸 **36 格宽、36 格高**（见 `ClawdSprites`；一格 = 1/2 个 SVG 单位）：
-    /// 身子 6..27 列、14..27 行，眼睛在 17..20 行，脚在 28..31 行。
+    /// 身子 6..27 列、14..27 行，眼睛在 16..19 行，脚在 28..31 行。
     /// 顶上 14 行、底下 4 行是留给手里道具的空。
     /// 所以帽子在头顶偏上、眼镜压在眼睛那一行、围巾在下巴底下、
     /// 靴子贴着脚、背包挂在身后偏一侧。
@@ -889,8 +889,8 @@ enum ClawdRig {
             return CGPoint(x: midX - itemW / 2,
                            y: CGFloat(bodyTop) - itemH + 3)
         case "glasses":
-            // 眼睛在第 17..20 行，镜框压在那一片上
-            return CGPoint(x: midX - itemW / 2, y: 17)
+            // 眼睛在第 16..19 行，镜框压在那一片上
+            return CGPoint(x: midX - itemW / 2, y: 16)
         case "bowtie":
             return CGPoint(x: midX - itemW / 2, y: 21)
         case "scarf":
@@ -918,7 +918,7 @@ enum ClawdRig {
     /// 位置和大小就得有个说法——就是这张表。
     ///
     /// ⚠️ **单位是图纸格**，跟身子那些常数同一套（图纸 36×36）：
-    /// 身子 6..27 列、14..27 行，眼睛 17..20 行，脚 28..31 行。
+    /// 身子 6..27 列、14..27 行，眼睛 16..19 行，脚 28..31 行。
     ///
     /// ⚠️ **只给宽和下沿，不给高。** 高度由图自己的长宽比算出来——
     /// 写死高度的话，换一张长宽比不同的图就会被压扁。
@@ -941,7 +941,7 @@ enum ClawdRig {
         // 现在有点像斗鸡眼。」——镜框比两只眼睛窄的时候，
         // 两个镜片都落在眼球内侧，看着就是斗鸡眼。
         // 身子横着 6..27 共 22 格，镜框给 21，正好一脸宽。
-        case "glasses":  return WearArt(width: 21, baseY: 23)
+        case "glasses":  return WearArt(width: 21, baseY: 22)
         case "bowtie":   return WearArt(width: 9,  baseY: 26)
         case "scarf":    return WearArt(width: 10, baseY: 30)
         case "bag":      return WearArt(width: 11, baseY: 27, dx: 7)
