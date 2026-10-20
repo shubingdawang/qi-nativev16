@@ -181,6 +181,10 @@ struct RootView: View {
             NavigationStack { MemoryLibraryView() }
                 .environmentObject(app)
         }
+        .sheet(isPresented: $notifier.openCheckIn) {
+            CheckInSheet()
+                .environmentObject(app)
+        }
 
 
     }

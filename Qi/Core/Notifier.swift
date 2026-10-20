@@ -18,6 +18,8 @@ final class Notifier: NSObject, ObservableObject {
     @Published var openConversationID: UUID?
     /// 点了「小屋有新内容」那条：打开记忆库
     @Published var openMemories = false
+    /// 点了「来查岗了」那条：弹出查岗页
+    @Published var openCheckIn = false
 
     private let center = UNUserNotificationCenter.current()
 
@@ -224,13 +226,16 @@ extension Notifier: UNUserNotificationCenterDelegate {
         let selfWake = info["selfWake"] as? Bool == true
         let nudge = info["nudge"] as? Bool == true
         let open = info["open"] as? String
+        let checkIn = info["checkIn"] as? Bool == true
         let conv = (info["conversation"] as? String).flatMap(UUID.init(uuidString:))
         DispatchQueue.main.async {
             MainActor.assumeIsolated {
                 // 他约的准点那条：**点开就行，别的什么都不用做**。
                 // App 一到前台 `WakeEngine.resume` → `advance` → 精确那条路在宽限窗口里兑现。
                 // ⚠️ 不能当兜底那条处理——那会多跑一次非精确的醒。
-                if selfWake {
+                if checkIn {
+                    Notifier.shared.openCheckIn = true
+                } else if selfWake {
                 } else if nudge {
                     // 兜底那条：点开的这一刻才真的去算他要说什么
                     Notifier.shared.pendingNudge = true

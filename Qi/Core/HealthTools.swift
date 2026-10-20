@@ -196,6 +196,12 @@ enum HealthTools {
         }
     }
 
+    /// 查岗时附上的今天的健康数据（读不到返回 nil）
+    static func todayBrief() async -> String? {
+        let r = await readHealth(["what": "all", "days": 1.0])
+        return r.1 ? nil : r.0.replacingOccurrences(of: "\n", with: "；")
+    }
+
     private static func readHealth(_ args: [String: Any]) async -> (String, Bool) {
         guard HKHealthStore.isHealthDataAvailable() else {
             return ("这台设备上没有「健康」（iPad 和模拟器就没有）。", true)

@@ -28,6 +28,8 @@ struct BeadProject: Codable, Identifiable, Hashable {
     var refY: Double = 0
     /// 参考图整张铺满板子（底图的格子跟板子的格子一一对上）。nil / false = 等比放进去
     var refFill: Bool?
+    /// 底图竖着再拉多少（图纸横竖格宽不一样时用，nil = 不拉）
+    var refStretchY: Double?
     /// 存成了零件（表情工坊「零件」那一页、动图「逐帧」里能加进来）
     var asPart: Bool?
     var updatedAt = Date()
@@ -70,6 +72,7 @@ extension BeadProject {
         let count = size * (rows ?? size)
         if cells.count != count { cells = Array(repeating: "", count: count) }
         refFill = (try? c.decodeIfPresent(Bool.self, forKey: .refFill)) ?? nil
+        refStretchY = (try? c.decodeIfPresent(Double.self, forKey: .refStretchY)) ?? nil
         asPart = (try? c.decodeIfPresent(Bool.self, forKey: .asPart)) ?? nil
         refImage = (try? c.decodeIfPresent(String.self, forKey: .refImage)) ?? ""
         refOpacity = (try? c.decodeIfPresent(Double.self, forKey: .refOpacity)) ?? 0.5
@@ -264,7 +267,7 @@ final class BeadStore: ObservableObject {
         g.saveGState()
         g.translateBy(x: bw / 2 + CGFloat(p.refX) * bw, y: bh / 2 + CGFloat(p.refY) * bh)
         g.rotate(by: CGFloat(p.refRotation) * .pi / 180)
-        g.scaleBy(x: CGFloat(p.refScale), y: CGFloat(p.refScale))
+        g.scaleBy(x: CGFloat(p.refScale), y: CGFloat(p.refScale * (p.refStretchY ?? 1)))
         image.draw(in: CGRect(x: -w / 2, y: -h / 2, width: w, height: h))
         g.restoreGState()
     }
@@ -305,8 +308,9 @@ enum BeadGrid {
     struct Found {
         var cols: Int
         var rows: Int
-        /// 一格多宽（缩放后那张图上的点）
+        /// 一格多宽、多高（缩放后那张图上的点）。截出来的图纸常常横竖差一点点，分开认
         var cell: Double
+        var cellY: Double
         /// 第一条竖 / 横格线在哪
         var ox: Double
         var oy: Double
@@ -346,7 +350,7 @@ enum BeadGrid {
         }
         let cp = detrend(colP), rp = detrend(rowP)
         let ax = period(cp), ay = period(rp)
-        // 格宽：两个方向都认出来就挑得分高的那个细调；只认出一个就两边都用它
+        // 格宽：先按两个方向一起找个大概，再横竖各自细调（一百多格的大图，差 0.1 点累到最后就错开一格）
         var cell: Double
         switch (ax, ay) {
         case let (a?, b?):
@@ -357,12 +361,15 @@ enum BeadGrid {
         default: return nil
         }
         guard cell >= 4 else { return nil }
-        let ox = offset(cp, cell).o, oy = offset(rp, cell).o
+        var cx = refineAxis(cp, around: cell), cy = refineAxis(rp, around: cell)
+        // 差得很少就当一样（省得把本来方的格子拉歪）
+        if abs(cx - cy) / max(cx, cy) < 0.004 { cx = cell; cy = cell }
+        let ox = offset(cp, cx).o, oy = offset(rp, cy).o
         // 最左、最上那一格被裁掉一大半的不算
-        let cols = Int(((Double(W) - ox) / cell).rounded())
-        let rows = Int(((Double(H) - oy) / cell).rounded())
+        let cols = Int(((Double(W) - ox) / cx).rounded())
+        let rows = Int(((Double(H) - oy) / cy).rounded())
         guard (4...BeadProject.maxSide).contains(cols), (4...BeadProject.maxSide).contains(rows) else { return nil }
-        return Found(cols: cols, rows: rows, cell: cell, ox: ox, oy: oy, w: W, h: H)
+        return Found(cols: cols, rows: rows, cell: cx, cellY: cy, ox: ox, oy: oy, w: W, h: H)
     }
 
     /// 去掉慢慢起伏的那部分，只留一格一格的节奏
@@ -421,6 +428,18 @@ enum BeadGrid {
             o += 0.5
         }
         return best
+    }
+
+    /// 只看一个方向，在大概的格宽附近 ±3% 里细找
+    private static func refineAxis(_ p: [Double], around c: Double) -> Double {
+        var best = (s: c, score: -Double.infinity)
+        var s = c * 0.97
+        while s <= c * 1.03 {
+            let score = offset(p, s).score
+            if score > best.score { best = (s, score) }
+            s += 0.01
+        }
+        return best.s
     }
 
     /// 在大概的格宽附近细找：两个方向的格线一起对得最齐的那个（可以不是整数）

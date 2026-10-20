@@ -344,7 +344,7 @@ struct BeadEditorView: View {
         guard let name = ImageStore.save(ImageStore.downscale(img, maxSide: 1600)) else { return }
         if !p.refImage.isEmpty { ImageStore.delete(p.refImage) }
         p.refImage = name
-        p.refScale = 1; p.refRotation = 0; p.refX = 0; p.refY = 0; p.refShown = true
+        p.refScale = 1; p.refRotation = 0; p.refX = 0; p.refY = 0; p.refShown = true; p.refStretchY = nil
         refUIImage = ImageStore.cached(name)
         // 板上还空着：板子直接改成跟底图一样的格数，底图铺满
         if p.filled == 0 { notice = p.fitToReference(img) } else { p.refFill = false }
@@ -670,7 +670,7 @@ struct BeadEditorView: View {
                     Toggle("显示", isOn: $p.refShown).font(.app(12.5)).fixedSize()
                     Spacer()
                     Button {
-                        p.refScale = 1; p.refRotation = 0; p.refX = 0; p.refY = 0
+                        p.refScale = 1; p.refRotation = 0; p.refX = 0; p.refY = 0; p.refStretchY = nil
                     } label: { Text("摆正").font(.app(12.5)) }
                     Button { alignToReference() } label: {
                         Label("对齐底图", systemImage: "grid").font(.app(12.5))
@@ -718,9 +718,16 @@ struct BeadEditorView: View {
         guard let img = refUIImage, img.size.width > 0 else { return }
         pushUndo()
         let traced = p.filled > 0
+        // 底图是一张图纸（认得出格子）：格数只能跟图纸一样，不然一格对不上一格
+        if let g = BeadGrid.grid(img), g.cols != n {
+            _ = p.fitToReference(img)
+            if traced { p.cells = BeadStore.trace(p, image: img, exact: false) }
+            notice = "这张底图是 \(g.cols)×\(g.rows) 格的图纸，板子按图纸的格数对齐" + (traced ? "，已重新铺好" : "")
+            return
+        }
         let nh = max(4, min(BeadProject.maxSide, Int((Double(n) * Double(img.size.height / img.size.width)).rounded())))
         p.resize(n, nh)
-        p.refScale = 1; p.refRotation = 0; p.refX = 0; p.refY = 0
+        p.refScale = 1; p.refRotation = 0; p.refX = 0; p.refY = 0; p.refStretchY = nil
         p.refFill = true
         if traced { p.cells = BeadStore.trace(p, image: img, exact: false) }
         notice = "改成 \(n)×\(nh) 了" + (traced ? "，照着重新铺了一遍" : "，点「一键铺豆」照着铺")
@@ -1061,16 +1068,20 @@ extension BeadProject {
     mutating func fitToReference(_ img: UIImage) -> String {
         refScale = 1; refRotation = 0; refX = 0; refY = 0
         refFill = true
+        refStretchY = nil
         if let g = BeadGrid.grid(img) {
             resize(g.cols, g.rows)
-            // 底图按认出的格宽放大，第一条格线对上板子左上角（图纸边上裁掉的半格露在板子外面）
-            let iw = Double(g.w) / g.cell, ih = Double(g.h) / g.cell
+            // 底图按认出的格宽放大，第一条格线对上板子左上角（图纸边上裁掉的半格露在板子外面）。
+            // 横竖格宽不一样时竖着再拉一点（`refStretchY`），一格对一格
+            let iw = Double(g.w) / g.cell, ih = Double(g.h) / g.cellY
             let cols = Double(g.cols), rows = Double(g.rows)
-            let fit = min(cols / iw, rows / ih)
+            // 画的时候先按原图比例放进板子（每点 f 格），再放大
+            let f = min(cols / Double(g.w), rows / Double(g.h))
             refFill = false
-            refScale = 1 / fit
+            refScale = (1 / g.cell) / f
+            refStretchY = abs(g.cell / g.cellY - 1) < 0.0005 ? nil : g.cell / g.cellY
             refX = (-g.ox / g.cell + iw / 2 - cols / 2) / cols
-            refY = (-g.oy / g.cell + ih / 2 - rows / 2) / rows
+            refY = (-g.oy / g.cellY + ih / 2 - rows / 2) / rows
             return "认出底图是 \(g.cols)×\(g.rows) 格，板子改成一样的，一格对一格。"
         }
         // 认不出格子：宽不变，行数按图的长宽比来，底图正好铺满

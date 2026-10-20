@@ -7676,17 +7676,20 @@ final class AppState: ObservableObject {
             }
             if (args["cancel"] as? Bool) == true {
                 CheckPlan.current = nil
+                CheckPlan.cancelNotice()
                 return ("撤了，不查了。", false)
             }
             guard let at else { return ("什么时候查？给 in_minutes（几分钟后）或 at（HH:mm）。", true) }
             let raw = (args["items"] as? String) ?? ""
             var items = CheckPlan.all.filter { raw.contains($0) || raw.contains(String($0.prefix(2))) }
             if items.isEmpty { items = ["在做什么"] }
-            CheckPlan.current = CheckPlan(at: at, items: items, why: (args["why"] as? String) ?? "")
+            let plan = CheckPlan(at: at, items: items, why: (args["why"] as? String) ?? "")
+            CheckPlan.current = plan
+            CheckPlan.schedule(plan, him: settings.aiName.isEmpty ? "他" : settings.aiName)
             let f = DateFormatter()
             f.dateFormat = "HH:mm"
-            return ("定好了：\(f.string(from: at)) 之后查「\(items.joined(separator: "、"))」。"
-                    + "她手机上的快捷指令会隔一阵来问，到点那次就按你要的收好交过来（她没装那条快捷指令的话就不会来）。", false)
+            return ("定好了：\(f.string(from: at)) 查「\(items.joined(separator: "、"))」。"
+                    + "到点她手机上会收到提醒，她点开填好交给你（装了快捷指令那条自动化的话会自动交）。", false)
 
         case "check_in":
             // 查岗。**不发邮件、不过服务器**——理由写在 Whereabouts.swift 开头。
