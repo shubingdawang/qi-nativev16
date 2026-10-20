@@ -57,6 +57,8 @@ enum JournalKind: String, Codable, CaseIterable {
     case rope     = "晾衣绳"
     /// 照片的拍摄信息：时间、地点、光圈快门。他拼页时自动放，不在加号里
     case strip    = "快门条"
+    /// 一条线：细线、虚线、双线、手画线……用来分隔版面、划重点
+    case line     = "线条"
 
     /// 加号那一排里摆哪几样（快门条是照片读出来的，不让手加）
     static var addable: [JournalKind] { allCases.filter { $0 != .strip } }
@@ -78,6 +80,7 @@ enum JournalKind: String, Codable, CaseIterable {
         case .cutout:  return "scissors"
         case .rope:    return "scribble"
         case .strip:   return "camera.aperture"
+        case .line:    return "line.diagonal"
         }
     }
 
@@ -108,6 +111,8 @@ enum JournalKind: String, Codable, CaseIterable {
             return "一句话加引号，底下署名。"
         case .rope:
             return "照片、贴纸、便签拖到绳子边上会挂上去；拖绳子，挂着的一起走。"
+        case .line:
+            return "用来分隔版面或给标题划重点，可以换细线、虚线、双线、手画线。"
         default:
             return ""
         }
@@ -181,6 +186,12 @@ struct JournalElement: Codable, Identifiable, Hashable {
     var tone: String = ""
     /// 挂在哪根晾衣绳上（那根绳的 id）。空 = 没挂
     var hangOn: String = ""
+    /// 宽多少点（没缩放时）。文字：固定这么宽、按 `align` 对齐；线条：多长。0 = 默认
+    var width: Double = 0
+    /// 文字怎么对齐：""（靠左）/ "center" / "trailing"
+    var align: String = ""
+    /// 模板里的占位提示：还没填的时候编辑页显示这句（灰的），点一下就去填。他看到的那份里不画
+    var hint: String = ""
 
     /// 第 n 个字什么颜色
     func inkAt(_ i: Int) -> Color {
@@ -231,6 +242,9 @@ extension JournalElement {
         charScales = (try? c.decodeIfPresent([Double].self, forKey: .charScales)) ?? []
         tone = (try? c.decodeIfPresent(String.self, forKey: .tone)) ?? ""
         hangOn = (try? c.decodeIfPresent(String.self, forKey: .hangOn)) ?? ""
+        width = (try? c.decodeIfPresent(Double.self, forKey: .width)) ?? 0
+        align = (try? c.decodeIfPresent(String.self, forKey: .align)) ?? ""
+        hint = (try? c.decodeIfPresent(String.self, forKey: .hint)) ?? ""
     }
 }
 
@@ -350,7 +364,8 @@ enum JournalKit {
 
     /// 字体。走 `pattern`（文字本来不用这个字段）
     static let fonts: [(String, String)] = [
-        ("宋体", ""), ("黑体", "sans"), ("楷体", "kai"), ("圆体", "round"), ("等宽", "mono")
+        ("宋体", ""), ("黑体", "sans"), ("楷体", "kai"), ("圆体", "round"), ("等宽", "mono"),
+        ("打字机", "type"), ("标签", "label")
     ]
 
     /// 胶带的花纹。同样是画出来的，所以换个颜色就是另一卷。
@@ -398,6 +413,12 @@ enum JournalKit {
     ]
 
     /// 夹子的样子
+    /// 线条的样子
+    static let lineStyles: [(String, String)] = [
+        ("细线", "rule"), ("虚线", "dash"), ("双线", "double"),
+        ("手画线", "hand"), ("波浪", "wave"), ("点线", "dots")
+    ]
+
     static let clipStyles: [(String, String)] = [
         ("方夹", ""), ("回形针", "paper"), ("木夹", "wood"),
         ("长尾夹", "bull"), ("别针", "pin")
@@ -444,7 +465,7 @@ enum JournalKit {
     /// 邮票的样子
     static let stampStyles: [(String, String)] = [
         ("锯齿", ""), ("方章", "square"), ("圆戳", "round"),
-        ("双框", "double"), ("旧票", "aged")
+        ("双框", "double"), ("旧票", "aged"), ("墨印圆章", "ink")
     ]
 
     /// 摘句的花纹边框。
@@ -465,7 +486,10 @@ enum JournalKit {
     static let weaves: [(String, String)] = [
         ("粗亚麻", "rough_linen"), ("麻布", "hessian_230"),
         ("华夫格", "waffle_pique_cotton"), ("提花", "floral_jacquard"),
-        ("人字呢", "poly_wool_herringbone"), ("平纹布", "cotton_jersey")
+        ("人字呢", "poly_wool_herringbone"), ("平纹布", "cotton_jersey"),
+        // 纸本身的纹理（scripts/journal_textures.py 算出来的）
+        ("牛皮纸纹", "paper_kraft"), ("棉纸", "paper_cotton"), ("宣纸", "paper_rice"),
+        ("旧书页", "paper_news"), ("水彩纸", "paper_water")
     ]
 
     /// **实物贴纸**：博物馆里那些博物学写生抠出来的。
@@ -690,6 +714,11 @@ enum JournalKit {
         case .strip:
             e.colorHex = "3A362E"
             e.angle = 0
+        case .line:
+            e.colorHex = "3A362E"
+            e.pattern = "hand"
+            e.width = 180
+            e.angle = 0
         }
         return e
     }
@@ -815,6 +844,17 @@ final class JournalStore: ObservableObject {
             buckets[p.monthKey, default: []].append(p)
         }
         return order.map { ($0, buckets[$0] ?? []) }
+    }
+
+    /// 按模板开一页（纸、线、占位都摆好了）
+    @discardableResult
+    func newPage(on day: Date = Date(), template: JournalTemplate) -> JournalPage {
+        var p = template.page(on: day)
+        p.themeID = ""
+        pages.insert(p, at: 0)
+        if !shelf.contains(p.monthKey) { shelf.append(p.monthKey) }
+        p.updatedAt = Date()
+        return p
     }
 
     @discardableResult

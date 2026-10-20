@@ -132,7 +132,7 @@ struct JournalCharText: View {
     @ObservedObject private var fonts = JournalFonts.shared
 
     private func face(_ size: CGFloat) -> Font {
-        if let k = fontKey { return JournalFonts.font(k, size: size * Theme.fontScale, weight: weight) }
+        if let k = fontKey { return JournalFonts.font(k, size: size * CGFloat(Theme.fontScale), weight: weight) }
         return .app(size, weight: weight, design: design)
     }
 
@@ -166,12 +166,16 @@ struct JournalCharText: View {
         } else {
             // 快路：没逐字设过就照旧一个 Text 画完。
             // 换行、断词、标点避头尾全归系统管，比我们算得好。
+            // 定了宽的（模板里的）：就这么宽、按 `align` 对齐，排版骨架才对得齐
+            let fixed = element.width > 0
             Text(element.text)
                 .font(face(base))
+                .tracking(fontKey == "label" ? 2.5 : (fontKey == "type" ? 0.5 : 0))
                 .foregroundStyle(element.color)
-                .multilineTextAlignment(.leading)
+                .multilineTextAlignment(element.align == "center" ? .center : (element.align == "trailing" ? .trailing : .leading))
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: maxWidth)
+                .frame(minWidth: fixed ? maxWidth : nil, maxWidth: maxWidth,
+                       alignment: element.align == "center" ? .center : (element.align == "trailing" ? .trailing : .leading))
         }
     }
 

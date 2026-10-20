@@ -13,6 +13,8 @@ struct JournalView: View {
     @State private var opened: JournalPage?
     @State private var openedMonth: String?
     @State private var pickingMonth = false
+    /// 新建一页之前先挑版式
+    @State private var choosingTemplate = false
     @State private var showingTrash = false
 
     private let columns = [GridItem(.flexible(), spacing: 22), GridItem(.flexible(), spacing: 22)]
@@ -74,7 +76,7 @@ struct JournalView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button {
-                        opened = store.newPage()
+                        choosingTemplate = true
                     } label: {
                         Label("写今天这一页", systemImage: "square.and.pencil")
                     }
@@ -92,6 +94,11 @@ struct JournalView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+            }
+        }
+        .sheet(isPresented: $choosingTemplate) {
+            JournalTemplateSheet(day: Date()) { t in
+                opened = t.map { store.newPage(template: $0) } ?? store.newPage()
             }
         }
         .sheet(isPresented: $pickingMonth) {
@@ -169,6 +176,7 @@ struct JournalMonthView: View {
     @State private var opened: JournalPage?
     @State private var confirmDelete: JournalPage?
     @State private var handingOff = false
+    @State private var choosingTemplate = false
 
     private let cal = Calendar.current
 
@@ -256,7 +264,7 @@ struct JournalMonthView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Button { opened = store.newPage(on: newPageDay) } label: {
+                    Button { choosingTemplate = true } label: {
                         Label("自己写一页", systemImage: "square.and.pencil")
                     }
                     Button {
@@ -271,6 +279,12 @@ struct JournalMonthView: View {
         }
         .navigationDestination(item: $opened) { p in
             JournalPageView(page: p)
+        }
+        .sheet(isPresented: $choosingTemplate) {
+            JournalTemplateSheet(day: newPageDay) { t in
+                let d = newPageDay
+                opened = t.map { store.newPage(on: d, template: $0) } ?? store.newPage(on: d)
+            }
         }
         .sheet(isPresented: $handingOff) {
             JournalHandOffSheet(
@@ -427,6 +441,8 @@ struct JournalThumb: View {
                     .frame(width: 6, height: 9)
             case .rope:
                 Capsule().fill(e.color).frame(width: 66, height: 1.2)
+            case .line:
+                Capsule().fill(e.color.opacity(0.7)).frame(width: 40, height: 1)
             case .strip:
                 Rectangle().fill(e.color.opacity(0.25)).frame(width: 40, height: 4)
             case .note:

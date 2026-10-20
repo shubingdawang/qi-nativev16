@@ -24,6 +24,7 @@ import SwiftUI
 struct JournalElementView: View {
 
     let e: JournalElement
+    @Environment(\.journalEditing) private var editing
 
     init(_ e: JournalElement) { self.e = e }
 
@@ -51,9 +52,21 @@ struct JournalElementView: View {
     private var content: some View {
             switch e.kind {
             case .text:
-                // 逐字设过颜色／大小的走 `JournalCharText`，没设过的它自己
-                // 退回一个 `Text`——那条快路上换行断词全归系统管。
-                JournalCharText(element: e, design: Self.design(e.pattern), fontKey: e.pattern)
+                // 模板里还没填的：编辑页画灰的提示，给他看的那份里什么都不画
+                if e.text.isEmpty && !e.hint.isEmpty {
+                    if editing { JournalTextHint(e: e) } else { Color.clear.frame(width: 1, height: 1) }
+                } else {
+                    // 逐字设过颜色／大小的走 `JournalCharText`，没设过的它自己
+                    // 退回一个 `Text`——那条快路上换行断词全归系统管。
+                    JournalCharText(element: e, design: Self.design(e.pattern), fontKey: e.pattern,
+                                    maxWidth: e.width > 0 ? CGFloat(e.width) : 220)
+                        .modifier(JournalInk(fontKey: e.pattern, hex: e.colorHex))
+                }
+
+            case .line:
+                JournalLineView(pattern: e.pattern, color: e.color,
+                                width: e.width > 0 ? CGFloat(e.width) : 180)
+                    .blendMode(JournalTheme.luma(e.colorHex) < 0.55 ? .multiply : .normal)
 
             case .rope:
                 JournalRope(color: e.color)
@@ -72,6 +85,7 @@ struct JournalElementView: View {
                 // 胶带：半透明一条，两头是撕开的毛边，花纹画在上面
                 JournalTapeView(color: e.color, pattern: e.pattern,
                                 ink: e.hasInk ? e.ink : nil)
+                    .shadow(color: .black.opacity(0.10), radius: 0.6, y: 0.6)
 
             case .sticker:
                 // 两种贴纸：她挑了形状就画那个（跟着颜色走），
@@ -122,6 +136,10 @@ struct JournalElementView: View {
                         }
                 }
 
+            case .stamp where e.pattern == "ink":
+                JournalInkStamp(text: e.text.isEmpty ? (e.hint.isEmpty ? "好" : e.hint) : e.text,
+                                sub: e.who, color: e.color, hex: e.colorHex)
+
             case .stamp:
                 // 邮票：锯齿边靠一圈白点做出来。
                 //
@@ -159,11 +177,14 @@ struct JournalElementView: View {
                 JournalStyle.Clip(kind: e.pattern, tint: e.color)
 
             case .note:
-                Text(e.text)
-                    .font(.app(13))
-                    .foregroundStyle(Color(hexString: "3A362E")!)
-                    .padding(10)
-                    .frame(width: 110, alignment: .topLeading)
+                // 还没填的便签：编辑页里写着灰的提示
+                let empty = e.text.isEmpty && !e.hint.isEmpty
+                Text(empty ? (editing ? e.hint : "") : e.text)
+                    .font(JournalFonts.font("", size: 13.5 * CGFloat(Theme.fontScale)))
+                    .lineSpacing(3)
+                    .foregroundStyle(Color(hexString: "3A362E")!.opacity(empty ? 0.4 : 1))
+                    .padding(12)
+                    .frame(width: e.width > 0 ? CGFloat(e.width) : 110, alignment: .topLeading)
                     .frame(minHeight: 90, alignment: .topLeading)
                     .background {
                         // 底色照旧是她挑的那个，纹路和撕口另画一层
@@ -172,27 +193,43 @@ struct JournalElementView: View {
                             JournalStyle.NoteSkin(kind: e.pattern)
                         }
                     }
+                    .overlay {
+                        // 便签纸自己的纹理
+                        if let img = JournalTextures.image("paper_cotton") {
+                            Image(uiImage: img).resizable(resizingMode: .tile)
+                                .blendMode(.multiply).opacity(0.35)
+                                .allowsHitTesting(false)
+                        }
+                    }
                     .clipShape(JournalStyle.NoteShape(kind: e.pattern))
-                    .shadow(color: .black.opacity(0.12), radius: 3, y: 2)
+                    // 两层影子：贴着纸的那一圈 + 散开的那一层，才像一张纸叠在另一张上
+                    .shadow(color: .black.opacity(0.14), radius: 0.8, y: 0.8)
+                    .shadow(color: Color(red: 0.25, green: 0.17, blue: 0.08).opacity(0.18), radius: 7, y: 5)
 
             case .photo:
                 // ⚠️ 照片本来一条边都没有。她定的「照片需要可以选择边框」——
                 // 所以 `pattern` 空的时候还是**光板**（老页面全是这一种），
                 // 挑了才加边。
-                Group {
-                    if let img = ImageStore.load(e.imageName) {
-                        Image(uiImage: img)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 120, height: 120)
-                            .clipped()
-                            .modifier(JournalPhotoTone(tone: e.tone))
-                    } else {
-                        Rectangle().fill(Color.gray.opacity(0.3))
-                            .frame(width: 120, height: 120)
+                if e.imageName.isEmpty && !e.hint.isEmpty {
+                    // 模板里还没放照片的格子：编辑页画虚线框，给他看的那份里不画
+                    if editing { JournalPhotoHint(hint: e.hint) } else { Color.clear.frame(width: 1, height: 1) }
+                } else {
+                    Group {
+                        if let img = ImageStore.load(e.imageName) {
+                            Image(uiImage: img)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 120, height: 120)
+                                .clipped()
+                                .modifier(JournalPhotoTone(tone: e.tone))
+                        } else {
+                            Rectangle().fill(Color.gray.opacity(0.3))
+                                .frame(width: 120, height: 120)
+                        }
                     }
+                    .modifier(JournalStyle.PhotoEdge(kind: e.pattern, tint: e.color))
+                    .shadow(color: .black.opacity(0.12), radius: 0.8, y: 0.8)
                 }
-                .modifier(JournalStyle.PhotoEdge(kind: e.pattern, tint: e.color))
 
             case .frame:
                 // 拍立得：白框，底下留一条写字的地方
@@ -205,13 +242,13 @@ struct JournalElementView: View {
                         Rectangle().fill(Color(hexString: "DDD8CE")!)
                             .frame(width: 116, height: 116)
                             .overlay {
-                                Text("点两下贴图")
+                                Text(editing ? (e.hint.isEmpty ? "添加照片" : e.hint) : "")
                                     .font(.app(10))
                                     .foregroundStyle(Color(hexString: "8A8378")!)
                             }
                     }
                     Text(e.text)
-                        .font(.app(10))
+                        .font(JournalFonts.font("kai", size: 11.5))
                         .foregroundStyle(Color(hexString: "6B655A")!)
                         .frame(width: 116, height: 26)
                 }
@@ -333,7 +370,7 @@ enum JournalSnapshot {
         for e in sorted {
             switch e.kind {
             case .text:
-                lines.append("· 写着：" + e.text)
+                if !e.text.isEmpty { lines.append("· 写着：" + e.text) }
             case .note:
                 lines.append("· 便签：" + e.text)
             case .quote:
@@ -367,6 +404,8 @@ enum JournalSnapshot {
                 lines.append("· 一根晾衣绳")
             case .strip:
                 lines.append("· 拍摄信息：" + e.text)
+            case .line:
+                break
             }
         }
         if page.elements.isEmpty { lines.append("（这一页还是空的）") }

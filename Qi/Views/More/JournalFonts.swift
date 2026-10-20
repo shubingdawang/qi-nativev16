@@ -29,6 +29,12 @@ final class JournalFonts: ObservableObject {
             return .system(size: size, weight: weight)
         case "mono":
             return .system(size: size, weight: weight, design: .monospaced)
+        case "type":
+            // 打字机：大日期、数字用（系统自带）
+            return .custom("AmericanTypewriter-Semibold", fixedSize: size)
+        case "label":
+            // 小标签：等宽，配着拉开的字距用
+            return .custom("Menlo-Regular", fixedSize: size)
         default:
             guard let name = names[key] else { return .system(size: size, weight: weight, design: .serif) }
             if UIFont(name: name, size: size) != nil { return .custom(name, fixedSize: size) }

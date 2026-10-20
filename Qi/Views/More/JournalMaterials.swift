@@ -96,6 +96,26 @@ struct JournalPaperView: View {
             // 没有它那就是一块塑料色板，不像纸。
             GrainOverlay(opacity: 0.05)
         }
+        .overlay {
+            // 没挑织纹的纸也铺一层棉纸纹：纤维和细颗粒，不再是一块平涂的颜色
+            if weave.isEmpty, let img = JournalTextures.image("paper_cotton") {
+                Image(uiImage: img)
+                    .resizable(resizingMode: .tile)
+                    .blendMode(.overlay)
+                    .opacity(0.6)
+                    .allowsHitTesting(false)
+            }
+        }
+        .overlay {
+            // 光：左上亮一点、四周压暗一点，像一张摊在桌上的真纸
+            ZStack {
+                RadialGradient(colors: [Color.white.opacity(0.14), .clear],
+                               center: .topLeading, startRadius: 0, endRadius: 520)
+                RadialGradient(colors: [.clear, Color.black.opacity(0.09)],
+                               center: .center, startRadius: 180, endRadius: 640)
+            }
+            .allowsHitTesting(false)
+        }
     }
 
     /// 织纹图。**读过的记着**——这一张会铺满整页，
@@ -491,6 +511,17 @@ struct JournalTapeView: View {
                 }
             }
             .mask(TornTape())
+            // 胶带的褶皱和一道光：纸胶带不是一块平的颜色
+            if let img = JournalTextures.image("tape_crinkle") {
+                Image(uiImage: img)
+                    .resizable(resizingMode: .tile)
+                    .blendMode(.overlay)
+                    .opacity(0.75)
+                    .mask(TornTape())
+            }
+            LinearGradient(colors: [Color.white.opacity(0.22), .clear, Color.black.opacity(0.05)],
+                           startPoint: .top, endPoint: .bottom)
+                .mask(TornTape())
         }
         .frame(width: width, height: height)
     }
@@ -547,13 +578,26 @@ struct JournalStickerView: View {
         let style = FillStyle(eoFill: JournalStickerShape.needsEO(shape))
         JournalStickerShape(kind: shape)
             .fill(color, style: style)
+            // 印刷的那层：一点颗粒 + 左上一道光，不再是一块平涂的色块
+            .overlay {
+                ZStack {
+                    if let img = JournalTextures.image("paper_cotton") {
+                        Image(uiImage: img).resizable(resizingMode: .tile)
+                            .blendMode(.overlay).opacity(0.7)
+                    }
+                    LinearGradient(colors: [Color.white.opacity(0.32), .clear, Color.black.opacity(0.08)],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+                }
+                .mask(JournalStickerShape(kind: shape).fill(style: style))
+            }
             .frame(width: side, height: side)
             .padding(4)
             .background {
                 JournalStickerShape(kind: shape)
                     .fill(backing ?? Color.white, style: style)
                     .padding(-1)
-                    .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
+                    .shadow(color: .black.opacity(0.16), radius: 0.6, y: 0.6)
+                    .shadow(color: Color(red: 0.25, green: 0.17, blue: 0.08).opacity(0.16), radius: 4, y: 3)
             }
     }
 }

@@ -186,6 +186,8 @@ struct JournalPageView: View {
                         element(e, in: full)
                     }
                 }
+                // 编辑页里画占位提示（模板里还没填的那几格）
+                .environment(\.journalEditing, true)
                 .frame(width: full.width, height: full.height)
                 // 手柄要按「手指相对元素中心转了多少度」来算，
                 // 所以得有一个跟这张纸对齐的坐标系。
@@ -327,6 +329,14 @@ struct JournalPageView: View {
                 if picked != e.id {
                     picked = e.id
                     charFocus = nil
+                }
+                // 模板里还没填的格子：点一下直接去填（写字 / 挑照片）
+                if e.text.isEmpty && !e.hint.isEmpty && [.text, .note].contains(e.kind) {
+                    draftText = ""
+                    editingText = e
+                } else if e.imageName.isEmpty && [.photo, .frame].contains(e.kind)
+                            && (!e.hint.isEmpty || e.kind == .frame) {
+                    showingPhotoPicker = true
                 }
             }
             .gesture(
@@ -742,6 +752,7 @@ struct JournalPageView: View {
         case .clip:  return JournalKit.clipStyles
         case .stamp: return JournalKit.stampStyles
         case .quote: return JournalKit.quoteStyles
+        case .line:  return JournalKit.lineStyles
         default:     return nil
         }
     }
