@@ -27,6 +27,13 @@ final class HimEvents: ObservableObject {
     }
 
     func add(_ text: String, source: String) {
+        // 同一件事已经攒着了：不再存第二份，挪到最上面、时间改成现在
+        if let i = items.firstIndex(where: { $0.text == text }) {
+            var e = items.remove(at: i)
+            e.at = Date()
+            items.insert(e, at: 0)
+            return
+        }
         items.insert(HimEvent(text: text, source: source), at: 0)
         // 攒太多就把最老的丢掉
         if items.count > 200 { items.removeLast(items.count - 200) }

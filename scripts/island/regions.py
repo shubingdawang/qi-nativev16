@@ -165,7 +165,7 @@ def huadao():
     R.rect("p", 1, 20, 14, 15)
     R.rect("p", 12, 13, 3, 25)
     # 中间的石板广场
-    R.rect("t", 10, 15, 13, 16)
+    R.rect("t", 10, 14, 13, 16)
     for (x0, x1, y0, y1) in [(4, 10, 5, 10), (15, 21, 5, 9), (4, 10, 19, 24), (16, 21, 21, 23)]:
         R.rect("f", x0, x1, y0, y1)
     R.rect("w", 16, 19, 18, 20)
@@ -330,7 +330,7 @@ def xiaozhen():
     R.rect("p", 11, 12, 2, 21)
     R.rect("t", 9, 15, 8, 13)
     R.bridge([(25, 10), (24, 10), (23, 10)], "yuewan", (25, 10), (2, 12))
-    R.add("fountain", 11, 12, ground=("t",), nudge=1)
+    R.add("fountain", 11, 11, ground=("t",), nudge=1)
     # 四间铺子：杂货铺、面包店、邮局、种子店
     R.add("shop", 3, 8); R.add("houseOrange", 15, 7); R.add("cabin", 3, 19); R.add("houseBeige", 16, 20)
     R.add("mailbox", 8, 18); R.add("signpost", 21, 9)

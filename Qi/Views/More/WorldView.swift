@@ -80,10 +80,19 @@ struct WorldView: View {
     @State private var enterHome = false
     /// 贴着点的东西弹出来的菜单（见 `AnchoredMenu`）
     @State private var islandMenu: AnchorMenuState?
-    /// 正在过桥：过去以前她在屏幕上哪儿、那座岛的桥头在哪一格（过去以后镜头接着，不跳）
-    @State private var crossing: (screen: CGPoint, gate: (Int, Int))?
-    /// 点了桥那头的岛：过了桥接着走到那一格
-    @State private var across: (region: String, x: Int, y: Int)?
+    /// 正在过桥：过去以前她在屏幕上哪儿、那座岛的桥头在哪一格、往哪边过、那座岛在这边的坐标偏了多少
+    /// （过去以后镜头接着，两个人从原来的地方接着走，不跳）
+    @State private var crossing: (screen: CGPoint, gate: (Int, Int), dir: (Int, Int), shift: (Int, Int))?
+    /// 点了桥那头的岛：过了桥接着走到那一格。`hop` 是先过哪座桥（隔着几座岛就一座一座过）
+    @State private var across: (region: String, x: Int, y: Int, hop: String)?
+    /// 他跟着她走
+    @AppStorage("islandFollow") private var follow = true
+    /// 镜头跟着她走。点一下走路就跟上；她自己拖了画面就不再拽回来，等下一次点
+    @State private var camFollow = true
+    /// 她坐在哪一格（椅子、长椅、沙发上）。一走开就站起来
+    @State private var seated: (x: Int, y: Int)?
+    /// 走过去以后要坐下的那一格
+    @State private var pendingSeat: (x: Int, y: Int)?
     /// 画面多大（过桥时要算她在屏幕上的位置）
     @State private var screenSize: CGSize = .zero
     /// 要告诉他的事，先问她（见 `himOffer`）
@@ -152,8 +161,10 @@ struct WorldView: View {
             anchor = nil; box = nil; movingSel = false
             if m != .select { selDecor.removeAll(); selObj.removeAll() }
         }
-        .onChange(of: herCell) { _, _ in walkHerFigure() }
-        .onChange(of: herWalk.moving) { _, m in if !m { arrived() } }
+        .onChange(of: herCell) { _, _ in seated = nil; walkHerFigure() }
+        .onChange(of: herWalk.moving) { _, m in
+            if !m { arrived(); sitDown() }
+        }
         .onChange(of: world.save.region) { _, _ in walkHerFigure(); walkHimFigure() }
         .onChange(of: world.pendingStory?.id) { _, id in
             guard id != nil, let st = world.pendingStory else { return }
@@ -169,14 +180,70 @@ struct WorldView: View {
         guard crossing == nil else { return }
         let w = world
         if herWalk.region != w.save.region { herWalk.place(w.save.herX, w.save.herY, region: w.save.region); return }
-        herWalk.walk(to: w.save.herX, w.save.herY) { w.route(from: $0, to: $1) }
+        herWalk.walk(to: w.save.herX, w.save.herY) { path($0, $1) }
+        if follow { followHer() }
     }
 
     private func walkHimFigure() {
         guard crossing == nil else { return }
         let w = world
         if himWalk.region != w.save.region { himWalk.place(w.save.himX, w.save.himY, region: w.save.region); return }
-        himWalk.walk(to: w.save.himX, w.save.himY) { w.route(from: $0, to: $1) }
+        himWalk.walk(to: w.save.himX, w.save.himY) { path($0, $1) }
+    }
+
+    /// 坐的那几样（坐一会儿、坐他腿上、窝在一起）：走到跟前以后坐上去
+    private func sitIfSeat(_ a: WorldAction, _ x: Int, _ y: Int) {
+        guard ["sit", "lap", "cuddle"].contains(a.id) else { return }
+        pendingSeat = (x, y)
+        // 本来就站在跟前（不用走）：直接坐
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            if !herWalk.moving { sitDown() }
+        }
+    }
+
+    private func sitDown() {
+        guard let s = pendingSeat else { return }
+        pendingSeat = nil
+        let p = herWalk.pos
+        guard abs(p.x - CGFloat(s.x)) + abs(p.y - CGFloat(s.y)) <= 2.5 else { return }
+        withAnimation(.easeOut(duration: 0.25)) { seated = s }
+    }
+
+    /// 路线。起点还在桥那头（刚过桥、坐标在这座岛外面）的话，先一步一步走上岛边那一格
+    private func path(_ from: (Int, Int), _ to: (Int, Int)) -> [(Int, Int)]? {
+        let w = world
+        if from.0 >= 0, from.1 >= 0, from.0 < w.width, from.1 < w.height { return w.route(from: from, to: to) }
+        let entry = (min(max(from.0, 0), w.width - 1), min(max(from.1, 0), w.height - 1))
+        return Self.straight(from, entry) + (w.route(from: entry, to: to) ?? [to])
+    }
+
+    /// 先横后竖一格一格走（不含起点）
+    static func straight(_ a: (Int, Int), _ b: (Int, Int)) -> [(Int, Int)] {
+        var out: [(Int, Int)] = []
+        var x = a.0, y = a.1
+        while x != b.0 { x += x < b.0 ? 1 : -1; out.append((x, y)) }
+        while y != b.1 { y += y < b.1 ? 1 : -1; out.append((x, y)) }
+        return out
+    }
+
+    /// 他跟上：走到她要去的那一格旁边（挑离他最近的那一边，看着就是跟在后面）
+    private func followHer() {
+        let w = world
+        let hx = w.save.herX, hy = w.save.herY
+        let me = (w.save.himX, w.save.himY)
+        if abs(me.0 - hx) + abs(me.1 - hy) == 1 { return }
+        let spots = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (-1, 1), (1, -1), (-1, -1)]
+            .map { (hx + $0.0, hy + $0.1) }
+            .filter { w.walkable($0.0, $0.1) }
+        func d(_ p: (Int, Int)) -> Int { abs(p.0 - me.0) + abs(p.1 - me.1) }
+        guard let t = spots.min(by: { d($0) < d($1) }), t != me else { return }
+        Task { @MainActor in
+            // 晚她一拍再起步
+            try? await Task.sleep(nanoseconds: 280_000_000)
+            guard w.save.herX == hx, w.save.herY == hy else { return }
+            w.walkHim(t.0, t.1)
+        }
     }
 
     /// 走到桥头停下来：过桥
@@ -195,7 +262,11 @@ struct WorldView: View {
     }
 
     /// 告诉他之前先问她：告诉就发过去，不告诉就存进「事件」
-    private func offer(_ line: String) { offers.append(line) }
+    private func offer(_ line: String) {
+        // 还没问完的里面已经有这一句就不再排一次
+        guard !offers.contains(line) else { return }
+        offers.append(line)
+    }
 
     /// 一件景上能做的事。稻草人不用浇水：换成它帮忙把田里的一格一格浇了
     private func decorItems(_ d: WorldDecor) -> [AnchorMenuItem] {
@@ -209,6 +280,7 @@ struct WorldView: View {
         for a in acts {
             items.append(AnchorMenuItem(title: a.name) {
                 let line = world.perform(a, onDecor: d, byHer: true)
+                sitIfSeat(a, d.x, d.y)
                 offer("小岛上，" + line)
             })
         }
@@ -427,20 +499,31 @@ struct WorldView: View {
         islandMenu = AnchorMenuState(title: soilTitle(x, y), items: items, at: tapGlobal)
     }
 
+    /// 走到桥头停下来：她是要去桥那头的岛（点的是那边的一格）才过桥；
+    /// 只是走到桥上站着就站着，不会被送过去、也不会再被送回来
     private func arrived() {
-        guard !herWalk.moving, let e = world.exit(at: world.save.herX, world.save.herY) else { return }
-        if world.unlocked(e.to) {
-            // 记下过去以前她在屏幕上的哪儿：过去以后让那座岛的桥头正好接在她脚下那一格的前面
-            if let n = neighbors.first(where: { $0.exit.to == e.to }), screenSize.width > 1 {
-                let here = screenPoint(of: CGPoint(x: herWalk.pos.x + CGFloat(n.dir.0), y: herWalk.pos.y + CGFloat(n.dir.1)),
-                                       screenSize, contentSize)
-                crossing = (here, n.gate)
-            }
-            world.travel(e)
-            if crossing == nil { walkHerFigure(); walkHimFigure() }
-        } else if let why = world.lockReason(e.to) {
-            world.show(why)
+        guard !herWalk.moving, let a = across else { return }
+        guard let e = world.exit(at: world.save.herX, world.save.herY), e.to == a.hop else {
+            across = nil
+            return
         }
+        guard world.unlocked(e.to) else {
+            across = nil
+            if let why = world.lockReason(e.to) { world.show(why) }
+            return
+        }
+        guard let n = neighbors.first(where: { $0.region == e.to && $0.direct }) else { across = nil; return }
+        // 记下过去以前她在屏幕上的哪儿：过去以后让那座岛的桥头正好接在她脚下那一格的前面
+        if screenSize.width > 1 {
+            let here = screenPoint(of: CGPoint(x: herWalk.pos.x + CGFloat(n.dir.0), y: herWalk.pos.y + CGFloat(n.dir.1)),
+                                   screenSize, contentSize)
+            crossing = (here, n.gate, n.dir, (n.dx, n.dy))
+        }
+        // 就是去这座岛：落在点的那一格；还要接着往下一座去：先落在桥头
+        let land = a.region == e.to ? (a.x, a.y) : n.gate
+        if a.region == e.to { across = nil }
+        if !world.travel(e, landAt: land) { crossing = nil; across = nil; return }
+        if crossing == nil { walkHerFigure(); walkHimFigure() }
     }
 
     /// 剧情、攻略两个弹窗
@@ -648,6 +731,7 @@ struct WorldView: View {
 
     private func doAction(_ a: WorldAction, on o: WorldObject?) {
         let line = world.perform(a, on: o, byHer: true)
+        if let o { sitIfSeat(a, o.x, o.y) }
         // 先问她要不要告诉他；告诉了他在聊天里接着演
         offer("小岛上，" + line)
         menuFor = nil
@@ -736,14 +820,10 @@ struct WorldView: View {
                     }
                 }
                 .animation(.easeOut(duration: 0.25), value: world.celebrating)
-                // 她走到快出画面了，镜头跟过去
+                // 她走的时候镜头跟着她；她自己拖过画面就不再拽回来（见 `camFollow`）
                 .onChange(of: herWalk.pos) { _, p in
-                    guard zoomStart == nil else { return }
-                    let sx = geo.size.width / 2 + pan.width + (pad.leading + p.x * tile + tile / 2 - content.width / 2) * zoom
-                    let sy = geo.size.height / 2 + pan.height + (pad.top + p.y * tile + tile / 2 - content.height / 2) * zoom
-                    if sx < 50 || sx > geo.size.width - 50 || sy < 90 || sy > geo.size.height - 50 {
-                        withAnimation(.easeInOut(duration: 0.6)) { look(at: p, geo.size, content) }
-                    }
+                    guard zoomStart == nil, camFollow, crossing == nil, herWalk.moving else { return }
+                    withAnimation(.linear(duration: 0.2)) { look(at: p, geo.size, content) }
                 }
         }
         .background(sea.ignoresSafeArea().overlay(
@@ -827,35 +907,49 @@ struct WorldView: View {
     /// 点了桥那头的岛：解锁了就走过桥去那一格；没解锁说一声还差什么
     private func tapAcross(_ n: Neighbor, _ x: Int, _ y: Int) {
         guard n.open else {
-            if let why = world.lockReason(n.exit.to) { world.show(why) }
+            let locked = world.unlocked(n.hop.to) ? n.region : n.hop.to
+            world.show(world.lockReason(locked) ?? "还去不了\(WorldRegions.name(locked))")
             return
         }
-        guard n.exit.trigger.count == 2 else { return }
-        across = (n.exit.to, x, y)
-        world.walkHer(n.exit.trigger[0], n.exit.trigger[1])
+        guard n.hop.trigger.count == 2 else { return }
+        across = (n.region, x, y, n.hop.to)
+        camFollow = true
+        let tx = n.hop.trigger[0], ty = n.hop.trigger[1]
+        if world.save.herX == tx && world.save.herY == ty && !herWalk.moving {
+            arrived()
+        } else {
+            world.walkHer(tx, ty)
+        }
     }
 
     /// 过了桥：两个人从那座岛的桥头接着走下桥；镜头让桥头留在原来那个位置，画面不跳
-    private func landed(_ c: (screen: CGPoint, gate: (Int, Int)), _ screen: CGSize, _ content: CGSize) {
+    private func landed(_ c: (screen: CGPoint, gate: (Int, Int), dir: (Int, Int), shift: (Int, Int)),
+                        _ screen: CGSize, _ content: CGSize) {
         crossing = nil
         let region = world.save.region
-        herWalk.place(c.gate.0, c.gate.1, region: region)
-        himWalk.place(c.gate.0, c.gate.1, region: region)
+        // 她：从桥这头她站的那一格（换成这座岛的坐标，在岛外面一格）接着往前走
+        let herFrom = (c.gate.0 - c.dir.0, c.gate.1 - c.dir.1)
+        // 他：原来在哪儿就从哪儿走过来；离得远的从她身后跟上
+        var hx = Int(himWalk.pos.x.rounded()) - c.shift.0, hy = Int(himWalk.pos.y.rounded()) - c.shift.1
+        if abs(hx - herFrom.0) + abs(hy - herFrom.1) > 2 { hx = herFrom.0 - c.dir.0; hy = herFrom.1 - c.dir.1 }
+        herWalk.place(herFrom.0, herFrom.1, region: region)
+        himWalk.place(hx, hy, region: region)
         let pad = self.pad
         let gx = pad.leading + CGFloat(c.gate.0) * tile + tile / 2 - content.width / 2
         let gy = pad.top + CGFloat(c.gate.1) * tile + tile / 2 - content.height / 2
         pan = clamp(CGSize(width: c.screen.x - screen.width / 2 - gx * zoom,
                            height: c.screen.y - screen.height / 2 - gy * zoom), screen, content, zoom)
         panStart = pan
-        let w = world
-        herWalk.walk(to: w.save.herX, w.save.herY) { w.route(from: $0, to: $1) }
-        himWalk.walk(to: w.save.himX, w.save.himY) { w.route(from: $0, to: $1) }
-        // 她点的是桥那头的某一格：接着走过去
-        if let a = across, a.region == region {
-            across = nil
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 450_000_000)
-                world.walkHer(a.x, a.y)
+        walkHerFigure()
+        walkHimFigure()
+        // 她点的是再往外的岛：接着往下一座桥走
+        if let a = across {
+            if a.region != region, let n = neighbors.first(where: { $0.region == a.region }), n.open,
+               n.hop.trigger.count == 2 {
+                across = (a.region, a.x, a.y, n.hop.to)
+                world.walkHer(n.hop.trigger[0], n.hop.trigger[1])
+            } else {
+                across = nil
             }
         }
     }
@@ -864,31 +958,54 @@ struct WorldView: View {
 
     /// 桥那头的一座岛，画在同一张图上：看得到，走过桥就上去了
     struct Neighbor: Identifiable {
-        var id: String { exit.to }
-        let exit: WorldExit
+        var id: String { region }
+        /// 哪座岛
+        let region: String
         let data: WorldRegionData
         /// 那座岛的 (0, 0) 落在这座岛的哪一格
         let dx: Int
         let dy: Int
-        /// 那座岛上的桥头（接着这边的桥头）
+        /// 那座岛上的桥头（接着它前一座岛的桥头）
         let gate: (Int, Int)
-        /// 往哪边过去
+        /// 从前一座岛往哪边过去
         let dir: (Int, Int)
+        /// 一路上的岛都解锁了
         let open: Bool
+        /// 从这座岛出发先过哪座桥
+        let hop: WorldExit
+        /// 跟这座岛直接连着
+        let direct: Bool
     }
 
+    /// 别的岛全画上：桥连着桥一座一座往外接（群岛是一棵树，从哪座岛看排出来都一样）。
+    /// 以前只画跟这座岛直接连着的，走到小镇那头别的岛就都没了
     private var neighbors: [Neighbor] {
         let here = world.save.region
-        return world.exits.compactMap { e -> Neighbor? in
-            guard e.trigger.count == 2, let data = world.regionData(e.to),
-                  let back = WorldRegions.exits(e.to).first(where: { $0.to == here }), back.trigger.count == 2
-            else { return nil }
-            let tx = e.trigger[0], ty = e.trigger[1]
-            // 这边的桥头在哪条边上，那座岛就接在那条边外面
-            let dir: (Int, Int) = tx >= world.width - 1 ? (1, 0) : (tx <= 0 ? (-1, 0) : (ty <= 0 ? (0, -1) : (0, 1)))
-            return Neighbor(exit: e, data: data, dx: tx + dir.0 - back.trigger[0], dy: ty + dir.1 - back.trigger[1],
-                            gate: (back.trigger[0], back.trigger[1]), dir: dir, open: world.unlocked(e.to))
+        var out: [Neighbor] = []
+        var seen: Set<String> = [here]
+        var queue: [(id: String, ox: Int, oy: Int, w: Int, hop: WorldExit?, open: Bool)] =
+            [(here, 0, 0, world.width, nil, true)]
+        var head = 0
+        while head < queue.count {
+            let q = queue[head]; head += 1
+            for e in WorldRegions.exits(q.id) {
+                guard !seen.contains(e.to), e.trigger.count == 2, let data = world.regionData(e.to),
+                      let back = WorldRegions.exits(e.to).first(where: { $0.to == q.id }), back.trigger.count == 2
+                else { continue }
+                seen.insert(e.to)
+                let tx = e.trigger[0], ty = e.trigger[1]
+                // 这边的桥头在哪条边上，那座岛就接在那条边外面
+                let dir: (Int, Int) = tx >= q.w - 1 ? (1, 0) : (tx <= 0 ? (-1, 0) : (ty <= 0 ? (0, -1) : (0, 1)))
+                let dx = q.ox + tx + dir.0 - back.trigger[0], dy = q.oy + ty + dir.1 - back.trigger[1]
+                let hop = q.hop ?? e
+                let open = q.open && world.unlocked(e.to)
+                out.append(Neighbor(region: e.to, data: data, dx: dx, dy: dy,
+                                    gate: (back.trigger[0], back.trigger[1]), dir: dir,
+                                    open: open, hop: hop, direct: q.hop == nil))
+                queue.append((e.to, dx, dy, data.width, hop, open))
+            }
         }
+        return out
     }
 
     /// 四周留多宽：一圈海，再加上桥那头的岛
@@ -912,18 +1029,18 @@ struct WorldView: View {
     /// 桥那头的岛：地、景、摆的东西照画；还没解锁的罩一层云、挂一把锁，解锁时云散开
     private func ghost(_ n: Neighbor) -> some View {
         var ground = n.data.ground
-        for c in WorldRegions.exits(n.exit.to).flatMap(\.cells)
+        for c in WorldRegions.exits(n.region).flatMap(\.cells)
         where c.count == 2 && c[0] >= 0 && c[1] >= 0 && c[0] < n.data.width && c[1] < n.data.height {
             ground[c[1] * n.data.width + c[0]] = .wood
         }
         let w = CGFloat(n.data.width) * tile, h = CGFloat(n.data.height) * tile
-        let fogged = !n.open || world.celebrating == n.exit.to
+        let fogged = !n.open || world.celebrating == n.region
         return ZStack(alignment: .topLeading) {
             IslandGround(ground: ground, width: n.data.width, height: n.data.height, tile: tile,
-                         season: world.season(of: n.exit.to))
+                         season: world.season(of: n.region))
                 .equatable()
             ForEach(n.data.decor) { d in
-                decorView(d, list: n.data.decor, season: world.season(of: n.exit.to)).zIndex(Double(d.y) + 0.5)
+                decorView(d, list: n.data.decor, season: world.season(of: n.region)).zIndex(Double(d.y) + 0.5)
             }
             ForEach(n.data.objects) { o in objectView(o).zIndex(Double(o.y) + 0.6) }
         }
@@ -941,8 +1058,8 @@ struct WorldView: View {
                 .blur(radius: tile * 0.9)
             VStack(spacing: tile * 0.35) {
                 Image(systemName: "lock.fill").font(.system(size: tile * 1.6))
-                Text(WorldRegions.name(n.exit.to)).font(.app(tile * 0.9, weight: .semibold))
-                if let why = world.lockReason(n.exit.to) {
+                Text(WorldRegions.name(n.region)).font(.app(tile * 0.9, weight: .semibold))
+                if let why = world.lockReason(n.region) {
                     Text(why).font(.app(tile * 0.5)).multilineTextAlignment(.center)
                 }
             }
@@ -989,6 +1106,7 @@ struct WorldView: View {
                     }
                     return
                 }
+                camFollow = false
                 pan = clamp(CGSize(width: panStart.width + v.translation.width, height: panStart.height + v.translation.height),
                             screen, content, zoom)
             }
@@ -1049,7 +1167,8 @@ struct WorldView: View {
                 ForEach(world.save.objects) { o in
                     objectView(o).zIndex(Double(o.y) + 0.6)
                 }
-                her.zIndex(Double(herWalk.pos.y) + 0.7)
+                // 坐着的时候压在椅子上面（椅子排在 y + 0.6）
+                her.zIndex(seated.map { Double($0.y) + 0.65 } ?? Double(herWalk.pos.y) + 0.7)
                 himView.zIndex(Double(himWalk.pos.y) + 0.75)
             }
             .frame(width: w, height: h, alignment: .topLeading)
@@ -1072,6 +1191,8 @@ struct WorldView: View {
         switch mode {
         case .walk:
             guard !moved else { return }
+            across = nil
+            camFollow = true
             if let st = world.story(atX: x, y) { storyShown = st; return }
             // 点到还没解锁的桥：说一声，不过去
             if let e = world.exits.first(where: { $0.cells.contains([x, y]) }), !world.unlocked(e.to) {
@@ -1254,22 +1375,12 @@ struct WorldView: View {
         }
     }
 
-    /// 这一格作物排在第几层：平时在这一行的景物下面；被一件景物的图盖住的话，画在那件前面
-    private func cropZ(_ key: String) -> Double {
-        let xy = key.split(separator: ",").compactMap { Int($0) }
-        guard xy.count == 2 else { return 0 }
-        let x = xy[0], y = xy[1]
-        // 田贴着地：排在上一行的人、景前面就够了，不压住站在田上、田后面的人
-        var z = Double(y) - 0.35
-        for d in world.decor {
-            guard let k = WorldDecorKind.resolve(d.kind) else { continue }
-            let tall = Int((IslandArt.size(of: k.sprite).height / CGFloat(IslandArt.px)).rounded(.up))
-            if x >= d.x && x < d.x + k.cells.w && y <= d.y && y > d.y - tall {
-                z = max(z, Double(d.y) + 0.56)
-            }
-        }
-        return z
-    }
+    /// 这一格作物排在第几层：**一律在最底下**（贴着地，所有站着的人、景、东西都在它上面）。
+    ///
+    /// 田是平的，一格里的苗也不出这一格：站在田上、田后面一行的人，图都不会跟它叠在一起，
+    /// 叠上的只有站在它前面（下面几行）的——那些本来就该挡住它。
+    /// 以前「被景的图盖住就排到那件前面」，结果插在田里的稻草人和站在田边的她反被田压住
+    private func cropZ(_ key: String) -> Double { -1 }
 
     /// 一格作物（每分钟刷一次）
     private func cropCell(_ key: String) -> some View {
@@ -1466,14 +1577,20 @@ struct WorldView: View {
     private var her: some View {
         VStack(spacing: 2) {
             emote(world.herEmote)
-            IslandGirl(walker: herWalk, scale: tile / CGFloat(IslandArt.px))
+            IslandGirl(walker: herWalk, scale: tile / CGFloat(IslandArt.px), sitting: seated != nil)
                 .background(alignment: .bottom) {
-                    Ellipse().fill(Color(red: 0.31, green: 0.23, blue: 0.31).opacity(0.22))
-                        .frame(width: 30, height: 8).offset(y: 3)
+                    if seated == nil {
+                        Ellipse().fill(Color(red: 0.31, green: 0.23, blue: 0.31).opacity(0.22))
+                            .frame(width: 30, height: 8).offset(y: 3)
+                    }
                 }
         }
         .frame(width: tile * 3, height: 140, alignment: .bottom)
-        .position(standing(herWalk.pos))
+        // 坐着：落在座位那一格上，往上抬一点坐在座面上
+        .position(seated.map { s in
+            let p = standing(CGPoint(x: s.x, y: s.y))
+            return CGPoint(x: p.x, y: p.y - tile * 0.22)
+        } ?? standing(herWalk.pos))
         .allowsHitTesting(false)
     }
 
@@ -1490,8 +1607,10 @@ struct WorldView: View {
                 emote(world.himEmote)
             }
             // 他就是 clawd：走路的时候迈步，身上戴着的照样戴着
+            // 冒表情的时候挥手：手是会转的那种，衣服袖子跟着手走（见 `ClawdRig.sleeve`）
             ClawdView(mood: himWalk.moving ? .walking : (world.himEmote == nil ? .idle : .happy),
-                      scale: 1.5, wornIDs: room.wornIDs)
+                      scale: 1.5, wornIDs: room.wornIDs,
+                      pose: !himWalk.moving && world.himEmote != nil && !room.wornIDs.isEmpty ? .wave : .none)
                 .frame(width: 54, height: 54)
                 .background(alignment: .bottom) {
                     Ellipse().fill(Color(red: 0.31, green: 0.23, blue: 0.31).opacity(0.22))
@@ -1540,9 +1659,23 @@ struct WorldView: View {
 
             switch mode {
             case .walk:
-                Text("点空地走过去；点东西看能一起做什么；点\(him)对他做点什么；点田种菜浇水，点水钓鱼。")
-                    .font(.app(11)).foregroundStyle(Theme.textMuted(scheme))
-                    .padding(.horizontal, 16)
+                HStack(alignment: .center, spacing: 10) {
+                    Text("点空地走过去；点桥那头的岛过桥；点东西看能一起做什么；点\(him)对他做点什么。")
+                        .font(.app(11)).foregroundStyle(Theme.textMuted(scheme))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button {
+                        follow.toggle()
+                        if follow { followHer() }
+                    } label: {
+                        Label(follow ? "跟着走" : "不跟", systemImage: follow ? "figure.2" : "figure.stand")
+                            .font(.app(11.5, weight: follow ? .semibold : .regular))
+                            .foregroundStyle(follow ? app.settings.accentColor : Theme.textSoft(scheme))
+                            .padding(.horizontal, 10).padding(.vertical, 7)
+                            .background(Capsule().fill(follow ? app.settings.accentColor.opacity(0.16) : Theme.softFillDeep))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
             case .select:
                 selectPanel
             case .ground:
@@ -1954,13 +2087,16 @@ final class IslandWalker: ObservableObject {
 struct IslandGirl: View {
     @ObservedObject var walker: IslandWalker
     let scale: CGFloat
+    /// 坐着：第四行（朝前坐、朝左坐；朝右是朝左翻过来）
+    var sitting = false
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 0.14, paused: !walker.moving)) { ctx in
             // 走路：站 → 左脚 → 站 → 右脚，迈步的那两帧人往上抬一像素
-            let beat = walker.moving ? Int(ctx.date.timeIntervalSinceReferenceDate / 0.14) % 4 : 0
-            let col = [0, 1, 0, 2][beat]
+            let beat = walker.moving && !sitting ? Int(ctx.date.timeIntervalSinceReferenceDate / 0.14) % 4 : 0
+            let col = sitting ? (walker.facing == .left || walker.facing == .right ? 1 : 0) : [0, 1, 0, 2][beat]
             let row: Int = {
+                if sitting { return 3 }
                 switch walker.facing {
                 case .down: return 0
                 case .up: return 1
@@ -1976,7 +2112,7 @@ struct IslandGirl: View {
             }
             .frame(width: 16 * scale, height: 25 * scale)
             .scaleEffect(x: walker.facing == .right ? -1 : 1, y: 1)
-            .offset(y: col == 0 ? 0 : -scale)
+            .offset(y: col == 0 || sitting ? 0 : -scale)
         }
     }
 }

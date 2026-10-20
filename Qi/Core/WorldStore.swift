@@ -276,7 +276,7 @@ enum WorldMods {
             WorldAction(id: "cuddle", name: "窝在一起", match: ["沙发", "地毯", "垫"], categories: [],
                         emote: "heart.circle", line: "她窝进你怀里，两个人挤在{物}上。")
         ]),
-        WorldMod(id: "spicy", name: "情趣", summary: "亲亲、坐腿上、咬耳朵、一起洗澡", actions: [
+        WorldMod(id: "spicy", name: "情趣", summary: "亲亲、坐腿上、咬耳朵、一起洗澡。在家里随时；在外面要天黑以后，小镇上不行", actions: [
             WorldAction(id: "kiss", name: "亲一下", match: [], categories: [],
                         emote: "mouth", line: "她勾住你的脖子亲了你一下。"),
             WorldAction(id: "ear", name: "咬耳朵", match: [], categories: [],
@@ -333,9 +333,59 @@ final class WorldStore: ObservableObject {
         if s.decor == nil { s.decor = Self.starterDecor }
         if s.art < 6, s.art >= 5 { Self.addHomeExtras(&s); s.art = Self.artVersion }
         if s.art < Self.artVersion { Self.upgrade(&s) }
+        Self.centerFountains(&s)
+        Self.dropBeachTable(&s)
         save = s
         loaded = true
+        // 上面几处修正（喷泉、沙滩的桌子）是在 loaded 之前改的，不会自己存：存一次
+        scheduleSave()
         ensureExits()
+    }
+
+    /// 一开始自动摆在沙滩边上的那张屋里的桌子：跟沙滩上的伞和躺椅不搭，拿掉（她自己摆的不动）
+    static func dropBeachTable(_ s: inout WorldSave) {
+        // 只拿一次：以后她自己再摆到这儿就是她要的
+        guard !UserDefaults.standard.bool(forKey: "beachTableDropped") else { return }
+        UserDefaults.standard.set(true, forKey: "beachTableDropped")
+        guard let k = FurnitureCatalog.all.first(where: { $0.name.contains("桌") && $0.category != .wear }) else { return }
+        let src = "f:" + k.id
+        func hit(_ o: WorldObject) -> Bool { o.source == src && o.x == 10 && o.y == 32 }
+        if s.region == "home" {
+            s.objects.removeAll(where: hit)
+        } else if var d = s.regions["home"] {
+            d.objects.removeAll(where: hit)
+            s.regions["home"] = d
+        }
+    }
+
+    /// 喷泉摆到广场正中：花岛的广场原来六格宽（三格宽的喷泉怎么放都偏半格），收成五格；
+    /// 小镇的喷泉原来压在广场靠下那一行，往上挪一行。去过的岛存着老样子，这里跟着改（改过的不会再动）
+    static func centerFountains(_ s: inout WorldSave) {
+        func fix(_ id: String, _ d: inout WorldRegionData) {
+            let w = d.width
+            func at(_ x: Int, _ y: Int) -> WorldGround? {
+                x >= 0 && y >= 0 && x < w && y < d.height ? d.ground[y * w + x] : nil
+            }
+            if id == "huadao", w == 26, d.decor.contains(where: { $0.kind == "fountain" && $0.x == 11 && $0.y == 16 }),
+               (13...16).allSatisfy({ at(15, $0) == .stone }), (13...16).allSatisfy({ at(14, $0) == .stone }) {
+                for y in 13...16 { d.ground[y * w + 15] = (y == 14 || y == 15) ? .path : .grass }
+            }
+            if id == "xiaozhen", let i = d.decor.firstIndex(where: { $0.kind == "fountain" && $0.x == 11 && $0.y == 12 }),
+               (11...13).allSatisfy({ at($0, 11) == .stone }) {
+                d.decor[i].y = 11
+            }
+        }
+        for id in ["huadao", "xiaozhen"] {
+            if s.region == id {
+                var d = WorldRegionData(width: s.width, height: s.height, ground: s.ground,
+                                        decor: s.decor ?? [], objects: s.objects, crops: s.crops)
+                fix(id, &d)
+                s.ground = d.ground; s.decor = d.decor
+            } else if var d = s.regions[id] {
+                fix(id, &d)
+                s.regions[id] = d
+            }
+        }
     }
 
     /// 栖岛后来添的景和石板（田边、屋前、池塘、沙滩……）。已有的景不动，只往空着的地方放
@@ -462,7 +512,6 @@ final class WorldStore: ObservableObject {
             }
         }
         put("椅", 16, 10)
-        put("桌", 10, 32)
         return objs
     }
 
@@ -520,11 +569,21 @@ final class WorldStore: ObservableObject {
     func actions(forDecor d: WorldDecor) -> [WorldAction] {
         let k = WorldDecorKind.resolve(d.kind)
         let n = k?.label ?? ""
-        let alias = k?.isHouse == true ? n + "床沙发" : n
+        // 只有栖岛上自己家的小屋算「家里」：屋里有床有沙发，亲密的那些都在这儿做。
+        // 别的岛上的小屋是店、是别人家，不挂这些
+        let home = k?.isHouse == true && save.region == "home"
+        let alias = home ? n + "床沙发" : n
         return WorldMods.all.filter(modOn).flatMap(\.actions).filter { a in
-            !a.match.isEmpty && a.match.contains { alias.contains($0) }
+            !a.match.isEmpty && a.match.contains { alias.contains($0) } && (home || allowedOutside(a))
         }
     }
+
+    /// 情趣那几样在外面要看时候：天黑以后（19 点到早上 6 点），而且不在人多的小镇。在家里随时
+    var outdoorSpicyOK: Bool { Self.isNight && save.region != "xiaozhen" }
+
+    private static let spicyIDs: Set<String> = Set(WorldMods.mod("spicy")?.actions.map(\.id) ?? [])
+
+    func allowedOutside(_ a: WorldAction) -> Bool { !Self.spicyIDs.contains(a.id) || outdoorSpicyOK }
 
     /// 在一样景上一起做件事
     @discardableResult
@@ -788,13 +847,14 @@ final class WorldStore: ObservableObject {
         let n = name(of: o), c = category(of: o)
         return WorldMods.all.filter(modOn).flatMap(\.actions).filter { a in
             guard !a.match.isEmpty || !a.categories.isEmpty else { return false }
-            return a.match.contains { n.contains($0) } || a.categories.contains(c)
+            return (a.match.contains { n.contains($0) } || a.categories.contains(c)) && allowedOutside(a)
         }
     }
 
-    /// 对着人做的事（不挂东西）
+    /// 对着人做的事（不挂东西）。岛上都算在外面
     var personActions: [WorldAction] {
-        WorldMods.all.filter(modOn).flatMap(\.actions).filter { $0.match.isEmpty && $0.categories.isEmpty }
+        WorldMods.all.filter(modOn).flatMap(\.actions)
+            .filter { $0.match.isEmpty && $0.categories.isEmpty && allowedOutside($0) }
     }
 
     // MARK: 走 / 做
@@ -883,6 +943,8 @@ final class WorldStore: ObservableObject {
     private func route(from a: (Int, Int), to b: (Int, Int), blocked: Set<Int>) -> [(Int, Int)]? {
         let w = width, h = height
         guard b.0 >= 0, b.1 >= 0, b.0 < w, b.1 < h, !blocked.contains(b.1 * w + b.0) else { return nil }
+        // 起点不在这座岛上（刚过桥还站在那头）：这里算不了，交给页面先走上岛
+        guard a.0 >= 0, a.1 >= 0, a.0 < w, a.1 < h else { return nil }
         if a == b { return [] }
         let start = a.1 * w + a.0, goal = b.1 * w + b.0
         var prev = [Int](repeating: -1, count: w * h)
@@ -950,6 +1012,11 @@ final class WorldStore: ObservableObject {
     }
 
     func log(_ text: String) {
+        // 同一件事连着记就不再添一条（来回走、连点几下都只记一次），只把时间挪到现在
+        if let i = save.events.indices.last, save.events[i].text == text {
+            save.events[i].at = Date()
+            return
+        }
         save.events.append(WorldEvent(text: text))
         if save.events.count > 40 { save.events.removeFirst(save.events.count - 40) }
     }
@@ -1320,7 +1387,7 @@ extension WorldStore {
 
     /// 过桥：这座岛存起来，换成那座岛。两个人一起过去
     @discardableResult
-    func travel(_ e: WorldExit) -> Bool {
+    func travel(_ e: WorldExit, landAt: (Int, Int)? = nil) -> Bool {
         guard unlocked(e.to), let target = save.regions[e.to] ?? WorldRegions.fresh(e.to) else { return false }
         var v = save
         v.regions[v.region] = WorldRegionData(width: v.width, height: v.height, ground: v.ground,
@@ -1329,7 +1396,11 @@ extension WorldStore {
         v.region = e.to
         v.width = target.width; v.height = target.height
         v.ground = target.ground; v.decor = target.decor; v.objects = target.objects; v.crops = target.crops
-        let ax = e.arrive.first ?? 0, ay = e.arrive.count > 1 ? e.arrive[1] : 0
+        // 走桥过去的：落在她要去的那一格（桥上也行），不再自己往岛里走几步
+        var ax = e.arrive.first ?? 0, ay = e.arrive.count > 1 ? e.arrive[1] : 0
+        if let l = landAt, l.0 >= 0, l.1 >= 0, l.0 < v.width, l.1 < v.height, !v.ground[l.1 * v.width + l.0].blocked {
+            ax = l.0; ay = l.1
+        }
         v.herX = ax; v.herY = ay
         // 他跟在旁边一格
         let spots = [(1, 0), (-1, 0), (0, 1), (0, -1)].map { (ax + $0.0, ay + $0.1) }

@@ -2530,8 +2530,11 @@ struct ClawdView: View {
                 // ⚠️⚠️ **手在下、身子在上**，跟 `ClawdRigView` 一样。
                 // 手有一半是埋在身子里的（`ClawdRig.arm` 那段注释说了为什么），
                 // 顺序反了那半截就糊在他脸上。
-                ClawdArmView(onLeft: true, angle: plan.leftArm, scale: scale)
-                ClawdArmView(onLeft: false, angle: plan.rightArm, scale: scale)
+                // 袖子挂在手上跟着转（身上那张图里同一块抠掉了，见 `ClawdRig.sleeve`）
+                ClawdArmView(onLeft: true, angle: plan.leftArm, scale: scale,
+                             sleeve: ClawdRig.sleeve(wornIDs, left: true))
+                ClawdArmView(onLeft: false, angle: plan.rightArm, scale: scale,
+                             sleeve: ClawdRig.sleeve(wornIDs, left: false))
                 PixelSpriteView(sprite: ClawdRig.stripArms(body), scale: scale)
             }
             .frame(width: cols * scale, height: rows * scale, alignment: .topLeading)
@@ -2606,7 +2609,7 @@ struct ClawdView: View {
                         // 端着道具的动作里，围巾领结先不画（见 `ClawdRig.hidesNeckwear`）
                         ForEach(ClawdRig.shownWorn(wornIDs, mood: mood, pose: pose),
                                 id: \.self) { id in
-                            ClawdWornView(id: id, scale: scale)
+                            ClawdWornView(id: id, scale: scale, stripSleeves: pose != .none)
                         }
                         // 道具盖回穿戴件上面：吉他压住帽子，不是帽子压住吉他（见 `ClawdRig.propsOnly`）
                         if pose == .none {

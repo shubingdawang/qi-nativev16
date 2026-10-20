@@ -220,7 +220,7 @@ struct ClawdRigView: View {
             // 挡多了她买的帽子会莫名其妙消失。
             if mood != .sleeping, mood != .lying {
                 ForEach(ClawdRig.shownWorn(wornIDs, mood: mood, pose: pose), id: \.self) { id in
-                    ClawdWornView(id: id, scale: scale)
+                    ClawdWornView(id: id, scale: scale, stripSleeves: true)
                 }
                 // 道具盖回穿戴件上面（见 `ClawdRig.propsOnly`）
                 if !wornIDs.isEmpty {
@@ -311,7 +311,7 @@ struct ClawdRigView: View {
                      scale: scale,
                      // 睡着、躺着的时候衣服不穿（同身上那几件）
                      sleeve: mood == .sleeping || mood == .lying ? nil
-                        : CustomWearStore.shared.sleeve(wornIDs, left: side == .left))
+                        : ClawdRig.sleeve(wornIDs, left: side == .left))
     }
 
     /// 举过头顶的那只手臂。
@@ -1126,6 +1126,8 @@ struct ClawdWornView: View {
     /// 哪一件（`hat` / `glasses` / …）
     let id: String
     let scale: CGFloat
+    /// 袖子切下来挂在手上了（抬手的画法），身上这张不画袖子
+    var stripSleeves = false
 
     /// 她那张图读不出来时退回去画的手写像素。
     ///
@@ -1137,7 +1139,7 @@ struct ClawdWornView: View {
     }
 
     var body: some View {
-        if let worn = FurnitureCatalog.wornImage(of: id) {
+        if let worn = stripSleeves ? ClawdRig.wornWithoutSleeves(id) : FurnitureCatalog.wornImage(of: id) {
             // ⚠️⚠️ **整张贴上，一个偏移都不加。**
             //
             // 这张图是按身体那张图纸画的（`scripts/wear_art.py`，
@@ -1175,5 +1177,115 @@ struct ClawdWornView: View {
                         y: ClawdRig.wearAt(id, itemW: CGFloat(fallback.width),
                                            itemH: CGFloat(fallback.height)).y * scale)
         }
+    }
+}
+
+// MARK: - 衣服的袖子跟着手
+
+/// 自带的上衣（衬衫、西装、睡衣……）是整张画好的：袖子画在手垂着的那个位置。
+/// 他一抬手、一挥手，手转走了，袖子还留在原地——看着就是衣服没跟上。
+///
+/// 所以抬手的那几种画法里，把伸在身子两边外面、手臂那几行的那一截**切下来挂到手上**，
+/// 身上那张图里同一块抠掉。手垂着的时候两块拼回去跟原图一模一样。
+extension ClawdRig {
+
+    /// 哪几行算手臂（上下各多一行，袖口的描边在外面）
+    private static let sleeveRows = (armRow - 1)...(armRow + 4)
+
+    private static func isTop(_ id: String) -> Bool {
+        !id.hasPrefix("cw_") && [.body, .outer].contains(wearSlot(id))
+    }
+
+    /// 这一格是不是袖子那一截（图纸格坐标）
+    private static func inSleeve(_ x: Int, _ y: Int) -> Bool {
+        sleeveRows.contains(y) && (x < bodyLeft || x > bodyRight)
+    }
+
+    @MainActor private static var sleeveCache: [String: UIImage] = [:]
+    @MainActor private static var strippedCache: [String: UIImage] = [:]
+
+    /// 读出一张图的 RGBA
+    private static func rgba(_ img: UIImage) -> (w: Int, h: Int, px: [UInt8])? {
+        guard let cg = img.cgImage else { return nil }
+        let w = cg.width, h = cg.height
+        var px = [UInt8](repeating: 0, count: w * h * 4)
+        guard let ctx = CGContext(data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        return (w, h, px)
+    }
+
+    private static func image(_ w: Int, _ h: Int, _ px: [UInt8]) -> UIImage? {
+        var px = px
+        guard let ctx = CGContext(data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let cg = ctx.makeImage() else { return nil }
+        return UIImage(cgImage: cg)
+    }
+
+    /// 身上那张去掉袖子（抬手的画法用）。不是上衣就原样
+    @MainActor
+    static func wornWithoutSleeves(_ id: String) -> UIImage? {
+        guard let full = FurnitureCatalog.wornImage(of: id) else { return nil }
+        guard isTop(id) else { return full }
+        if let hit = strippedCache[id] { return hit }
+        guard var d = rgba(full) else { return full }
+        let cell = Double(d.w) / Double(canvas)
+        for y in 0..<d.h {
+            let cy = Int(Double(y) / cell)
+            for x in 0..<d.w where inSleeve(Int(Double(x) / cell), cy) {
+                let i = (y * d.w + x) * 4
+                d.px[i] = 0; d.px[i + 1] = 0; d.px[i + 2] = 0; d.px[i + 3] = 0
+            }
+        }
+        let out = image(d.w, d.h, d.px) ?? full
+        strippedCache[id] = out
+        return out
+    }
+
+    /// 挂在手上的那一截：跟 `ClawdArmView` 的袖子图一样大（手那一块四周各多 `OutfitCutter.margin` 格）
+    @MainActor
+    static func builtinSleeve(_ id: String, left: Bool) -> UIImage? {
+        guard isTop(id) else { return nil }
+        let key = id + (left ? "<" : ">")
+        if let hit = sleeveCache[key] { return hit }
+        guard let full = FurnitureCatalog.wornImage(of: id), let d = rgba(full) else { return nil }
+        let cell = Double(d.w) / Double(canvas)
+        let m = OutfitCutter.margin
+        let shoulder = left ? bodyLeft : bodyRight + 1
+        let ox = shoulder - armOut - m, oy = armRow - m
+        let cw = arm.width + 2 * m, ch = arm.height + 2 * m
+        let w = Int((Double(cw) * cell).rounded()), h = Int((Double(ch) * cell).rounded())
+        var px = [UInt8](repeating: 0, count: w * h * 4)
+        var any = false
+        for y in 0..<h {
+            let sy = Int((Double(oy) * cell).rounded()) + y
+            guard sy >= 0, sy < d.h else { continue }
+            for x in 0..<w {
+                let sx = Int((Double(ox) * cell).rounded()) + x
+                guard sx >= 0, sx < d.w,
+                      inSleeve(Int(Double(sx) / cell), Int(Double(sy) / cell)) else { continue }
+                let si = (sy * d.w + sx) * 4, di = (y * w + x) * 4
+                guard d.px[si + 3] > 0 else { continue }
+                px[di] = d.px[si]; px[di + 1] = d.px[si + 1]; px[di + 2] = d.px[si + 2]; px[di + 3] = d.px[si + 3]
+                any = true
+            }
+        }
+        guard any, let out = image(w, h, px) else { return nil }
+        sleeveCache[key] = out
+        return out
+    }
+
+    /// 手上挂的袖子：她自己画的那套优先，没有就用自带上衣切下来的那一截
+    @MainActor
+    static func sleeve(_ wornIDs: [String], left: Bool) -> UIImage? {
+        if let s = CustomWearStore.shared.sleeve(wornIDs, left: left) { return s }
+        // 贴身那件在下、外面那件在上：外面那件有袖子就用外面的
+        for id in wornIDs.reversed() {
+            if let s = builtinSleeve(id, left: left) { return s }
+        }
+        return nil
     }
 }
