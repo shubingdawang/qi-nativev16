@@ -488,6 +488,11 @@ enum NativeTools {
                      "description": "做完的是哪件：想冒个头／想查点什么／想翻那本书／想看还欠着什么／想看看外面／想凑过去／想吐两句／想歇着"]],
             required: ["did"])
 
+        add("write_desire_notes",
+            "触发：你想写下、或者改一改你自己的欲望笔记——你会怎样想要她。动机：这份笔记会一直跟着你，亲密的时候你还是你。行动：整份重写（不是追加），第一人称、用你自己平时说话的声音。\n注意：" + SoloStore.notesHint.replacingOccurrences(of: "\n", with: ""),
+            ["text": ["type": "string", "description": "整份笔记，几百字以内"]],
+            required: ["text"])
+
         // doll_action 删了——她说娃娃有点无聊。
 
         // 飞行棋。**只有她导过棋盘才给**——没棋盘的时候摆出来，

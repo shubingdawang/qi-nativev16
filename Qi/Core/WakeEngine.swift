@@ -400,6 +400,18 @@ final class WakeEngine: ObservableObject {
         state = s
 
         Task { @MainActor in
+            // 渴压了好一阵、她又好久没来：这一次不去找她，自己来一回（见 `SoloStore`）
+            let solo = SoloStore.shared
+            if solo.shouldRun(app: app) {
+                let plan = solo.plan()
+                if let text = await app.runSolo(plan) {
+                    solo.finish(plan, text: text, app: app)
+                    WakeLog.shared.add(.init(at: Date(), kind: .silent, text: "一个人待了一会儿（" + SoloStore.label(plan.mode) + "）", from: "本机"))
+                    self.running = false
+                    self.noteRun()
+                    return
+                }
+            }
             let woke = await self.run(app: app)
             if !woke {
                 // 这一次不算。次数退回去、上次醒来的时间也退回去。

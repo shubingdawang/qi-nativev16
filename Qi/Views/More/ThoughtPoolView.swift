@@ -95,6 +95,9 @@ struct ThoughtPoolView: View {
 
                 DesireBars()
 
+                // 他的欲望笔记、他自己来过的那几回（见 `SoloStore`）
+                SoloSection()
+
                 // 好感度摆在这儿：跟念头池、八条驱动条是同一摊东西，
                 // 都是「他此刻是什么样」——分散到三页反而看不出彼此的关系
                 FeelingCard()

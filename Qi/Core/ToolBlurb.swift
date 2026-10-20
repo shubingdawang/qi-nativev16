@@ -126,6 +126,7 @@ enum ToolBlurb {
         "stir_thought": "生成一条念头",
         "read_thoughts": "查看念头池",
         "read_desire": "查询当前的意愿强度",
+        "write_desire_notes": "写自己的欲望笔记",
         "satisfied": "将某项意愿标记为已满足",
         "read_hobbies": "查询爱好列表",
         "note_hobby": "记录一项爱好或偏好",
