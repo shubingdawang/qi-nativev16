@@ -137,6 +137,25 @@ final class StickerStore: ObservableObject {
         albumCovers[sticker.album] = sticker.id
     }
 
+    // MARK: 最近用过（只存在本机，丢了也不要紧）
+
+    private static let recentKey = "stickerRecent"
+
+    /// 最近发过的那几张，新的在前
+    func recent(owner: String) -> [Sticker] {
+        let ids = UserDefaults.standard.stringArray(forKey: Self.recentKey) ?? []
+        return ids.compactMap { UUID(uuidString: $0).flatMap(sticker(id:)) }
+            .filter { $0.owner == owner && $0.ready }
+    }
+
+    func noteUsed(_ s: Sticker) {
+        var ids = UserDefaults.standard.stringArray(forKey: Self.recentKey) ?? []
+        ids.removeAll { $0 == s.id.uuidString }
+        ids.insert(s.id.uuidString, at: 0)
+        UserDefaults.standard.set(Array(ids.prefix(24)), forKey: Self.recentKey)
+        objectWillChange.send()
+    }
+
     func list(owner: String, keyword: String = "", album: String = "") -> [Sticker] {
         var out = stickers.filter { $0.owner == owner }
         if !album.isEmpty { out = out.filter { $0.album == album } }

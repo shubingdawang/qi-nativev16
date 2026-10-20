@@ -18,37 +18,60 @@ struct StickerPanel: View {
     @State private var picking: [PhotosPickerItem] = []
     @State private var editing: Sticker?
 
-    /// 现在只看哪一册。空的就是全部。
+    /// 现在只看哪一册。空的就是全部；`recentTab` 是「最近用过」
     @State private var album = ""
+    @Namespace private var ring
+
+    private static let recentTab = "\u{1}recent"
 
     private var list: [Sticker] {
-        store.list(owner: "user", keyword: keyword, album: album).filter { $0.ready }
+        if album == Self.recentTab { return keyword.isEmpty ? store.recent(owner: "user") : [] }
+        return store.list(owner: "user", keyword: keyword, album: album).filter { $0.ready }
     }
     private var drafts: [Sticker] {
         store.list(owner: "user").filter { !$0.ready }
     }
 
-    /// 一册的按钮：有封面就把封面画成小圆脸，没有就只有名字
+    /// 一册一个小圆：封面画成圆脸（没有封面的写第一个字），名字在底下。
+    /// 选中的那个外面一圈环，换一册时环滑过去
     @ViewBuilder
-    private func albumChip(name: String, value: String, cover: Sticker?) -> some View {
+    private func albumChip(name: String, value: String, cover: Sticker?, icon: String? = nil) -> some View {
         let on = album == value
         Button {
-            album = on ? "" : value
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) { album = value }
         } label: {
-            HStack(spacing: 5) {
-                if let cover {
-                    StickerImage(sticker: cover, size: 20)
-                        .frame(width: 20, height: 20)
-                        .clipShape(Circle())
+            VStack(spacing: 3) {
+                ZStack {
+                    Circle().fill(Theme.softFillDeep)
+                    if let cover {
+                        StickerImage(sticker: cover, size: 30)
+                            .frame(width: 30, height: 30)
+                            .clipShape(Circle())
+                    } else if let icon {
+                        Image(systemName: icon)
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundStyle(on ? app.settings.accentColor : Theme.textSoft(scheme))
+                    } else {
+                        Text(String(name.prefix(1)))
+                            .font(.app(13, weight: .medium))
+                            .foregroundStyle(on ? app.settings.accentColor : Theme.textSoft(scheme))
+                    }
+                }
+                .frame(width: 34, height: 34)
+                .overlay {
+                    if on {
+                        Circle()
+                            .stroke(app.settings.accentColor, lineWidth: 2)
+                            .frame(width: 40, height: 40)
+                            .matchedGeometryEffect(id: "ring", in: ring)
+                    }
                 }
                 Text(name)
-                    .font(.app(12))
+                    .font(.app(10))
+                    .lineLimit(1)
+                    .foregroundStyle(on ? app.settings.accentColor : Theme.textMuted(scheme))
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Capsule().fill(on ? app.settings.accentColor.opacity(0.2)
-                                          : Theme.softFillDeep))
-            .foregroundStyle(on ? app.settings.accentColor : Theme.textSoft(scheme))
+            .frame(width: 46)
         }
         .buttonStyle(.plain)
     }
@@ -93,18 +116,23 @@ struct StickerPanel: View {
             // 专辑那一行。**只在真有专辑的时候才出现**——
             // 一个专辑都没有的时候摆一排空按钮是纯噪音。
             let albums = store.albums(owner: "user")
-            if !albums.isEmpty {
+            let hasRecent = !store.recent(owner: "user").isEmpty
+            if !albums.isEmpty || hasRecent {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        albumChip(name: "全部", value: "", cover: nil)
+                    HStack(spacing: 6) {
+                        if hasRecent {
+                            albumChip(name: "最近", value: Self.recentTab, cover: nil, icon: "clock")
+                        }
+                        albumChip(name: "全部", value: "", cover: nil, icon: "square.grid.2x2")
                         ForEach(albums, id: \.self) { a in
                             albumChip(name: a, value: a,
                                       cover: store.cover(of: a, owner: "user"))
                         }
                     }
-                    .padding(.horizontal, 1)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 3)
                 }
-                .frame(height: 34)
+                .frame(height: 58)
             }
 
             if !drafts.isEmpty {
@@ -144,6 +172,7 @@ struct StickerPanel: View {
                                 if app.settings.haptics {
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                 }
+                                store.noteUsed(sticker)
                                 onPick(sticker)
                             } label: {
                                 StickerImage(sticker: sticker, size: 60)
