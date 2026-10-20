@@ -112,7 +112,7 @@ struct VinylStage: View {
                         .frame(maxWidth: .infinity)
                         .padding(.top, 4)
                     if !unlocked.isEmpty {
-                        Text("拖到想放的地方，双击锁住")
+                        Text("拖动到目标位置，双击锁定")
                             .font(.app(11))
                             .padding(.horizontal, 10).padding(.vertical, 5)
                             .background(Capsule().fill(.ultraThinMaterial))

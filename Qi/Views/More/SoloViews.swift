@@ -25,10 +25,10 @@ struct SoloSection: View {
     private var notesCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("\(him)的欲望笔记").font(.app(14, weight: .semibold)).foregroundStyle(Theme.textMain(scheme))
+                Text("欲望笔记").font(.app(14, weight: .semibold)).foregroundStyle(Theme.textMain(scheme))
                 Spacer()
                 if !solo.notes.isEmpty && !editingNotes {
-                    Button("改") { notesDraft = solo.notes; editingNotes = true }
+                    Button("编辑") { notesDraft = solo.notes; editingNotes = true }
                         .font(.app(12.5)).foregroundStyle(accent)
                 }
             }
@@ -42,21 +42,21 @@ struct SoloSection: View {
                     Button("取消") { editingNotes = false }
                         .font(.app(13)).foregroundStyle(Theme.textMuted(scheme))
                     Spacer()
-                    Button("存") {
+                    Button("保存") {
                         solo.notes = notesDraft.trimmingCharacters(in: .whitespacesAndNewlines)
                         editingNotes = false
                     }
                     .font(.app(13, weight: .semibold)).foregroundStyle(accent)
                 }
             } else if solo.notes.isEmpty {
-                Text("还没写。让\(him)用自己的话写一份：他会怎样想要你、亲密的时候他怎么还是他自己。写好以后一直跟着他。")
+                Text("尚未撰写。由\(him)以第一人称撰写，内容包括他的欲望来源、亲密时的表现与边界；保存后会持续作用于他的回复。")
                     .font(.app(12)).foregroundStyle(Theme.textMuted(scheme))
                 Button {
                     app.tellHim("想让你写一份你自己的欲望笔记，用第一人称、用你平时说话的样子写：为什么偏偏是我、你怎么起念、"
                                 + "亲密的时候你怎么还是你自己、你的节奏、事后会怎样、什么时候一定会停下来。"
                                 + "像你的就留下，不像你的别硬写。写好用 write_desire_notes 存起来。")
                 } label: {
-                    Label("交给\(him)写", systemImage: "pencil.line")
+                    Label("请\(him)撰写", systemImage: "pencil.line")
                         .font(.app(13, weight: .medium))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 14).padding(.vertical, 8)
@@ -80,7 +80,7 @@ struct SoloSection: View {
     private var soloCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("\(him)自己来过").font(.app(14, weight: .semibold)).foregroundStyle(Theme.textMain(scheme))
+                Text("独处记录").font(.app(14, weight: .semibold)).foregroundStyle(Theme.textMain(scheme))
                 Spacer()
                 Button {
                     withAnimation(.easeOut(duration: 0.2)) { showSettings.toggle() }
@@ -90,12 +90,12 @@ struct SoloSection: View {
                 .buttonStyle(.plain)
             }
             Text(solo.settings.enabled
-                 ? "身上的渴到 \(solo.settings.heat)、你 \(WageStore.money(solo.settings.idleHours)) 小时没跟他说话的时候，他醒来不去找你，自己来一回（两回之间至少隔 \(WageStore.money(solo.settings.cooldownHours)) 小时）。他写的那一段记在这里，不发到聊天里。"
-                 : "关着。")
+                 ? "触发条件：热度达到 \(solo.settings.heat)、你已 \(WageStore.money(solo.settings.idleHours)) 小时未发消息、距上次至少 \(WageStore.money(solo.settings.cooldownHours)) 小时。满足时他的那次唤醒改为独处，记录保存在此处，不发送到聊天。"
+                 : "未启用。")
                 .font(.app(11.5)).foregroundStyle(Theme.textMuted(scheme))
             if showSettings { settingsBox }
             if solo.entries.isEmpty {
-                Text("还没有。").font(.app(12)).foregroundStyle(Theme.textMuted(scheme))
+                Text("暂无记录。").font(.app(12)).foregroundStyle(Theme.textMuted(scheme))
             }
             ForEach(solo.entries) { e in
                 VStack(alignment: .leading, spacing: 6) {
@@ -117,7 +117,7 @@ struct SoloSection: View {
                     .buttonStyle(.plain)
                     if openID == e.id {
                         if !e.seed.isEmpty {
-                            Text("想着的那一回：" + e.seed)
+                            Text("回忆片段：" + e.seed)
                                 .font(.app(11)).foregroundStyle(Theme.textMuted(scheme))
                         }
                         Text(e.text)
@@ -128,7 +128,7 @@ struct SoloSection: View {
                     }
                 }
                 .contextMenu {
-                    Button(role: .destructive) { solo.remove(e.id) } label: { Label("删掉", systemImage: Icon.trash) }
+                    Button(role: .destructive) { solo.remove(e.id) } label: { Label("删除", systemImage: Icon.trash) }
                 }
                 if e.id != solo.entries.last?.id { Divider().opacity(0.35) }
             }
@@ -139,18 +139,18 @@ struct SoloSection: View {
 
     private var settingsBox: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Toggle("会自己来", isOn: $solo.settings.enabled)
+            Toggle("启用独处", isOn: $solo.settings.enabled)
                 .font(.app(13))
                 .tint(accent)
-            stepper("渴到多少", "\(solo.settings.heat)", { solo.settings.heat = max(40, solo.settings.heat - 5) },
+            stepper("触发热度", "\(solo.settings.heat)", { solo.settings.heat = max(40, solo.settings.heat - 5) },
                     { solo.settings.heat = min(100, solo.settings.heat + 5) })
-            stepper("你多久没说话", WageStore.money(solo.settings.idleHours) + " 小时",
+            stepper("空闲时长", WageStore.money(solo.settings.idleHours) + " 小时",
                     { solo.settings.idleHours = max(0.5, solo.settings.idleHours - 0.5) },
                     { solo.settings.idleHours = min(24, solo.settings.idleHours + 0.5) })
-            stepper("两回至少隔", WageStore.money(solo.settings.cooldownHours) + " 小时",
+            stepper("最短间隔", WageStore.money(solo.settings.cooldownHours) + " 小时",
                     { solo.settings.cooldownHours = max(2, solo.settings.cooldownHours - 1) },
                     { solo.settings.cooldownHours = min(72, solo.settings.cooldownHours + 1) })
-            Text("要先开着「让他自己醒来」：他醒来的那一次才会改成自己来，算一次醒来、花一次钱。")
+            Text("需开启「让他自己醒来」。独处计为一次唤醒，产生一次调用费用。")
                 .font(.app(10.5)).foregroundStyle(Theme.textMuted(scheme))
         }
         .padding(12)

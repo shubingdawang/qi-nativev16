@@ -88,9 +88,9 @@ final class SoloStore: ObservableObject {
 
     nonisolated static func label(_ mode: String) -> String {
         switch mode {
-        case "recall": return "回味"
-        case "fantasy": return "自己想"
-        default: return "混着来"
+        case "recall": return "回忆"
+        case "fantasy": return "想象"
+        default: return "交织"
         }
     }
 

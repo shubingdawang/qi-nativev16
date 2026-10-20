@@ -39,7 +39,7 @@ struct JournalHandOffSheet: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         DatePicker(selection: $day, in: ...Date(), displayedComponents: .date) {
-                            Text("做哪一天").font(.app(14)).foregroundStyle(Theme.textMain(scheme))
+                            Text("日期").font(.app(14)).foregroundStyle(Theme.textMain(scheme))
                         }
                         .tint(accent)
                         .glassCard()
@@ -48,7 +48,7 @@ struct JournalHandOffSheet: View {
                         moodCard
 
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("再说一句（不说也行）").font(.app(12)).foregroundStyle(Theme.textMuted(scheme))
+                            Text("附言（选填）").font(.app(12)).foregroundStyle(Theme.textMuted(scheme))
                             TextField("比如：那天风很大", text: $note, axis: .vertical)
                                 .lineLimit(1...4)
                                 .font(.app(14))
@@ -63,14 +63,14 @@ struct JournalHandOffSheet: View {
                     .padding(16)
                 }
             }
-            .navigationTitle("交给他")
+            .navigationTitle("发送")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("交给他") {
+                    Button("发送") {
                         let order = JournalPhotoInfo.moods.filter { moods.contains($0) }
                         onSend(day, datas, order, note.trimmingCharacters(in: .whitespacesAndNewlines))
                         dismiss()
@@ -147,7 +147,7 @@ struct JournalHandOffSheet: View {
 
     private var moodCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("想要什么感觉").font(.app(12)).foregroundStyle(Theme.textMuted(scheme))
+            Text("风格偏好").font(.app(12)).foregroundStyle(Theme.textMuted(scheme))
             FlowChips(items: JournalPhotoInfo.moods, picked: moods, accent: accent) { m in
                 if moods.contains(m) { moods.remove(m) } else { moods.insert(m) }
             }
@@ -201,7 +201,7 @@ struct JournalTrashSheet: View {
                 ScrollView {
                     LazyVStack(spacing: 10) {
                         if store.trash.isEmpty {
-                            Text("没有撕掉的页")
+                            Text("暂无已删除的页面")
                                 .font(.app(13))
                                 .foregroundStyle(Theme.textMuted(scheme))
                                 .padding(.top, 60)
@@ -219,7 +219,7 @@ struct JournalTrashSheet: View {
                                         .foregroundStyle(Theme.textMuted(scheme))
                                 }
                                 Spacer(minLength: 0)
-                                Button("放回去") { store.restore(t.id) }
+                                Button("恢复") { store.restore(t.id) }
                                     .font(.app(12.5, weight: .medium))
                                     .buttonStyle(.plain)
                                     .foregroundStyle(Theme.textSoft(scheme))
@@ -228,7 +228,7 @@ struct JournalTrashSheet: View {
                             .glassCard(padding: 0)
                             .contextMenu {
                                 Button(role: .destructive) { confirm = t } label: {
-                                    Label("彻底撕掉", systemImage: Icon.trash)
+                                    Label("永久删除", systemImage: Icon.trash)
                                 }
                             }
                         }
@@ -242,23 +242,23 @@ struct JournalTrashSheet: View {
                     .padding(16)
                 }
             }
-            .navigationTitle("最近撕掉的")
+            .navigationTitle("最近删除")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("关闭") { dismiss() }
                 }
             }
-            .confirmationDialog("彻底撕掉这一页？", isPresented: Binding(
+            .confirmationDialog("永久删除此页？", isPresented: Binding(
                 get: { confirm != nil }, set: { if !$0 { confirm = nil } }
             ), titleVisibility: .visible) {
-                Button("彻底撕掉", role: .destructive) {
+                Button("永久删除", role: .destructive) {
                     if let t = confirm { store.purge(t.id) }
                     confirm = nil
                 }
                 Button("取消", role: .cancel) { confirm = nil }
             } message: {
-                Text("连同上面的照片一起删掉，找不回来。")
+                Text("此页及其中的照片将被删除，且无法恢复。")
             }
         }
     }

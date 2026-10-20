@@ -81,7 +81,7 @@ struct DrawerView: View {
                                   hint: "他想留给你、又不用你马上回的话，一幅很小的画，或者一张贺卡，会悄悄放在这里。")
                             .padding(.top, 40)
                     } else if shown.isEmpty {
-                        EmptyNote(icon: "line.3.horizontal.decrease", title: "这里没有")
+                        EmptyNote(icon: "line.3.horizontal.decrease", title: "无内容")
                             .padding(.top, 30)
                     }
                     let list = shown
@@ -89,7 +89,7 @@ struct DrawerView: View {
                         row(item, first: i == 0, last: i == list.count - 1)
                             .contextMenu {
                                 Button(role: .destructive) { store.remove(item.id) } label: {
-                                    Label("拿出抽屉", systemImage: Icon.trash)
+                                    Label("移出抽屉", systemImage: Icon.trash)
                                 }
                             }
                     }
@@ -149,7 +149,7 @@ struct DrawerView: View {
                 }
             }
             if months.count > 1 {
-                Text("长按左边的时间线上下拖，挑一个月看")
+                Text("长按左侧时间线并上下拖动，可按月份筛选")
                     .font(.app(10.5))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
@@ -284,10 +284,10 @@ struct DrawerView: View {
                     withAnimation(.spring(response: 0.55, dampingFraction: 0.86)) { openCard = item }
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(item.title.isEmpty ? "一张贺卡" : item.title)
+                    Text(item.title.isEmpty ? "贺卡" : item.title)
                         .font(.app(14, weight: .semibold))
                         .foregroundStyle(Theme.textMain(scheme))
-                    Text("点开看看")
+                    Text("轻点查看")
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
@@ -363,7 +363,7 @@ struct DrawerLock: View {
                     .font(.system(size: 17, weight: .light))
                     .foregroundStyle(accent)
                     .contentTransition(.symbolEffect(.replace))
-                Text("封着的一张")
+                Text("已封存")
                     .font(.app(12.5, weight: .medium))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
@@ -382,7 +382,7 @@ struct DrawerLock: View {
                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(Theme.textMain(scheme).opacity(0.05)))
                 Button(action: tryOpen) {
-                    Text("拆开")
+                    Text("开启")
                         .font(.app(14, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 16)

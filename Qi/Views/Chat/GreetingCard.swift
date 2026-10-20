@@ -338,7 +338,7 @@ struct GreetingCardViewer: View {
                 }
                 VStack {
                     Spacer()
-                    Text(opened ? "点卡片合上，点空白处放回去" : "点卡片翻开")
+                    Text(opened ? "轻点卡片合上 · 轻点空白处返回" : "轻点卡片打开")
                         .font(.app(11.5))
                         .foregroundStyle(.white.opacity(0.75))
                         .padding(.bottom, 40)

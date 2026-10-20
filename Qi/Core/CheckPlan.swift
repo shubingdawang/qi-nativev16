@@ -37,7 +37,7 @@ struct CheckPlan: Codable, Hashable {
 
 /// 快捷指令里问一句：他现在要查岗吗？到点了返回他要的那几样（用「、」隔开），没到就返回空
 struct CheckDueIntent: AppIntent {
-    static var title: LocalizedStringResource = "他要查岗吗"
+    static var title: LocalizedStringResource = "获取查岗计划"
     static var description = IntentDescription("到了他定的查岗时间就返回他要看的几样（在做什么、屏幕使用、健康），没到返回空。返回一次就算查过了")
     static var openAppWhenRun = false
 
@@ -50,7 +50,7 @@ struct CheckDueIntent: AppIntent {
 
 /// 把这次查岗收到的几样一次交给他：在做什么、屏幕使用的截图、健康数据。不打开 App，他回了发通知
 struct CheckReportIntent: AppIntent {
-    static var title: LocalizedStringResource = "交查岗"
+    static var title: LocalizedStringResource = "提交查岗"
     static var description = IntentDescription("把在做什么、屏幕使用截图、健康数据合成一条交给他。不打开 App，他回了会发通知")
     static var openAppWhenRun = false
 

@@ -189,7 +189,7 @@ struct JournalAsk: Codable, Identifiable, Hashable {
 enum JournalPhotoInfo {
 
     /// 「交给他」那几个感觉
-    static let moods = ["安安静静的", "复古一点", "热闹一点·多贴点", "第一张放大", "字少一点", "多写点"]
+    static let moods = ["安静", "复古", "热闹", "首图放大", "少量文字", "较多文字"]
 
     /// 从原图读拍摄时间、坐标、光圈快门（JPEG、HEIC 都行；截图和聊天软件存的图一般读不到）
     static func read(_ data: Data) -> JournalAskPhoto {

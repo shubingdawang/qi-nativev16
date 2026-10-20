@@ -296,7 +296,7 @@ struct BookshelfView: View {
         let list = store.continueBooks
         if let first = list.first {
             VStack(alignment: .leading, spacing: 10) {
-                Text("接着读")
+                Text("继续阅读")
                     .font(.app(11))
                     .tracking(2)
                     .foregroundStyle(Theme.textMuted(scheme))
@@ -339,7 +339,7 @@ struct BookshelfView: View {
                         }
                         HStack(spacing: 6) {
                             ShelfChip(text: "读到 \(Int(b.progress * 100))%")
-                            if b.shared { ShelfChip(text: aiName + "跟着读") }
+                            if b.shared { ShelfChip(text: aiName + "伴读") }
                         }
                         .padding(.top, 4)
                         GeometryReader { g in
@@ -367,7 +367,7 @@ struct BookshelfView: View {
                             .foregroundStyle(Theme.textMain(scheme))
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
-                        Text(markByline(m) + (m.notes.contains { $0.author == aiName } ? " · " + aiName + "在旁边写了一句 ›" : ""))
+                        Text(markByline(m) + (m.notes.contains { $0.author == aiName } ? " · " + aiName + "写了批注 ›" : ""))
                             .font(.app(10))
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
@@ -406,7 +406,7 @@ struct BookshelfView: View {
     private func markByline(_ m: Annotation) -> String {
         let f = DateFormatter()
         f.dateFormat = "MM/dd"
-        return (m.author == aiName ? aiName + "划的" : "你划的") + " · " + f.string(from: m.createdAt)
+        return (m.author == aiName ? aiName + "划线" : "我的划线") + " · " + f.string(from: m.createdAt)
     }
 
     /// 一本书的**脊**

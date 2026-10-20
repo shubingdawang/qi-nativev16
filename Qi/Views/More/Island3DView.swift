@@ -22,12 +22,12 @@ final class Island3DController: NSObject, ObservableObject {
     enum Gaze: String { case forward, screen }
 
     enum HerAction: String, CaseIterable, Identifiable {
-        case stand = "站着", sit = "坐下", jump = "蹦一下", spin = "转圈"
+        case stand = "站立", sit = "坐下", jump = "跳跃", spin = "转圈"
         var id: String { rawValue }
     }
 
     enum HimPose: String, CaseIterable, Identifiable {
-        case idle = "平常", happy = "开心", wave = "挥手", love = "冒爱心", sleep = "打盹", think = "想事情"
+        case idle = "默认", happy = "开心", wave = "挥手", love = "爱心", sleep = "小憩", think = "思考"
         var id: String { rawValue }
         var mood: ClawdMood {
             switch self {
@@ -41,7 +41,7 @@ final class Island3DController: NSObject, ObservableObject {
     }
 
     /// 她的表情：0 平常，1 笑，2 眨眼，3 惊讶（`island_girl.png` 第五行）
-    static let faces = ["平常", "笑", "眨眼", "惊讶"]
+    static let faces = ["默认", "微笑", "眨眼", "惊讶"]
 
     @Published var person: Person = .third
     @Published var gaze: Gaze = .forward
@@ -707,9 +707,9 @@ final class Island3DController: NSObject, ObservableObject {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 140_000_000)
             withAnimation(.easeOut(duration: 0.35)) { self.flash = false }
-            self.toast = "存进相册了"
+            self.toast = "已保存到相册"
             try? await Task.sleep(nanoseconds: 1_600_000_000)
-            if self.toast == "存进相册了" { withAnimation { self.toast = nil } }
+            if self.toast == "已保存到相册" { withAnimation { self.toast = nil } }
         }
     }
 }
@@ -829,11 +829,11 @@ struct Island3DView: View {
     private var walkControls: some View {
         VStack {
             HStack(spacing: 8) {
-                roundButton("square.grid.3x3", "回到 2D") { back() }
+                roundButton("square.grid.3x3", "返回 2D") { back() }
                 Spacer()
                 pill(ctl.person == .third ? "第三人称" : "第一人称", "person.crop.circle") { ctl.togglePerson() }
                 if ctl.person == .third {
-                    pill(ctl.gaze == .forward ? "看前面" : "看镜头", ctl.gaze == .forward ? "arrow.up.forward" : "eye") {
+                    pill(ctl.gaze == .forward ? "注视前方" : "注视镜头", ctl.gaze == .forward ? "arrow.up.forward" : "eye") {
                         ctl.gaze = ctl.gaze == .forward ? .screen : .forward
                     }
                 }
@@ -846,7 +846,7 @@ struct Island3DView: View {
                 Joystick(value: Binding(get: { CGPoint(x: CGFloat(ctl.stick.x), y: CGFloat(ctl.stick.y)) },
                                         set: { ctl.stick = SIMD2(Float($0.x), Float($0.y)) }))
                 Spacer()
-                Text("拖空白处转镜头 · 两指拉远拉近")
+                Text("拖动空白处旋转视角 · 双指缩放")
                     .font(.app(10.5))
                     .foregroundStyle(.white.opacity(0.85))
                     .shadow(color: .black.opacity(0.3), radius: 2)
@@ -861,9 +861,9 @@ struct Island3DView: View {
     private var photoControls: some View {
         VStack(spacing: 0) {
             HStack {
-                roundButton("xmark", "收起") { ctl.photoMode = false }
+                roundButton("xmark", "退出拍照") { ctl.photoMode = false }
                 Spacer()
-                pill(ctl.gaze == .forward ? "看前面" : "看镜头", ctl.gaze == .forward ? "arrow.up.forward" : "eye") {
+                pill(ctl.gaze == .forward ? "注视前方" : "注视镜头", ctl.gaze == .forward ? "arrow.up.forward" : "eye") {
                     ctl.gaze = ctl.gaze == .forward ? .screen : .forward
                 }
             }
@@ -871,10 +871,10 @@ struct Island3DView: View {
             .padding(.top, 8)
             Spacer()
             VStack(alignment: .leading, spacing: 10) {
-                row("她的表情", Island3DController.faces.indices.map { i in
+                row("表情", Island3DController.faces.indices.map { i in
                     (Island3DController.faces[i], ctl.herFace == i, { ctl.setFace(i) })
                 })
-                row("她的动作", Island3DController.HerAction.allCases.map { a in
+                row("动作", Island3DController.HerAction.allCases.map { a in
                     (a.rawValue, ctl.herAction == a, { ctl.act(a) })
                 })
                 row(app.settings.aiName.isEmpty ? "他" : app.settings.aiName, Island3DController.HimPose.allCases.map { p in

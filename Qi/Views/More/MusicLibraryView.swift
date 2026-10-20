@@ -348,7 +348,7 @@ struct MusicLibraryView: View {
                 HStack {
                     Text("最近").font(.app(12)).foregroundStyle(Theme.textSoft(scheme))
                     Spacer()
-                    Text("随手放在桌上的").font(.app(11)).foregroundStyle(Theme.textMuted(scheme))
+                    Text("最近播放").font(.app(11)).foregroundStyle(Theme.textMuted(scheme))
                 }
                 // 几张封面歪歪地叠着，后放的压在上面
                 GeometryReader { g in
@@ -377,7 +377,7 @@ struct MusicLibraryView: View {
             .padding(.top, 2)
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)], spacing: 16) {
                 NavigationLink { PlayCountView() } label: {
-                    cdCase(title: "听得最多", sub: "\(library.mostPlayed.count) 首 · 按次数",
+                    cdCase(title: "最常播放", sub: "\(library.mostPlayed.count) 首 · 按次数",
                            art: library.mostPlayed.first?.0)
                 }
                 .buttonStyle(.plain)

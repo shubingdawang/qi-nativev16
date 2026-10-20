@@ -969,6 +969,8 @@ enum ClawdRig {
         case outer     // 套在外面的：背带裤
         case scarf     // 绕在最外面的：围巾
         case feet      // 脚上：靴子、拖鞋
+        case eyes      // 眼睛样式（盖住原来那双重画）
+        case cheek     // 腮红
     }
 
     /// 做这个动作的时候，脖子上那几件（领结、围巾）先不画。
@@ -1052,6 +1054,8 @@ enum ClawdRig {
             return .head
         }
         if let s = extraWearSlots[id] { return s }
+        if id.hasPrefix("eyes_") { return .eyes }
+        if id.hasPrefix("blush_") { return .cheek }
         switch id {
         case "hat", "beret", "cap", "headphones": return .head
         case "glasses", "sunglasses": return .face
@@ -1074,7 +1078,7 @@ enum ClawdRig {
     /// ⚠️ **穿衣服有顺序**（她说的）：贴身的衬衫 → 背带裤、西装套在外面 → **领带在最前面** →
     /// 围巾绕在外套外面 → 包的带子斜挎在所有衣服上面 → 眼镜 → 帽子。
     /// 鞋子在最底下（跟上面几件不重叠，先画后画都行）。
-    static let wearOrder: [WearSlot] = [.feet, .body, .outer, .neck, .scarf, .back, .face, .head]
+    static let wearOrder: [WearSlot] = [.feet, .body, .outer, .neck, .scarf, .back, .eyes, .cheek, .face, .head]
 
     /// 图纸多少格见方。**穿戴那批图也是按这个画的**
     /// （见 `scripts/wear_art.py`）。

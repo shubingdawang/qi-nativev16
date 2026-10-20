@@ -108,7 +108,7 @@ struct WageView: View {
                 if let data = try? await it.loadTransferable(type: Data.self), let img = UIImage(data: data),
                    let name = ImageStore.save(img, quality: 0.92) {
                     store.replaceRoster(old.id, with: name)
-                    flash("旧的那张收进抽屉了")
+                    flash("原班表已收入抽屉")
                 }
                 replaceItem = nil
                 replacing = nil
@@ -167,7 +167,7 @@ struct WageView: View {
                             .foregroundStyle(Theme.textMuted(scheme))
                     }
                 } else {
-                    Text("还没发")
+                    Text("未发放")
                         .font(.app(12, weight: .bold))
                         .foregroundStyle(Theme.textMuted(scheme))
                 }
@@ -543,7 +543,7 @@ struct WageView: View {
                             replacing = r
                             replacePick = true
                         } label: {
-                            Label("收进抽屉，换一张", systemImage: "tray.and.arrow.down")
+                            Label("收入抽屉并替换", systemImage: "tray.and.arrow.down")
                         }
                         Button(role: .destructive) { store.removeRoster(r.id) } label: {
                             Label("删除这张班表", systemImage: "trash")
@@ -591,9 +591,9 @@ struct WageView: View {
                                     Spacer(minLength: 0)
                                     Button {
                                         store.unstashRoster(r.id)
-                                        flash("放出来了，外面那张收进抽屉")
+                                        flash("已取出，原班表已收入抽屉")
                                     } label: {
-                                        Text("放出来")
+                                        Text("取出")
                                             .font(.app(12, weight: .medium))
                                             .foregroundStyle(.white)
                                             .padding(.horizontal, 11)
@@ -869,7 +869,7 @@ struct WageSummaryCard: View {
                         }
                     }
                     if !WageStore.shared.isFullTime(date) || WageStore.shared.dayPay(day, on: date) > 0 {
-                    row(WageStore.shared.isFullTime(date) ? "当天另算" : "总薪资") {
+                    row(WageStore.shared.isFullTime(date) ? "当日额外" : "总薪资") {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(WageStore.money(WageStore.shared.dayPay(day, on: date)))
                                 .font(.app(14, weight: .semibold))
@@ -1329,7 +1329,7 @@ struct WageDayEditor: View {
                 WageThumb(name: r.image, size: 64)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("这天的班表").font(.app(14, weight: .semibold)).foregroundStyle(Theme.textMain(scheme))
-                    Text("点开看大图").font(.app(11.5)).foregroundStyle(Theme.textMuted(scheme))
+                    Text("轻点查看大图").font(.app(11.5)).foregroundStyle(Theme.textMuted(scheme))
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(Theme.textMuted(scheme))
@@ -1345,7 +1345,7 @@ struct WageDayEditor: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "checklist").foregroundStyle(Theme.textMuted(scheme))
-                Text("今天用了吗").font(.app(14, weight: .semibold)).foregroundStyle(Theme.textMain(scheme))
+                Text("今日用量").font(.app(14, weight: .semibold)).foregroundStyle(Theme.textMain(scheme))
             }
             ForEach(usageList) { e in
                 usageRow(e)
@@ -1598,7 +1598,7 @@ struct WageDayEditor: View {
                 Text("元").font(.app(12)).foregroundStyle(Theme.textMuted(scheme))
                 Spacer(minLength: 0)
             }
-            Text("算进这个月的收入。")
+            Text("计入本月收入。")
                 .font(.app(10.5))
                 .foregroundStyle(Theme.textMuted(scheme))
         }
@@ -2174,7 +2174,7 @@ struct WageSettingsSheet: View {
                     moneyField("底薪", $baseText, unit: "元/月") { draft.baseSalary = $0 }
                     moneyField("全勤", $bonusText, unit: "元/月") { draft.attendanceBonus = $0 }
                     HStack(spacing: 6) {
-                        Text("日薪按")
+                        Text("日薪计算")
                             .font(.app(13))
                             .foregroundStyle(Theme.textSoft(scheme))
                         ForEach([21.75, 22, 26, 30], id: \.self) { n in

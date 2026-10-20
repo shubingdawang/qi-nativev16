@@ -575,11 +575,11 @@ final class AccountBook: ObservableObject {
         guard let data = try? JSONEncoder().encode(snap) else { return }
         let local = SharedKeychain.write(data, key: "book") && SharedKeychain.lastStatus == 0
         if local { WidgetCenter.shared.reloadTimelines(ofKind: "QiBook") }
-        widgetStatus = local ? "钥匙串正常" : SharedKeychain.diagnosis
+        widgetStatus = local ? "钥匙串可用" : SharedKeychain.diagnosis
         // 钥匙串不通的时候小组件凭同步码去小屋取（见 BookWidget 的 `BookWidgetConfig`）
         guard let app = WakeEngine.shared.app, let ep = HouseSync.endpoint(app),
               let url = Self.relayURL(base: ep.0) else {
-            if !local { widgetStatus += " · 没连小屋，小组件取不到" }
+            if !local { widgetStatus += " · 未连接小屋，小组件无法获取" }
             return
         }
         var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)
@@ -598,12 +598,12 @@ final class AccountBook: ObservableObject {
                     WidgetCenter.shared.reloadTimelines(ofKind: "QiBook")
                     let f = DateFormatter()
                     f.dateFormat = "HH:mm"
-                    self.widgetStatus = (local ? "钥匙串正常" : "走小屋") + " · " + f.string(from: Date()) + " 已同步"
+                    self.widgetStatus = (local ? "钥匙串可用" : "经由小屋") + " · " + f.string(from: Date()) + " 已同步"
                 } else {
                     self.widgetStatus += " · 小屋返回 \(code)"
                 }
             } catch {
-                self.widgetStatus += " · 连不上小屋"
+                self.widgetStatus += " · 无法连接小屋"
             }
         }
     }

@@ -6,13 +6,6 @@ struct MCPListView: View {
 
     @EnvironmentObject var app: AppState
     @State private var editing: MCPServer?
-    /// 点了「现成的」里某一个：带着地址打开新建那一页
-    @State private var preset: MCPServer?
-
-    /// 现成能接的（别人公开的服务）
-    private static let presets: [(name: String, url: String, about: String)] = [
-        ("性塔罗", "https://anzhi-ehzo.com/mcp/tarot/mcp", "大阿卡纳抽三张：过去（身份）/ 现在（关系）/ 未来（玩法），正逆位各一半")
-    ]
     @State private var creatingNew = false
 
     // ⚠️⚠️ **这一页原来是 `List`，换成了跟设置页一样的卡片。**
@@ -54,30 +47,6 @@ struct MCPListView: View {
                             }
                         }
                     }
-                    let left = Self.presets.filter { p in !app.mcpServers.contains { $0.url == p.url } }
-                    if !left.isEmpty {
-                        SettingsCard(title: "现成的") {
-                            ForEach(left, id: \.url) { p in
-                                HStack(spacing: 10) {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(p.name).font(.app(14, weight: .medium)).foregroundStyle(Theme.textMain(scheme))
-                                        Text(p.about).font(.app(11)).foregroundStyle(Theme.textMuted(scheme))
-                                    }
-                                    Spacer(minLength: 0)
-                                    Button("加上") {
-                                        var s = MCPServer()
-                                        s.name = p.name
-                                        s.url = p.url
-                                        preset = s
-                                    }
-                                    .font(.app(13, weight: .medium))
-                                    .foregroundStyle(app.settings.accentColor)
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                            }
-                        }
-                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 4)
@@ -96,9 +65,6 @@ struct MCPListView: View {
         }
         .sheet(isPresented: $creatingNew) {
             MCPFormView(server: MCPServer(), isNew: true)
-        }
-        .sheet(item: $preset) { s in
-            MCPFormView(server: s, isNew: true)
         }
     }
     private func serverRow(_ server: MCPServer) -> some View {

@@ -87,7 +87,11 @@ enum JournalKind: String, Codable, CaseIterable {
     /// 一个字都没说出它跟照片的区别（原样存、保住透明底）。
     /// 别的几样名字就是它本身，照旧用 `rawValue`。
     var title: String {
-        self == .cutout ? "透明贴" : rawValue
+        switch self {
+        case .cutout: return "透明贴"
+        case .strip: return "拍摄信息条"
+        default: return rawValue
+        }
     }
 
     /// 挑这一样的时候在底下写一句。空 = 不用解释。

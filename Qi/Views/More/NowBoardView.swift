@@ -53,7 +53,7 @@ struct NowBoardView: View {
         let mins = Int(Date().timeIntervalSince(s.updated) / 60)
         let ago = mins < 60 ? "\(max(1, mins)) 分钟前" : "\(mins / 60) 小时前"
         let left = Int(s.expires.timeIntervalSinceNow / 3600)
-        return ago + " · " + (left >= 1 ? "还留 \(left) 小时" : "快撤了")
+        return ago + " · " + (left >= 1 ? "还留 \(left) 小时" : "即将过期")
     }
 
     private var slotsCard: some View {
@@ -87,7 +87,7 @@ struct NowBoardView: View {
                 .contextMenu {
                     if s != nil {
                         Button(role: .destructive) { board.clear(info.id) } label: {
-                            Label("擦掉", systemImage: "eraser")
+                            Label("清除", systemImage: "eraser")
                         }
                     }
                 }
@@ -111,7 +111,7 @@ struct NowBoardView: View {
                 .buttonStyle(.plain)
             }
             if board.counterNames.isEmpty {
-                Text("还没有要数的").font(.app(12.5)).foregroundStyle(muted)
+                Text("暂无计数项").font(.app(12.5)).foregroundStyle(muted)
             }
             ForEach(board.counterNames, id: \.self) { k in
                 let cur = counts[k] ?? 0
@@ -193,7 +193,7 @@ struct NowBoardView: View {
                     .buttonStyle(.plain)
                     .contextMenu {
                         Button(role: .destructive) { board.removePantry(it.name) } label: {
-                            Label("拿掉", systemImage: "trash")
+                            Label("移除", systemImage: "trash")
                         }
                     }
                 }
@@ -223,20 +223,20 @@ private struct SlotEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(NowBoard.label(edit.id)).font(.app(16, weight: .semibold))
-            TextField("写点什么", text: $text, axis: .vertical)
+            TextField("添加内容", text: $text, axis: .vertical)
                 .lineLimit(1...3)
                 .font(.app(15))
                 .padding(12)
                 .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
             HStack {
-                Text("留多久").font(.app(13.5))
+                Text("保留时长").font(.app(13.5))
                 Spacer()
                 Stepper("\(Int(hours)) 小时", value: $hours, in: 1...720, step: hours < 24 ? 1 : 12)
                     .font(.app(13.5))
                     .fixedSize()
             }
             HStack(spacing: 12) {
-                Button("擦掉") {
+                Button("清除") {
                     NowBoard.shared.clear(edit.id)
                     dismiss()
                 }
@@ -247,7 +247,7 @@ private struct SlotEditor: View {
                     if t.isEmpty { NowBoard.shared.clear(edit.id) } else { NowBoard.shared.set(edit.id, t, hours: hours) }
                     dismiss()
                 } label: {
-                    Text("写上").font(.app(15, weight: .semibold)).foregroundStyle(.white)
+                    Text("添加").font(.app(15, weight: .semibold)).foregroundStyle(.white)
                         .padding(.horizontal, 22).padding(.vertical, 9)
                         .background(Capsule().fill(accent))
                 }
@@ -267,7 +267,7 @@ private struct CounterEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("今天要数的").font(.app(16, weight: .semibold))
+            Text("今日计数").font(.app(16, weight: .semibold))
             HStack(spacing: 10) {
                 TextField("名字", text: $name).font(.app(15))
                 TextField("目标", text: $goal).keyboardType(.numberPad).frame(width: 60).font(.app(15))
@@ -320,22 +320,22 @@ private struct PantryEditor: View {
                 Picker("种类", selection: $item.kind) {
                     ForEach(["药", "零食", "日用", "其他"], id: \.self) { Text($0).tag($0) }
                 }
-                Toggle("数得清（记几颗、几包）", isOn: $counted)
+                Toggle("按数量记录", isOn: $counted)
                 if counted {
                     HStack {
-                        TextField("还剩几", text: $countText).keyboardType(.numberPad)
+                        TextField("剩余数量", text: $countText).keyboardType(.numberPad)
                         TextField("单位", text: $item.unit).frame(width: 70)
                     }
                     Stepper("剩 \(item.low) 个就提醒", value: $item.low, in: 0...50)
                 } else {
-                    Picker("还有多少", selection: $item.level) {
-                        ForEach(["有", "快没了", "没了"], id: \.self) { Text($0).tag($0) }
+                    Picker("余量", selection: $item.level) {
+                        ForEach(["有", "即将用完", "已用完"], id: \.self) { Text($0).tag($0) }
                     }
                     .pickerStyle(.segmented)
                 }
-                TextField("放在哪（可不填）", text: $item.place)
+                TextField("存放位置（选填）", text: $item.place)
             }
-            .navigationTitle(isNew ? "加一样" : item.name)
+            .navigationTitle(isNew ? "添加物品" : item.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

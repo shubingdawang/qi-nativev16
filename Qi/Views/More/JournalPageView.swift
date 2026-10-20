@@ -523,7 +523,7 @@ struct JournalPageView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    paletteButton("arrow.uturn.backward", "撤回", enabled: !history.isEmpty) { undo() }
+                    paletteButton("arrow.uturn.backward", "撤销", enabled: !history.isEmpty) { undo() }
                     ForEach(JournalKind.addable, id: \.self) { kind in
                         Button {
                             add(kind)
@@ -550,7 +550,7 @@ struct JournalPageView: View {
                         VStack(spacing: 3) {
                             Image(systemName: "doc.plaintext")
                                 .font(.app(15))
-                            Text("纸和风格")
+                            Text("纸张与风格")
                                 .font(.app(9))
                         }
                         .foregroundStyle(Theme.textSoft(scheme))
@@ -559,7 +559,7 @@ struct JournalPageView: View {
                             .fill(Theme.softFillDeep))
                     }
                     .buttonStyle(.plain)
-                    paletteButton("arrow.down.to.line.compact", "加长", enabled: page.length < 3) { lengthen() }
+                    paletteButton("arrow.down.to.line.compact", "延长页面", enabled: page.length < 3) { lengthen() }
                 }
                 .padding(.horizontal, 14)
             }

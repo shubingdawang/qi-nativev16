@@ -86,7 +86,7 @@ struct JournalView: View {
                     Button {
                         showingTrash = true
                     } label: {
-                        Label("最近撕掉的" + (store.trash.isEmpty ? "" : "（\(store.trash.count)）"),
+                        Label("最近删除" + (store.trash.isEmpty ? "" : "（\(store.trash.count)）"),
                               systemImage: "trash")
                     }
                 } label: {
@@ -262,7 +262,7 @@ struct JournalMonthView: View {
                     Button {
                         handingOff = true
                     } label: {
-                        Label("交给他做一天", systemImage: "sparkles")
+                        Label("请他制作", systemImage: "sparkles")
                     }
                 } label: {
                     Image(systemName: "plus")
@@ -364,7 +364,7 @@ struct JournalMonthView: View {
                                       systemImage: p.shared ? "person.slash" : "person.2")
                             }
                             Button(role: .destructive) { confirmDelete = p } label: {
-                                Label("撕掉这一页", systemImage: Icon.trash)
+                                Label("删除此页", systemImage: Icon.trash)
                             }
                         }
                     }

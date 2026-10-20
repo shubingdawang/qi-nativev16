@@ -1186,21 +1186,21 @@ struct ExpenseEditor: View {
 
     private var spreadSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("怎么算").font(.app(14)).foregroundStyle(main)
+            Text("计算方式").font(.app(14)).foregroundStyle(main)
             Picker("", selection: mode) {
-                Text("整笔").tag(0)
-                Text("按天摊").tag(1)
+                Text("一次性").tag(0)
+                Text("按天分摊").tag(1)
                 Text("按用量").tag(2)
             }
             .pickerStyle(.segmented)
             Text(countOn ? "数得清的东西（卫生巾、药）：一包几片，每天用了几就算几份。从买的那天起，每天的编辑页里会问「今天用了吗」，用完就不再出现"
-                 : spreadOn ? "能用很久的东西：每天只算一份，用完那天把剩下的一起算上"
-                 : "整笔算在花钱那天")
+                 : spreadOn ? "适用于长期使用的物品：每天计一份，用完当天计入剩余部分"
+                 : "全额计入消费当天")
                 .font(.app(11))
                 .foregroundStyle(muted)
             if countOn {
                 HStack(spacing: 6) {
-                    Text("一包几").font(.app(13.5)).foregroundStyle(main)
+                    Text("每包数量").font(.app(13.5)).foregroundStyle(main)
                     Spacer()
                     TextField("20", text: $packText)
                         .keyboardType(.numberPad)
@@ -1223,7 +1223,7 @@ struct ExpenseEditor: View {
             }
             if spreadOn {
                 HStack(spacing: 6) {
-                    Text("用多少天").font(.app(13.5)).foregroundStyle(main)
+                    Text("分摊天数").font(.app(13.5)).foregroundStyle(main)
                     Spacer()
                     TextField("30", text: $daysText)
                         .keyboardType(.numberPad)
@@ -1238,7 +1238,7 @@ struct ExpenseEditor: View {
                         .foregroundStyle(accent)
                 }
                 HStack {
-                    Text("多久问一次还在不在用").font(.app(13.5)).foregroundStyle(main)
+                    Text("使用确认频率").font(.app(13.5)).foregroundStyle(main)
                     Spacer()
                     Picker("", selection: $remind) {
                         Text("不问").tag(0)
@@ -1285,7 +1285,7 @@ struct ExpenseEditor: View {
                     .foregroundStyle(muted)
                 Spacer()
                 if e.usedUp != nil {
-                    Button("还没用完") { e.usedUp = nil }
+                    Button("未用完") { e.usedUp = nil }
                         .font(.app(12.5, weight: .medium))
                         .foregroundStyle(accent)
                 } else {
@@ -1315,7 +1315,7 @@ struct ExpenseEditor: View {
                         .font(.app(12.5))
                         .foregroundStyle(muted)
                     Spacer()
-                    Button("还在用") { e.usedUp = nil }
+                    Button("仍在使用") { e.usedUp = nil }
                         .font(.app(12.5, weight: .medium))
                         .foregroundStyle(accent)
                 } else {
@@ -1629,7 +1629,7 @@ private struct LevelsEditor: View {
             Color.black.opacity(0.32).ignoresSafeArea()
                 .onTapGesture { done(nil) }
             VStack(alignment: .leading, spacing: 14) {
-                Text("日历颜色怎么分")
+                Text("日历颜色分档")
                     .font(.app(16, weight: .semibold))
                     .foregroundStyle(Theme.textMain(scheme))
                 Text("一天花到第一个数以下最浅，每过一个数深一档")
@@ -1652,12 +1652,12 @@ private struct LevelsEditor: View {
                     }
                 }
                 HStack(spacing: 16) {
-                    Button("加一档") {
+                    Button("增加一档") {
                         let last = Double(texts.last ?? "") ?? 100
                         texts.append(WageStore.money(last * 2))
                     }
                     .disabled(texts.count >= 7)
-                    Button("减一档") { if texts.count > 1 { texts.removeLast() } }
+                    Button("减少一档") { if texts.count > 1 { texts.removeLast() } }
                         .disabled(texts.count <= 1)
                     Spacer()
                     Button("存") {

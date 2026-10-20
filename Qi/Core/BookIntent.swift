@@ -118,11 +118,11 @@ struct QiShortcuts: AppShortcutsProvider {
                     systemImageName: "bubble.left.and.text.bubble.right")
         AppShortcut(intent: CheckDueIntent(),
                     phrases: ["\(.applicationName)他要查岗吗"],
-                    shortTitle: "他要查岗吗",
+                    shortTitle: "获取查岗计划",
                     systemImageName: "eye")
         AppShortcut(intent: CheckReportIntent(),
                     phrases: ["用\(.applicationName)交查岗"],
-                    shortTitle: "交查岗",
+                    shortTitle: "提交查岗",
                     systemImageName: "checkmark.message")
         AppShortcut(intent: OpenHisChatIntent(),
                     phrases: ["打开\(.applicationName)和他的聊天", "\(.applicationName)找他"],

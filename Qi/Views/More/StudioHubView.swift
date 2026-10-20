@@ -76,10 +76,10 @@ struct StudioHubView: View {
                         Button { editing = p } label: { Label("回到拼豆页修改", systemImage: "pencil") }
                         Button {
                             animating = GifStart(image: BeadStore.render(p, look: .pixel, cellPx: 8), name: p.name)
-                        } label: { Label("拿它做动图", systemImage: "sparkles") }
+                        } label: { Label("制作动图", systemImage: "sparkles") }
                         Button {
                             var q = p; q.asPart = false; store.save(q)
-                        } label: { Label("不当零件了", systemImage: "minus.circle") }
+                        } label: { Label("移出零件", systemImage: "minus.circle") }
                     }
                 }
             }

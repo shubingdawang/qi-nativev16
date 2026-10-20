@@ -1686,7 +1686,7 @@ struct WorldView: View {
                         follow.toggle()
                         if follow { followHer() }
                     } label: {
-                        Label(follow ? "跟着走" : "不跟", systemImage: follow ? "figure.2" : "figure.stand")
+                        Label(follow ? "跟随" : "不跟随", systemImage: follow ? "figure.2" : "figure.stand")
                             .font(.app(11.5, weight: follow ? .semibold : .regular))
                             .foregroundStyle(follow ? app.settings.accentColor : Theme.textSoft(scheme))
                             .padding(.horizontal, 10).padding(.vertical, 7)
