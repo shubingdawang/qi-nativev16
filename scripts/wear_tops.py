@@ -29,17 +29,14 @@ def mirror(pts):
     return [(15 - x, y) for x, y in reversed(pts)]
 
 
-# 领口（左半边，从左肩到正中）；都在眼睛那一列下面过（x 3.9..5.1 时 y ≥ 9.75）
-_SHOULDER = [(1.75, 9.0)] + bez((1.75, 9.0), (2.9, 9.0), (3.4, 9.8), (4.4, 9.95))
-
-
+# 领口：从肩顺着一条弧线滑下来（她喜欢的那种顺的，不要台阶）。眼睛在第 7..9 格，领口在它下面过
 def neck_round(depth=10.3):
-    half = _SHOULDER + bez((4.4, 9.95), (5.6, depth), (6.6, depth), (7.5, depth))
+    half = [(1.75, 9.0)] + bez((1.75, 9.0), (3.5, 9.0), (5.0, depth), (7.5, depth))
     return half + mirror(half)[1:]
 
 
-def neck_v(bottom=11.3):
-    half = _SHOULDER + [(5.3, 10.05)] + bez((5.3, 10.05), (6.2, 10.2), (7.0, bottom - 0.5), (7.5, bottom))
+def neck_v(bottom=11.6):
+    half = [(1.75, 9.0)] + bez((1.75, 9.0), (4.4, 9.0), (6.3, 9.7), (7.5, bottom))
     return half + mirror(half)[1:]
 
 
@@ -73,7 +70,7 @@ class Top:
 
     def __init__(self, base, lt, dk, edge, neck="v", sleeves=None, inner=None, depth=None):
         self.c = (base, lt, dk, edge)
-        self.neck = {"v": lambda: neck_v(depth or 11.3), "round": lambda: neck_round(depth or 10.3),
+        self.neck = {"v": lambda: neck_v(depth or 11.6), "round": lambda: neck_round(depth or 10.3),
                      "cute": lambda: neck_round(depth or 10.35), "open": lambda: neck_round(depth or 10.2)}[neck]()
         self.kind = neck
         self.sleeves = sleeves
@@ -92,7 +89,7 @@ class Top:
         p = Part(outline(neck))
         p.shade(base, lt, dk, edge)
         if self.sleeves:
-            sl = (SX < 1.85) | (SX > 13.15)
+            sl = (SX < 1.72) | (SX > 13.28)
             p.paint(sl & p.m & ~(p.img[..., 3] == 0), self.sleeves)
         seams(p, dk)
         p.paint(band(self.neck[2:-2]) & p.m, dk)
@@ -104,15 +101,51 @@ class Top:
         return p
 
 
-def shirt_v(bottom=11.3, tie=None, bow=None, color=("#F4F1EA", "#FFFFFF", "#D9D4C8", "#A8A398")):
+def draw_tie(s, c, knot_y=9.62, tip_y=12.75, pattern=None):
+    """领带：有棱角的。结是个倒梯形，下面一条直边往下微微放宽，尖头是个菱角；平涂一个色，
+    一道描边，正中一条折痕，不做圆鼓鼓的明暗"""
+    base, lt, dk, edge = c
+    knot = Part([(6.92, knot_y), (8.08, knot_y), (7.82, knot_y + 0.7), (7.18, knot_y + 0.7)])
+    knot.shade(base, None, None, edge)
+    knot.paint((SY < knot_y + 0.16) & (SX > 7.15) & (SX < 7.85), lt)
+    blade = Part([(7.2, knot_y + 0.68), (7.8, knot_y + 0.68), (8.25, tip_y - 0.66), (7.5, tip_y), (6.75, tip_y - 0.66)])
+    blade.shade(base, None, None, edge)
+    blade.paint((np.abs(SX - 7.5) < 0.05) & (SY > knot_y + 0.9) & (SY < tip_y - 0.3), dk)
+    if pattern:
+        pattern(blade)
+    blade.on(s)
+    knot.on(s)
+
+
+def draw_bow(s, c, y=9.95):
+    """领结：两片有棱角的翼，中间一个方结"""
+    base, lt, dk, edge = c
+    for side in (-1, 1):
+        w = Part([(7.5, y - 0.12), (7.5 + side * 1.5, y - 0.6), (7.5 + side * 1.6, y + 0.62), (7.5, y + 0.12)])
+        w.shade(base, None, None, edge)
+        w.paint((np.abs(SY - y - (SX - 7.5) * side * 0.02) < 0.05) & (np.abs(SX - 7.5) > 0.4) & (np.abs(SX - 7.5) < 1.3), dk)
+        w.on(s)
+    k = Part([(7.18, y - 0.34), (7.82, y - 0.34), (7.82, y + 0.34), (7.18, y + 0.34)])
+    k.shade(lt, None, None, edge)
+    k.on(s)
+
+
+def shirt_v(bottom=11.6, tie=None, bow=None, color=("#F4F1EA", "#FFFFFF", "#D9D4C8", "#A8A398")):
+    """V 口里那件衬衫：顺着西装的领口填满（不是贴上去的一个三角），
+    上沿一道浅浅的弧在眼睛下面过；两片尖领顺着西装翻领那条线往下"""
     def f(s):
-        Part(neck_v(bottom)[3:-3] + [(7.5, bottom + 0.4)]).shade(*color).on(s)
+        v = neck_v(bottom)
+        inside = [pt for pt in v if 4.2 < pt[0] < 10.8]
+        top = bez((10.8, 9.05), (9.3, 9.15), (8.3, 9.55), (7.5, 9.6)) + bez((7.5, 9.6), (6.7, 9.55), (5.7, 9.15), (4.2, 9.05))
+        Part(inside + top).shade(*color, lw=(2, 1), dw=(-2, -1)).on(s)
+        # 两片尖领：从领口顶上顺着翻领往下，尖头朝下
+        for side in (-1, 1):
+            Part([(7.5, 9.62), (7.5 + side * 1.45, 9.2), (7.5 + side * 1.05, 10.05), (7.5 + side * 0.38, 10.55)]
+                 ).shade(*color, lw=(2, 1), dw=(-2, -1)).on(s)
         if tie:
-            Part([(7.3, 10.15), (7.7, 10.15), (7.9, bottom + 0.6), (7.5, bottom + 1.1), (7.1, bottom + 0.6)]).shade(*tie).on(s)
+            draw_tie(s, tie, tip_y=bottom + 1.2)
         if bow:
-            for side in (-1, 1):
-                Part([(7.5, 10.45), (7.5 + side * 0.95, 10.1), (7.5 + side * 0.95, 10.85)]).shade(*bow).on(s)
-            Part(B.ellipse_pts(7.5, 10.47, 0.22, 0.2)).shade(*bow).on(s)
+            draw_bow(s, bow)
     return f
 
 
@@ -121,7 +154,7 @@ def buttons(p, ys, x=7.9, col="#20232A", r=0.15):
         p.paint(near(x, y, r), col)
 
 
-def placket(p, col, y0=11.3):
+def placket(p, col, y0=11.6):
     p.paint((np.abs(SX - 7.5) < 0.05) & (SY > y0) & (SY < 13.4), col)
 
 
@@ -167,12 +200,12 @@ def white_suit(s):
 def tux(s):
     pants(s, ("#1E1D22", "#2C2B31", "#141317", "#0A0A0C"), stripe="#3A3942")
     t = Top("#26252B", "#3A3942", "#17161B", "#0E0E11", "v",
-            inner=shirt_v(bottom=11.5, bow=("#2B2A30", "#45444C", "#1A191E", "#0E0E11")))
+            inner=shirt_v(bottom=11.6, bow=("#2B2A30", "#45444C", "#1A191E", "#0E0E11")))
 
     def extra(p):
         # 缎面翻领：沿领口那一道亮一点
-        p.paint(band(neck_v(11.5)[2:-2], 0.4) & p.m, "#3A3942")
-        placket(p, "#0E0E11", 11.5)
+        p.paint(band(neck_v(11.6)[2:-2], 0.4) & p.m, "#3A3942")
+        placket(p, "#0E0E11", 11.6)
         buttons(p, (12.1, 12.9), col="#57565E")
         p.paint(near(10.5, 10.9, 0.28), "#B5483A")
         p.paint(near(10.5, 10.9, 0.1), "#D9705E")
@@ -200,10 +233,9 @@ def uni_vest(s):
 
     def extra(p):
         # 细条纹
-        p.paint(((SX * 4).astype(int) % 3 == 0) & (SX > 2.0) & (SX < 13.0) & p.m &
-                ~((SX < 1.9) | (SX > 13.1)), "#3A4B74")
+        p.paint(((SX * 4).astype(int) % 3 == 0) & (SX > 2.0) & (SX < 13.0) & p.m, "#3A4B74")
         # 袖子是里面那件衬衫的
-        p.paint(((SX < 1.85) | (SX > 13.15)) & p.m, "#F4F1EA")
+        p.paint(((SX < 1.72) | (SX > 13.28)) & p.m, "#F4F1EA")
         p.paint(((SX < 0.6) | (SX > 14.4)) & p.m, "#D9D4C8")
         placket(p, "#161E33")
         buttons(p, (11.9, 12.6, 13.2), col="#E9D9B8")
@@ -247,10 +279,10 @@ def military(s):
 def blue_shirt(s):
     pants(s, ("#2E3138", "#3E414A", "#22242A", "#16171B"))
     t = Top("#A9C4E0", "#C3D7EC", "#8DABCB", "#5F7FA2", "v",
-            inner=lambda s: Part(neck_v(11.0)[3:-3] + [(7.5, 11.4)]).shade("#C3D7EC", "#DCE8F4", "#A9C4E0", "#7E9CBC").on(s))
+            inner=lambda s: Part([(5.6, 9.5), (9.4, 9.5), (7.5, 11.6)]).shade("#C3D7EC", "#DCE8F4", "#A9C4E0", "#7E9CBC").on(s), depth=11.3)
 
     def extra(p):
-        placket(p, "#7E9CBC", 11.0)
+        placket(p, "#7E9CBC", 11.3)
         buttons(p, (11.5, 12.2, 12.9), x=7.8, col="#F4F1EA", r=0.12)
         # 胸袋
         p.paint((np.abs(SX - 10.4) < 0.55) & (np.abs(SY - 11.3) < 0.45) & ~((np.abs(SX - 10.4) < 0.42) & (np.abs(SY - 11.35) < 0.33)), "#7E9CBC")

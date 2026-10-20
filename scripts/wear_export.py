@@ -14,6 +14,7 @@ import wear_art as W  # noqa: E402
 import wear_batch2 as B  # noqa: E402
 import wear_batch3 as C  # noqa: E402
 import wear_new_hats as H  # noqa: E402
+import wear_tops as T  # noqa: E402
 
 OUT = W.OUT
 
@@ -28,16 +29,16 @@ WAYS = {
 # (编号, 名字, 价钱, 位置, 画法, 配色族 或 None, 换上时那一句)
 PIECES = [
     ("nightcap", "星星睡帽", 95, "head", H.nightcap, "star", "把绒球甩到脑后"),
-    ("star_pj", "星星睡衣", 150, "outer", C.pajamas, "star", "打了个哈欠"),
+    ("star_pj", "星星睡衣", 150, "outer", T.star_pj, "star", "打了个哈欠"),
     ("bear_slippers", "小熊毛绒拖鞋", 80, "feet", C.bearslippers, None, "原地踩了两下"),
     ("knot_cap", "荷叶边睡帽", 95, "head", C.knotcap, "cream", "理了理帽口的荷叶边"),
-    ("cream_pj", "圆领睡衣", 150, "outer", B.raincoat, "cream", "扣好最上面那颗扣子"),
+    ("cream_pj", "圆领睡衣", 150, "outer", T.cream_pj, "cream", "扣好最上面那颗扣子"),
     ("pom_slippers", "绒球拖鞋", 75, "feet", C.pomslippers, "cream", "踢了踢脚尖的绒球"),
     ("ushanka", "风雪帽", 120, "head", H.ushanka, None, "把护耳放下来"),
-    ("puffer", "绗缝羽绒服", 190, "outer", C.puffer, "snow", "缩进毛领里"),
+    ("puffer", "绗缝羽绒服", 190, "outer", T.puffer, "snow", "缩进毛领里"),
     ("snow_boots", "毛边雪地靴", 110, "feet", C.snowboots, None, "跺掉靴子上的雪"),
     ("aviator", "飞行帽", 120, "head", H.aviator, "flight", "把风镜推上去"),
-    ("bomber", "飞行员皮夹克", 200, "outer", C.bomber, "flight", "拉上拉链"),
+    ("bomber", "飞行员皮夹克", 200, "outer", T.bomber, "flight", "拉上拉链"),
     ("avi_scarf", "白色长围巾", 70, "scarf", C.aviscarf, None, "把围巾甩到身后"),
     ("flight_boots", "系带短靴", 110, "feet", C.flightboots, "flight", "系紧鞋带"),
     ("straw_hat", "草帽", 85, "head", B.strawhat, None, "压了压帽檐"),
