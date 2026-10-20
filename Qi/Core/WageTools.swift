@@ -65,7 +65,7 @@ enum WageTools {
                 "end": ["type": "string", "description": "下班时间，如 22:00。跨零点照写，如 02:00"],
                 "breaks": ["type": "string", "description": "休息时段，多段用逗号隔开：17:00-18:00,20:00-20:15。填「无」= 没有休息。不填用默认"],
                 "hourly": ["type": "number", "description": "这一天的时薪。不填用工资设置里的"],
-                "overtime": ["type": "number", "description": "这天加班几小时（另算加班费），0 = 没加班。不填不改"],
+                "overtime": ["type": "number", "description": "这天加班几小时（只算整小时，不满一小时不算），0 = 没加班。不填不改"],
                 "leave": ["type": "boolean", "description": "true = 这天请假，不算工资；false = 取消请假。不填不改"]
             ],
             required: ["date", "shift"])

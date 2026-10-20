@@ -889,7 +889,7 @@ struct WageSummaryCard: View {
 
                 if day.overtime > 0 && !day.leave {
                     row("加班") {
-                        value(String(format: "%.1f", day.overtimeHours) + " 小时 · "
+                        value(String(Int(day.overtimeHours)) + " 小时 · "
                               + WageStore.money(day.overtimeRate) + "x")
                     }
                 }
@@ -1524,13 +1524,13 @@ struct WageDayEditor: View {
             }
             HStack(spacing: 10) {
                 Text("时长").font(.app(13)).foregroundStyle(Theme.textSoft(scheme))
-                stepButton("minus") { setOvertime(day.overtime - 30) }
-                Text(String(format: "%.1f", Double(day.overtime) / 60) + " 小时")
+                stepButton("minus") { setOvertime(day.overtime / 60 * 60 - 60) }
+                Text("\(day.overtime / 60) 小时")
                     .font(HomeType.number(15, weight: .semibold))
                     .foregroundStyle(Theme.textMain(scheme))
                     .frame(minWidth: 64)
                     .contentTransition(.numericText())
-                stepButton("plus") { setOvertime(day.overtime + 30) }
+                stepButton("plus") { setOvertime(day.overtime / 60 * 60 + 60) }
                 Spacer(minLength: 0)
             }
             if day.overtime > 0 {
@@ -1550,7 +1550,7 @@ struct WageDayEditor: View {
                     }
                     Spacer(minLength: 0)
                 }
-                Text(full ? "按日薪 ÷ 8 当时薪算。" : "按这一天的时薪算。")
+                Text((full ? "按日薪 ÷ 8 当时薪算" : "按这一天的时薪算") + "，只算整小时。")
                     .font(.app(10.5))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
@@ -2173,7 +2173,25 @@ struct WageSettingsSheet: View {
                 if draft.fullTime {
                     moneyField("底薪", $baseText, unit: "元/月") { draft.baseSalary = $0 }
                     moneyField("全勤", $bonusText, unit: "元/月") { draft.attendanceBonus = $0 }
-                    Text("每月按底薪 + 全勤算；请假一天按日薪（底薪 ÷ 21.75）扣，当月没有全勤。排班只记哪天上班。")
+                    HStack(spacing: 6) {
+                        Text("日薪按")
+                            .font(.app(13))
+                            .foregroundStyle(Theme.textSoft(scheme))
+                        ForEach([21.75, 22, 26, 30], id: \.self) { n in
+                            let on = abs(draft.payDays - n) < 0.01
+                            Button { draft.payDays = n } label: {
+                                Text("÷" + WageStore.money(n))
+                                    .font(.app(12, weight: on ? .semibold : .regular))
+                                    .foregroundStyle(on ? Color.white : Theme.textMain(scheme))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(Capsule().fill(on ? app.settings.accentColor : Theme.softFillDeep))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    Text("每月结算：底薪 + 全勤。这个月没请假就加上全勤，请了假就不加，请假一天扣一天日薪（底薪 ÷ 上面选的天数，不确定的话看工资条或问一下人事）。排班只记哪天上班。")
                         .font(.app(11))
                         .foregroundStyle(Theme.textMuted(scheme))
                 } else {

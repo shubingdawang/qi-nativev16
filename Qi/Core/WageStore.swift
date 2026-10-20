@@ -204,7 +204,8 @@ struct WorkDay: Codable, Hashable {
         return max(0, total - rest)
     }
 
-    var overtimeHours: Double { leave ? 0 : Double(overtime) / 60 }
+    /// 加班按整小时算：不满一小时的那一截不算（她说的「未满 1 小时不算加班」）
+    var overtimeHours: Double { leave ? 0 : Double(overtime / 60) }
 
     /// 按时薪算的加班费
     var overtimePay: Double {
@@ -336,8 +337,11 @@ struct WageSettings: Codable, Hashable {
     /// 加班默认按几倍算
     var overtimeRate: Double = 1.5
 
-    /// 全职的日薪（底薪 ÷ 21.75 天），请假扣这么多
-    var dailyWage: Double { baseSalary / 21.75 }
+    /// 一个月按几天算日薪（21.75、26……公司不一样）
+    var payDays: Double = 26
+
+    /// 全职的日薪（底薪 ÷ 计薪天数），请假扣这么多
+    var dailyWage: Double { payDays > 0 ? baseSalary / payDays : 0 }
 
     /// 编辑页、图例、设置页列出来的全部班次
     var kinds: [ShiftKind] { ShiftKind.builtins + custom.map(ShiftKind.init) }
@@ -380,6 +384,7 @@ extension WageSettings {
         baseSalary = (try? c.decodeIfPresent(Double.self, forKey: .baseSalary)) ?? 0
         attendanceBonus = (try? c.decodeIfPresent(Double.self, forKey: .attendanceBonus)) ?? 0
         overtimeRate = (try? c.decodeIfPresent(Double.self, forKey: .overtimeRate)) ?? 1.5
+        payDays = (try? c.decodeIfPresent(Double.self, forKey: .payDays)) ?? 26
     }
 }
 
@@ -687,7 +692,7 @@ final class WageStore: ObservableObject {
         var day = self.day(d) ?? blankDay()
         if let h = overtimeHours {
             if day.overtime == 0 { day.overtimeRate = settings.overtimeRate }
-            day.overtime = max(0, Int((h * 60).rounded()))
+            day.overtime = max(0, Int(h.rounded(.down)) * 60)
         }
         if let l = leave { day.leave = l }
         put(day, on: d)
@@ -838,7 +843,7 @@ final class WageStore: ObservableObject {
             b.extra += d.earnedExtra
             b.spent += d.spent
             if d.leave { b.leaveDays += 1; continue }
-            otMinutes += d.overtime
+            otMinutes += Int(d.overtimeHours) * 60
             if b.fullTime {
                 b.overtimePay += fullTimeOvertime(d)
                 if d.shift != nil, d.multiplier > 1.001 { b.shiftPay += settings.dailyWage * (d.multiplier - 1) }
