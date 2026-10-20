@@ -87,6 +87,8 @@ struct WorldView: View {
     @State private var across: (region: String, x: Int, y: Int, hop: String)?
     /// 他跟着她走
     @AppStorage("islandFollow") private var follow = true
+    /// 走进 3D 的岛里（见 `Island3DView`）
+    @State private var show3D = false
     /// 镜头跟着她走。点一下走路就跟上；她自己拖了画面就不再拽回来，等下一次点
     @State private var camFollow = true
     /// 她坐在哪一格（椅子、长椅、沙发上）。一走开就站起来
@@ -585,11 +587,28 @@ struct WorldView: View {
 
     var body: some View {
         staged
+            // 进 3D：2D 这层往里推一点、糊开，3D 那层淡进来（镜头再从头顶俯冲下去）
+            .scaleEffect(show3D ? 1.18 : 1)
+            .blur(radius: show3D ? 10 : 0)
+            .overlay {
+                if show3D {
+                    Island3DView {
+                        withAnimation(.easeInOut(duration: 0.45)) { show3D = false }
+                    }
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                }
+            }
         .himOffer($offers, source: "小岛")
         .navigationTitle("小岛")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(show3D ? .hidden : .automatic, for: .navigationBar)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    islandMenu = nil
+                    withAnimation(.easeInOut(duration: 0.55)) { show3D = true }
+                } label: { Image(systemName: "cube") }
                 if mode != .walk {
                     Button { world.undo() } label: { Image(systemName: "arrow.uturn.backward") }
                         .disabled(!world.canUndo)

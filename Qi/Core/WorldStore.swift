@@ -874,7 +874,7 @@ final class WorldStore: ObservableObject {
     // MARK: 走路
 
     /// 走不过去的格子：水、海、景的根脚下（树干、房子的墙脚）
-    private func blockedCells() -> Set<Int> {
+    func blockedCells() -> Set<Int> {
         var set = Set<Int>()
         for i in 0..<(width * height) where save.ground[i].blocked { set.insert(i) }
         for d in decor {
