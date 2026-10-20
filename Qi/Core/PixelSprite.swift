@@ -2431,8 +2431,22 @@ struct ClawdView: View {
 
     @State private var frame = 0
     @State private var ticker: Task<Void, Never>?
+    /// 她刚点的地方（房间里挂了 `ClawdGazeHost` 才有）
+    @Environment(\.clawdLookAt) private var lookAt
+    /// 他自己在屏幕上的正中（全局坐标），算往哪边看用
+    @State private var myCenter: CGPoint = .zero
 
     private var sprites: [(PixelSprite, Double)] { mood.frames }
+
+    /// 往哪边看：左右、上下各挪一格（-1 / 0 / 1）。戴着眼睛样式、睡着躺着的时候不挪
+    private var gaze: (x: Int, y: Int)? {
+        guard let p = lookAt, myCenter != .zero, mood != .sleeping, mood != .lying,
+              !ClawdRig.wearsEyes(wornIDs), !CustomWearStore.shared.eyesOnTop(wornIDs) else { return nil }
+        let dx = p.x - myCenter.x, dy = p.y - myCenter.y
+        let gx = dx > 24 ? 1 : (dx < -24 ? -1 : 0)
+        let gy = dy > 40 ? 1 : (dy < -40 ? -1 : 0)
+        return gx == 0 && gy == 0 ? nil : (gx, gy)
+    }
 
     /// 睡着和呼吸那两帧整只往下沉了一格，影子跟着淡一点、扁一点
     private var settled: Bool { mood == .sleeping }
@@ -2558,7 +2572,7 @@ struct ClawdView: View {
                     .allowsHitTesting(false)
             }
 
-            if let g = mood.gif, ClawdGif.exists(g), pose == .none, wornIDs.isEmpty {
+            if let g = mood.gif, ClawdGif.exists(g), pose == .none, wornIDs.isEmpty, gaze == nil {
                 // ⚠️ **播 gif 的时候，我们自己那套一件都不叠。**
                 //
                 // 道具、飘着的音符和爱心、动作的快慢，人家的 gif 里全都有。
@@ -2577,6 +2591,14 @@ struct ClawdView: View {
                             .offset(y: -6 * scale)
                             .allowsHitTesting(false)
                     }
+            } else if pose == .none, let g = gaze {
+                // 看她点的那边：身子不画眼睛，眼睛单独画、往那边挪一格
+                let body = sprites[min(frame, sprites.count - 1)].0
+                ZStack(alignment: .topLeading) {
+                    PixelSpriteView(sprite: ClawdRig.noEyes(body), scale: scale)
+                    PixelSpriteView(sprite: ClawdRig.eyesOnly(body), scale: scale)
+                        .offset(x: CGFloat(g.x) * scale, y: CGFloat(g.y) * scale)
+                }
             } else if pose == .none {
                 // 穿着要露眼睛的衣服：身子这层不画眼睛，眼睛只在衣服上面画一次（不然走路时眼睛挪了会露出两双）
                 let body = sprites[min(frame, sprites.count - 1)].0
@@ -2696,6 +2718,16 @@ struct ClawdView: View {
             //    外面一圈 B、中间填身体色，缩小之后就是个圈。
             //    那七行已经改成实心的了，再叠一层就是两份重影。
         }
+            // 记下自己在屏幕上哪儿（她点了哪儿，眼睛往那边看）。只在房间里挂了 `ClawdGazeHost` 时有用
+            .background {
+                GeometryReader { g in
+                    Color.clear
+                        .onAppear { myCenter = CGPoint(x: g.frame(in: .global).midX, y: g.frame(in: .global).midY) }
+                        .onChange(of: lookAt) { _, _ in
+                            myCenter = CGPoint(x: g.frame(in: .global).midX, y: g.frame(in: .global).midY)
+                        }
+                }
+            }
             .onAppear { start() }
             .onDisappear { ticker?.cancel() }
             .onChange(of: mood) { _, _ in

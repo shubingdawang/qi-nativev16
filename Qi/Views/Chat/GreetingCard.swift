@@ -309,6 +309,8 @@ struct GreetingCardViewer: View {
     let close: () -> Void
 
     @State private var opened = false
+    /// 手机歪一点，卡片跟着微微转、箔上的反光跟着走
+    @StateObject private var tilt = DeviceTilt()
 
     var body: some View {
         GeometryReader { g in
@@ -329,9 +331,21 @@ struct GreetingCardViewer: View {
                         .clipShape(RoundedRectangle(cornerRadius: pageW * 0.035, style: .continuous))
                 }
                 .frame(width: pageW, height: pageH)
+                .overlay {
+                    // 一块跟着手机走的反光
+                    RadialGradient(colors: [Color.white.opacity(0.22), .clear],
+                                   center: UnitPoint(x: 0.5 + tilt.x * 0.45, y: 0.35 + tilt.y * 0.45),
+                                   startRadius: 0, endRadius: pageW * 0.9)
+                        .blendMode(.screen)
+                        .allowsHitTesting(false)
+                }
                 .matchedGeometryEffect(id: item.id, in: ns)
                 // 封面往左翻开：整张往右挪半页，翻开的两页正好在中间
                 .offset(x: opened ? pageW / 2 : 0)
+                .rotation3DEffect(.degrees(-tilt.y * 7), axis: (x: 1, y: 0, z: 0), perspective: 0.5)
+                .rotation3DEffect(.degrees(tilt.x * 7), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
+                .animation(.easeOut(duration: 0.15), value: tilt.x)
+                .animation(.easeOut(duration: 0.15), value: tilt.y)
                 .shadow(color: .black.opacity(0.25), radius: 18, y: 8)
                 .onTapGesture {
                     withAnimation(.spring(response: 0.9, dampingFraction: 0.86)) { opened.toggle() }
@@ -348,11 +362,13 @@ struct GreetingCardViewer: View {
             .frame(width: g.size.width, height: g.size.height)
         }
         .onAppear {
+            tilt.start()
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 420_000_000)
                 withAnimation(.spring(response: 1.0, dampingFraction: 0.86)) { opened = true }
             }
         }
+        .onDisappear { tilt.stop() }
     }
 
     private func dismiss() {

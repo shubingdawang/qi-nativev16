@@ -47,10 +47,8 @@ struct MoneyCard: View {
                 Text(free < 0 ? "超出 ¥" : "¥")
                     .font(.app(free < 0 ? 13 : 16, weight: .medium))
                     .foregroundStyle(free < 0 ? Color.red : cash)
-                Text(WageStore.money(abs(free)))
-                    .font(HomeType.number(28, weight: .semibold))
-                    .foregroundStyle(main)
-                    .contentTransition(.numericText())
+                RollingNumber(text: WageStore.money(abs(free)), font: HomeType.number(28, weight: .semibold),
+                              color: main)
             }
             Text("收入 \(BookFormat.money(m.income)) · 固定拿走 \(BookFormat.money(m.fixed)) · 已经花了 \(BookFormat.money(m.spent))")
                 .font(.app(11))
@@ -95,24 +93,28 @@ struct MoneyCard: View {
         return .free
     }
 
+    /// 一张纸币。拿走的时候不是直接变灰：**钞票从上边折起来翻过去**，底下露出留下的那个位置
     @ViewBuilder
     private func note(_ s: NoteState) -> some View {
         let shape = RoundedRectangle(cornerRadius: 2.5, style: .continuous)
         ZStack {
-            switch s {
-            case .free:
+            // 底下：固定开支是一块灰，花掉的留一圈虚线
+            shape.fill(main.opacity(s == .fixed ? 0.16 : 0))
+            shape.strokeBorder(main.opacity(s == .spent ? 0.25 : 0), style: StrokeStyle(lineWidth: 0.8, dash: [2, 2]))
+            // 钞票本身
+            ZStack {
                 shape.fill(LinearGradient(colors: [cash.opacity(0.95), cash.opacity(0.7)],
                                           startPoint: .topLeading, endPoint: .bottomTrailing))
                 shape.inset(by: 1.5).stroke(Color.white.opacity(0.55), lineWidth: 0.6)
                 Circle().stroke(Color.white.opacity(0.6), lineWidth: 0.6).frame(width: 6, height: 6).offset(x: 5)
-            case .fixed:
-                shape.fill(main.opacity(0.16))
-            case .spent:
-                shape.strokeBorder(main.opacity(0.25), style: StrokeStyle(lineWidth: 0.8, dash: [2, 2]))
+                // 折起来的时候背面暗一点
+                shape.fill(Color.black.opacity(s == .free ? 0 : 0.25))
             }
+            .rotation3DEffect(.degrees(s == .free ? 0 : -100), axis: (x: 1, y: 0, z: 0),
+                              anchor: .top, perspective: 0.6)
+            .opacity(s == .free ? 1 : 0)
         }
         .frame(height: 14)
-        .scaleEffect(s == .free ? 1 : 0.92)
     }
 
     private func legend(_ s: NoteState, _ t: String) -> some View {

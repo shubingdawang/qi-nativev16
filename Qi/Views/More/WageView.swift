@@ -147,10 +147,9 @@ struct WageView: View {
                 Text("¥")
                     .font(.app(16, weight: .medium))
                     .foregroundStyle(Self.payRed)
-                Text(WageStore.money(t.pay))
-                    .font(HomeType.number(32, weight: .semibold))
-                    .foregroundStyle(Theme.textMain(scheme))
-                    .contentTransition(.numericText())
+                // 金额一位一位滚到新的值
+                RollingNumber(text: WageStore.money(t.pay), font: HomeType.number(32, weight: .semibold),
+                              color: Theme.textMain(scheme))
                 // 实发：下个月发薪日记下的到手钱加起来
                 let real = store.actualPay(forWorkMonth: month)
                 Text("实发")

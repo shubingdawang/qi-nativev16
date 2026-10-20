@@ -771,7 +771,9 @@ struct ClawdHomeView: View {
             switch tab {
             case 0:
                 if let viewing {
+                    // 点房间里哪儿，他的眼睛往那边看一会儿
                     roomPage(viewing)
+                        .modifier(ClawdGazeHost())
                 } else {
                     ScrollView {
                         FloorPlanView(store: store) { enter($0) }
