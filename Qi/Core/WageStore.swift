@@ -187,22 +187,36 @@ struct WorkDay: Codable, Hashable {
     var extra: [TimeSpan] = []
     /// 这一天的备注（在当天的卡片里显示）
     var note: String = ""
+    /// 加班多少分钟（另算，不在上班时段里）
+    var overtime: Int = 0
+    /// 加班按几倍算（记加班那一下从设置里抄进来）
+    var overtimeRate: Double = 1.5
+    /// 请假：这一天不算工资
+    var leave = false
 
     var workText: String { ([work] + extra).map(\.text).joined(separator: "、") }
 
-    /// 实际干了多少分钟：各段上班加起来减掉各段休息。不会是负的。
+    /// 实际干了多少分钟：各段上班加起来减掉各段休息。不会是负的。请假那天是 0
     var workedMinutes: Int {
-        guard shift != nil else { return 0 }
+        guard shift != nil, !leave else { return 0 }
         let rest = breaks.reduce(0) { $0 + $1.minutes }
         let total = extra.reduce(work.minutes) { $0 + $1.minutes }
         return max(0, total - rest)
     }
 
-    /// 这一天挣多少。**没排班就是 0**，不是按空时间段算出个数。
+    var overtimeHours: Double { leave ? 0 : Double(overtime) / 60 }
+
+    /// 按时薪算的加班费
+    var overtimePay: Double {
+        (hourly * max(overtimeRate, 1) * overtimeHours * 100).rounded() / 100
+    }
+
+    /// 这一天挣多少（按时薪算，兼职用）。**没排班、请假就是 0**，加班另加。
     var pay: Double {
-        guard shift != nil else { return 0 }
+        guard !leave else { return 0 }
         let m = multiplier > 0 ? multiplier : 1
-        return (hourly * m * Double(workedMinutes) / 60 * 100).rounded() / 100
+        let base = shift == nil ? 0 : hourly * m * Double(workedMinutes) / 60
+        return (base * 100).rounded() / 100 + overtimePay
     }
 
     /// 按平常算是多少（三倍那天在总结里两个数一起给，好对账）
@@ -212,7 +226,7 @@ struct WorkDay: Codable, Hashable {
     }
 
     /// 要不要挂那个「3x 工资」的小胶囊
-    var hasBonusRate: Bool { shift != nil && multiplier > 1.001 }
+    var hasBonusRate: Bool { shift != nil && !leave && multiplier > 1.001 }
 
     /// 胶囊上写什么。整数就不拖小数点（3x 不是 3.0x）
     var rateLabel: String {
@@ -231,7 +245,10 @@ struct WorkDay: Codable, Hashable {
     }
 
     /// 这一天有没有东西。空的就从存档里删掉，别攒一堆空壳。
-    var isEmpty: Bool { shift == nil && entries.isEmpty && note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    var isEmpty: Bool {
+        shift == nil && !leave && overtime == 0 && entries.isEmpty
+            && note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 }
 
 // ⚠️⚠️ **跟 `LedgerEntry` 那段一样的理由：`multiplier` 是后加的键。**
@@ -251,6 +268,9 @@ extension WorkDay {
         entries = (try? c.decodeIfPresent([LedgerEntry].self, forKey: .entries)) ?? []
         extra = (try? c.decodeIfPresent([TimeSpan].self, forKey: .extra)) ?? []
         note = (try? c.decodeIfPresent(String.self, forKey: .note)) ?? ""
+        overtime = (try? c.decodeIfPresent(Int.self, forKey: .overtime)) ?? 0
+        overtimeRate = (try? c.decodeIfPresent(Double.self, forKey: .overtimeRate)) ?? 1.5
+        leave = (try? c.decodeIfPresent(Bool.self, forKey: .leave)) ?? false
     }
 }
 
@@ -306,6 +326,18 @@ struct WageSettings: Codable, Hashable {
     /// 每个发薪日发上个月工资的几成（键是几号，值 0...1）。没填的那几天平分剩下的
     var payRatios: [String: Double] = [:]
     var anniversaries: [WageAnniversary] = []
+    /// 全职：每月按底薪 + 全勤算，排班只用来记哪天上班；兼职：按时薪 × 工时
+    var fullTime = false
+    /// 从哪个月起按全职算（yyyy-MM）。之前的月份还按时薪算，不会被底薪改掉
+    var fullTimeSince = ""
+    var baseSalary: Double = 0
+    /// 全勤奖：这个月一天假都没请才有
+    var attendanceBonus: Double = 0
+    /// 加班默认按几倍算
+    var overtimeRate: Double = 1.5
+
+    /// 全职的日薪（底薪 ÷ 21.75 天），请假扣这么多
+    var dailyWage: Double { baseSalary / 21.75 }
 
     /// 编辑页、图例、设置页列出来的全部班次
     var kinds: [ShiftKind] { ShiftKind.builtins + custom.map(ShiftKind.init) }
@@ -343,6 +375,11 @@ extension WageSettings {
         paydays = (try? c.decodeIfPresent([Int].self, forKey: .paydays)) ?? []
         payRatios = (try? c.decodeIfPresent([String: Double].self, forKey: .payRatios)) ?? [:]
         anniversaries = (try? c.decodeIfPresent([WageAnniversary].self, forKey: .anniversaries)) ?? []
+        fullTime = (try? c.decodeIfPresent(Bool.self, forKey: .fullTime)) ?? false
+        fullTimeSince = (try? c.decodeIfPresent(String.self, forKey: .fullTimeSince)) ?? ""
+        baseSalary = (try? c.decodeIfPresent(Double.self, forKey: .baseSalary)) ?? 0
+        attendanceBonus = (try? c.decodeIfPresent(Double.self, forKey: .attendanceBonus)) ?? 0
+        overtimeRate = (try? c.decodeIfPresent(Double.self, forKey: .overtimeRate)) ?? 1.5
     }
 }
 
@@ -355,6 +392,8 @@ struct WageFile: Codable {
     var rosters: [WageRoster] = []
     /// 发薪日的实发记录，键是 yyyy-MM-dd
     var payRecords: [String: WagePayRecord] = [:]
+    /// 每个月的绩效（键是 yyyy-MM），15 号那天填
+    var performance: [String: Double] = [:]
 
     init() {}
 
@@ -365,6 +404,7 @@ struct WageFile: Codable {
         days = (try? c.decodeIfPresent([String: WorkDay].self, forKey: .days)) ?? [:]
         rosters = (try? c.decodeIfPresent([WageRoster].self, forKey: .rosters)) ?? []
         payRecords = (try? c.decodeIfPresent([String: WagePayRecord].self, forKey: .payRecords)) ?? [:]
+        performance = (try? c.decodeIfPresent([String: Double].self, forKey: .performance)) ?? [:]
     }
 }
 
@@ -642,6 +682,17 @@ final class WageStore: ObservableObject {
         put(day, on: d)
     }
 
+    /// 改加班时长、请假（给的才改）
+    func setExtras(on d: Date, overtimeHours: Double?, leave: Bool?) {
+        var day = self.day(d) ?? blankDay()
+        if let h = overtimeHours {
+            if day.overtime == 0 { day.overtimeRate = settings.overtimeRate }
+            day.overtime = max(0, Int((h * 60).rounded()))
+        }
+        if let l = leave { day.leave = l }
+        put(day, on: d)
+    }
+
     func addEntry(on d: Date, _ e: LedgerEntry) {
         var day = self.day(d) ?? blankDay()
         day.entries.append(e)
@@ -723,16 +774,95 @@ final class WageStore: ObservableObject {
 
     /// 一个月的合计：挣了多少、花了多少、上了几天班、干了多少小时。
     func monthTotals(_ month: Date) -> (pay: Double, spent: Double, days: Int, hours: Double) {
+        let b = monthBreakdown(month)
+        return (b.total, b.spent, b.days, b.hours)
+    }
+
+    /// 一个月的钱是怎么来的。全职那几项兼职是 0
+    struct MonthBreakdown {
+        var fullTime = false
+        var base = 0.0          // 全职：底薪（已扣请假）
+        var attendance = 0.0    // 全职：全勤
+        var leaveDeduct = 0.0   // 全职：请假扣掉的
+        var shiftPay = 0.0      // 兼职：时薪 × 工时；全职：节假日多出来的那几倍
+        var overtimePay = 0.0
+        var performance = 0.0
+        var extra = 0.0         // 记成收入的那几笔
+        var spent = 0.0
+        var days = 0
+        var hours = 0.0
+        var overtimeHours = 0.0
+        var leaveDays = 0
+        var total: Double { base + attendance + shiftPay + overtimePay + performance + extra }
+    }
+
+    nonisolated static func monthKey(_ d: Date) -> String { String(key(d).prefix(7)) }
+
+    /// 这个月按不按全职算：开着全职，而且是从开全职那个月起
+    func isFullTime(_ month: Date) -> Bool {
+        let s = settings
+        guard s.fullTime else { return false }
+        return s.fullTimeSince.isEmpty || Self.monthKey(month) >= s.fullTimeSince
+    }
+
+    /// 全职那天的加班费：日薪 ÷ 8 当时薪
+    func fullTimeOvertime(_ d: WorkDay) -> Double {
+        (settings.dailyWage / 8 * max(d.overtimeRate, 1) * d.overtimeHours * 100).rounded() / 100
+    }
+
+    /// 日历格子、总结里那一天的工资。全职：只有加班费和节假日多出来的；兼职：时薪 × 工时 + 加班
+    func dayPay(_ d: WorkDay, on date: Date) -> Double {
+        guard isFullTime(date) else { return d.pay }
+        guard !d.leave else { return 0 }
+        var v = fullTimeOvertime(d)
+        if d.shift != nil, d.multiplier > 1.001 { v += settings.dailyWage * (d.multiplier - 1) }
+        return (v * 100).rounded() / 100
+    }
+
+    func performance(for month: Date) -> Double? { file.performance[Self.monthKey(month)] }
+
+    func setPerformance(_ v: Double?, for month: Date) {
+        var f = file
+        f.performance[Self.monthKey(month)] = (v ?? 0) > 0 ? v : nil
+        file = f
+    }
+
+    func monthBreakdown(_ month: Date) -> MonthBreakdown {
         let cal = Calendar.current
-        var pay = 0.0, spent = 0.0, days = 0, minutes = 0
+        var b = MonthBreakdown()
+        b.fullTime = isFullTime(month)
+        var minutes = 0, otMinutes = 0
         for (k, d) in file.days {
             guard let date = Self.keyFormat.date(from: k),
                   cal.isDate(date, equalTo: month, toGranularity: .month) else { continue }
-            pay += d.pay + d.earnedExtra
-            spent += d.spent
-            if d.shift != nil { days += 1; minutes += d.workedMinutes }
+            b.extra += d.earnedExtra
+            b.spent += d.spent
+            if d.leave { b.leaveDays += 1; continue }
+            otMinutes += d.overtime
+            if b.fullTime {
+                b.overtimePay += fullTimeOvertime(d)
+                if d.shift != nil, d.multiplier > 1.001 { b.shiftPay += settings.dailyWage * (d.multiplier - 1) }
+            } else {
+                b.shiftPay += d.pay - d.overtimePay
+                b.overtimePay += d.overtimePay
+            }
+            if d.shift != nil { b.days += 1; minutes += d.workedMinutes }
         }
-        return (pay, spent, days, Double(minutes) / 60)
+        if b.fullTime {
+            let s = settings
+            b.leaveDeduct = min(s.baseSalary, s.dailyWage * Double(b.leaveDays))
+            b.base = s.baseSalary - b.leaveDeduct
+            b.attendance = b.leaveDays == 0 ? s.attendanceBonus : 0
+        }
+        b.performance = performance(for: month) ?? 0
+        b.hours = Double(minutes) / 60
+        b.overtimeHours = Double(otMinutes) / 60
+        func cents(_ v: Double) -> Double { (v * 100).rounded() / 100 }
+        b.shiftPay = cents(b.shiftPay)
+        b.overtimePay = cents(b.overtimePay)
+        b.base = cents(b.base)
+        b.leaveDeduct = cents(b.leaveDeduct)
+        return b
     }
 
     /// 钱怎么写：整数不带小数点，有零头保留到分。

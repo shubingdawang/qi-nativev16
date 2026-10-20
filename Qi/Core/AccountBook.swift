@@ -491,10 +491,18 @@ final class AccountBook: ObservableObject {
     /// 这个月到今天进来的钱：工资（排了班的那些天）+ 工资页里记的收入
     func income(month: Date, upTo: Date) -> (wage: Double, other: Double) {
         var wage = 0.0, other = 0.0
+        let ws = WageStore.shared
         for d in days(in: month, upTo: upTo) {
-            guard let w = WageStore.shared.day(d) else { continue }
-            wage += w.pay
+            guard let w = ws.day(d) else { continue }
+            wage += ws.dayPay(w, on: d)
             other += w.earnedExtra
+        }
+        // 全职：底薪、全勤、绩效是按月的，整份算进这个月
+        if ws.isFullTime(month) {
+            let b = ws.monthBreakdown(month)
+            wage += b.base + b.attendance + b.performance
+        } else {
+            wage += ws.performance(for: month) ?? 0
         }
         return (wage, other)
     }

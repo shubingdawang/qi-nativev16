@@ -64,7 +64,9 @@ enum WageTools {
                 "start": ["type": "string", "description": "上班时间，如 13:00。不填用默认"],
                 "end": ["type": "string", "description": "下班时间，如 22:00。跨零点照写，如 02:00"],
                 "breaks": ["type": "string", "description": "休息时段，多段用逗号隔开：17:00-18:00,20:00-20:15。填「无」= 没有休息。不填用默认"],
-                "hourly": ["type": "number", "description": "这一天的时薪。不填用工资设置里的"]
+                "hourly": ["type": "number", "description": "这一天的时薪。不填用工资设置里的"],
+                "overtime": ["type": "number", "description": "这天加班几小时（另算加班费），0 = 没加班。不填不改"],
+                "leave": ["type": "boolean", "description": "true = 这天请假，不算工资；false = 取消请假。不填不改"]
             ],
             required: ["date", "shift"])
 
@@ -156,6 +158,9 @@ enum WageTools {
             }
             let hourly = (args["hourly"] as? Double) ?? (args["hourly"] as? Int).map { Double($0) }
             store.setShift(on: d, kind: kind, work: work, breaks: breaks, hourly: hourly)
+            let ot = (args["overtime"] as? Double) ?? (args["overtime"] as? Int).map { Double($0) }
+            let leave = args["leave"] as? Bool
+            if ot != nil || leave != nil { store.setExtras(on: d, overtimeHours: ot, leave: leave) }
             return ("排好了。\n" + describe(day: d, store: store, withSettings: false), false)
 
         case "wage_ledger":
@@ -262,6 +267,7 @@ enum WageTools {
             f.string(from: month) + "：收入 " + WageStore.money(t.pay)
                 + " 元，花费 " + WageStore.money(t.spent)
                 + " 元，上班 \(t.days) 天，工时 " + String(format: "%.1f", t.hours) + " 小时",
+            breakdownLine(store.monthBreakdown(month)),
             settingsLine(store)
         ]
         let keys = store.file.days.keys.sorted().filter { k in
@@ -290,9 +296,12 @@ enum WageTools {
                          + "，休息 " + rest
                          + "，时薪 " + WageStore.money(day.hourly)
                          + "，工时 " + String(format: "%.1f", Double(day.workedMinutes) / 60)
-                         + " 小时，薪资 " + WageStore.money(day.pay))
+                         + " 小时，薪资 " + WageStore.money(store.dayPay(day, on: d))
+                         + (day.overtime > 0 ? "，加班 " + String(format: "%.1f", day.overtimeHours) + " 小时" : "")
+                         + (day.leave ? "，请假（不算工资）" : ""))
         } else {
-            lines.append(label(d) + "：没排班")
+            lines.append(label(d) + (day.leave ? "：请假（不算工资）" : "：没排班")
+                         + (day.overtime > 0 && !day.leave ? "，加班 " + String(format: "%.1f", day.overtimeHours) + " 小时" : ""))
         }
         for e in day.entries {
             var one = "  [" + shortID(e.id) + "] "
@@ -304,6 +313,24 @@ enum WageTools {
         return lines.joined(separator: "\n")
     }
 
+    private static func breakdownLine(_ b: WageStore.MonthBreakdown) -> String {
+        var parts: [String] = []
+        if b.fullTime {
+            parts.append("底薪 " + WageStore.money(b.base))
+            if b.attendance > 0 { parts.append("全勤 " + WageStore.money(b.attendance)) }
+            if b.leaveDays > 0 { parts.append("请假 \(b.leaveDays) 天扣 " + WageStore.money(b.leaveDeduct)) }
+        } else {
+            parts.append("工时工资 " + WageStore.money(b.shiftPay))
+            if b.leaveDays > 0 { parts.append("请假 \(b.leaveDays) 天") }
+        }
+        if b.overtimeHours > 0 {
+            parts.append("加班 " + String(format: "%.1f", b.overtimeHours) + " 小时 " + WageStore.money(b.overtimePay))
+        }
+        if b.performance > 0 { parts.append("绩效 " + WageStore.money(b.performance)) }
+        if b.extra > 0 { parts.append("其他收入 " + WageStore.money(b.extra)) }
+        return "构成：" + parts.joined(separator: "，")
+    }
+
     private static func settingsLine(_ store: WageStore) -> String {
         let s = store.settings
         let parts = s.kinds.map { k -> String in
@@ -311,7 +338,11 @@ enum WageTools {
             let rest = t.breaks.isEmpty ? "" : "（休" + t.breaks.map(\.text).joined(separator: "、") + "）"
             return k.rawValue + " " + t.workText + rest
         }
-        return "设置：时薪 " + WageStore.money(s.hourly) + "；" + parts.joined(separator: "；")
+        let mode = s.fullTime
+            ? "全职：底薪 " + WageStore.money(s.baseSalary) + "，全勤 " + WageStore.money(s.attendanceBonus) + "；"
+            : "兼职；"
+        return "设置：" + mode + "时薪 " + WageStore.money(s.hourly) + "，加班 " + WageStore.money(s.overtimeRate) + " 倍；"
+            + parts.joined(separator: "；")
     }
 
     private static func line(_ e: LedgerEntry) -> String {

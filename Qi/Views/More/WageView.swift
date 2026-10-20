@@ -34,6 +34,8 @@ struct WageView: View {
 
     /// 日历上那个红字的颜色。**写死一个红**，她要的就是红字，不跟主题色走。
     static let payRed = Color(hexString: "E5484D") ?? .red
+    /// 请假那天的颜色：低饱和的灰蓝
+    static let leaveTint = Color(hexString: "8A97AD") ?? .gray
 
     /// 日历格子上那个很小的角标：`3x`。整数不拖小数点。
     static func rateTag(_ m: Double) -> String {
@@ -179,10 +181,51 @@ struct WageView: View {
                 divider
                 stat("结余", "¥" + WageStore.money(t.pay - t.spent))
             }
+            breakdown
             reminders
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard()
+    }
+
+    /// 这个月的钱怎么来的：底薪、全勤、加班、绩效、请假。只有时薪工资的话不占地方
+    @ViewBuilder
+    private var breakdown: some View {
+        let b = store.monthBreakdown(month)
+        let parts: [(String, String)] = {
+            var out: [(String, String)] = []
+            if b.fullTime {
+                out.append(("底薪", "¥" + WageStore.money(b.base)))
+                if store.settings.attendanceBonus > 0 {
+                    out.append(("全勤", b.leaveDays == 0 ? "¥" + WageStore.money(b.attendance) : "无"))
+                }
+                if b.shiftPay > 0 { out.append(("节假日", "¥" + WageStore.money(b.shiftPay))) }
+            }
+            if b.overtimeHours > 0 {
+                out.append(("加班 " + String(format: "%.1f", b.overtimeHours) + "h", "¥" + WageStore.money(b.overtimePay)))
+            }
+            if b.performance > 0 { out.append(("绩效", "¥" + WageStore.money(b.performance))) }
+            if b.leaveDays > 0 {
+                out.append(("请假 \(b.leaveDays) 天", b.fullTime ? "-¥" + WageStore.money(b.leaveDeduct) : "不计"))
+            }
+            return out
+        }()
+        if !parts.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(parts, id: \.0) { p in
+                        HStack(spacing: 4) {
+                            Text(p.0).foregroundStyle(Theme.textMuted(scheme))
+                            Text(p.1).foregroundStyle(Theme.textMain(scheme)).fontWeight(.semibold)
+                        }
+                        .font(.app(11))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(Theme.softFillDeep))
+                    }
+                }
+            }
+        }
     }
 
     /// 下次发薪、最近的纪念日。都没设就不占地方
@@ -352,7 +395,7 @@ struct WageView: View {
 
                 // 中间只放金额：进来的红字 +，花出去的 -。
                 // ⚠️ + 算的是**薪资加上记成收入的那几笔**，不只是薪资。
-                let plus = (rec?.pay ?? 0) + (rec?.earnedExtra ?? 0)
+                let plus = (rec.map { store.dayPay($0, on: date) } ?? 0) + (rec?.earnedExtra ?? 0)
                 let minus = rec?.spent ?? 0
                 amountLine(plus > 0 ? "+" + WageStore.money(plus) : nil, Self.payRed)
                 amountLine(minus > 0 ? "-" + WageStore.money(minus) : nil,
@@ -391,7 +434,13 @@ struct WageView: View {
                 }
             }
             .overlay(alignment: .topLeading) {
-                if rec?.hasBonusRate == true {
+                if rec?.leave == true {
+                    Text("假")
+                        .font(.app(8, weight: .semibold))
+                        .foregroundStyle(WageView.leaveTint)
+                        .padding(.leading, 7)
+                        .padding(.top, 3)
+                } else if rec?.hasBonusRate == true {
                     Text(WageView.rateTag(rec?.multiplier ?? 1))
                         .font(.app(8, weight: .semibold))
                         .foregroundStyle(WageView.payRed)
@@ -794,7 +843,9 @@ struct WageSummaryCard: View {
                 .frame(maxWidth: .infinity)
 
             VStack(alignment: .leading, spacing: 9) {
-                if let k = day.shift {
+                if day.leave {
+                    row("请假") { value("这一天不算工资") }
+                } else if let k = day.shift {
                     row("班次") {
                         HStack(spacing: 6) {
                             Circle().fill(k.tint).frame(width: 7, height: 7)
@@ -817,13 +868,14 @@ struct WageSummaryCard: View {
                             }
                         }
                     }
-                    row("总薪资") {
+                    if !WageStore.shared.isFullTime(date) || WageStore.shared.dayPay(day, on: date) > 0 {
+                    row(WageStore.shared.isFullTime(date) ? "当天另算" : "总薪资") {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(WageStore.money(day.pay))
+                            Text(WageStore.money(WageStore.shared.dayPay(day, on: date)))
                                 .font(.app(14, weight: .semibold))
                                 .foregroundStyle(WageView.payRed)
                             // 三倍那天把「平常是多少」也写出来，好对账
-                            if day.hasBonusRate {
+                            if day.hasBonusRate && !WageStore.shared.isFullTime(date) {
                                 Text("平常 " + WageStore.money(day.basePay)
                                      + " × " + day.rateLabel.replacingOccurrences(
                                         of: " 工资", with: ""))
@@ -831,6 +883,22 @@ struct WageSummaryCard: View {
                                     .foregroundStyle(Theme.textMuted(scheme))
                             }
                         }
+                    }
+                    }
+                }
+
+                if day.overtime > 0 && !day.leave {
+                    row("加班") {
+                        value(String(format: "%.1f", day.overtimeHours) + " 小时 · "
+                              + WageStore.money(day.overtimeRate) + "x")
+                    }
+                }
+                if Calendar.current.component(.day, from: date) == 15,
+                   let p = WageStore.shared.performance(for: date) {
+                    row("当月绩效") {
+                        Text(WageStore.money(p))
+                            .font(.app(14, weight: .semibold))
+                            .foregroundStyle(WageView.payRed)
                     }
                 }
 
@@ -1093,6 +1161,8 @@ struct WageDayEditor: View {
 
     @State private var day: WorkDay
     @State private var hourlyText = ""
+    /// 15 号那天填的当月绩效
+    @State private var perfText = ""
 
     // 记账那两个方格子
     // ⚠️ 这两个格子的字放在盒子里、由格子自己管，不放在这一页的 @State 上：
@@ -1167,13 +1237,15 @@ struct WageDayEditor: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 14) {
                             if let r = store.roster(on: date) { rosterCard(r) }
-                            if store.isPayday(date) { WagePayCard(date: date) }
+                            if store.isPayday(date) { WagePayCard(date: date) { rosterShown = $0 } }
                             WageAnniversaryCard(date: date)
                             if !usageList.isEmpty { usageCard }
                             noteCard
+                            if isPerformanceDay { performanceCard }
                             shiftCard
-                            if day.shift != nil { rateCard }
-                            if day.shift != nil { timeCard }
+                            if day.shift != nil && !day.leave { rateCard }
+                            if day.shift != nil && !day.leave { timeCard }
+                            if !day.leave { overtimeCard }
                             ledgerCard
                             if existed { deleteBar }
                         }
@@ -1212,6 +1284,7 @@ struct WageDayEditor: View {
             }
             .onAppear {
                 hourlyText = WageStore.money(day.hourly)
+                perfText = store.performance(for: date).map(WageStore.money) ?? ""
                 noteBox.text = day.note
                 let book = AccountBook.shared
                 usageList = book.usageItems(on: date)
@@ -1325,6 +1398,7 @@ struct WageDayEditor: View {
         day.note = noteBox.text.trimmingCharacters(in: .whitespacesAndNewlines)
         commitDraftEntry()
         store.put(day, on: date)
+        if isPerformanceDay { store.setPerformance(Double(perfText), for: date) }
         for e in usageList { AccountBook.shared.setUsage(e.id, on: date, count: usage[e.id] ?? 0) }
         committed = true
         let kept = Set(day.entries.flatMap(\.images))
@@ -1395,16 +1469,138 @@ struct WageDayEditor: View {
 
     private var shiftCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("班次").heading(14)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5),
-                      spacing: 8) {
-                ForEach(store.settings.kinds) { k in
-                    shiftChip(k.rawValue, tint: k.tint, on: day.shift == k) { pick(k) }
+            HStack {
+                Text("班次").heading(14)
+                Spacer()
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { day.leave.toggle() }
+                    if app.settings.haptics { UISelectionFeedbackGenerator().selectionChanged() }
+                } label: {
+                    Label(day.leave ? "已请假" : "请假", systemImage: day.leave ? "checkmark" : "moon.zzz")
+                        .font(.app(12, weight: day.leave ? .semibold : .regular))
+                        .foregroundStyle(day.leave ? Color.white : Theme.textSoft(scheme))
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(day.leave ? WageView.leaveTint : Theme.softFillDeep))
                 }
-                shiftChip("不排班", tint: Theme.textMuted(scheme), on: day.shift == nil) {
-                    day.shift = nil
+                .buttonStyle(.plain)
+            }
+            if day.leave {
+                Text(store.isFullTime(date)
+                     ? "请假这天不算工资，按日薪扣 ¥" + WageStore.money(store.settings.dailyWage) + "，这个月没有全勤。"
+                     : "请假这天不算工资。")
+                    .font(.app(11.5))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            } else {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5),
+                          spacing: 8) {
+                    ForEach(store.settings.kinds) { k in
+                        shiftChip(k.rawValue, tint: k.tint, on: day.shift == k) { pick(k) }
+                    }
+                    shiftChip("不排班", tint: Theme.textMuted(scheme), on: day.shift == nil) {
+                        day.shift = nil
+                    }
                 }
             }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard()
+    }
+
+    // MARK: 加班
+
+    private var overtimeCard: some View {
+        let full = store.isFullTime(date)
+        let pay = full ? store.fullTimeOvertime(day) : day.overtimePay
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("加班").heading(14)
+                Spacer()
+                if day.overtime > 0 {
+                    Text("+" + WageStore.money(pay))
+                        .font(.app(14, weight: .semibold))
+                        .foregroundStyle(WageView.payRed)
+                }
+            }
+            HStack(spacing: 10) {
+                Text("时长").font(.app(13)).foregroundStyle(Theme.textSoft(scheme))
+                stepButton("minus") { setOvertime(day.overtime - 30) }
+                Text(String(format: "%.1f", Double(day.overtime) / 60) + " 小时")
+                    .font(HomeType.number(15, weight: .semibold))
+                    .foregroundStyle(Theme.textMain(scheme))
+                    .frame(minWidth: 64)
+                    .contentTransition(.numericText())
+                stepButton("plus") { setOvertime(day.overtime + 30) }
+                Spacer(minLength: 0)
+            }
+            if day.overtime > 0 {
+                HStack(spacing: 6) {
+                    Text("倍率").font(.app(13)).foregroundStyle(Theme.textSoft(scheme))
+                    ForEach([1.0, 1.5, 2.0, 3.0], id: \.self) { r in
+                        let on = abs(day.overtimeRate - r) < 0.01
+                        Button { day.overtimeRate = r } label: {
+                            Text(WageStore.money(r) + "x")
+                                .font(.app(12, weight: on ? .semibold : .regular))
+                                .foregroundStyle(on ? Color.white : Theme.textMain(scheme))
+                                .padding(.horizontal, 11)
+                                .padding(.vertical, 6)
+                                .background(Capsule().fill(on ? app.settings.accentColor : Theme.softFillDeep))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Spacer(minLength: 0)
+                }
+                Text(full ? "按日薪 ÷ 8 当时薪算。" : "按这一天的时薪算。")
+                    .font(.app(10.5))
+                    .foregroundStyle(Theme.textMuted(scheme))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard()
+    }
+
+    private func setOvertime(_ m: Int) {
+        if day.overtime == 0 { day.overtimeRate = store.settings.overtimeRate }
+        withAnimation(.easeOut(duration: 0.15)) { day.overtime = min(24 * 60, max(0, m)) }
+        if app.settings.haptics { UISelectionFeedbackGenerator().selectionChanged() }
+    }
+
+    private func stepButton(_ icon: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Theme.textMain(scheme))
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(Theme.softFillDeep))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: 绩效（15 号那天填）
+
+    private var isPerformanceDay: Bool { Calendar.current.component(.day, from: date) == 15 }
+
+    private var performanceCard: some View {
+        let f = DateFormatter()
+        f.dateFormat = "M月"
+        return VStack(alignment: .leading, spacing: 10) {
+            Text(f.string(from: date) + "绩效").heading(14)
+            HStack(spacing: 8) {
+                Text("金额").font(.app(13)).foregroundStyle(Theme.textSoft(scheme))
+                TextField("0", text: $perfText)
+                    .keyboardType(.decimalPad)
+                    .font(.app(14))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .frame(width: 110)
+                    .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(Theme.softFillDeep))
+                Text("元").font(.app(12)).foregroundStyle(Theme.textMuted(scheme))
+                Spacer(minLength: 0)
+            }
+            Text("算进这个月的收入。")
+                .font(.app(10.5))
+                .foregroundStyle(Theme.textMuted(scheme))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard()
@@ -1489,9 +1685,11 @@ struct WageDayEditor: View {
                 Text("时长 " + String(format: "%.1f", Double(day.workedMinutes) / 60) + " 小时")
                     .font(.app(12))
                     .foregroundStyle(Theme.textMuted(scheme))
-                Text("+" + WageStore.money(day.pay))
-                    .font(.app(14, weight: .semibold))
-                    .foregroundStyle(WageView.payRed)
+                if !store.isFullTime(date) {
+                    Text("+" + WageStore.money(day.pay - day.overtimePay))
+                        .font(.app(14, weight: .semibold))
+                        .foregroundStyle(WageView.payRed)
+                }
             }
 
             HStack(spacing: 8) {
@@ -1879,6 +2077,10 @@ struct WageSettingsSheet: View {
 
     @State private var draft = WageStore.shared.settings
     @State private var hourlyText = WageStore.money(WageStore.shared.settings.hourly)
+    @State private var baseText = WageStore.shared.settings.baseSalary > 0
+        ? WageStore.money(WageStore.shared.settings.baseSalary) : ""
+    @State private var bonusText = WageStore.shared.settings.attendanceBonus > 0
+        ? WageStore.money(WageStore.shared.settings.attendanceBonus) : ""
     @State private var adding = false
     @State private var newName = ""
 
@@ -1896,27 +2098,7 @@ struct WageSettingsSheet: View {
                 WallpaperBackground()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        SettingsCard(title: "时薪") {
-                            HStack(spacing: 8) {
-                                TextField("20", text: $hourlyText)
-                                    .keyboardType(.decimalPad)
-                                    .font(.app(16, weight: .medium))
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .frame(width: 110)
-                                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .fill(Theme.softFillDeep))
-                                    .onChange(of: hourlyText) { _, v in
-                                        if let n = Double(v) { draft.hourly = n }
-                                    }
-                                Text("元/小时")
-                                    .font(.app(13))
-                                    .foregroundStyle(Theme.textMuted(scheme))
-                                Spacer(minLength: 0)
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                        }
+                        modeCard
 
                         paydayCard
                         anniversaryCard
@@ -1964,12 +2146,85 @@ struct WageSettingsSheet: View {
                         for i in draft.anniversaries.indices where draft.anniversaries[i].name.trimmingCharacters(in: .whitespaces).isEmpty {
                             draft.anniversaries[i].name = "纪念日"
                         }
+                        // 刚切成全职：从这个月起按底薪算，之前的月份还按时薪
+                        if draft.fullTime && !store.settings.fullTime {
+                            draft.fullTimeSince = WageStore.monthKey(Date())
+                        }
                         store.updateSettings(draft)
                         dismiss()
                     }
                     .fontWeight(.semibold)
                 }
             }
+        }
+    }
+
+    // MARK: 全职 / 兼职
+
+    private var modeCard: some View {
+        SettingsCard(title: "工作方式") {
+            VStack(alignment: .leading, spacing: 12) {
+                Picker("", selection: $draft.fullTime) {
+                    Text("兼职").tag(false)
+                    Text("全职").tag(true)
+                }
+                .pickerStyle(.segmented)
+
+                if draft.fullTime {
+                    moneyField("底薪", $baseText, unit: "元/月") { draft.baseSalary = $0 }
+                    moneyField("全勤", $bonusText, unit: "元/月") { draft.attendanceBonus = $0 }
+                    Text("每月按底薪 + 全勤算；请假一天按日薪（底薪 ÷ 21.75）扣，当月没有全勤。排班只记哪天上班。")
+                        .font(.app(11))
+                        .foregroundStyle(Theme.textMuted(scheme))
+                } else {
+                    moneyField("时薪", $hourlyText, unit: "元/小时") { draft.hourly = $0 }
+                }
+
+                HStack(spacing: 6) {
+                    Text("加班")
+                        .font(.app(13))
+                        .foregroundStyle(Theme.textSoft(scheme))
+                        .frame(width: 34, alignment: .leading)
+                    ForEach([1.0, 1.5, 2.0, 3.0], id: \.self) { r in
+                        let on = abs(draft.overtimeRate - r) < 0.01
+                        Button { draft.overtimeRate = r } label: {
+                            Text(WageStore.money(r) + "x")
+                                .font(.app(12, weight: on ? .semibold : .regular))
+                                .foregroundStyle(on ? Color.white : Theme.textMain(scheme))
+                                .padding(.horizontal, 11)
+                                .padding(.vertical, 6)
+                                .background(Capsule().fill(on ? app.settings.accentColor : Theme.softFillDeep))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+    }
+
+    private func moneyField(_ label: String, _ text: Binding<String>, unit: String,
+                            set: @escaping (Double) -> Void) -> some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(.app(13))
+                .foregroundStyle(Theme.textSoft(scheme))
+                .frame(width: 34, alignment: .leading)
+            TextField("0", text: text)
+                .keyboardType(.decimalPad)
+                .font(.app(16, weight: .medium))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(width: 120)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Theme.softFillDeep))
+                .onChange(of: text.wrappedValue) { _, v in set(Double(v) ?? 0) }
+            Text(unit)
+                .font(.app(13))
+                .foregroundStyle(Theme.textMuted(scheme))
+            Spacer(minLength: 0)
         }
     }
 
@@ -2382,6 +2637,8 @@ struct WageZoomImage: View {
 /// 发薪日：应发多少（上个月工资 × 比例）、实发多少，差多少（多了绿、少了红），为什么——文字和图
 struct WagePayCard: View {
     let date: Date
+    /// 点缩略图看大图
+    var onOpen: (String) -> Void = { _ in }
 
     @ObservedObject private var store = WageStore.shared
     @EnvironmentObject private var app: AppState
@@ -2445,6 +2702,8 @@ struct WagePayCard: View {
                 HStack(spacing: 8) {
                     ForEach(images, id: \.self) { n in
                         WageThumb(name: n, size: 54)
+                            .contentShape(Rectangle())
+                            .onTapGesture { onOpen(n) }
                             .overlay(alignment: .topTrailing) {
                                 Button {
                                     images.removeAll { $0 == n }
