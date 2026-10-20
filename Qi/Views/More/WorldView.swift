@@ -1945,7 +1945,7 @@ struct WorldView: View {
 
     private var modsSheet: some View {
         NavigationStack {
-            List {
+            QiList {
                 Section {
                     ForEach(WorldMods.all) { m in
                         Toggle(isOn: Binding(get: { world.modOn(m) }, set: { _ in world.toggleMod(m) })) {
@@ -2254,6 +2254,7 @@ struct WorldStorySheet: View {
             .buttonStyle(.plain)
         }
         .padding(22)
+        .background(WallpaperBackground())
         .interactiveDismissDisabled()
     }
 }
@@ -2270,7 +2271,7 @@ struct WorldGuideSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            QiList {
                 Section {
                     Picker("季节", selection: Binding<String>(
                         get: { world.save.seasonPick ?? "auto" },

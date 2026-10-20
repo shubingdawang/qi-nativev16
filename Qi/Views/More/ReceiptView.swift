@@ -626,6 +626,7 @@ struct ReceiptView: View {
                 .padding(.bottom, 30)
             }
             .background(Theme.pageBackground(.light).opacity(0.6))
+            .background(WallpaperBackground())
             .navigationTitle("小票")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -15,7 +15,7 @@ struct GroupSetupView: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            QiList {
                 Section {
                     TextField("群名", text: Binding(
                         get: { conversation?.title ?? "" },
@@ -133,7 +133,7 @@ struct GroupMemberFormView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            QiForm {
                 Section("这一位") {
                     // 头像：点一下从相册挑
                     HStack(spacing: 14) {

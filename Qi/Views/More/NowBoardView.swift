@@ -314,7 +314,7 @@ private struct PantryEditor: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            QiForm {
                 TextField("名字，比如：布洛芬", text: $item.name)
                     .disabled(!isNew)
                 Picker("种类", selection: $item.kind) {

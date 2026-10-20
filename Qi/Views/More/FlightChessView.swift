@@ -329,6 +329,7 @@ struct FlightChessView: View {
             TextEditor(text: $pasteText)
                 .font(.app(12))
                 .padding(10)
+                .scrollContentBackground(.hidden).background(WallpaperBackground())
                 .navigationTitle("粘贴棋盘")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {

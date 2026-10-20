@@ -261,6 +261,7 @@ struct MomentsView: View {
                 Spacer()
             }
             .padding(16)
+            .background(WallpaperBackground())
             .navigationTitle("回复")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -322,8 +323,8 @@ struct MomentsView: View {
         let f = DateFormatter()
         f.locale = Locale(identifier: "zh_CN")
         if cal.isDateInToday(d) { f.dateFormat = "今天 HH:mm" }
-        else if cal.isDateInYesterday(d) { f.dateFormat = "昨天 HH:mm" }
-        else { f.dateFormat = "M月d日 HH:mm" }
+        else if cal.isDateInYesterday(d) { f.dateFormat = "M月d日 EEEE 昨天 HH:mm" }
+        else { f.dateFormat = "M月d日 EEEE HH:mm" }
         return f.string(from: d)
     }
 }

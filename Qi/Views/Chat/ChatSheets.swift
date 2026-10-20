@@ -20,7 +20,7 @@ struct ConversationListView: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            QiList {
                 ForEach(list) { conv in
                     Button {
                         app.setActive(conv.id, for: space)
@@ -159,7 +159,7 @@ struct ModelPickerView: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            QiList {
                 if !app.hasUsableModel {
                     Section {
                         VStack(alignment: .leading, spacing: 8) {
@@ -284,7 +284,7 @@ struct SystemPromptView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            QiForm {
                 Section {
                     TextEditor(text: $text)
                         .frame(minHeight: 220)

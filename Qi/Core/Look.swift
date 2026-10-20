@@ -392,8 +392,8 @@ struct DayMark: View {
         .padding(.bottom, 2)
     }
 
-    /// 换天那一道：今天／昨天／几月几号 周几（隔年的把年份也写上），后面跟时间。
-    /// 同一天里那几道：只有时间。
+    /// 换天那一道：今天／几月几号 星期几（昨天的再加「昨天」，隔年的把年份也写上），后面跟时间。
+    /// 同一天里那几道：今天的只有时间，以前的也带上几月几号、星期几。
     ///
     /// ⚠️ 时间写**这一条真正的时刻**（14:07），不是整点（14:00）。
     /// 整点是我们判断要不要横线的依据，不是她要看的东西——
@@ -403,17 +403,20 @@ struct DayMark: View {
         f.locale = Locale(identifier: "zh_CN")
         f.dateFormat = "HH:mm"
         let clock = f.string(from: date)
-        if hourOnly { return clock }
-
         let cal = Calendar.current
-        if cal.isDateInToday(date) { return "今天 " + clock }
-        if cal.isDateInYesterday(date) { return "昨天 " + clock }
+        let today = cal.isDateInToday(date)
+        // 今天以外的日子：前面都带上几月几号、星期几（同一天后面那几道也带，翻回去才认得出是哪天）
+        if hourOnly && today { return clock }
+        if today { return "今天 " + clock }
         if cal.component(.year, from: date) == cal.component(.year, from: Date()) {
             f.dateFormat = "M月d日 EEEE"
         } else {
             f.dateFormat = "yyyy年M月d日 EEEE"
         }
-        return f.string(from: date) + " " + clock
+        let day = f.string(from: date)
+        if hourOnly { return day + " " + clock }
+        if cal.isDateInYesterday(date) { return day + " 昨天 " + clock }
+        return day + " " + clock
     }
 }
 

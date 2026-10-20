@@ -286,6 +286,7 @@ struct QuestView: View {
                 Spacer()
             }
             .padding(16)
+            .background(WallpaperBackground())
             .navigationTitle("打卡")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
