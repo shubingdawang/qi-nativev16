@@ -191,6 +191,8 @@ struct WorkDay: Codable, Hashable {
     var overtime: Int = 0
     /// 加班按几倍算（记加班那一下从设置里抄进来）
     var overtimeRate: Double = 1.5
+    /// 加班一小时多少钱（记加班那一下从设置里抄进来）。0 = 老记录，按倍率算
+    var overtimeHourly: Double = 0
     /// 请假：这一天不算工资
     var leave = false
 
@@ -209,7 +211,8 @@ struct WorkDay: Codable, Hashable {
 
     /// 按时薪算的加班费
     var overtimePay: Double {
-        (hourly * max(overtimeRate, 1) * overtimeHours * 100).rounded() / 100
+        let perHour = overtimeHourly > 0 ? overtimeHourly : hourly * max(overtimeRate, 1)
+        return (perHour * overtimeHours * 100).rounded() / 100
     }
 
     /// 这一天挣多少（按时薪算，兼职用）。**没排班、请假就是 0**，加班另加。
@@ -271,6 +274,7 @@ extension WorkDay {
         note = (try? c.decodeIfPresent(String.self, forKey: .note)) ?? ""
         overtime = (try? c.decodeIfPresent(Int.self, forKey: .overtime)) ?? 0
         overtimeRate = (try? c.decodeIfPresent(Double.self, forKey: .overtimeRate)) ?? 1.5
+        overtimeHourly = (try? c.decodeIfPresent(Double.self, forKey: .overtimeHourly)) ?? 0
         leave = (try? c.decodeIfPresent(Bool.self, forKey: .leave)) ?? false
     }
 }
@@ -334,8 +338,10 @@ struct WageSettings: Codable, Hashable {
     var baseSalary: Double = 0
     /// 全勤奖：这个月一天假都没请才有
     var attendanceBonus: Double = 0
-    /// 加班默认按几倍算
+    /// 加班默认按几倍算（老设置；填了加班时薪就用时薪）
     var overtimeRate: Double = 1.5
+    /// 加班一小时多少钱
+    var overtimeHourly: Double = 0
 
     /// 一个月按几天算日薪（21.75、26……公司不一样）
     var payDays: Double = 26
@@ -385,6 +391,7 @@ extension WageSettings {
         attendanceBonus = (try? c.decodeIfPresent(Double.self, forKey: .attendanceBonus)) ?? 0
         overtimeRate = (try? c.decodeIfPresent(Double.self, forKey: .overtimeRate)) ?? 1.5
         payDays = (try? c.decodeIfPresent(Double.self, forKey: .payDays)) ?? 26
+        overtimeHourly = (try? c.decodeIfPresent(Double.self, forKey: .overtimeHourly)) ?? 0
     }
 }
 
@@ -691,7 +698,7 @@ final class WageStore: ObservableObject {
     func setExtras(on d: Date, overtimeHours: Double?, leave: Bool?) {
         var day = self.day(d) ?? blankDay()
         if let h = overtimeHours {
-            if day.overtime == 0 { day.overtimeRate = settings.overtimeRate }
+            if day.overtime == 0 { day.overtimeRate = settings.overtimeRate; day.overtimeHourly = settings.overtimeHourly }
             day.overtime = max(0, Int(h.rounded(.down)) * 60)
         }
         if let l = leave { day.leave = l }
@@ -812,7 +819,8 @@ final class WageStore: ObservableObject {
 
     /// 全职那天的加班费：日薪 ÷ 8 当时薪
     func fullTimeOvertime(_ d: WorkDay) -> Double {
-        (settings.dailyWage / 8 * max(d.overtimeRate, 1) * d.overtimeHours * 100).rounded() / 100
+        let perHour = d.overtimeHourly > 0 ? d.overtimeHourly : settings.dailyWage / 8 * max(d.overtimeRate, 1)
+        return (perHour * d.overtimeHours * 100).rounded() / 100
     }
 
     /// 日历格子、总结里那一天的工资。全职：只有加班费和节假日多出来的；兼职：时薪 × 工时 + 加班

@@ -307,8 +307,17 @@ struct JournalPageView: View {
             .rotationEffect(.degrees(angle))
             // ⚠️ 手柄挂在**缩放和旋转之后**：这样它自己不跟着变大变斜，
             // 元素缩到很小的时候它还是那么大、还是正的，指头按得着。
-            .overlay(alignment: .bottomTrailing) {
-                if live { handle(e, center: center) }
+            // 位置按缩放、旋转之后的右下角算（缩放和旋转不改排版大小，直接挂在角上会停在原地）
+            .overlay {
+                if live {
+                    GeometryReader { g in
+                        let hw = g.size.width / 2 * scale + 4, hh = g.size.height / 2 * scale + 4
+                        let r = angle * .pi / 180
+                        handle(e, center: center)
+                            .position(x: g.size.width / 2 + hw * cos(r) - hh * sin(r),
+                                      y: g.size.height / 2 + hw * sin(r) + hh * cos(r))
+                    }
+                }
             }
             .position(center)
             .onTapGesture {
@@ -408,7 +417,6 @@ struct JournalPageView: View {
             .frame(width: 20, height: 20)
             // 感应区比看得见的那个圆大一圈——20 点的圆按起来是勉强的
             .contentShape(Circle().inset(by: -10))
-            .offset(x: 10, y: 10)
             .gesture(
                 DragGesture(coordinateSpace: .named(Self.canvasSpace))
                     .onChanged { v in
@@ -1213,8 +1221,7 @@ struct JournalPageView: View {
                     .frame(width: 46, height: 32)
                     .overlay(alignment: .bottomLeading) {
                         Text("字")
-                            .font(.system(size: 11, weight: .medium,
-                                          design: JournalElementView.design(t.font)))
+                            .font(JournalFonts.font(t.font, size: 11, weight: .medium))
                             .foregroundStyle(Color(hexString: t.ink) ?? .black)
                             .padding(4)
                     }

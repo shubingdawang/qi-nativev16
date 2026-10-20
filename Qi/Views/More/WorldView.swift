@@ -1054,14 +1054,18 @@ struct WorldView: View {
         }
         let w = CGFloat(n.data.width) * tile, h = CGFloat(n.data.height) * tile
         let fogged = !n.open || world.celebrating == n.region
+        // 隔着几座、又还没解锁的岛：只画地和云，上面的景不画（九座岛的景一起画太占内存）
+        let detail = n.direct || n.open
         return ZStack(alignment: .topLeading) {
             IslandGround(ground: ground, width: n.data.width, height: n.data.height, tile: tile,
                          season: world.season(of: n.region))
                 .equatable()
-            ForEach(n.data.decor) { d in
-                decorView(d, list: n.data.decor, season: world.season(of: n.region)).zIndex(Double(d.y) + 0.5)
+            if detail {
+                ForEach(n.data.decor) { d in
+                    decorView(d, list: n.data.decor, season: world.season(of: n.region)).zIndex(Double(d.y) + 0.5)
+                }
+                ForEach(n.data.objects) { o in objectView(o).zIndex(Double(o.y) + 0.6) }
             }
-            ForEach(n.data.objects) { o in objectView(o).zIndex(Double(o.y) + 0.6) }
         }
         .frame(width: w, height: h, alignment: .topLeading)
         .overlay { fog(n).opacity(fogged ? 1 : 0) }
@@ -1072,9 +1076,12 @@ struct WorldView: View {
 
     private func fog(_ n: Neighbor) -> some View {
         ZStack {
-            RoundedRectangle(cornerRadius: tile * 3, style: .continuous)
-                .fill(Color.white.opacity(0.86))
-                .blur(radius: tile * 0.9)
+            // ⚠️ 不用 blur：模糊要给每座岛开一整张离屏大图，九座岛一起画会把内存撑爆（进小岛就闪退）。
+            // 中间实、四周渐渐透明的径向渐变，看着一样是一团云
+            Ellipse()
+                .fill(RadialGradient(colors: [Color.white.opacity(0.9), Color.white.opacity(0.82), Color.white.opacity(0)],
+                                     center: .center, startRadius: 0, endRadius: max(1, tile * 14)))
+                .scaleEffect(1.15)
             VStack(spacing: tile * 0.35) {
                 Image(systemName: "lock.fill").font(.system(size: tile * 1.6))
                 Text(WorldRegions.name(n.region)).font(.app(tile * 0.9, weight: .semibold))

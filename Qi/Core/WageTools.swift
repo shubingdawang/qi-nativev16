@@ -341,7 +341,7 @@ enum WageTools {
         let mode = s.fullTime
             ? "全职：底薪 " + WageStore.money(s.baseSalary) + "，全勤 " + WageStore.money(s.attendanceBonus) + "；"
             : "兼职；"
-        return "设置：" + mode + "时薪 " + WageStore.money(s.hourly) + "，加班 " + WageStore.money(s.overtimeRate) + " 倍；"
+        return "设置：" + mode + "时薪 " + WageStore.money(s.hourly) + (s.overtimeHourly > 0 ? "，加班 " + WageStore.money(s.overtimeHourly) + " 元/小时；" : "，加班 " + WageStore.money(s.overtimeRate) + " 倍；")
             + parts.joined(separator: "；")
     }
 

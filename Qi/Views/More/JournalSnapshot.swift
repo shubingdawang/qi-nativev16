@@ -53,7 +53,7 @@ struct JournalElementView: View {
             case .text:
                 // 逐字设过颜色／大小的走 `JournalCharText`，没设过的它自己
                 // 退回一个 `Text`——那条快路上换行断词全归系统管。
-                JournalCharText(element: e, design: Self.design(e.pattern))
+                JournalCharText(element: e, design: Self.design(e.pattern), fontKey: e.pattern)
 
             case .rope:
                 JournalRope(color: e.color)

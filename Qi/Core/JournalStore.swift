@@ -350,7 +350,7 @@ enum JournalKit {
 
     /// 字体。走 `pattern`（文字本来不用这个字段）
     static let fonts: [(String, String)] = [
-        ("宋体", ""), ("黑体", "sans"), ("等宽", "mono"), ("圆体", "round")
+        ("宋体", ""), ("黑体", "sans"), ("楷体", "kai"), ("圆体", "round"), ("等宽", "mono")
     ]
 
     /// 胶带的花纹。同样是画出来的，所以换个颜色就是另一卷。

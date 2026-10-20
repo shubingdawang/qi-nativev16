@@ -168,7 +168,8 @@ struct ClawdRigView: View {
 
     /// 穿着她画的、要把眼睛露在外面的衣服（睡着、躺着不叠衣服，照原样）
     private var eyesOnCloth: Bool {
-        mood != .sleeping && mood != .lying && CustomWearStore.shared.eyesOnTop(wornIDs)
+        mood != .sleeping && mood != .lying
+            && (CustomWearStore.shared.eyesOnTop(wornIDs) || ClawdRig.wearsEyes(wornIDs))
     }
 
     /// 我们自己拼的那只：手臂能转、能举家具、能穿戴。
@@ -656,6 +657,9 @@ enum ClawdRig {
     nonisolated(unsafe) private static var eyeCache: [Int: PixelSprite] = [:]
 
     /// 眼睛（`k`）换成身子的颜色：眼睛另外画在衣服上面的时候用
+    /// 戴着衣柜里的眼睛样式（`eyes_*`）：身子那层不画原来那双眼睛，新眼睛整张叠上去
+    static func wearsEyes(_ ids: [String]) -> Bool { ids.contains { $0.hasPrefix("eyes_") } }
+
     static func noEyes(_ s: PixelSprite) -> PixelSprite {
         let key = s.key
         if let hit = noEyeCache[key] { return hit }
@@ -1078,7 +1082,7 @@ enum ClawdRig {
     /// ⚠️ **穿衣服有顺序**（她说的）：贴身的衬衫 → 背带裤、西装套在外面 → **领带在最前面** →
     /// 围巾绕在外套外面 → 包的带子斜挎在所有衣服上面 → 眼镜 → 帽子。
     /// 鞋子在最底下（跟上面几件不重叠，先画后画都行）。
-    static let wearOrder: [WearSlot] = [.feet, .body, .outer, .neck, .scarf, .back, .eyes, .cheek, .face, .head]
+    static let wearOrder: [WearSlot] = [.body, .outer, .feet, .neck, .scarf, .back, .eyes, .cheek, .face, .head]
 
     /// 图纸多少格见方。**穿戴那批图也是按这个画的**
     /// （见 `scripts/wear_art.py`）。
@@ -1209,24 +1213,29 @@ extension ClawdRig {
     @MainActor private static var strippedCache: [String: UIImage] = [:]
 
     /// 读出一张图的 RGBA
+    /// ⚠️ 指针只在 `withUnsafeMutableBytes` 里面有效：画布的建、画、取都得在里面做完
     private static func rgba(_ img: UIImage) -> (w: Int, h: Int, px: [UInt8])? {
         guard let cg = img.cgImage else { return nil }
         let w = cg.width, h = cg.height
         var px = [UInt8](repeating: 0, count: w * h * 4)
-        guard let ctx = CGContext(data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
-                                  space: CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
-        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
-        return (w, h, px)
+        let ok = px.withUnsafeMutableBytes { buf -> Bool in
+            guard let ctx = CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+            return true
+        }
+        return ok ? (w, h, px) : nil
     }
 
     private static func image(_ w: Int, _ h: Int, _ px: [UInt8]) -> UIImage? {
         var px = px
-        guard let ctx = CGContext(data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
-                                  space: CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
-              let cg = ctx.makeImage() else { return nil }
-        return UIImage(cgImage: cg)
+        let cg: CGImage? = px.withUnsafeMutableBytes { buf in
+            CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                      space: CGColorSpaceCreateDeviceRGB(),
+                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?.makeImage()
+        }
+        return cg.map { UIImage(cgImage: $0) }
     }
 
     /// 身上那张去掉袖子（抬手的画法用）。不是上衣就原样

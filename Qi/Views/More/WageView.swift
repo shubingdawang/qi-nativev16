@@ -890,7 +890,8 @@ struct WageSummaryCard: View {
                 if day.overtime > 0 && !day.leave {
                     row("加班") {
                         value(String(Int(day.overtimeHours)) + " 小时 · "
-                              + WageStore.money(day.overtimeRate) + "x")
+                              + (day.overtimeHourly > 0 ? WageStore.money(day.overtimeHourly) + " 元/小时"
+                                 : WageStore.money(day.overtimeRate) + "x"))
                     }
                 }
                 if Calendar.current.component(.day, from: date) == 15,
@@ -1163,6 +1164,8 @@ struct WageDayEditor: View {
     @State private var hourlyText = ""
     /// 15 号那天填的当月绩效
     @State private var perfText = ""
+    /// 这一天的加班时薪
+    @State private var overtimeText = ""
 
     // 记账那两个方格子
     // ⚠️ 这两个格子的字放在盒子里、由格子自己管，不放在这一页的 @State 上：
@@ -1285,6 +1288,7 @@ struct WageDayEditor: View {
             .onAppear {
                 hourlyText = WageStore.money(day.hourly)
                 perfText = store.performance(for: date).map(WageStore.money) ?? ""
+                overtimeText = day.overtimeHourly > 0 ? WageStore.money(day.overtimeHourly) : ""
                 noteBox.text = day.note
                 let book = AccountBook.shared
                 usageList = book.usageItems(on: date)
@@ -1534,23 +1538,22 @@ struct WageDayEditor: View {
                 Spacer(minLength: 0)
             }
             if day.overtime > 0 {
-                HStack(spacing: 6) {
-                    Text("倍率").font(.app(13)).foregroundStyle(Theme.textSoft(scheme))
-                    ForEach([1.0, 1.5, 2.0, 3.0], id: \.self) { r in
-                        let on = abs(day.overtimeRate - r) < 0.01
-                        Button { day.overtimeRate = r } label: {
-                            Text(WageStore.money(r) + "x")
-                                .font(.app(12, weight: on ? .semibold : .regular))
-                                .foregroundStyle(on ? Color.white : Theme.textMain(scheme))
-                                .padding(.horizontal, 11)
-                                .padding(.vertical, 6)
-                                .background(Capsule().fill(on ? app.settings.accentColor : Theme.softFillDeep))
-                        }
-                        .buttonStyle(.plain)
-                    }
+                HStack(spacing: 8) {
+                    Text("加班时薪").font(.app(13)).foregroundStyle(Theme.textSoft(scheme))
+                    TextField(full ? WageStore.money(store.settings.dailyWage / 8) : WageStore.money(day.hourly),
+                              text: $overtimeText)
+                        .keyboardType(.decimalPad)
+                        .font(.app(14))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .frame(width: 90)
+                        .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(Theme.softFillDeep))
+                        .onChange(of: overtimeText) { _, v in day.overtimeHourly = Double(v) ?? 0 }
+                    Text("元/小时").font(.app(12)).foregroundStyle(Theme.textMuted(scheme))
                     Spacer(minLength: 0)
                 }
-                Text((full ? "按日薪 ÷ 8 当时薪算" : "按这一天的时薪算") + "，只算整小时。")
+                Text("只计整小时，不足一小时不计。")
                     .font(.app(10.5))
                     .foregroundStyle(Theme.textMuted(scheme))
             }
@@ -1560,7 +1563,13 @@ struct WageDayEditor: View {
     }
 
     private func setOvertime(_ m: Int) {
-        if day.overtime == 0 { day.overtimeRate = store.settings.overtimeRate }
+        if day.overtime == 0 {
+            day.overtimeRate = store.settings.overtimeRate
+            if day.overtimeHourly == 0 && store.settings.overtimeHourly > 0 {
+                day.overtimeHourly = store.settings.overtimeHourly
+                overtimeText = WageStore.money(store.settings.overtimeHourly)
+            }
+        }
         withAnimation(.easeOut(duration: 0.15)) { day.overtime = min(24 * 60, max(0, m)) }
         if app.settings.haptics { UISelectionFeedbackGenerator().selectionChanged() }
     }
@@ -2081,6 +2090,8 @@ struct WageSettingsSheet: View {
         ? WageStore.money(WageStore.shared.settings.baseSalary) : ""
     @State private var bonusText = WageStore.shared.settings.attendanceBonus > 0
         ? WageStore.money(WageStore.shared.settings.attendanceBonus) : ""
+    @State private var overtimeHourlyText = WageStore.shared.settings.overtimeHourly > 0
+        ? WageStore.money(WageStore.shared.settings.overtimeHourly) : ""
     @State private var adding = false
     @State private var newName = ""
 
@@ -2198,25 +2209,7 @@ struct WageSettingsSheet: View {
                     moneyField("时薪", $hourlyText, unit: "元/小时") { draft.hourly = $0 }
                 }
 
-                HStack(spacing: 6) {
-                    Text("加班")
-                        .font(.app(13))
-                        .foregroundStyle(Theme.textSoft(scheme))
-                        .frame(width: 34, alignment: .leading)
-                    ForEach([1.0, 1.5, 2.0, 3.0], id: \.self) { r in
-                        let on = abs(draft.overtimeRate - r) < 0.01
-                        Button { draft.overtimeRate = r } label: {
-                            Text(WageStore.money(r) + "x")
-                                .font(.app(12, weight: on ? .semibold : .regular))
-                                .foregroundStyle(on ? Color.white : Theme.textMain(scheme))
-                                .padding(.horizontal, 11)
-                                .padding(.vertical, 6)
-                                .background(Capsule().fill(on ? app.settings.accentColor : Theme.softFillDeep))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    Spacer(minLength: 0)
-                }
+                moneyField("加班", $overtimeHourlyText, unit: "元/小时") { draft.overtimeHourly = $0 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)

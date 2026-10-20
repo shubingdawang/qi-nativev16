@@ -260,8 +260,8 @@ struct AppearanceView: View {
             .padding(.vertical, 11)
             if app.settings.splashOn {
                 Picker("", selection: $app.settings.splashStyle) {
-                    Text("枝头").tag("perch")
                     Text("雾窗").tag("window")
+                    Text("枝头").tag("perch")
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal, 16)

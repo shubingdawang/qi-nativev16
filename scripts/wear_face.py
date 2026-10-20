@@ -44,7 +44,10 @@ def eyes(rows_l, rows_r=None, pal=None, mirror_right=True):
     pal = pal or {"k": INK, "w": WHITE}
 
     def f(s):
-        cover(s)
+        # 原来那双眼睛在 App 里由身子那层去掉（`ClawdRig.wearsEyes`），这里不再盖色块：
+        # 盖的颜色跟他真正的身子颜色差一点，就会露出一块橘色方块
+        if "--preview" in sys.argv:
+            cover(s)
         stamp(s, rows_l, EYES[0][0], EYES[0][1], pal)
         stamp(s, rows_r or rows_l, EYES[1][0], EYES[1][1], pal, mirror=mirror_right and rows_r is None)
     return f

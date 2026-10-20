@@ -2535,7 +2535,8 @@ struct ClawdView: View {
                              sleeve: ClawdRig.sleeve(wornIDs, left: true))
                 ClawdArmView(onLeft: false, angle: plan.rightArm, scale: scale,
                              sleeve: ClawdRig.sleeve(wornIDs, left: false))
-                PixelSpriteView(sprite: ClawdRig.stripArms(body), scale: scale)
+                PixelSpriteView(sprite: ClawdRig.stripArms(ClawdRig.wearsEyes(wornIDs) ? ClawdRig.noEyes(body) : body),
+                                scale: scale)
             }
             .frame(width: cols * scale, height: rows * scale, alignment: .topLeading)
         }
@@ -2579,7 +2580,8 @@ struct ClawdView: View {
             } else if pose == .none {
                 // 穿着要露眼睛的衣服：身子这层不画眼睛，眼睛只在衣服上面画一次（不然走路时眼睛挪了会露出两双）
                 let body = sprites[min(frame, sprites.count - 1)].0
-                PixelSpriteView(sprite: CustomWearStore.shared.eyesOnTop(wornIDs) && mood != .sleeping && mood != .lying
+                PixelSpriteView(sprite: (CustomWearStore.shared.eyesOnTop(wornIDs) || ClawdRig.wearsEyes(wornIDs))
+                                && mood != .sleeping && mood != .lying
                                 ? ClawdRig.noEyes(body) : body, scale: scale)
             } else {
                 waving

@@ -44,10 +44,11 @@ struct BookEntry: TimelineEntry {
 struct BookProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> BookEntry { BookEntry(date: Date(), snap: Self.sample) }
 
+    /// 快照要马上给：用上一次存下的，不现场去取（现场取慢了系统就一直画灰色占位）
     func snapshot(for configuration: BookWidgetConfig, in context: Context) async -> BookEntry {
         if context.isPreview { return BookEntry(date: Date(), snap: Self.cached() ?? Self.sample) }
-        let r = await Self.load(code: configuration.code)
-        return BookEntry(date: Date(), snap: r.snap, why: r.why)
+        return BookEntry(date: Date(), snap: Self.cached(),
+                         why: Self.relayURL(configuration.code) == nil ? "长按小组件 → 编辑 → 填同步码" : "正在同步…")
     }
 
     func timeline(for configuration: BookWidgetConfig, in context: Context) async -> Timeline<BookEntry> {
@@ -73,14 +74,35 @@ struct BookProvider: AppIntentTimelineProvider {
         guard let url = relayURL(code) else {
             return (cached(), local + " · 还没填同步码（长按小组件 → 编辑）")
         }
+        // ⚠️ 整次最多等 8 秒。`timeoutInterval` 只管「多久没收到数据」，连接卡着可以一直拖，
+        // 拖过系统给小组件的时间，它就一直停在灰色占位上
+        let r = await withTaskGroup(of: (BookWidgetSnapshot?, String)?.self) { g -> (BookWidgetSnapshot?, String)? in
+            g.addTask { await fetch(url) }
+            g.addTask {
+                try? await Task.sleep(nanoseconds: 8_000_000_000)
+                return nil
+            }
+            let first = await g.next() ?? nil
+            g.cancelAll()
+            return first
+        }
+        guard let r else { return (cached(), "小屋 8 秒没回应（网络慢或连不上），显示的是上一次的") }
+        return r
+    }
+
+    private static func fetch(_ url: URL) async -> (BookWidgetSnapshot?, String) {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.timeoutIntervalForRequest = 7
+        cfg.timeoutIntervalForResource = 8
+        cfg.waitsForConnectivity = false
+        let session = URLSession(configuration: cfg)
         var req = URLRequest(url: url)
-        req.timeoutInterval = 15
         req.cachePolicy = .reloadIgnoringLocalCacheData
         do {
-            let (data, resp) = try await URLSession.shared.data(for: req)
+            let (data, resp) = try await session.data(for: req)
             let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
             guard status == 200, let s = try? JSONDecoder().decode(BookWidgetSnapshot.self, from: data) else {
-                return (cached(), status == 404 ? "小屋上还没有，打开栖记一笔" : "小屋返回 \(status)")
+                return (cached(), status == 404 ? "小屋上还没有这份数据：打开栖记一笔再看" : "小屋返回 \(status)")
             }
             UserDefaults.standard.set(data, forKey: "bookRelayCache")
             return (s, "")

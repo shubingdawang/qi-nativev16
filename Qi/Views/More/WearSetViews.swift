@@ -27,8 +27,11 @@ struct WearSetPreview: View {
                     ctx.fill(r(2, 6, 11, 7), with: .color(Self.skin))
                     ctx.fill(r(0, 9, 2, 2), with: .color(Self.skin))
                     ctx.fill(r(13, 9, 2, 2), with: .color(Self.skin))
-                    ctx.fill(r(4, 7, 1, 2), with: .color(.black))
-                    ctx.fill(r(10, 7, 1, 2), with: .color(.black))
+                    // 套装里有眼睛样式的话，原来那双不画
+                    if !ClawdRig.wearsEyes(pieces) {
+                        ctx.fill(r(4, 7, 1, 2), with: .color(.black))
+                        ctx.fill(r(10, 7, 1, 2), with: .color(.black))
+                    }
                 }
                 ForEach(ordered, id: \.self) { id in
                     if let img = FurnitureCatalog.wornImage(of: id) {

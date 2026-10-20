@@ -113,6 +113,8 @@ struct JournalCharText: View {
     var base: CGFloat = 17
     var weight: Font.Weight = .medium
     var design: Font.Design = .serif
+    /// 手帐字体的键（见 `JournalFonts`）。nil = 按 `design` 走系统字体
+    var fontKey: String? = nil
     var maxWidth: CGFloat = 220
     /// 编辑的时候点中的是第几个字。`nil` = 不在编辑
     var focus: Int?
@@ -125,6 +127,14 @@ struct JournalCharText: View {
     /// 但没有什么拦着她往里贴一整段。所以给个上限——
     /// 超过就退回整块画，宁可失去逐字上色，也不能让这一页卡住。
     private static let charLimit = 120
+
+    /// 下载中的字体下好了要重画
+    @ObservedObject private var fonts = JournalFonts.shared
+
+    private func face(_ size: CGFloat) -> Font {
+        if let k = fontKey { return JournalFonts.font(k, size: size * Theme.fontScale, weight: weight) }
+        return .app(size, weight: weight, design: design)
+    }
 
     var body: some View {
         let n = element.text.count
@@ -139,8 +149,7 @@ struct JournalCharText: View {
                         Color.clear.frame(width: maxWidth, height: 1)
                     } else {
                         Text(String(ch))
-                            .font(.app(base * element.sizeAt(i),
-                                       weight: weight, design: design))
+                            .font(face(base * element.sizeAt(i)))
                             .foregroundStyle(element.inkAt(i))
                             .background {
                                 if focus == i {
@@ -158,7 +167,7 @@ struct JournalCharText: View {
             // 快路：没逐字设过就照旧一个 Text 画完。
             // 换行、断词、标点避头尾全归系统管，比我们算得好。
             Text(element.text)
-                .font(.app(base, weight: weight, design: design))
+                .font(face(base))
                 .foregroundStyle(element.color)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
