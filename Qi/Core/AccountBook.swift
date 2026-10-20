@@ -573,10 +573,60 @@ final class AccountBook: ObservableObject {
         snap.accentHex = WakeEngine.shared.app?.settings.accentHex ?? "C47A5A"
         snap.updated = now
         guard let data = try? JSONEncoder().encode(snap) else { return }
-        if SharedKeychain.write(data, key: "book") {
-            WidgetCenter.shared.reloadTimelines(ofKind: "QiBook")
+        let local = SharedKeychain.write(data, key: "book") && SharedKeychain.lastStatus == 0
+        if local { WidgetCenter.shared.reloadTimelines(ofKind: "QiBook") }
+        widgetStatus = local ? "钥匙串正常" : SharedKeychain.diagnosis
+        // 钥匙串不通的时候小组件凭同步码去小屋取（见 BookWidget 的 `BookWidgetConfig`）
+        guard let app = WakeEngine.shared.app, let ep = HouseSync.endpoint(app),
+              let url = Self.relayURL(base: ep.0) else {
+            if !local { widgetStatus += " · 没连小屋，小组件取不到" }
+            return
         }
-        widgetStatus = SharedKeychain.diagnosis
+        var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        parts?.queryItems = [URLQueryItem(name: "k", value: ep.1)]
+        guard let put = parts?.url else { return }
+        Task { @MainActor in
+            var req = URLRequest(url: put)
+            req.httpMethod = "PUT"
+            req.timeoutInterval = 20
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = data
+            do {
+                let (_, resp) = try await URLSession.shared.data(for: req)
+                let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                if code == 200 {
+                    WidgetCenter.shared.reloadTimelines(ofKind: "QiBook")
+                    let f = DateFormatter()
+                    f.dateFormat = "HH:mm"
+                    self.widgetStatus = (local ? "钥匙串正常" : "走小屋") + " · " + f.string(from: Date()) + " 已同步"
+                } else {
+                    self.widgetStatus += " · 小屋返回 \(code)"
+                }
+            } catch {
+                self.widgetStatus += " · 连不上小屋"
+            }
+        }
+    }
+
+    /// 小组件同步码：第一次用时随机生成一个，之后一直是它
+    static var widgetCode: String {
+        let key = "bookWidgetCode"
+        if let c = UserDefaults.standard.string(forKey: key), c.count == 32 { return c }
+        let c = (0..<16).map { _ in String(format: "%02x", UInt8.random(in: 0...255)) }.joined()
+        UserDefaults.standard.set(c, forKey: key)
+        return c
+    }
+
+    static func relayURL(base: URL) -> URL? {
+        URL(string: base.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            + "/widget/" + widgetCode)
+    }
+
+    /// 给她复制到小组件里的那一串（不带钥匙，只能读）
+    var widgetSyncText: String? {
+        guard let app = WakeEngine.shared.app, let ep = HouseSync.endpoint(app),
+              let url = Self.relayURL(base: ep.0) else { return nil }
+        return url.absoluteString.replacingOccurrences(of: "https://", with: "")
     }
 
     // MARK: 给他看的

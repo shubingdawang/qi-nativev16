@@ -245,7 +245,7 @@ enum HouseSync {
     /// → base `https://…`，token 是 `k`。
     /// ⚠️ 钥匙放在请求头里的那种拿不到（`MCPServer` 不存请求头），
     /// 那种情况下只能不拉——**宁可不拉，也不能拿个空钥匙去撞**。
-    private static func endpoint(_ app: AppState) -> (URL, String)? {
+    static func endpoint(_ app: AppState) -> (URL, String)? {
         guard let server = app.mcpServers.first(where: { s in
             s.usable && s.enabledTools.contains { AppState.memoryToolNames.contains($0.name) }
         }) else { return nil }

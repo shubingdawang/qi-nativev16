@@ -153,6 +153,7 @@ struct AccountBookView: View {
     @State private var dayShown: Date?
     @State private var editing: ExpenseRef?
     @State private var receipt = false
+    @State private var codeCopied = false
     @State private var preview: String?
     @State private var editingLevels = false
 
@@ -173,12 +174,7 @@ struct AccountBookView: View {
                 addCard
                 todaySection
                 MoneyCard(accent: accent)
-                if !book.widgetStatus.isEmpty {
-                    Text("小组件同步：" + book.widgetStatus)
-                        .font(.app(10))
-                        .foregroundStyle(muted.opacity(0.7))
-                        .frame(maxWidth: .infinity)
-                }
+                widgetSyncRow
             }
 
             if let d = dayShown {
@@ -279,6 +275,42 @@ struct AccountBookView: View {
     private var elapsedDays: Int {
         if isThisMonth { return cal.component(.day, from: Date()) }
         return cal.range(of: .day, in: .month, for: month)?.count ?? 30
+    }
+
+    /// 最底下：小组件同步码（复制了粘到小组件的设置里）+ 上一次同步的结果
+    private var widgetSyncRow: some View {
+        VStack(spacing: 6) {
+            if let text = book.widgetSyncText {
+                Button {
+                    UIPasteboard.general.string = text
+                    withAnimation { codeCopied = true }
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 1_600_000_000)
+                        withAnimation { codeCopied = false }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: codeCopied ? "checkmark" : "square.on.square")
+                        Text(codeCopied ? "已复制" : "复制小组件同步码")
+                    }
+                    .font(.app(11.5, weight: .medium))
+                    .foregroundStyle(accent)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(accent.opacity(0.1)))
+                }
+                .buttonStyle(.plain)
+                Text("长按桌面上的记账小组件 → 编辑小组件 → 粘贴到「同步码」")
+                    .font(.app(10))
+                    .foregroundStyle(muted.opacity(0.8))
+            }
+            if !book.widgetStatus.isEmpty {
+                Text("小组件同步：" + book.widgetStatus)
+                    .font(.app(10))
+                    .foregroundStyle(muted.opacity(0.7))
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private var summaryCard: some View {

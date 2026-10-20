@@ -1,11 +1,26 @@
 import WidgetKit
 import SwiftUI
+import AppIntents
+
+/// 小组件的设置：同步码（App 记账页最底下「小组件同步码」那里复制）。
+///
+/// 她的签名不带钥匙串共享，App 写的那份小组件读不到（-34018），
+/// 所以 App 另外把汇总放到小屋上，小组件凭这个码去取。
+struct BookWidgetConfig: WidgetConfigurationIntent {
+    static var title: LocalizedStringResource = "记账"
+    static var description = IntentDescription("在栖的记账页最底下复制同步码，粘贴到这里。")
+
+    @Parameter(title: "同步码")
+    var code: String?
+
+    init() {}
+}
 
 /// 桌面上的记账小组件：小的看本月和今天，中的多几个分类，大的再加一张按天深浅的日历。
 /// 数据是 App 记完账写进钥匙串的那份（见 `BookWidgetShared.swift`）。
 struct BookWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "QiBook", provider: BookProvider()) { entry in
+        AppIntentConfiguration(kind: "QiBook", intent: BookWidgetConfig.self, provider: BookProvider()) { entry in
             BookWidgetView(entry: entry)
                 // 点一下直接打开记账那页
                 .widgetURL(URL(string: "qiapp://book"))
@@ -26,27 +41,64 @@ struct BookEntry: TimelineEntry {
     var why = ""
 }
 
-struct BookProvider: TimelineProvider {
+struct BookProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> BookEntry { BookEntry(date: Date(), snap: Self.sample) }
 
-    func getSnapshot(in context: Context, completion: @escaping (BookEntry) -> Void) {
-        completion(BookEntry(date: Date(), snap: Self.load() ?? (context.isPreview ? Self.sample : nil)))
+    func snapshot(for configuration: BookWidgetConfig, in context: Context) async -> BookEntry {
+        if context.isPreview { return BookEntry(date: Date(), snap: Self.cached() ?? Self.sample) }
+        let r = await Self.load(code: configuration.code)
+        return BookEntry(date: Date(), snap: r.snap, why: r.why)
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<BookEntry>) -> Void) {
+    func timeline(for configuration: BookWidgetConfig, in context: Context) async -> Timeline<BookEntry> {
         let now = Date()
         let cal = Calendar.current
         // 过了零点「今天」要清零：零点再来一次
         let midnight = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now)) ?? now.addingTimeInterval(3600)
-        let snap = Self.load()
-        let why = SharedKeychain.diagnosis
-        let entries = [BookEntry(date: now, snap: snap, why: why), BookEntry(date: midnight, snap: snap, why: why)]
-        completion(Timeline(entries: entries, policy: .after(midnight.addingTimeInterval(3600))))
+        let r = await Self.load(code: configuration.code)
+        let entries = [BookEntry(date: now, snap: r.snap, why: r.why),
+                       BookEntry(date: midnight, snap: r.snap, why: r.why)]
+        // 走小屋的那种隔半小时再取一次（App 记完账也会叫它马上刷新）
+        let next = configuration.code?.isEmpty == false ? min(midnight, now.addingTimeInterval(30 * 60)) : midnight.addingTimeInterval(3600)
+        return Timeline(entries: entries, policy: .after(next))
     }
 
-    static func load() -> BookWidgetSnapshot? {
-        guard let data = SharedKeychain.read(key: "book") else { return nil }
-        return try? JSONDecoder().decode(BookWidgetSnapshot.self, from: data)
+    /// 先读钥匙串；读不到再凭同步码去小屋取；都不行用上一次取到的
+    static func load(code: String?) async -> (snap: BookWidgetSnapshot?, why: String) {
+        if let data = SharedKeychain.read(key: "book"),
+           let s = try? JSONDecoder().decode(BookWidgetSnapshot.self, from: data) {
+            return (s, "")
+        }
+        let local = SharedKeychain.diagnosis
+        guard let url = relayURL(code) else {
+            return (cached(), local + " · 还没填同步码（长按小组件 → 编辑）")
+        }
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 15
+        req.cachePolicy = .reloadIgnoringLocalCacheData
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            guard status == 200, let s = try? JSONDecoder().decode(BookWidgetSnapshot.self, from: data) else {
+                return (cached(), status == 404 ? "小屋上还没有，打开栖记一笔" : "小屋返回 \(status)")
+            }
+            UserDefaults.standard.set(data, forKey: "bookRelayCache")
+            return (s, "")
+        } catch {
+            return (cached(), "连不上小屋：" + error.localizedDescription)
+        }
+    }
+
+    /// 同步码可以是整条地址，也可以只有「域名/widget/码」
+    static func relayURL(_ code: String?) -> URL? {
+        guard var s = code?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
+        if !s.hasPrefix("http") { s = "https://" + s }
+        return URL(string: s)
+    }
+
+    static func cached() -> BookWidgetSnapshot? {
+        guard let d = UserDefaults.standard.data(forKey: "bookRelayCache") else { return nil }
+        return try? JSONDecoder().decode(BookWidgetSnapshot.self, from: d)
     }
 
     static let sample: BookWidgetSnapshot = {
