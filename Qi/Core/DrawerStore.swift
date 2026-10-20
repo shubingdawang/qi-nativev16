@@ -26,6 +26,10 @@ struct DrawerItem: Codable, Identifiable, Hashable {
     var unlocked = false
     /// 猜错了几次（三次以后给一个字的提示）
     var tries = 0
+    /// 贺卡：封面那行字、样式（金箔 / 墨金 / 绿金 / 银箔 / 玫瑰金 / 烫蓝）、封面图案
+    var title: String = ""
+    var style: String = ""
+    var motif: String = ""
 }
 
 // 谜语那几样是后加的：老的 drawer.json 里没有这几个键，不写容错解码整个抽屉会读不出来
@@ -45,6 +49,9 @@ extension DrawerItem {
         answer = (try? c.decodeIfPresent(String.self, forKey: .answer)) ?? ""
         unlocked = (try? c.decodeIfPresent(Bool.self, forKey: .unlocked)) ?? false
         tries = (try? c.decodeIfPresent(Int.self, forKey: .tries)) ?? 0
+        title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
+        style = (try? c.decodeIfPresent(String.self, forKey: .style)) ?? ""
+        motif = (try? c.decodeIfPresent(String.self, forKey: .motif)) ?? ""
     }
 }
 
@@ -100,7 +107,7 @@ enum DrawerMarker {
 
     static let open = "[[抽屉:"
     static let close = "[[/抽屉]]"
-    private static let pattern = #"\[\[抽屉[:：]\s*(便签|画|谜|text|pixel|riddle)\s*\]\]([\s\S]*?)\[\[/抽屉\]\]"#
+    private static let pattern = #"\[\[抽屉[:：]\s*(便签|画|谜|贺卡|text|pixel|riddle|card)\s*\]\]([\s\S]*?)\[\[/抽屉\]\]"#
     nonisolated(unsafe) private static let regex = try? NSRegularExpression(pattern: pattern)
 
     /// 收尾那一下用：剥掉、认出来。返回干净正文 + 这一轮留下的东西
@@ -115,6 +122,8 @@ enum DrawerMarker {
                 items.append(p)
             } else if kind == "谜" || kind == "riddle", let r = riddle(body) {
                 items.append(r)
+            } else if kind == "贺卡" || kind == "card", let c = card(body) {
+                items.append(c)
             } else if !body.isEmpty {
                 // 画坏了（JSON 读不出）就当便签存原文，不丢
                 items.append(DrawerItem(kind: "note", text: String(body.prefix(2000))))
@@ -146,6 +155,31 @@ enum DrawerMarker {
             break
         }
         return t
+    }
+
+    /// 封面：…… / 样式：…… / 图案：…… / 剩下的是里面写的话。没写话就不算
+    private static func card(_ body: String) -> DrawerItem? {
+        var title = "", style = "", motif = ""
+        var rest: [String] = []
+        for line in body.components(separatedBy: .newlines) {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if let r = t.range(of: #"^(封面|标题)[:：]"#, options: .regularExpression) {
+                title = String(t[r.upperBound...]).trimmingCharacters(in: .whitespaces)
+            } else if let r = t.range(of: #"^样式[:：]"#, options: .regularExpression) {
+                style = String(t[r.upperBound...]).trimmingCharacters(in: .whitespaces)
+            } else if let r = t.range(of: #"^图案[:：]"#, options: .regularExpression) {
+                motif = String(t[r.upperBound...]).trimmingCharacters(in: .whitespaces)
+            } else {
+                rest.append(line)
+            }
+        }
+        let note = rest.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !note.isEmpty else { return nil }
+        var item = DrawerItem(kind: "card", text: String(note.prefix(3000)))
+        item.title = String(title.prefix(20))
+        item.style = String(style.prefix(10))
+        item.motif = String(motif.prefix(10))
+        return item
     }
 
     /// 谜面：…… / 谜底：…… / 剩下的是拆开以后看到的话。缺谜面或谜底就不上锁
