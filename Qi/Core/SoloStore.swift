@@ -86,7 +86,7 @@ final class SoloStore: ObservableObject {
         notes = Storage.load(DesireNotesFile.self, from: "desire-notes.json")?.text ?? ""
     }
 
-    static func label(_ mode: String) -> String {
+    nonisolated static func label(_ mode: String) -> String {
         switch mode {
         case "recall": return "回味"
         case "fantasy": return "自己想"
