@@ -65,6 +65,8 @@ struct QiApp: App {
                 app.sweepAllStuck()
                 // 跨了一天的话小组件上的「今天」要换
                 AccountBook.shared.pushWidget()
+                // 手帐下好过的字体每次启动要重新启用
+                JournalFonts.shared.activateSaved()
                 // 他定的查岗到点了还没交：打开 App 就弹查岗页
                 if CheckPlan.due != nil { Notifier.shared.openCheckIn = true }
                 // 「开两小时」那种到点了自己松开，别等她想起来再去关。

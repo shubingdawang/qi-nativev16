@@ -726,6 +726,10 @@ struct JournalPageView: View {
             if let styles = Self.styles(for: e.kind) {
                 styleBar(e, styles)
             }
+            // 宋体、楷体、圆体要下载：下没下好、失败了能重试
+            if e.kind == .text, JournalFonts.downloadable.contains(where: { $0.0 == e.pattern }) {
+                JournalFontStatusRow(key: e.pattern)
+            }
             // 那几样光看名字猜不出来的，选中的时候在底下说一句。
             //
             // 她报的：「剪贴不知道是什么作用，目前看起来作用跟照片差不多。」
