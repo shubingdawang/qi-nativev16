@@ -115,10 +115,11 @@ enum SharedKeychain {
         return lastStatus == errSecSuccess || lastBoard == "备用路已写"
     }
 
-    static func read(key: String) -> Data? {
+    /// board = false：钥匙串读不到也不去读备用剪贴板（小组件里用，剪贴板在那儿会卡住）
+    static func read(key: String, board: Bool = true) -> Data? {
         lastStatus = 0
         lastBoard = ""
-        guard let group else { lastGroup = ""; if lastStatus == 0 { lastStatus = -1 }; return boardRead(key: key) }
+        guard let group else { lastGroup = ""; if lastStatus == 0 { lastStatus = -1 }; return board ? boardRead(key: key) : nil }
         lastGroup = group
         let q: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -129,7 +130,7 @@ enum SharedKeychain {
         ]
         var result: CFTypeRef?
         lastStatus = SecItemCopyMatching(q as CFDictionary, &result)
-        guard lastStatus == errSecSuccess else { return boardRead(key: key) }
+        guard lastStatus == errSecSuccess else { return board ? boardRead(key: key) : nil }
         return result as? Data
     }
 }

@@ -64,15 +64,17 @@ struct BookProvider: AppIntentTimelineProvider {
         return Timeline(entries: entries, policy: .after(next))
     }
 
-    /// 先读钥匙串；读不到再凭同步码去小屋取；都不行用上一次取到的
+    /// 填了同步码：只去小屋取（取不到用上一次取到的）。没填：读钥匙串。
+    ///
+    /// ⚠️ 填了码就**不碰钥匙串和备用剪贴板**：小组件里读剪贴板会卡住甚至被系统杀掉，
+    /// 时间线一直交不出去，小组件就一直是灰的占位
     static func load(code: String?) async -> (snap: BookWidgetSnapshot?, why: String) {
-        if let data = SharedKeychain.read(key: "book"),
-           let s = try? JSONDecoder().decode(BookWidgetSnapshot.self, from: data) {
-            return (s, "")
-        }
-        let local = SharedKeychain.diagnosis
         guard let url = relayURL(code) else {
-            return (cached(), local + " · 还没填同步码（长按小组件 → 编辑）")
+            if let data = SharedKeychain.read(key: "book", board: false),
+               let s = try? JSONDecoder().decode(BookWidgetSnapshot.self, from: data) {
+                return (s, "")
+            }
+            return (cached(), SharedKeychain.diagnosis + " · 还没填同步码（长按小组件 → 编辑）")
         }
         // ⚠️ 整次最多等 8 秒。`timeoutInterval` 只管「多久没收到数据」，连接卡着可以一直拖，
         // 拖过系统给小组件的时间，它就一直停在灰色占位上
