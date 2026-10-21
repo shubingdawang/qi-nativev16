@@ -49,10 +49,12 @@ enum BookTools {
                 "id": ["type": "string", "description": "改或删的那一笔的 id（read_book 里给的短 id）"],
                 "category": ["type": "string", "description": "分类名：餐饮 / 零食饮品 / 交通 / 购物 / 日用 / 服饰 / 美妆 / 居住 / 通讯 / 娱乐 / 学习 / 医疗 / 人情 / 宠物 / 旅行 / 其他，或她自己加的分类"],
                 "name": ["type": "string", "description": "这一笔叫什么，如：拿铁"],
-                "amount": ["type": "number", "description": "多少钱，正数"],
+                "amount": ["type": "number", "description": "多少钱，可以是 0"],
+                "reimbursed": ["type": "number", "description": "报销了多少（她父母给报的），算支出时减掉。填 0 = 取消报销"],
                 "time": ["type": "string", "description": "什么时候花的：2026-10-18 13:20 / 今天 13:20 / 昨天。不填 = 现在"],
                 "note": ["type": "string", "description": "备注"],
-                "spread_days": ["type": "number", "description": "按天摊开：这东西能用多少天。不摊就不填，填 0 = 取消摊开"],
+                "spread_days": ["type": "number", "description": "按天摊开：这东西能连续用多少天。不摊就不填，填 0 = 取消摊开"],
+                "days": ["type": "string", "description": "平摊到指定的几天，可以不连着，逗号隔开：2026-10-23,2026-10-25（比如提前买好的几顿早餐、几天的零食）。填空字符串 = 取消"],
                 "remind_every": ["type": "number", "description": "摊开的东西隔几天问她一次还在不在用。不填 = 不问"],
                 "images": ["type": "string", "description": "挂她最近发的第几张图，多张用逗号：1,2（#1 是最新那张）"],
                 "why": ["type": "string", "description": "写在卡片上给她看的一句话"]
@@ -111,6 +113,7 @@ enum BookTools {
             .filter { e in
                 cal.isDate(e.at, equalTo: month, toGranularity: .month)
                     || (e.spreadDays ?? 0) > 1 && e.at < month && e.usedUp == nil
+                    || e.days.contains { WageStore.date($0).map { cal.isDate($0, equalTo: month, toGranularity: .month) } ?? false }
             }
             .sorted { $0.at < $1.at }
         if mine.isEmpty {
@@ -173,7 +176,7 @@ enum BookTools {
         }
         if let n = args["name"] as? String, !n.isEmpty { e.name = n }
         if let a = number("amount") {
-            guard a > 0 else { return "amount 要填正数" }
+            guard a >= 0 else { return "amount 不能是负数" }
             e.amount = a
         }
         if let n = args["note"] as? String { e.note = n }
@@ -185,6 +188,17 @@ enum BookTools {
             let n = Int(d)
             e.spreadDays = n > 1 ? n : nil
             if n <= 1 { e.remindEvery = nil; e.usedUp = nil }
+        }
+        if let r = number("reimbursed") { e.reimbursed = max(0, r) }
+        if let raw = args["days"] as? String {
+            var keys: [String] = []
+            for p in raw.split(whereSeparator: { $0 == "," || $0 == "，" || $0 == "、" || $0 == " " }) {
+                guard let d = WageTools.parseDate(String(p)) else { return "日期看不懂：" + p }
+                let k = WageStore.key(d)
+                if !keys.contains(k) { keys.append(k) }
+            }
+            e.days = keys.sorted()
+            if !keys.isEmpty { e.spreadDays = nil; e.remindEvery = nil; e.usedUp = nil; e.packCount = nil }
         }
         if let r = number("remind_every") {
             let n = Int(r)

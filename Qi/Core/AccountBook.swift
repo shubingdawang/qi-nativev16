@@ -65,8 +65,15 @@ struct Expense: Codable, Identifiable, Hashable {
     var unit = "片"
     /// 按用量算：每天用了几（`WageStore.key` 那天 → 数量）
     var usage: [String: Int] = [:]
+    /// 指定日期：平摊到这几天（`WageStore.key`），可以不连着。空 = 不按指定日期
+    var days: [String] = []
+    /// 报销了多少（父母给报的）。算支出时减掉
+    var reimbursed: Double = 0
 
     static let maxImages = 5
+
+    /// 自己实际出的钱
+    var net: Double { max(0, amount - reimbursed) }
 }
 
 extension Expense {
@@ -86,6 +93,8 @@ extension Expense {
         packCount = (try? c.decodeIfPresent(Int.self, forKey: .packCount)) ?? nil
         unit = (try? c.decodeIfPresent(String.self, forKey: .unit)) ?? "片"
         usage = (try? c.decodeIfPresent([String: Int].self, forKey: .usage)) ?? [:]
+        days = (try? c.decodeIfPresent([String].self, forKey: .days)) ?? []
+        reimbursed = (try? c.decodeIfPresent(Double.self, forKey: .reimbursed)) ?? 0
     }
 }
 
@@ -343,20 +352,29 @@ final class AccountBook: ObservableObject {
     /// 第 105 天才用完就是每天 1/105（超出的那几天也补上）。
     func share(_ e: Expense, on day: Date) -> Double {
         if let p = e.packCount, p > 0 { return countShare(e, pack: p, on: day) }
-        guard let n = e.spreadDays, n > 1 else { return cal.isDate(e.at, inSameDayAs: day) ? e.amount : 0 }
+        if !e.days.isEmpty {
+            return e.days.contains(WageStore.key(day)) ? e.net / Double(e.days.count) : 0
+        }
+        guard let n = e.spreadDays, n > 1 else { return cal.isDate(e.at, inSameDayAs: day) ? e.net : 0 }
         let k = dayIndex(e, day)
         guard k >= 0 else { return 0 }
         if e.usedUp != nil {
             let actual = daysUsed(e)
-            return k < actual ? e.amount / Double(actual) : 0
+            return k < actual ? e.net / Double(actual) : 0
         }
-        return k < n ? e.amount / Double(n) : 0
+        return k < n ? e.net / Double(n) : 0
+    }
+
+    /// 这一笔算在哪一天露面（指定日期的算第一天，其余是买的那天）
+    func firstDay(_ e: Expense) -> Date {
+        e.days.sorted().first.flatMap { WageStore.date($0) } ?? e.at
     }
 
     /// 摊到每天是多少（用完了就按实际天数）
     func perDay(_ e: Expense) -> Double? {
+        if !e.days.isEmpty { return e.net / Double(e.days.count) }
         guard let n = e.spreadDays, n > 1 else { return nil }
-        return e.amount / Double(e.usedUp != nil ? daysUsed(e) : n)
+        return e.net / Double(e.usedUp != nil ? daysUsed(e) : n)
     }
 
     // MARK: 按用量算
@@ -389,7 +407,7 @@ final class AccountBook: ObservableObject {
         let today = min(used(e, on: day), max(0, p - before))
         var n = today
         if let u = e.usedUp, cal.isDate(u, inSameDayAs: day) { n += max(0, p - before - today) }
-        return e.amount * Double(n) / Double(p)
+        return e.net * Double(n) / Double(p)
     }
 
     /// 这一天的编辑页里要问「今天用了吗」的那几样：买了以后、还没用完的；
@@ -417,8 +435,11 @@ final class AccountBook: ObservableObject {
         for e in file.expenses {
             let v = share(e, on: day)
             let counted = isCounted(e)
-            // 按用量算的：买的那天就算还没用，也列出来（不然这一笔哪天都看不见）
-            guard v > 0.0001 || (counted && cal.isDate(e.at, inSameDayAs: day)) else { continue }
+            // 按用量算的：买的那天就算还没用，也列出来（不然这一笔哪天都看不见）；
+            // 0 元的、全报销了的也照样列在那一天
+            let showsAnyway = (counted || e.net < 0.0001)
+                && (e.days.isEmpty ? cal.isDate(e.at, inSameDayAs: day) : e.days.contains(WageStore.key(day)))
+            guard v > 0.0001 || showsAnyway else { continue }
             var note = ""
             var images = e.images
             if let p = e.packCount, p > 0 {
@@ -432,6 +453,11 @@ final class AccountBook: ObservableObject {
                     note = "用了 \(u) \(e.unit) · 剩 \(rest)/\(p)"
                 }
                 if !cal.isDate(e.at, inSameDayAs: day) { images = [] }
+            } else if !e.days.isEmpty {
+                let sorted = e.days.sorted()
+                let k = (sorted.firstIndex(of: WageStore.key(day)) ?? 0) + 1
+                note = "指定日期 \(k)/\(sorted.count) 天"
+                if !cal.isDate(firstDay(e), inSameDayAs: day) { images = [] }
             } else if let n = e.spreadDays, n > 1 {
                 let k = dayIndex(e, day) + 1
                 if e.usedUp != nil {
@@ -442,6 +468,10 @@ final class AccountBook: ObservableObject {
                 // 照片只挂在买的那天，后面每天那一份不重复挂
                 if !cal.isDate(e.at, inSameDayAs: day) { images = [] }
             }
+            if e.reimbursed > 0 {
+                let r = "已报销 " + BookFormat.money(e.reimbursed)
+                note = note.isEmpty ? r : note + " · " + r
+            }
             var line = BookLine(id: e.id.uuidString + "@" + WageStore.key(day), category: e.category,
                                 name: e.name, amount: v, note: e.note, images: images,
                                 at: e.at, source: .book(e.id))
@@ -449,7 +479,8 @@ final class AccountBook: ObservableObject {
             out.append(line)
         }
         if let w = WageStore.shared.day(day) {
-            for x in w.entries where !x.income && x.amount > 0 {
+            // 0 元的也列上（比如家里做的饭）
+            for x in w.entries where !x.income && x.amount >= 0 {
                 out.append(BookLine(id: "w" + x.id.uuidString, category: x.meal == .none ? "other" : "food",
                                     name: x.what + (x.meal == .none ? "" : "（\(x.meal.rawValue)）"),
                                     amount: x.amount, note: "", images: x.images,
@@ -644,9 +675,13 @@ final class AccountBook: ObservableObject {
             if let u = e.usedUp { s += "，\(f.string(from: u)) 用完" }
         }
         if let n = e.spreadDays, n > 1 {
-            s += " · 摊 \(n) 天（每天 ¥\(WageStore.money(e.amount / Double(n)))）"
+            s += " · 摊 \(n) 天（每天 ¥\(WageStore.money(e.net / Double(n)))）"
             if let u = e.usedUp { s += "，\(f.string(from: u)) 用完" }
         }
+        if !e.days.isEmpty {
+            s += " · 指定日期：" + e.days.sorted().joined(separator: "、")
+        }
+        if e.reimbursed > 0 { s += " · 已报销 ¥" + WageStore.money(e.reimbursed) }
         if !e.note.isEmpty { s += " · 备注：" + e.note }
         if !e.images.isEmpty { s += " · \(e.images.count) 张图" }
         return s

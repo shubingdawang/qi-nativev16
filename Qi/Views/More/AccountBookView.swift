@@ -876,8 +876,12 @@ struct ProposalCard: View {
     private func detail(_ e: Expense, _ c: ExpenseCategory) -> String {
         var bits = [c.name]
         if let n = e.spreadDays, n > 1 {
-            bits.append("摊 \(n) 天，每天 " + BookFormat.money(e.amount / Double(n)))
+            bits.append("摊 \(n) 天，每天 " + BookFormat.money(e.net / Double(n)))
         }
+        if !e.days.isEmpty {
+            bits.append("摊到 \(e.days.count) 天，每天 " + BookFormat.money(e.net / Double(e.days.count)))
+        }
+        if e.reimbursed > 0 { bits.append("已报销 " + BookFormat.money(e.reimbursed)) }
         if let r = e.remindEvery, r > 0 { bits.append("每 \(r) 天问一次") }
         return bits.joined(separator: " · ")
     }
@@ -899,6 +903,12 @@ struct ExpenseEditor: View {
     @State private var amountText: String
     @State private var spreadOn: Bool
     @State private var daysText: String
+    /// 按天分摊的两种：连续天数 / 指定日期
+    @State private var pickDays: Bool
+    @State private var pickedDays: Set<DateComponents>
+    /// 报销
+    @State private var reimburseOn: Bool
+    @State private var reimburseText: String
     /// 按用量算（一包几片）
     @State private var countOn: Bool
     @State private var packText: String
@@ -924,8 +934,14 @@ struct ExpenseEditor: View {
         self.proposalID = proposalID
         self.accent = accent
         _e = State(initialValue: start)
-        _amountText = State(initialValue: start.amount > 0 ? WageStore.money(start.amount) : "")
-        _spreadOn = State(initialValue: (start.spreadDays ?? 0) > 1)
+        _amountText = State(initialValue: start.amount > 0 || !isNew ? WageStore.money(start.amount) : "")
+        _spreadOn = State(initialValue: (start.spreadDays ?? 0) > 1 || !start.days.isEmpty)
+        _pickDays = State(initialValue: !start.days.isEmpty)
+        let cal = Calendar.current
+        _pickedDays = State(initialValue: Set(start.days.compactMap { WageStore.date($0) }
+            .map { cal.dateComponents([.calendar, .era, .year, .month, .day], from: $0) }))
+        _reimburseOn = State(initialValue: start.reimbursed > 0)
+        _reimburseText = State(initialValue: start.reimbursed > 0 ? WageStore.money(start.reimbursed) : "")
         _daysText = State(initialValue: start.spreadDays.map { String($0) } ?? "")
         _countOn = State(initialValue: (start.packCount ?? 0) > 0)
         _packText = State(initialValue: start.packCount.map { String($0) } ?? "")
@@ -938,10 +954,25 @@ struct ExpenseEditor: View {
     private var main: Color { Theme.textMain(scheme) }
     private var muted: Color { Theme.textMuted(scheme) }
 
-    private var amount: Double {
-        Double(amountText.replacingOccurrences(of: ",", with: ".")
+    /// 填了的金额（可以是 0）；没填或填错是 nil
+    private var amountValue: Double? { Self.parse(amountText) }
+    private var amount: Double { amountValue ?? 0 }
+    private var reimburse: Double { reimburseOn ? min(amount, Self.parse(reimburseText) ?? 0) : 0 }
+    private var canSave: Bool { (amountValue ?? -1) >= 0 }
+
+    private static func parse(_ s: String) -> Double? {
+        let t = s.replacingOccurrences(of: ",", with: ".")
             .replacingOccurrences(of: "¥", with: "")
-            .trimmingCharacters(in: .whitespaces)) ?? 0
+            .trimmingCharacters(in: .whitespaces)
+        return t.isEmpty ? nil : Double(t)
+    }
+
+    /// 指定日期挑好的那几天（按先后）
+    private var pickedKeys: [String] {
+        let cal = Calendar.current
+        return pickedDays.compactMap { cal.date(from: $0) }.map { WageStore.key($0) }
+            .reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+            .sorted()
     }
 
     var body: some View {
@@ -972,8 +1003,8 @@ struct ExpenseEditor: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("存") { save() }
                         .font(.app(15, weight: .semibold))
-                        .foregroundStyle(amount > 0 ? accent : muted)
-                        .disabled(amount <= 0)
+                        .foregroundStyle(canSave ? accent : muted)
+                        .disabled(!canSave)
                 }
             }
         }
@@ -1078,6 +1109,7 @@ struct ExpenseEditor: View {
                     .font(HomeType.number(30, weight: .semibold))
                     .foregroundStyle(main)
             }
+            reimburseRow
             Divider().opacity(0.5)
             TextField("名字，比如：拿铁", text: $e.name)
                 .font(.app(15))
@@ -1171,6 +1203,51 @@ struct ExpenseEditor: View {
         .glassCard()
     }
 
+    // MARK: 报销
+
+    @ViewBuilder private var reimburseRow: some View {
+        if reimburseOn {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text("报销金额").font(.app(13.5)).foregroundStyle(main)
+                    Spacer()
+                    Text("¥").font(.app(13.5)).foregroundStyle(muted)
+                    TextField(WageStore.money(amount), text: $reimburseText)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .font(.app(14, weight: .medium))
+                        .frame(width: 90)
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) { reimburseOn = false; reimburseText = "" }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 15))
+                            .foregroundStyle(muted.opacity(0.6))
+                    }
+                    .buttonStyle(.plain)
+                }
+                HStack(spacing: 8) {
+                    Button("全额报销") { reimburseText = WageStore.money(amount) }
+                        .font(.app(12, weight: .medium))
+                        .foregroundStyle(accent)
+                    Spacer()
+                    Text("实际支出 " + BookFormat.money(max(0, amount - reimburse)))
+                        .font(.app(11.5))
+                        .foregroundStyle(muted)
+                }
+            }
+        } else {
+            Button {
+                withAnimation(.easeOut(duration: 0.2)) { reimburseOn = true }
+            } label: {
+                Label("报销", systemImage: "arrow.uturn.backward.circle")
+                    .font(.app(12.5, weight: .medium))
+                    .foregroundStyle(accent)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
     // MARK: 摊销
 
     /// 0 整笔，1 按天摊，2 按用量
@@ -1194,7 +1271,8 @@ struct ExpenseEditor: View {
             }
             .pickerStyle(.segmented)
             Text(countOn ? "数得清的东西（卫生巾、药）：一包几片，每天用了几就算几份。从买的那天起，每天的编辑页里会问「今天用了吗」，用完就不再出现"
-                 : spreadOn ? "适用于长期使用的物品：每天计一份，用完当天计入剩余部分"
+                 : spreadOn ? (pickDays ? "金额平摊到选中的几天，日期可以不连续（比如买好的几顿早餐、几天的零食）"
+                               : "适用于长期使用的物品：每天计一份，用完当天计入剩余部分")
                  : "全额计入消费当天")
                 .font(.app(11))
                 .foregroundStyle(muted)
@@ -1222,6 +1300,23 @@ struct ExpenseEditor: View {
                 if !isNew { countUsedRow }
             }
             if spreadOn {
+                Picker("", selection: $pickDays.animation(.easeOut(duration: 0.2))) {
+                    Text("连续天数").tag(false)
+                    Text("指定日期").tag(true)
+                }
+                .pickerStyle(.segmented)
+            }
+            if spreadOn && pickDays {
+                MultiDatePicker("分摊日期", selection: $pickedDays)
+                    .tint(accent)
+                    .frame(maxHeight: 400)
+                let n = pickedKeys.count
+                Text(n == 0 ? "选择要分摊的日期"
+                     : "已选 \(n) 天" + (amount > 0 ? " · 每天约 " + BookFormat.money(max(0, amount - reimburse) / Double(n)) : ""))
+                    .font(.app(11.5))
+                    .foregroundStyle(n == 0 ? muted : accent)
+            }
+            if spreadOn && !pickDays {
                 HStack(spacing: 6) {
                     Text("分摊天数").font(.app(13.5)).foregroundStyle(main)
                     Spacer()
@@ -1233,7 +1328,7 @@ struct ExpenseEditor: View {
                     Text("天").font(.app(13.5)).foregroundStyle(muted)
                 }
                 if let n = Int(daysText), n > 1, amount > 0 {
-                    Text("每天约 " + BookFormat.money(amount / Double(n)))
+                    Text("每天约 " + BookFormat.money(max(0, amount - reimburse) / Double(n)))
                         .font(.app(11.5))
                         .foregroundStyle(accent)
                 }
@@ -1354,9 +1449,10 @@ struct ExpenseEditor: View {
     // MARK: 存
 
     private func save() {
-        guard amount > 0 else { return }
+        guard canSave else { return }
         var out = e
         out.amount = amount
+        out.reimbursed = reimburse
         out.name = out.name.trimmingCharacters(in: .whitespacesAndNewlines)
         out.note = out.note.trimmingCharacters(in: .whitespacesAndNewlines)
         if out.name.isEmpty { out.name = book.category(out.category).name }
@@ -1365,9 +1461,18 @@ struct ExpenseEditor: View {
             out.unit = unitName
             out.spreadDays = nil
             out.remindEvery = nil
-        } else if spreadOn, let n = Int(daysText), n > 1 {
+            out.days = []
+        } else if spreadOn, pickDays, !pickedKeys.isEmpty {
             out.packCount = nil
             out.usage = [:]
+            out.spreadDays = nil
+            out.remindEvery = nil
+            out.usedUp = nil
+            out.days = pickedKeys
+        } else if spreadOn, !pickDays, let n = Int(daysText), n > 1 {
+            out.packCount = nil
+            out.usage = [:]
+            out.days = []
             out.spreadDays = n
             let r = remind == -1 ? (Int(remindText) ?? 0) : remind
             out.remindEvery = r > 0 ? r : nil
@@ -1377,6 +1482,7 @@ struct ExpenseEditor: View {
             out.spreadDays = nil
             out.remindEvery = nil
             out.usedUp = nil
+            out.days = []
         }
         if let pid = proposalID { book.settle(pid, with: out) } else { book.save(out) }
         saved = true
