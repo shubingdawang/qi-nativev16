@@ -185,11 +185,17 @@ final class BeadStore: ObservableObject {
         }
     }
 
-    /// 一键铺豆：把参考图按现在的摆法缩到 size×size，每格取色，就近换成色板里的颜色。
+    /// 一键铺豆：把参考图按现在的摆法缩到板子大小，每格取色，就近换成色板里的颜色。
     /// exact = true 时不换色板，直接用原色
     ///
-    /// 每格放大成 10×10 个点来看，只看中间那一圈（边上是格线），
-    /// 取出现最多的那个颜色——色号那几个字只占一小撮，投不过底色
+    /// 每格放大成 10×10 个点来看：
+    /// - 只看中间那一圈（边上是格线）；
+    /// - 颜色先按每通道 16 档分桶，挑「自己加上下左右挨着的桶」点数最多的那一桶当底色——
+    ///   JPEG 的噪点会把同一块底色拆进好几个挨着的桶，单看一个桶，色号那几个字反而可能最多；
+    /// - 底色 = 跟它差不多的那些点一起平均（不是只取一个桶，不然颜色会偏一点）；
+    /// - 图纸上的格线、每 5 / 10 格的分界线：先看所有格子的最外圈和正中间，
+    ///   只在外圈常见、中间几乎没有的颜色就是线的颜色，挑底色时跳过（整格都是这个颜色才算）；
+    /// - 最后把差得很少的颜色并成一个，同一种豆子不会因为噪点认成好几个色号。
     static func trace(_ p: BeadProject, image: UIImage, exact: Bool) -> [String] {
         let k = 10
         let W = p.w * k, H = p.h * k
@@ -207,36 +213,152 @@ final class BeadStore: ObservableObject {
         UIGraphicsPopContext()
         guard let raw = ctx.data else { return p.cells }
         let ptr = raw.bindMemory(to: UInt8.self, capacity: W * H * 4)
-        var out = Array(repeating: "", count: p.w * p.h)
+
+        typealias Bin = (n: Int, r: Double, g: Double, b: Double)
+        var perCell = [[Int: Bin]](repeating: [:], count: p.w * p.h)
+        var opaqueOK = [Bool](repeating: false, count: p.w * p.h)
+        var ringHist: [Int: Int] = [:], centerHist: [Int: Int] = [:]
         for cy in 0..<p.h {
             for cx in 0..<p.w {
-                // 颜色按每通道 16 档分桶，桶里记个数和总和
-                var bins: [Int: (n: Int, r: Double, g: Double, b: Double)] = [:]
+                var bins: [Int: Bin] = [:]
                 var opaque = 0, total = 0
-                for yy in 2..<(k - 2) {
-                    for xx in 2..<(k - 2) {
+                for yy in 0..<k {
+                    for xx in 0..<k {
+                        let ring = min(xx, yy, k - 1 - xx, k - 1 - yy)
                         let o = ((cy * k + yy) * W + (cx * k + xx)) * 4
-                        total += 1
                         let a = Double(ptr[o + 3])
+                        if ring >= 2 { total += 1 }
                         guard a > 128 else { continue }
-                        opaque += 1
                         let m = 255 / max(a, 1)
                         let r = min(255, Double(ptr[o]) * m)
                         let g = min(255, Double(ptr[o + 1]) * m)
                         let b = min(255, Double(ptr[o + 2]) * m)
-                        let key = (Int(r) >> 4) << 8 | (Int(g) >> 4) << 4 | (Int(b) >> 4)
+                        let key = Self.binKey(r, g, b)
+                        if ring == 0 { ringHist[key, default: 0] += 1 } else if ring >= 3 { centerHist[key, default: 0] += 1 }
+                        guard ring >= 2 else { continue }
+                        opaque += 1
                         let e = bins[key] ?? (0, 0, 0, 0)
                         bins[key] = (e.n + 1, e.r + r, e.g + g, e.b + b)
                     }
                 }
-                guard opaque * 2 > total, let best = bins.values.max(by: { $0.n < $1.n }) else { continue }
-                let n = Double(best.n)
-                let r = best.r / n, g = best.g / n, b = best.b / n
-                out[cy * p.w + cx] = exact ? String(format: "%02X%02X%02X", Int(r), Int(g), Int(b))
-                                           : nearest(r, g, b)
+                perCell[cy * p.w + cx] = bins
+                opaqueOK[cy * p.w + cx] = opaque * 2 > total
             }
         }
+
+        // 线的颜色
+        let ringTotal = Double(max(1, ringHist.values.reduce(0, +)))
+        let centerTotal = Double(max(1, centerHist.values.reduce(0, +)))
+        var lineLabs: [Lab] = []
+        for key in ringHist.keys {
+            let rs = Double(Self.around(ringHist, key)) / ringTotal
+            let cs = Double(Self.around(centerHist, key)) / centerTotal
+            if rs > 0.02 && rs > cs * 3 {
+                let c = Self.binCenter(key)
+                lineLabs.append(Lab(c.0, c.1, c.2))
+            }
+        }
+
+        // 每格的底色
+        var picked = [(Double, Double, Double)?](repeating: nil, count: p.w * p.h)
+        for i in 0..<perCell.count where opaqueOK[i] {
+            let bins = perCell[i]
+            guard !bins.isEmpty else { continue }
+            let counts = bins.mapValues { $0.n }
+            let tot = Double(counts.values.reduce(0, +))
+            let ranked = bins.map { (key: $0.key, bin: $0.value, score: Self.around(counts, $0.key)) }
+                .sorted { $0.score > $1.score }
+            var seed: (Double, Double, Double)?
+            for c in ranked {
+                let avg = (c.bin.r / Double(c.bin.n), c.bin.g / Double(c.bin.n), c.bin.b / Double(c.bin.n))
+                if Double(c.score) < tot * 0.7 {
+                    let L = Lab(avg.0, avg.1, avg.2)
+                    if lineLabs.contains(where: { $0.distance(L) < 12 }) { continue }
+                }
+                seed = avg
+                break
+            }
+            if seed == nil, let c = ranked.first {
+                seed = (c.bin.r / Double(c.bin.n), c.bin.g / Double(c.bin.n), c.bin.b / Double(c.bin.n))
+            }
+            guard let s = seed else { continue }
+            let sl = Lab(s.0, s.1, s.2)
+            var sr = 0.0, sg = 0.0, sb = 0.0, n = 0
+            for (_, e) in bins {
+                let L = Lab(e.r / Double(e.n), e.g / Double(e.n), e.b / Double(e.n))
+                guard L.distance(sl) < 14 else { continue }
+                sr += e.r; sg += e.g; sb += e.b; n += e.n
+            }
+            picked[i] = n > 0 ? (sr / Double(n), sg / Double(n), sb / Double(n)) : s
+        }
+
+        // 差得很少的并成一个（点数多的那个先占位）
+        struct Cluster { var lab: Lab; var n: Int; var r: Double; var g: Double; var b: Double }
+        var freq: [Int: (n: Int, c: (Double, Double, Double))] = [:]
+        for c in picked.compactMap({ $0 }) {
+            let q = Int(c.0) << 16 | Int(c.1) << 8 | Int(c.2)
+            freq[q] = ((freq[q]?.n ?? 0) + 1, c)
+        }
+        var clusters: [Cluster] = []
+        var owner: [Int: Int] = [:]
+        for (q, v) in freq.sorted(by: { $0.value.n > $1.value.n }) {
+            let L = Lab(v.c.0, v.c.1, v.c.2)
+            if let j = clusters.firstIndex(where: { $0.lab.distance(L) < 6 }) {
+                let w = Double(v.n)
+                clusters[j].n += v.n
+                clusters[j].r += v.c.0 * w; clusters[j].g += v.c.1 * w; clusters[j].b += v.c.2 * w
+                owner[q] = j
+            } else {
+                let w = Double(v.n)
+                clusters.append(Cluster(lab: L, n: v.n, r: v.c.0 * w, g: v.c.1 * w, b: v.c.2 * w))
+                owner[q] = clusters.count - 1
+            }
+        }
+        // 只有一两格的零星颜色，离大块颜色很近的也并过去（多半是噪点）
+        var redirect = Array(0..<clusters.count)
+        for j in clusters.indices where clusters[j].n <= 2 {
+            let L = clusters[j].lab
+            if let big = clusters.indices.filter({ clusters[$0].n > 2 })
+                .min(by: { clusters[$0].lab.distance(L) < clusters[$1].lab.distance(L) }),
+               clusters[big].lab.distance(L) < 12 {
+                redirect[j] = big
+            }
+        }
+        var out = Array(repeating: "", count: p.w * p.h)
+        for i in picked.indices {
+            guard let c = picked[i] else { continue }
+            let q = Int(c.0) << 16 | Int(c.1) << 8 | Int(c.2)
+            guard let j0 = owner[q] else { continue }
+            let cl = clusters[redirect[j0]]
+            let n = Double(max(1, cl.n))
+            let r = cl.r / n, g = cl.g / n, b = cl.b / n
+            out[i] = exact ? String(format: "%02X%02X%02X", Int(r), Int(g), Int(b)) : nearest(r, g, b)
+        }
         return out
+    }
+
+    private static func binKey(_ r: Double, _ g: Double, _ b: Double) -> Int {
+        (Int(r) >> 4) << 8 | (Int(g) >> 4) << 4 | (Int(b) >> 4)
+    }
+
+    private static func binCenter(_ key: Int) -> (Double, Double, Double) {
+        (Double((key >> 8) & 15) * 16 + 8, Double((key >> 4) & 15) * 16 + 8, Double(key & 15) * 16 + 8)
+    }
+
+    /// 这一桶加上前后左右上下挨着的桶，一共多少点
+    private static func around(_ h: [Int: Int], _ key: Int) -> Int {
+        let r = (key >> 8) & 15, g = (key >> 4) & 15, b = key & 15
+        var s = 0
+        for dr in -1...1 {
+            for dg in -1...1 {
+                for db in -1...1 {
+                    let rr = r + dr, gg = g + dg, bb = b + db
+                    guard (0...15).contains(rr), (0...15).contains(gg), (0...15).contains(bb) else { continue }
+                    s += h[rr << 8 | gg << 4 | bb] ?? 0
+                }
+            }
+        }
+        return s
     }
 
     private static let paletteRGB: [(String, Double, Double, Double)] = palette.compactMap { hex in
@@ -244,12 +366,15 @@ final class BeadStore: ObservableObject {
         return (hex, Double((v >> 16) & 0xFF), Double((v >> 8) & 0xFF), Double(v & 0xFF))
     }
 
+    private static let paletteLab: [(String, Lab)] = paletteRGB.map { ($0.0, Lab($0.1, $0.2, $0.3)) }
+
+    /// 色板里看起来最接近的那个（按人眼的色差 Lab 算，不是直接比 RGB）
     static func nearest(_ r: Double, _ g: Double, _ b: Double) -> String {
+        let L = Lab(r, g, b)
         var best = palette[0]
         var bestD = Double.greatestFiniteMagnitude
-        for (hex, pr, pg, pb) in paletteRGB {
-            // 人眼对绿最敏感，权重照常见的那组给
-            let d = 0.3 * (r - pr) * (r - pr) + 0.59 * (g - pg) * (g - pg) + 0.11 * (b - pb) * (b - pb)
+        for (hex, pl) in paletteLab {
+            let d = pl.distance(L)
             if d < bestD { bestD = d; best = hex }
         }
         return best
@@ -270,6 +395,32 @@ final class BeadStore: ObservableObject {
         g.scaleBy(x: CGFloat(p.refScale), y: CGFloat(p.refScale * (p.refStretchY ?? 1)))
         image.draw(in: CGRect(x: -w / 2, y: -h / 2, width: w, height: h))
         g.restoreGState()
+    }
+}
+
+/// CIE Lab：两个颜色在人眼里差多少，直接量距离就行
+struct Lab {
+    var l: Double, a: Double, b: Double
+
+    init(_ r: Double, _ g: Double, _ bl: Double) {
+        func lin(_ c: Double) -> Double {
+            let v = c / 255
+            return v > 0.04045 ? pow((v + 0.055) / 1.055, 2.4) : v / 12.92
+        }
+        let R = lin(r), G = lin(g), B = lin(bl)
+        let x = (R * 0.4124 + G * 0.3576 + B * 0.1805) / 0.95047
+        let y = R * 0.2126 + G * 0.7152 + B * 0.0722
+        let z = (R * 0.0193 + G * 0.1192 + B * 0.9505) / 1.08883
+        func f(_ t: Double) -> Double { t > 0.008856 ? cbrt(t) : 7.787 * t + 16.0 / 116 }
+        let fx = f(x), fy = f(y), fz = f(z)
+        l = 116 * fy - 16
+        a = 500 * (fx - fy)
+        b = 200 * (fy - fz)
+    }
+
+    func distance(_ o: Lab) -> Double {
+        let dl = l - o.l, da = a - o.a, db = b - o.b
+        return (dl * dl + da * da + db * db).squareRoot()
     }
 }
 
