@@ -9,7 +9,6 @@
 // - 只有镜头动、人在走、海在晃的时候才重画；闲着时海一秒只晃几帧
 // - 后期用一张预先算好的纸纹图，不在每个像素上现算噪声
 import * as THREE from 'three';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { grad, toon, hullMat, store, bake, worldUV, R, jit, box, cyl, cone, ball, blob, disc, torus, OPT, lathe } from './kit.js';
 import { G, grandManor, fountain, parterre, urn } from './grand.js';
@@ -26,6 +25,7 @@ import { hedge, boxBall, roseBush, lollipop, coneTopiary, cypress, pillarBox } f
 import { collector, cropCell } from './plants.js';
 import { ridge, rock } from './sculpt.js';
 import * as FL from './flora.js';
+import * as FG from './figures.js';
 
 // 老房子配庄园花园：房子换成维多利亚 / 哥特 / 洛可可 / 巴洛克，小树修剪成造型树，灌木是绿篱和玫瑰
 Object.assign(BUILD, {
@@ -335,7 +335,7 @@ function makeKit(grp) {
   };
 }
 
-// 潮玩手办风：大头、圆润、哑光软胶质感（按她给的参考），保留她自己的样子——棕发、粉色蝴蝶结、粉色衣服
+// 一个个小零件直接挂在组上（钓鱼的浮漂和竿用）
 function toyKit(grp) {
   const mats = new Map();
   const matOf = (c, rough = .55) => { const k = c + rough; if (!mats.has(k)) mats.set(k, new THREE.MeshStandardMaterial({ color: c, roughness: rough, metalness: 0 })); return mats.get(k); };
@@ -347,121 +347,8 @@ function toyKit(grp) {
 }
 const sph = (r, a = 32, b = 24, ...rest) => new THREE.SphereGeometry(r, a, b, ...rest);
 const cap = (r, l, a = 12, b = 20) => new THREE.CapsuleGeometry(r, l, a, b);
-const rbox = (w, h, d, r, seg = 6) => new RoundedBoxGeometry(w, h, d, seg, r);
 
-function figureHer() {
-  const grp = new THREE.Group(), m = toyKit(grp);
-  const SKIN = '#f8dfd2', HAIR = '#5b3a2e', HAIRL = '#6c4636', PINK = '#eba7b3', PINKD = '#d98a99', CREAM = '#f7efe6', BOOT = '#6f4337', BOOTL = '#8a5747', SOLE = '#2b2526', BOW = '#f08ea0';
-  // 靴子：粗粗的短靴、黑色厚底
-  const legs = [-1, 1].map((sx) => {
-    const l = new THREE.Group(); l.position.set(sx * .085, 0, 0); grp.add(l);
-    // 腿：短短一截，浅肤色
-    m(cap(.045, .09, 10, 20), SKIN, [0, .24, 0], [0, 0, 0], [1, 1, 1], l, .6);
-    // 短靴：一整只圆角的靴子（鞋头圆圆地往前一点），靴口一圈翻边，贴着鞋形的厚鞋底，脚背一条搭扣带
-    m(cyl(.054, .058, .1, 28), BOOT, [0, .12, -.005], [0, 0, 0], [1, 1, 1], l, .45);
-    m(torus(.056, .013, 10, 28), BOOTL, [0, .17, -.005], [Math.PI / 2, 0, 0], [1, 1, 1], l, .5);
-    m(rbox(.12, .085, .18, .042, 8), BOOT, [0, .062, .022], [0, 0, 0], [1, 1, 1], l, .45);
-    m(rbox(.122, .028, .184, .03, 6), SOLE, [0, .014, .022], [0, 0, 0], [1, 1, 1], l, .75);
-    m(rbox(.1, .014, .03, .007, 4), BOOTL, [0, .103, .055], [0, 0, 0], [1, 1, 1], l, .5);
-    m(rbox(.018, .018, .01, .004, 2), '#d8b878', [sx * .03, .108, .06], [0, 0, 0], [1, 1, 1], l, .3);
-    return l;
-  });
-  // 裙子：米白色的短 A 字裙，下摆一圈粉色线
-  const sk = lathe([[.225, .29], [.222, .31], [.17, .41], [.13, .49]], 40); sk.computeVertexNormals();
-  m(sk, CREAM, [0, 0, 0]);
-  m(new THREE.CircleGeometry(.225, 40).rotateX(Math.PI / 2), CREAM, [0, .29, 0]);
-  m(torus(.224, .008, 6, 40), PINK, [0, .3, 0], [Math.PI / 2, 0, 0]);
-  // 粉色宽松毛衣：一道道竖纹、高领、灯笼袖、罗纹袖口
-  const sweater = lathe([[.12, 0], [.165, .02], [.175, .1], [.165, .2], [.13, .26], [.08, .29], [0, .3]], 40);
-  { const pa = sweater.attributes.position; for (let i = 0; i < pa.count; i++) { const a = Math.atan2(pa.getZ(i), pa.getX(i)); const k = 1 + Math.cos(a * 36) * .012; pa.setX(i, pa.getX(i) * k); pa.setZ(i, pa.getZ(i) * k); } sweater.computeVertexNormals(); }
-  m(sweater, PINK, [0, .44, 0], [0, 0, 0], [1, 1, .85]);
-  m(torus(.15, .025, 10, 32), PINKD, [0, .455, 0], [Math.PI / 2, 0, 0], [1, .85, 1]);   // 下摆罗纹
-  m(cyl(.075, .085, .06, 28), PINK, [0, .755, 0]);
-  m(torus(.075, .018, 10, 28), PINKD, [0, .785, 0], [Math.PI / 2, 0, 0]);
-  const arms = [-1, 1].map((sx) => {
-    const a = new THREE.Group(); a.position.set(sx * .16, .68, 0); a.rotation.z = sx * .18; grp.add(a);
-    m(cap(.065, .12), PINK, [sx * .01, -.09, 0], [0, 0, 0], [1, 1, .95], a);
-    m(torus(.05, .02, 8, 20), PINKD, [sx * .012, -.2, 0], [Math.PI / 2, 0, 0], [1, 1, 1], a);
-    m(sph(.045, 20, 16), SKIN, [sx * .012, -.25, .005], [0, 0, 0], [1, 1.05, .95], a);
-    return a;
-  });
-  // 头：大大圆圆，脸朝 +z
-  const head = new THREE.Group(); head.position.y = 1.03; grp.add(head);
-  const eyes = [];
-  m(sph(.3), SKIN, [0, 0, 0], [0, 0, 0], [1.06, .98, .98], head);
-  for (const sx of [-1, 1]) m(sph(.06, 16, 12), SKIN, [sx * .31, -.03, 0], [0, 0, 0], [.6, 1, .9], head);   // 耳朵
-  // 眼睛：白色眼白、大大的棕色瞳孔、黑色瞳仁、两点高光，上面一道弯弯的眼线（不往下压，看着温柔）
-  for (const sx of [-1, 1]) {
-    const e = new THREE.Group(); e.position.set(sx * .118, -.04, .262); e.rotation.y = sx * .32; head.add(e); eyes.push(e);
-    m(sph(.062, 24, 18), '#fbfaf8', [0, 0, 0], [0, 0, 0], [1, 1, .38], e, .3);
-    m(sph(.047, 24, 18), '#6b3c2c', [sx * -.006, -.004, .012], [0, 0, 0], [1, 1.08, .4], e, .25);
-    m(sph(.022, 16, 12), '#1e1412', [sx * -.006, -.004, .024], [0, 0, 0], [1, 1.12, .3], e, .2);
-    m(sph(.012, 10, 8), '#ffffff', [sx * -.006 + sx * .014, .016, .031], [0, 0, 0], [1, 1, .3], e, .1);
-    m(sph(.0065, 8, 6), '#ffffff', [sx * -.006 - sx * .012, -.02, .031], [0, 0, 0], [1, 1, .3], e, .1);
-    m(torus(.062, .009, 8, 24, Math.PI * .9), '#2b1d18', [0, .004, .012], [0, 0, Math.PI * .05], [1, 1.02, 1], e, .4);   // 上眼线
-    m(sph(.04, 16, 12), '#f3a9a3', [sx * .05, -.085, -.01], [0, 0, 0], [1.2, .55, .3], e, .7);   // 腮红
-  }
-  const mouth = m(torus(.02, .006, 8, 16, Math.PI), '#b9605e', [0, -.15, .285], [0, 0, Math.PI], [1, .8, 1], head, .4);   // 小小的笑
-  const oMouth = m(torus(.016, .007, 8, 16), '#b9605e', [0, -.15, .285], [0, 0, 0], [1, 1.2, 1], head, .4); oMouth.visible = false;   // 惊讶时的小圆嘴
-  m(sph(.012, 10, 8), '#efc6b4', [0, -.085, .298], [0, 0, 0], [1, .7, .6], head);   // 鼻头
-  // 头发：整个后脑和头顶一层，前面一排齐刘海，中间一缕尖尖的分发
-  m(sph(.318, 36, 24, 0, Math.PI * 2, 0, Math.PI * .62), HAIR, [0, .015, -.012], [-.5, 0, 0], [1.06, 1, 1], head, .62);
-  {
-    // 刘海：前额那一片头发，下边缘一波一波的（像一缕一缕垂下来），不是一刀切的盖子
-    const bang = sph(.316, 48, 20, Math.PI / 2 - 1.25, 2.5, 0, .9);
-    const pa = bang.attributes.position, v = new THREE.Vector3();
-    for (let i = 0; i < pa.count; i++) {
-      v.fromBufferAttribute(pa, i);
-      const r = v.length(), th = Math.acos(v.y / r), ph = Math.atan2(v.z, -v.x);
-      if (th < .6) continue;
-      const k = (th - .6) / .3, wave = .5 + .5 * Math.cos((ph - Math.PI / 2) * 11);
-      const t2 = th + k * .14 * wave;
-      const s = Math.sin(t2);
-      pa.setXYZ(i, -Math.cos(ph) * s * r, Math.cos(t2) * r, Math.sin(ph) * s * r);
-    }
-    bang.computeVertexNormals();
-    m(bang, HAIRL, [0, .02, .0], [0, 0, 0], [1.06, 1, 1.02], head, .62);
-  }
-  for (const sx of [-1, 1]) m(cap(.05, .14), HAIR, [sx * .27, -.08, .1], [0, 0, sx * .15], [1, 1, .9], head, .62);   // 鬓角
-  // 两条粗辫子：一节一节的，绑粉色发圈，辫尾一小撮
-  for (const sx of [-1, 1]) {
-    const b = new THREE.Group(); b.position.set(sx * .27, -.12, -.02); b.rotation.z = sx * .35; head.add(b);
-    // 每一节是左右两股交叉压着（一股斜向左、一股斜向右），像真的编起来
-    for (let k = 0; k < 3; k++) {
-      const r = .066 - k * .006, y = -.07 - k * .1;
-      m(sph(r, 20, 16), HAIR, [sx * .02, y, 0], [0, 0, 0], [1, 1.25, 1], b, .62);
-      for (const s of [-1, 1]) m(cap(r * .42, r * .9, 6, 12), HAIRL, [sx * .02 + s * r * .32, y, r * .55], [0, 0, s * .55], [1, 1, .6], b, .55);
-    }
-    m(torus(.035, .016, 8, 16), BOW, [sx * .03, -.34, 0], [Math.PI / 2, 0, 0], [1, 1, 1], b, .4);
-    m(cone(.06, .12, 16), HAIR, [sx * .03, -.42, 0], [Math.PI, 0, 0], [1, 1, .8], b, .62);
-  }
-  // 头顶右边一个粉色蝴蝶结
-  const bow = new THREE.Group(); bow.position.set(.16, .24, .1); bow.rotation.set(.2, .3, -.4); head.add(bow);
-  for (const sx of [-1, 1]) m(sph(.065, 20, 16), BOW, [sx * .07, 0, 0], [0, 0, sx * .25], [1.25, .85, .5], bow, .4);
-  m(sph(.035, 16, 12), '#e57d91', [0, 0, .01], [0, 0, 0], [1, 1, .8], bow, .4);
-  grp.scale.setScalar(.95);
-  grp.userData = { legs, arms, head, eyes, mouth, oMouth };
-  return grp;
-}
-
-// clawd 也换成同一套软胶手办：圆角很大的身子、两只亮亮的黑眼睛、两边短短的小手、四条圆圆的小腿
-function figureClawd() {
-  const grp = new THREE.Group(), m = toyKit(grp);
-  const C = '#dd7a5c', CD = '#c86a4e';
-  const body = new THREE.Group(); body.position.y = .1; grp.add(body);
-  const eyesH = [];
-  m(rbox(.62, .46, .44, .16, 8), C, [0, .23, 0], [0, 0, 0], [1, 1, 1], body, .5);
-  for (const sx of [-1, 1]) {
-    eyesH.push(m(cap(.03, .07, 8, 16), '#1d1614', [sx * .14, .27, .218], [0, 0, 0], [1, 1, .6], body, .15));
-    m(sph(.011, 8, 6), '#ffffff', [sx * .14 + .008, .31, .235], [0, 0, 0], [1, 1, .5], body, .1);
-    m(sph(.035, 12, 10), '#f0a08c', [sx * .22, .16, .21], [0, 0, 0], [1.1, .6, .3], body, .7);
-  }
-  const arms = [-1, 1].map((sx) => m(cap(.055, .07, 8, 16), CD, [sx * .34, .16, 0], [0, 0, Math.PI / 2], [1, 1, 1.1], body, .5));
-  const legs = [];
-  for (const [x, z] of [[-.21, .1], [-.09, -.1], [.09, .1], [.21, -.1]]) legs.push(m(cap(.045, .04, 8, 16), CD, [x, .065, z], [0, 0, 0], [1, 1, 1], grp, .5));
-  grp.userData = { body, arms, legs, eyes: eyesH };
-  return grp;
-}
+// 她和 clawd 的样子在 figures.js（照真东西的形状捏的：头发一缕缕、三股辫、针织毛衣、压褶裙；clawd 是软方块）
 
 // ———————————————————— 场景 ————————————————————
 const cv = document.getElementById('cv');
@@ -611,7 +498,7 @@ sun.shadow.bias = -.0006; sun.shadow.normalBias = .02; sun.shadow.radius = 2; su
 sun.shadow.camera.updateProjectionMatrix();
 scene.add(sun, sun.target);
 
-const her = figureHer(), him = figureClawd();
+const her = FG.figureHer(), him = FG.figureClawd();
 her.position.set(D.her[0] + .5, topAt(D.her[0], D.her[1]) ?? 0, D.her[1] + .5);
 him.position.set(D.him[0] + .5, topAt(D.him[0], D.him[1]) ?? 0, D.him[1] + .5);
 him.rotation.y = .15; her.rotation.y = -.1;
