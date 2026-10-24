@@ -824,6 +824,7 @@ window.I3D = {
   state() { return JSON.stringify({ her: [Math.floor(her.position.x), Math.floor(her.position.z)], him: [Math.floor(him.position.x), Math.floor(him.position.z)] }); },
 };
 window.__view = view; window.__place = () => { placeView(); };
+window.__cam = cam; window.__her = her; window.__him = him;   // 预览里对着谁拍
 
 // ———————————————————— 画 ————————————————————
 function drawNow() { renderer.render(scene, cam); }
@@ -836,7 +837,7 @@ if (window.webkit?.messageHandlers?.i3d) fpsEl.style.display = 'none';   // App 
 document.addEventListener('visibilitychange', () => { paused = document.hidden; });
 renderer.setAnimationLoop((ms) => {
   // 一秒最多画 30 帧（压住发热）；App 退到后台就不画
-  if (paused || ms - last < 32) return;
+  if (paused || window.__freeze || ms - last < 32) return;   // __freeze：预览里定住画面拍图
   const dt = Math.min(.1, last ? (ms - last) / 1000 : .03); last = ms;
   const ts = ms / 1000;
   seaMat.uniforms.t.value = ts; grassMat.uniforms.t.value = ts; moteMat.uniforms.t.value = ts; flyAnim(ts);

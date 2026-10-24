@@ -12,7 +12,7 @@ const M = (x, y, z, ry = 0) => new THREE.Matrix4().makeRotationY(ry).setPosition
 const rb = (w, h, d, r = .02) => box(w, h, d, r, 3);
 const COL = (h) => lathe([[.07, 0], [.07, .04], [.055, .07], [.05, h * .9], [.065, h * .94], [.08, h]], 14);
 
-function archWin(put, m, w, h) {
+function archWin(put, m, w, h, sill = true) {
   const s = new THREE.Shape(); s.moveTo(-w / 2, 0); s.lineTo(w / 2, 0); s.lineTo(w / 2, h - w / 2); s.absarc(0, h - w / 2, w / 2, 0, Math.PI, false); s.closePath();
   const fr = new THREE.Shape(); fr.moveTo(-w / 2 - .05, -.02); fr.lineTo(w / 2 + .05, -.02); fr.lineTo(w / 2 + .05, h - w / 2); fr.absarc(0, h - w / 2, w / 2 + .05, 0, Math.PI, false); fr.closePath(); fr.holes.push(s);
   put(new THREE.ExtrudeGeometry(fr, { depth: .05, bevelEnabled: false, curveSegments: 14 }), C.sandL, { m });
@@ -20,7 +20,7 @@ function archWin(put, m, w, h) {
   put(box(.015, h, .02), C.sandL, { m, p: [0, h / 2, .03] });
   put(box(w, .015, .02), C.sandL, { m, p: [0, (h - w / 2) * .6, .03] });
   put(rb(.07, .09, .06, .01), C.sandL, { m, p: [0, h + .03, .04] });   // 拱心石
-  put(rb(w + .16, .04, .1, .01), C.sandL, { m, p: [0, -.03, .05] });
+  if (sill) put(rb(w + .16, .04, .1, .01), C.sandL, { m, p: [0, -.03, .05] });
 }
 
 export function baroque(o, d) {
@@ -50,15 +50,19 @@ export function baroque(o, d) {
     put(rb(tw + .06, base, tw + .06, .02), C.sandD, { p: [x, base / 2, z] });
     put(rb(tw, h, tw, .02), C.sand, { p: [x, base + h / 2, z] });
     for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) put(box(.06, h, .06), C.sandL, { p: [x + dx * tw / 2, base + h / 2, z + dz * tw / 2] });
-    if (sz > 0) archWin(put, M(x, base + .25, z + tw / 2 + .005), .2, .55);
-    archWin(put, M(x + sx * (tw / 2 + .005), base + .25, z, sx * Math.PI / 2), .2, .55);
+    // 窗户下面一整圈腰线（绕过转角，前后左右连成一圈），窗户直接坐在上面
+    put(rb(tw + .07, .05, tw + .07, .012), C.sandL, { p: [x, base + .225, z] });
+    if (sz > 0) archWin(put, M(x, base + .25, z + tw / 2 + .005), .2, .55, false);
+    archWin(put, M(x + sx * (tw / 2 + .005), base + .25, z, sx * Math.PI / 2), .2, .55, false);
     // 方塔
     // 方塔直接坐在下面的塔身上：先一圈挑出来的线脚把两段接住，不留缝
     const y1 = base + h;
     put(rb(tw + .04, .07, tw + .04, .015), C.sandL, { p: [x, y1 + .035, z] });
     put(rb(tw - .06, th + .02, tw - .06, .02), C.sand, { p: [x, y1 + th / 2 + .02, z] });
     for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) put(box(.06, th, .06), C.sandL, { p: [x + dx * (tw - .06) / 2, y1 + th / 2, z + dz * (tw - .06) / 2] });
-    for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) archWin(put, M(x + Math.sin(a) * ((tw - .06) / 2 + .005), y1 + .13, z + Math.cos(a) * ((tw - .06) / 2 + .005), a), .14, .3);
+    // 方塔：底下那圈线脚往上直接接一整圈腰线，四扇窗都坐在腰线上（不再各自伸出一块窗台）
+    put(rb(tw - .06 + .05, .05, tw - .06 + .05, .012), C.sandL, { p: [x, y1 + .095, z] });
+    for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) archWin(put, M(x + Math.sin(a) * ((tw - .06) / 2 + .005), y1 + .12, z + Math.cos(a) * ((tw - .06) / 2 + .005), a), .14, .3, false);
     put(rb(tw + .02, .06, tw + .02, .01), C.sandL, { p: [x, y1 + th + .03, z] });
     // 柱亭：圆台座、八根柱子、柱顶一整圈柱上楣（檐底、中间一圈、檐口），小穹顶的底边跟檐口一样宽，正好压在柱子上
     const y2 = y1 + th + .06, ch = .32, cr = .17;
