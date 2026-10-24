@@ -1,98 +1,91 @@
-// 像素图 → 立体件：她岛上摆的家具（像素画）、clawd 身上的衣服，一个像素一颗小方块拼起来，
-// 所以不管哪一件、她自己导入的也一样，都能在 3D 里出现。
+// clawd 身上的衣服：在 3D 里是一层贴着身子的膜，不做体积。
+// 衣服图跟身体用同一套 36 格图纸（rig：身子在第 left..right 列、第 top..legTop 行）：
+// - 落在身子里的那块：做成一层贴膜包在身子上（衬衫、外套、围巾前后都包；眼镜、领结只贴正面；背包只贴背面）
+// - 袖子那块（身子两边）：两只小手染成袖子的颜色
+// - 裤腿、鞋（腿那几行）：腿染成那个颜色
+// - 帽子（身子上面那几行）：一层贴在头顶的膜，颜色和花纹从帽子图里取
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 function load(src) {
   return new Promise((ok) => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => ok(null); im.src = src; });
 }
-// grid：先缩成这么多格（衣服图是 36 格放大 8 倍画的）；不给就按原图
-function pixels(im, grid = 0) {
-  const w = grid || im.width, h = grid || im.height;
-  const c = document.createElement('canvas'); c.width = w; c.height = h;
-  const x = c.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(im, 0, 0, w, h);
-  return { w, h, d: x.getImageData(0, 0, w, h).data };
+// 缩成 grid 格（衣服图是 36 格放大 8 倍画的）
+function pixels(im, grid) {
+  const c = document.createElement('canvas'); c.width = grid; c.height = grid;
+  const x = c.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(im, 0, 0, grid, grid);
+  return { w: grid, h: grid, d: x.getImageData(0, 0, grid, grid).data };
 }
-const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .6 });
-const cube = new THREE.BoxGeometry(1, 1, 1);
-
-// 一张像素图里有东西的那几格（透明的不算）
-function opaque(px, rect = null) {
-  const out = [];
-  const x0 = rect ? rect[0] : 0, y0 = rect ? rect[1] : 0, x1 = rect ? rect[2] : px.w - 1, y1 = rect ? rect[3] : px.h - 1;
-  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-    const i = (y * px.w + x) * 4; if (px.d[i + 3] < 100) continue;
-    out.push([x, y, px.d[i] / 255, px.d[i + 1] / 255, px.d[i + 2] / 255]);
+const at = (px, x, y) => { const i = (y * px.w + x) * 4; return [px.d[i], px.d[i + 1], px.d[i + 2], px.d[i + 3]]; };
+// 一块里最多的那个颜色
+function dominant(px, x0, y0, x1, y1) {
+  const tally = new Map();
+  for (let y = Math.max(0, y0); y <= Math.min(px.h - 1, y1); y++) for (let x = Math.max(0, x0); x <= Math.min(px.w - 1, x1); x++) {
+    const [r, g, b, a] = at(px, x, y); if (a < 100) continue;
+    const k = (r >> 4) + ',' + (g >> 4) + ',' + (b >> 4); const e = tally.get(k) || [0, 0, 0, 0];
+    tally.set(k, [e[0] + 1, e[1] + r, e[2] + g, e[3] + b]);
   }
-  return out;
+  let best = null; for (const v of tally.values()) if (!best || v[0] > best[0]) best = v;
+  return best ? new THREE.Color().setRGB(best[1] / best[0] / 255, best[2] / best[0] / 255, best[3] / best[0] / 255, THREE.SRGBColorSpace) : null;
 }
-// 一堆格子 → 一个网格：每格一颗方块（颜色写在顶点上，整件一次绘制）
-function build(cells, size, depth, place) {
-  const list = [];
-  const col = new THREE.Color();
-  for (const [x, y, r, g, b] of cells) {
-    const geo = cube.clone(); geo.scale(size * 1.02, size * 1.02, depth);
-    const [px, py, pz] = place(x, y); geo.translate(px, py, pz);
-    col.setRGB(r, g, b, THREE.SRGBColorSpace);
-    const n = geo.attributes.position.count, ca = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) { ca[i * 3] = col.r; ca[i * 3 + 1] = col.g; ca[i * 3 + 2] = col.b; }
-    geo.setAttribute('color', new THREE.BufferAttribute(ca, 3)); geo.deleteAttribute('uv');
-    list.push(geo);
+// 把图纸上一块（x0..x1, y0..y1）画成贴图，四周留一圈透明（贴膜外面就是透明的）
+function regionTex(px, x0, y0, x1, y1) {
+  const w = x1 - x0 + 1, h = y1 - y0 + 1, c = document.createElement('canvas'); c.width = w + 2; c.height = h + 2;
+  const g = c.getContext('2d'), id = g.createImageData(w + 2, h + 2);
+  let any = false;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const p = at(px, x0 + x, y0 + y); if (p[3] < 100) continue; any = true;
+    const di = ((y + 1) * (w + 2) + x + 1) * 4; id.data[di] = p[0]; id.data[di + 1] = p[1]; id.data[di + 2] = p[2]; id.data[di + 3] = 255;
   }
-  if (!list.length) return null;
-  const m = new THREE.Mesh(mergeGeometries(list), mat); m.castShadow = true; m.receiveShadow = true;
+  if (!any) return null;
+  g.putImageData(id, 0, 0);
+  const t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.colorSpace = THREE.SRGBColorSpace;
+  return { tex: t, w: w + 2, h: h + 2 };
+}
+// 一层膜：比身子大一丝的圆角盒子，贴图从正面投过去（侧面顺着边上那一格延伸，像布包过去）
+function film(size, center, region, { front = true, back = false } = {}) {
+  const [W, H, D] = size;
+  const geo = new RoundedBoxGeometry(W * 1.012, H * 1.012, D * 1.02, 6, Math.min(.15, H * .33));
+  const pa = geo.attributes.position, na = geo.attributes.normal, uv = geo.attributes.uv;
+  const pxU = 1 / region.w, pxV = 1 / region.h;
+  for (let i = 0; i < pa.count; i++) {
+    const x = pa.getX(i), y = pa.getY(i), nz = na.getZ(i);
+    let u = .5 + x / W * (1 - 2 * pxU), v = .5 + y / H * (1 - 2 * pxV);
+    u = Math.min(1 - pxU * 1.01, Math.max(pxU * 1.01, u)); v = Math.min(1 - pxV * 1.01, Math.max(pxV * 1.01, v));
+    if (nz < -.35) { if (!back) { u = pxU * .5; v = pxV * .5; } else u = 1 - u; }   // 背面：要包就镜像过去，不包就落在透明的那一圈
+    else if (nz > .35 && !front) { u = pxU * .5; v = pxV * .5; }
+    uv.setXY(i, u, v);
+  }
+  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: region.tex, transparent: true, alphaTest: .5, roughness: .55 }));
+  m.position.set(...center);
   return m;
 }
 
-// 岛上摆的一件家具：底边中点放在那一格，宽 w 格
-export async function placeObject(scene, o, groundAt) {
-  const im = await load(o.png); if (!im) return;
-  const px = pixels(im), cells = opaque(px);
-  if (!cells.length) return;
-  let minX = 1e9, maxX = -1, minY = 1e9, maxY = -1;
-  for (const [x, y] of cells) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
-  const bw = maxX - minX + 1, size = Math.min((o.w || 1) * .9 / bw, .06), depth = Math.min(.5, bw * size * .45);
-  const cx = o.x + (o.w || 1) / 2, cz = o.y + .5, t = groundAt(o.x, o.y);
-  const mesh = build(cells, size, depth, (x, y) => [cx + (x - (minX + maxX) / 2) * size, t + (maxY - y + .5) * size, cz]);
-  if (mesh) scene.add(mesh);
-}
-
-// clawd 身上的衣服：图纸跟身体同一套格子（rig：身子在第 left..right 列、第 top..legTop 行）。
-// 落在身子里的像素印在身子正面（像潮玩的涂装），伸出身子的（帽子、包、鞋）做成小方块挂上去。
 export async function dressClawd(him, wear, rig) {
-  const u = him.userData, body = u.body;
-  const cols = rig.right - rig.left + 1, rows = rig.legTop - rig.top;
-  const size = .62 / cols;
-  const X = (x) => (x + .5 - (rig.left + rig.right + 1) / 2) * size;
-  const Y = (y) => .46 * (rig.legTop - (y + .5)) / rows;   // 身子底边 = 0（在 body 组里）
+  const u = him.userData, body = u.body, grid = rig.grid || 36;
+  const L = rig.left, R = rig.right, T = rig.top, B = rig.legTop - 1;
   for (const w of wear) {
     const im = await load(w.png); if (!im) continue;
-    const px = pixels(im, rig.grid || 36);
+    const px = pixels(im, grid);
     if (w.slot === 'eyes') u.eyes.forEach((e) => (e.visible = false));
-    // 身子范围里：画成一张贴图，贴在正面
-    const inside = opaque(px, [rig.left, rig.top, rig.right, rig.legTop - 1]);
-    if (inside.length) {
-      const c = document.createElement('canvas'); c.width = cols; c.height = rows;
-      const x = c.getContext('2d'), id = x.createImageData(cols, rows);
-      for (const [cx, cy] of inside) { const si = (cy * px.w + cx) * 4, di = ((cy - rig.top) * cols + (cx - rig.left)) * 4; for (let k = 0; k < 4; k++) id.data[di + k] = px.d[si + k]; }
-      x.putImageData(id, 0, 0);
-      const tex = new THREE.CanvasTexture(c); tex.magFilter = THREE.NearestFilter; tex.colorSpace = THREE.SRGBColorSpace;
-      const plane = new THREE.Mesh(new THREE.PlaneGeometry(.6, .44), new THREE.MeshStandardMaterial({ map: tex, transparent: true, alphaTest: .4, roughness: .6 }));
-      plane.position.set(0, .23, .223); body.add(plane);
-      // 贴身穿的（衬衫、外套）：身子侧面和背面也染成衣服的主色
-      if (w.slot === 'body' || w.slot === 'outer') {
-        const tally = new Map(); for (const [, , r, g, b] of inside) { const k = ((r * 15) | 0) + ',' + ((g * 15) | 0) + ',' + ((b * 15) | 0); tally.set(k, (tally.get(k) || 0) + 1); }
-        const top = [...tally.entries()].sort((a, b) => b[1] - a[1])[0][0].split(',').map((v) => (+v + .5) / 15);
-        const shell = new THREE.Mesh(new RoundedBoxGeometry(.635, .3, .455, 6, .15), new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(top[0], top[1], top[2], THREE.SRGBColorSpace), roughness: .6 }));
-        shell.position.set(0, .15, 0); body.add(shell);
-      }
+    // 身子那块：一层贴膜
+    const reg = regionTex(px, L, T, R, B);
+    if (reg) {
+      const wrap = w.slot === 'body' || w.slot === 'outer' || w.slot === 'scarf';
+      body.add(film([.62, .46, .44], [0, .23, 0], reg, { front: w.slot !== 'back', back: wrap || w.slot === 'back' }));
     }
-    // 身子外面：一颗颗小方块（头上的厚一点，旁边的薄一点）
-    const outside = opaque(px).filter(([x, y]) => x < rig.left || x > rig.right || y < rig.top || y >= rig.legTop);
-    const head = outside.filter(([, y]) => y < rig.top), side = outside.filter(([x, y]) => y >= rig.top && y < rig.legTop), feet = outside.filter(([, y]) => y >= rig.legTop);
-    const mh = build(head, size, .34, (x, y) => [X(x), Y(y), 0]); if (mh) body.add(mh);
-    const ms = build(side, size, .2, (x, y) => [X(x), Y(y), w.slot === 'back' ? -.15 : 0]); if (ms) body.add(ms);
-    const mf = build(feet, size, .12, (x, y) => [X(x), .1 + Y(y) - .02, .1]); if (mf) him.add(mf);
+    // 袖子：两只小手染色
+    const left = dominant(px, 0, T, L - 1, B), right = dominant(px, R + 1, T, grid - 1, B);
+    if (left && u.arms[0]) u.arms[0].material = new THREE.MeshStandardMaterial({ color: left, roughness: .55 });
+    if (right && u.arms[1]) u.arms[1].material = new THREE.MeshStandardMaterial({ color: right, roughness: .55 });
+    // 裤腿、鞋：腿染色
+    const feet = dominant(px, 0, rig.legTop, grid - 1, grid - 1);
+    if (feet) for (const l of u.legs) l.material = new THREE.MeshStandardMaterial({ color: feet, roughness: .55 });
+    // 帽子：头顶一层膜（花纹从帽子图里取，压在头顶和正面上沿）
+    const hat = regionTex(px, L - 2, 0, R + 2, T - 1);
+    if (hat) {
+      const cap = film([.62, .16, .44], [0, .4, 0], hat, { front: true, back: true });
+      body.add(cap);
+    }
   }
 }
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';

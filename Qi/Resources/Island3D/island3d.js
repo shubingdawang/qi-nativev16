@@ -19,7 +19,7 @@ import { bakery } from './bakery.js';
 import { baroque as baroqueHall } from './baroque.js';
 import * as PR from './props.js';
 import * as AT from './atmos.js';
-import { placeObject, dressClawd } from './voxel.js';
+import { dressClawd } from './voxel.js';
 import * as TX from './tex.js';
 import { P, BUILD, fallback, flowerPatch, clover, bush, lavender } from './models.js';
 import { victorian, gothic, rococo, baroque, gasLamp, ironFence, ironBench } from './manor.js';
@@ -238,6 +238,10 @@ function shadowDisc(x, t, z, r) {
 // 别的景落在房子占的地方就不摆，人走路也绕开这些地方（App 里用 window.__blocked）
 const BIG = new Set(['houseOrange', 'cabin', 'shop', 'houseBeige', 'greenhouse', 'lighthouse', 'windmill']);
 const footprints = [];
+// 挡镜头的东西：镜头和她之间隔着它们时，镜头往前推到它们前面
+const blockers = [];
+const LOW = new Set(['daisy', 'clover', 'flowerY', 'flowerR', 'tulipPeach', 'lavender', 'lily', 'pebble', 'rock', 'rocks', 'stones', 'shells', 'picnic', 'mushrooms', 'reeds', 'wheat', 'seaweed', 'coralPink', 'fence', 'fenceV', 'stump', 'haybale', 'crate', 'barrel', 'campfire', 'logpile', 'sled', 'wheelbarrow', 'bench', 'deckchair']);
+const TALL = new Set(['treeGreen', 'treePink', 'treeBig', 'treeOrange', 'pine', 'lamp', 'lighthouse', 'windmill', 'signpost', 'roseArch', 'umbrella']);
 function buildDecor() {
   const list = D.decor.filter((d) => topAt(d.x, d.y) != null);
   for (const d of list.filter((d) => BIG.has(d.kind))) {
@@ -247,7 +251,7 @@ function buildDecor() {
     const bb = new THREE.Box3();
     for (const [k, v] of Object.entries(store.groups)) for (let i = before[k]; i < v.length; i++) { v[i].computeBoundingBox(); bb.union(v[i].boundingBox); }
     // 只算一人高以下的部分：屋檐、雨棚伸出去不算挡路
-    footprints.push({ x0: bb.min.x, x1: bb.max.x, z0: bb.min.z, z1: bb.max.z, kind: d.kind });
+    footprints.push({ x0: bb.min.x, x1: bb.max.x, z0: bb.min.z, z1: bb.max.z, h: bb.max.y, kind: d.kind });
   }
   const hit = (x, z, r) => footprints.some((f) => x + r > f.x0 && x - r < f.x1 && z + r > f.z0 && z - r < f.z1);
   for (const d of list.filter((d) => !BIG.has(d.kind))) {
@@ -255,6 +259,7 @@ function buildDecor() {
     if (hit(o.cx, o.cz, Math.min(.45, d.w * .3))) continue;
     (BUILD[d.kind] || fallback)(o, d);
     shadowDisc(o.cx, o.t, o.cz, Math.min(.65, d.w * .36));
+    if (!LOW.has(d.kind)) blockers.push({ x: o.cx, z: o.cz, r: Math.min(.7, .3 + d.w * .18), h: o.t + (TALL.has(d.kind) ? 2.4 : 1.1) });
   }
   // 走不进去的格子：房子占的、湖里海里
   const blocked = new Set();
@@ -380,12 +385,32 @@ function figureHer() {
   m(sph(.012, 10, 8), '#efc6b4', [0, -.085, .298], [0, 0, 0], [1, .7, .6], head);   // 鼻头
   // 头发：整个后脑和头顶一层，前面一排齐刘海，中间一缕尖尖的分发
   m(sph(.318, 36, 24, 0, Math.PI * 2, 0, Math.PI * .62), HAIR, [0, .015, -.012], [-.5, 0, 0], [1.06, 1, 1], head, .62);
-  m(sph(.316, 36, 16, Math.PI / 2 - 1.25, 2.5, 0, .9), HAIRL, [0, .02, .0], [0, 0, 0], [1.06, 1, 1.02], head, .62);
+  {
+    // 刘海：前额那一片头发，下边缘一波一波的（像一缕一缕垂下来），不是一刀切的盖子
+    const bang = sph(.316, 48, 20, Math.PI / 2 - 1.25, 2.5, 0, .9);
+    const pa = bang.attributes.position, v = new THREE.Vector3();
+    for (let i = 0; i < pa.count; i++) {
+      v.fromBufferAttribute(pa, i);
+      const r = v.length(), th = Math.acos(v.y / r), ph = Math.atan2(v.z, -v.x);
+      if (th < .6) continue;
+      const k = (th - .6) / .3, wave = .5 + .5 * Math.cos((ph - Math.PI / 2) * 11);
+      const t2 = th + k * .14 * wave;
+      const s = Math.sin(t2);
+      pa.setXYZ(i, -Math.cos(ph) * s * r, Math.cos(t2) * r, Math.sin(ph) * s * r);
+    }
+    bang.computeVertexNormals();
+    m(bang, HAIRL, [0, .02, .0], [0, 0, 0], [1.06, 1, 1.02], head, .62);
+  }
   for (const sx of [-1, 1]) m(cap(.05, .14), HAIR, [sx * .27, -.08, .1], [0, 0, sx * .15], [1, 1, .9], head, .62);   // 鬓角
   // 两条粗辫子：一节一节的，绑粉色发圈，辫尾一小撮
   for (const sx of [-1, 1]) {
     const b = new THREE.Group(); b.position.set(sx * .27, -.12, -.02); b.rotation.z = sx * .35; head.add(b);
-    for (let k = 0; k < 3; k++) m(sph(.068 - k * .006, 20, 16), k % 2 ? HAIRL : HAIR, [sx * .02, -.07 - k * .1, 0], [0, 0, 0], [1, 1.25, 1], b, .62);
+    // 每一节是左右两股交叉压着（一股斜向左、一股斜向右），像真的编起来
+    for (let k = 0; k < 3; k++) {
+      const r = .066 - k * .006, y = -.07 - k * .1;
+      m(sph(r, 20, 16), HAIR, [sx * .02, y, 0], [0, 0, 0], [1, 1.25, 1], b, .62);
+      for (const s of [-1, 1]) m(cap(r * .42, r * .9, 6, 12), HAIRL, [sx * .02 + s * r * .32, y, r * .55], [0, 0, s * .55], [1, 1, .6], b, .55);
+    }
     m(torus(.035, .016, 8, 16), BOW, [sx * .03, -.34, 0], [Math.PI / 2, 0, 0], [1, 1, 1], b, .4);
     m(cone(.06, .12, 16), HAIR, [sx * .03, -.42, 0], [Math.PI, 0, 0], [1, 1, .8], b, .62);
   }
@@ -572,8 +597,7 @@ for (const f of [her, him]) {
 }
 renderer.shadowMap.needsUpdate = true;
 window.__dbg = { renderer, sun, scene };
-// 她岛上摆的家具、他身上的衣服：从像素图做成立体件（图是异步读的，读完再补一次影子）
-Promise.all((D.objects || []).map((o) => placeObject(scene, o, (x, y) => topAt(x, y) ?? 0))).then(() => { renderer.shadowMap.needsUpdate = true; });
+// 他身上的衣服：像一层膜贴在身子上（图是异步读的）
 if (D.wear?.length && D.rig) dressClawd(him, D.wear, D.rig);
 
 // ———————————————————— 氛围：天、云、雾、光点、草、蝴蝶、柔光 ————————————————————
@@ -598,8 +622,32 @@ const cam = new THREE.PerspectiveCamera(36, innerWidth / innerHeight, .1, 900);
 const view = { yaw: .35, pitch: .72, dist: 15, target: her.position.clone() };
 function placeCam() {
   const t = view.target;
-  cam.position.set(t.x + Math.sin(view.yaw) * Math.cos(view.pitch) * view.dist, t.y + .6 + Math.sin(view.pitch) * view.dist, t.z + Math.cos(view.yaw) * Math.cos(view.pitch) * view.dist);
+  const dx = Math.sin(view.yaw) * Math.cos(view.pitch), dy = Math.sin(view.pitch), dz = Math.cos(view.yaw) * Math.cos(view.pitch);
+  let d = view.dist;
+  if (window.ISLAND) d = clearDist(t.x, t.y + .6, t.z, dx, dy, dz, d);
+  cam.position.set(t.x + dx * d, t.y + .6 + dy * d, t.z + dz * d);
   cam.lookAt(t.x, t.y + .6, t.z);
+}
+// 从她头那儿往镜头方向看过去，第一样挡着的东西在多远（房子按占地的方块算，树和灯按一根圆柱算）
+function clearDist(ox, oy, oz, dx, dy, dz, max) {
+  let best = max;
+  const hz = Math.hypot(dx, dz) || 1e-6;
+  for (const b of blockers) {
+    const t = ((b.x - ox) * dx + (b.z - oz) * dz) / (hz * hz);
+    if (t <= .35 || t >= best) continue;
+    const px = ox + dx * t - b.x, pz = oz + dz * t - b.z;
+    if (px * px + pz * pz > b.r * b.r) continue;
+    if (oy + dy * t > b.h) continue;
+    best = Math.max(1.2, t - b.r);
+  }
+  for (const f of footprints) {
+    for (let k = 1; k <= 16; k++) {
+      const t = best * k / 16; if (t < .6) continue;
+      const x = ox + dx * t, y = oy + dy * t, z = oz + dz * t;
+      if (x > f.x0 && x < f.x1 && z > f.z0 && z < f.z1 && y < (f.h ?? 4)) { best = Math.max(1.2, t - .3); break; }
+    }
+  }
+  return best;
 }
 placeCam();
 let dirty = true;
