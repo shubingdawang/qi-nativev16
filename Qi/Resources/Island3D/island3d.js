@@ -23,6 +23,8 @@ import * as TX from './tex.js';
 import { P, BUILD, fallback, flowerPatch, clover, bush, lavender } from './models.js';
 import { victorian, gothic, rococo, baroque, gasLamp, ironFence, ironBench } from './manor.js';
 import { hedge, boxBall, roseBush, lollipop, coneTopiary, cypress, pillarBox } from './garden.js';
+import { collector, cropCell } from './plants.js';
+import { ridge, rock } from './sculpt.js';
 
 // 老房子配庄园花园：房子换成维多利亚 / 哥特 / 洛可可 / 巴洛克，小树修剪成造型树，灌木是绿篱和玫瑰
 Object.assign(BUILD, {
@@ -196,7 +198,9 @@ function groundDetail() {
     }
     if (kind === 'soil') {   // 田：一道道垄（App 里庄稼另外按存档画；只有预览里垄上撒点小苗）
       for (const dz of [.2, .5, .8]) {
-        bake(box(.96, .06, .14, .025, 1), new THREE.Color(P.soilL), { p: [x + .5, t + .03, y + dz], line: 0 });
+        // 垄是捏出来的一道土：中间拱、两头收、表面坑坑洼洼；旁边散两三块小土坷垃
+        bake(ridge(.98, .2, .075, { seed: (x * 31 + y * 17 + dz * 10) | 0 }), jit('#8f6c4c', .04), { p: [x + .5, t, y + dz + (R() - .5) * .02], r: [0, (R() - .5) * .04, 0], line: 0, ao: t - .05 });
+        for (let k = 0; k < 3; k++) if (R() < .7) bake(rock(.012 + R() * .012, { seed: (R() * 99) | 0, flat: .6, detail: 1 }), jit(P.soil, .08), { p: [x + .08 + R() * .84, t + .003, y + dz + (R() < .5 ? -.11 : .11)], r: [0, R() * 6, 0], line: 0 });
         if (!D.crops) for (const dx of [.25, .75]) if (R() < .7) for (const sx of [-1, 1]) bake(blob(.03, 0, .4), P.leaf, { p: [x + dx + sx * .025, t + .08, y + dz], s: [1.5, 1, .8], r: [0, 0, sx * .5], line: .003 });
       }
     }
@@ -806,69 +810,22 @@ const heartMat = (() => {
 })();
 
 // ———————————————————— 田园：庄稼、浇水、钓鱼、采集（存档在 App 里，这边只画和报「她跟前是什么」） ————————————————————
-// 庄稼：App 传过来 [{x, y, kind, stage 0~3, wet, color}]，每格六棵（三道垄上各两棵），南瓜西瓜熟了是正中一个大的
+// 庄稼：App 传过来 [{x, y, kind, stage 0~3, wet, color}]。样子在 plants.js 里捏（叶子、茎、果子都是照轮廓长出来的），
+// 整片田合成一个网格；浇过水的那格土深一块
 const cropGrp = new THREE.Group(); scene.add(cropGrp);
-const cropKit = toyKit(cropGrp);
-const LEAF = '#7f9a5c', LEAF_D = '#6a8550', STEM = '#7a8f52';
-function plantAt(c, px, pz, y) {
-  const m = cropKit, s = c.stage, col = '#' + (c.color || 'E8758F');
-  if (s === 0) { m(sph(.035, 10, 8), '#7d5f45', [px, y + .07, pz], [0, 0, 0], [1.3, .5, 1.3]); return; }   // 刚种下：一小撮土
-  if (s === 1) {   // 发芽：两片小叶子
-    m(cap(.008, .05, 4, 6), STEM, [px, y + .1, pz]);
-    for (const sx of [-1, 1]) m(sph(.03, 10, 8), LEAF, [px + sx * .03, y + .14, pz], [0, 0, sx * .6], [1.4, .45, .9]);
-    return;
-  }
-  const big = s === 3;
-  switch (c.kind) {
-    case 'sunflower': {
-      const h = big ? .5 : .32;
-      m(cap(.012, h, 4, 8), STEM, [px, y + .06 + h / 2, pz]);
-      for (const sx of [-1, 1]) m(sph(.045, 10, 8), LEAF, [px + sx * .05, y + .06 + h * .45, pz], [0, 0, sx * .5], [1.4, .35, .9]);
-      if (big) { m(new THREE.CylinderGeometry(.09, .09, .02, 20), '#f2c230', [px, y + .1 + h, pz + .02], [1.2, 0, 0]); m(new THREE.CylinderGeometry(.045, .045, .025, 16), '#6b4a2e', [px, y + .1 + h, pz + .03], [1.2, 0, 0]); }
-      return;
-    }
-    case 'lavender': case 'rose': {
-      const n = big ? 5 : 3;
-      for (let i = 0; i < n; i++) {
-        const a = i / n * 6.28, ox = Math.cos(a) * .04, oz = Math.sin(a) * .04, h = .16 + (i % 2) * .05;
-        m(cap(.006, h, 3, 6), STEM, [px + ox, y + .06 + h / 2, pz + oz]);
-        if (big) c.kind === 'lavender' ? m(cap(.016, .06, 6, 8), col, [px + ox, y + .09 + h, pz + oz]) : m(sph(.03, 12, 10), col, [px + ox, y + .08 + h, pz + oz], [0, 0, 0], [1, .8, 1]);
-      }
-      m(sph(.06, 12, 8), LEAF_D, [px, y + .09, pz], [0, 0, 0], [1.2, .6, 1.2]);
-      return;
-    }
-    case 'carrot': {
-      for (let i = 0; i < 5; i++) { const a = i / 5 * 6.28; m(cap(.008, big ? .14 : .1, 3, 6), LEAF, [px + Math.cos(a) * .015, y + .13, pz + Math.sin(a) * .015], [Math.sin(a) * .35, 0, -Math.cos(a) * .35]); }
-      if (big) m(new THREE.ConeGeometry(.035, .05, 12), col, [px, y + .075, pz], [Math.PI, 0, 0]);
-      return;
-    }
-    case 'pumpkin': case 'watermelon': {
-      m(sph(.07, 12, 8), LEAF_D, [px - .05, y + .09, pz], [0, 0, 0], [1.3, .45, 1.1]);
-      m(sph(.06, 12, 8), LEAF, [px + .06, y + .09, pz + .03], [0, 0, 0], [1.3, .45, 1.1]);
-      return;   // 熟了的那颗大的另外画在格子正中
-    }
-    default: {   // 草莓、番茄、樱桃番茄：一丛叶子，熟了挂几颗果子
-      m(sph(.075, 14, 10), LEAF, [px, y + .1, pz], [0, 0, 0], [1.25, .7, 1.1]);
-      m(sph(.05, 12, 8), LEAF_D, [px + .04, y + .14, pz - .02], [0, 0, 0], [1.2, .7, 1]);
-      if (big) for (const [ox, oy, oz] of [[-.06, .08, .05], [.05, .07, .06], [.0, .1, -.07], [.07, .12, .0]]) m(sph(c.kind === 'strawberry' ? .022 : .026, 12, 10), col, [px + ox, y + oy, pz + oz], [0, 0, 0], c.kind === 'strawberry' ? [1, 1.2, 1] : [1, .9, 1]);
-    }
-  }
-}
+const cropMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .72, metalness: 0, side: THREE.DoubleSide });
 function buildCrops(list) {
   for (const ch of [...cropGrp.children]) { cropGrp.remove(ch); ch.geometry?.dispose(); }
+  let sd = 11; const rnd = () => ((sd = (sd * 9301 + 49297) % 233280) / 233280);
+  const add = collector(rnd);
   for (const c of list || []) {
     const y = topAt(c.x, c.y) ?? 0;
-    // 浇过水：垄间的土深一块
-    if (c.wet) cropKit(new THREE.BoxGeometry(.94, .006, .94), '#6a4f3c', [c.x + .5, y + .006, c.y + .5], [0, 0, 0], [1, 1, 1], cropGrp, .95);
-    for (const dz of [.2, .5, .8]) for (const dx of [.28, .72]) plantAt(c, c.x + dx, c.y + dz, y);
-    if (c.stage === 3 && (c.kind === 'pumpkin' || c.kind === 'watermelon')) {
-      const col = '#' + c.color;
-      const ball = cropKit(sph(.17, 24, 16), col, [c.x + .5, y + .15, c.y + .5], [0, 0, 0], [1.15, .8, 1]);
-      if (c.kind === 'pumpkin') { for (let i = 0; i < 6; i++) cropKit(sph(.17, 16, 12), col, [0, 0, 0], [0, i / 6 * Math.PI, 0], [.55, .98, 1.02], ball); cropKit(cap(.02, .05, 4, 6), '#6b5a3a', [c.x + .5, y + .3, c.y + .5]); }
-      else for (let i = 0; i < 8; i++) cropKit(sph(.171, 16, 12, i / 8 * 6.28, .12), '#2f6b3a', [0, 0, 0], [0, 0, 0], [1, 1, 1], ball);
-    }
+    sd = (c.x * 73 + c.y * 151) % 233280 + 1;   // 同一格每次长得一样（浇个水不会整片重新长一遍）
+    if (c.wet) add(new THREE.BoxGeometry(.94, .006, .94), '#6a4f3c', { p: [c.x + .5, y + .006, c.y + .5], jit: 0 });
+    cropCell(add, c, y, rnd);
   }
-  cropGrp.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  const m = add.mesh(cropMat);
+  if (m) { m.castShadow = true; m.receiveShadow = true; cropGrp.add(m); }
 }
 buildCrops(D.crops);
 
