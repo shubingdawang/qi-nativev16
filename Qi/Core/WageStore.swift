@@ -426,9 +426,27 @@ final class WageStore: ObservableObject {
     static let shared = WageStore()
 
     @Published private(set) var file = WageFile() {
-        didSet { if loaded { Storage.save(file, to: "wage.json") } }
+        didSet {
+            memo = Memo()
+            if loaded { Storage.save(file, to: "wage.json") }
+        }
     }
     private var loaded = false
+
+    /// 算过的结果先记着，数据一改就全扔掉重算。
+    ///
+    /// ⚠️ 工资页订阅着整个 AppState，App 别处一动它就整页重画；每画一次都要算这个月的合计、
+    /// 明细、下次发薪、最近的纪念日，日历上每一格还要看是不是纪念日。不记着的话，
+    /// 「最近的纪念日」一次就要往后翻 370 天、每天把每个纪念日的日期从字重新解析一遍——
+    /// 她说的「工资页偶尔卡一下」就是这些。
+    private struct Memo {
+        var breakdown: [String: MonthBreakdown] = [:]
+        var nextPayday: [String: Date?] = [:]
+        var nextAnniversary: [String: (WageAnniversary, Date, Int)?] = [:]
+        /// 纪念日：日期只解析一次（哪个、哪天、几月几号）
+        var anniversaries: [(a: WageAnniversary, date: Date, month: Int, day: Int)]?
+    }
+    private var memo = Memo()
 
     private init() {
         file = Storage.load(WageFile.self, from: "wage.json") ?? WageFile()
@@ -516,39 +534,62 @@ final class WageStore: ObservableObject {
 
     /// 从今天起（含今天）下一个发薪日
     func nextPayday(from d: Date = Date()) -> Date? {
+        let k = Self.key(d)
+        if let hit = memo.nextPayday[k] { return hit }
         let cal = gregorian
         let start = cal.startOfDay(for: d)
+        var found: Date?
         for i in 0..<62 {
-            if let x = cal.date(byAdding: .day, value: i, to: start), isPayday(x) { return x }
+            if let x = cal.date(byAdding: .day, value: i, to: start), isPayday(x) { found = x; break }
         }
-        return nil
+        memo.nextPayday[k] = found
+        return found
+    }
+
+    private var parsedAnniversaries: [(a: WageAnniversary, date: Date, month: Int, day: Int)] {
+        if let hit = memo.anniversaries { return hit }
+        let cal = gregorian
+        let list = file.settings.anniversaries.compactMap { a -> (a: WageAnniversary, date: Date, month: Int, day: Int)? in
+            guard let ad = Self.date(a.date) else { return nil }
+            return (a, ad, cal.component(.month, from: ad), cal.component(.day, from: ad))
+        }
+        memo.anniversaries = list
+        return list
     }
 
     /// 这一天是哪几个纪念日（每年的按月日算；2 月 29 日那年没有就按 28 日）
     func anniversaries(on d: Date) -> [WageAnniversary] {
+        let list = parsedAnniversaries
+        guard !list.isEmpty else { return [] }
         let cal = gregorian
-        return file.settings.anniversaries.filter { a in
-            guard let ad = Self.date(a.date) else { return false }
-            if !a.yearly { return cal.isDate(ad, inSameDayAs: d) }
-            guard ad <= d || cal.isDate(ad, inSameDayAs: d) else { return false }
-            let am = cal.component(.month, from: ad), aday = cal.component(.day, from: ad)
-            let m = cal.component(.month, from: d), day = cal.component(.day, from: d)
-            let last = cal.range(of: .day, in: .month, for: d)?.count ?? 31
-            return am == m && min(aday, last) == day
+        let m = cal.component(.month, from: d), day = cal.component(.day, from: d)
+        var last: Int?
+        return list.compactMap { e in
+            if !e.a.yearly { return cal.isDate(e.date, inSameDayAs: d) ? e.a : nil }
+            guard e.month == m, e.date <= d || cal.isDate(e.date, inSameDayAs: d) else { return nil }
+            if last == nil { last = cal.range(of: .day, in: .month, for: d)?.count ?? 31 }
+            return min(e.day, last!) == day ? e.a : nil
         }
     }
 
     /// 最近的一个纪念日：哪个、哪天、第几年（0 = 当天就是那一天）
     func nextAnniversary(from d: Date = Date()) -> (WageAnniversary, Date, Int)? {
-        let cal = gregorian
-        let start = cal.startOfDay(for: d)
-        for i in 0..<370 {
-            guard let x = cal.date(byAdding: .day, value: i, to: start) else { continue }
-            if let a = anniversaries(on: x).first, let ad = Self.date(a.date) {
-                return (a, x, cal.dateComponents([.year], from: ad, to: x).year ?? 0)
+        let k = Self.key(d)
+        if let hit = memo.nextAnniversary[k] { return hit }
+        var found: (WageAnniversary, Date, Int)?
+        if !parsedAnniversaries.isEmpty {
+            let cal = gregorian
+            let start = cal.startOfDay(for: d)
+            for i in 0..<370 {
+                guard let x = cal.date(byAdding: .day, value: i, to: start) else { continue }
+                if let a = anniversaries(on: x).first, let ad = Self.date(a.date) {
+                    found = (a, x, cal.dateComponents([.year], from: ad, to: x).year ?? 0)
+                    break
+                }
             }
         }
-        return nil
+        memo.nextAnniversary[k] = found
+        return found
     }
 
     /// 这一天看哪张班表（几张都管到这天的话，用后导入的那张）
@@ -841,13 +882,14 @@ final class WageStore: ObservableObject {
     }
 
     func monthBreakdown(_ month: Date) -> MonthBreakdown {
-        let cal = Calendar.current
+        // 哪个月：直接比日期字的前 7 个字（yyyy-MM），不用把每一天的字都解析成日期
+        let mk = Self.monthKey(month)
+        if let hit = memo.breakdown[mk] { return hit }
         var b = MonthBreakdown()
         b.fullTime = isFullTime(month)
         var minutes = 0, otMinutes = 0
         for (k, d) in file.days {
-            guard let date = Self.keyFormat.date(from: k),
-                  cal.isDate(date, equalTo: month, toGranularity: .month) else { continue }
+            guard k.hasPrefix(mk) else { continue }
             b.extra += d.earnedExtra
             b.spent += d.spent
             if d.leave { b.leaveDays += 1; continue }
@@ -875,6 +917,7 @@ final class WageStore: ObservableObject {
         b.overtimePay = cents(b.overtimePay)
         b.base = cents(b.base)
         b.leaveDeduct = cents(b.leaveDeduct)
+        memo.breakdown[mk] = b
         return b
     }
 

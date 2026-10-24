@@ -263,11 +263,8 @@ struct WageView: View {
         }
     }
 
-    static func md(_ d: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "M月d日"
-        return f.string(from: d)
-    }
+    private static let mdFormat: DateFormatter = { let f = DateFormatter(); f.dateFormat = "M月d日"; return f }()
+    static func md(_ d: Date) -> String { mdFormat.string(from: d) }
 
     /// 「今天」「明天」「还有 N 天」
     static func until(_ d: Date) -> String {
