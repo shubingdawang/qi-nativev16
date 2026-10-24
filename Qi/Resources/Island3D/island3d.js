@@ -259,7 +259,7 @@ function buildDecor() {
     if (hit(o.cx, o.cz, Math.min(.45, d.w * .3))) continue;
     (BUILD[d.kind] || fallback)(o, d);
     shadowDisc(o.cx, o.t, o.cz, Math.min(.65, d.w * .36));
-    if (!LOW.has(d.kind)) blockers.push({ x: o.cx, z: o.cz, r: Math.min(.7, .3 + d.w * .18), h: o.t + (TALL.has(d.kind) ? 2.4 : 1.1) });
+    if (TALL.has(d.kind)) blockers.push({ x: o.cx, z: o.cz, r: Math.min(.7, .3 + d.w * .18), h: o.t + (TALL.has(d.kind) ? 2.4 : 1.1) });
   }
   // 走不进去的格子：房子占的、湖里海里
   const blocked = new Set();
@@ -579,8 +579,8 @@ scene.add(sea);
 
 // 光：天光 + 一盏暖暖的太阳；影子只压掉一半的光
 if (D.night) Object.assign(AT.SKY, AT.NIGHT);
-scene.add(new THREE.HemisphereLight(D.night ? '#5a6aa8' : '#cfdcef', D.night ? '#2a2638' : '#8a7a62', D.night ? .55 : 1.0));
-const sun = new THREE.DirectionalLight(D.night ? '#b8c6f2' : '#ffe2b6', D.night ? 1.1 : 3.6);
+scene.add(new THREE.HemisphereLight(D.night ? '#5a6aa8' : '#cfdcef', D.night ? '#2a2638' : '#8a7a62', D.night ? .38 : 1.0));
+const sun = new THREE.DirectionalLight(D.night ? '#b8c6f2' : '#ffe2b6', D.night ? .75 : 3.6);
 sun.position.set(W / 2 + AT.SKY.sun.x * 40, AT.SKY.sun.y * 40 + 4, H / 2 + AT.SKY.sun.z * 40); sun.target.position.set(W / 2, 0, H / 2);
 sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -W * .75, right: W * .75, top: H * .75, bottom: -H * .75, near: 1, far: 80 });
@@ -661,8 +661,9 @@ function clearDist(ox, oy, oz, dx, dy, dz, max) {
 placeCam();
 let dirty = true;
 const pointers = new Map(); let pinch0 = 0, dist0 = 0;
-cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture(e.pointerId); pointers.set(e.pointerId, [e.clientX, e.clientY]); if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); dist0 = view.dist; } });
-cv.addEventListener('pointermove', (e) => {
+// 电脑上预览时用鼠标转视角（App 里由 I3D.look 控制，这几个不挂）
+if (!window.ISLAND) cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture(e.pointerId); pointers.set(e.pointerId, [e.clientX, e.clientY]); if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); dist0 = view.dist; } });
+if (!window.ISLAND) cv.addEventListener('pointermove', (e) => {
   if (!pointers.has(e.pointerId)) return;
   const [px, py] = pointers.get(e.pointerId); pointers.set(e.pointerId, [e.clientX, e.clientY]);
   if (pointers.size === 1) { view.yaw -= (e.clientX - px) * .006; view.pitch = Math.max(.12, Math.min(1.45, view.pitch + (e.clientY - py) * .005)); }
