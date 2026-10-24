@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>小岛 3D</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #f3ece0; touch-action: none; -webkit-user-select: none; user-select: none; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #fps { position: fixed; left: 8px; top: 8px; font: 11px -apple-system, sans-serif; color: #8a7a6a; }
+</style>
+<script type="importmap">
+{"imports":{"three":"./lib/three.module.min.js","three/addons/geometries/RoundedBoxGeometry.js":"./lib/RoundedBoxGeometry.js","three/addons/utils/BufferGeometryUtils.js":"./lib/BufferGeometryUtils.js"}}
+</script>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="fps"></div>
+<div style="position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(40,28,20,.28) 100%)"></div>
+<script type="module">
+// 电脑上预览「App 里」的样子：?app 时假装是 App 把岛的数据塞进来
+if (location.search.includes("app") && !window.ISLAND) window.ISLAND = await (await fetch(location.search.includes("test") ? "_t/island_app.json" : "island.json")).json();
+import("./island3d.js?" + Date.now());
+</script>
+</body>
+</html>
