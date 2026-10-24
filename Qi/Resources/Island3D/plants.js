@@ -110,7 +110,7 @@ function tomato(add, x, y, z, rnd, st, cherry) {
   }
 }
 
-function sunflower(add, x, y, z, rnd, st) {
+export function sunflower(add, x, y, z, rnd, st) {
   const h = st === 3 ? .66 : .42, a = rnd() * 6.28, sway = (rnd() - .5) * .05;
   const top = V(x + sway, y + h, z + .02);
   add(stem([V(x, y, z), V(x - sway * .3, y + h * .4, z), V(x + sway * .6, y + h * .8, z + .01), top], .012, .008, { seg: 14, rad: 7, knots: 4 }), '#7f9650');
@@ -131,20 +131,27 @@ function sunflower(add, x, y, z, rnd, st) {
   add(fruit(.06, { sy: .32, lump: .06 }), '#6f8a46', { p: [0, -.012, 0], parent: head });
 }
 
-function lavender(add, x, y, z, rnd, st) {
-  for (let i = 0; i < 12; i++) add(leaf({ len: .07, wid: .011, shape: BLADE, droop: .35, fold: .2, segL: 6, segW: 1, seed: i }), '#8fa184', { p: [x, y + .01, z], r: [0, i / 12 * 6.28 + rnd() * .3, .8] });
+export function lavender(add, x, y, z, rnd, st) {
+  for (let i = 0; i < 9; i++) add(leaf({ len: .07, wid: .011, shape: BLADE, droop: .35, fold: .2, segL: 5, segW: 1, seed: i }), '#8fa184', { p: [x, y + .01, z], r: [0, i / 12 * 6.28 + rnd() * .3, .8] });
   const n = st === 3 ? 11 : 8;
   for (let i = 0; i < n; i++) {   // 一束细茎往外散开，顶上一穗紫色的小花苞
     const a = i / n * 6.28 + rnd() * .4, sp = .02 + rnd() * .03, h = .17 + rnd() * .07, tip = out(x, y, z, a, sp * 1.6, h);
-    add(stem([V(x, y, z), out(x, y, z, a, sp * .6, h * .5), tip], .0022, .0015, { seg: 7, rad: 4, cap: false }), '#8a9a72');
+    add(stem([V(x, y, z), out(x, y, z, a, sp * .6, h * .5), tip], .0022, .0015, { seg: 5, rad: 3, cap: false }), '#8a9a72');
     const dir = tip.clone().sub(out(x, y, z, a, sp * 1.3, h * .85)).normalize();
-    for (let k = 0; k < 9; k++) {
-      const t = k / 9, p = tip.clone().addScaledVector(dir, t * .05), b = k * 2.2;
-      add(fruit(.0065 * (1 - t * .35), { sy: 1.3, lump: .15, seg: 8 }), st === 3 ? (k % 3 ? '#8b72c2' : '#a08ad3') : '#93a57f', { p: [p.x + Math.cos(b) * .004, p.y, p.z + Math.sin(b) * .004] });
-    }
+    // 花穗：一整支细长的穗，表面一轮轮的小花苞（起伏和深浅隔一段换一下），往上收尖
+    const spike = add.mat([tip.x + dir.x * .025, tip.y + dir.y * .025, tip.z + dir.z * .025], [Math.atan2(dir.z, dir.y), 0, -Math.atan2(dir.x, dir.y)]);
+    add(fruit(.008, { sy: 3.4, point: .3, lump: .35, seg: 7, seed: i }), st === 3 ? '#8b72c2' : '#93a57f', { parent: spike, vcol: (v, c) => { if (Math.sin(v.y * 520) > .2) c.multiplyScalar(1.18); } });
   }
 }
 
+// 一朵玫瑰：一层层往里卷的花瓣，越里越紧、越深（parent：花朝哪儿、多大）
+export function roseBloom(add, parent, color, both = false, lite = false) {
+  const lf = both ? leafShape : leaf, sl = lite ? 3 : 5, sw = lite ? 1 : 2;
+  for (let ring = 0; ring < 4; ring++) {
+    const n = 5 + ring, col = new THREE.Color(color).multiplyScalar(1 - ring * .08);
+    for (let k = 0; k < n; k++) add(lf({ len: .032 - ring * .005, wid: .036 - ring * .005, shape: PETAL, droop: -.25 + ring * .05, fold: .9, curl: 1.2 - ring * .2, segL: sl, segW: sw, seed: k }), col, { p: [0, ring * .002, 0], r: [0, k / n * 6.28 + ring * .6, 1.25 - ring * .3 + (3 - ring) * .05], parent, jit: .03 });
+  }
+}
 function rose(add, x, y, z, rnd, st) {
   for (let i = 0; i < 4; i++) {   // 几根木质的枝，长着复叶
     const a = i * 1.6 + rnd(), h = .2 + rnd() * .08, tip = out(x, y, z, a, .04, h);
@@ -152,10 +159,7 @@ function rose(add, x, y, z, rnd, st) {
     for (let k = 0; k < 2; k++) compound(add, [tip.x - Math.cos(a) * .02 * k, tip.y - .06 - k * .05, tip.z + Math.sin(a) * .02 * k], a + k * 2 + 1, .05, .015, { pairs: 1, lw: .032, ww: .024, shape: ROUND, rnd, col: C.leafD, wave: .3 });
     const bloom = add.mat([tip.x, tip.y + .006, tip.z], [(rnd() - .5) * .4, rnd() * 6, (rnd() - .5) * .4]);
     if (st === 3 && i < 3) {   // 玫瑰：一层层往里卷的花瓣，越里越紧、越深
-      for (let ring = 0; ring < 4; ring++) {
-        const n = 5 + ring, col = new THREE.Color('#c63a52').multiplyScalar(1 - ring * .08);
-        for (let k = 0; k < n; k++) add(leaf({ len: .032 - ring * .005, wid: .036 - ring * .005, shape: PETAL, droop: -.25 + ring * .05, fold: .9, curl: 1.2 - ring * .2, segL: 5, segW: 2, seed: k }), col, { p: [0, ring * .002, 0], r: [0, k / n * 6.28 + ring * .6, 1.25 - ring * .3 + (3 - ring) * .05], parent: bloom, jit: .03 });
-      }
+      roseBloom(add, bloom, '#c63a52');
     } else {   // 花苞：尖尖的，外面几片萼片
       add(fruit(.011, { sy: 1.6, point: -.3, lump: .05 }), st === 3 ? '#c63a52' : '#7e9a56', { p: [0, .01, 0], parent: bloom });
       for (let k = 0; k < 5; k++) add(leaf({ len: .016, wid: .006, droop: -.3, segL: 4, segW: 1 }), C.leafD, { r: [0, k / 5 * 6.28, 1.1], parent: bloom });

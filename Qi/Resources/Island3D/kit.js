@@ -45,7 +45,7 @@ export const R = () => ((SEED = (SEED * 9301 + 49297) % 233280) / 233280);
 export const jit = (hex, k = .05) => { const c = new THREE.Color(hex); const f = 1 + (R() - .5) * 2 * k; return c.multiplyScalar(f); };
 
 // 按材质分开合：石头和木头（哑光）、金（会反光）、玻璃（彩绘玻璃，透亮）、水
-export const store = { groups: { base: [], gold: [], glass: [], water: [], roof: [], slate: [], siding: [], darkstone: [], ashlar: [], plinth: [], glow: [], iron: [] }, hulls: [] };
+export const store = { groups: { base: [], gold: [], glass: [], water: [], roof: [], slate: [], siding: [], darkstone: [], ashlar: [], plinth: [], glow: [], iron: [], foliage: [] }, hulls: [] };
 store.parts = store.groups.base;
 // 描边：华丽版不要（那是可爱版的画法）
 export const OPT = { outline: false };
@@ -54,10 +54,17 @@ const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpE = new THRE
 
 // 一块：geo 按 p / r / s 摆好，涂成 color。
 // line：描边多粗（0 = 不描）；ao：地面高度——越贴地越暗一点（假的环境光遮蔽）
-export function bake(geo, color, { p = [0, 0, 0], r = [0, 0, 0], s = [1, 1, 1], line = .014, ao = null, matrix = null, mat = null } = {}) {
+// vcol(v, c)：按这块自己的坐标给每个点改颜色（树冠底下暗、顶上亮，石头顶上长青苔……）
+export function bake(geo, color, { p = [0, 0, 0], r = [0, 0, 0], s = [1, 1, 1], line = .014, ao = null, matrix = null, mat = null, vcol = null } = {}) {
   let g = geo.index ? geo.toNonIndexed() : geo.clone();
   for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
   if (!g.attributes.normal) g.computeVertexNormals();
+  let local = null;
+  if (vcol) {
+    const base = color instanceof THREE.Color ? color : new THREE.Color(color), c = new THREE.Color(), v = new THREE.Vector3(), q = g.attributes.position;
+    local = new Float32Array(q.count * 3);
+    for (let i = 0; i < q.count; i++) { c.copy(base); v.fromBufferAttribute(q, i); vcol(v, c); local[i * 3] = c.r; local[i * 3 + 1] = c.g; local[i * 3 + 2] = c.b; }
+  }
   tmpE.set(r[0], r[1], r[2]); tmpQ.setFromEuler(tmpE); tmpP.set(p[0], p[1], p[2]); tmpS.set(s[0], s[1], s[2]);
   tmpM.compose(tmpP, tmpQ, tmpS);
   if (matrix) tmpM.premultiply(matrix);
@@ -67,6 +74,7 @@ export function bake(geo, color, { p = [0, 0, 0], r = [0, 0, 0], s = [1, 1, 1], 
   for (let i = 0; i < n; i++) {
     let k = 1;
     if (ao != null) { const h = pa.getY(i) - ao; const t = Math.max(0, Math.min(1, h / .45)); k = .74 + .26 * t * t * (3 - 2 * t); }
+    if (local) { ca[i * 3] = local[i * 3] * k; ca[i * 3 + 1] = local[i * 3 + 1] * k; ca[i * 3 + 2] = local[i * 3 + 2] * k; continue; }
     ca[i * 3] = col.r * k; ca[i * 3 + 1] = col.g * k; ca[i * 3 + 2] = col.b * k;
   }
   g.setAttribute('color', new THREE.BufferAttribute(ca, 3));

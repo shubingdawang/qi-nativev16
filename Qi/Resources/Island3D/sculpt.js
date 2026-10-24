@@ -7,7 +7,7 @@
 // - fruit：果子——有棱（南瓜）、顶上凹（苹果、番茄）、一头尖（草莓）、表面起伏
 // - rock / canopy：不规则的石头、一团团的树冠
 import * as THREE from 'three';
-import { mergeVertices, mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // ———— 噪声 ————
 const hash = (x, y, z, s) => {
@@ -37,6 +37,14 @@ export function smooth(geo) {
   g.computeVertexNormals();
   return g;
 }
+// 沿法线推拉：fn(位置, 法线) 返回推出去多少（修剪过的绿篱、树冠表面一簇簇叶子的起伏）
+export function pushN(geo, fn) {
+  const g = smooth(geo), pa = g.attributes.position, na = g.attributes.normal, v = new THREE.Vector3(), n = new THREE.Vector3();
+  for (let i = 0; i < pa.count; i++) { v.fromBufferAttribute(pa, i); n.fromBufferAttribute(na, i); const d = fn(v, n); pa.setXYZ(i, v.x + n.x * d, v.y + n.y * d, v.z + n.z * d); }
+  g.computeVertexNormals();
+  return g;
+}
+export const leafy = (geo, amp = .025, freq = 14, seed = 0) => pushN(geo, (v) => fbm(v.x * freq, v.y * freq, v.z * freq, seed, 3) * amp + noise(v.x * freq * 3, v.y * freq * 3, v.z * freq * 3, seed + 9) * amp * .35);
 export function deform(geo, fn) {
   const pa = geo.attributes.position, v = new THREE.Vector3();
   for (let i = 0; i < pa.count; i++) { v.fromBufferAttribute(pa, i); fn(v, i); pa.setXYZ(i, v.x, v.y, v.z); }
@@ -150,22 +158,20 @@ export function rock(r = .2, { flat = .55, seed = 0, rough = .22, detail = 3 } =
   g.computeVertexNormals();
   return g;
 }
-// 树冠：几团大小不一的鼓包挤在一起，表面再起一层细的起伏（叶丛的感觉），底下收平一点
-export function canopy(r = .6, { blobs = 6, seed = 0, sy = .85, rough = .18 } = {}) {
+// 树冠：一整团（一个网格，省三角形），表面鼓出几大簇叶团、再起一层细的起伏，底下收平一点。
+// blobs = 鼓出几簇；detail = 细分几次（3 = 1280 个三角形，2 = 320）
+export function canopy(r = .6, { blobs = 6, seed = 0, sy = .85, rough = .18, detail = 3 } = {}) {
   let s = seed * 9301 + 7; const rnd = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
-  const parts = [];
-  for (let i = 0; i < blobs; i++) {
-    const a = rnd() * Math.PI * 2, d = i === 0 ? 0 : r * (.35 + rnd() * .3), y = i === 0 ? 0 : (rnd() - .35) * r * .6;
-    const rr = r * (i === 0 ? .75 : .42 + rnd() * .2);
-    const b = new THREE.IcosahedronGeometry(rr, 3);
-    b.translate(Math.cos(a) * d, y, Math.sin(a) * d);
-    parts.push(b);
-  }
-  let g = smooth(mergeGeometries(parts.map((p) => { p.deleteAttribute('uv'); p.deleteAttribute('normal'); return p; })));
+  const cl = [];
+  for (let i = 0; i < blobs; i++) { const a = rnd() * Math.PI * 2, y = rnd() * 1.4 - .4, k = Math.sqrt(Math.max(0, 1 - y * y)); cl.push([new THREE.Vector3(Math.cos(a) * k, y, Math.sin(a) * k), .5 + rnd() * .4, .18 + rnd() * .14]); }
+  const g = smooth(new THREE.IcosahedronGeometry(1, detail)), d = new THREE.Vector3();
   deform(g, (v) => {
-    v.multiplyScalar(1 + fbm(v.x * 3 / r, v.y * 3 / r, v.z * 3 / r, seed, 3) * rough);
-    v.multiplyScalar(1 + noise(v.x * 9 / r, v.y * 9 / r, v.z * 9 / r, seed + 3) * .05);
-    v.y *= sy; if (v.y < -r * .3) v.y = -r * .3 + (v.y + r * .3) * .4;
+    d.copy(v).normalize();
+    let k = 1 + fbm(d.x * 1.8, d.y * 1.8, d.z * 1.8, seed, 3) * rough;
+    for (const [c, w, h] of cl) { const t = d.dot(c); if (t > 1 - w) { const q = (t - (1 - w)) / w; k += h * q * q * (3 - 2 * q); } }   // 一簇簇鼓出来
+    k *= 1 + noise(d.x * 7, d.y * 7, d.z * 7, seed + 3) * .06;
+    v.copy(d).multiplyScalar(k * r);
+    v.y *= sy; if (v.y < -r * .35) v.y = -r * .35 + (v.y + r * .35) * .4;
   });
   g.computeVertexNormals();
   return g;

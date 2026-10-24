@@ -25,6 +25,7 @@ import { victorian, gothic, rococo, baroque, gasLamp, ironFence, ironBench } fro
 import { hedge, boxBall, roseBush, lollipop, coneTopiary, cypress, pillarBox } from './garden.js';
 import { collector, cropCell } from './plants.js';
 import { ridge, rock } from './sculpt.js';
+import * as FL from './flora.js';
 
 // 老房子配庄园花园：房子换成维多利亚 / 哥特 / 洛可可 / 巴洛克，小树修剪成造型树，灌木是绿篱和玫瑰
 Object.assign(BUILD, {
@@ -42,6 +43,22 @@ Object.assign(BUILD, {
   logpile: PR.logpile, tent: PR.tent, mushrooms: PR.mushrooms, birdhouse: PR.birdhouse, reeds: PR.reeds, stones: PR.stones,
   lanterns: PR.lanterns, windmill: PR.windmill, wheat: PR.wheat, coralPink: PR.coralPink, seaweed: PR.seaweed, snowman: PR.snowman, sled: PR.sled, fountain: (o, d) => fountain(o, d), parterre: (o, d) => parterre(o, d),
   urnPed: (o) => { const put = (g, c, opt = {}) => bake(g, c, { ...opt, ao: o.t, p: [o.cx + (opt.p?.[0] ?? 0), o.t + (opt.p?.[1] ?? 0), o.cz + (opt.p?.[2] ?? 0)] }); put(box(.3, .08, .3), G.stoneD); put(box(.22, .5, .22), G.marble, { p: [0, .29, 0] }); put(box(.3, .06, .3), G.marble, { p: [0, .57, 0] }); urn(put, 0, .6, 0, .9); },
+});
+
+// 草木、石头、蘑菇换成捏出来的（flora.js）：树干沿曲线长、带根，树冠是不规则的叶团，花瓣叶子照轮廓长
+Object.assign(BUILD, {
+  treeGreen: (o) => FL.tree(o, {}),
+  treePink: (o) => FL.tree(o, { leaf: P.pink, leafD: P.pinkD, leafL: P.pinkL, petals: P.pink, blossom: P.white }),
+  treeBig: (o) => FL.tree(o, { h: 1.15, r: .62, fruit: P.apple }),
+  treeOrange: (o) => FL.tree(o, { leaf: P.autumn, leafD: P.autumnD, leafL: P.autumnL, petals: P.autumn }),
+  pinkSmall: (o) => FL.tree(o, { h: .72, r: .38, leaf: P.pink, leafD: P.pinkD, leafL: P.pinkL, blossom: P.white }),
+  bush: (o, d) => (R() < .5 ? FL.hedge(o, d) : FL.boxBall(o)), berry: FL.roseBush,
+  treeSmall: (o) => FL.coneTopiary(o, 1, R() < .4), olive: (o) => FL.lollipop(o), bonsai: (o) => FL.cypress(o, .8), pine: (o) => FL.cypress(o, 1.2),
+  rock: (o) => FL.rock(o, 1.1), pebble: (o) => FL.rock(o, .55), rocks: (o) => FL.rock(o, 1, 3), stump: FL.stump,
+  daisy: (o) => FL.flowerPatch(o, P.white, { shape: 'daisy' }), clover: FL.clover,
+  flowerY: (o) => FL.flowerPatch(o, P.yellow), flowerR: (o) => FL.flowerPatch(o, P.red, { shape: 'tulip' }),
+  tulipPeach: (o) => FL.flowerPatch(o, P.peach, { shape: 'tulip' }), lavender: FL.lavender, sunflower: FL.sunflower, lily: FL.lily,
+  mushrooms: FL.mushrooms,
 });
 
 // ———————————————————— 数据 ————————————————————
@@ -287,13 +304,14 @@ function scatter() {
     const t = TOP[g(x, y)]; if (t == null) continue;
     for (let rep = 0; rep < 2; rep++) {
     const o = { cx: x + .15 + r() * .7, cz: y + .15 + r() * .7, t }, v = r();
-    if (v < .3) flowerPatch(o, petals[(r() * petals.length) | 0], { n: 2 + (r() * 3 | 0), stem: .12 + r() * .1, shape: r() < .3 ? 'daisy' : 'round' });
-    else if (v < .42) clover(o);
-    else if (v < .5) lavender(o);
-    else if (v < .58) { for (let i = 0; i < 5; i++) bake(cone(.05, .28 + r() * .12, 4), jit('#6f9058', .06), { p: [o.cx + (r() - .5) * .2, t + .14, o.cz + (r() - .5) * .2], r: [(r() - .5) * .9, r() * 3, (r() - .5) * .9], s: [1, 1, .25], ao: t, line: 0 }); }
-    else if (v < .605) bush(o, { flower: r() < .5 ? '#fff6e0' : '#f3c4cf' });
-    else if (v < .66) { for (let i = 0; i < 3; i++) { const mx = o.cx + (r() - .5) * .3, mz = o.cz + (r() - .5) * .3, ms = .5 + r() * .5; bake(cyl(.015 * ms, .02 * ms, .07 * ms, 6), '#f4ecdf', { p: [mx, t + .035 * ms, mz], ao: t, line: 0 }); bake(ball(.05 * ms, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), r() < .5 ? '#d9706a' : '#e8b46a', { p: [mx, t + .065 * ms, mz], ao: t, line: 0 }); } }
-    else if (v < .72) { for (let i = 0; i < 3; i++) bake(blob(.04 + r() * .04, 1, .55, .3), jit('#bdb5a8', .06), { p: [o.cx + (r() - .5) * .4, t + .015, o.cz + (r() - .5) * .4], ao: t, line: 0 }); }
+    // 都是捏出来的（flora.js）；空地上数量多，用省三角形的那几样
+    if (v < .24) FL.wildFlower(o, petals[(r() * petals.length) | 0], r() < .3);
+    else if (v < .34) FL.clover(o, true);
+    else if (v < .42) FL.wildLavender(o);
+    else if (v < .48) FL.fern(o);
+    else if (v < .495) FL.bush(o);
+    else if (v < .53) FL.wildMushrooms(o);
+    else if (v < .6) FL.pebbles(o);
     }
   }
 }
@@ -505,6 +523,8 @@ const MATS = {
   plinth: new THREE.MeshStandardMaterial({ vertexColors: true, map: TX.plinthStone, roughness: .85 }),
   glow: new THREE.MeshStandardMaterial({ vertexColors: true, emissive: '#f0a048', emissiveIntensity: 1.4, roughness: .3 }),
   iron: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .45, metalness: .6 }),
+  // 叶子、花瓣：薄薄一片，两面都画
+  foliage: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .78, metalness: 0, side: THREE.DoubleSide }),
 };
 // 彩绘玻璃自己透一点光（像屋里点着灯）
 MATS.glass.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += diffuseColor.rgb * .22;'); };
@@ -601,7 +621,7 @@ for (const f of [her, him]) {
   scene.add(f);
 }
 renderer.shadowMap.needsUpdate = true;
-window.__dbg = { renderer, sun, scene };
+window.__dbg = { renderer, sun, scene, tris: () => tris, BUILD, store };
 
 // ———————————————————— 氛围：天、云、雾、光点、草、蝴蝶、柔光 ————————————————————
 scene.background = null;
