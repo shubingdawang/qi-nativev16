@@ -2658,6 +2658,8 @@ struct WagePayCard: View {
     @State private var images: [String] = []
     @State private var pick: [PhotosPickerItem] = []
     @State private var loaded = false
+    /// 打字时先不存：停手半秒再存（每打一个字就存，整页都跟着重画，打字会卡）
+    @State private var saveLater: Task<Void, Never>?
 
     static let green = Color(hexString: "4FA36B")!
     static let red = Color(hexString: "D9566B")!
@@ -2746,8 +2748,9 @@ struct WagePayCard: View {
             note = r?.note ?? ""
             images = r?.images ?? []
         }
-        .onChange(of: actualText) { _, _ in persist() }
-        .onChange(of: note) { _, _ in persist() }
+        .onChange(of: actualText) { _, _ in persistSoon() }
+        .onChange(of: note) { _, _ in persistSoon() }
+        .onDisappear { if saveLater != nil { saveLater?.cancel(); persist() } }
         .onChange(of: pick) { _, items in
             guard !items.isEmpty else { return }
             Task { @MainActor in
@@ -2762,7 +2765,18 @@ struct WagePayCard: View {
     }
 
     private func persist() {
+        saveLater = nil
         store.setPayRecord(WagePayRecord(actual: Double(actualText), note: note, images: images), on: date)
+    }
+
+    private func persistSoon() {
+        guard loaded else { return }
+        saveLater?.cancel()
+        saveLater = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled else { return }
+            persist()
+        }
     }
 }
 
