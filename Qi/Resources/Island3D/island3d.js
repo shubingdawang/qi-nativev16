@@ -19,7 +19,6 @@ import { bakery } from './bakery.js';
 import { baroque as baroqueHall } from './baroque.js';
 import * as PR from './props.js';
 import * as AT from './atmos.js';
-import { dressClawd } from './voxel.js';
 import * as TX from './tex.js';
 import { P, BUILD, fallback, flowerPatch, clover, bush, lavender } from './models.js';
 import { victorian, gothic, rococo, baroque, gasLamp, ironFence, ironBench } from './manor.js';
@@ -599,8 +598,6 @@ for (const f of [her, him]) {
 }
 renderer.shadowMap.needsUpdate = true;
 window.__dbg = { renderer, sun, scene };
-// 他身上的衣服：像一层膜贴在身子上（图是异步读的）
-if (D.wear?.length && D.rig) dressClawd(him, D.wear, D.rig);
 
 // ———————————————————— 氛围：天、云、雾、光点、草、蝴蝶、柔光 ————————————————————
 scene.background = null;

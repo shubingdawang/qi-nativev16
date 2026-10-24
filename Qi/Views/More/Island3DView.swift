@@ -8,7 +8,7 @@ import WebKit
 // - 左下摇杆走路；空白处拖动转视角，两指缩放
 // - 第三人称 / 第一人称；第三人称时她可以看前进的方向，或者一直看镜头
 // - 拍照：换她的表情和动作、他的样子，按快门存进相册
-// - 他穿的衣服像一层膜贴在身上；岛上摆的家具不进 3D
+// - clawd 在 3D 里不穿衣服（衣服只在 2D 里穿）；岛上摆的家具不进 3D
 //
 // ⚠️ 资源在安装包里是**摊平**的（同步文件夹，子目录不保留），网页里 `./lib/three.module.min.js`
 // 这种路径要靠 `Island3DFiles` 按文件名去包里找。
@@ -196,8 +196,8 @@ final class Island3DController: NSObject, ObservableObject {
 
     // MARK: 塞进网页的数据
 
-    /// 地、景、走不进去的格子、两个人在哪、他穿着什么（家具不进 3D）
-    static func payload(world: WorldStore, wornIDs: [String]) -> String {
+    /// 地、景、走不进去的格子、两个人在哪（家具不进 3D；clawd 在 3D 里不穿衣服，衣服只在 2D 里穿）
+    static func payload(world: WorldStore) -> String {
         let s = world.save
         var dict: [String: Any] = [
             "w": s.width, "h": s.height,
@@ -205,15 +205,10 @@ final class Island3DController: NSObject, ObservableObject {
             "her": [s.herX, s.herY], "him": [s.himX, s.himY],
             "season": world.season.rawValue, "night": WorldStore.isNight,
             "blocked": Array(world.blockedCells()),
-            "rig": ["left": ClawdRig.bodyLeft, "right": ClawdRig.bodyRight, "top": ClawdRig.bodyTop, "legTop": ClawdRig.legTop, "grid": 36],
         ]
         dict["decor"] = (s.decor ?? []).compactMap { d -> [String: Any]? in
             guard let k = WorldDecorKind.resolve(d.kind) else { return nil }
             return ["kind": k.rawValue, "x": d.x, "y": d.y, "w": k.cells.w, "h": k.cells.h]
-        }
-        dict["wear"] = wornIDs.compactMap { id -> [String: Any]? in
-            guard let img = FurnitureCatalog.wornImage(of: id), let png = img.pngData() else { return nil }
-            return ["slot": ClawdRig.wearSlot(id).rawValue, "png": "data:image/png;base64," + png.base64EncodedString()]
         }
         guard let data = try? JSONSerialization.data(withJSONObject: dict),
               let str = String(data: data, encoding: .utf8) else { return "null" }
@@ -243,7 +238,7 @@ struct Island3DView: View {
     init(exit: @escaping () -> Void) {
         self.exit = exit
         _ctl = StateObject(wrappedValue: Island3DController(
-            payload: Island3DController.payload(world: WorldStore.shared, wornIDs: ClawdStore.shared.wornIDs)))
+            payload: Island3DController.payload(world: WorldStore.shared)))
     }
 
     private var accent: Color { app.settings.accentColor }
