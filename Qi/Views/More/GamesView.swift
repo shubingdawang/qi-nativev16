@@ -28,6 +28,7 @@ struct GamesView: View {
     @State private var renaming: LocalGame?
     @State private var newName = ""
     @State private var openingHuman = false
+    @State private var openingBakery = false
     @AppStorage("webLinks") private var webLinksRaw = ""
     @State private var addingLink = false
     @State private var linkName = ""
@@ -109,6 +110,9 @@ struct GamesView: View {
         } message: {
             Text("打开网页遇到要输钥匙的登录页时自动填好并登录。")
         }
+        .fullScreenCover(isPresented: $openingBakery) {
+            BakeryView()
+        }
         .fullScreenCover(isPresented: $openingHuman) {
             WebPageView(title: "人类端",
                         url: URL(string: "https://toy.cedarstar.org")!)
@@ -139,6 +143,13 @@ struct GamesView: View {
 
     @ViewBuilder
     private var webTab: some View {
+        // 自带的：甜品屋（经营一家甜品店，见 `BakeryView`）
+        section("经营") {
+            Button { openingBakery = true } label: {
+                row(title: "甜品屋", sub: "进货、设计甜点、开店卖给客人", icon: "birthday.cake")
+            }
+            .buttonStyle(.plain)
+        }
         // 娃娃那一栏删了。她的原话：「删掉娃娃游戏，有点无聊」。
         // 状态文件（doll.json）没动——万一哪天想找回来，数据还在。
         let grouped = Dictionary(grouping: store.games) { $0.genreValue }
