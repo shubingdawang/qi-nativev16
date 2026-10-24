@@ -20,6 +20,7 @@
 <script type="module">
 // 电脑上预览「App 里」的样子：?app 时假装是 App 把岛的数据塞进来
 if (location.search.includes("app") && !window.ISLAND) window.ISLAND = await (await fetch(location.search.includes("test") ? "_t/island_app.json" : "island.json")).json();
+if (window.ISLAND && location.search.includes("night")) window.ISLAND.night = true;
 import("./island3d.js?" + Date.now());
 </script>
 </body>

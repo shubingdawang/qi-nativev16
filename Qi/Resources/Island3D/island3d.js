@@ -572,13 +572,15 @@ const seaMat = new THREE.ShaderMaterial({
     }`,
 });
 seaMat.uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, seaMat.uniforms]); seaMat.uniforms.shore.value = shoreTex;
+if (D.night) { seaMat.uniforms.c0.value.set('#3a5a7c'); seaMat.uniforms.c1.value.set('#22385a'); seaMat.uniforms.shallow.value.set('#55789a'); seaMat.uniforms.foam.value.set('#a8b8d8'); }
 const sea = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1600), seaMat);
 sea.rotation.x = -Math.PI / 2; sea.position.set(W / 2, -.32, H / 2);
 scene.add(sea);
 
 // 光：天光 + 一盏暖暖的太阳；影子只压掉一半的光
-scene.add(new THREE.HemisphereLight('#cfdcef', '#8a7a62', 1.0));
-const sun = new THREE.DirectionalLight('#ffe2b6', 3.6);
+if (D.night) Object.assign(AT.SKY, AT.NIGHT);
+scene.add(new THREE.HemisphereLight(D.night ? '#5a6aa8' : '#cfdcef', D.night ? '#2a2638' : '#8a7a62', D.night ? .55 : 1.0));
+const sun = new THREE.DirectionalLight(D.night ? '#b8c6f2' : '#ffe2b6', D.night ? 1.1 : 3.6);
 sun.position.set(W / 2 + AT.SKY.sun.x * 40, AT.SKY.sun.y * 40 + 4, H / 2 + AT.SKY.sun.z * 40); sun.target.position.set(W / 2, 0, H / 2);
 sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -W * .75, right: W * .75, top: H * .75, bottom: -H * .75, near: 1, far: 80 });
@@ -603,9 +605,16 @@ if (D.wear?.length && D.rig) dressClawd(him, D.wear, D.rig);
 // ———————————————————— 氛围：天、云、雾、光点、草、蝴蝶、柔光 ————————————————————
 scene.background = null;
 AT.skyDome(scene);
+const starMat = D.night ? AT.stars(scene) : null;
+if (D.night) {
+  // 夜里窗户亮着暖光，灯更亮
+  MATS.glass.emissive = new THREE.Color('#f2b467'); MATS.glass.emissiveIntensity = .75;
+  MATS.glow.emissiveIntensity = 2.2;
+}
 scene.fog = new THREE.FogExp2(new THREE.Color(AT.SKY.fog), .0105);
 AT.clouds(scene, W / 2, H / 2);
 const moteMat = AT.motes(scene, W / 2, H / 2, W * .9, H * .9);
+if (D.night) moteMat.uniforms.col.value.set('#d9f59a');   // 夜里是萤火虫
 const grassSpots = [], flowerSpots = [];
 for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
   const k = g(x, y); if (k !== 'grass' && k !== 'flowers') continue;
@@ -634,17 +643,17 @@ function clearDist(ox, oy, oz, dx, dy, dz, max) {
   const hz = Math.hypot(dx, dz) || 1e-6;
   for (const b of blockers) {
     const t = ((b.x - ox) * dx + (b.z - oz) * dz) / (hz * hz);
-    if (t <= .35 || t >= best) continue;
+    if (t <= 1.5 || t >= best) continue;   // 她身边一米半以内的不管（她常站在花丛、小树旁边）
     const px = ox + dx * t - b.x, pz = oz + dz * t - b.z;
     if (px * px + pz * pz > b.r * b.r) continue;
     if (oy + dy * t > b.h) continue;
-    best = Math.max(1.2, t - b.r);
+    best = Math.max(2.2, t - b.r);
   }
   for (const f of footprints) {
     for (let k = 1; k <= 16; k++) {
-      const t = best * k / 16; if (t < .6) continue;
+      const t = best * k / 16; if (t < 1.2) continue;
       const x = ox + dx * t, y = oy + dy * t, z = oz + dz * t;
-      if (x > f.x0 && x < f.x1 && z > f.z0 && z < f.z1 && y < (f.h ?? 4)) { best = Math.max(1.2, t - .3); break; }
+      if (x > f.x0 && x < f.x1 && z > f.z0 && z < f.z1 && y < (f.h ?? 4)) { best = Math.max(1.6, t - .3); break; }
     }
   }
   return best;
@@ -830,6 +839,7 @@ renderer.setAnimationLoop((ms) => {
   const dt = Math.min(.1, last ? (ms - last) / 1000 : .03); last = ms;
   const ts = ms / 1000;
   seaMat.uniforms.t.value = ts; grassMat.uniforms.t.value = ts; moteMat.uniforms.t.value = ts; flyAnim(ts);
+  if (starMat) starMat.uniforms.t.value = ts;
   if (window.ISLAND) step(dt);
   drawNow(); frames++;
   if (ms - fpsT > 1000) { fpsEl.textContent = frames + ' 帧/秒'; frames = 0; fpsT = ms; }

@@ -2,6 +2,8 @@
 // 随风摆的草（一次绘制画成千上万根）、空地上自动长出来的野花和蝴蝶（只是装饰，不改她岛上的布局）。
 import * as THREE from 'three';
 
+// 夜里：深蓝的天、冷冷的月光、天边一点紫，星星和萤火虫
+export const NIGHT = { top: '#0b1634', mid: '#1f3566', horizon: '#56578a', glow: '#d6defc', fog: '#33395f', sun: new THREE.Vector3(.5, .45, -.74).normalize() };
 export const SKY = { top: '#2f5f9e', mid: '#6f9fd2', horizon: '#ecc9a4', glow: '#ffd9a6', fog: '#ecc9a4', sun: new THREE.Vector3(-.55, .32, .77).normalize() };
 
 // ———— 天：一个大球，竖着从深蓝到地平线暖金，太阳那边亮一片 ————
@@ -26,6 +28,24 @@ export function skyDome(scene) {
   const mesh = new THREE.Mesh(g, m); mesh.renderOrder = -10; mesh.frustumCulled = false;
   scene.add(mesh);
   return mesh;
+}
+
+// 星星：天上一层一闪一闪的小点（只在夜里加）
+export function stars(scene) {
+  const n = 900, pos = new Float32Array(n * 3), seed = new Float32Array(n);
+  let s = 5; const r = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
+  for (let i = 0; i < n; i++) {
+    const th = r() * Math.PI * 2, y = .08 + r() * .92, rr = Math.sqrt(1 - y * y);
+    pos[i * 3] = Math.cos(th) * rr * 380; pos[i * 3 + 1] = y * 380; pos[i * 3 + 2] = Math.sin(th) * rr * 380; seed[i] = r() * 100;
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('seed', new THREE.BufferAttribute(seed, 1));
+  const m = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending, uniforms: { t: { value: 0 }, px: { value: Math.min(devicePixelRatio, 2) } },
+    vertexShader: `uniform float t, px; attribute float seed; varying float vA; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.); gl_Position = projectionMatrix * mv; gl_Position.z = gl_Position.w; vA = .45 + .55 * sin(t * (1. + fract(seed)) + seed * 9.); gl_PointSize = (1.2 + fract(seed * 7.) * 2.2) * px; }`,
+    fragmentShader: `varying float vA; void main(){ float d = length(gl_PointCoord - .5); gl_FragColor = vec4(.92, .94, 1., smoothstep(.5, 0., d) * vA); }`,
+  });
+  const p = new THREE.Points(g, m); p.frustumCulled = false; p.renderOrder = -9; scene.add(p);
+  return m;
 }
 
 // ———— 云：一张张柔软的云贴片，围着岛一圈，远的大近的小，跟着镜头转（永远朝着你） ————
@@ -67,13 +87,13 @@ export function motes(scene, cx, cz, w, h) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('seed', new THREE.BufferAttribute(seed, 1));
   const m = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    uniforms: { t: { value: 0 }, px: { value: Math.min(devicePixelRatio, 2) } },
+    uniforms: { t: { value: 0 }, px: { value: Math.min(devicePixelRatio, 2) }, col: { value: new THREE.Color(1, .92, .72) } },
     vertexShader: `uniform float t, px; attribute float seed; varying float vA;
       void main(){ vec3 p = position; p.y = mod(p.y + t * (.08 + fract(seed) * .1), 4.) + .2; p.x += sin(t * .3 + seed) * .4; p.z += cos(t * .25 + seed * 1.3) * .4;
         vec4 mv = modelViewMatrix * vec4(p, 1.); gl_Position = projectionMatrix * mv;
         vA = (.5 + .5 * sin(t * 1.5 + seed * 7.)) * smoothstep(4.2, 2.5, p.y) * smoothstep(.2, .8, p.y);
         gl_PointSize = (6. + fract(seed * 3.) * 6.) * px * (8. / -mv.z); }`,
-    fragmentShader: `varying float vA; void main(){ float d = length(gl_PointCoord - .5); float a = smoothstep(.5, 0., d) * vA; gl_FragColor = vec4(1., .92, .72, a * .85); }`,
+    fragmentShader: `uniform vec3 col; varying float vA; void main(){ float d = length(gl_PointCoord - .5); float a = smoothstep(.5, 0., d) * vA; gl_FragColor = vec4(col, a * .85); }`,
   });
   const pts = new THREE.Points(g, m); pts.frustumCulled = false; scene.add(pts);
   return m;
