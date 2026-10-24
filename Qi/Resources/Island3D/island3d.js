@@ -194,10 +194,10 @@ function groundDetail() {
       if (R() < .03) { const px = x + R(), pz = y + R(); for (let k = 0; k < 5; k++) { const a = k / 5 * 6.28; bake(box(.06, .012, .022), '#e9a98c', { p: [px + Math.cos(a) * .03, t + .006, pz + Math.sin(a) * .03], r: [0, -a, 0], line: .003 }); } }
       if (R() < .25) bake(box(.5, .006, .02), new THREE.Color(P.sand).multiplyScalar(.95), { p: [x + .5, t + .002, y + R()], r: [0, (R() - .5) * .3, 0], line: 0 });
     }
-    if (kind === 'soil') {   // 田：一道道垄，垄上小苗
+    if (kind === 'soil') {   // 田：一道道垄（App 里庄稼另外按存档画；只有预览里垄上撒点小苗）
       for (const dz of [.2, .5, .8]) {
         bake(box(.96, .06, .14, .025, 1), new THREE.Color(P.soilL), { p: [x + .5, t + .03, y + dz], line: 0 });
-        for (const dx of [.25, .75]) if (R() < .7) for (const sx of [-1, 1]) bake(blob(.03, 0, .4), P.leaf, { p: [x + dx + sx * .025, t + .08, y + dz], s: [1.5, 1, .8], r: [0, 0, sx * .5], line: .003 });
+        if (!D.crops) for (const dx of [.25, .75]) if (R() < .7) for (const sx of [-1, 1]) bake(blob(.03, 0, .4), P.leaf, { p: [x + dx + sx * .025, t + .08, y + dz], s: [1.5, 1, .8], r: [0, 0, sx * .5], line: .003 });
       }
     }
     if (kind === 'wood') {   // 木桥：一块块木板（有缝）、两边桥柱和绳子
@@ -791,6 +791,7 @@ function step(dt) {
   hu.arms[1].rotation.z = st.himPose === 'wave' ? Math.PI / 2 + Math.sin(st.clock * 9) * .5 + .6 : Math.PI / 2;
   hu.body.rotation.z = st.himPose === 'think' ? Math.sin(st.clock * 1.5) * .06 + .1 : 0;
   hp.y = ground(hp.x, hp.z);
+  nearTick(); fxTick();
   // 爱心：从他头上一颗颗冒出来往上飘
   if (st.himPose === 'love' && (hearts.length === 0 || st.clock - hearts[hearts.length - 1].t > .45)) {
     const sp = new THREE.Sprite(heartMat); sp.scale.set(.18, .18, 1); sp.position.set(hp.x + (Math.random() - .5) * .3, hp.y + .7, hp.z); scene.add(sp); hearts.push({ sp, t: st.clock });
@@ -803,6 +804,173 @@ const heartMat = (() => {
   x.fillStyle = '#f07c92'; x.beginPath(); x.moveTo(32, 54); x.bezierCurveTo(4, 34, 10, 8, 32, 22); x.bezierCurveTo(54, 8, 60, 34, 32, 54); x.fill();
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false });
 })();
+
+// ———————————————————— 田园：庄稼、浇水、钓鱼、采集（存档在 App 里，这边只画和报「她跟前是什么」） ————————————————————
+// 庄稼：App 传过来 [{x, y, kind, stage 0~3, wet, color}]，每格六棵（三道垄上各两棵），南瓜西瓜熟了是正中一个大的
+const cropGrp = new THREE.Group(); scene.add(cropGrp);
+const cropKit = toyKit(cropGrp);
+const LEAF = '#7f9a5c', LEAF_D = '#6a8550', STEM = '#7a8f52';
+function plantAt(c, px, pz, y) {
+  const m = cropKit, s = c.stage, col = '#' + (c.color || 'E8758F');
+  if (s === 0) { m(sph(.035, 10, 8), '#7d5f45', [px, y + .07, pz], [0, 0, 0], [1.3, .5, 1.3]); return; }   // 刚种下：一小撮土
+  if (s === 1) {   // 发芽：两片小叶子
+    m(cap(.008, .05, 4, 6), STEM, [px, y + .1, pz]);
+    for (const sx of [-1, 1]) m(sph(.03, 10, 8), LEAF, [px + sx * .03, y + .14, pz], [0, 0, sx * .6], [1.4, .45, .9]);
+    return;
+  }
+  const big = s === 3;
+  switch (c.kind) {
+    case 'sunflower': {
+      const h = big ? .5 : .32;
+      m(cap(.012, h, 4, 8), STEM, [px, y + .06 + h / 2, pz]);
+      for (const sx of [-1, 1]) m(sph(.045, 10, 8), LEAF, [px + sx * .05, y + .06 + h * .45, pz], [0, 0, sx * .5], [1.4, .35, .9]);
+      if (big) { m(new THREE.CylinderGeometry(.09, .09, .02, 20), '#f2c230', [px, y + .1 + h, pz + .02], [1.2, 0, 0]); m(new THREE.CylinderGeometry(.045, .045, .025, 16), '#6b4a2e', [px, y + .1 + h, pz + .03], [1.2, 0, 0]); }
+      return;
+    }
+    case 'lavender': case 'rose': {
+      const n = big ? 5 : 3;
+      for (let i = 0; i < n; i++) {
+        const a = i / n * 6.28, ox = Math.cos(a) * .04, oz = Math.sin(a) * .04, h = .16 + (i % 2) * .05;
+        m(cap(.006, h, 3, 6), STEM, [px + ox, y + .06 + h / 2, pz + oz]);
+        if (big) c.kind === 'lavender' ? m(cap(.016, .06, 6, 8), col, [px + ox, y + .09 + h, pz + oz]) : m(sph(.03, 12, 10), col, [px + ox, y + .08 + h, pz + oz], [0, 0, 0], [1, .8, 1]);
+      }
+      m(sph(.06, 12, 8), LEAF_D, [px, y + .09, pz], [0, 0, 0], [1.2, .6, 1.2]);
+      return;
+    }
+    case 'carrot': {
+      for (let i = 0; i < 5; i++) { const a = i / 5 * 6.28; m(cap(.008, big ? .14 : .1, 3, 6), LEAF, [px + Math.cos(a) * .015, y + .13, pz + Math.sin(a) * .015], [Math.sin(a) * .35, 0, -Math.cos(a) * .35]); }
+      if (big) m(new THREE.ConeGeometry(.035, .05, 12), col, [px, y + .075, pz], [Math.PI, 0, 0]);
+      return;
+    }
+    case 'pumpkin': case 'watermelon': {
+      m(sph(.07, 12, 8), LEAF_D, [px - .05, y + .09, pz], [0, 0, 0], [1.3, .45, 1.1]);
+      m(sph(.06, 12, 8), LEAF, [px + .06, y + .09, pz + .03], [0, 0, 0], [1.3, .45, 1.1]);
+      return;   // 熟了的那颗大的另外画在格子正中
+    }
+    default: {   // 草莓、番茄、樱桃番茄：一丛叶子，熟了挂几颗果子
+      m(sph(.075, 14, 10), LEAF, [px, y + .1, pz], [0, 0, 0], [1.25, .7, 1.1]);
+      m(sph(.05, 12, 8), LEAF_D, [px + .04, y + .14, pz - .02], [0, 0, 0], [1.2, .7, 1]);
+      if (big) for (const [ox, oy, oz] of [[-.06, .08, .05], [.05, .07, .06], [.0, .1, -.07], [.07, .12, .0]]) m(sph(c.kind === 'strawberry' ? .022 : .026, 12, 10), col, [px + ox, y + oy, pz + oz], [0, 0, 0], c.kind === 'strawberry' ? [1, 1.2, 1] : [1, .9, 1]);
+    }
+  }
+}
+function buildCrops(list) {
+  for (const ch of [...cropGrp.children]) { cropGrp.remove(ch); ch.geometry?.dispose(); }
+  for (const c of list || []) {
+    const y = topAt(c.x, c.y) ?? 0;
+    // 浇过水：垄间的土深一块
+    if (c.wet) cropKit(new THREE.BoxGeometry(.94, .006, .94), '#6a4f3c', [c.x + .5, y + .006, c.y + .5], [0, 0, 0], [1, 1, 1], cropGrp, .95);
+    for (const dz of [.2, .5, .8]) for (const dx of [.28, .72]) plantAt(c, c.x + dx, c.y + dz, y);
+    if (c.stage === 3 && (c.kind === 'pumpkin' || c.kind === 'watermelon')) {
+      const col = '#' + c.color;
+      const ball = cropKit(sph(.17, 24, 16), col, [c.x + .5, y + .15, c.y + .5], [0, 0, 0], [1.15, .8, 1]);
+      if (c.kind === 'pumpkin') { for (let i = 0; i < 6; i++) cropKit(sph(.17, 16, 12), col, [0, 0, 0], [0, i / 6 * Math.PI, 0], [.55, .98, 1.02], ball); cropKit(cap(.02, .05, 4, 6), '#6b5a3a', [c.x + .5, y + .3, c.y + .5]); }
+      else for (let i = 0; i < 8; i++) cropKit(sph(.171, 16, 12, i / 8 * 6.28, .12), '#2f6b3a', [0, 0, 0], [0, 0, 0], [1, 1, 1], ball);
+    }
+  }
+  cropGrp.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+}
+buildCrops(D.crops);
+
+// 一下子的效果：浇水的水珠、采东西冒的小光点、钓鱼的浮漂
+const fxs = [];
+const dropMat = new THREE.MeshStandardMaterial({ color: '#9cc6e0', roughness: .2, transparent: true, opacity: .85 });
+const sparkMat = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+  const gr = x.createRadialGradient(32, 32, 0, 32, 32, 30); gr.addColorStop(0, 'rgba(255,248,220,1)'); gr.addColorStop(.35, 'rgba(255,230,160,.7)'); gr.addColorStop(1, 'rgba(255,230,160,0)');
+  x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c); return new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+})();
+let bobber = null, rod = null;
+function fx(kind, x, y) {
+  const t0 = st.clock, cx = x + .5, cz = y + .5, gy = topAt(x, y) ?? 0;
+  if (kind === 'water') for (let i = 0; i < 14; i++) {
+    const d = new THREE.Mesh(new THREE.SphereGeometry(.018, 8, 6), dropMat); d.scale.set(1, 1.6, 1);
+    d.position.set(cx + (Math.random() - .5) * .8, gy + .7 + Math.random() * .3, cz + (Math.random() - .5) * .8); scene.add(d);
+    fxs.push({ o: d, t0: t0 + i * .04, life: .7, upd: (o, a) => { o.position.y -= .035; o.visible = a >= 0; } });
+  }
+  if (kind === 'pick') for (let i = 0; i < 8; i++) {
+    const s = new THREE.Sprite(sparkMat); s.scale.setScalar(.16); s.position.set(cx + (Math.random() - .5) * .6, gy + .3 + Math.random() * .3, cz + (Math.random() - .5) * .6); scene.add(s);
+    fxs.push({ o: s, t0: t0 + i * .05, life: 1, upd: (o, a) => { o.position.y += .012; o.material.opacity = 1; o.scale.setScalar(.16 * (1 - a)); o.visible = a >= 0; } });
+  }
+  if (kind === 'fish') {   // 抛竿：浮漂落到水面开阔一点的地方（岸边的压顶石外面），手里一根竿，竿梢一根线连到浮漂；等 App 说钓到了再收
+    if (bobber) { scene.remove(bobber); rod && scene.remove(rod); }
+    const p = her.position, [dx, dz] = st.herDir;
+    let tx = cx, tz = cz;
+    for (let r = .6; r <= 2.6; r += .1) {
+      const qx = p.x + dx * r, qz = p.z + dz * r, k = g(Math.floor(qx), Math.floor(qz)), open = (k === 'water' || k === 'sea') && [[.5, 0], [-.5, 0], [0, .5], [0, -.5]].every(([ox, oz]) => { const k2 = g(Math.floor(qx + ox), Math.floor(qz + oz)); return k2 === 'water' || k2 === 'sea'; });
+      if (open) { tx = qx; tz = qz; if (r > 1.6) break; }
+    }
+    const wy = (k => k === 'sea' ? -.32 : TOP.water)(g(Math.floor(tx), Math.floor(tz))) + .03;
+    bobber = new THREE.Group(); const k = toyKit(bobber);
+    k(sph(.04, 14, 10, 0, 6.28, 0, Math.PI / 2), '#e0535f', [0, 0, 0]); k(sph(.04, 14, 10, 0, 6.28, Math.PI / 2, Math.PI / 2), '#f6efe4', [0, 0, 0]); k(cap(.005, .05, 3, 6), '#3f3a3c', [0, .06, 0]);
+    bobber.position.set(tx, wy, tz); scene.add(bobber);
+    // 竿：从她右手往前上方斜出去；线：竿梢到浮漂
+    rod = new THREE.Group(); const rk = toyKit(rod);
+    rk(new THREE.CylinderGeometry(.006, .012, .9, 6), '#6b4a2e', [0, .45, 0]);
+    rk(new THREE.CylinderGeometry(.016, .016, .12, 8), '#3f3a3c', [0, .08, 0]);
+    const lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+    const line = new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: '#f4efe6', transparent: true, opacity: .8 }));
+    scene.add(rod); scene.add(line);
+    const tip = new THREE.Vector3(), b0 = bobber;
+    fxs.push({ o: line, t0, life: 99, keep: true, upd: () => {
+      const q = her.position, [ex, ez] = st.herDir, rx = ez, rz = -ex;   // rx/rz：她的右手边
+      rod.position.set(q.x + rx * .2 + ex * .15, q.y + .5, q.z + rz * .2 + ez * .15);
+      rod.rotation.set(0, 0, 0); rod.lookAt(rod.position.x + ex, rod.position.y + .9, rod.position.z + ez); rod.rotateX(Math.PI / 2);
+      tip.set(0, .9, 0); rod.localToWorld(tip);
+      b0.position.y = wy + Math.sin((st.clock - t0) * 5) * .01;
+      lineGeo.attributes.position.setXYZ(0, tip.x, tip.y, tip.z); lineGeo.attributes.position.setXYZ(1, b0.position.x, b0.position.y + .03, b0.position.z); lineGeo.attributes.position.needsUpdate = true;
+    } });
+  }
+  if (kind === 'reel' && bobber) {   // 钓到了：浮漂一沉，水花
+    const b = bobber; bobber = null;
+    for (let i = 0; i < 10; i++) {
+      const d = new THREE.Mesh(new THREE.SphereGeometry(.02, 8, 6), dropMat), a = i / 10 * 6.28;
+      d.position.copy(b.position); scene.add(d);
+      fxs.push({ o: d, t0, life: .6, upd: (o, q) => { o.position.x = b.position.x + Math.cos(a) * q * .25; o.position.z = b.position.z + Math.sin(a) * q * .25; o.position.y = b.position.y + Math.sin(q * Math.PI) * .2; } });
+    }
+    fxs.push({ o: b, t0, life: .4, upd: (o, q) => { o.position.y -= .01; } });
+    for (const f of fxs) if (f.keep) f.life = 0;   // 线收掉
+    const r0 = rod; rod = null; setTimeout(() => scene.remove(r0), 450);
+  }
+}
+function fxTick() {
+  for (let i = fxs.length - 1; i >= 0; i--) {
+    const f = fxs[i], a = (st.clock - f.t0) / f.life;
+    if (a >= 1) { scene.remove(f.o); fxs.splice(i, 1); continue; }
+    f.upd(f.o, a);
+  }
+}
+// 转过去对着那一格（种地、钓鱼的时候）
+function faceTo(x, y) { const dx = x + .5 - her.position.x, dz = y + .5 - her.position.z, l = Math.hypot(dx, dz); if (l > .05) st.herDir = [dx / l, dz / l]; }
+
+// 她跟前是什么：脚下 / 面前那一格是田、面前是水、或者旁边有能采的景。变了才告诉 App
+let nearKey = '', nearT = 0;
+const fishable = (x, y) => { const k = g(x, y); return k === 'water' || (k === 'sea' && x >= -1 && y >= -1 && x <= W && y <= H); };
+function nearTick() {
+  if (st.clock - nearT < .25) return; nearT = st.clock;
+  if (!window.webkit?.messageHandlers?.i3d && !window.__nearLog) return;
+  const p = her.position, fx2 = p.x + st.herDir[0] * .7, fz2 = p.z + st.herDir[1] * .7;
+  let near = null;
+  const here = [Math.floor(p.x), Math.floor(p.z)], ahead = [Math.floor(fx2), Math.floor(fz2)];
+  if (g(...ahead) === 'soil') near = { t: 'soil', x: ahead[0], y: ahead[1] };
+  else if (g(...here) === 'soil') near = { t: 'soil', x: here[0], y: here[1] };
+  if (!near) {
+    let best = .75;
+    (D.decor || []).forEach((d) => {
+      if (!d.act) return;
+      const qx = Math.max(d.x, Math.min(d.x + d.w, fx2)), qz = Math.max(d.y, Math.min(d.y + d.h, fz2)), dd = Math.hypot(qx - fx2, qz - fz2);
+      if (dd < best) { best = dd; near = { t: 'decor', i: d.i }; }
+    });
+  }
+  if (!near && st.action !== 'sit') {
+    for (const [ax, ay] of [ahead, [Math.floor(p.x + st.herDir[0] * 1.2), Math.floor(p.z + st.herDir[1] * 1.2)]]) if (fishable(ax, ay)) { near = { t: 'water', x: ax, y: ay }; break; }
+  }
+  const key = JSON.stringify(near);
+  if (key === nearKey) return; nearKey = key;
+  if (window.__nearLog) window.__nearLog.push(key);
+  window.webkit?.messageHandlers?.i3d?.postMessage('near:' + key);
+}
 
 window.I3D = {
   stick(x, y) { st.stick = [x, y]; },
@@ -817,6 +985,9 @@ window.I3D = {
   gaze(m) { st.gaze = m; },
   photo(on) { st.photo = on; },
   face: setFace, act, him: setHim, intro,
+  // 田园：庄稼重画、一下子的效果（water 浇水 / pick 采到 / fish 抛竿 / reel 收竿），做之前先转过去对着那一格
+  crops(list) { buildCrops(list); },
+  fx(kind, x, y) { if (st.action === 'sit') st.action = 'stand'; faceTo(x, y); fx(kind, x, y); },
   // 回 2D 时：人在哪一格
   state() { return JSON.stringify({ her: [Math.floor(her.position.x), Math.floor(her.position.z)], him: [Math.floor(him.position.x), Math.floor(him.position.z)] }); },
 };
