@@ -24,13 +24,15 @@
       up: { oven: 0, mixer: 0, case: 0, sign: 0, fridge: 0 },
       regulars: {}, clawdJob: 'greet', clean: 100, reviews: [],
       stats: { sold: 0, earned: 0, customers: 0 }, weather: 'sunny', prices: {}, unlockCreams: [], discounts: {},
-      oven: [], nextId: 10, tut: 0, contestDay: 0, lastLv: 1, seen: {},
+      oven: [], nextId: 10, tut: 0, contestDay: 0, lastLv: 1, seen: {}, style: 'story',
     };
   }
   let S;
   try { S = window.BAKERY_SAVE || JSON.parse(localStorage.getItem('qi-bakery') || 'null'); } catch (e) { S = null; }
   const fresh = !S || S.v !== 1;
   if (fresh) S = newGame();
+  if (!S.style) S.style = 'story';
+  INK.setStyle(S.style);
   let saveT = 0;
   function save() {
     const j = JSON.stringify(S);
@@ -141,21 +143,68 @@
     cv.width = W * DPR; cv.height = H * DPR;
     SC = Math.max(H / 740, W / SCENE.WW); OY = H - SCENE.WH * SC + 6;
     camX = clamp(camX, 0, Math.max(0, SCENE.WW - W / SC));
-    bgDirty = true;
+    if (typeof clearCaches === 'function') clearCaches();
   }
   addEventListener('resize', resize);
   const toWorld = (px, py) => [px / SC + camX, (py - OY) / SC];
   const toScreen = (x, y) => [(x - camX) * SC, y * SC + OY];
 
-  // 墙和地板画一次存起来
-  let bgCv = document.createElement('canvas'), bgDirty = true;
-  function drawBg() {
-    bgCv.width = SCENE.WW * 2; bgCv.height = SCENE.WH * 2;
-    const b = bgCv.getContext('2d'); b.scale(2, 2);
-    SCENE.wallpaper(b, WALLPAPERS[S.wallpaper]); SCENE.floor(b, FLOORS[S.floor]);
-    bgDirty = false;
+  // 画面分层缓存（新画法每一笔都有晕染和纸纹，每帧全画一遍手机会烫）：
+  //   bg   墙、窗框窗帘、藤蔓、架子、地板地毯、墙上的家具、吊灯（窗玻璃是空的，后面每帧画天）
+  //   mid  展示柜（里面的甜点）、柜台正面、黑板——卖掉一个才重画
+  //   小图 人、clawd、她、地上的家具：按样子和动作帧各画一次，之后直接贴
+  const layer = () => document.createElement('canvas');
+  let bgCv = layer(), midCv = layer(), bgKey = '', midKey = '', bgDirty = true;
+  const sprites = new Map();
+  function clearCaches() { bgKey = ''; midKey = ''; sprites.clear(); }
+  function sceneLayer(cv, draw) {
+    const k = Math.min(3, SC * DPR);
+    cv.width = Math.ceil(SCENE.WW * k); cv.height = Math.ceil(SCENE.WH * k);
+    const x = cv.getContext('2d'); x.setTransform(k, 0, 0, k, 0, 0); x.clearRect(0, 0, SCENE.WW, SCENE.WH);
+    draw(x);
   }
-
+  // 一张小图：w×h 的范围，原点在 (ox, oy)（脚底那一点），画好以后贴到场景里
+  function sprite(key, w, h, ox, oy, draw) {
+    let c = sprites.get(key); if (c) return c;
+    const k = Math.min(3, SC * DPR);
+    c = layer(); c.width = Math.ceil(w * k); c.height = Math.ceil(h * k);
+    const x = c.getContext('2d'); x.setTransform(k, 0, 0, k, ox * k, oy * k); draw(x);
+    c.ow = w; c.oh = h; c.ox = ox; c.oy = oy;
+    sprites.set(key, c); if (sprites.size > 500) sprites.delete(sprites.keys().next().value);
+    return c;
+  }
+  const blit = (c, x, y) => g.drawImage(c, x - c.ox, y - c.oy, c.ow, c.oh);
+  function drawLayers(clock) {
+    const lit = Math.round(Math.max(.35, Math.min(1, (clock / 60 - 15) / 3)) * 10);
+    const wallDecor = S.decor.filter((d) => DECOR[d.kind]?.place === 'wall').map((d) => d.kind + d.x.toFixed(0) + d.y.toFixed(0) + (decorSel === d ? '*' : '')).join(',');
+    const bk = [S.style, S.wallpaper, S.floor, wallDecor, lit, SC, S.recipes[0]?.id, S.phase === 'closed'].join('|');
+    if (bk !== bgKey || bgDirty) {
+      bgKey = bk; bgDirty = false;
+      sceneLayer(bgCv, (x) => {
+        SCENE.background(x, S);
+        SCENE.lights(x, clock);
+        for (const d of S.decor) if (DECOR[d.kind]?.place === 'wall') SCENE.decorItem(x, d, 0, clock, decorSel === d);
+        SCENE.counterBack(x);
+      });
+    }
+    const menu = S.display.filter((s) => s && s.n > 0).map((s) => ({ name: recipeById(s.rid)?.name || '', price: s.price }));
+    const mk = [S.style, SC, JSON.stringify(S.display), S.recipes.length, S.recipes[1]?.id].join('|');
+    if (mk !== midKey) {
+      midKey = mk;
+      const byId = {}; S.recipes.forEach((r) => (byId[r.id] = r));
+      sceneLayer(midCv, (x) => {
+        SCENE.chalkboard(x, menu.filter((m, i) => menu.findIndex((q) => q.name === m.name) === i));
+        SCENE.displayCase(x, S.display, byId);
+        SCENE.counterFront(x, S.recipes);
+      });
+    }
+  }
+  // 人：动作切成 8 帧，每个人每帧画一次
+  const PH = 8;
+  function personSprite(look, type, k, mood, walk, phase, eating) {
+    const kq = Math.round(k * 20) / 20;
+    return sprite(['p', look.id, type, kq, mood, walk ? phase : '-', eating ? 1 : 0].join(':'), 90 * kq, 150 * kq, 45 * kq, 140 * kq, (x) => PEOPLE.person(x, look, 0, 0, kq, { t: walk ? phase / PH * TAU / 9 : 0, walk, mood, facing: 1, eating, type }));
+  }
   // ———————————————— 店里的人 ————————————————
   const people = [];   // 客人
   const floats = [];   // 飘起来的字
@@ -164,6 +213,7 @@
   let doorOpen = 0;
   const seatsTaken = new Set();
 
+  let lookSeq = 1;
   function lookFor(type, reg) {
     const L = CUSTOMER_TYPES[type].look;
     const look = { hair: reg?.hair || pick(L.hair), top: reg?.top || pick(L.top), bottom: pick(L.bottom), skin: pick(['#f6dccd', '#f3d3c2', '#eac3ad']) };
@@ -172,6 +222,10 @@
     if (type === 'granny' || type === 'critic') look.glasses = true;
     if (type === 'kid') look.bow = pick(['#f08ea0', '#a9c1d9', '#f1dca0']);
     if (type === 'athlete' && R() < .5) look.cap = '#a9c9b6';
+    if (type === 'critic') look.beret = '#8a5a6a';
+    if (['office', 'athlete', 'critic'].includes(type)) look.pants = true;
+    if (type === 'kid' && R() < .5) look.style = 'bob';
+    look.type = type; look.id = (lookSeq++).toString(36);
     return look;
   }
   function spawn() {
@@ -363,49 +417,46 @@
   let hitBoxes = [], bubbleRects = [];
   function drawScene() {
     bubbleRects = [];
-    if (bgDirty) drawBg();
+    const clock = S.phase === 'prep' ? 8 * 60 + 30 : S.clock;
+    while (S.display.length < slots()) S.display.push(null);
+    drawLayers(clock);
     g.setTransform(DPR, 0, 0, DPR, 0, 0);
     g.fillStyle = '#efe6da'; g.fillRect(0, 0, W, H);
     g.setTransform(DPR * SC, 0, 0, DPR * SC, -camX * SC * DPR, OY * DPR);
     // 屏幕比场景高的时候：上面是天花板，接一道石膏线
     if (OY > 0) { const cg = g.createLinearGradient(0, -OY / SC, 0, 0); cg.addColorStop(0, '#efe5d8'); cg.addColorStop(1, '#f6eee3'); g.fillStyle = cg; g.fillRect(0, -OY / SC - 2, SCENE.WW, OY / SC + 2); }
+    SCENE.sky(g, clock, S.weather, T);   // 窗外的天在最底下，背景那一层窗玻璃是空的
     g.drawImage(bgCv, 0, 0, SCENE.WW, SCENE.WH);
     g.fillStyle = '#ece0cf'; g.fillRect(0, -10, SCENE.WW, 12); g.fillStyle = '#f8f1e7'; g.fillRect(0, -14, SCENE.WW, 5); g.fillStyle = 'rgba(120,90,60,.12)'; g.fillRect(0, 2, SCENE.WW, 4);
-    const clock = S.phase === 'prep' ? 8 * 60 + 30 : S.clock;
-    SCENE.windowArch(g, clock, S.weather, T);
-    SCENE.door(g, doorOpen, T);
-    for (const d of S.decor) if (DECOR[d.kind]?.place === 'wall') SCENE.decorItem(g, d, T, clock, decorSel === d);
-    SCENE.lamps(g, clock);
-    SCENE.shelves(g, S.recipes);
-    const menu = S.display.filter((s) => s && s.n > 0).map((s) => ({ name: recipeById(s.rid)?.name || '', price: s.price }));
-    SCENE.chalkboard(g, menu.filter((m, i) => menu.findIndex((q) => q.name === m.name) === i));
-    const byId = {}; S.recipes.forEach((r) => (byId[r.id] = r));
-    while (S.display.length < slots()) S.display.push(null);
-    SCENE.displayCase(g, S.display, byId, T);
-    SCENE.counter(g, T, S.oven.length > 0 || people.some((p) => p.state === 'pay'));
+    blit(sprite('door:' + S.style + ':' + Math.round(doorOpen * 6), 140, 345, 0, 0, (x) => SCENE.door(x, Math.round(doorOpen * 6) / 6, 0)), 0, 0);
+    // 她在柜台后面（忙的时候手一上一下：8 帧）
+    const busy = S.oven.length > 0 || people.some((p) => p.state === 'pay');
+    const bph = busy ? Math.floor(T * 10 / TAU * PH) % PH : 0;
+    blit(sprite('baker:' + S.style + ':' + bph + ':' + busy, 80, 130, 40, 120, (x) => PEOPLE.baker(x, 0, 0, 1.05, busy ? bph / PH * TAU / 10 : 0, { busy })), SCENE.COUNTER.x + 52, SCENE.COUNTER.top + 6 - Math.sin(T * 2.2) * .8);
+    g.drawImage(midCv, 0, 0, SCENE.WW, SCENE.WH);
     // 地上的面包屑
     g.fillStyle = 'rgba(200,160,110,.7)'; for (const c of crumbs) { ART.ellipse(g, c.x, SCENE.floorY(c.z), 2.2, 1.2); g.fill(); ART.ellipse(g, c.x + 4, SCENE.floorY(c.z) + 1, 1.5, .9); g.fill(); }
     // 地上的东西、人、clawd 按前后排
     const ents = [];
-    for (const d of S.decor) if (DECOR[d.kind]?.place === 'floor') ents.push({ y: SCENE.floorY(d.z), f: () => SCENE.decorItem(g, d, T, clock, decorSel === d) });
+    for (const d of S.decor) if (DECOR[d.kind]?.place === 'floor') ents.push({ y: SCENE.floorY(d.z), f: () => drawFloorDecor(d, clock) });
     for (const p of people) ents.push({ y: SCENE.floorY(p.z) + (p.state === 'sit' ? -2 : 0), f: () => drawPerson(p) });
-    ents.push({ y: SCENE.floorY(clawd.z), f: () => ART.clawd(g, clawd.x, SCENE.floorY(clawd.z), .95 * SCENE.depthK(clawd.z), T, { job: S.clawdJob, walk: clawd.walk, facing: clawd.facing, mood: clawd.mood }) });
+    ents.push({ y: SCENE.floorY(clawd.z), f: drawClawd });
     ents.sort((a, b) => a.y - b.y).forEach((e) => e.f());
     // 气泡和飘字（最上层）
     hitBoxes = [];
     for (const p of people) {
-      const k = SCENE.depthK(p.z) * (p.kid ? .78 : 1), top = SCENE.floorY(p.z) - 104 * k;
+      const k = SCENE.depthK(p.z) * (p.kid ? .78 : 1), top = SCENE.floorY(p.z) - 108 * k;
       if (p.state === 'browse') {
         const b = bubble(p.x, top, p.line);
-        // 等太久了：气泡边上一个小沙漏
+        // 等太久了：气泡边上一圈慢慢变短
         const left = 1 - p.t / (p.browse * (S.clawdJob === 'cashier' ? 1.3 : 1));
         g.strokeStyle = left < .35 ? '#d0606f' : '#c8a96c'; g.lineWidth = 2; g.beginPath(); g.arc(b.x + b.w - 2, b.y + 2, 6, -Math.PI / 2, -Math.PI / 2 + TAU * left); g.stroke();
         hitBoxes.push({ kind: 'cust', p, x: b.x, y: b.y, w: b.w, h: b.h + 110 * k });
       } else hitBoxes.push({ kind: 'cust', p, x: p.x - 20 * k, y: top + 10, w: 40 * k, h: 100 * k });
-      if (p.state === 'sit') { g.font = '13px sans-serif'; g.textAlign = 'center'; g.fillText(Math.sin(T * 3 + p.id * 9) > 0 ? '♪' : '', p.x + 14, top + 6); }
+      if (p.state === 'sit') { g.font = '13px sans-serif'; g.textAlign = 'center'; g.fillStyle = '#c98b94'; g.fillText(Math.sin(T * 3 + p.id * 9) > 0 ? '♪' : '', p.x + 14, top + 6); }
     }
     hitBoxes.push({ kind: 'clawd', x: clawd.x - 26, y: SCENE.floorY(clawd.z) - 60, w: 52, h: 62 });
-    if (clawd.say && clawd.sayT > 0) bubble(clawd.x, SCENE.floorY(clawd.z) - 62, clawd.say, { bg: '#fff4ee' });
+    if (clawd.say && clawd.sayT > 0) bubble(clawd.x, SCENE.floorY(clawd.z) - 66, clawd.say, { bg: '#fff4ee' });
     SCENE.caseSlots(slots()).forEach((sp, i) => hitBoxes.push({ kind: 'slot', i, x: sp.x - sp.w / 2, y: sp.y - 40, w: sp.w, h: 52 }));
     for (const f of floats) {
       if (f.t < 0) continue;
@@ -418,14 +469,33 @@
     // 关门后一层暮色
     if (S.phase === 'closed') { g.fillStyle = 'rgba(60,40,70,.18)'; g.fillRect(0, -OY / SC - 2, SCENE.WW, SCENE.WH + OY / SC + 2); }
   }
+  function drawFloorDecor(d, clock) {
+    const def = DECOR[d.kind], k = SCENE.depthK(d.z), y = SCENE.floorY(d.z);
+    if (decorSel === d || d.kind === 'garland') return SCENE.decorItem(g, d, T, clock, decorSel === d);   // 正在拖的那一件直接画
+    const kq = Math.round(k * 20) / 20, w = def.w * 2.2 * kq, h = (SCENE.DECOR_H[d.kind] || 90) * 1.3 * kq;
+    blit(sprite(['d', S.style, d.kind, kq, d.kind === 'flowerpot' ? Math.round(d.x) : 0].join(':'), w, h + 12, w / 2, h, (x) => { x.fillStyle = 'rgba(80,55,40,.2)'; x.beginPath(); x.ellipse(0, 0, def.w * .55 * kq, 7 * kq, 0, 0, TAU); x.fill(); SCENE.DRAW[d.kind](x, 0, 0, kq, clock); }), d.x, y);
+  }
   function drawPerson(p) {
     const k = SCENE.depthK(p.z) * (p.kid ? .78 : 1), y = SCENE.floorY(p.z);
     const sitting = p.state === 'sit';
-    const opts = { t: T + p.id * 10, walk: p.walk, mood: p.mood, facing: p.facing, eating: sitting && Math.sin(T * 2 + p.id * 7) > .3 };
-    if (sitting) { g.save(); g.translate(0, -16 * k); ART.person(g, p.look, p.x, y, k, opts); g.restore(); }
-    else ART.person(g, p.look, p.x, y, k, opts);
-    if (p.partner && !sitting) ART.person(g, p.partner, p.x - 24 * p.facing * k, y + 4, k * .97, { ...opts, t: opts.t + 1.3 });
-    if (p.reg && p.state !== 'leave') { g.fillStyle = '#e8b4b8'; g.font = '600 10px "PingFang SC", sans-serif'; g.textAlign = 'center'; g.fillText('♥ ' + p.reg.name, p.x, y + 12); }
+    const phase = p.walk ? Math.floor((T + p.id * 10) * 9 / TAU * PH) % PH : 0;
+    const eating = sitting && Math.sin(T * 2 + p.id * 7) > .3;
+    const bob = p.walk ? 0 : Math.sin((T + p.id * 10) * 2) * .6 * k;
+    const draw = (look, x, yy, kk) => {
+      const c = personSprite(look, p.type, kk, p.mood, p.walk, phase, eating);
+      g.save(); g.translate(x, yy - bob); g.scale(p.facing, 1); blit(c, 0, 0); g.restore();
+    };
+    draw(p.look, p.x, y - (sitting ? 16 * k : 0), k);
+    if (p.partner && !sitting) draw(p.partner, p.x - 24 * p.facing * k, y + 4, k * .97);
+    if (p.reg && p.state !== 'leave') { g.fillStyle = '#d98a9a'; g.font = '600 10px "PingFang SC", sans-serif'; g.textAlign = 'center'; g.fillText('♥ ' + p.reg.name, p.x, y + 12); }
+  }
+  function drawClawd() {
+    const k = Math.round(.95 * SCENE.depthK(clawd.z) * 20) / 20, y = SCENE.floorY(clawd.z);
+    const job = S.clawdJob, anim = clawd.walk || job === 'greet' || job === 'clean';
+    const ph = anim ? Math.floor(T * 10 / TAU * PH) % PH : 0;
+    const c = sprite(['c', S.style, k, job, clawd.walk ? 1 : 0, ph, clawd.mood].join(':'), 80 * k, 80 * k, 40 * k, 70 * k, (x) => PEOPLE.clawd(x, 0, 0, k, ph / PH * TAU / 10 * (job === 'greet' && !clawd.walk ? 1.25 : 1), { job, walk: clawd.walk, mood: clawd.mood }));
+    const bob = clawd.walk ? 0 : Math.sin(T * 2.6) * .7 * k;
+    g.save(); g.translate(clawd.x, y - bob); g.scale(clawd.facing, 1); blit(c, 0, 0); g.restore();
   }
 
   // ———————————————— 摸店里 ————————————————
@@ -511,7 +581,7 @@
     const r = recipeById(c.dataset.r) || window.__draft; if (!r) return;
     const x = c.getContext('2d'), w = c.width, h = c.height;
     x.clearRect(0, 0, w, h);
-    ART.dessert(x, r, w / 2, h * .82, Math.min(w * .78, h * 1.25));
+    INK.dessert(x, r, w / 2, h * .82, Math.min(w * .78, h * 1.25));
   }
 
   // ———————————————— 顶上、底下 ————————————————
@@ -700,11 +770,12 @@
     let html = '';
     for (const r of S.recipes) {
       const n = canMake(r), rating = r.sold ? (r.starSum / r.sold).toFixed(1) : '—';
-      html += `<div class="card"><div class="row"><canvas width="180" height="130" style="width:90px;height:65px" data-r="${r.id}"></canvas><div class="grow"><div class="t1">${r.name}</div><div>${topTags(r.tags).map((t) => `<span class="tag">${TAG_NAMES[t]}</span>`).join('')}</div><div class="t3" style="margin-top:4px">口感 ${r.taste} · 颜值 ${r.beauty} · 成本 ¥${r.cost}</div><div class="t3">卖出 ${r.sold || 0} · 评分 ${rating}</div></div></div><div class="row" style="margin-top:8px;justify-content:flex-end;gap:6px"><button class="btn" data-del="${r.id}">删掉</button><button class="btn" data-edit="${r.id}">改装饰</button><button class="btn dark" data-make="${r.id}" ${n ? '' : 'disabled'}>${n ? `做一炉 ×${n}` : '料不够'}</button></div></div>`;
+      html += `<div class="card"><div class="row"><canvas width="180" height="130" style="width:90px;height:65px" data-r="${r.id}"></canvas><div class="grow"><div class="t1">${r.name}</div><div>${topTags(r.tags).map((t) => `<span class="tag">${TAG_NAMES[t]}</span>`).join('')}</div><div class="t3" style="margin-top:4px">口感 ${r.taste} · 颜值 ${r.beauty} · 成本 ¥${r.cost}</div><div class="t3">卖出 ${r.sold || 0} · 评分 ${rating}</div></div></div><div class="row" style="margin-top:8px;justify-content:flex-end;gap:6px"><button class="btn" data-del="${r.id}">删掉</button><button class="btn" data-share="${r.id}">分享</button><button class="btn" data-edit="${r.id}">改装饰</button><button class="btn dark" data-make="${r.id}" ${n ? '' : 'disabled'}>${n ? `做一炉 ×${n}` : '料不够'}</button></div></div>`;
     }
     body.innerHTML = html;
     body.querySelectorAll('[data-make]').forEach((b) => b.onclick = () => makeBatch(recipeById(b.dataset.make)));
     body.querySelectorAll('[data-edit]').forEach((b) => b.onclick = () => { closeSheet(); openKitchen(recipeById(b.dataset.edit)); });
+    body.querySelectorAll('[data-share]').forEach((b) => b.onclick = () => openPoster(recipeById(b.dataset.share)));
     body.querySelectorAll('[data-del]').forEach((b) => b.onclick = async () => { if (!(await ask('删掉这个配方？库存和展示柜里的也会一起清掉。', '删掉'))) return; const id = b.dataset.del; S.recipes = S.recipes.filter((r) => r.id !== id); delete S.stock[id]; S.display = S.display.map((s) => (s && s.rid === id ? null : s)); save(); renderSheet(); });
   }
   function makeBatch(r) {
@@ -718,10 +789,11 @@
   // 装修
   function sheetDecor(body) {
     H2('装修', `氛围 ${cozy()} · 拖动店里的家具换位置`);
-    tabs([['mine', '我的家具'], ['buy', '家具店'], ['wall', '墙纸'], ['floor', '地板']], sheetTab || 'mine', (k) => { sheetTab = k; renderSheet(); });
+    tabs([['mine', '我的家具'], ['buy', '家具店'], ['wall', '墙纸'], ['floor', '地板'], ['style', '画风']], sheetTab || 'mine', (k) => { sheetTab = k; renderSheet(); });
     const tab = sheetTab || 'mine';
     const lv = level();
     if (tab === 'mine') return renderDecorTray();
+    if (tab === 'style') return styleTab(body);
     let html = '';
     if (tab === 'buy') {
       html += '<div class="grid2">';
@@ -741,6 +813,14 @@
     body.querySelectorAll('[data-buy]').forEach((b) => b.onclick = () => { const k = b.dataset.buy, d = DECOR[k]; S.money -= d.price; S.owned.decor[k] = (S.owned.decor[k] || 0) + 1; toast(`买了${d.name}，在「我的家具」里摆出来`); save(); renderSheet(); });
     body.querySelectorAll('[data-own]').forEach((b) => b.onclick = () => { const k = b.dataset.own, src = tab === 'wall' ? WALLPAPERS : FLOORS; S.money -= src[k].price; (tab === 'wall' ? S.owned.wallpapers : S.owned.floors).push(k); if (tab === 'wall') S.wallpaper = k; else S.floor = k; bgDirty = true; save(); renderSheet(); });
     body.querySelectorAll('[data-use]').forEach((b) => b.onclick = () => { if (tab === 'wall') S.wallpaper = b.dataset.use; else S.floor = b.dataset.use; bgDirty = true; save(); renderSheet(); });
+  }
+  // 画风：整间店、人、甜点一起换
+  const STYLE_LIST = [['story', '绘本水彩', '手绘线稿、水彩晕染、纸纹和闪光'], ['candy', '糖果厚描边', '粗描边、明亮色块、硬边阴影'], ['paper', '剪纸扁平', '几何色块、错开的纸片阴影、碎纸屑']];
+  function styleTab(body) {
+    body.innerHTML = '<div class="grid3">' + STYLE_LIST.map(([k, n, d]) => `<button class="pick ${S.style === k ? 'on' : ''}" data-style="${k}"><canvas width="180" height="150" style="width:90px;height:75px" data-sty="${k}"></canvas><div class="t1" style="font-size:12.5px">${n}</div><div class="t3" style="margin-top:2px;line-height:1.4">${d}</div></button>`).join('') + '</div>';
+    const sample = S.recipes[0] || { base: 'sponge', cream: 'strawberry', seed: 4, dust: false, drizzle: [], pipes: [{ c: '#fbf5ea', pts: Array.from({ length: 30 }, (_, i) => [Math.cos(i / 30 * TAU) * .9, Math.sin(i / 30 * TAU) * .86]) }], items: [{ t: 'strawberry', u: 0, v: 0 }, { t: 'strawberry', u: .4, v: .1 }, { t: 'blueberry', u: -.35, v: .1 }, { t: 'mint', u: .1, v: -.5 }] };
+    body.querySelectorAll('canvas[data-sty]').forEach((c) => { const keep = INK.style(); INK.setStyle(c.dataset.sty); INK.dessert(c.getContext('2d'), sample, 90, 128, 140); INK.setStyle(keep); });
+    body.querySelectorAll('[data-style]').forEach((b) => b.onclick = () => { S.style = b.dataset.style; INK.setStyle(S.style); clearCaches(); save(); renderSheet(); });
   }
   function renderDecorTray() {
     if (sheetKind !== 'decor' || (sheetTab && sheetTab !== 'mine')) return;
@@ -890,7 +970,7 @@
     }
     html += '</div><div class="t3" style="margin:10px 2px">一份料做 4 个。红字的食材不够，可以先去集市买。</div>';
     kBody.innerHTML = html;
-    kBody.querySelectorAll('canvas[data-prev]').forEach((c) => { const x = c.getContext('2d'); ART.dessert(x, { base: c.dataset.prev, cream: 'plain', items: [], pipes: [], drizzle: [], seed: 3 }, 100, 118, 120); });
+    kBody.querySelectorAll('canvas[data-prev]').forEach((c) => { const x = c.getContext('2d'); INK.dessert(x, { base: c.dataset.prev, cream: 'plain', items: [], pipes: [], drizzle: [], seed: 3 }, 100, 118, 120); });
     kBody.querySelectorAll('[data-b]').forEach((b) => b.onclick = () => { if (!have(BASES[b.dataset.b].need)) return toast('食材不够，先去集市买一点'); K.r.base = b.dataset.b; K.step = 'cream'; renderKitchen(); });
   }
   function kCream() {
@@ -901,7 +981,7 @@
     }
     html += '</div>';
     kBody.innerHTML = html;
-    kBody.querySelectorAll('canvas[data-prev]').forEach((c) => { const x = c.getContext('2d'); ART.dessert(x, { base: K.r.base, cream: c.dataset.prev, items: [], pipes: [], drizzle: [], seed: 3 }, 100, 118, 120); });
+    kBody.querySelectorAll('canvas[data-prev]').forEach((c) => { const x = c.getContext('2d'); INK.dessert(x, { base: K.r.base, cream: c.dataset.prev, items: [], pipes: [], drizzle: [], seed: 3 }, 100, 118, 120); });
     kBody.querySelectorAll('[data-c]').forEach((b) => b.onclick = () => {
       const all = {}; for (const need of [BASES[K.r.base].need, CREAMS[b.dataset.c].need]) for (const [k, v] of Object.entries(need)) all[k] = (all[k] || 0) + v;
       if (!have(all)) return toast('食材不够，先去集市买一点');
@@ -1037,7 +1117,7 @@
       else if (K.tool === 'pipe') pal.innerHTML = pipeCols.map(([col, n]) => `<button data-pc="${col}" class="${K.pc === col ? 'on' : ''}"><span class="swatch" style="background:${col}"></span>${n}</button>`).join('');
       else if (K.tool === 'drizzle') pal.innerHTML = [['#6b4a3a', '巧克力', 'cocoa'], ['#c7894a', '焦糖', 'caramel']].filter(([, , k]) => (S.inv[k] || 0) > 0).map(([col, n]) => `<button data-dc="${col}" class="${(K.dc || '#6b4a3a') === col ? 'on' : ''}"><span class="swatch" style="background:${col}"></span>${n}</button>`).join('');
       else pal.innerHTML = '';
-      pal.querySelectorAll('canvas[data-t]').forEach((cc) => { const xx = cc.getContext('2d'); ART.topping(xx, cc.dataset.t, 32, 34, 44, 0); });
+      pal.querySelectorAll('canvas[data-t]').forEach((cc) => { const xx = cc.getContext('2d'); INK.topping(xx, cc.dataset.t, 32, 34, 44, 0); });
       pal.querySelectorAll('[data-top]').forEach((b) => b.onclick = () => { K.top = b.dataset.top; drawUI(); });
       pal.querySelectorAll('[data-pc]').forEach((b) => b.onclick = () => { K.pc = b.dataset.pc; drawUI(); });
       pal.querySelectorAll('[data-dc]').forEach((b) => b.onclick = () => { K.dc = b.dataset.dc; drawUI(); });
@@ -1057,7 +1137,7 @@
     const snap = () => { K.undo.push(JSON.stringify({ items: K.r.items, pipes: K.r.pipes, drizzle: K.r.drizzle, dust: K.r.dust })); if (K.undo.length > 40) K.undo.shift(); };
     drawUI();
     const DW = Math.min(w * .78, h * 1.25), dx = w / 2, dy = h * .8;
-    const s = ART.SHAPE[K.r.base];
+    const s = INK.SHAPE[K.r.base];
     const toUV = (px, py) => [(px - dx) / (s.rx * DW), (py - (dy + s.top * DW)) / (s.ry * DW)];
     let drag = null, stroke = null;
     c.onpointerdown = (e) => {
@@ -1066,7 +1146,7 @@
       if (K.tool === 'item') {
         // 按在已有的装饰上：拖就是挪它，长按不动是拿掉，轻点一下还是照样再放一个（挨着放、叠着放都行）
         let hit = null;
-        for (let i = K.r.items.length - 1; i >= 0; i--) { const it = K.r.items[i]; const [ix, iy] = ART.topPoint(K.r.base, dx, dy, DW, it.u, it.v); if (Math.hypot(ix - px, iy - DW * .03 - py) < DW * .055) { hit = it; break; } }
+        for (let i = K.r.items.length - 1; i >= 0; i--) { const it = K.r.items[i]; const [ix, iy] = INK.topPoint(K.r.base, dx, dy, DW, it.u, it.v); if (Math.hypot(ix - px, iy - DW * .03 - py) < DW * .055) { hit = it; break; } }
         drag = { it: hit, t0: performance.now(), moved: false, u, v };
         if (hit) { snap(); drag.hold = setTimeout(() => { if (drag && !drag.moved) { K.r.items = K.r.items.filter((x2) => x2 !== hit); drag.removed = true; toast('拿掉了'); drawUI(); } }, 480); }
       } else if (K.tool === 'pipe' || K.tool === 'drizzle') {
@@ -1087,13 +1167,38 @@
     };
     const loop = () => {
       x.clearRect(0, 0, w, h);
-      ART.dessert(x, K.r, dx, dy, DW);
+      INK.dessert(x, K.r, dx, dy, DW);
       // 能放东西的那一圈：淡淡的虚线
       x.strokeStyle = 'rgba(217,138,154,.35)'; x.setLineDash([4, 5]); x.lineWidth = 1.2; ART.ellipse(x, dx, dy + s.top * DW, s.rx * DW * 1.02, s.ry * DW * 1.02); x.stroke(); x.setLineDash([]);
       kAnim = requestAnimationFrame(loop);
     };
     loop();
   }
+  // ———————————————— 分享海报 ————————————————
+  // 剪纸风的海报：一句英文一句中文、整块底色、底下格纹 / 波点；能换一句、换底纹，保存时交给 App 选存进哪个相册
+  let PV = null;
+  function openPoster(r) {
+    const tags = Object.entries(r.tags || {}).sort((a, b) => b[1] - a[1]).map((e) => e[0]).filter((t) => INK.LINES[t]);
+    PV = { r, tags: tags.length ? tags : ['sweet'], ti: 0, pat: (r.seed || 0) % 2 };
+    $('#poster').classList.add('open'); drawPoster();
+  }
+  function drawPoster() {
+    const c = $('#pc'), W = 1080, H = 1920;
+    c.width = W; c.height = H;
+    const x = c.getContext('2d');
+    INK.poster(x, { ...PV.r, name: PV.r.name }, W, H, { tag: PV.tags[PV.ti % PV.tags.length], pattern: PV.pat });
+  }
+  $('#pLine').onclick = () => { PV.ti++; if (PV.ti >= PV.tags.length) { PV.tags = [...PV.tags, ...Object.keys(INK.LINES).filter((t) => !PV.tags.includes(t))]; } drawPoster(); };
+  $('#pPat').onclick = () => { PV.pat++; drawPoster(); };
+  $('#pClose').onclick = () => { $('#poster').classList.remove('open'); PV = null; };
+  $('#pSave').onclick = () => {
+    const url = $('#pc').toDataURL('image/png');
+    if (window.webkit?.messageHandlers?.bake) window.webkit.messageHandlers.bake.postMessage({ poster: url, title: PV.r.name || '甜点' });
+    else { const a = document.createElement('a'); a.href = url; a.download = (PV.r.name || 'dessert') + '.png'; a.click(); }
+  };
+  // App 存好了回一句
+  window.__posterSaved = (where) => { toast(where ? '已保存到「' + where + '」' : '已保存'); };
+
   function kDone() {
     const r = finishRecipe(K.r);
     const cr = CREAMS[r.cream].name.replace('奶油', '').replace('甘纳许', '').replace('凝乳', '').replace('原味', '');
@@ -1108,8 +1213,10 @@
       <div class="meter">颜值<div class="bar"><i style="width:${r.beauty}%"></i></div><span>${r.beauty}</span></div>
       <div class="t3" style="margin-top:6px">搅拌 ${r.mix} · 火候 ${r.bake}${pairs.length ? ' · 绝配：' + pairs.map(([a, b]) => INGREDIENTS[a].name + '×' + INGREDIENTS[b].name).join('、') : ''}</div>
       <div class="t3">一个成本 ¥${r.cost} · 建议卖 ¥${suggestPrice(r)}</div></div>
+      <button class="cta rose" id="share" style="width:100%;margin-bottom:8px">做一张分享海报</button>
       <button class="cta" id="keep" style="width:100%;margin-top:4px">${n ? `收进配方簿，做一炉（${n} 个）` : '收进配方簿（料不够做一炉）'}</button>`;
-    const fc = $('#finalC').getContext('2d'); ART.dessert(fc, r, 220, 250, 300);
+    const fc = $('#finalC').getContext('2d'); INK.dessert(fc, r, 220, 250, 300);
+    $('#share').onclick = () => { r.name = ($('#rName').value || r.name).trim().slice(0, 10); openPoster(r); };
     $('#keep').onclick = () => {
       r.name = ($('#rName').value || r.name).trim().slice(0, 10);
       r.id = 'r' + (S.nextId++); r.price = suggestPrice(r); r.sold = 0; r.starSum = 0;
@@ -1143,5 +1250,5 @@
   if (S.phase === 'open') { S.phase = 'prep'; S.clock = 8 * 60 + 30; }   // 中途退出的那天：重新从开门前开始
   requestAnimationFrame(frame);
   if (S.tut === 0) setTimeout(() => clawdSay('今天开张！先做点甜点吧～'), 800);
-  window.__bake = { S: () => S, K: () => K, spawn, openKitchen, save };
+  window.__bake = { S: () => S, K: () => K, spawn, openKitchen, save, draw: () => drawScene(), step: (dt) => { if (S.phase === "open") { tick(dt); updatePeople(dt); } T += dt; } };
 })();

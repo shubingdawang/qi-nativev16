@@ -20,6 +20,8 @@ struct StickerLibraryView: View {
     nonisolated(unsafe) static var openTab: Int?
 
     @State private var tab = 0                // 0 图片，1 表情包，2 GIF
+    /// 图片那一栏：0 时间线，1 相册（文件夹）。记在本机
+    @AppStorage("photoMode") private var photoMode = 0
     @State private var owner = "user"
     @State private var keyword = ""
     @State private var importing = false
@@ -70,7 +72,25 @@ struct StickerLibraryView: View {
             .padding(.bottom, 10)
 
             if tab == 0 {
-                FolderGridView(kind: "photo")
+                // 图片：时间线（所有图按日子排）/ 相册（一个个文件夹）
+                HStack(spacing: 6) {
+                    ForEach([(0, "时间线"), (1, "相册")], id: \.0) { m in
+                        Button {
+                            withAnimation(.easeOut(duration: 0.18)) { photoMode = m.0 }
+                        } label: {
+                            Text(m.1)
+                                .font(.app(12.5, weight: photoMode == m.0 ? .semibold : .regular))
+                                .foregroundStyle(photoMode == m.0 ? Color.white : Theme.textSoft(scheme))
+                                .padding(.horizontal, 14).padding(.vertical, 6)
+                                .background(Capsule().fill(photoMode == m.0 ? app.settings.accentColor : Theme.softFillDeep))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+                if photoMode == 0 { PhotoTimelineView() } else { FolderGridView(kind: "photo") }
             } else {
                 stickerSide
             }
